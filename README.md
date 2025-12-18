@@ -4,7 +4,7 @@ Warden Core - AI Code Guardian Core Library
 
 ## Memory System
 
-This project uses Qdrant vector database for advanced memory management with semantic search capabilities.
+This project uses **Qdrant Cloud** with Azure OpenAI embeddings for enterprise-grade memory management with semantic search capabilities.
 
 ### Available Commands
 
@@ -16,26 +16,22 @@ This project uses Qdrant vector database for advanced memory management with sem
 
 #### Prerequisites
 
-1. **Qdrant** must be running on `localhost:6333`
-   ```bash
-   docker run -p 6333:6333 -p 6334:6334 \
-     -v $(pwd)/qdrant_storage:/qdrant/storage:z \
-     qdrant/qdrant
-   ```
-
-2. The collection `warden_core_memories` is automatically created on first use.
+**No local setup required!** This project uses Qdrant Cloud (managed service).
 
 #### Configuration
 
 Memory is configured in `.claude/config.json`:
-- Backend: Qdrant
-- Collection: `warden_core_memories`
-- Embedding Model: `sentence-transformers/all-MiniLM-L6-v2`
-- Vector Dimension: 384
+- **Backend**: Qdrant Cloud (GCP Europe West 3)
+- **Collection**: `warden_core_memories`
+- **Embedding Model**: Azure OpenAI `text-embedding-ada-002`
+- **Vector Dimension**: 1536
+- **TLS**: Enabled
 
 ### Features
 
-- **Semantic Search**: Find relevant memories using natural language queries
-- **Persistent Storage**: All memories stored in Qdrant vector database
-- **Project-Specific**: Isolated memory space for this project
+- **Semantic Search**: Find relevant memories using natural language queries with Azure OpenAI embeddings
+- **Cloud Storage**: All memories stored in Qdrant Cloud (persistent, managed, no local setup)
+- **Project-Specific**: Isolated memory space for warden-core project
+- **Enterprise-Grade**: Azure OpenAI + Qdrant Cloud for production-ready memory
+- **Highly Available**: Managed cloud infrastructure with automatic backups
 - **Scalable**: Can handle large amounts of project context and notes
