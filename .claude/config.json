@@ -1,8 +1,0 @@
-{
-  "project_name": "warden-core",
-  "memory": {
-    "enabled": true,
-    "backend": "simple",
-    "storage_path": ".claude/memory"
-  }
-}
