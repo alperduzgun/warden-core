@@ -2,7 +2,10 @@
 .claude/
 *.db
 *.sqlite
-*.qdrant
+
+# Qdrant storage
+qdrant_storage/
+.qdrant/
 
 # Python
 __pycache__/
