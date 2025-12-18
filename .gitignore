@@ -1,5 +1,5 @@
-# Memory files
-.claude/memory/
+# Claude Code & Memory files
+.claude/
 *.db
 *.sqlite
 *.qdrant
