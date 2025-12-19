@@ -35,3 +35,6 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.session-notes.md
+mem0_cli.py
+mem
