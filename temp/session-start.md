@@ -360,9 +360,81 @@ find /Users/ibrahimcaglar/warden-csharp/src -name "*FeatureName*"
 
 ---
 
+## 🌿 Git Branching Strategy
+
+### Branch Structure
+```
+prod     (production)    → Stable releases only
+  ↑
+staging  (pre-prod)      → Testing & QA
+  ↑
+dev      (development)   → Daily development (default)
+  ↑
+main     (integration)   → Integration branch
+```
+
+### Branch Purposes
+
+**`dev` (Development)**
+- Daily development work
+- Feature branches merge here
+- Unstable, rapid changes
+- CI/CD runs tests
+
+**`staging` (Pre-Production)**
+- QA & testing environment
+- Merge from `dev` when features complete
+- Mimics production
+- Integration testing
+
+**`prod` (Production)**
+- Production releases only
+- Merge from `staging` after QA approval
+- Tagged releases (v1.0.0, v1.1.0)
+- Stable, zero breaking changes
+
+**`main` (Integration)**
+- Integration branch (optional)
+- Can be used as hotfix base
+- Or keep in sync with `dev`
+
+### Workflow
+
+```bash
+# Daily development
+git checkout dev
+git pull origin dev
+# ... code changes ...
+git add .
+git commit -m "feat: Add feature X"
+git push origin dev
+
+# Ready for testing
+git checkout staging
+git merge dev
+git push origin staging
+# ... QA tests ...
+
+# Ready for production
+git checkout prod
+git merge staging
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin prod --tags
+```
+
+### Protection Rules (Recommended)
+
+- `prod`: Require PR approval, no direct push
+- `staging`: Require PR approval
+- `dev`: Allow direct push (fast iteration)
+- `main`: Optional protection
+
+---
+
 **Last Updated**: 2025-12-19
 **Migration Status**: 🚀 Ready to Start - session-start.md created
 **Panel Reference**: Latest (check .session-notes for date)
+**Git Branches**: ✅ dev, staging, prod created and pushed to remote
 
 ---
 
