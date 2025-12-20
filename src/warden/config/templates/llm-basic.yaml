@@ -1,0 +1,75 @@
+# Warden LLM Configuration - Basic Setup
+# Minimal LLM-enabled validation with single provider
+
+pipeline:
+  name: "llm-basic-validation"
+  description: "Basic validation with LLM-enhanced analysis"
+  fail_fast: true
+
+# LLM Configuration
+llm:
+  enabled: true
+  default_provider: azure_openai
+  fallback_providers: []
+
+  # Azure OpenAI (Recommended for production)
+  providers:
+    azure_openai:
+      enabled: true
+      api_key: ${AZURE_OPENAI_API_KEY}
+      endpoint: ${AZURE_OPENAI_ENDPOINT}
+      default_model: ${AZURE_OPENAI_DEPLOYMENT_NAME:-gpt-4o}
+      api_version: ${AZURE_OPENAI_API_VERSION:-2024-02-01}
+
+# Pipeline Stages
+stages:
+  - name: "analysis"
+    enabled: true
+    use_llm: true  # Use LLM for deep code analysis
+    timeout_seconds: 120
+
+  - name: "classification"
+    enabled: true
+    use_llm: true  # Use LLM for intelligent frame recommendation
+    timeout_seconds: 60
+
+  - name: "validation"
+    enabled: true
+    parallel: true
+    frames:
+      - name: "security"
+        priority: "critical"
+        is_blocker: true
+        timeout_seconds: 300
+
+      - name: "chaos"
+        priority: "high"
+        is_blocker: false
+        timeout_seconds: 180
+
+      - name: "fuzz"
+        priority: "high"
+        is_blocker: false
+        timeout_seconds: 120
+
+      - name: "property"
+        priority: "medium"
+        is_blocker: false
+        timeout_seconds: 120
+
+      - name: "architectural"
+        priority: "medium"
+        is_blocker: false
+        timeout_seconds: 180
+
+  - name: "fortification"
+    enabled: false  # Optional stage
+
+  - name: "cleaning"
+    enabled: false  # Optional stage
+
+# Logging
+logging:
+  level: "INFO"
+  structured: true
+  correlation_id: true

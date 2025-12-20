@@ -1,0 +1,53 @@
+# Warden LLM Configuration - Fast Development
+# Optimized for speed with Groq (ultra-fast inference)
+
+pipeline:
+  name: "llm-fast-validation"
+  description: "Fast validation for development with Groq"
+  fail_fast: false
+
+# LLM Configuration - Groq for Speed
+llm:
+  enabled: true
+  default_provider: groq
+  fallback_providers: []
+
+  providers:
+    # Groq: Ultra-fast inference (500+ tokens/sec)
+    groq:
+      enabled: true
+      api_key: ${GROQ_API_KEY}
+      endpoint: https://api.groq.com/openai/v1
+      default_model: llama-3.1-70b-versatile
+
+# Minimal Stages for Fast Feedback
+stages:
+  - name: "analysis"
+    enabled: true
+    use_llm: true
+    timeout_seconds: 30
+
+  - name: "classification"
+    enabled: true
+    use_llm: true
+    timeout_seconds: 20
+
+  - name: "validation"
+    enabled: true
+    parallel: true
+    frames:
+      - name: "security"
+        priority: "critical"
+        is_blocker: true
+        timeout_seconds: 60
+
+      - name: "fuzz"
+        priority: "high"
+        is_blocker: false
+        timeout_seconds: 30
+
+# Fast Logging
+logging:
+  level: "WARNING"
+  structured: false
+  correlation_id: false

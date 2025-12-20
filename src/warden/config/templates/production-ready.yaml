@@ -1,0 +1,44 @@
+# Production-Ready Pipeline Template
+# Focus: Production-grade validation with strict rules
+# Use case: Final validation before production deployment
+
+version: "1.0"
+name: "Production-Ready Validation"
+
+# Critical frames for production
+frames:
+  - security       # BLOCKER: Security vulnerabilities
+  - chaos          # Resilience under failure
+  - stress         # Performance under load
+  - architectural  # Code quality and design
+
+# Global security rules (applied to all frames)
+global_rules:
+  - id: "no-hardcoded-secrets"
+    name: "No Hardcoded Secrets"
+    category: "security"
+    severity: "critical"
+    is_blocker: true
+    description: "Detect hardcoded API keys, passwords, tokens"
+    type: "security"
+    conditions:
+      check_secrets: true
+      check_git: true
+      check_connections: false
+
+  - id: "naming-conventions"
+    name: "Naming Conventions"
+    category: "convention"
+    severity: "medium"
+    is_blocker: false
+    description: "Enforce snake_case for Python, camelCase for TypeScript"
+    type: "convention"
+    conditions:
+      check_naming: true
+      check_redis: false
+      check_api: false
+
+settings:
+  fail_fast: true   # Stop on blocker failures
+  timeout: 900      # 15 minutes for thorough validation
+  parallel: false   # Sequential for better error reporting
