@@ -38,6 +38,9 @@ setup(
         "typer>=0.9.0",
         "rich>=13.0.0",
         "pyyaml>=6.0",
+        "httpx>=0.24.0",
+        "textual>=0.60.0",  # Modern TUI framework
+        "textual-dev>=1.0.0",  # Textual development tools
     ],
     extras_require={
         "dev": [
