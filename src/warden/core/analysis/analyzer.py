@@ -35,9 +35,14 @@ class CodeAnalyzer:
     Future: LLM integration for deeper analysis.
     """
 
-    def __init__(self):
-        """Initialize code analyzer."""
+    def __init__(self, llm_factory=None):
+        """Initialize code analyzer.
+
+        Args:
+            llm_factory: Optional LLM factory for enhanced analysis
+        """
         self.logger = logger
+        self.llm_factory = llm_factory
 
     async def analyze(
         self,
@@ -281,3 +286,103 @@ class CodeAnalyzer:
         score = max(0.0, min(10.0, score))
 
         return round(score, 1)
+
+    async def analyze_with_llm(
+        self,
+        file_path: str,
+        file_content: str,
+        language: str = "python",
+    ) -> Dict[str, Any]:
+        """
+        Enhanced analysis using LLM.
+
+        Combines AST analysis with LLM-based deep analysis for:
+        - More accurate security vulnerability detection
+        - Context-aware code smells
+        - Confidence scoring to reduce false positives
+
+        Args:
+            file_path: Path to file
+            file_content: File content
+            language: Programming language
+
+        Returns:
+            Analysis result with LLM insights
+        """
+        if not self.llm_factory:
+            self.logger.warning("llm_factory_not_configured", file_path=file_path)
+            return await self.analyze(file_path, file_content, language)
+
+        start_time = time.perf_counter()
+
+        try:
+            # Import LLM types
+            from warden.llm import (
+                LlmRequest,
+                AnalysisResult,
+                generate_analysis_request,
+                ANALYSIS_SYSTEM_PROMPT
+            )
+
+            # Get LLM client with fallback
+            client = await self.llm_factory.create_client_with_fallback()
+
+            # Create LLM request
+            request = LlmRequest(
+                system_prompt=ANALYSIS_SYSTEM_PROMPT,
+                user_message=generate_analysis_request(file_content, language, file_path),
+                temperature=0.3,
+                max_tokens=4000,
+                timeout_seconds=60
+            )
+
+            # Send to LLM
+            response = await client.send_async(request)
+
+            if not response.success:
+                self.logger.warning(
+                    "llm_analysis_failed",
+                    file_path=file_path,
+                    error=response.error_message,
+                    provider=response.provider.value if response.provider else None
+                )
+                # Fallback to AST analysis
+                return await self.analyze(file_path, file_content, language)
+
+            # Parse LLM response
+            import json
+            llm_data = json.loads(response.content)
+            result = AnalysisResult.from_dict(llm_data)
+
+            duration_ms = (time.perf_counter() - start_time) * 1000
+
+            self.logger.info(
+                "llm_analysis_completed",
+                file_path=file_path,
+                score=result.score,
+                confidence=result.confidence,
+                issue_count=len(result.issues),
+                provider=response.provider.value if response.provider else None,
+                duration_ms=duration_ms
+            )
+
+            # Convert to standard format
+            return {
+                "score": result.score,
+                "confidence": result.confidence,
+                "summary": result.summary,
+                "issues": [issue.to_dict() for issue in result.issues],
+                "provider": response.provider.value if response.provider else None,
+                "durationMs": duration_ms,
+                "tokensUsed": response.total_tokens
+            }
+
+        except Exception as ex:
+            self.logger.error(
+                "llm_analysis_error",
+                file_path=file_path,
+                error=str(ex),
+                error_type=type(ex).__name__
+            )
+            # Fallback to AST analysis
+            return await self.analyze(file_path, file_content, language)
