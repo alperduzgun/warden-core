@@ -136,7 +136,7 @@ class ValidationCheck(ABC):
                 # Check for company-specific API key patterns
                 pass
 
-    Plugin Discovery:
+    Check Discovery:
         - Entry points: [tool.poetry.plugins."warden.checks.security"]
         - Directory-based: ~/.warden/checks/security/
         - Registered programmatically: frame.register_check(MyCheck())

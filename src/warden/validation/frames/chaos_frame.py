@@ -19,10 +19,13 @@ from warden.validation.domain.frame import (
     ValidationFrame,
     FrameResult,
     Finding,
+    CodeFile,
+)
+from warden.validation.domain.enums import (
     FrameCategory,
     FramePriority,
+    FrameScope,
     FrameApplicability,
-    CodeFile,
 )
 from warden.validation.domain.check import CheckRegistry, CheckResult
 from warden.validation.infrastructure.check_loader import CheckLoader
@@ -51,6 +54,7 @@ class ChaosFrame(ValidationFrame):
     description = "Validates resilience against network failures, timeouts, and cascading failures"
     category = FrameCategory.GLOBAL
     priority = FramePriority.HIGH
+    scope = FrameScope.FILE_LEVEL
     is_blocker = False  # Warning only, not blocking
     version = "1.0.0"
     author = "Warden Team"
@@ -76,10 +80,10 @@ class ChaosFrame(ValidationFrame):
 
     def _register_builtin_checks(self) -> None:
         """Register built-in chaos engineering checks."""
-        from warden.validation.frames.chaos.timeout_check import TimeoutCheck
-        from warden.validation.frames.chaos.retry_check import RetryCheck
-        from warden.validation.frames.chaos.circuit_breaker_check import CircuitBreakerCheck
-        from warden.validation.frames.chaos.error_handling_check import ErrorHandlingCheck
+        from warden.validation.frames.chaos._internal.timeout_check import TimeoutCheck
+        from warden.validation.frames.chaos._internal.retry_check import RetryCheck
+        from warden.validation.frames.chaos._internal.circuit_breaker_check import CircuitBreakerCheck
+        from warden.validation.frames.chaos._internal.error_handling_check import ErrorHandlingCheck
 
         # Register all built-in checks
         self.checks.register(TimeoutCheck(self.config.get("timeout", {})))
@@ -94,11 +98,11 @@ class ChaosFrame(ValidationFrame):
         )
 
     def _discover_community_checks(self) -> None:
-        """Discover and register community checks from plugins."""
+        """Discover and register external checks."""
         loader = CheckLoader(frame_id=self.frame_id)
-        community_checks = loader.discover_all()
+        external_checks = loader.discover_all()
 
-        for check_class in community_checks:
+        for check_class in external_checks:
             try:
                 check_config = self.config.get("checks", {}).get(
                     check_class.id, {}  # type: ignore[attr-defined]

@@ -124,9 +124,9 @@ async def test_orchestrator_frame_priority_sorting():
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
 
-    # After initialization, frames should be sorted by priority
-    assert orchestrator.frames[0].priority.value == "critical"  # CRITICAL (Security)
-    assert orchestrator.frames[1].priority.value == "high"  # HIGH (Chaos)
+    # After initialization, frames should be sorted by priority (lower value = higher priority)
+    assert orchestrator.frames[0].priority.value == 1  # CRITICAL (Security)
+    assert orchestrator.frames[1].priority.value == 2  # HIGH (Chaos)
 
 
 @pytest.mark.asyncio
