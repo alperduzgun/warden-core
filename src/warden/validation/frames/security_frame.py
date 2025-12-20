@@ -17,10 +17,13 @@ from warden.validation.domain.frame import (
     ValidationFrame,
     FrameResult,
     Finding,
+    CodeFile,
+)
+from warden.validation.domain.enums import (
     FrameCategory,
     FramePriority,
+    FrameScope,
     FrameApplicability,
-    CodeFile,
 )
 from warden.validation.domain.check import CheckRegistry, CheckResult
 from warden.validation.infrastructure.check_loader import CheckLoader
@@ -48,6 +51,7 @@ class SecurityFrame(ValidationFrame):
     description = "Detects SQL injection, XSS, secrets, and other security vulnerabilities"
     category = FrameCategory.GLOBAL
     priority = FramePriority.CRITICAL
+    scope = FrameScope.FILE_LEVEL
     is_blocker = True  # Block PR if critical security issues found
     version = "1.0.0"
     author = "Warden Team"
@@ -73,10 +77,10 @@ class SecurityFrame(ValidationFrame):
 
     def _register_builtin_checks(self) -> None:
         """Register built-in security checks."""
-        from warden.validation.frames.security.sql_injection_check import SQLInjectionCheck
-        from warden.validation.frames.security.xss_check import XSSCheck
-        from warden.validation.frames.security.secrets_check import SecretsCheck
-        from warden.validation.frames.security.hardcoded_password_check import (
+        from warden.validation.frames.security._internal.sql_injection_check import SQLInjectionCheck
+        from warden.validation.frames.security._internal.xss_check import XSSCheck
+        from warden.validation.frames.security._internal.secrets_check import SecretsCheck
+        from warden.validation.frames.security._internal.hardcoded_password_check import (
             HardcodedPasswordCheck,
         )
 
@@ -95,11 +99,11 @@ class SecurityFrame(ValidationFrame):
         )
 
     def _discover_community_checks(self) -> None:
-        """Discover and register community checks from plugins."""
+        """Discover and register external checks."""
         loader = CheckLoader(frame_id=self.frame_id)
-        community_checks = loader.discover_all()
+        external_checks = loader.discover_all()
 
-        for check_class in community_checks:
+        for check_class in external_checks:
             try:
                 # Get check-specific config from frame config
                 check_config = self.config.get("checks", {}).get(

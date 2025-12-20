@@ -1,10 +1,10 @@
 """
-Validation Frame base class - Plugin System Foundation.
+Validation Frame base class - Frame System Foundation.
 
-All validation frames (built-in and community) must inherit from ValidationFrame.
+All validation frames (built-in and external) must inherit from ValidationFrame.
 
 Panel Source: /warden-panel-development/src/lib/types/frame.ts
-Plugin Docs: /docs/PLUGIN_SYSTEM.md
+Frame Docs: /docs/FRAME_SYSTEM.md
 """
 
 from __future__ import annotations
@@ -12,52 +12,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, Any, List
-from enum import Enum
 
-
-class FrameCategory(str, Enum):
-    """
-    Frame category classification.
-
-    Matches Panel TypeScript FrameCategory enum.
-    """
-
-    GLOBAL = "global"  # Applies to all code
-    LANGUAGE_SPECIFIC = "language-specific"  # Python, JavaScript, etc.
-    FRAMEWORK_SPECIFIC = "framework-specific"  # FastAPI, React, Flutter, etc.
-
-
-class FramePriority(str, Enum):
-    """
-    Frame execution priority.
-
-    Panel: type FramePriority = 'critical' | 'high' | 'medium' | 'low';
-    """
-
-    CRITICAL = "critical"  # Execute first, block on failure
-    HIGH = "high"  # Execute early
-    MEDIUM = "medium"  # Normal priority
-    LOW = "low"  # Execute last
-
-
-class FrameApplicability(str, Enum):
-    """
-    Language/framework applicability.
-
-    Matches Panel TypeScript FrameApplicability enum.
-    """
-
-    ALL = "all"
-    CSHARP = "csharp"
-    DART = "dart"
-    TYPESCRIPT = "typescript"
-    PYTHON = "python"
-    JAVA = "java"
-    GO = "go"
-    FLUTTER = "flutter"
-    REACT = "react"
-    ASPNETCORE = "aspnetcore"
-    NEXTJS = "nextjs"
+from warden.validation.domain.enums import (
+    FramePriority,
+    FrameScope,
+    FrameCategory,
+    FrameApplicability,
+)
 
 
 @dataclass
@@ -141,9 +102,11 @@ class FrameResult:
 
 class ValidationFrame(ABC):
     """
-    Base class for all validation frames (built-in and community plugins).
+    Base class for all validation frames (built-in and external).
 
-    Community developers extend this class to create custom frames.
+    Matches C# Warden.Core.Validation.IValidationFrame interface.
+
+    Developers extend this class to create custom frames.
 
     Example:
         class MyCustomFrame(ValidationFrame):
@@ -151,18 +114,19 @@ class ValidationFrame(ABC):
             description = "Company-specific security validation"
             category = FrameCategory.GLOBAL
             priority = FramePriority.HIGH
+            scope = FrameScope.FILE_LEVEL
             is_blocker = True
 
             async def execute(self, code_file: CodeFile) -> FrameResult:
                 # Validation logic here
                 pass
 
-    Plugin Discovery:
-        - Entry points (PyPI packages): [tool.poetry.plugins."warden.frames"]
-        - Directory-based: ~/.warden/plugins/
-        - Environment variable: WARDEN_PLUGIN_PATHS
+    Frame Discovery:
+        - Built-in frames: Registered in FrameRegistry
+        - External frames: ~/.warden/frames/
+        - Environment variable: WARDEN_FRAME_PATHS
 
-    See: /docs/PLUGIN_SYSTEM.md
+    See: /docs/FRAME_SYSTEM.md
     """
 
     # Required metadata (must be overridden by subclasses)
@@ -170,6 +134,7 @@ class ValidationFrame(ABC):
     description: str = "No description provided"
     category: FrameCategory = FrameCategory.GLOBAL
     priority: FramePriority = FramePriority.MEDIUM
+    scope: FrameScope = FrameScope.FILE_LEVEL
     is_blocker: bool = False
 
     # Optional metadata
@@ -177,7 +142,7 @@ class ValidationFrame(ABC):
     author: str = "Unknown"
     applicability: List[FrameApplicability] = [FrameApplicability.ALL]
 
-    # Plugin compatibility (for community frames)
+    # Frame compatibility (for community frames)
     min_warden_version: str | None = None
     max_warden_version: str | None = None
 
@@ -230,7 +195,7 @@ class ValidationFrame(ABC):
         Unique frame identifier.
 
         Default: snake_case class name
-        Override for custom ID (e.g., community plugins)
+        Override for custom ID (e.g., external frames)
         """
         return self.__class__.__name__.lower().replace("frame", "").replace("_", "-")
 
@@ -270,6 +235,7 @@ class ValidationFrame(ABC):
             f"id={self.frame_id}, "
             f"name={self.name}, "
             f"priority={self.priority.value}, "
+            f"scope={self.scope.value}, "
             f"blocker={self.is_blocker})"
         )
 

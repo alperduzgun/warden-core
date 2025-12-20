@@ -280,7 +280,7 @@ async def test_chaos_frame_metadata():
     assert frame.name == "Chaos Engineering"
     assert frame.frame_id == "chaos"
     assert frame.is_blocker is False  # Warning only, not blocking
-    assert frame.priority.value == "high"
+    assert frame.priority.value == 2  # HIGH = 2
 
 
 @pytest.mark.asyncio

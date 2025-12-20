@@ -196,7 +196,7 @@ async def test_security_frame_metadata():
     assert frame.name == "Security Analysis"
     assert frame.frame_id == "security"
     assert frame.is_blocker is True
-    assert frame.priority.value == "critical"
+    assert frame.priority.value == 1  # CRITICAL = 1
 
 
 @pytest.mark.asyncio

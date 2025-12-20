@@ -61,8 +61,9 @@ class PipelineOrchestrator:
 
     def _sort_frames_by_priority(self) -> None:
         """Sort frames by priority (CRITICAL → HIGH → MEDIUM → LOW)."""
-        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        self.frames.sort(key=lambda f: priority_order.get(f.priority.value, 999))
+        # Priority is now IntEnum: CRITICAL=1, HIGH=2, MEDIUM=3, LOW=4, INFORMATIONAL=5
+        # Lower values = higher priority, so we can sort directly by value
+        self.frames.sort(key=lambda f: f.priority.value)
 
     async def execute(self, code_files: List[CodeFile]) -> PipelineResult:
         """
