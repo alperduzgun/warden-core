@@ -66,6 +66,22 @@ cat temp/warden_quick_reference.md
 ## 🎯 Mission
 Migrate Warden from C# to Python while preserving functionality and improving maintainability.
 
+## ⚠️ CRITICAL PRINCIPLE: WARDEN IS A REPORTER, NOT A CODE MODIFIER
+
+**Warden NEVER modifies code automatically!**
+- ✅ Warden analyzes code
+- ✅ Warden detects issues
+- ✅ Warden generates reports with suggestions
+- ❌ Warden does NOT auto-fix code
+- ❌ Warden does NOT modify source files
+- ❌ Warden does NOT apply patches
+
+**LLM Usage:**
+- LLM can provide better descriptions/explanations
+- LLM can suggest fixes (as text recommendations)
+- LLM does NOT generate modified code
+- Final decision is ALWAYS with the developer
+
 ---
 
 ## 📁 Critical Paths
