@@ -1,0 +1,386 @@
+"""
+Pipeline orchestrator.
+
+Core execution engine for validation pipelines.
+"""
+
+import asyncio
+import time
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+
+from warden.pipeline.domain.models import (
+    ValidationPipeline,
+    PipelineConfig,
+    PipelineResult,
+    FrameExecution,
+)
+from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
+from warden.validation.domain.frame import ValidationFrame, FrameResult, CodeFile
+from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.exceptions import ValidationError
+
+logger = get_logger(__name__)
+
+
+class PipelineOrchestrator:
+    """
+    Orchestrates validation pipeline execution.
+
+    Responsibilities:
+    - Frame dependency resolution
+    - Sequential/parallel execution
+    - Timeout management
+    - Result aggregation
+    - Error handling
+    """
+
+    def __init__(
+        self,
+        frames: List[ValidationFrame],
+        config: Optional[PipelineConfig] = None,
+    ) -> None:
+        """
+        Initialize orchestrator.
+
+        Args:
+            frames: List of validation frames to execute
+            config: Pipeline configuration
+        """
+        self.frames = frames
+        self.config = config or PipelineConfig()
+
+        # Sort frames by priority (CRITICAL first)
+        self._sort_frames_by_priority()
+
+        logger.info(
+            "orchestrator_initialized",
+            frame_count=len(frames),
+            strategy=self.config.strategy.value,
+        )
+
+    def _sort_frames_by_priority(self) -> None:
+        """Sort frames by priority (CRITICAL → HIGH → MEDIUM → LOW)."""
+        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        self.frames.sort(key=lambda f: priority_order.get(f.priority.value, 999))
+
+    async def execute(self, code_files: List[CodeFile]) -> PipelineResult:
+        """
+        Execute validation pipeline on code files.
+
+        Args:
+            code_files: List of code files to validate
+
+        Returns:
+            PipelineResult with aggregated findings
+
+        Raises:
+            ValidationError: If pipeline execution fails
+        """
+        # Create pipeline entity
+        pipeline = ValidationPipeline(
+            name="Code Validation",
+            config=self.config,
+            total_frames=len(self.frames),
+        )
+
+        # Initialize frame executions
+        pipeline.frame_executions = [
+            FrameExecution(
+                frame_id=frame.frame_id,
+                frame_name=frame.name,
+                status="pending",
+            )
+            for frame in self.frames
+        ]
+
+        # Start pipeline
+        pipeline.start()
+
+        logger.info(
+            "pipeline_started",
+            pipeline_id=pipeline.id,
+            frame_count=len(self.frames),
+            file_count=len(code_files),
+        )
+
+        try:
+            # Execute based on strategy
+            if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
+                await self._execute_sequential(pipeline, code_files)
+            elif self.config.strategy == ExecutionStrategy.PARALLEL:
+                await self._execute_parallel(pipeline, code_files)
+            elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
+                await self._execute_fail_fast(pipeline, code_files)
+
+            # Mark as completed if no failures
+            if pipeline.frames_failed == 0:
+                pipeline.complete()
+            else:
+                pipeline.fail()
+
+        except Exception as e:
+            logger.error(
+                "pipeline_execution_failed",
+                pipeline_id=pipeline.id,
+                error=str(e),
+            )
+            pipeline.fail()
+            raise ValidationError(f"Pipeline execution failed: {e}") from e
+
+        # Build result
+        result = self._build_result(pipeline)
+
+        logger.info(
+            "pipeline_completed",
+            pipeline_id=pipeline.id,
+            status=pipeline.status.value,
+            duration=pipeline.duration,
+            total_findings=result.total_findings,
+        )
+
+        return result
+
+    async def _execute_sequential(
+        self,
+        pipeline: ValidationPipeline,
+        code_files: List[CodeFile],
+    ) -> None:
+        """Execute frames sequentially (one at a time)."""
+        for idx, frame in enumerate(self.frames):
+            frame_exec = pipeline.frame_executions[idx]
+
+            # Check if should skip (fail_fast + blocker failed)
+            if self.config.fail_fast and pipeline.frames_failed > 0:
+                if self._has_blocker_failed(pipeline):
+                    frame_exec.status = "skipped"
+                    logger.info(
+                        "frame_skipped",
+                        frame=frame.name,
+                        reason="blocker_failed",
+                    )
+                    continue
+
+            # Execute frame
+            await self._execute_frame(pipeline, frame, frame_exec, code_files)
+
+    async def _execute_parallel(
+        self,
+        pipeline: ValidationPipeline,
+        code_files: List[CodeFile],
+    ) -> None:
+        """Execute frames in parallel (with concurrency limit)."""
+        semaphore = asyncio.Semaphore(self.config.parallel_limit)
+
+        async def execute_with_semaphore(
+            frame: ValidationFrame,
+            frame_exec: FrameExecution,
+        ) -> None:
+            async with semaphore:
+                await self._execute_frame(pipeline, frame, frame_exec, code_files)
+
+        # Create tasks for all frames
+        tasks = [
+            execute_with_semaphore(frame, pipeline.frame_executions[idx])
+            for idx, frame in enumerate(self.frames)
+        ]
+
+        # Execute all frames concurrently
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _execute_fail_fast(
+        self,
+        pipeline: ValidationPipeline,
+        code_files: List[CodeFile],
+    ) -> None:
+        """Execute frames sequentially, stop on first blocker failure."""
+        for idx, frame in enumerate(self.frames):
+            frame_exec = pipeline.frame_executions[idx]
+
+            # Execute frame
+            await self._execute_frame(pipeline, frame, frame_exec, code_files)
+
+            # Stop if blocker frame failed
+            if frame.is_blocker and frame_exec.status == "failed":
+                logger.info(
+                    "pipeline_stopped",
+                    frame=frame.name,
+                    reason="blocker_failed",
+                )
+
+                # Mark remaining frames as skipped
+                for remaining_idx in range(idx + 1, len(self.frames)):
+                    pipeline.frame_executions[remaining_idx].status = "skipped"
+
+                break
+
+    async def _execute_frame(
+        self,
+        pipeline: ValidationPipeline,
+        frame: ValidationFrame,
+        frame_exec: FrameExecution,
+        code_files: List[CodeFile],
+    ) -> None:
+        """Execute a single frame on all code files."""
+        frame_exec.status = "running"
+        frame_exec.started_at = datetime.utcnow()
+
+        logger.info(
+            "frame_started",
+            pipeline_id=pipeline.id,
+            frame=frame.name,
+        )
+
+        try:
+            # Execute frame on each code file
+            all_findings = []
+            total_duration = 0.0
+
+            for code_file in code_files:
+                try:
+                    # Execute with timeout
+                    result = await asyncio.wait_for(
+                        frame.execute(code_file),
+                        timeout=self.config.frame_timeout,
+                    )
+
+                    all_findings.extend(result.findings)
+                    total_duration += result.duration
+
+                except asyncio.TimeoutError:
+                    logger.error(
+                        "frame_timeout",
+                        frame=frame.name,
+                        file=code_file.path,
+                        timeout=self.config.frame_timeout,
+                    )
+                    frame_exec.error = f"Timeout after {self.config.frame_timeout}s"
+                    frame_exec.status = "failed"
+                    pipeline.frames_failed += 1
+                    return
+
+                except Exception as e:
+                    logger.error(
+                        "frame_execution_error",
+                        frame=frame.name,
+                        file=code_file.path,
+                        error=str(e),
+                    )
+                    # Continue with other files
+                    continue
+
+            # Determine frame status
+            if len(all_findings) == 0:
+                frame_status = "passed"
+            elif frame.is_blocker:
+                frame_status = "failed"  # Blocker with issues = failed
+            else:
+                frame_status = "warning"  # Non-blocker with issues = warning
+
+            # Create aggregated result
+            frame_exec.result = FrameResult(
+                frame_id=frame.frame_id,
+                frame_name=frame.name,
+                status=frame_status,
+                duration=total_duration,
+                issues_found=len(all_findings),
+                is_blocker=frame.is_blocker,
+                findings=all_findings,
+                metadata={"files_processed": len(code_files)},
+            )
+
+            # Update execution status
+            frame_exec.status = "completed"
+            frame_exec.completed_at = datetime.utcnow()
+            frame_exec.duration = (
+                frame_exec.completed_at - frame_exec.started_at
+            ).total_seconds()
+
+            # Update pipeline counters
+            pipeline.frames_completed += 1
+            pipeline.total_issues += len(all_findings)
+
+            # Only count as failed if it's a BLOCKER frame with issues
+            if len(all_findings) > 0 and frame.is_blocker:
+                pipeline.frames_failed += 1
+                pipeline.blocker_issues += len(all_findings)
+
+            logger.info(
+                "frame_completed",
+                pipeline_id=pipeline.id,
+                frame=frame.name,
+                status=frame_exec.status,
+                issues=len(all_findings),
+                duration=frame_exec.duration,
+            )
+
+        except Exception as e:
+            logger.error(
+                "frame_execution_failed",
+                pipeline_id=pipeline.id,
+                frame=frame.name,
+                error=str(e),
+            )
+            frame_exec.status = "failed"
+            frame_exec.error = str(e)
+            frame_exec.completed_at = datetime.utcnow()
+            pipeline.frames_failed += 1
+
+    def _has_blocker_failed(self, pipeline: ValidationPipeline) -> bool:
+        """Check if any blocker frame has failed."""
+        for idx, frame in enumerate(self.frames):
+            frame_exec = pipeline.frame_executions[idx]
+            if frame.is_blocker and frame_exec.status == "failed":
+                return True
+        return False
+
+    def _build_result(self, pipeline: ValidationPipeline) -> PipelineResult:
+        """Build aggregated pipeline result."""
+        # Collect all frame results
+        frame_results = [
+            fe.result for fe in pipeline.frame_executions if fe.result is not None
+        ]
+
+        # Count findings by severity
+        critical_count = 0
+        high_count = 0
+        medium_count = 0
+        low_count = 0
+
+        for fr in frame_results:
+            for finding in fr.findings:
+                if finding.severity == "critical":
+                    critical_count += 1
+                elif finding.severity == "high":
+                    high_count += 1
+                elif finding.severity == "medium":
+                    medium_count += 1
+                elif finding.severity == "low":
+                    low_count += 1
+
+        # Count skipped frames
+        skipped_count = sum(
+            1 for fe in pipeline.frame_executions if fe.status == "skipped"
+        )
+
+        return PipelineResult(
+            pipeline_id=pipeline.id,
+            pipeline_name=pipeline.name,
+            status=pipeline.status,
+            duration=pipeline.duration,
+            total_frames=pipeline.total_frames,
+            frames_passed=pipeline.frames_completed - pipeline.frames_failed,
+            frames_failed=pipeline.frames_failed,
+            frames_skipped=skipped_count,
+            total_findings=pipeline.total_issues,
+            critical_findings=critical_count,
+            high_findings=high_count,
+            medium_findings=medium_count,
+            low_findings=low_count,
+            frame_results=frame_results,
+            metadata={
+                "strategy": self.config.strategy.value,
+                "fail_fast": self.config.fail_fast,
+                "frame_executions": [fe.to_json() for fe in pipeline.frame_executions],
+            },
+        )

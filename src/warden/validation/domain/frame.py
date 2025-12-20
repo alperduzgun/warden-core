@@ -1,0 +1,308 @@
+"""
+Validation Frame base class - Plugin System Foundation.
+
+All validation frames (built-in and community) must inherit from ValidationFrame.
+
+Panel Source: /warden-panel-development/src/lib/types/frame.ts
+Plugin Docs: /docs/PLUGIN_SYSTEM.md
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Dict, Any, List
+from enum import Enum
+
+
+class FrameCategory(str, Enum):
+    """
+    Frame category classification.
+
+    Matches Panel TypeScript FrameCategory enum.
+    """
+
+    GLOBAL = "global"  # Applies to all code
+    LANGUAGE_SPECIFIC = "language-specific"  # Python, JavaScript, etc.
+    FRAMEWORK_SPECIFIC = "framework-specific"  # FastAPI, React, Flutter, etc.
+
+
+class FramePriority(str, Enum):
+    """
+    Frame execution priority.
+
+    Panel: type FramePriority = 'critical' | 'high' | 'medium' | 'low';
+    """
+
+    CRITICAL = "critical"  # Execute first, block on failure
+    HIGH = "high"  # Execute early
+    MEDIUM = "medium"  # Normal priority
+    LOW = "low"  # Execute last
+
+
+class FrameApplicability(str, Enum):
+    """
+    Language/framework applicability.
+
+    Matches Panel TypeScript FrameApplicability enum.
+    """
+
+    ALL = "all"
+    CSHARP = "csharp"
+    DART = "dart"
+    TYPESCRIPT = "typescript"
+    PYTHON = "python"
+    JAVA = "java"
+    GO = "go"
+    FLUTTER = "flutter"
+    REACT = "react"
+    ASPNETCORE = "aspnetcore"
+    NEXTJS = "nextjs"
+
+
+@dataclass
+class Finding:
+    """
+    A single validation finding (issue/warning).
+
+    Panel TypeScript:
+        export interface Finding {
+            id: string;
+            severity: 'critical' | 'high' | 'medium' | 'low';
+            message: string;
+            location: string;
+            detail?: string;
+            code?: string;
+        }
+    """
+
+    id: str
+    severity: str  # 'critical' | 'high' | 'medium' | 'low'
+    message: str
+    location: str  # e.g., "user_service.py:45"
+    detail: str | None = None
+    code: str | None = None  # Code snippet
+
+    def to_json(self) -> Dict[str, Any]:
+        """Serialize to Panel JSON."""
+        return {
+            "id": self.id,
+            "severity": self.severity,
+            "message": self.message,
+            "location": self.location,
+            "detail": self.detail,
+            "code": self.code,
+        }
+
+
+@dataclass
+class FrameResult:
+    """
+    Result from frame execution.
+
+    Panel TypeScript:
+        export interface FrameExecutionResult {
+            frameId: string;
+            frameName: string;
+            status: 'passed' | 'failed' | 'warning';
+            duration: number;
+            issuesFound: number;
+            isBlocker: boolean;
+        }
+    """
+
+    frame_id: str
+    frame_name: str
+    status: str  # 'passed' | 'failed' | 'warning'
+    duration: float  # in seconds
+    issues_found: int
+    is_blocker: bool
+    findings: List[Finding]
+    metadata: Dict[str, Any] | None = None
+
+    @property
+    def passed(self) -> bool:
+        """Check if frame passed (no issues)."""
+        return self.status == "passed"
+
+    def to_json(self) -> Dict[str, Any]:
+        """Serialize to Panel JSON (camelCase)."""
+        return {
+            "frameId": self.frame_id,
+            "frameName": self.frame_name,
+            "status": self.status,
+            "duration": self.duration,
+            "issuesFound": self.issues_found,
+            "isBlocker": self.is_blocker,
+            "findings": [f.to_json() for f in self.findings],
+            "metadata": self.metadata,
+        }
+
+
+class ValidationFrame(ABC):
+    """
+    Base class for all validation frames (built-in and community plugins).
+
+    Community developers extend this class to create custom frames.
+
+    Example:
+        class MyCustomFrame(ValidationFrame):
+            name = "My Custom Security Check"
+            description = "Company-specific security validation"
+            category = FrameCategory.GLOBAL
+            priority = FramePriority.HIGH
+            is_blocker = True
+
+            async def execute(self, code_file: CodeFile) -> FrameResult:
+                # Validation logic here
+                pass
+
+    Plugin Discovery:
+        - Entry points (PyPI packages): [tool.poetry.plugins."warden.frames"]
+        - Directory-based: ~/.warden/plugins/
+        - Environment variable: WARDEN_PLUGIN_PATHS
+
+    See: /docs/PLUGIN_SYSTEM.md
+    """
+
+    # Required metadata (must be overridden by subclasses)
+    name: str = "Unnamed Frame"
+    description: str = "No description provided"
+    category: FrameCategory = FrameCategory.GLOBAL
+    priority: FramePriority = FramePriority.MEDIUM
+    is_blocker: bool = False
+
+    # Optional metadata
+    version: str = "0.0.0"
+    author: str = "Unknown"
+    applicability: List[FrameApplicability] = [FrameApplicability.ALL]
+
+    # Plugin compatibility (for community frames)
+    min_warden_version: str | None = None
+    max_warden_version: str | None = None
+
+    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+        """
+        Initialize frame with optional configuration.
+
+        Args:
+            config: Frame-specific configuration from .warden/config.yaml
+                    or programmatic setup
+        """
+        self.config = config or {}
+        self._validate_metadata()
+
+    def _validate_metadata(self) -> None:
+        """Validate required metadata is present."""
+        if self.name == "Unnamed Frame":
+            raise ValueError(f"{self.__class__.__name__} must define 'name' attribute")
+
+        if self.description == "No description provided":
+            raise ValueError(f"{self.__class__.__name__} must define 'description' attribute")
+
+    @abstractmethod
+    async def execute(self, code_file: "CodeFile") -> FrameResult:  # type: ignore[name-defined]
+        """
+        Execute validation frame on code file.
+
+        Args:
+            code_file: Code file to validate (contains path, content, language, etc.)
+
+        Returns:
+            FrameResult with findings and metadata
+
+        Raises:
+            ValidationFrameError: If validation fails unexpectedly
+
+        Implementation Guidelines:
+            - Execute within 30 seconds (timeout enforced by FrameExecutor)
+            - Return FrameResult even on partial failure (don't raise exceptions)
+            - Use Finding objects to report issues
+            - Set status='failed' if frame execution fails
+            - Set status='warning' for non-critical findings
+            - Set status='passed' if no issues found
+        """
+        pass
+
+    @property
+    def frame_id(self) -> str:
+        """
+        Unique frame identifier.
+
+        Default: snake_case class name
+        Override for custom ID (e.g., community plugins)
+        """
+        return self.__class__.__name__.lower().replace("frame", "").replace("_", "-")
+
+    def is_applicable(self, language: str, framework: str | None = None) -> bool:
+        """
+        Check if frame is applicable to given language/framework.
+
+        Args:
+            language: Programming language (python, javascript, etc.)
+            framework: Optional framework (fastapi, react, etc.)
+
+        Returns:
+            True if frame should run for this code
+        """
+        # Global frames apply to everything
+        if FrameApplicability.ALL in self.applicability:
+            return True
+
+        # Check language
+        lang_match = any(
+            app.value.lower() == language.lower() for app in self.applicability
+        )
+
+        # Check framework (if provided)
+        if framework:
+            framework_match = any(
+                app.value.lower() == framework.lower() for app in self.applicability
+            )
+            return lang_match or framework_match
+
+        return lang_match
+
+    def __repr__(self) -> str:
+        """String representation for logging."""
+        return (
+            f"{self.__class__.__name__}("
+            f"id={self.frame_id}, "
+            f"name={self.name}, "
+            f"priority={self.priority.value}, "
+            f"blocker={self.is_blocker})"
+        )
+
+
+class ValidationFrameError(Exception):
+    """Raised when frame execution fails unexpectedly."""
+
+    pass
+
+
+# ============================================================================
+# CodeFile Model (temporary - will move to shared/domain later)
+# ============================================================================
+
+
+@dataclass
+class CodeFile:
+    """
+    Represents a code file to be validated.
+
+    This is a simplified version. Full implementation will be in shared/domain.
+    """
+
+    path: str
+    content: str
+    language: str  # python, javascript, typescript, etc.
+    framework: str | None = None  # fastapi, react, flutter, etc.
+    size_bytes: int = 0
+    line_count: int = 0
+
+    def __post_init__(self) -> None:
+        """Calculate size and line count if not provided."""
+        if self.size_bytes == 0:
+            self.size_bytes = len(self.content.encode("utf-8"))
+        if self.line_count == 0:
+            self.line_count = self.content.count("\n") + 1
