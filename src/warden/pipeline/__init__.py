@@ -8,6 +8,7 @@ from warden.pipeline.domain.models import (
 )
 from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
 from warden.pipeline.application.orchestrator import PipelineOrchestrator
+from warden.pipeline.application.enhanced_orchestrator import EnhancedPipelineOrchestrator
 
 __all__ = [
     "ValidationPipeline",
@@ -17,4 +18,5 @@ __all__ = [
     "PipelineStatus",
     "ExecutionStrategy",
     "PipelineOrchestrator",
+    "EnhancedPipelineOrchestrator",
 ]

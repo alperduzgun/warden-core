@@ -6,15 +6,49 @@ name: "Warden Core Development Pipeline"
 
 # Validation frames to run
 frames:
+  # Core validation frames
   - security      # Critical security checks
   - fuzz          # Edge case testing
   - property      # Logic validation
   - architectural # Code organization
 
+  # Git integration frames
+  - gitchanges    # Analyze only changed lines (CI/CD)
+  - orphan        # Dead code detection
+
+# Pipeline settings
 settings:
   fail_fast: true     # Stop on first blocker failure
   parallel: false     # Sequential execution for debugging
   timeout: 300        # 5 minutes max per frame
+
+  # Enhanced pipeline features
+  enable_discovery: true        # Auto-discover project files
+  enable_build_context: true    # Load build configuration
+  enable_suppression: true      # Filter false positives
+
+# Frame-specific configurations
+frame_config:
+  gitchanges:
+    compare_mode: "staged"      # Options: "staged", "unstaged", "branch"
+    base_branch: "main"         # Base branch for comparison
+    include_context: false      # Include context lines
+
+  orphan:
+    ignore_private: true        # Ignore private functions/classes
+    ignore_test_files: true     # Skip test files
+    ignore_imports:             # Imports to ignore
+      - "pytest"
+      - "unittest"
+
+# Discovery configuration
+discovery:
+  use_gitignore: true           # Respect .gitignore patterns
+  max_depth: null               # No depth limit
+
+# Suppression configuration
+suppression:
+  config_path: ".warden/suppressions.yaml"  # Path to suppressions file
 
 # Project-specific ignore patterns (future feature)
 # ignore_patterns:

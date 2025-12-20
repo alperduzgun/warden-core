@@ -8,6 +8,9 @@
 
 ## 📋 KODLAMA STANDARTLARI (NON-NEGOTIABLE)
 
+### 0. Sakın Commit Atma
+Commitler kullanıcı tarafından atılır.
+
 ### 1. Kod Organizasyon Kuralları (KRİTİK)
 
 #### 1.1 Dosya Boyut Limiti

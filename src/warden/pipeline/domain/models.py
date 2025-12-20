@@ -57,6 +57,17 @@ class PipelineConfig(BaseDomainModel):
     parallel_limit: int = 4  # Max concurrent frames in parallel mode
     skip_non_blockers: bool = False  # Skip non-blocker frames if blocker fails
 
+    # Optional pre-processing phases
+    enable_discovery: bool = True  # Run file discovery before validation
+    enable_build_context: bool = True  # Load build context at pipeline start
+
+    # Optional post-processing phases
+    enable_suppression: bool = True  # Apply suppression filtering after validation
+
+    # Phase-specific configurations
+    discovery_config: Optional[Dict[str, Any]] = None  # Discovery configuration options
+    suppression_config_path: Optional[str] = None  # Path to suppression config file
+
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
