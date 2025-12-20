@@ -33,20 +33,33 @@ async def display_scan_summary(
     stopped_pipelines = 0
 
     for result in results:
-        pipeline_result = result.get("pipeline_result", {})
-        summary = pipeline_result.get("summary", {})
+        pipeline_result = result.get("pipeline_result")
+        if not pipeline_result:
+            continue
 
-        total_issues += summary.get("totalIssues", 0)
-        critical += summary.get("critical", 0)
-        high += summary.get("high", 0)
-        medium += summary.get("medium", 0)
-        low += summary.get("low", 0)
-        total_duration += pipeline_result.get("durationMs", 0)
+        total_duration += pipeline_result.duration_ms
 
-        status = pipeline_result.get("status", "unknown")
-        if status == "failed":
+        # Count issues from analysis_result
+        analysis_result = pipeline_result.analysis_result or {}
+        issues = analysis_result.get("issues", [])
+        total_issues += len(issues)
+
+        # Count by severity
+        for issue in issues:
+            severity = issue.get("severity", "medium").lower()
+            if severity == "critical":
+                critical += 1
+            elif severity == "high":
+                high += 1
+            elif severity == "medium":
+                medium += 1
+            elif severity == "low":
+                low += 1
+
+        # Check pipeline status
+        if not pipeline_result.success:
             failed_pipelines += 1
-        elif status == "stopped":
+        elif pipeline_result.blocker_failures:
             stopped_pipelines += 1
 
     # Status emoji
@@ -92,14 +105,17 @@ async def display_scan_summary(
         lines.append("")
 
         # Show files with most issues
-        files_with_issues = [
-            {
-                "path": r["path"],
-                "issues": r["pipeline_result"].get("summary", {}).get("totalIssues", 0)
-            }
-            for r in results
-            if r["pipeline_result"].get("summary", {}).get("totalIssues", 0) > 0
-        ]
+        files_with_issues = []
+        for r in results:
+            pipeline_result = r.get("pipeline_result")
+            if not pipeline_result or not pipeline_result.analysis_result:
+                continue
+            issue_count = len(pipeline_result.analysis_result.get("issues", []))
+            if issue_count > 0:
+                files_with_issues.append({
+                    "path": r["path"],
+                    "issues": issue_count
+                })
         files_with_issues.sort(key=lambda x: x["issues"], reverse=True)
 
         if files_with_issues:

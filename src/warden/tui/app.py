@@ -18,7 +18,7 @@ from .handlers import handle_chat_message, handle_slash_command
 # Import real Warden components
 try:
     from warden.core.pipeline.orchestrator import PipelineOrchestrator
-    from warden.config.yaml_parser import YamlConfigParser
+    from warden.config.discovery import discover_config
     PIPELINE_AVAILABLE = True
 except ImportError:
     PIPELINE_AVAILABLE = False
@@ -59,8 +59,8 @@ class WardenTUI(App):
         self.orchestrator = None
         self.active_config_name = "quick-scan"
 
-        # Initialize pipeline with default config
-        self._load_pipeline_config(config_path or "quick-scan")
+        # Initialize pipeline with config discovery (None = auto-discover)
+        self._load_pipeline_config(config_path)
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -91,28 +91,43 @@ class WardenTUI(App):
         yield Footer()
 
     def _load_pipeline_config(self, config_name: str) -> None:
-        """Load pipeline configuration from YAML."""
+        """Load pipeline configuration using discovery system."""
         if not PIPELINE_AVAILABLE:
             return
 
         try:
-            # Check if it's a template name or file path
-            if not config_name.endswith('.yaml'):
-                # It's a template name, load from templates/
-                import importlib.resources
-                template_path = Path(__file__).parent.parent.parent / "config" / "templates" / f"{config_name}.yaml"
-            else:
-                template_path = Path(config_name)
+            from warden.config.discovery import discover_config, get_config_source
 
-            if template_path.exists():
-                self.pipeline_config = YamlConfigParser.parse_file(str(template_path))
-                self.orchestrator = PipelineOrchestrator(self.pipeline_config)
-                self.active_config_name = config_name.replace('.yaml', '')
-            else:
-                # Fallback to quick-scan
-                self.active_config_name = "no-config"
-        except Exception:
+            # Discover config with hierarchy
+            config = discover_config(
+                start_path=self.project_root,
+                template_name=config_name if config_name else None
+            )
+
+            if not config:
+                import sys
+                print(f"⚠️  No config found", file=sys.stderr)
+                self.active_config_name = "none"
+                self.orchestrator = None
+                return
+
+            # Create orchestrator with discovered config
+            self.orchestrator = PipelineOrchestrator(config=config)
+
+            # Set active config name based on source
+            self.active_config_name = get_config_source(
+                start_path=self.project_root,
+                template_name=config_name if config_name else None
+            )
+
+        except Exception as e:
+            # Log error but don't crash
+            import sys
+            print(f"⚠️  Pipeline loading error: {str(e)}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
             self.active_config_name = "error"
+            self.orchestrator = None
 
     def _get_session_info(self) -> str:
         """Get session info bar text."""

@@ -1,0 +1,22 @@
+# Warden Pipeline Configuration
+# This is the project-specific config for warden-core
+
+version: "1.0"
+name: "Warden Core Development Pipeline"
+
+# Validation frames to run
+frames:
+  - security      # Critical security checks
+  - fuzz          # Edge case testing
+  - property      # Logic validation
+  - architectural # Code organization
+
+settings:
+  fail_fast: true     # Stop on first blocker failure
+  parallel: false     # Sequential execution for debugging
+  timeout: 300        # 5 minutes max per frame
+
+# Project-specific ignore patterns (future feature)
+# ignore_patterns:
+#   - "*/tests/*"
+#   - "*/temp/*"

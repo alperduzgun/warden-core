@@ -1,0 +1,8 @@
+# Warden runtime files (ignored)
+*.log
+*.cache
+.session-*
+reports/
+
+# Config is committed (team-shared)
+!config.yaml

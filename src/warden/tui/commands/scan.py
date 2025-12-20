@@ -3,6 +3,11 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
+from ..display.scan import (
+    display_scan_summary,
+    show_mock_scan_result
+)
+
 if TYPE_CHECKING:
     from warden.core.pipeline.orchestrator import PipelineOrchestrator
 
@@ -22,10 +27,6 @@ async def handle_scan_command(
         orchestrator: PipelineOrchestrator instance
         add_message: Function to add messages to chat
     """
-    from ..display.scan import (
-        display_scan_summary,
-        show_mock_scan_result
-    )
 
     scan_path = Path(args.strip()) if args else project_root
 
@@ -99,7 +100,7 @@ async def _run_pipeline_scan(
                     content = f.read()
 
                 # Execute full pipeline
-                pipeline_result = await orchestrator.execute_pipeline(
+                pipeline_result = await orchestrator.execute(
                     file_path=str(file_path),
                     file_content=content,
                     language="python"

@@ -1,5 +1,24 @@
 # Warden C# to Python Migration Session
 
+## 📌 PATH CONFIGURATION
+
+**IMPORTANT:** This file uses generic path placeholders. Replace them with your actual paths:
+
+```bash
+<WARDEN_PANEL_PATH>   → Path to warden-panel-development (Svelte frontend)
+<WARDEN_CSHARP_PATH>  → Path to warden-csharp (C# legacy backend)
+<PROJECT_ROOT>        → Path to this project (warden-core Python)
+
+Example:
+<WARDEN_PANEL_PATH>   → /Users/yourname/warden-panel-development
+<WARDEN_CSHARP_PATH>  → /Users/yourname/warden-csharp
+<PROJECT_ROOT>        → /Users/yourname/warden-core
+```
+
+**For Claude Code:** When executing commands, replace placeholders with actual paths.
+
+---
+
 ## 📌 DEVELOPMENT CONTEXT (Claude Code için)
 
 **NOT:** Bu proje uzun soluklu bir geliştirme. Kullanıcının local'inde mem0 kurulu ve Claude Code session'ları arasında context tutmak için kullanılıyor.
@@ -11,9 +30,9 @@
 /mem-context
 
 # 2. Critical files'ı oku (3 dosya - MANDATORY!)
-cat session-start.md
-cat warden_core_rules.md
-cat temp/warden_project_context.md
+cat temp/session-start.md
+cat temp/warden_core_rules.md
+cat temp/warden_quick_reference.md
 
 # 3. Gerekirse spesifik search
 /mem-search "warden core"
@@ -53,7 +72,7 @@ Migrate Warden from C# to Python while preserving functionality and improving ma
 
 ### Source (C# Project - LEGACY)
 ```
-/Users/ibrahimcaglar/warden-csharp/
+<WARDEN_CSHARP_PATH>/
 ├── src/Warden.Core/           # Core business logic
 ├── src/Warden.CLI/            # CLI implementation
 ├── tests/                     # Test suite
@@ -64,7 +83,7 @@ Migrate Warden from C# to Python while preserving functionality and improving ma
 
 ### Reference (Svelte Panel - SOURCE OF TRUTH)
 ```
-/Users/ibrahimcaglar/warden-panel-development/
+<WARDEN_PANEL_PATH>/
 ├── src/lib/types/            # TypeScript type definitions (REFERENCE!)
 │   ├── warden.ts             # Issue, Report, Metrics models
 │   ├── pipeline.ts           # Pipeline execution models
@@ -80,7 +99,7 @@ Migrate Warden from C# to Python while preserving functionality and improving ma
 
 ### Target (Python Project)
 ```
-/Users/ibrahimcaglar/warden-core/
+<PROJECT_ROOT>/
 ├── src/warden/               # Main package (struktur TBD)
 ├── tests/                     # Python tests (pytest)
 └── docs/                      # Documentation
@@ -116,18 +135,18 @@ Migrate Warden from C# to Python while preserving functionality and improving ma
 ### Before Implementing ANY Feature - Checklist
 ```bash
 # 1. Panel Types kontrol
-cat /Users/ibrahimcaglar/warden-panel-development/src/lib/types/warden.ts
-cat /Users/ibrahimcaglar/warden-panel-development/src/lib/types/pipeline.ts
-cat /Users/ibrahimcaglar/warden-panel-development/src/lib/types/frame.ts
+cat <WARDEN_PANEL_PATH>/src/lib/types/warden.ts
+cat <WARDEN_PANEL_PATH>/src/lib/types/pipeline.ts
+cat <WARDEN_PANEL_PATH>/src/lib/types/frame.ts
 
 # 2. API Design kontrol
-cat /Users/ibrahimcaglar/warden-panel-development/API_DESIGN.md
+cat <WARDEN_PANEL_PATH>/API_DESIGN.md
 
 # 3. Latest Session Notes kontrol
-cat /Users/ibrahimcaglar/warden-panel-development/.session-notes*.md
+cat <WARDEN_PANEL_PATH>/.session-notes*.md
 
 # 4. C# (SADECE gerekirse - SECONDARY)
-find /Users/ibrahimcaglar/warden-csharp/src -name "*FeatureName*"
+find <WARDEN_CSHARP_PATH>/src -name "*FeatureName*"
 ```
 
 ---
@@ -337,26 +356,26 @@ Over-engineering yapma. Panel'de ne varsa onu implement et.
 ### Panel Feature Check
 ```bash
 # Feature var mı?
-grep -r "FeatureName" /Users/ibrahimcaglar/warden-panel-development/src/lib/types/
+grep -r "FeatureName" <WARDEN_PANEL_PATH>/src/lib/types/
 
 # Latest implementation notes
-cat /Users/ibrahimcaglar/warden-panel-development/.session-notes*.md | grep -A 10 "FeatureName"
+cat <WARDEN_PANEL_PATH>/.session-notes*.md | grep -A 10 "FeatureName"
 ```
 
 ### C# Reference Check (Secondary)
 ```bash
 # Sadece Panel'de bulamazsanız
-find /Users/ibrahimcaglar/warden-csharp/src -name "*FeatureName*"
+find <WARDEN_CSHARP_PATH>/src -name "*FeatureName*"
 ```
 
 ---
 
 ## 📞 Support Resources
 
-- Panel TypeScript Types: `/Users/ibrahimcaglar/warden-panel-development/src/lib/types/`
-- API Contracts: `/Users/ibrahimcaglar/warden-panel-development/API_DESIGN.md`
-- Latest Features: `/Users/ibrahimcaglar/warden-panel-development/.session-notes*.md`
-- C# Reference: `/Users/ibrahimcaglar/warden-csharp/src/Warden.Core/`
+- Panel TypeScript Types: `<WARDEN_PANEL_PATH>/src/lib/types/`
+- API Contracts: `<WARDEN_PANEL_PATH>/API_DESIGN.md`
+- Latest Features: `<WARDEN_PANEL_PATH>/.session-notes*.md`
+- C# Reference: `<WARDEN_CSHARP_PATH>/src/Warden.Core/`
 
 ---
 
@@ -452,8 +471,9 @@ git push origin prod --tags
 - ⚠️ IMPORTANT: C# yapısını birebir kopyalama!
 
 **Files Created:**
-- `/Users/ibrahimcaglar/warden-core/session-start.md`
-- `/Users/ibrahimcaglar/warden-core/warden_core_rules.md`
+- `<PROJECT_ROOT>/temp/session-start.md`
+- `<PROJECT_ROOT>/temp/warden_core_rules.md`
+- `<PROJECT_ROOT>/temp/warden_quick_reference.md`
 
 **Session Workflow:**
 1. `/mem-context` (load previous context)
@@ -476,19 +496,19 @@ git push origin prod --tags
 ### STEP 2: Read Critical Files (MANDATORY)
 ```bash
 # 1. Session start guide (migration strategy)
-cat /Users/ibrahimcaglar/warden-core/session-start.md
+cat temp/session-start.md
 
 # 2. Python coding rules (standards & best practices)
-cat /Users/ibrahimcaglar/warden-core/warden_core_rules.md
+cat temp/warden_core_rules.md
 
-# 3. Warden project context (C# implementation reference - genel bilgi için)
-cat /Users/ibrahimcaglar/warden-core/temp/warden_project_context.md
+# 3. Warden quick reference (core concepts - condensed version)
+cat temp/warden_quick_reference.md
 ```
 
 **WHY MANDATORY:**
 - `session-start.md` → Migration strategy, Panel-first approach, critical paths, feature workflow
 - `warden_core_rules.md` → Python standards, Panel JSON compatibility, security rules, type hints
-- `warden_project_context.md` → C# Warden projesinin tam dokümantasyonu, validation frames, architecture, genel kavramlar
+- `warden_quick_reference.md` → Core concepts, validation strategies, architecture overview (condensed)
 
 **⚠️ DO NOT SKIP:** These files contain critical rules that MUST be followed.
 
@@ -496,7 +516,7 @@ cat /Users/ibrahimcaglar/warden-core/temp/warden_project_context.md
 - [ ] ✅ `/mem-context` çalıştırıldı (context loaded)
 - [ ] ✅ session-start.md okundu (migration rules)
 - [ ] ✅ warden_core_rules.md okundu (coding standards)
-- [ ] ✅ warden_project_context.md okundu (C# reference, genel kavramlar)
+- [ ] ✅ warden_quick_reference.md okundu (core concepts)
 - [ ] Check Panel types for latest changes
 - [ ] Check .session-notes for new features
 - [ ] Review API_DESIGN.md if needed
