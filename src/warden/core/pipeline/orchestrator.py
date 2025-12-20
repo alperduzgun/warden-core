@@ -9,8 +9,11 @@ Sequential flow:
 5. Cleaning (optional)
 
 Features:
-- Fail-fast validation
+- YAML config-driven execution
+- Fail-fast validation (from config)
 - Blocker check (security failures stop pipeline)
+- Priority-based frame execution
+- Parallel/Sequential execution modes
 - Resilience patterns (retry, timeout)
 - Correlation ID tracking
 - Structured logging
@@ -19,10 +22,12 @@ import uuid
 import time
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 from warden.core.pipeline.result import PipelineResult
+from warden.core.pipeline.factory import create_frame_executor_from_config
+from warden.models.pipeline_config import PipelineConfig
 
 # Fallback logger (structlog not installed yet)
 try:
@@ -35,17 +40,18 @@ except ImportError:
 
 class PipelineOrchestrator:
     """
-    Main pipeline executor.
+    Main pipeline executor - YAML config-driven.
 
     Orchestrates sequential execution of pipeline stages with
-    resilience patterns and fail-fast behavior.
+    resilience patterns and config-based behavior.
     """
 
     def __init__(
         self,
+        config: Optional[PipelineConfig] = None,
         analyzer=None,  # CodeAnalyzer instance
         classifier=None,  # CodeClassifier instance
-        frame_executor=None,  # FrameExecutor instance
+        frame_executor=None,  # FrameExecutor instance (will be created from config)
         fortifier=None,  # Optional fortifier
         cleaner=None,  # Optional cleaner
     ):
@@ -53,18 +59,35 @@ class PipelineOrchestrator:
         Initialize pipeline orchestrator.
 
         Args:
-            analyzer: Code analyzer instance
-            classifier: Code classifier instance
-            frame_executor: Frame executor instance
+            config: Pipeline configuration (YAML loaded)
+            analyzer: Code analyzer instance (optional, auto-created if None)
+            classifier: Code classifier instance (optional, auto-created if None)
+            frame_executor: Frame executor (will be created from config if None)
             fortifier: Optional fortifier instance
             cleaner: Optional cleaner instance
         """
+        self.config = config
+
+        # Auto-create analyzer/classifier if not provided
+        if analyzer is None:
+            from warden.core.analysis.analyzer import CodeAnalyzer
+            analyzer = CodeAnalyzer()
+
+        if classifier is None:
+            from warden.core.analysis.classifier import CodeClassifier
+            classifier = CodeClassifier()
+
         self.analyzer = analyzer
         self.classifier = classifier
-        self.frame_executor = frame_executor
         self.fortifier = fortifier
         self.cleaner = cleaner
         self.logger = logger
+
+        # Create FrameExecutor from config
+        if frame_executor is None and config is not None:
+            frame_executor = create_frame_executor_from_config(config)
+
+        self.frame_executor = frame_executor
 
     async def execute(
         self,
@@ -73,7 +96,7 @@ class PipelineOrchestrator:
         language: str = "python",
         enable_fortification: bool = True,
         enable_cleaning: bool = False,
-        fail_fast: bool = True,
+        fail_fast: Optional[bool] = None,
     ) -> PipelineResult:
         """
         Execute full pipeline on a code file.
@@ -84,7 +107,7 @@ class PipelineOrchestrator:
             language: Programming language
             enable_fortification: Run fortification stage
             enable_cleaning: Run cleaning stage
-            fail_fast: Stop on blocker failures
+            fail_fast: Stop on blocker failures (uses config default if None)
 
         Returns:
             PipelineResult with execution results
@@ -92,6 +115,12 @@ class PipelineOrchestrator:
         correlation_id = str(uuid.uuid4())
         started_at = datetime.now()
         start_time = time.perf_counter()
+
+        # Get config settings (or use defaults)
+        if fail_fast is None:
+            fail_fast = self.config.settings.fail_fast if self.config else True
+
+        parallel = self.config.settings.parallel if self.config else False
 
         self.logger.info(
             "pipeline_started",
@@ -102,8 +131,12 @@ class PipelineOrchestrator:
 
         try:
             # Fail-fast validation
-            if not file_path or not file_content:
-                raise ValueError("file_path and file_content are required")
+            if not file_path:
+                raise ValueError("file_path is required")
+
+            # Allow empty content (e.g., __init__.py files)
+            if file_content is None:
+                raise ValueError("file_content cannot be None")
 
             path_obj = Path(file_path)
             if not path_obj.suffix:
@@ -162,6 +195,7 @@ class PipelineOrchestrator:
                 language,
                 classification_result,
                 correlation_id,
+                parallel,
             )
 
             if not validation_summary:
@@ -345,6 +379,7 @@ class PipelineOrchestrator:
         language: str,
         classification_result: Dict[str, Any],
         correlation_id: str,
+        parallel: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Execute validation stage."""
         if not self.frame_executor:
@@ -370,6 +405,7 @@ class PipelineOrchestrator:
                 recommended_frames=recommended_frames,
                 characteristics=characteristics,
                 correlation_id=correlation_id,
+                parallel=parallel,  # Use config setting
             )
             return result
         except Exception as ex:

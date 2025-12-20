@@ -85,7 +85,7 @@ async def _run_full_pipeline(
             content = f.read()
 
         # Run full pipeline (5 stages + validation frames)
-        result = await orchestrator.execute_pipeline(
+        result = await orchestrator.execute(
             file_path=str(file_path),
             file_content=content,
             language="python"

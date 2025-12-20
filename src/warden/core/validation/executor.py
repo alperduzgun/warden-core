@@ -37,9 +37,29 @@ class FrameExecutor:
         Initialize frame executor.
 
         Args:
-            frames: List of frame instances to execute
+            frames: List of frame instances to execute (auto-loads all if None)
         """
-        self.frames = frames or []
+        if frames is None:
+            # Auto-register all available frames
+            from warden.core.validation.frames import (
+                SecurityFrame,
+                ChaosEngineeringFrame,
+                FuzzTestingFrame,
+                PropertyTestingFrame,
+                ArchitecturalConsistencyFrame,
+                StressTestingFrame,
+            )
+            self.frames = [
+                SecurityFrame(),
+                ChaosEngineeringFrame(),
+                FuzzTestingFrame(),
+                PropertyTestingFrame(),
+                ArchitecturalConsistencyFrame(),
+                StressTestingFrame(),
+            ]
+        else:
+            self.frames = frames
+
         self.logger = logger
         self._cache: Dict[str, FrameResult] = {}
 

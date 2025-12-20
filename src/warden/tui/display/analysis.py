@@ -6,7 +6,7 @@ from typing import Callable, Any, Dict
 
 async def display_pipeline_result(
     file_path: Path,
-    pipeline_result: Dict[str, Any],
+    pipeline_result: Any,  # PipelineResult object
     add_message: Callable[[str, str, bool], None],
 ) -> None:
     """
@@ -14,16 +14,16 @@ async def display_pipeline_result(
 
     Args:
         file_path: Path to analyzed file
-        pipeline_result: PipelineRun result from orchestrator
+        pipeline_result: PipelineResult object from orchestrator
         add_message: Function to add messages to chat
     """
     from ..utils.formatter import TreeFormatter
 
-    # Extract data from pipeline result
-    status = pipeline_result.get("status", "unknown")
-    duration_ms = pipeline_result.get("durationMs", 0)
-    steps = pipeline_result.get("steps", [])
-    summary = pipeline_result.get("summary", {})
+    # Extract data from PipelineResult object
+    status = "success" if pipeline_result.success else "failed"
+    duration_ms = pipeline_result.duration_ms
+    analysis_result = pipeline_result.analysis_result or {}
+    validation_summary = pipeline_result.validation_summary or {}
 
     # Status emoji
     if status == "success":
@@ -54,60 +54,82 @@ async def display_pipeline_result(
 
     # Pipeline stages
     lines.append(TreeFormatter.header("Pipeline Stages"))
-    for idx, step in enumerate(steps, 1):
-        step_type = step.get("stepType", "unknown")
-        step_status = step.get("status", "unknown")
-        step_duration = step.get("durationMs", 0)
 
-        step_emoji = "✅" if step_status == "success" else "❌"
+    # Analysis stage
+    if analysis_result:
+        score = analysis_result.get("score", 0)
+        issue_count = len(analysis_result.get("issues", []))
+        lines.append(TreeFormatter.item(f"Stage 1/5: **Analysis** ✅ (Score: {score:.1f}, Issues: {issue_count})"))
+
+    # Classification stage
+    if pipeline_result.classification_result:
+        recommended_frames = pipeline_result.classification_result.get("recommendedFrames", [])
+        lines.append(TreeFormatter.item(f"Stage 2/5: **Classification** ✅ (Recommended: {len(recommended_frames)} frames)"))
+
+    # Validation stage
+    if validation_summary:
+        total_frames = validation_summary.get("totalFrames", 0)
+        passed_frames = validation_summary.get("passedFrames", 0)
+        failed_frames = validation_summary.get("failedFrames", 0)
+
+        stage_emoji = "✅" if failed_frames == 0 else "⚠️"
         lines.append(
             TreeFormatter.item(
-                f"Stage {idx}/5: **{step_type.title()}** {step_emoji} ({step_duration:.0f}ms)"
+                f"Stage 3/5: **Validation** {stage_emoji} ({passed_frames}/{total_frames} passed)"
             )
         )
 
-        # Show validation frames details
-        if step_type == "validation":
-            sub_steps = step.get("subSteps", [])
-            for sub_step in sub_steps:
-                frame_name = sub_step.get("frameName", "Unknown")
-                frame_status = sub_step.get("status", "unknown")
-                is_blocker = sub_step.get("isBlocker", False)
-                issue_count = sub_step.get("issuesFound", 0)
-                frame_duration = sub_step.get("durationMs", 0)
+        # Show validation frame details
+        frame_results = validation_summary.get("results", [])
+        for frame_result in frame_results:
+            frame_name = frame_result.get("name", "Unknown")
+            frame_passed = frame_result.get("passed", False)
+            is_blocker = frame_result.get("isBlocker", False)
+            frame_duration = frame_result.get("executionTimeMs", 0)
 
-                frame_emoji = "✅" if frame_status == "passed" else "❌"
-                blocker_text = " **(BLOCKER)**" if is_blocker else ""
+            frame_emoji = "✅" if frame_passed else "❌"
+            blocker_text = " **(BLOCKER)**" if is_blocker else ""
 
-                lines.append(
-                    TreeFormatter.item(
-                        f"{frame_emoji} {frame_name}{blocker_text}: {issue_count} issues ({frame_duration:.0f}ms)",
-                        level=2
-                    )
+            lines.append(
+                TreeFormatter.item(
+                    f"{frame_emoji} {frame_name}{blocker_text} ({frame_duration:.0f}ms)",
+                    level=2
                 )
+            )
 
-    # Summary
-    if summary:
-        total_issues = summary.get("totalIssues", 0)
-        if total_issues > 0:
-            lines.append("")
-            lines.append(TreeFormatter.header("Issues Found"))
-            lines.append(TreeFormatter.item(f"Total: **{total_issues}**"))
-            lines.append(TreeFormatter.item(f"🔴 Critical: {summary.get('critical', 0)}"))
-            lines.append(TreeFormatter.item(f"🟡 High: {summary.get('high', 0)}"))
-            lines.append(TreeFormatter.item(f"🟠 Medium: {summary.get('medium', 0)}"))
-            lines.append(TreeFormatter.item(f"⚪ Low: {summary.get('low', 0)}"))
-        else:
-            lines.append("")
-            lines.append("✅ **No issues found!** Code looks good.")
-
-    # Recommendations
-    recommendations = pipeline_result.get("recommendations", [])
-    if recommendations:
+    # Issues from analysis
+    issues = analysis_result.get("issues", [])
+    if len(issues) > 0:
         lines.append("")
-        lines.append(TreeFormatter.header("Recommendations"))
-        for rec in recommendations[:3]:
-            lines.append(TreeFormatter.item(rec))
+        lines.append(TreeFormatter.header("Issues Found"))
+        lines.append(TreeFormatter.item(f"Total: **{len(issues)}**"))
+
+        # Count by severity
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for issue in issues:
+            severity = issue.get("severity", "medium").lower()
+            if severity in severity_counts:
+                severity_counts[severity] += 1
+
+        if severity_counts["critical"] > 0:
+            lines.append(TreeFormatter.item(f"🔴 Critical: {severity_counts['critical']}"))
+        if severity_counts["high"] > 0:
+            lines.append(TreeFormatter.item(f"🟡 High: {severity_counts['high']}"))
+        if severity_counts["medium"] > 0:
+            lines.append(TreeFormatter.item(f"🟠 Medium: {severity_counts['medium']}"))
+        if severity_counts["low"] > 0:
+            lines.append(TreeFormatter.item(f"⚪ Low: {severity_counts['low']}"))
+    else:
+        lines.append("")
+        lines.append("✅ **No issues found!** Code looks good.")
+
+    # Blocker failures
+    blocker_failures = pipeline_result.blocker_failures
+    if blocker_failures:
+        lines.append("")
+        lines.append(TreeFormatter.header("⚠️ Blocker Failures"))
+        for blocker in blocker_failures:
+            lines.append(TreeFormatter.item(f"❌ {blocker}"))
 
     add_message("\n".join(lines), "assistant-message", True)
 
