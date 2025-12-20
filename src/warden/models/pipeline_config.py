@@ -142,8 +142,8 @@ class FrameNodeData(BaseDomainModel):
     ```
     """
 
-    type: Literal['frame'] = 'frame'
     frame_id: str  # Reference to frame (e.g., "security", "chaos")
+    type: Literal['frame'] = 'frame'
     pre_rules: List[CustomRule] = field(default_factory=list)  # Execute before frame
     post_rules: List[CustomRule] = field(default_factory=list)  # Execute after frame
     on_fail: OnFailAction = 'stop'
