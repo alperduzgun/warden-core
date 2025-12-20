@@ -10,13 +10,15 @@ async def display_scan_summary(
     add_message: Callable[[str, str, bool], None],
 ) -> None:
     """
-    Display aggregated scan results from multiple pipeline executions.
+    Display aggregated scan results with visual hierarchy.
 
     Args:
         scan_path: Path that was scanned
         results: List of {path, pipeline_result} dictionaries
         add_message: Function to add messages to chat
     """
+    from ..utils.formatter import TreeFormatter, ProgressBar
+
     files_analyzed = len(results)
 
     # Aggregate statistics
@@ -55,28 +57,39 @@ async def display_scan_summary(
     else:
         status_emoji = "✅"
 
-    message = f"""
-{status_emoji} **Scan Complete**
+    # Build visual tree
+    lines = []
 
-**Path:** `{scan_path}`
-**Files Analyzed:** {files_analyzed}
-**Total Duration:** {total_duration:.0f}ms
-**Pipeline Status:**
-- Completed: {files_analyzed - failed_pipelines - stopped_pipelines}
-- Stopped (Blocker): {stopped_pipelines}
-- Failed: {failed_pipelines}
+    lines.append(f"{status_emoji} **Scan Complete**\n")
+    lines.append(TreeFormatter.header(f"Scanned: {scan_path.name}"))
+    lines.append(TreeFormatter.item(f"Files Analyzed: **{files_analyzed}**"))
+    lines.append(TreeFormatter.item(f"Total Duration: {total_duration:.0f}ms"))
+    lines.append("")
 
-**Issues Found:** {total_issues}
-"""
+    # Pipeline status
+    completed = files_analyzed - failed_pipelines - stopped_pipelines
+    lines.append(TreeFormatter.header("Pipeline Status"))
+    lines.append(TreeFormatter.item(f"✅ Completed: {completed}"))
+    if stopped_pipelines > 0:
+        lines.append(TreeFormatter.item(f"⚠️  Stopped (Blocker): {stopped_pipelines}"))
+    if failed_pipelines > 0:
+        lines.append(TreeFormatter.item(f"❌ Failed: {failed_pipelines}"))
+    lines.append("")
+
+    # Progress bar
+    progress = ProgressBar.create(completed, files_analyzed)
+    lines.append(TreeFormatter.item(progress))
+    lines.append("")
+
+    # Issues breakdown
+    lines.append(TreeFormatter.header(f"Issues Found: {total_issues}"))
 
     if total_issues > 0:
-        message += f"""
-**Breakdown:**
-- 🔴 Critical: {critical}
-- 🟡 High: {high}
-- 🟠 Medium: {medium}
-- ⚪ Low: {low}
-"""
+        lines.append(TreeFormatter.item(f"🔴 Critical: {critical}"))
+        lines.append(TreeFormatter.item(f"🟡 High: {high}"))
+        lines.append(TreeFormatter.item(f"🟠 Medium: {medium}"))
+        lines.append(TreeFormatter.item(f"⚪ Low: {low}"))
+        lines.append("")
 
         # Show files with most issues
         files_with_issues = [
@@ -90,18 +103,21 @@ async def display_scan_summary(
         files_with_issues.sort(key=lambda x: x["issues"], reverse=True)
 
         if files_with_issues:
-            message += "\n**Top Files with Issues:**\n\n"
+            lines.append(TreeFormatter.header("Top Files with Issues"))
             for idx, file_info in enumerate(files_with_issues[:5], 1):
                 file_name = Path(file_info["path"]).name
                 issue_count = file_info["issues"]
-                message += f"{idx}. `{file_name}`: {issue_count} issues\n"
+                lines.append(TreeFormatter.item(f"{idx}. `{file_name}`: {issue_count} issues"))
 
-        if total_issues > 5:
-            message += f"\n💡 Use `/analyze <file>` to see detailed analysis for specific files.\n"
+            if total_issues > 5:
+                lines.append("")
+                lines.append("💡 Use `/analyze <file>` for detailed analysis")
     else:
-        message += "\n✅ **No issues found!** All files look good.\n"
+        lines.append(TreeFormatter.item("✅ No issues detected!"))
+        lines.append("")
+        lines.append("**All files look good!**")
 
-    add_message(message.strip(), "assistant-message", True)
+    add_message("\n".join(lines), "assistant-message", True)
 
 
 async def show_mock_scan_result(
@@ -109,31 +125,36 @@ async def show_mock_scan_result(
     add_message: Callable[[str, str, bool], None],
 ) -> None:
     """
-    Show mock scan result (placeholder).
+    Show mock scan result with visual hierarchy.
 
     Args:
         scan_path: Path that was scanned
         add_message: Function to add messages to chat
     """
-    result = f"""
-✅ **Scan Complete**
+    from ..utils.formatter import TreeFormatter, ProgressBar
 
-**Path:** `{scan_path}`
-**Files Scanned:** 42
-**Total Lines:** 5,240
-**Issues Found:** 3
+    lines = []
+    lines.append("✅ **Scan Complete**\n")
+    lines.append(TreeFormatter.header(f"Scanned: {scan_path.name}"))
+    lines.append(TreeFormatter.item("Files Scanned: **42**"))
+    lines.append(TreeFormatter.item("Total Lines: 5,240"))
+    lines.append("")
 
-**Summary:**
-- 🔴 Critical: 0
-- 🟡 High: 1
-- 🟢 Medium: 2
-- ⚪ Low: 0
+    lines.append(TreeFormatter.header("Progress"))
+    progress = ProgressBar.create(42, 42)
+    lines.append(TreeFormatter.item(progress))
+    lines.append("")
 
-**Top Issues:**
-1. Missing error handling in `api/client.py:145`
-2. Potential SQL injection in `db/query.py:87`
-3. Unused import in `utils/helper.py:12`
+    lines.append(TreeFormatter.header("Issues Found: 3"))
+    lines.append(TreeFormatter.item("🔴 Critical: 0"))
+    lines.append(TreeFormatter.item("🟡 High: 1"))
+    lines.append(TreeFormatter.item("🟠 Medium: 2"))
+    lines.append(TreeFormatter.item("⚪ Low: 0"))
+    lines.append("")
 
-Run `/fix` to auto-repair these issues.
-    """
-    add_message(result.strip(), "assistant-message", True)
+    lines.append(TreeFormatter.header("Top Issues"))
+    lines.append(TreeFormatter.item("1. Missing error handling in `api/client.py:145`"))
+    lines.append(TreeFormatter.item("2. Potential SQL injection in `db/query.py:87`"))
+    lines.append(TreeFormatter.item("3. Unused import in `utils/helper.py:12`"))
+
+    add_message("\n".join(lines), "assistant-message", True)

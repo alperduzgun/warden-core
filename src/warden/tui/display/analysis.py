@@ -10,13 +10,15 @@ async def display_pipeline_result(
     add_message: Callable[[str, str, bool], None],
 ) -> None:
     """
-    Display full pipeline execution results.
+    Display full pipeline execution results with visual hierarchy.
 
     Args:
         file_path: Path to analyzed file
         pipeline_result: PipelineRun result from orchestrator
         add_message: Function to add messages to chat
     """
+    from ..utils.formatter import TreeFormatter
+
     # Extract data from pipeline result
     status = pipeline_result.get("status", "unknown")
     duration_ms = pipeline_result.get("durationMs", 0)
@@ -33,57 +35,81 @@ async def display_pipeline_result(
     else:
         status_emoji = "❓"
 
-    # Build header
-    message = f"""
-{status_emoji} **Pipeline Complete**
+    # Count lines
+    try:
+        with open(file_path) as f:
+            line_count = len(f.readlines())
+    except Exception:
+        line_count = 0
 
-**File:** `{file_path}`
-**Status:** {status.upper()}
-**Duration:** {duration_ms:.0f}ms
-"""
+    # Build visual tree
+    lines = []
 
-    # Show validation frames execution
-    validation_step = next((s for s in steps if s.get("stepType") == "validation"), None)
-    if validation_step:
-        message += "\n**Validation Frames:**\n"
-        sub_steps = validation_step.get("subSteps", [])
+    # Header
+    lines.append(f"{status_emoji} **Pipeline Complete**\n")
+    lines.append(TreeFormatter.header(f"{file_path.name} ({line_count} lines)"))
+    lines.append(TreeFormatter.item(f"Status: **{status.upper()}**"))
+    lines.append(TreeFormatter.item(f"Duration: {duration_ms:.0f}ms"))
+    lines.append("")
 
-        for sub_step in sub_steps:
-            frame_name = sub_step.get("frameName", "Unknown")
-            frame_status = sub_step.get("status", "unknown")
-            is_blocker = sub_step.get("isBlocker", False)
-            issue_count = sub_step.get("issuesFound", 0)
+    # Pipeline stages
+    lines.append(TreeFormatter.header("Pipeline Stages"))
+    for idx, step in enumerate(steps, 1):
+        step_type = step.get("stepType", "unknown")
+        step_status = step.get("status", "unknown")
+        step_duration = step.get("durationMs", 0)
 
-            # Frame emoji
-            if frame_status == "passed":
-                frame_emoji = "✅"
-            elif frame_status == "failed":
-                frame_emoji = "❌"
-            else:
-                frame_emoji = "⚠️"
+        step_emoji = "✅" if step_status == "success" else "❌"
+        lines.append(
+            TreeFormatter.item(
+                f"Stage {idx}/5: **{step_type.title()}** {step_emoji} ({step_duration:.0f}ms)"
+            )
+        )
 
-            blocker_text = " (BLOCKER)" if is_blocker else ""
-            message += f"  {frame_emoji} **{frame_name}**{blocker_text}: {issue_count} issues\n"
+        # Show validation frames details
+        if step_type == "validation":
+            sub_steps = step.get("subSteps", [])
+            for sub_step in sub_steps:
+                frame_name = sub_step.get("frameName", "Unknown")
+                frame_status = sub_step.get("status", "unknown")
+                is_blocker = sub_step.get("isBlocker", False)
+                issue_count = sub_step.get("issuesFound", 0)
+                frame_duration = sub_step.get("durationMs", 0)
 
-    # Show summary
+                frame_emoji = "✅" if frame_status == "passed" else "❌"
+                blocker_text = " **(BLOCKER)**" if is_blocker else ""
+
+                lines.append(
+                    TreeFormatter.item(
+                        f"{frame_emoji} {frame_name}{blocker_text}: {issue_count} issues ({frame_duration:.0f}ms)",
+                        level=2
+                    )
+                )
+
+    # Summary
     if summary:
-        message += f"""
-**Summary:**
-- Total Issues: {summary.get('totalIssues', 0)}
-- Critical: {summary.get('critical', 0)}
-- High: {summary.get('high', 0)}
-- Medium: {summary.get('medium', 0)}
-- Low: {summary.get('low', 0)}
-"""
+        total_issues = summary.get("totalIssues", 0)
+        if total_issues > 0:
+            lines.append("")
+            lines.append(TreeFormatter.header("Issues Found"))
+            lines.append(TreeFormatter.item(f"Total: **{total_issues}**"))
+            lines.append(TreeFormatter.item(f"🔴 Critical: {summary.get('critical', 0)}"))
+            lines.append(TreeFormatter.item(f"🟡 High: {summary.get('high', 0)}"))
+            lines.append(TreeFormatter.item(f"🟠 Medium: {summary.get('medium', 0)}"))
+            lines.append(TreeFormatter.item(f"⚪ Low: {summary.get('low', 0)}"))
+        else:
+            lines.append("")
+            lines.append("✅ **No issues found!** Code looks good.")
 
-    # Show recommendations if any
+    # Recommendations
     recommendations = pipeline_result.get("recommendations", [])
     if recommendations:
-        message += "\n**Recommendations:**\n"
-        for idx, rec in enumerate(recommendations[:3], 1):
-            message += f"{idx}. {rec}\n"
+        lines.append("")
+        lines.append(TreeFormatter.header("Recommendations"))
+        for rec in recommendations[:3]:
+            lines.append(TreeFormatter.item(rec))
 
-    add_message(message.strip(), "assistant-message", True)
+    add_message("\n".join(lines), "assistant-message", True)
 
 
 async def show_mock_analysis_result(
@@ -91,26 +117,26 @@ async def show_mock_analysis_result(
     add_message: Callable[[str, str, bool], None],
 ) -> None:
     """
-    Show mock analysis result (placeholder).
+    Show mock analysis result with visual hierarchy.
 
     Args:
         file_path: Path to analyzed file
         add_message: Function to add messages to chat
     """
-    result = f"""
-✅ **Analysis Complete**
+    from ..utils.formatter import TreeFormatter
 
-**File:** `{file_path}`
-**Lines:** 150
-**Issues Found:** 0
+    lines = []
+    lines.append("✅ **Analysis Complete**\n")
+    lines.append(TreeFormatter.header(f"{file_path.name} (150 lines)"))
+    lines.append(TreeFormatter.item("Issues Found: **0**"))
+    lines.append("")
+    lines.append(TreeFormatter.header("Validation Frames"))
+    lines.append(TreeFormatter.item("🔐 Security Analysis: ✅ Pass"))
+    lines.append(TreeFormatter.item("⚡ Chaos Engineering: ✅ Pass"))
+    lines.append(TreeFormatter.item("🎲 Fuzz Testing: ✅ Pass"))
+    lines.append(TreeFormatter.item("📐 Property Testing: ✅ Pass"))
+    lines.append(TreeFormatter.item("💪 Stress Testing: ✅ Pass"))
+    lines.append("")
+    lines.append("**Status:** Ready for production! 🎉")
 
-**Validation Frames:**
-- 🔐 Security Analysis: ✅ Pass
-- ⚡ Chaos Engineering: ✅ Pass
-- 🎲 Fuzz Testing: ✅ Pass
-- 📐 Property Testing: ✅ Pass
-- 💪 Stress Testing: ✅ Pass
-
-**Status:** Ready for production! 🎉
-    """
-    add_message(result.strip(), "assistant-message", True)
+    add_message("\n".join(lines), "assistant-message", True)
