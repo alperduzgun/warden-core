@@ -76,6 +76,8 @@ class PipelineSettings(BaseDomainModel):
       failFast: boolean
       timeout?: number
       parallel?: boolean
+      enableLlm?: boolean
+      llmProvider?: string
     }
     ```
     """
@@ -83,13 +85,17 @@ class PipelineSettings(BaseDomainModel):
     fail_fast: bool = True  # Stop on first error
     timeout: Optional[int] = None  # Execution timeout in seconds
     parallel: bool = False  # Run frames in parallel
+    enable_llm: bool = True  # Enable LLM-enhanced analysis (C# pattern)
+    llm_provider: str = "deepseek"  # LLM provider (deepseek, openai, anthropic, etc.)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         return {
             'failFast': self.fail_fast,
             'timeout': self.timeout,
-            'parallel': self.parallel
+            'parallel': self.parallel,
+            'enableLlm': self.enable_llm,
+            'llmProvider': self.llm_provider
         }
 
     @classmethod
@@ -98,7 +104,9 @@ class PipelineSettings(BaseDomainModel):
         return cls(
             fail_fast=data.get('failFast', True),
             timeout=data.get('timeout'),
-            parallel=data.get('parallel', False)
+            parallel=data.get('parallel', False),
+            enable_llm=data.get('enableLlm', True),
+            llm_provider=data.get('llmProvider', 'deepseek')
         )
 
 

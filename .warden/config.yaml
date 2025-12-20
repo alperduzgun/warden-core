@@ -26,6 +26,8 @@ settings:
   enable_discovery: true        # Auto-discover project files
   enable_build_context: true    # Load build configuration
   enable_suppression: true      # Filter false positives
+  enable_llm: true              # Use LLM for enhanced analysis
+  llm_provider: "deepseek"      # LLM provider (deepseek/openai/groq/anthropic)
 
 # Frame-specific configurations
 frame_config:
