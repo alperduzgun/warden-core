@@ -1,0 +1,119 @@
+/* Warden TUI Styling - GitHub-inspired Dark Theme */
+/* Colors from warden-panel/tailwind.config.js */
+
+/* Main container */
+#main-container {
+    height: 100%;
+    background: #0d1117;  /* bg-primary */
+}
+
+/* Session info bar - Subtle and minimal */
+#session-info {
+    dock: top;
+    height: 1;
+    background: #161b22;  /* bg-secondary - subtle */
+    color: #8b949e;  /* text-secondary - muted */
+    content-align: center middle;
+    padding: 0 2;
+}
+
+/* Chat area - Clean GitHub dark */
+#chat-area {
+    height: 1fr;
+    background: #0d1117;  /* bg-primary */
+    padding: 2;
+    scrollbar-background: #21262d;  /* bg-tertiary */
+    scrollbar-color: #58a6ff;  /* info blue */
+    scrollbar-color-hover: #1f6feb;  /* info-dark */
+    scrollbar-color-active: #3fb950;  /* success */
+    scrollbar-size: 1 1;
+}
+
+/* Input container - Clean & minimal like QwenCode/Claude Code */
+#input-container {
+    dock: bottom;
+    height: 3;
+    background: #0d1117;  /* bg-primary - seamless with chat */
+    padding: 0 2;
+    border-top: solid #30363d;  /* subtle separator */
+}
+
+#prompt {
+    width: auto;
+    color: #8b949e;  /* text-secondary - subtle */
+    content-align: left middle;
+    padding-right: 1;
+}
+
+#chat-input {
+    width: 1fr;
+    border: none;  /* no border - clean look */
+    background: #0d1117;  /* same as container */
+    color: #e6edf3;  /* text-primary */
+}
+
+#chat-input:focus {
+    border: none;  /* no focus border - keep it clean */
+    background: #0d1117;
+}
+
+/* Message styles - Minimal and clean */
+.message {
+    margin: 0 0 1 0;
+    padding: 1 0;
+    background: transparent;
+    border-left: none;
+}
+
+.user-message {
+    margin: 0 0 1 0;
+    padding: 1 0;
+    background: transparent;
+    color: #e6edf3;  /* text-primary */
+    border-left: solid #58a6ff;  /* info blue - thin border */
+    padding-left: 2;
+}
+
+.assistant-message {
+    margin: 0 0 1 0;
+    padding: 1 0;
+    background: transparent;
+    color: #e6edf3;  /* text-primary */
+    border-left: solid #3fb950;  /* success green - thin border */
+    padding-left: 2;
+}
+
+.system-message {
+    margin: 0 0 1 0;
+    padding: 1 0;
+    background: transparent;
+    color: #8b949e;  /* text-secondary - muted */
+    border-left: none;
+}
+
+.error-message {
+    margin: 0 0 1 0;
+    padding: 1 0;
+    background: transparent;
+    color: #f85149;  /* error red */
+    border-left: solid #f85149;  /* error red - thin border */
+    padding-left: 2;
+}
+
+#welcome-message {
+    margin: 2 0;
+    padding: 2;
+    background: transparent;  /* no background */
+    color: #8b949e;  /* text-secondary - muted */
+    text-align: center;
+    border: none;  /* no border */
+}
+
+/* Scrollbar styling */
+VerticalScroll {
+    scrollbar-size: 1 1;
+    scrollbar-background: $panel;
+    scrollbar-color: $accent;
+    scrollbar-color-hover: $accent-lighten-1;
+    scrollbar-color-active: $accent-lighten-2;
+}

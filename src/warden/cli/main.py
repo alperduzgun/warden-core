@@ -62,19 +62,18 @@ def config(
 
 @app.command()
 def chat():
-    """Start interactive conversational mode (like Claude Code)"""
-    import asyncio
-    from warden.cli.interactive import WardenInteractive
+    """Start Warden TUI - Modern terminal interface"""
+    from warden.tui import WardenTUI
 
-    session = WardenInteractive()
-    asyncio.run(session.run())
+    app_instance = WardenTUI()
+    app_instance.run()
 
 
 def main():
     """Main entry point"""
-    # If no arguments, start interactive mode
+    # If no arguments, start Textual TUI
     if len(sys.argv) == 1:
-        console.print("[cyan]Starting interactive mode...[/cyan]")
+        console.print("[cyan]🛡️  Starting Warden TUI...[/cyan]")
         console.print("[dim]Use 'warden --help' for command-line options[/dim]\n")
         chat()
     else:
