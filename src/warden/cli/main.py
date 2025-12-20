@@ -60,9 +60,25 @@ def config(
         console.print("[yellow]Use --show to display current configuration[/yellow]")
 
 
+@app.command()
+def chat():
+    """Start interactive conversational mode (like Claude Code)"""
+    import asyncio
+    from warden.cli.interactive import WardenInteractive
+
+    session = WardenInteractive()
+    asyncio.run(session.run())
+
+
 def main():
     """Main entry point"""
-    app()
+    # If no arguments, start interactive mode
+    if len(sys.argv) == 1:
+        console.print("[cyan]Starting interactive mode...[/cyan]")
+        console.print("[dim]Use 'warden --help' for command-line options[/dim]\n")
+        chat()
+    else:
+        app()
 
 
 if __name__ == "__main__":

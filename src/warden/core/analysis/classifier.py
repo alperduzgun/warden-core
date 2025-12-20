@@ -35,9 +35,14 @@ class CodeClassifier:
     Future: LLM integration for intelligent classification.
     """
 
-    def __init__(self):
-        """Initialize code classifier."""
+    def __init__(self, llm_factory=None):
+        """Initialize code classifier.
+
+        Args:
+            llm_factory: Optional LLM factory for enhanced classification
+        """
         self.logger = logger
+        self.llm_factory = llm_factory
 
     async def classify(
         self,
@@ -299,3 +304,97 @@ class CodeClassifier:
             frames.append("stress")
 
         return frames
+
+    async def classify_with_llm(
+        self,
+        file_path: str,
+        file_content: str,
+        language: str = "python",
+    ) -> Dict[str, Any]:
+        """
+        Enhanced classification using LLM.
+
+        LLM provides more intelligent characteristic detection and
+        frame recommendations based on code context.
+
+        Args:
+            file_path: Path to file
+            file_content: File content
+            language: Programming language
+
+        Returns:
+            Classification result with LLM insights
+        """
+        if not self.llm_factory:
+            self.logger.warning("llm_factory_not_configured", file_path=file_path)
+            return await self.classify(file_path, file_content, language)
+
+        start_time = time.perf_counter()
+
+        try:
+            # Import LLM types
+            from warden.llm import (
+                LlmRequest,
+                ClassificationResult,
+                generate_classification_request,
+                CLASSIFICATION_SYSTEM_PROMPT
+            )
+
+            # Get LLM client with fallback
+            client = await self.llm_factory.create_client_with_fallback()
+
+            # Create LLM request
+            request = LlmRequest(
+                system_prompt=CLASSIFICATION_SYSTEM_PROMPT,
+                user_message=generate_classification_request(file_content, language, file_path),
+                temperature=0.3,
+                max_tokens=2000,
+                timeout_seconds=30
+            )
+
+            # Send to LLM
+            response = await client.send_async(request)
+
+            if not response.success:
+                self.logger.warning(
+                    "llm_classification_failed",
+                    file_path=file_path,
+                    error=response.error_message,
+                    provider=response.provider.value if response.provider else None
+                )
+                # Fallback to AST classification
+                return await self.classify(file_path, file_content, language)
+
+            # Parse LLM response
+            import json
+            llm_data = json.loads(response.content)
+
+            duration_ms = (time.perf_counter() - start_time) * 1000
+
+            self.logger.info(
+                "llm_classification_completed",
+                file_path=file_path,
+                recommended_frames=llm_data.get("recommendedFrames", []),
+                provider=response.provider.value if response.provider else None,
+                duration_ms=duration_ms
+            )
+
+            # Return in standard format
+            return {
+                "characteristics": llm_data.get("characteristics", {}),
+                "recommendedFrames": llm_data.get("recommendedFrames", []),
+                "summary": llm_data.get("summary", ""),
+                "provider": response.provider.value if response.provider else None,
+                "durationMs": duration_ms,
+                "tokensUsed": response.total_tokens
+            }
+
+        except Exception as ex:
+            self.logger.error(
+                "llm_classification_error",
+                file_path=file_path,
+                error=str(ex),
+                error_type=type(ex).__name__
+            )
+            # Fallback to AST classification
+            return await self.classify(file_path, file_content, language)
