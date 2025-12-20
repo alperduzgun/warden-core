@@ -1,0 +1,16 @@
+# Quick Scan Pipeline Template
+# Focus: Fast validation for development workflow
+# Use case: Pre-commit hooks, rapid feedback
+
+version: "1.0"
+name: "Quick Scan"
+
+# Essential frames only
+frames:
+  - security  # Critical security checks
+  - fuzz      # Basic edge case testing
+
+settings:
+  fail_fast: true   # Fast failure on critical issues
+  timeout: 60       # 1 minute timeout
+  parallel: true    # Parallel execution for speed
