@@ -18,6 +18,8 @@ import logging
 from typing import Dict, Any, List
 from pathlib import Path
 
+from warden.core.analysis.prompt_builder import build_enriched_prompt
+
 # Fallback logger (structlog not installed yet)
 try:
     import structlog
@@ -35,14 +37,16 @@ class CodeAnalyzer:
     Future: LLM integration for deeper analysis.
     """
 
-    def __init__(self, llm_factory=None):
+    def __init__(self, llm_factory=None, use_llm: bool = True):
         """Initialize code analyzer.
 
         Args:
             llm_factory: Optional LLM factory for enhanced analysis
+            use_llm: Enable LLM-enhanced analysis (default: True)
         """
         self.logger = logger
         self.llm_factory = llm_factory
+        self.use_llm = use_llm and llm_factory is not None
 
     async def analyze(
         self,
@@ -51,7 +55,12 @@ class CodeAnalyzer:
         language: str = "python",
     ) -> Dict[str, Any]:
         """
-        Analyze code file.
+        Hybrid code analysis: AST (fast, exact) + LLM (semantic, context-aware).
+
+        Follows C# pattern:
+        - Phase 1: AST Analysis (deterministic metrics)
+        - Phase 2: LLM Analysis (semantic insights) - ALWAYS runs if enabled
+        - Phase 3: Merge Results
 
         Args:
             file_path: Path to file
@@ -68,23 +77,46 @@ class CodeAnalyzer:
             file_path=file_path,
             language=language,
             content_length=len(file_content),
+            llm_enabled=self.use_llm,
         )
 
         try:
-            # Analyze based on language
+            # Phase 1: AST Analysis (fast, exact metrics)
+            ast_result = None
             if language.lower() == "python":
-                result = await self._analyze_python(file_path, file_content)
+                ast_result = await self._analyze_python(file_path, file_content)
             else:
-                result = await self._analyze_generic(file_path, file_content, language)
+                ast_result = await self._analyze_generic(file_path, file_content, language)
+
+            # Phase 2: LLM Analysis (semantic insights) - C# pattern: ALWAYS run
+            if self.use_llm:
+                # Extract AST metrics to enrich prompt
+                ast_metrics = ast_result.get("metrics") if ast_result else None
+
+                result = await self.analyze_with_llm(
+                    file_path,
+                    file_content,
+                    language,
+                    ast_metrics=ast_metrics  # Enrich prompt with AST metrics
+                )
+
+                # Merge AST metrics if available
+                if ast_result and "metrics" in ast_result:
+                    result["metrics"] = ast_result["metrics"]
+                    result["ast_analysis_success"] = True
+            else:
+                # Fallback: Use AST-only result
+                result = ast_result
 
             duration_ms = (time.perf_counter() - start_time) * 1000
 
             self.logger.info(
                 "analysis_completed",
                 file_path=file_path,
-                score=result["score"],
-                issue_count=len(result["issues"]),
+                score=result.get("score", 0),
+                issue_count=len(result.get("issues", [])),
                 duration_ms=duration_ms,
+                llm_used=self.use_llm,
             )
 
             result["durationMs"] = duration_ms
@@ -292,26 +324,33 @@ class CodeAnalyzer:
         file_path: str,
         file_content: str,
         language: str = "python",
+        ast_metrics: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
-        Enhanced analysis using LLM.
+        Enhanced analysis using LLM with enriched prompts (C# pattern).
 
-        Combines AST analysis with LLM-based deep analysis for:
-        - More accurate security vulnerability detection
-        - Context-aware code smells
-        - Confidence scoring to reduce false positives
+        Enriches prompt with AST metrics for better analysis:
+        - File header (path, language)
+        - AST metrics (LOC, complexity, functions, classes)
+        - Source code
+        - Analysis instructions
 
         Args:
             file_path: Path to file
             file_content: File content
             language: Programming language
+            ast_metrics: Optional AST metrics to enrich prompt
 
         Returns:
             Analysis result with LLM insights
         """
         if not self.llm_factory:
             self.logger.warning("llm_factory_not_configured", file_path=file_path)
-            return await self.analyze(file_path, file_content, language)
+            # Return basic AST analysis
+            if language.lower() == "python":
+                return await self._analyze_python(file_path, file_content)
+            else:
+                return await self._analyze_generic(file_path, file_content, language)
 
         start_time = time.perf_counter()
 
@@ -320,17 +359,24 @@ class CodeAnalyzer:
             from warden.llm import (
                 LlmRequest,
                 AnalysisResult,
-                generate_analysis_request,
                 ANALYSIS_SYSTEM_PROMPT
             )
 
             # Get LLM client with fallback
             client = await self.llm_factory.create_client_with_fallback()
 
+            # Build enriched prompt with AST metrics (C# pattern)
+            user_message = build_enriched_prompt(
+                file_path,
+                file_content,
+                language,
+                ast_metrics
+            )
+
             # Create LLM request
             request = LlmRequest(
                 system_prompt=ANALYSIS_SYSTEM_PROMPT,
-                user_message=generate_analysis_request(file_content, language, file_path),
+                user_message=user_message,
                 temperature=0.3,
                 max_tokens=4000,
                 timeout_seconds=60
@@ -385,4 +431,7 @@ class CodeAnalyzer:
                 error_type=type(ex).__name__
             )
             # Fallback to AST analysis
-            return await self.analyze(file_path, file_content, language)
+            if language.lower() == "python":
+                return await self._analyze_python(file_path, file_content)
+            else:
+                return await self._analyze_generic(file_path, file_content, language)

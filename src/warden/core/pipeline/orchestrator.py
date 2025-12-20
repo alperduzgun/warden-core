@@ -71,7 +71,30 @@ class PipelineOrchestrator:
         # Auto-create analyzer/classifier if not provided
         if analyzer is None:
             from warden.core.analysis.analyzer import CodeAnalyzer
-            analyzer = CodeAnalyzer()
+
+            # Try to create LLM factory from config
+            llm_factory = None
+            use_llm = False
+
+            if config and hasattr(config.settings, 'enable_llm'):
+                use_llm = config.settings.enable_llm
+
+            if use_llm:
+                try:
+                    from warden.llm.factory import LlmFactory
+                    llm_factory = LlmFactory()
+                    self.logger.info(
+                        "llm_factory_created",
+                        provider=config.settings.llm_provider if hasattr(config.settings, 'llm_provider') else "default"
+                    )
+                except Exception as e:
+                    self.logger.warning(
+                        "llm_factory_creation_failed",
+                        error=str(e),
+                        fallback="ast_only"
+                    )
+
+            analyzer = CodeAnalyzer(llm_factory=llm_factory, use_llm=use_llm)
 
         if classifier is None:
             from warden.core.analysis.classifier import CodeClassifier
