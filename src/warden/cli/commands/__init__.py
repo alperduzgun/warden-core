@@ -2,6 +2,7 @@
 Warden CLI Commands
 """
 
-from warden.cli.commands import validate, scan, report
+from warden.cli.commands import scan, report
+# validate temporarily disabled due to missing dependencies
 
-__all__ = ["validate", "scan", "report"]
+__all__ = ["scan", "report"]

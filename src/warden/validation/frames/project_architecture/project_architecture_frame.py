@@ -256,12 +256,17 @@ class ProjectArchitectureFrame(ValidationFrame):
         self, project_context: ProjectContext
     ) -> List[ArchitecturalViolation]:
         """
-        Detect duplicate module implementations.
+        Detect duplicate module implementations with smart filtering.
 
-        Example violation:
-        - src/warden/core/validation/frames/security.py
-        - src/warden/validation/frames/security/security_frame.py
-        (Both implement SecurityFrame!)
+        Uses pattern detection to avoid false positives:
+        - Domain pattern (models.py in different domains)
+        - UI layer pattern (same file in cli/tui/api)
+        - Provider pattern (multiple provider implementations)
+        - Config pattern (module-specific configurations)
+
+        Example real duplicate:
+        - src/old/analyzer.py (legacy)
+        - src/new/analyzer.py (new implementation)
         """
         violations = []
 
@@ -277,32 +282,60 @@ class ProjectArchitectureFrame(ValidationFrame):
             if filename.startswith("test_"):
                 continue
 
-            # Check if files are in different module hierarchies
-            module_names = set()
-            for path in paths:
-                # Get module name (parent directory structure)
-                parts = path.parts
-                if "src" in parts:
-                    src_idx = parts.index("src")
-                    module_parts = parts[src_idx + 1 : -1]  # Exclude filename
-                    module_names.add(".".join(module_parts))
+            # === SMART FILTERING (False Positive Prevention) ===
 
-            # If different modules have same file, it's likely a duplicate
-            if len(module_names) > 1:
-                violations.append(
-                    ArchitecturalViolation(
-                        rule="duplicate_module",
-                        severity="error",
-                        message=f"Duplicate file '{filename}' found in {len(paths)} locations",
-                        location=", ".join(str(p) for p in paths[:3]),
-                        expected="Single implementation",
-                        actual=f"{len(paths)} duplicate files",
-                        suggestion=(
-                            "Keep one implementation and remove duplicates. "
-                            "Multiple implementations of the same module cause confusion and maintenance issues."
-                        ),
-                    )
+            # 1. Domain Pattern Check
+            if self._is_domain_pattern(filename, paths):
+                logger.debug(
+                    "duplicate_ignored_domain_pattern",
+                    filename=filename,
+                    count=len(paths),
                 )
+                continue  # NOT a duplicate
+
+            # 2. UI Layer Check
+            if self._is_ui_layer_pattern(filename, paths):
+                logger.debug(
+                    "duplicate_ignored_ui_layer_pattern",
+                    filename=filename,
+                    count=len(paths),
+                )
+                continue  # NOT a duplicate
+
+            # 3. Provider Pattern Check
+            if self._is_provider_pattern(filename, paths):
+                logger.debug(
+                    "duplicate_ignored_provider_pattern",
+                    filename=filename,
+                    count=len(paths),
+                )
+                continue  # NOT a duplicate
+
+            # 4. Config Pattern Check
+            if self._is_config_pattern(filename, paths):
+                logger.debug(
+                    "duplicate_ignored_config_pattern",
+                    filename=filename,
+                    count=len(paths),
+                )
+                continue  # NOT a duplicate
+
+            # === IF NONE OF THE ABOVE, IT'S A REAL DUPLICATE ===
+
+            violations.append(
+                ArchitecturalViolation(
+                    rule="duplicate_module",
+                    severity="error",
+                    message=f"Duplicate file '{filename}' found in {len(paths)} locations",
+                    location=", ".join(str(p) for p in paths[:3]),
+                    expected="Single implementation",
+                    actual=f"{len(paths)} duplicate files",
+                    suggestion=(
+                        "Keep one implementation and remove duplicates. "
+                        "Multiple implementations of the same module cause confusion and maintenance issues."
+                    ),
+                )
+            )
 
         return violations
 
@@ -394,6 +427,111 @@ class ProjectArchitectureFrame(ValidationFrame):
                 )
 
         return violations
+
+    # ==============================================
+    # SMART FILTERING (False Positive Prevention)
+    # ==============================================
+
+    def _is_domain_pattern(self, filename: str, paths: List[Path]) -> bool:
+        """
+        Check if files follow domain pattern (different modules/domains).
+
+        Domain pattern: models.py, enums.py, base.py in different module directories.
+        Example: src/orders/models.py vs src/payments/models.py
+        Example: src/issues/domain/models.py vs src/pipeline/domain/models.py
+        Example: src/analyzers/cleanup/base.py vs src/analyzers/fortify/base.py
+
+        These are NOT duplicates - each module/domain has its own models/base!
+        """
+        # Domain files: models.py, enums.py, base.py
+        if filename not in ["models.py", "enums.py", "base.py"]:
+            return False
+
+        # Get FULL parent path (not just name) to ensure uniqueness
+        parent_paths = set()
+        for path in paths:
+            # Use full parent path as unique identifier
+            # This handles both:
+            # - issues/domain/models.py vs pipeline/domain/models.py (different)
+            # - analyzers/cleanup/base.py vs analyzers/fortify/base.py (different)
+            parent_paths.add(str(path.parent))
+
+        # If all files are in DIFFERENT parent paths, it's a domain pattern
+        return len(parent_paths) == len(paths)
+
+    def _is_ui_layer_pattern(self, filename: str, paths: List[Path]) -> bool:
+        """
+        Check if files are in different UI layers.
+
+        UI layer pattern: Same file in cli/, tui/, api/, web/ directories.
+        Example: cli/commands/export.py vs tui/commands/export.py vs api/routes/export.py
+
+        These are NOT duplicates - different UI implementations!
+        """
+        ui_layers = {"cli", "tui", "api", "web"}
+
+        # Get UI layer for each path
+        file_layers = set()
+        for path in paths:
+            for part in path.parts:
+                if part in ui_layers:
+                    file_layers.add(part)
+                    break
+
+        # If files are in different UI layers (each in its own layer), NOT a duplicate
+        return len(file_layers) == len(paths)
+
+    def _is_provider_pattern(self, filename: str, paths: List[Path]) -> bool:
+        """
+        Check if files follow provider/plugin pattern.
+
+        Provider pattern: Files in */providers/*, */plugins/*, */implementations/*
+        Example: storage/providers/s3.py vs storage/providers/azure.py
+
+        These are NOT duplicates - different provider implementations!
+        """
+        provider_keywords = {"providers", "plugins", "implementations", "adapters"}
+
+        # Check if ALL paths contain provider keywords
+        for path in paths:
+            if not any(keyword in path.parts for keyword in provider_keywords):
+                return False  # At least one is NOT a provider
+
+        # All are in provider directories
+        return True
+
+    def _is_config_pattern(self, filename: str, paths: List[Path]) -> bool:
+        """
+        Check if config files are in different modules.
+
+        Config pattern: config.py, settings.py in different top-level modules.
+        Example: llm/config.py vs pipeline/config.py
+
+        These are NOT duplicates - module-specific configurations!
+        """
+        if filename not in ["config.py", "settings.py", "configuration.py"]:
+            return False
+
+        # Get top-level module for each config (after src/)
+        modules = set()
+        for path in paths:
+            parts = path.parts
+            # Find 'src' directory (common pattern)
+            if "src" in parts:
+                src_idx = parts.index("src")
+                # Get first directory after src/ (top-level module)
+                if len(parts) > src_idx + 2:  # src/package/module
+                    # Skip package name, get actual module
+                    modules.add(parts[src_idx + 2])
+                elif len(parts) > src_idx + 1:
+                    modules.add(parts[src_idx + 1])
+            else:
+                # No src/ directory, use first directory
+                if len(parts) > 1:
+                    modules.add(parts[0])
+
+        # Different top-level modules = different configs
+        return len(modules) == len(paths)
 
     # ==============================================
     # HELPERS

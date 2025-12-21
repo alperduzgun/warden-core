@@ -6,15 +6,16 @@ name: "Warden Core Development Pipeline"
 
 # Validation frames to run
 frames:
-  # Core validation frames
-  - security      # Critical security checks
-  - fuzz          # Edge case testing
-  - property      # Logic validation
-  - architectural # Code organization
-
-  # Git integration frames
-  - gitchanges    # Analyze only changed lines (CI/CD)
-  - orphan        # Dead code detection
+  # Implemented frames (ACTIVE)
+  - security             # Critical security checks
+  - chaos                # Chaos engineering / resilience testing
+  - architectural        # Code organization (file-level)
+  - project_architecture # Project structure validation (project-level)
+  - gitchanges           # Analyze only changed lines (CI/CD)
+  - orphan               # Dead code detection (LLM-powered)
+  - fuzz                 # Edge case testing (null, empty, boundaries)
+  - property             # Logic validation (invariants, preconditions)
+  - stress               # Load/stress testing (performance, resource leaks)
 
 # Pipeline settings
 settings:

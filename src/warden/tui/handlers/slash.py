@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from textual.app import App
-    from warden.core.analysis.analyzer import CodeAnalyzer
+    from warden.analyzers.discovery.analyzer import CodeAnalyzer
 
 
 async def handle_slash_command(

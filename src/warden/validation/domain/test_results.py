@@ -1,11 +1,8 @@
 """
 Test results domain models.
 
-Panel Type Reference:
-/Users/alper/Documents/Development/warden-panel/src/lib/types/pipeline.ts
-
 These models represent detailed test execution results for validation frames.
-Panel displays these in the "Test Results" tab of the pipeline UI.
+Matches Panel TypeScript pipeline.ts types for JSON compatibility.
 
 NOTE: These are placeholder models. Actual test execution logic is not yet implemented.
 """

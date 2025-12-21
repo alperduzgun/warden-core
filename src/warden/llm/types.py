@@ -1,11 +1,8 @@
 """
 LLM Type Definitions - Panel Compatible
 
-Based on:
-- C#: /Users/alper/vibe-code-analyzer/src/Warden.LLM/
-- Panel: /Users/alper/Documents/Development/warden-panel/src/lib/types/warden.ts
-
-All types designed for Panel JSON compatibility (camelCase ↔ snake_case)
+Multi-provider LLM support with fallback chain.
+All types designed for Panel JSON compatibility (camelCase ↔ snake_case).
 """
 
 from enum import Enum
