@@ -1,0 +1,184 @@
+# Warden Configuration File - Example
+# Copy this file to .warden.yml and customize for your project
+
+# Project metadata
+project:
+  name: "my-project"
+  description: "Project description"
+
+# LLM Configuration (used by LLM-powered frames)
+llm:
+  # Provider: anthropic, openai, groq, deepseek, qwencode
+  provider: "anthropic"
+
+  # Model name
+  model: "claude-3-5-sonnet-20241022"
+
+  # API key (use environment variable)
+  # ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
+  # api_key: "${ANTHROPIC_API_KEY}"
+
+  # Request timeout (seconds)
+  timeout: 300
+
+  # Max retries on failure
+  max_retries: 2
+
+# Validation Frames Configuration
+frames:
+  # ============================================
+  # ORPHAN CODE DETECTOR (NEW: LLM-POWERED!)
+  # ============================================
+  orphan:
+    enabled: true
+
+    # === INTELLIGENT MODE (RECOMMENDED) ===
+    # Uses LLM to filter false positives
+    # - Detects @property, @abstractmethod, Protocol, etc.
+    # - Works for ALL programming languages
+    # - Cost: ~$0.20 per full scan, $0.01 per incremental
+    # - Accuracy: <10% false positives
+    use_llm_filter: true
+
+    # === FAST MODE (FALLBACK) ===
+    # Basic AST filtering without LLM
+    # - Fast but may have 60-70% false positives
+    # - Use for quick local development
+    # use_llm_filter: false
+    # ignore_private: true  # Ignore _private functions/classes
+    # ignore_test_files: true  # Skip test_*.py files
+    # ignore_imports:
+    #   - "annotations"
+    #   - "TYPE_CHECKING"
+
+  # ============================================
+  # SECURITY FRAME
+  # ============================================
+  security:
+    enabled: true
+    priority: "critical"
+    is_blocker: true
+
+    # Security checks
+    checks:
+      - sql_injection
+      - xss
+      - hardcoded_secrets
+      - command_injection
+      - path_traversal
+
+  # ============================================
+  # CHAOS ENGINEERING FRAME
+  # ============================================
+  chaos:
+    enabled: true
+    priority: "high"
+    is_blocker: false
+
+    # Resilience checks
+    checks:
+      - timeout_handling
+      - retry_logic
+      - circuit_breaker
+      - error_recovery
+
+  # ============================================
+  # FUZZ TESTING FRAME
+  # ============================================
+  fuzz:
+    enabled: true
+    priority: "medium"
+    is_blocker: false
+
+    # Edge case checks
+    checks:
+      - null_handling
+      - empty_string
+      - max_length
+      - unicode_edge_cases
+      - malformed_input
+
+  # ============================================
+  # PROPERTY-BASED TESTING FRAME
+  # ============================================
+  property:
+    enabled: true
+    priority: "medium"
+    is_blocker: false
+
+    # Property checks
+    checks:
+      - idempotency
+      - commutativity
+      - associativity
+      - round_trip
+
+  # ============================================
+  # STRESS TESTING FRAME
+  # ============================================
+  stress:
+    enabled: true
+    priority: "low"
+    is_blocker: false
+
+    # Performance checks
+    checks:
+      - memory_leak
+      - performance_under_load
+      - concurrent_access
+
+  # ============================================
+  # ARCHITECTURAL CONSISTENCY FRAME
+  # ============================================
+  architectural:
+    enabled: false  # Optional
+    priority: "low"
+    is_blocker: false
+
+    # Architecture checks
+    checks:
+      - design_pattern_adherence
+      - dependency_rules
+      - layer_boundaries
+
+# Global Suppression Rules
+suppression:
+  # Suppress specific issues globally
+  global:
+    - id: "orphan-unused-import-annotations"
+      reason: "False positive - used in type hints"
+
+  # Suppress by file pattern
+  files:
+    - pattern: "**/__init__.py"
+      suppress: ["orphan-unused-import"]
+      reason: "Re-exports for public API"
+
+    - pattern: "**/test_*.py"
+      suppress: ["orphan-unreferenced-function"]
+      reason: "Test functions called by pytest"
+
+# CI/CD Integration
+ci:
+  enabled: true
+
+  # Fail build on blockers
+  fail_on_blocker: true
+
+  # Report formats
+  output:
+    - format: "markdown"
+      path: "./WARDEN_REPORT.md"
+    - format: "json"
+      path: "./warden-report.json"
+
+# Advanced Options
+advanced:
+  # Parallel execution
+  max_workers: 4
+
+  # Timeout per frame (seconds)
+  frame_timeout: 300
+
+  # Enable debug logging
+  debug: false

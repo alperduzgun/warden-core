@@ -7,11 +7,16 @@ Built-in checks:
 - Unreferenced classes detection
 - Dead code (unreachable statements) detection
 
+NEW: LLM-powered intelligent filtering (optional)
+- Removes false positives using LLM context awareness
+- Works for ANY programming language
+- Configurable via use_llm_filter option
+
 Priority: MEDIUM (warning)
 """
 
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from warden.validation.domain.frame import (
     ValidationFrame,
@@ -26,6 +31,7 @@ from warden.validation.domain.enums import (
     FrameApplicability,
 )
 from warden.validation.frames.orphan_detector import OrphanDetector, OrphanFinding
+from warden.validation.frames.llm_orphan_filter import LLMOrphanFilter
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -52,7 +58,7 @@ class OrphanFrame(ValidationFrame):
     priority = FramePriority.MEDIUM
     scope = FrameScope.FILE_LEVEL
     is_blocker = False  # Dead code is warning, not blocker
-    version = "1.0.0"
+    version = "2.0.0"  # Upgraded: LLM filtering support
     author = "Warden Team"
     applicability = [FrameApplicability.PYTHON]  # Python-specific (AST-based)
 
@@ -62,6 +68,7 @@ class OrphanFrame(ValidationFrame):
 
         Args:
             config: Frame configuration
+                - use_llm_filter: bool (default: False) - Use LLM for intelligent filtering
                 - ignore_private: bool (default: True) - Ignore private functions/classes
                 - ignore_test_files: bool (default: True) - Ignore test files
                 - ignore_imports: List[str] - Import names to ignore
@@ -69,9 +76,27 @@ class OrphanFrame(ValidationFrame):
         super().__init__(config)
 
         # Configuration options
+        self.use_llm_filter = self.config.get("use_llm_filter", False)
         self.ignore_private = self.config.get("ignore_private", True)
         self.ignore_test_files = self.config.get("ignore_test_files", True)
         self.ignore_imports = set(self.config.get("ignore_imports", []))
+
+        # LLM filter (lazy initialization)
+        self.llm_filter: Optional[LLMOrphanFilter] = None
+        if self.use_llm_filter:
+            try:
+                self.llm_filter = LLMOrphanFilter()
+                logger.info(
+                    "llm_orphan_filter_enabled",
+                    mode="intelligent_filtering",
+                )
+            except Exception as e:
+                logger.warning(
+                    "llm_orphan_filter_initialization_failed",
+                    error=str(e),
+                    fallback="basic filtering",
+                )
+                self.use_llm_filter = False  # Fallback to basic filtering
 
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
@@ -102,11 +127,73 @@ class OrphanFrame(ValidationFrame):
 
         # Run orphan detection
         try:
+            # STAGE 1: AST-based detection (fast, language-specific)
             detector = OrphanDetector(code_file.content, code_file.path)
             orphan_findings = detector.detect_all()
 
-            # Filter findings based on config
-            filtered_findings = self._filter_findings(orphan_findings, code_file)
+            logger.debug(
+                "ast_detection_complete",
+                total_findings=len(orphan_findings),
+                file=code_file.path,
+            )
+
+            # STAGE 2: Filter findings (basic OR intelligent)
+            if self.llm_filter and orphan_findings:
+                # Intelligent filtering using LLM (recommended)
+                logger.info(
+                    "llm_filtering_started",
+                    ast_findings=len(orphan_findings),
+                    file=code_file.path,
+                )
+
+                llm_start = time.perf_counter()
+                filtered_findings = await self.llm_filter.filter_findings(
+                    findings=orphan_findings,
+                    code_file=code_file,
+                    language=code_file.language,
+                )
+                llm_duration = time.perf_counter() - llm_start
+
+                false_positives_removed = len(orphan_findings) - len(filtered_findings)
+                false_positive_rate = (
+                    (false_positives_removed / len(orphan_findings) * 100)
+                    if len(orphan_findings) > 0
+                    else 0
+                )
+
+                logger.info(
+                    "llm_filtering_complete",
+                    ast_findings=len(orphan_findings),
+                    llm_findings=len(filtered_findings),
+                    false_positives_removed=false_positives_removed,
+                    false_positive_rate=f"{false_positive_rate:.1f}%",
+                    llm_duration=f"{llm_duration:.2f}s",
+                )
+
+                filtering_metadata = {
+                    "filtering_mode": "llm",
+                    "ast_findings": len(orphan_findings),
+                    "llm_findings": len(filtered_findings),
+                    "false_positives_removed": false_positives_removed,
+                    "false_positive_rate": f"{false_positive_rate:.1f}%",
+                    "llm_duration": f"{llm_duration:.2f}s",
+                }
+
+            else:
+                # Basic filtering (fast, but may have false positives)
+                filtered_findings = self._filter_findings(orphan_findings, code_file)
+
+                logger.debug(
+                    "basic_filtering_complete",
+                    ast_findings=len(orphan_findings),
+                    filtered_findings=len(filtered_findings),
+                )
+
+                filtering_metadata = {
+                    "filtering_mode": "basic",
+                    "ast_findings": len(orphan_findings),
+                    "filtered_findings": len(filtered_findings),
+                }
 
             # Convert to Frame findings
             findings = self._convert_to_findings(filtered_findings, code_file)
@@ -124,6 +211,29 @@ class OrphanFrame(ValidationFrame):
                 duration=f"{duration:.2f}s",
             )
 
+            # Build comprehensive metadata
+            metadata = {
+                **filtering_metadata,
+                "total_orphans": len(orphan_findings),
+                "final_orphans": len(filtered_findings),
+                "unused_imports": sum(
+                    1 for f in filtered_findings if f.orphan_type == "unused_import"
+                ),
+                "unreferenced_functions": sum(
+                    1
+                    for f in filtered_findings
+                    if f.orphan_type == "unreferenced_function"
+                ),
+                "unreferenced_classes": sum(
+                    1
+                    for f in filtered_findings
+                    if f.orphan_type == "unreferenced_class"
+                ),
+                "dead_code": sum(
+                    1 for f in filtered_findings if f.orphan_type == "dead_code"
+                ),
+            }
+
             return FrameResult(
                 frame_id=self.frame_id,
                 frame_name=self.name,
@@ -132,26 +242,7 @@ class OrphanFrame(ValidationFrame):
                 issues_found=len(findings),
                 is_blocker=False,  # Orphan code is never a blocker
                 findings=findings,
-                metadata={
-                    "total_orphans": len(orphan_findings),
-                    "filtered_orphans": len(filtered_findings),
-                    "unused_imports": sum(
-                        1 for f in filtered_findings if f.orphan_type == "unused_import"
-                    ),
-                    "unreferenced_functions": sum(
-                        1
-                        for f in filtered_findings
-                        if f.orphan_type == "unreferenced_function"
-                    ),
-                    "unreferenced_classes": sum(
-                        1
-                        for f in filtered_findings
-                        if f.orphan_type == "unreferenced_class"
-                    ),
-                    "dead_code": sum(
-                        1 for f in filtered_findings if f.orphan_type == "dead_code"
-                    ),
-                },
+                metadata=metadata,
             )
 
         except Exception as e:
