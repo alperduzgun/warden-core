@@ -37,6 +37,7 @@ from warden.validation.frames import (
     PropertyFrame,
     StressFrame,
 )
+from warden.config.project_manager import ProjectConfigManager
 
 app = typer.Typer()
 console = Console()
@@ -200,12 +201,29 @@ async def scan_directory(
         console.print(f"[red]Error:[/red] Directory not found: {directory}")
         raise typer.Exit(code=1)
 
-    # Display header
-    console.print(Panel.fit(
+    # Load or create project config
+    config_manager = ProjectConfigManager(dir_path)
+    project_config = await config_manager.load_or_create()
+
+    # Display header with project info
+    header_text = (
         f"[bold cyan]Warden Project Scan[/bold cyan]\n"
+        f"[dim]Project:[/dim] {project_config.name}\n"
         f"[dim]Directory:[/dim] {dir_path}\n"
+        f"[dim]Language:[/dim] {project_config.language}"
+    )
+    if project_config.framework:
+        header_text += f"\n[dim]Framework:[/dim] {project_config.framework}"
+    if project_config.sdk_version:
+        header_text += f"\n[dim]SDK:[/dim] {project_config.sdk_version}"
+    header_text += (
+        f"\n[dim]Type:[/dim] {project_config.project_type}\n"
         f"[dim]Extensions:[/dim] {', '.join(extensions)}\n"
-        f"[dim]Started:[/dim] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"[dim]Started:[/dim] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    console.print(Panel.fit(
+        header_text,
         title="Scan Session",
         border_style="cyan"
     ))
@@ -300,13 +318,14 @@ async def scan_directory(
     for file_path in files:
         try:
             content = file_path.read_text()
-            language = determine_language(str(file_path))
+            # Use config language if available, otherwise detect from file
+            language = project_config.language if project_config.language != "unknown" else determine_language(str(file_path))
 
             code_file = CodeFile(
                 path=str(file_path),
                 content=content,
                 language=language,
-                framework=None,
+                framework=project_config.framework,
                 size_bytes=len(content.encode('utf-8')),
             )
             code_files.append(code_file)
@@ -356,8 +375,13 @@ async def scan_directory(
     for frame_result in result.frame_results:
         if frame_result.is_blocker and not frame_result.passed:
             critical_issues += frame_result.issues_found
-        elif frame_result.priority.value <= 2:  # HIGH or CRITICAL
-            high_issues += frame_result.issues_found
+        else:
+            # Count high severity issues from findings
+            high_severity_count = sum(
+                1 for finding in frame_result.findings
+                if finding.severity in ['high', 'critical']
+            )
+            high_issues += high_severity_count
 
     # Display results
     console.print("\n")
