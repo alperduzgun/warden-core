@@ -203,3 +203,168 @@ class PipelineResult(BaseDomainModel):
     def has_blockers(self) -> bool:
         """Check if pipeline has blocker issues."""
         return any(fr.is_blocker and not fr.passed for fr in self.frame_results)
+
+
+@dataclass
+class SubStep(BaseDomainModel):
+    """
+    Pipeline substep (validation frame within validation step).
+
+    Maps to Panel's SubStep interface.
+    Panel expects: {id, name, type, status, duration?}
+    """
+
+    id: str
+    name: str
+    type: str  # SubStepType value: 'security' | 'chaos' | 'fuzz' | 'property' | 'stress' | 'architectural'
+    status: str  # StepStatus value: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+    duration: Optional[str] = None  # Format: "0.8s", "1m 43s"
+
+    @classmethod
+    def from_frame_execution(cls, frame_exec: FrameExecution) -> "SubStep":
+        """
+        Convert FrameExecution to SubStep.
+
+        Args:
+            frame_exec: FrameExecution instance to convert
+
+        Returns:
+            SubStep instance compatible with Panel expectations
+        """
+        # Calculate duration string
+        duration_str = None
+        if frame_exec.duration > 0:
+            if frame_exec.duration < 60:
+                duration_str = f"{frame_exec.duration:.1f}s"
+            else:
+                minutes = int(frame_exec.duration // 60)
+                seconds = int(frame_exec.duration % 60)
+                duration_str = f"{minutes}m {seconds}s"
+
+        return cls(
+            id=frame_exec.frame_id,
+            name=frame_exec.frame_name,
+            type=frame_exec.frame_id,  # Use frame_id as type (e.g., 'security', 'chaos')
+            status=frame_exec.status,
+            duration=duration_str,
+        )
+
+
+@dataclass
+class PipelineStep(BaseDomainModel):
+    """
+    Pipeline step (one of 5 stages).
+
+    Maps to Panel's Step interface.
+    Panel expects: {id, name, type, status, duration?, score?, subSteps?}
+    """
+
+    id: str
+    name: str
+    type: str  # StepType value: 'analysis' | 'classification' | 'validation' | 'fortification' | 'cleaning'
+    status: str  # StepStatus value: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+    duration: Optional[str] = None  # Format: "0.8s", "1m 43s"
+    score: Optional[str] = None  # Format: "4/10", "8/12"
+    sub_steps: List[SubStep] = field(default_factory=list)  # Only for validation step
+
+    def to_json(self) -> Dict[str, Any]:
+        """Convert to Panel-compatible JSON with subSteps (camelCase)."""
+        data = super().to_json()
+        # Ensure subSteps is included (base class handles conversion)
+        return data
+
+
+@dataclass
+class PipelineSummary(BaseDomainModel):
+    """
+    Pipeline execution summary.
+
+    Maps to Panel's PipelineSummary interface.
+    Panel expects: {score: {before, after}, lines: {before, after}, duration, progress: {current, total}, findings: {critical, high, medium, low}, aiSource}
+    """
+
+    score_before: float = 0.0
+    score_after: float = 0.0
+    lines_before: int = 0
+    lines_after: int = 0
+    duration: str = "0s"
+    current_step: int = 0
+    total_steps: int = 5  # Always 5 steps in Panel's pipeline
+    findings_critical: int = 0
+    findings_high: int = 0
+    findings_medium: int = 0
+    findings_low: int = 0
+    ai_source: str = "warden-cli"
+
+    def to_json(self) -> Dict[str, Any]:
+        """
+        Convert to Panel-compatible JSON with nested structure.
+
+        Panel expects:
+        {
+            "score": {"before": 0, "after": 0},
+            "lines": {"before": 0, "after": 0},
+            "duration": "1m 43s",
+            "progress": {"current": 2, "total": 5},
+            "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "aiSource": "warden-cli"
+        }
+        """
+        return {
+            "score": {
+                "before": self.score_before,
+                "after": self.score_after,
+            },
+            "lines": {
+                "before": self.lines_before,
+                "after": self.lines_after,
+            },
+            "duration": self.duration,
+            "progress": {
+                "current": self.current_step,
+                "total": self.total_steps,
+            },
+            "findings": {
+                "critical": self.findings_critical,
+                "high": self.findings_high,
+                "medium": self.findings_medium,
+                "low": self.findings_low,
+            },
+            "aiSource": self.ai_source,
+        }
+
+
+@dataclass
+class PipelineRun(BaseDomainModel):
+    """
+    Complete pipeline run (Panel's 5-stage pipeline).
+
+    Maps to Panel's PipelineRun interface.
+    Panel expects: {id, runNumber, status, trigger, startTime, steps, summary, activeStepId?, activeSubStepId?, activeTabId, testResults?}
+
+    NOTE: This is the NEW model that Panel expects. ValidationPipeline is kept for backwards compatibility.
+    """
+
+    id: str
+    run_number: int
+    status: str  # CRITICAL: Panel expects string: 'running' | 'success' | 'failed'
+    trigger: str  # "manual", "git-push", "schedule", etc.
+    start_time: datetime
+    steps: List[PipelineStep]  # Always 5 steps: analysis, classification, validation, fortification, cleaning
+    summary: PipelineSummary
+    active_step_id: Optional[str] = None
+    active_sub_step_id: Optional[str] = None
+    active_tab_id: str = "logs"  # Default tab: "logs" | "console" | "tests" | "issues"
+    test_results: Optional[Dict[str, Any]] = None  # ValidationTestDetails (complex nested structure)
+
+    def to_json(self) -> Dict[str, Any]:
+        """
+        Convert to Panel-compatible JSON.
+
+        IMPORTANT: Status is already a string ('running' | 'success' | 'failed'),
+        so we don't need to convert it like ValidationPipeline does.
+        """
+        data = super().to_json()
+        # Status is already a string, no conversion needed
+        # summary.to_json() is called automatically by BaseDomainModel
+        return data
