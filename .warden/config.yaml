@@ -64,6 +64,28 @@ issue_validation:
   # - EvidenceQuoteRule: Validates evidence quotes exist in code
   # - TitleDescriptionQualityRule: Validates title quality (no placeholders)
 
+# Semantic search configuration (always enabled)
+semantic_search:
+  enabled: true                       # Enable semantic code search
+  qdrant_url: "http://localhost:6333"  # Qdrant server URL (or cloud URL)
+  qdrant_api_key: null                # Qdrant API key (required for cloud)
+  collection_name: "warden_code_index"  # Qdrant collection name
+  chunk_size: 500                     # Maximum lines per code chunk
+  embedding_model: "text-embedding-3-small"  # OpenAI embedding model
+  embedding_provider: "openai"        # Provider: openai or azure_openai
+  search_limit: 10                    # Default max search results
+  min_search_score: 0.5               # Minimum similarity score (0.0-1.0)
+  max_context_tokens: 4000            # Max tokens for LLM context retrieval
+
+# Infrastructure configuration
+infrastructure:
+  ci_provider: "github"          # CI provider: github, gitlab, azure
+  hooks:
+    pre_commit: true             # Enable pre-commit hook
+    pre_push: false              # Enable pre-push hook
+  installer:
+    auto_update: false           # Auto-update Warden in CI
+
 # Project-specific ignore patterns (future feature)
 # ignore_patterns:
 #   - "*/tests/*"
