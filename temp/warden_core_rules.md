@@ -726,6 +726,234 @@ Kurallar değiştiğinde bu dosya güncellenmeli ve `/mem-save` ile memory'e kay
 
 ---
 
-**Son Güncelleme:** 2025-12-19
+## 📁 MİMARİ ORGANIZASYON (ZORUNLU)
+
+### 1. Validation Frames Klasör Yapısı
+
+**Kural:** Her validation frame kendi klasöründe olmalı (frame-per-directory pattern)
+
+#### 1.1 Kaynak Kod Organizasyonu
+```
+src/warden/validation/frames/
+├── __init__.py
+├── README.md
+│
+├── chaos/                          # Her frame kendi klasöründe
+│   ├── __init__.py
+│   ├── chaos_frame.py              # Main frame
+│   └── _internal/                  # Internal checks (opsiyonel)
+│       ├── __init__.py
+│       └── *_check.py
+│
+├── security/
+│   ├── __init__.py
+│   ├── security_frame.py
+│   └── _internal/
+│
+├── orphan/
+│   ├── __init__.py
+│   ├── orphan_frame.py             # Main frame (orchestrator)
+│   ├── orphan_detector.py          # Helper module
+│   └── llm_orphan_filter.py        # Helper module
+│
+└── gitchanges/
+    ├── __init__.py
+    ├── gitchanges_frame.py
+    └── git_diff_parser.py          # Helper module
+```
+
+#### 1.2 Test Organizasyonu (MİRROR STRUCTURE)
+```
+tests/validation/frames/
+├── __init__.py
+├── README.md
+│
+├── chaos/
+│   ├── __init__.py
+│   └── test_chaos_frame.py
+│
+├── security/
+│   ├── __init__.py
+│   └── test_security_frame.py
+│
+├── orphan/
+│   ├── __init__.py
+│   ├── test_orphan_frame.py
+│   ├── test_orphan_detector.py
+│   └── test_llm_orphan_filter.py
+│
+└── gitchanges/
+    ├── __init__.py
+    └── test_gitchanges_frame.py
+```
+
+#### 1.3 Import Rules
+```python
+# ✅ GOOD: Organize edilmiş import
+from warden.validation.frames.orphan import OrphanFrame
+from warden.validation.frames.security import SecurityFrame
+from warden.validation.frames.orphan import LLMOrphanFilter
+
+# ❌ BAD: Flat import (deprecated)
+from warden.validation.frames.orphan_frame import OrphanFrame
+```
+
+#### 1.4 Frame Naming Convention
+```
+Directory:    <frame_name>/              # lowercase, underscores
+Main File:    <frame_name>_frame.py      # lowercase_frame.py
+Class:        <FrameName>Frame            # PascalCaseFrame
+Package:      warden.validation.frames.<frame_name>
+```
+
+**Örnek:**
+- `orphan/orphan_frame.py` → `OrphanFrame`
+- `security/security_frame.py` → `SecurityFrame`
+- `gitchanges/gitchanges_frame.py` → `GitChangesFrame`
+
+#### 1.5 Her Frame'in __init__.py'si
+```python
+# ✅ GOOD: Clean exports
+"""<Frame Name> - <description>"""
+
+from warden.validation.frames.<frame_name>.<frame_name>_frame import <FrameName>Frame
+
+__all__ = ["<FrameName>Frame"]
+```
+
+#### 1.6 Main frames/__init__.py
+```python
+# ✅ GOOD: Re-export all frames
+from warden.validation.frames.orphan import OrphanFrame
+from warden.validation.frames.security import SecurityFrame
+from warden.validation.frames.chaos import ChaosFrame
+from warden.validation.frames.gitchanges import GitChangesFrame
+
+__all__ = [
+    "OrphanFrame",
+    "SecurityFrame",
+    "ChaosFrame",
+    "GitChangesFrame",
+]
+```
+
+### 2. Frame Complexity Patterns
+
+**Pattern 1: Simple Frame (1 dosya)**
+```
+gitchanges/
+├── __init__.py
+├── gitchanges_frame.py     # Main frame
+└── git_diff_parser.py      # Helper
+```
+
+**Pattern 2: Complex Frame (Multiple helpers)**
+```
+orphan/
+├── __init__.py
+├── orphan_frame.py          # Orchestrator
+├── orphan_detector.py       # AST detector
+└── llm_orphan_filter.py     # LLM filter
+```
+
+**Pattern 3: Frame with Internal Checks**
+```
+security/
+├── __init__.py
+├── security_frame.py        # Main frame
+└── _internal/               # Internal checks
+    ├── __init__.py
+    ├── sql_injection_check.py
+    ├── xss_check.py
+    ├── secrets_check.py
+    └── hardcoded_password_check.py
+```
+
+### 3. Yeni Frame Ekleme (TEMPLATE)
+
+**Adım 1:** Klasör oluştur
+```bash
+mkdir src/warden/validation/frames/my_frame
+mkdir tests/validation/frames/my_frame
+```
+
+**Adım 2:** Main frame dosyası oluştur
+```python
+# src/warden/validation/frames/my_frame/my_frame_frame.py
+from warden.validation.domain.frame import ValidationFrame, FrameResult
+
+class MyFrameFrame(ValidationFrame):
+    """My frame description."""
+
+    name = "My Frame"
+    description = "Description here"
+
+    async def execute(self, code_file) -> FrameResult:
+        # Implementation
+        pass
+```
+
+**Adım 3:** __init__.py oluştur
+```python
+# src/warden/validation/frames/my_frame/__init__.py
+"""My Frame - Description"""
+
+from warden.validation.frames.my_frame.my_frame_frame import MyFrameFrame
+
+__all__ = ["MyFrameFrame"]
+```
+
+**Adım 4:** Main __init__.py güncelle
+```python
+# src/warden/validation/frames/__init__.py
+from warden.validation.frames.my_frame import MyFrameFrame
+
+__all__ = [
+    # ... existing
+    "MyFrameFrame",
+]
+```
+
+**Adım 5:** Test oluştur
+```python
+# tests/validation/frames/my_frame/__init__.py
+"""My Frame Tests"""
+
+# tests/validation/frames/my_frame/test_my_frame.py
+import pytest
+from warden.validation.frames.my_frame import MyFrameFrame
+
+class TestMyFrame:
+    def test_basic_functionality(self):
+        frame = MyFrameFrame()
+        assert frame.name == "My Frame"
+```
+
+### 4. Organizasyon Kuralları (ENFORCE)
+
+**Kural 1:** Her frame kendi klasöründe
+- ✅ Doğru: `frames/orphan/orphan_frame.py`
+- ❌ Yanlış: `frames/orphan_frame.py` (flat)
+
+**Kural 2:** Test yapısı kaynak kod yapısını mirror etmeli
+- ✅ Doğru: `tests/validation/frames/orphan/` mirrors `src/warden/validation/frames/orphan/`
+- ❌ Yanlış: Farklı yapılar
+
+**Kural 3:** Import path'ler organize edilmiş olmalı
+- ✅ Doğru: `from warden.validation.frames.orphan import OrphanFrame`
+- ❌ Yanlış: `from warden.validation.frames.orphan_frame import OrphanFrame`
+
+**Kural 4:** Her klasörde __init__.py olmalı
+- ✅ `frames/__init__.py` - Main exports
+- ✅ `frames/orphan/__init__.py` - Frame exports
+- ✅ `tests/validation/frames/orphan/__init__.py` - Test package marker
+
+**Kural 5:** README.md her major klasörde
+- ✅ `src/warden/validation/frames/README.md` - Kaynak kod dokümantasyonu
+- ✅ `tests/validation/frames/README.md` - Test dokümantasyonu
+
+---
+
+**Son Güncelleme:** 2025-12-21
 **Durum:** ACTIVE - Tüm yeni kod bu kurallara uymalı
 **Panel Reference:** /Users/ibrahimcaglar/warden-panel-development/src/lib/types/
