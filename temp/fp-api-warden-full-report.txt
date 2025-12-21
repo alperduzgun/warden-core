@@ -1,0 +1,684 @@
+
+====================================================================================================
+🛡️  WARDEN FULL ANALYSIS - fp-api Java Microservices Project
+====================================================================================================
+📅 Analysis Date: 2025-12-21 18:52:05
+
+🔧 Initializing Warden...
+2025-12-21 18:52:05 [info     ] ast_provider_discovery_started
+2025-12-21 18:52:05 [debug    ] loading_builtin_providers
+2025-12-21 18:52:05 [warning  ] provider_validation_failed     provider_name=tree-sitter
+2025-12-21 18:52:05 [info     ] provider_registered            languages=['python'] priority=1 provider_name=python-native
+2025-12-21 18:52:05 [debug    ] builtin_provider_loaded        provider_name=python-native
+2025-12-21 18:52:05 [debug    ] loading_entry_point_providers
+2025-12-21 18:52:05 [info     ] provider_registered            languages=['java'] priority=1 provider_name=javalang-parser
+2025-12-21 18:52:05 [info     ] entry_point_provider_loaded    entry_point=java provider_name=javalang-parser
+2025-12-21 18:52:05 [debug    ] loading_local_plugins
+2025-12-21 18:52:05 [debug    ] local_plugin_dir_not_found     path=/Users/ibrahimcaglar/.warden/ast-providers
+2025-12-21 18:52:05 [debug    ] loading_env_providers
+2025-12-21 18:52:05 [info     ] ast_provider_discovery_completed loaded_providers=['warden.ast.providers.python_ast_provider.PythonASTProvider', 'entry_point:java'] total_providers=2
+2025-12-21 18:52:05 [debug    ] provider_selected              language=java priority=1 provider_name=javalang-parser selection=auto
+   ✅ AST Provider: javalang-parser v0.1.0
+   ✅ LLM: Azure OpenAI GPT-4o
+
+📊 Project Structure:
+   Total Modules: 11
+   Total Java Files: 800
+      - common-service: 446 files
+      - integration: 150 files
+      - paypro-client: 51 files
+      - account-service: 41 files
+      - common-module: 27 files
+
+2025-12-21 18:52:05 [info     ] builtin_checks_registered      count=4 frame=Security Analysis
+2025-12-21 18:52:05 [info     ] check_discovery_started        frame_id=security
+2025-12-21 18:52:05 [info     ] entry_point_checks_discovered  checks=[] count=0 frame_id=security
+2025-12-21 18:52:05 [debug    ] local_check_directory_not_found frame_id=security path=/Users/ibrahimcaglar/.warden/checks/security
+2025-12-21 18:52:05 [info     ] local_checks_discovered        checks=[] count=0 frame_id=security
+2025-12-21 18:52:05 [info     ] check_discovery_complete       frame_id=security total_discovered=0 unique_checks=0
+2025-12-21 18:52:05 [info     ] builtin_checks_registered      count=4 frame=Chaos Engineering
+2025-12-21 18:52:05 [info     ] check_discovery_started        frame_id=chaos
+2025-12-21 18:52:05 [info     ] entry_point_checks_discovered  checks=[] count=0 frame_id=chaos
+2025-12-21 18:52:05 [debug    ] local_check_directory_not_found frame_id=chaos path=/Users/ibrahimcaglar/.warden/checks/chaos
+2025-12-21 18:52:05 [info     ] local_checks_discovered        checks=[] count=0 frame_id=chaos
+2025-12-21 18:52:05 [info     ] check_discovery_complete       frame_id=chaos total_discovered=0 unique_checks=0
+====================================================================================================
+🔍 DETAILED ANALYSIS - Sample Files (Top 5 modules)
+====================================================================================================
+
+
+📦 Module: common-service (446 files)
+----------------------------------------------------------------------------------------------------
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=4178 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/WebSocketEventListener.java language=java
+2025-12-21 18:52:05 [error    ] parse_failed                   error='MemberReference' object has no attribute 'name' error_type=AttributeError file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/WebSocketEventListener.java
+   ❌ WebSocketEventListener.java - Parse failed
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=437 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java node_count=19
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/SocketController.java status=passed violations=0
+   ✅ SocketController.java (437 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=704 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java node_count=1
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/Queues.java status=passed violations=0
+   ✅ Queues.java (704 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=2214 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java node_count=89
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/PerformanceLoggingAspect.java status=passed violations=0
+   ✅ PerformanceLoggingAspect.java (2214 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=3169 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/WsSessionTrackerHandler.java language=java
+2025-12-21 18:52:05 [error    ] parse_failed                   error='MemberReference' object has no attribute 'name' error_type=AttributeError file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-service/src/main/java/io/featureplanner/WsSessionTrackerHandler.java
+   ❌ WsSessionTrackerHandler.java - Parse failed
+
+   Module Summary: Security=0, Chaos=0, Arch=0
+
+📦 Module: integration (150 files)
+----------------------------------------------------------------------------------------------------
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=7571 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java node_count=358
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.01s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java status=warning total_findings=2
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/HttpUtil.java status=passed violations=0
+   ⚠️ HttpUtil.java (7571 bytes)
+      💥 Chaos: 2 issues
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=2597 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java node_count=201
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EncryptionUtil.java status=passed violations=0
+   ✅ EncryptionUtil.java (2597 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=2520 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EditorConverterMain.java language=java
+2025-12-21 18:52:05 [warning  ] java_syntax_error              error= file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/util/EditorConverterMain.java
+   ❌ EditorConverterMain.java - Parse failed
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=22603 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/IssueIntegrationService.java language=java
+2025-12-21 18:52:05 [error    ] parse_failed                   error='MemberReference' object has no attribute 'name' error_type=AttributeError file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/IssueIntegrationService.java
+   ❌ IssueIntegrationService.java - Parse failed
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=2756 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java node_count=153
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/integration/src/main/java/io/featureplanner/integration/EditorConverterUtil.java status=passed violations=0
+   ✅ EditorConverterUtil.java (2756 bytes)
+
+   Module Summary: Security=0, Chaos=2, Arch=0
+
+📦 Module: paypro-client (51 files)
+----------------------------------------------------------------------------------------------------
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=1368 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java node_count=54
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProClientApi.java status=passed violations=0
+   ✅ PayProClientApi.java (1368 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=550 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java node_count=29
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/CancellationReasonEnumValidator.java status=passed violations=0
+   ✅ CancellationReasonEnumValidator.java (550 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=641 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java node_count=32
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/EnumValidator.java status=passed violations=0
+   ✅ EnumValidator.java (641 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=9187 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java node_count=416
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.01s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java status=warning total_findings=2
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayProApiClient.java status=passed violations=0
+   ⚠️ PayProApiClient.java (9187 bytes)
+      💥 Chaos: 2 issues
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=1698 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java node_count=64
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/libs/paypro-client/src/main/java/io/featureplanner/payproclient/PayproWebHookController.java status=passed violations=0
+   ✅ PayproWebHookController.java (1698 bytes)
+
+   Module Summary: Security=0, Chaos=2, Arch=0
+
+📦 Module: account-service (41 files)
+----------------------------------------------------------------------------------------------------
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=294 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java node_count=16
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java status=warning total_findings=1
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountResponse.java status=passed violations=0
+   ⚠️ DeleteAccountResponse.java (294 bytes)
+      💥 Chaos: 1 issues
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=327 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java node_count=18
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java status=warning total_findings=1
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePasswordRequest.java status=passed violations=0
+   ⚠️ ChangePasswordRequest.java (327 bytes)
+      💥 Chaos: 1 issues
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=255 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java node_count=15
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java status=warning total_findings=1
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/DeleteAccountRequest.java status=passed violations=0
+   ⚠️ DeleteAccountRequest.java (255 bytes)
+      💥 Chaos: 1 issues
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=328 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java node_count=18
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java status=warning total_findings=1
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/ChangePrimaryEmailRequest.java status=passed violations=0
+   ⚠️ ChangePrimaryEmailRequest.java (328 bytes)
+      💥 Chaos: 1 issues
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=474 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java node_count=34
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=1 frame=Chaos Engineering passed=False
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java status=warning total_findings=1
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/account-service/src/main/java/io/featureplanner/api/dto/AccountDto.java status=passed violations=0
+   ⚠️ AccountDto.java (474 bytes)
+      💥 Chaos: 1 issues
+
+   Module Summary: Security=0, Chaos=5, Arch=0
+
+📦 Module: common-module (27 files)
+----------------------------------------------------------------------------------------------------
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=357 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java node_count=20
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/UserRequest.java status=passed violations=0
+   ✅ UserRequest.java (357 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=403 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java node_count=17
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/BaseResponse.java status=passed violations=0
+   ✅ BaseResponse.java (403 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=391 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java node_count=19
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/WorkspaceRequest.java status=passed violations=0
+   ✅ WorkspaceRequest.java (391 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=305 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java node_count=16
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/Result.java status=passed violations=0
+   ✅ Result.java (305 bytes)
+2025-12-21 18:52:05 [info     ] parse_started                  code_length=392 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java language=java
+2025-12-21 18:52:05 [info     ] parse_completed                file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java node_count=19
+2025-12-21 18:52:05 [info     ] security_frame_started         enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=SQL Injection Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=SQL Injection Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=XSS Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=XSS Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Secrets Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Secrets Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Hardcoded Password Detection file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Security Analysis
+2025-12-21 18:52:05 [debug    ] check_completed                check=Hardcoded Password Detection findings_count=0 frame=Security Analysis passed=True
+2025-12-21 18:52:05 [info     ] security_frame_completed       duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] chaos_frame_started            enabled_checks=4 file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java language=java
+2025-12-21 18:52:05 [debug    ] check_executing                check=Timeout Configuration Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Timeout Configuration Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Retry Mechanism Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Retry Mechanism Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Circuit Breaker Pattern Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Circuit Breaker Pattern Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [debug    ] check_executing                check=Error Handling Check file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java frame=Chaos Engineering
+2025-12-21 18:52:05 [debug    ] check_completed                check=Error Handling Check findings_count=0 frame=Chaos Engineering passed=True
+2025-12-21 18:52:05 [info     ] chaos_frame_completed          duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java status=passed total_findings=0
+2025-12-21 18:52:05 [info     ] architectural_frame_started    file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java language=java
+2025-12-21 18:52:05 [info     ] architectural_frame_completed  duration=0.00s file_path=/Users/ibrahimcaglar/IdeaProjects/fp-api/common-module/src/main/java/io/featureplanner/dto/ProjectRequest.java status=passed violations=0
+   ✅ ProjectRequest.java (392 bytes)
+
+   Module Summary: Security=0, Chaos=0, Arch=0
+
+====================================================================================================
+🤖 LLM DEEP ANALYSIS - Critical Files
+====================================================================================================
+
+
+📄 HttpUtil.java
+   Issues: 2
+   Module: integration
+
+   🤖 GPT-4o Analysis:
+      1. **Security Concerns**: The code does not validate or sanitize the `url` or `payload`, which could lead to security vulnerabilities such as SSRF (Server-Side Request Forgery) or injection attacks if these inputs are not properly controlled.
+      2. **Code Quality Issues**: The method documentation contains typos (e.g., "secont" instead of "second") and incomplete comments, which can lead to misunderstandings. Additionally, the method signature is incomplete, which suggests missing code or improper handling of exceptions.
+      3. **Recommendation**: Implement input validation and sanitization for the `url` and `payload` parameters to prevent potential security vulnerabilities, and ensure that all method signatures and comments are complete and accurate for better
+
+📄 PayProApiClient.java
+   Issues: 2
+   Module: paypro-client
+
+   🤖 GPT-4o Analysis:
+      1. **Security Concerns:** The code snippet does not show any explicit handling of sensitive data such as `API_SECRET_KEY`, which should be securely managed and not hardcoded or exposed in logs. Additionally, the use of `RestTemplate` without any security configurations (e.g., SSL/TLS) could lead to insecure data transmission.
+      2. **Code Quality Issues:** The code is incomplete, with a truncated line (`private final Res`), indicating potential issues with readability and maintainability. The use of `BufferingClientHttpRequestFactory` without proper configuration might lead to inefficient memory usage.
+      3. **Recommendation:** Ensure sensitive information like `API_SECRET_KEY` is stored securely using environment variables or a secrets management tool, and configure `Rest
+
+📄 DeleteAccountResponse.java
+   Issues: 1
+   Module: account-service
+
+   🤖 GPT-4o Analysis:
+      1. **Security Concerns:** There are no direct security concerns in this DTO class itself, as it primarily serves as a data container without any business logic or data processing.
+      2. **Code Quality Issues:** The class extends `BaseResponse`, but this is not shown in the provided code. If `BaseResponse` contains any fields or methods, they should be considered for potential redundancy or misuse.
+      3. **Recommendation:** Ensure that the `BaseResponse` class is appropriately designed to avoid exposing sensitive information or unnecessary fields, and consider adding validation or constraints if this DTO is used in a context where data integrity is critical.
+
+====================================================================================================
+📊 FINAL REPORT
+====================================================================================================
+
+📈 Statistics:
+   Total Files Scanned: 25
+   Successfully Parsed: 21
+   Parse Success Rate: 84.0%
+
+🔍 Issues Found:
+   🔒 Security Issues: 0
+   💥 Chaos Engineering: 9
+   🏗️  Architecture Issues: 0
+   ⚠️  Critical Files: 7
+
+📦 Module Health:
+   ⚠️ account-service: 5 total issues (Sec=0, Chaos=5, Arch=0)
+   ✅ common-module: 0 total issues (Sec=0, Chaos=0, Arch=0)
+   ✅ common-service: 0 total issues (Sec=0, Chaos=0, Arch=0)
+   ⚠️ integration: 2 total issues (Sec=0, Chaos=2, Arch=0)
+   ⚠️ paypro-client: 2 total issues (Sec=0, Chaos=2, Arch=0)
+
+====================================================================================================
+✅ ANALYSIS COMPLETE!
+====================================================================================================
+
+🎯 Key Findings:
+   ✅ No critical security vulnerabilities found
+
+💡 Recommendations:
+   1. Review files with multiple issues
+   2. Implement circuit breaker pattern for external API calls
+   3. Add retry mechanisms for resilient microservices
+

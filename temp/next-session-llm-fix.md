@@ -314,3 +314,152 @@ M src/warden/tui/commands/scan.py
 **Session:** LLM Integration Fix
 **Priority:** HIGH (blocking LLM usage)
 **Estimated Time:** 30-60 minutes
+
+ ---
+  🎯 KISA CEVAP
+
+  ÖNERİ: HYBRID APPROACH - Hem Tree-sitter hem de Native Provider'lar
+
+  ✅ SHORT-TERM (2-3 hafta):  Tree-sitter (tüm diller için)
+  ✅ LONG-TERM (2-3 ay):      Java + C# Native Providers
+
+  ---
+  📊 KARAR MATRİSİ
+
+  Tree-sitter YALNIZ mı?
+
+  ❌ HAYIR - Yeterli değil!
+
+  Neden:
+  - ❌ Symbol resolution yok → Orphan detection için kritik
+  - ❌ Type information yok → Hangi import nerede kullanıldı bulunamaz
+  - ❌ Cross-file analysis zor → Module dependencies çözülmez
+
+  Örnek Problem:
+  // OrphanDetector bu import'u kullanılmamış diyebilir!
+  import com.example.Utils;  // Utils static import ediliyor
+
+  public class Test {
+      public void method() {
+          Utils.helper();  // Tree-sitter bunu import ile eşleyemez!
+      }
+  }
+
+  Native Provider'lar mı?
+
+  ✅ EVET - Ama sadece kritik diller için!
+
+  Java & C# için EVET:
+  - ✅ Orphan detection için symbol resolution gerekli
+  - ✅ Panel'de en çok kullanılan enterprise diller
+  - ✅ JavaParser ve Roslyn mature ve production-ready
+
+  Diğer diller için HAYIR:
+  - TypeScript, JavaScript, Go, Rust → Tree-sitter yeterli
+  - LLM filtering ile false positive azaltılır
+
+  ---
+  🏗️ ÖNERİLEN MİMARİ
+
+  Priority System
+
+  Language: Java
+      ↓
+  1️⃣ JavaParserProvider var mı?
+      ✅ YES → JavaParser kullan (symbol resolution)
+      ❌ NO  → Tree-sitter fallback
+      ↓
+  2️⃣ Tree-sitter parse et
+      ↓
+  3️⃣ LLM filtering (false positive azalt)
+      ↓
+  Result: High accuracy orphan detection
+
+  Implementation Roadmap
+
+  Phase 1: Tree-sitter Foundation (2-3 hafta)
+  ✅ Tree-sitter provider'ı implement et (PLACEHOLDER'ı bitir)
+  ✅ 14 dil için test yaz (Python, Java, C#, JS, TS, Go, Rust, etc.)
+  ✅ LLM filtering multi-language support
+
+  Sonuç:
+  - Tüm diller parse edilebilir
+  - Orta false positive rate (%30-40)
+  - Çok hızlı (36x faster)
+
+  Phase 2: Native Providers (2-3 ay)
+  ✅ JavaParserProvider (Java için)
+     - JPype (Python-Java bridge) veya subprocess
+     - Symbol resolution + type information
+
+  ✅ RoslynProvider (C# için)
+     - REST API wrapper (C# microservice)
+     - Symbol resolution + type information
+
+  Sonuç:
+  - Java & C# için %95+ accuracy
+  - Düşük false positive rate (<10%)
+  - Biraz daha yavaş (ama kabul edilebilir)
+
+  ---
+  📈 KARŞILAŞTIRMA
+
+  | Özellik             | Tree-sitter Only | Hybrid (Tree + Native) |
+  |---------------------|------------------|------------------------|
+  | Implementation Time | ✅ 2-3 hafta      | ⚠️ 2-3 ay              |
+  | Accuracy (Java/C#)  | ⚠️ %60-70        | ✅ %95+                 |
+  | Accuracy (Others)   | ✅ %80-90         | ✅ %80-90               |
+  | Performance         | ✅ Çok hızlı      | ⚠️ Orta                |
+  | Maintenance         | ✅ Kolay          | ⚠️ Orta                |
+  | False Positives     | ⚠️ Orta-Yüksek   | ✅ Düşük                |
+  | Symbol Resolution   | ❌ Yok            | ✅ Var (native)         |
+  | Multi-language      | ✅ 14 dil         | ✅ 14 dil               |
+
+  ---
+  🎬 PRODUCTION ÖRNEKLER
+
+  Tree-sitter Kullananlar:
+  - ✅ GitHub Semantic - Code navigation
+  - ✅ Slack Engineering - Security scanning (2 intern, milyonlarca satır)
+  - ✅ Semgrep - Static analysis
+  - ✅ Symflower - 36x speedup (JavaParser'dan geçiş)
+
+  Native Parser Kullananlar:
+  - ✅ IntelliJ IDEA - Java için IntelliJ PSI (native)
+  - ✅ Visual Studio - C# için Roslyn (native)
+  - ✅ SonarQube - Multi-language (language-specific parsers)
+
+  ---
+  💡 SONUÇ VE TAVSİYE
+
+  Kısa Vadeli Strateji (MVP - 2-3 hafta)
+
+  ✅ Tree-sitter provider'ı bitir
+  ✅ 14 dil için temel orphan detection
+  ✅ LLM filtering ile false positive azalt
+  ✅ Production'a çıkar
+
+  Avantaj: Hızlı MVP, tüm diller çalışır
+  Dezavantaj: Java/C# için %30-40 false positive
+
+  Uzun Vadeli Strateji (Production - 2-3 ay)
+
+  ✅ JavaParser provider ekle (Java)
+  ✅ Roslyn provider ekle (C#)
+  ✅ Priority system otomatik seçsin (native > tree-sitter)
+  ✅ Diğer diller tree-sitter ile devam
+
+  Avantaj: Enterprise diller (%95 accuracy), diğerleri hızlı
+  Dezavantaj: Biraz daha kompleks maintenance
+
+  ---
+  🚀 SONRAKİ ADIMLAR
+
+  Şimdi ne yapmak istersin?
+
+  1. Tree-sitter Implementation - PLACEHOLDER'ı bitir, 14 dil test et
+  2. JavaParser POC - Java provider prototype yap
+  3. Roslyn POC - C# provider prototype yap
+  4. Architecture Decision - Detaylı plan dokümante et
+  5. Başka bir şey?
+

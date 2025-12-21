@@ -207,6 +207,21 @@ class ASTProviderRegistry:
         self._language_providers.clear()
         logger.info("registry_cleared")
 
+    async def discover_providers(self) -> None:
+        """
+        Discover and load providers from all sources.
+
+        This is a convenience method that uses ASTProviderLoader to:
+        1. Load built-in providers
+        2. Discover PyPI entry points
+        3. Load local plugins
+        4. Load environment-specified providers
+        """
+        from warden.ast.application.provider_loader import ASTProviderLoader
+
+        loader = ASTProviderLoader(self)
+        await loader.load_all()
+
     def __len__(self) -> int:
         """Get number of registered providers."""
         return len(self._providers)

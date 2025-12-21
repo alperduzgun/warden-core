@@ -26,6 +26,7 @@ from warden.validation.domain.frame import CodeFile
 from warden.validation.frames.security import SecurityFrame
 from warden.validation.frames.chaos import ChaosFrame
 from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
+from warden.config.project_manager import ProjectConfigManager
 
 app = typer.Typer()
 console = Console()
@@ -160,14 +161,41 @@ async def validate_file(
         console.print(f"[red]Error reading file:[/red] {e}")
         raise typer.Exit(code=1)
 
-    language = determine_language(file_path)
+    # Load or create project config
+    file_abs_path = Path(file_path).resolve()
+    project_root_path = file_abs_path.parent
 
-    # Display header
-    console.print(Panel.fit(
+    # Find project root by looking for common markers
+    for parent in [file_abs_path.parent] + list(file_abs_path.parents):
+        if any((parent / marker).exists() for marker in [
+            '.git', 'pyproject.toml', 'package.json', 'Cargo.toml',
+            'go.mod', 'pom.xml', 'build.gradle'
+        ]):
+            project_root_path = parent
+            break
+
+    config_manager = ProjectConfigManager(project_root_path)
+    project_config = await config_manager.load_or_create()
+
+    # Use detected language from project config if available
+    language = project_config.language if project_config.language != "unknown" else determine_language(file_path)
+    framework = project_config.framework
+
+    # Display header with project info
+    header_text = (
         f"[bold cyan]Warden Code Validation[/bold cyan]\n"
+        f"[dim]Project:[/dim] {project_config.name}\n"
         f"[dim]File:[/dim] {file_path}\n"
-        f"[dim]Language:[/dim] {language}\n"
-        f"[dim]Size:[/dim] {len(content)} bytes",
+        f"[dim]Language:[/dim] {language}"
+    )
+    if framework:
+        header_text += f"\n[dim]Framework:[/dim] {framework}"
+    if project_config.sdk_version:
+        header_text += f"\n[dim]SDK:[/dim] {project_config.sdk_version}"
+    header_text += f"\n[dim]Size:[/dim] {len(content)} bytes"
+
+    console.print(Panel.fit(
+        header_text,
         title="Validation Session",
         border_style="cyan"
     ))
@@ -179,12 +207,12 @@ async def validate_file(
         ArchitecturalConsistencyFrame(),
     ]
 
-    # Create code file object
+    # Create code file object with project config
     code_file = CodeFile(
         path=file_path,
         content=content,
         language=language,
-        framework=None,
+        framework=framework,
         size_bytes=len(content.encode('utf-8')),
     )
 
