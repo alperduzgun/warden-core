@@ -288,6 +288,33 @@ GLOBAL_FRAMES: List[Frame] = [
         is_blocker=False,
         applicability=[FrameApplicability()]
     ),
+    Frame(
+        id='project_architecture',
+        name='Project Architecture Validator',
+        description='Validates project-level structure, organization, and patterns',
+        category='global',
+        priority='medium',
+        is_blocker=False,
+        applicability=[FrameApplicability()]
+    ),
+    Frame(
+        id='gitchanges',
+        name='Git Changes Analyzer',
+        description='Analyzes only changed lines in git commits for targeted validation',
+        category='global',
+        priority='medium',
+        is_blocker=False,
+        applicability=[FrameApplicability()]
+    ),
+    Frame(
+        id='orphan',
+        name='Dead Code Detector',
+        description='Detects unused functions and classes using LLM-powered analysis',
+        category='global',
+        priority='low',
+        is_blocker=False,
+        applicability=[FrameApplicability()]
+    ),
 ]
 
 

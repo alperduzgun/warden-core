@@ -21,8 +21,7 @@ from rich.panel import Panel
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from warden.cli.commands import scan, report, infrastructure
-# validate temporarily disabled
+from warden.cli.commands import scan, report, infrastructure, validate
 
 app = typer.Typer(
     name="warden",

@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Any
 
 async def display_scan_summary(
     scan_path: Path,
-    results: List[Dict[str, Any]],
+    pipeline_result: Any,  # PipelineResult from orchestrator
     add_message: Callable[[str, str, bool], None],
 ) -> None:
     """
@@ -14,56 +14,25 @@ async def display_scan_summary(
 
     Args:
         scan_path: Path that was scanned
-        results: List of {path, pipeline_result} dictionaries
+        pipeline_result: PipelineResult from orchestrator.execute()
         add_message: Function to add messages to chat
     """
     from ..utils.formatter import TreeFormatter, ProgressBar
 
-    files_analyzed = len(results)
+    # Extract statistics from PipelineResult
+    total_issues = pipeline_result.total_findings
+    critical = pipeline_result.critical_findings
+    high = pipeline_result.high_findings
+    medium = pipeline_result.medium_findings
+    low = pipeline_result.low_findings
 
-    # Aggregate statistics
-    total_issues = 0
-    critical = 0
-    high = 0
-    medium = 0
-    low = 0
-    total_duration = 0
-
-    failed_pipelines = 0
-    stopped_pipelines = 0
-
-    for result in results:
-        pipeline_result = result.get("pipeline_result")
-        if not pipeline_result:
-            continue
-
-        total_duration += pipeline_result.duration_ms
-
-        # Count issues from analysis_result
-        analysis_result = pipeline_result.analysis_result or {}
-        issues = analysis_result.get("issues", [])
-        total_issues += len(issues)
-
-        # Count by severity
-        for issue in issues:
-            severity = issue.get("severity", "medium").lower()
-            if severity == "critical":
-                critical += 1
-            elif severity == "high":
-                high += 1
-            elif severity == "medium":
-                medium += 1
-            elif severity == "low":
-                low += 1
-
-        # Check pipeline status
-        if not pipeline_result.success:
-            failed_pipelines += 1
-        elif pipeline_result.blocker_failures:
-            stopped_pipelines += 1
+    files_analyzed = len(pipeline_result.frame_results)  # Approximate
+    failed_frames = pipeline_result.frames_failed
+    passed_frames = pipeline_result.frames_passed
+    total_duration = pipeline_result.duration * 1000  # Convert to ms
 
     # Status emoji
-    if failed_pipelines > 0 or stopped_pipelines > 0:
+    if failed_frames > 0:
         status_emoji = "⚠️"
     elif total_issues > 0:
         status_emoji = "🟡"
@@ -75,22 +44,19 @@ async def display_scan_summary(
 
     lines.append(f"{status_emoji} **Scan Complete**\n")
     lines.append(TreeFormatter.header(f"Scanned: {scan_path.name}"))
-    lines.append(TreeFormatter.item(f"Files Analyzed: **{files_analyzed}**"))
+    lines.append(TreeFormatter.item(f"Frames Executed: **{pipeline_result.total_frames}**"))
     lines.append(TreeFormatter.item(f"Total Duration: {total_duration:.0f}ms"))
     lines.append("")
 
     # Pipeline status
-    completed = files_analyzed - failed_pipelines - stopped_pipelines
     lines.append(TreeFormatter.header("Pipeline Status"))
-    lines.append(TreeFormatter.item(f"✅ Completed: {completed}"))
-    if stopped_pipelines > 0:
-        lines.append(TreeFormatter.item(f"⚠️  Stopped (Blocker): {stopped_pipelines}"))
-    if failed_pipelines > 0:
-        lines.append(TreeFormatter.item(f"❌ Failed: {failed_pipelines}"))
+    lines.append(TreeFormatter.item(f"✅ Passed: {passed_frames}"))
+    if failed_frames > 0:
+        lines.append(TreeFormatter.item(f"❌ Failed: {failed_frames}"))
     lines.append("")
 
     # Progress bar
-    progress = ProgressBar.create(completed, files_analyzed)
+    progress = ProgressBar.create(passed_frames, pipeline_result.total_frames)
     lines.append(TreeFormatter.item(progress))
     lines.append("")
 
@@ -104,34 +70,21 @@ async def display_scan_summary(
         lines.append(TreeFormatter.item(f"⚪ Low: {low}"))
         lines.append("")
 
-        # Show files with most issues
-        files_with_issues = []
-        for r in results:
-            pipeline_result = r.get("pipeline_result")
-            if not pipeline_result or not pipeline_result.analysis_result:
-                continue
-            issue_count = len(pipeline_result.analysis_result.get("issues", []))
-            if issue_count > 0:
-                files_with_issues.append({
-                    "path": r["path"],
-                    "issues": issue_count
-                })
-        files_with_issues.sort(key=lambda x: x["issues"], reverse=True)
+        # Show frames with most issues
+        if pipeline_result.frame_results:
+            lines.append(TreeFormatter.header("Frames with Issues"))
+            for idx, frame_result in enumerate(pipeline_result.frame_results[:5], 1):
+                if frame_result.issues_found > 0:
+                    lines.append(TreeFormatter.item(
+                        f"{idx}. `{frame_result.frame_name}`: {frame_result.issues_found} issues"
+                    ))
 
-        if files_with_issues:
-            lines.append(TreeFormatter.header("Top Files with Issues"))
-            for idx, file_info in enumerate(files_with_issues[:5], 1):
-                file_name = Path(file_info["path"]).name
-                issue_count = file_info["issues"]
-                lines.append(TreeFormatter.item(f"{idx}. `{file_name}`: {issue_count} issues"))
-
-            if total_issues > 5:
-                lines.append("")
-                lines.append("💡 Use `/analyze <file>` for detailed analysis")
+            lines.append("")
+            lines.append("💡 Use `/analyze <file>` for detailed frame-level analysis")
     else:
         lines.append(TreeFormatter.item("✅ No issues detected!"))
         lines.append("")
-        lines.append("**All files look good!**")
+        lines.append("**All frames passed!**")
 
     add_message("\n".join(lines), "assistant-message", True)
 

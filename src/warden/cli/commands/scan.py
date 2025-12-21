@@ -24,10 +24,8 @@ from rich import box
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from warden.pipeline.application.orchestrator import PipelineOrchestrator
-from warden.analyzers.discovery.analyzer import CodeAnalyzer
-from warden.analyzers.discovery.classifier import CodeClassifier
-from warden.validation.domain.executor import FrameExecutor
+from warden.pipeline.application.enhanced_orchestrator import EnhancedPipelineOrchestrator
+from warden.pipeline.domain.models import PipelineConfig
 from warden.validation.frames import (
     SecurityFrame,
     ChaosFrame,
@@ -241,41 +239,6 @@ async def scan_directory(
 
     console.print(f"\n[cyan]Found {len(files)} file(s) to scan[/cyan]\n")
 
-    # Initialize LLM factory (if enabled in config)
-    llm_factory = None
-    try:
-        import os
-        from dotenv import load_dotenv
-        from warden.llm import LlmClientFactory, LlmConfiguration, LlmProvider
-
-        # Load .env file
-        load_dotenv()
-
-        # Create LLM config from environment
-        llm_config = LlmConfiguration(
-            default_provider=LlmProvider.AZURE_OPENAI,
-            fallback_providers=[]
-        )
-
-        # Configure Azure OpenAI from environment
-        llm_config.azure_openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        llm_config.azure_openai.endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        llm_config.azure_openai.default_model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
-        llm_config.azure_openai.api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
-
-        # Only create factory if API key is present
-        if llm_config.azure_openai.api_key:
-            llm_factory = LlmClientFactory(llm_config)
-            console.print(f"[green]✓ LLM integration enabled (Azure OpenAI - {llm_config.azure_openai.default_model})[/green]")
-        else:
-            console.print("[yellow]LLM integration disabled: AZURE_OPENAI_API_KEY not found[/yellow]")
-    except Exception as e:
-        console.print(f"[yellow]LLM integration disabled: {str(e)}[/yellow]")
-
-    # Initialize components with LLM factory
-    analyzer = CodeAnalyzer(llm_factory=llm_factory, use_llm=True)
-    classifier = CodeClassifier()
-
     # Load frames from config file
     frames = []
     config_file = Path(config_path)
@@ -321,116 +284,80 @@ async def scan_directory(
         console.print("[red]Error: No frames loaded![/red]")
         raise typer.Exit(code=1)
 
-    executor = FrameExecutor(frames)
-
-    orchestrator = PipelineOrchestrator(
-        analyzer=analyzer,
-        classifier=classifier,
-        frame_executor=executor
+    # Create simple pipeline config
+    pipeline_config = PipelineConfig(
+        enable_discovery=False,  # We already discovered files manually
+        enable_build_context=False,  # Not needed for simple scan
+        enable_suppression=False,  # Can be enabled later
     )
 
-    # Track results
-    file_results = []
-    total_issues = 0
-    critical_issues = 0
-    high_issues = 0
-    scores = []
-    failed_count = 0
+    # Create CodeFile objects from discovered files
+    from warden.validation.domain.frame import CodeFile
 
+    code_files = []
+    console.print(f"[cyan]Preparing {len(files)} files for validation...[/cyan]\n")
+
+    for file_path in files:
+        try:
+            content = file_path.read_text()
+            language = determine_language(str(file_path))
+
+            code_file = CodeFile(
+                path=str(file_path),
+                content=content,
+                language=language,
+                framework=None,
+                size_bytes=len(content.encode('utf-8')),
+            )
+            code_files.append(code_file)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to load {file_path.name}: {e}[/yellow]")
+
+    if not code_files:
+        console.print("[red]Error: No files could be loaded![/red]")
+        raise typer.Exit(code=1)
+
+    # Create enhanced orchestrator with frames
+    orchestrator = EnhancedPipelineOrchestrator(
+        frames=frames,
+        config=pipeline_config
+    )
+
+    # Run validation
     start_time = datetime.now()
 
-    # Scan files with progress bar
+    console.print(f"[cyan]Running {len(frames)} validation frames on {len(code_files)} files...[/cyan]\n")
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        console=console
+        console=console,
+        transient=False
     ) as progress:
+        task = progress.add_task("[cyan]Validating files...", total=None)
 
-        task = progress.add_task("[cyan]Scanning files...", total=len(files))
+        # Execute all frames on all files
+        result = await orchestrator.execute(code_files)
 
-        for file_path in files:
-            try:
-                # Read file
-                content = file_path.read_text()
-                language = determine_language(str(file_path))
-
-                # Update progress
-                progress.update(
-                    task,
-                    description=f"[cyan]Scanning[/cyan] [blue]{file_path.name}[/blue]"
-                )
-
-                # Run pipeline
-                result = await orchestrator.execute(
-                    file_path=str(file_path),
-                    file_content=content,
-                    language=language
-                )
-
-                # Track results
-                if result.success and result.analysis_result:
-                    score = result.analysis_result.get("score", 0)
-                    scores.append(score)
-
-                    file_result = {
-                        "file": str(file_path),
-                        "score": score,
-                        "total_issues": 0,
-                        "blocker_failures": 0,
-                        "critical_issues": 0,
-                        "high_issues": 0,
-                    }
-
-                    if result.validation_summary:
-                        # validation_summary has "results" array with JSON objects
-                        frame_results = result.validation_summary.get("results", [])
-                        blocker_failures_list = result.validation_summary.get("blockerFailures", [])
-
-                        file_result["total_issues"] = sum(
-                            len(fr.get("issues", [])) for fr in frame_results
-                        )
-                        file_result["blocker_failures"] = len(blocker_failures_list)
-
-                        # Count critical and high issues
-                        for frame_result in frame_results:
-                            priority = frame_result.get("priority", "medium")
-                            issues = frame_result.get("issues", [])
-
-                            if priority.lower() == "critical":
-                                file_result["critical_issues"] += len(issues)
-                                critical_issues += len(issues)
-                            elif priority.lower() == "high":
-                                file_result["high_issues"] += len(issues)
-                                high_issues += len(issues)
-
-                        total_issues += file_result["total_issues"]
-
-                    file_results.append(file_result)
-
-                    # Show quick result if verbose
-                    if verbose:
-                        score_color = "green" if score >= 7 else "yellow" if score >= 5 else "red"
-                        console.print(
-                            f"  [{score_color}]{score:.1f}/10[/{score_color}] "
-                            f"[dim]{file_path.relative_to(dir_path)}[/dim]"
-                        )
-
-                else:
-                    failed_count += 1
-
-            except Exception as e:
-                failed_count += 1
-                if verbose:
-                    console.print(f"  [red]Failed:[/red] {file_path.name} - {str(e)}")
-
-            progress.advance(task)
+        progress.update(task, completed=True)
 
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
+
+    # Process results
+    total_issues = result.total_findings
+    file_results = []
+    critical_issues = 0
+    high_issues = 0
+    scores = [7.0] * len(code_files)  # Default score (frames don't provide scores)
+    failed_count = 0
+
+    # Extract issues from frame results
+    for frame_result in result.frame_results:
+        if frame_result.is_blocker and not frame_result.passed:
+            critical_issues += frame_result.issues_found
+        elif frame_result.priority.value <= 2:  # HIGH or CRITICAL
+            high_issues += frame_result.issues_found
 
     # Display results
     console.print("\n")
@@ -439,7 +366,7 @@ async def scan_directory(
     avg_score = sum(scores) / len(scores) if scores else 0
     summary_table = create_scan_summary_table(
         total_files=len(files),
-        analyzed_files=len(file_results),
+        analyzed_files=len(code_files),
         failed_files=failed_count,
         avg_score=avg_score,
         total_issues=total_issues,
@@ -449,11 +376,16 @@ async def scan_directory(
     )
     console.print(summary_table)
 
-    # Top issues table (if any issues found)
-    if file_results and total_issues > 0:
-        console.print()
-        issues_table = create_file_results_table(file_results, limit=10)
-        console.print(issues_table)
+    # Show frame results if verbose
+    if verbose and result.frame_results:
+        console.print("\n[cyan]Frame Results:[/cyan]")
+        for frame_result in result.frame_results:
+            status_icon = "✓" if frame_result.passed else "✗"
+            status_color = "green" if frame_result.passed else "red"
+            console.print(
+                f"  [{status_color}]{status_icon}[/{status_color}] "
+                f"{frame_result.frame_name}: {frame_result.issues_found} issues"
+            )
 
     # Final status
     console.print()
