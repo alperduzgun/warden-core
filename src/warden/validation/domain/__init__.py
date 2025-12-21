@@ -19,6 +19,17 @@ from warden.validation.domain.check import (
     CheckFinding,
     CheckSeverity,
 )
+from warden.validation.domain.test_results import (
+    TestAssertion,
+    TestResult,
+    SecurityTestDetails,
+    ChaosTestDetails,
+    FuzzTestDetails,
+    PropertyTestDetails,
+    StressTestMetrics,
+    StressTestDetails,
+    ValidationTestDetails,
+)
 
 __all__ = [
     # Enums
@@ -37,4 +48,14 @@ __all__ = [
     "CheckResult",
     "CheckFinding",
     "CheckSeverity",
+    # Test results models
+    "TestAssertion",
+    "TestResult",
+    "SecurityTestDetails",
+    "ChaosTestDetails",
+    "FuzzTestDetails",
+    "PropertyTestDetails",
+    "StressTestMetrics",
+    "StressTestDetails",
+    "ValidationTestDetails",
 ]
