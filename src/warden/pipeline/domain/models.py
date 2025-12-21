@@ -6,12 +6,37 @@ Core entities for validation pipeline orchestration.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from uuid import uuid4
 
 from warden.shared.domain.base_model import BaseDomainModel
 from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
 from warden.validation.domain.frame import ValidationFrame, FrameResult
+
+# Forward reference to avoid circular import
+if TYPE_CHECKING:
+    from warden.rules.domain.models import CustomRule
+
+
+@dataclass
+class FrameRules(BaseDomainModel):
+    """
+    Pre/Post rules for a specific frame.
+
+    Defines custom rules that should execute before/after a frame.
+    """
+
+    pre_rules: List["CustomRule"] = field(default_factory=list)
+    post_rules: List["CustomRule"] = field(default_factory=list)
+    on_fail: str = "continue"  # 'stop' | 'continue' - what to do if blocker violations found
+
+    def to_json(self) -> Dict[str, Any]:
+        """Convert to Panel-compatible JSON."""
+        return {
+            "preRules": [rule.to_json() for rule in self.pre_rules],
+            "postRules": [rule.to_json() for rule in self.post_rules],
+            "onFail": self.on_fail,
+        }
 
 
 @dataclass
@@ -70,11 +95,22 @@ class PipelineConfig(BaseDomainModel):
     suppression_config_path: Optional[str] = None  # Path to suppression config file
     issue_validation_config: Optional[Dict[str, Any]] = None  # Issue validator configuration (min_confidence, rules)
 
+    # Custom Rules (NEW)
+    global_rules: List["CustomRule"] = field(default_factory=list)  # Rules applied to all frames
+    frame_rules: Dict[str, FrameRules] = field(default_factory=dict)  # Frame-specific rules (key: frame_id)
+
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         # Convert enum to string value
         data["strategy"] = self.strategy.value
+
+        # Convert custom rules
+        data["globalRules"] = [rule.to_json() for rule in self.global_rules]
+        data["frameRules"] = {
+            frame_id: frame_rules.to_json() for frame_id, frame_rules in self.frame_rules.items()
+        }
+
         return data
 
 
@@ -225,6 +261,9 @@ class SubStep(BaseDomainModel):
         """
         Convert FrameExecution to SubStep.
 
+        Maps internal frame status to Panel-compatible SubStep status.
+        Panel expects: 'pending'|'running'|'completed'|'failed'|'skipped'
+
         Args:
             frame_exec: FrameExecution instance to convert
 
@@ -241,11 +280,24 @@ class SubStep(BaseDomainModel):
                 seconds = int(frame_exec.duration % 60)
                 duration_str = f"{minutes}m {seconds}s"
 
+        # Map status to Panel-compatible value
+        # frame_exec.status is execution status ('pending', 'running', 'completed', 'skipped')
+        # If frame completed, check result for actual validation status
+        panel_status = frame_exec.status
+        if frame_exec.status == "completed" and frame_exec.result:
+            # Map result.status to Panel status
+            # 'failed' → 'failed', 'passed' → 'completed', 'warning' → 'completed'
+            result_status = frame_exec.result.status
+            if result_status == "failed":
+                panel_status = "failed"
+            elif result_status in ("passed", "warning"):
+                panel_status = "completed"
+
         return cls(
             id=frame_exec.frame_id,
             name=frame_exec.frame_name,
             type=frame_exec.frame_id,  # Use frame_id as type (e.g., 'security', 'chaos')
-            status=frame_exec.status,
+            status=panel_status,
             duration=duration_str,
         )
 

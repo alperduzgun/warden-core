@@ -98,25 +98,59 @@ class WardenTUI(App):
         yield Footer()
 
     def _load_pipeline_config(self, config_name: str) -> None:
-        """Load pipeline configuration from .warden/config.yaml."""
+        """Load pipeline configuration from .warden/config.yaml and rules.yaml."""
         if not PIPELINE_AVAILABLE:
             return
 
         try:
             import yaml
             from warden.pipeline.domain.models import PipelineConfig as PipelineOrchestratorConfig
+            from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+            import asyncio
 
             # Find config file
             config_file = self.project_root / ".warden" / "config.yaml"
+
+            # ✅ NEW: Load custom rules from rules.yaml
+            rules_file = self.project_root / ".warden" / "rules.yaml"
+            global_rules = []
+            frame_rules = {}
+
+            if rules_file.exists():
+                try:
+                    # Load rules synchronously (TUI __init__ is sync)
+                    loop = asyncio.new_event_loop()
+                    rules_config = loop.run_until_complete(
+                        RulesYAMLLoader.load_from_file(rules_file)
+                    )
+                    loop.close()
+
+                    # Extract global rules (rules referenced in global_rules section)
+                    rule_lookup = {rule.id: rule for rule in rules_config.rules if rule.enabled}
+                    global_rules = [rule_lookup[rule_id] for rule_id in rules_config.global_rules if rule_id in rule_lookup]
+
+                    # Get frame_rules from config (already parsed by loader)
+                    frame_rules = rules_config.frame_rules
+
+                    import sys
+                    print(f"✅ Loaded {len(global_rules)} global rules + {len(frame_rules)} frame rules from {rules_file.name}", file=sys.stderr)
+
+                except Exception as e:
+                    import sys
+                    print(f"⚠️  Failed to load custom rules: {e}", file=sys.stderr)
 
             if not config_file.exists():
                 import sys
                 print(f"⚠️  No config found at {config_file}, using default frames", file=sys.stderr)
                 self.active_config_name = "default"
 
-                # Use default frames when no config
+                # Use default frames when no config (with rules if loaded)
                 frames = self._get_default_frames()
-                self.orchestrator = PipelineOrchestrator(frames=frames, config=None)
+                config = PipelineOrchestratorConfig(
+                    global_rules=global_rules,
+                    frame_rules=frame_rules,
+                ) if global_rules or frame_rules else None
+                self.orchestrator = PipelineOrchestrator(frames=frames, config=config)
                 return
 
             # Parse YAML directly (simple format - not visual builder format)
@@ -144,13 +178,15 @@ class WardenTUI(App):
                 else:
                     self.active_config_name = config_data.get('name', 'project-config')
 
-            # Create pipeline orchestrator config (domain model, not Panel model!)
+            # Create pipeline orchestrator config (domain model, not Panel model!) WITH custom rules
             settings = config_data.get('settings', {})
             pipeline_config = PipelineOrchestratorConfig(
                 fail_fast=settings.get('fail_fast', True),
                 timeout=settings.get('timeout', 300),
                 frame_timeout=settings.get('timeout', 120),
                 parallel_limit=4,
+                global_rules=global_rules,  # ✅ NEW: Custom rules
+                frame_rules=frame_rules,    # ✅ NEW: Frame-specific rules
             )
 
             # Create orchestrator with frames and config
@@ -244,11 +280,21 @@ class WardenTUI(App):
     def _get_session_info(self) -> str:
         """Get session info bar text."""
         pipeline_status = "⚙️ Full Pipeline" if self.orchestrator else "⚙️ No Pipeline"
+
+        # ✅ NEW: Show custom rules count if available
+        rules_count = 0
+        if self.orchestrator and self.orchestrator.config and hasattr(self.orchestrator.config, 'global_rules'):
+            rules_count = len(self.orchestrator.config.global_rules)
+
         info_parts = [
             f"📁 {self.project_root.name}",
             pipeline_status,
             f"📋 {self.active_config_name}",
         ]
+
+        # ✅ NEW: Add rules count if present
+        if rules_count > 0:
+            info_parts.append(f"📜 {rules_count} rules")
 
         if self.session_id:
             info_parts.append(f"🔖 Session: {self.session_id[:8]}")

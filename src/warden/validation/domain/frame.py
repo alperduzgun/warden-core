@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import TYPE_CHECKING, Dict, Any, List
 
 from warden.validation.domain.enums import (
     FramePriority,
@@ -19,6 +19,9 @@ from warden.validation.domain.enums import (
     FrameCategory,
     FrameApplicability,
 )
+
+if TYPE_CHECKING:
+    from warden.rules.domain.models import CustomRule, CustomRuleViolation
 
 
 @dataclass
@@ -59,7 +62,7 @@ class Finding:
 @dataclass
 class FrameResult:
     """
-    Result from frame execution.
+    Result from frame execution with pre/post rules support.
 
     Panel TypeScript:
         export interface FrameExecutionResult {
@@ -69,6 +72,10 @@ class FrameResult:
             duration: number;
             issuesFound: number;
             isBlocker: boolean;
+            preRules?: CustomRule[];
+            postRules?: CustomRule[];
+            preRuleViolations?: CustomRuleViolation[];
+            postRuleViolations?: CustomRuleViolation[];
         }
     """
 
@@ -81,6 +88,12 @@ class FrameResult:
     findings: List[Finding]
     metadata: Dict[str, Any] | None = None
 
+    # ⭐ NEW: Pre/Post Rules Support
+    pre_rules: List[CustomRule] | None = None
+    post_rules: List[CustomRule] | None = None
+    pre_rule_violations: List[CustomRuleViolation] | None = None
+    post_rule_violations: List[CustomRuleViolation] | None = None
+
     @property
     def passed(self) -> bool:
         """Check if frame passed (no issues)."""
@@ -88,7 +101,7 @@ class FrameResult:
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel JSON (camelCase)."""
-        return {
+        result = {
             "frameId": self.frame_id,
             "frameName": self.frame_name,
             "status": self.status,
@@ -98,6 +111,18 @@ class FrameResult:
             "findings": [f.to_json() for f in self.findings],
             "metadata": self.metadata,
         }
+
+        # Add pre/post rules if present
+        if self.pre_rules:
+            result["preRules"] = [r.to_json() for r in self.pre_rules]  # type: ignore
+        if self.post_rules:
+            result["postRules"] = [r.to_json() for r in self.post_rules]  # type: ignore
+        if self.pre_rule_violations:
+            result["preRuleViolations"] = [v.to_json() for v in self.pre_rule_violations]  # type: ignore
+        if self.post_rule_violations:
+            result["postRuleViolations"] = [v.to_json() for v in self.post_rule_violations]  # type: ignore
+
+        return result
 
 
 class ValidationFrame(ABC):

@@ -1,0 +1,416 @@
+# Warden Core - Production Rules Configuration
+# Real-world rules for warden-core codebase
+
+project:
+  name: "warden-core"
+  language: "python"
+  framework: "cli"
+
+# ============================================================================
+# GLOBAL RULES (Run on ALL frames, PRE-execution)
+# ============================================================================
+# Global rules are applied before ANY frame executes. They act as a first-pass
+# filter to catch common issues across all validation types.
+#
+# Use global_rules for:
+#   - Universal security checks (secrets, credentials)
+#   - File size/resource limits
+#   - Basic sanity checks that apply everywhere
+#
+# Note: These run BEFORE frame-specific logic, so they're fast gatekeepers.
+# ============================================================================
+global_rules:
+  - no-secrets           # Prevent any secrets from being committed
+  - file-size-limit      # Ensure files don't exceed size limits
+
+# ============================================================================
+# FRAME RULES (Frame-specific rule attachments)
+# ============================================================================
+# Frame rules attach specific rules to validation frames. Each frame can have:
+#   - pre_rules:  Run BEFORE the frame's validation logic
+#   - post_rules: Run AFTER the frame's validation logic (if pre_rules pass)
+#   - on_fail:    Behavior when rules fail ("stop" or "continue")
+#
+# Available frames:
+#   - security:      Security vulnerability checks
+#   - chaos:         Chaos engineering (error handling, edge cases)
+#   - fuzz:          Fuzz testing (input validation, boundary cases)
+#   - property:      Property-based testing (invariants, contracts)
+#   - stress:        Performance and resource testing
+#   - architecture:  Project architecture validation
+#
+# on_fail behavior:
+#   - "stop":     Halt validation immediately if rule fails (blocker)
+#   - "continue": Log failure but continue validation (warning)
+#
+# ============================================================================
+frame_rules:
+  # Security Frame - Critical security checks
+  security:
+    pre_rules:
+      - env-var-api-keys      # No hardcoded API keys
+      - no-secrets            # Double-check: no secrets at all
+    post_rules:
+      - security-audit        # Post-validation: check for vulnerabilities
+    on_fail: "stop"           # Security failures are blockers
+
+  # Chaos Frame - Error handling and resilience
+  chaos:
+    pre_rules:
+      - async-method-naming   # Ensure async methods are properly named
+    on_fail: "continue"       # Convention issues are warnings
+
+  # Fuzz Frame - Input validation and boundary testing
+  fuzz:
+    pre_rules:
+      - input-validation-check  # Ensure input sanitization exists
+      - file-size-limit         # Prevent processing huge files
+    post_rules:
+      - security-audit          # Check for injection vulnerabilities
+    on_fail: "stop"             # Input validation failures are critical
+
+  # Property Frame - Invariant and contract checking
+  property:
+    pre_rules:
+      - no-secrets              # No secrets in property tests
+    on_fail: "continue"
+
+  # Stress Frame - Performance and resource checks
+  stress:
+    pre_rules:
+      - file-size-limit         # Don't stress-test huge files
+    on_fail: "continue"
+
+  # Architecture Frame - Project structure validation
+  architecture:
+    pre_rules:
+      - no-secrets              # No secrets in architecture files
+    on_fail: "continue"
+
+# ============================================================================
+# RULES (Individual validation rules)
+# ============================================================================
+rules:
+  # ============================================================================
+  # Security Rules
+  # ============================================================================
+
+  - id: "env-var-api-keys"
+    name: "API Keys Must Use Environment Variables"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "All API keys must be loaded from environment variables, never hardcoded"
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          # Azure OpenAI patterns (matches both quoted and unquoted)
+          - "AZURE_OPENAI_API_KEY\\s*=\\s*[\"']?[^$\\s][A-Za-z0-9+/]{30,}[\"']?"
+          - "AZURE_OPENAI_ENDPOINT\\s*=\\s*[\"']?https://[^\\s\"']+[\"']?"
+          # Groq pattern (both quoted and unquoted)
+          - "GROQ_API_KEY\\s*=\\s*[\"']?gsk_[A-Za-z0-9]{30,}[\"']?"
+          # Generic OpenAI pattern
+          - "OPENAI_API_KEY\\s*=\\s*[\"']?sk-[A-Za-z0-9]{20,}[\"']?"
+          # DeepSeek pattern
+          - "DEEPSEEK_API_KEY\\s*=\\s*[\"']?sk-[A-Za-z0-9]{20,}[\"']?"
+          # Generic API key pattern (catches most) - both quoted and unquoted
+          - "api[_-]?key\\s*=\\s*[\"']?(sk-|gsk_|key-)[A-Za-z0-9+/_-]{15,}[\"']?"
+    examples:
+      invalid:
+        - 'AZURE_OPENAI_API_KEY = "3QESZxaQXEKI0a4z..."'
+        - 'api_key = "sk-1234567890abcdef"'
+        - 'groq_key = "gsk_KdgDwd7ne6..."'
+      valid:
+        - 'api_key = os.getenv("AZURE_OPENAI_API_KEY")'
+        - 'api_key = ${AZURE_OPENAI_API_KEY}'
+        - 'azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")'
+    message: "API keys must use environment variables (os.getenv) or config templates (${VAR}). Never hardcode secrets!"
+    # No language filter - secrets check applies to ALL files (.env, .py, .js, etc.)
+    exceptions:
+      - "*/test_*.py"
+      - "*_test.py"
+      - "test_*.py"
+      - "*.test.py"
+      - ".env.example"  # Template file is OK
+      - "*.example.*"
+      - "**/examples/**"
+      - "**/docs/**"
+      # NOTE: .env is NOT excluded - we want to catch secrets there!
+
+  # ============================================================================
+  # Convention Rules
+  # ============================================================================
+
+  - id: "async-method-naming"
+    name: "Async Methods Must End with _async"
+    category: convention
+    severity: medium
+    isBlocker: false
+    description: "All async methods must have _async suffix for code clarity"
+    enabled: true
+    type: convention
+    conditions:
+      naming:
+        asyncMethodSuffix: "_async"
+    examples:
+      invalid:
+        - "async def validate_file(file_path: str):"
+        - "async def load_from_file(path: Path):"
+        - "async def detect_frameworks(root: Path):"
+      valid:
+        - "async def validate_file_async(file_path: str):"
+        - "async def load_from_file_async(path: Path):"
+        - "async def detect_frameworks_async(root: Path):"
+    message: "Async methods must end with '_async' suffix for code clarity (e.g., validate_file -> validate_file_async)"
+    language:
+      - "python"
+    exceptions:
+      - "*/test_*.py"
+      - "*_test.py"
+      - "test_*.py"
+      - "*.test.py"
+      - "**/tests/**"
+
+  # ============================================================================
+  # Global Security Rules
+  # ============================================================================
+
+  - id: "no-secrets"
+    name: "No Secrets or Credentials in Code"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "Detects common secret patterns (passwords, tokens, private keys) that should never be committed"
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          # Password patterns
+          - "password\\s*=\\s*[\"'][^$\\s][^\"']{6,}[\"']"
+          - "passwd\\s*=\\s*[\"'][^$\\s][^\"']{6,}[\"']"
+          - "pwd\\s*=\\s*[\"'][^$\\s][^\"']{6,}[\"']"
+          # Token patterns
+          - "token\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
+          - "auth_token\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
+          - "access_token\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
+          # Private keys
+          - "BEGIN\\s+(RSA|DSA|EC|OPENSSH)\\s+PRIVATE\\s+KEY"
+          - "private_key\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/=]{40,}[\"']"
+          # AWS credentials
+          - "AWS_SECRET_ACCESS_KEY\\s*=\\s*[\"']?[^$\\s][A-Za-z0-9+/]{40}[\"']?"
+          - "aws_secret_access_key\\s*=\\s*[\"']?[^$\\s][A-Za-z0-9+/]{40}[\"']?"
+          # Database connection strings with embedded passwords
+          - "(mysql|postgresql|mongodb)://[^:]+:[^@]+@"
+          # Generic secret patterns
+          - "secret\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
+          - "client_secret\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
+    examples:
+      invalid:
+        - 'password = "MySecretPass123"'
+        - 'token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."'
+        - 'AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"'
+        - 'db_url = "postgresql://user:password@localhost/db"'
+        - '-----BEGIN RSA PRIVATE KEY-----'
+      valid:
+        - 'password = os.getenv("DB_PASSWORD")'
+        - 'token = ${AUTH_TOKEN}'
+        - 'aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")'
+        - 'db_url = os.getenv("DATABASE_URL")'
+    message: "Secrets, passwords, tokens, or private keys detected. Use environment variables or secret management instead!"
+    exceptions:
+      - "*/test_*.py"
+      - "*_test.py"
+      - "test_*.py"
+      - "*.test.py"
+      - ".env.example"
+      - "*.example.*"
+      - "**/examples/**"
+      - "**/docs/**"
+
+  # ============================================================================
+  # Resource Management Rules
+  # ============================================================================
+
+  - id: "file-size-limit"
+    name: "File Size Must Not Exceed 10MB"
+    category: performance
+    severity: medium
+    isBlocker: false
+    description: "Prevents processing excessively large files that could cause performance issues"
+    enabled: true
+    type: script
+    scriptPath: ".warden/scripts/check_file_size.sh"
+    timeout: 10
+    message: "File exceeds maximum size limit of 500KB"
+    conditions: {}
+    examples:
+      invalid:
+        - "15MB log file"
+        - "20MB dataset"
+      valid:
+        - "5MB source file"
+        - "2KB configuration file"
+    exceptions:
+      - "**/node_modules/**"
+      - "**/venv/**"
+      - "**/.venv/**"
+      - "**/dist/**"
+      - "**/build/**"
+      - "**/*.min.js"
+      - "**/*.bundle.js"
+
+  # ============================================================================
+  # Input Validation Rules
+  # ============================================================================
+
+  - id: "input-validation-check"
+    name: "Input Validation Must Be Present"
+    category: security
+    severity: high
+    isBlocker: true
+    description: "Ensures functions that accept user input have validation/sanitization logic"
+    enabled: true
+    type: security
+    conditions:
+      patterns:
+        # Functions accepting input WITHOUT validation keywords nearby
+        # This is a heuristic check - looks for input params without validate/sanitize/clean
+        must_have_nearby:
+          - pattern: "def\\s+\\w+\\([^)]*(?:input|user_input|data|payload|request)[^)]*\\):"
+            requires_within_lines: 10
+            any_of:
+              - "validate"
+              - "sanitize"
+              - "clean"
+              - "escape"
+              - "strip"
+              - "isinstance"
+              - "type\\s*=="
+              - "if\\s+not\\s+"
+              - "raise\\s+ValueError"
+              - "raise\\s+TypeError"
+    examples:
+      invalid:
+        - |
+          def process_user_input(user_input: str):
+              return user_input.upper()  # No validation!
+        - |
+          def handle_data(data: dict):
+              name = data['name']  # No checking if 'name' exists
+      valid:
+        - |
+          def process_user_input(user_input: str):
+              if not isinstance(user_input, str):
+                  raise TypeError("Input must be string")
+              sanitized = user_input.strip()
+              return sanitized.upper()
+        - |
+          def handle_data(data: dict):
+              if 'name' not in data:
+                  raise ValueError("Missing 'name' field")
+              return data['name']
+    message: "Functions accepting user input must validate/sanitize inputs. Add type checks, None checks, or validation logic."
+    language:
+      - "python"
+    exceptions:
+      - "*/test_*.py"
+      - "*_test.py"
+      - "test_*.py"
+      - "*.test.py"
+      - "**/tests/**"
+      - "**/models.py"      # Data models often just define structure
+      - "**/schemas.py"     # Schema definitions
+
+  # ============================================================================
+  # Security Audit Rules (Post-validation)
+  # ============================================================================
+
+  - id: "security-audit"
+    name: "Common Vulnerability Patterns"
+    category: security
+    severity: high
+    isBlocker: true
+    description: "Detects common security vulnerabilities (SQL injection, XSS, command injection, path traversal)"
+    enabled: true
+    type: security
+    conditions:
+      patterns:
+        # SQL Injection patterns
+        - "execute\\s*\\([^)]*[\"'].*%s.*[\"']\\s*%"  # String formatting in SQL
+        - "execute\\s*\\([^)]*f[\"'].*\\{.*\\}.*[\"']"  # F-strings in SQL
+        - "\\+\\s*[\"']SELECT\\s+"                    # String concat with SELECT
+        # Command Injection patterns
+        - "os\\.system\\s*\\([^)]*\\+[^)]*\\)"        # os.system with concatenation
+        - "subprocess\\.call\\s*\\([^)]*\\+[^)]*\\)"  # subprocess with concat
+        - "eval\\s*\\("                               # eval() usage (dangerous)
+        - "exec\\s*\\("                               # exec() usage (dangerous)
+        # Path Traversal patterns
+        - "open\\s*\\([^)]*\\.\\.\\/[^)]*\\)"        # Hardcoded ../ in open()
+        - "Path\\s*\\([^)]*\\.\\.\\/[^)]*\\)"        # ../ in Path()
+        # XSS patterns (for web frameworks)
+        - "innerHTML\\s*="                           # Direct innerHTML assignment
+        - "dangerouslySetInnerHTML"                  # React unsafe HTML
+        # Insecure deserialization
+        - "pickle\\.loads\\s*\\([^)]*input[^)]*\\)"  # pickle.loads on user input
+        - "yaml\\.load\\s*\\([^)]*\\)"               # yaml.load without safe_load
+    examples:
+      invalid:
+        - 'cursor.execute("SELECT * FROM users WHERE id = %s" % user_id)'
+        - 'cursor.execute(f"SELECT * FROM users WHERE name = {name}")'
+        - 'os.system("rm -rf " + user_path)'
+        - 'eval(user_input)'
+        - 'file = open("data/" + "../etc/passwd")'
+        - 'data = pickle.loads(request.data)'
+        - 'config = yaml.load(file)'
+      valid:
+        - 'cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))'
+        - 'subprocess.run(["rm", "-rf", user_path], check=True)'
+        - 'ast.literal_eval(user_input)  # Safe alternative'
+        - 'file = open(Path("data") / sanitized_filename)'
+        - 'data = json.loads(request.data)'
+        - 'config = yaml.safe_load(file)'
+    message: "Potential security vulnerability detected. Use parameterized queries, avoid eval/exec, validate file paths, and use safe deserialization."
+    language:
+      - "python"
+      - "javascript"
+      - "typescript"
+    exceptions:
+      - "*/test_*.py"
+      - "*_test.py"
+      - "test_*.py"
+      - "*.test.py"
+      - "**/tests/**"
+
+# ============================================================================
+# AI Validation Configuration
+# ============================================================================
+ai_validation:
+  enabled: true
+  llm_provider: "azure_openai"
+
+# ============================================================================
+# Exclusion Patterns
+# ============================================================================
+exclude:
+  paths:
+    - "node_modules/"
+    - "venv/"
+    - ".venv/"
+    - "dist/"
+    - "build/"
+    - "__pycache__/"
+    - ".pytest_cache/"
+    - ".git/"
+    - "docs/"
+    - "examples/"
+  files:
+    - "*.test.py"
+    - "*.spec.py"
+    - "test_*.py"
+    - "*_test.py"
+    - ".env.example"
+    - "*.md"
+    - "*.yaml.example"

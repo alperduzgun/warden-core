@@ -21,14 +21,94 @@ project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from warden.pipeline.application.orchestrator import PipelineOrchestrator
-from warden.pipeline.domain.models import PipelineConfig
+from warden.pipeline.domain.models import PipelineConfig, FrameRules
 from warden.validation.domain.frame import CodeFile
 from warden.validation.frames.security import SecurityFrame
 from warden.validation.frames.chaos import ChaosFrame
 from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
+from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+from warden.rules.domain.models import CustomRule, CustomRuleViolation
+from warden.shared.infrastructure.logging import get_logger
 
 app = typer.Typer()
 console = Console()
+logger = get_logger(__name__)
+
+
+async def load_custom_rules(rules_path: Path) -> tuple[list[CustomRule], dict[str, FrameRules]]:
+    """
+    Load custom rules from .warden/rules.yaml
+
+    Args:
+        rules_path: Path to rules.yaml file
+
+    Returns:
+        Tuple of (global_rules, frame_rules_dict)
+    """
+    if not rules_path.exists():
+        logger.info("no_custom_rules_file", path=str(rules_path))
+        return [], {}
+
+    try:
+        config = await RulesYAMLLoader.load_from_file(rules_path)
+
+        # Extract global rules (rules referenced in global_rules section)
+        # Build a lookup map
+        rule_lookup = {rule.id: rule for rule in config.rules if rule.enabled}
+
+        # Get only the global rules specified in global_rules section
+        global_rules = [rule_lookup[rule_id] for rule_id in config.global_rules if rule_id in rule_lookup]
+
+        # Get frame_rules from config (already parsed by loader)
+        frame_rules = config.frame_rules
+
+        logger.info(
+            "custom_rules_loaded",
+            path=str(rules_path),
+            global_count=len(global_rules),
+            frame_count=len(frame_rules),
+        )
+
+        return global_rules, frame_rules
+
+    except Exception as e:
+        logger.error("rules_loading_failed", path=str(rules_path), error=str(e))
+        console.print(f"[yellow]Warning: Failed to load custom rules from {rules_path}: {e}[/yellow]")
+        return [], {}
+
+
+def display_rule_violations(violations: list[CustomRuleViolation]) -> None:
+    """
+    Display detailed custom rule violations.
+
+    Args:
+        violations: List of rule violations to display
+    """
+    if not violations:
+        return
+
+    console.print("\n[red bold]Custom Rule Violations:[/red bold]")
+
+    # Show first 10 violations
+    for v in violations[:10]:
+        severity_color = {
+            "critical": "red bold",
+            "high": "yellow",
+            "medium": "blue",
+            "low": "dim"
+        }.get(v.severity.value, "white")
+
+        blocker_marker = " [red bold]⚠ BLOCKER[/red bold]" if v.is_blocker else ""
+
+        console.print(f"\n  [{severity_color}]●[/{severity_color}] {v.rule_name}{blocker_marker}")
+        console.print(f"    {v.message}")
+        console.print(f"    [dim]File: {v.file_path}[/dim]")
+
+        if v.line_number:
+            console.print(f"    [dim]Line: {v.line_number}[/dim]")
+
+    if len(violations) > 10:
+        console.print(f"\n  [dim]... and {len(violations) - 10} more violations[/dim]")
 
 
 def determine_language(file_path: str) -> str:
@@ -128,6 +208,12 @@ def run(
     format: str = typer.Option("console", "--format", "-f", help="Output format (console, json)"),
     blocker_only: bool = typer.Option(False, "--blocker-only", help="Only check blocker issues"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+    rules_config: str = typer.Option(
+        ".warden/rules.yaml",
+        "--rules",
+        "-r",
+        help="Path to custom rules config file"
+    ),
 ):
     """
     Run validation strategies on a code file
@@ -136,15 +222,17 @@ def run(
         warden validate myfile.py
         warden validate myfile.py --blocker-only
         warden validate myfile.py --verbose
+        warden validate myfile.py --rules custom_rules.yaml
     """
-    asyncio.run(validate_file(file_path, format, blocker_only, verbose))
+    asyncio.run(validate_file(file_path, format, blocker_only, verbose, rules_config))
 
 
 async def validate_file(
     file_path: str,
     format: str,
     blocker_only: bool,
-    verbose: bool
+    verbose: bool,
+    rules_config: str
 ):
     """Async validation logic"""
 
@@ -162,12 +250,17 @@ async def validate_file(
 
     language = determine_language(file_path)
 
+    # Load custom rules
+    rules_path = Path(rules_config)
+    global_rules, frame_rules = await load_custom_rules(rules_path)
+
     # Display header
+    rules_info = f"\n[dim]Custom Rules:[/dim] {len(global_rules)} loaded" if global_rules else ""
     console.print(Panel.fit(
         f"[bold cyan]Warden Code Validation[/bold cyan]\n"
         f"[dim]File:[/dim] {file_path}\n"
         f"[dim]Language:[/dim] {language}\n"
-        f"[dim]Size:[/dim] {len(content)} bytes",
+        f"[dim]Size:[/dim] {len(content)} bytes{rules_info}",
         title="Validation Session",
         border_style="cyan"
     ))
@@ -188,12 +281,14 @@ async def validate_file(
         size_bytes=len(content.encode('utf-8')),
     )
 
-    # Create pipeline config and orchestrator
+    # Create pipeline config and orchestrator WITH custom rules
     config = PipelineConfig(
         fail_fast=True,
         enable_discovery=False,
         enable_build_context=False,
         enable_suppression=False,
+        global_rules=global_rules,  # ✅ NEW: Custom rules
+        frame_rules=frame_rules,    # ✅ NEW: Frame-specific rules
     )
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
@@ -237,6 +332,17 @@ async def validate_file(
                 f"  [{status_color}]{status_icon}[/{status_color}] "
                 f"{frame_result.frame_name}: {frame_result.issues_found} issues"
             )
+
+    # ✅ NEW: Display custom rule violations
+    all_violations = []
+    for frame_result in result.frame_results:
+        if frame_result.pre_rule_violations:
+            all_violations.extend(frame_result.pre_rule_violations)
+        if frame_result.post_rule_violations:
+            all_violations.extend(frame_result.post_rule_violations)
+
+    if all_violations:
+        display_rule_violations(all_violations)
 
     # Final status
     console.print()

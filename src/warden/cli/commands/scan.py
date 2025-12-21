@@ -25,7 +25,7 @@ project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from warden.pipeline.application.enhanced_orchestrator import EnhancedPipelineOrchestrator
-from warden.pipeline.domain.models import PipelineConfig
+from warden.pipeline.domain.models import PipelineConfig, FrameRules
 from warden.validation.frames import (
     SecurityFrame,
     ChaosFrame,
@@ -37,9 +37,55 @@ from warden.validation.frames import (
     PropertyFrame,
     StressFrame,
 )
+from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+from warden.rules.domain.models import CustomRule, CustomRuleViolation
+from warden.shared.infrastructure.logging import get_logger
 
 app = typer.Typer()
 console = Console()
+logger = get_logger(__name__)
+
+
+async def load_custom_rules(rules_path: Path) -> tuple[list[CustomRule], dict[str, FrameRules]]:
+    """
+    Load custom rules from .warden/rules.yaml
+
+    Args:
+        rules_path: Path to rules.yaml file
+
+    Returns:
+        Tuple of (global_rules, frame_rules_dict)
+    """
+    if not rules_path.exists():
+        logger.info("no_custom_rules_file", path=str(rules_path))
+        return [], {}
+
+    try:
+        config = await RulesYAMLLoader.load_from_file(rules_path)
+
+        # Extract global rules (rules referenced in global_rules section)
+        # Build a lookup map
+        rule_lookup = {rule.id: rule for rule in config.rules if rule.enabled}
+
+        # Get only the global rules specified in global_rules section
+        global_rules = [rule_lookup[rule_id] for rule_id in config.global_rules if rule_id in rule_lookup]
+
+        # Get frame_rules from config (already parsed by loader)
+        frame_rules = config.frame_rules
+
+        logger.info(
+            "custom_rules_loaded",
+            path=str(rules_path),
+            global_count=len(global_rules),
+            frame_count=len(frame_rules),
+        )
+
+        return global_rules, frame_rules
+
+    except Exception as e:
+        logger.error("rules_loading_failed", path=str(rules_path), error=str(e))
+        console.print(f"[yellow]Warning: Failed to load custom rules from {rules_path}: {e}[/yellow]")
+        return [], {}
 
 
 def determine_language(file_path: str) -> str:
@@ -167,6 +213,12 @@ def run(
     blocker_only: bool = typer.Option(False, "--blocker-only", help="Only check blocker issues"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
     max_files: int = typer.Option(100, "--max-files", help="Maximum files to scan"),
+    rules_config: str = typer.Option(
+        ".warden/rules.yaml",
+        "--rules",
+        "-r",
+        help="Path to custom rules config file"
+    ),
 ):
     """
     Scan entire project or directory
@@ -178,8 +230,9 @@ def run(
         warden scan --config custom.yaml     # Use custom config file
         warden scan --blocker-only           # Only check critical/high severity issues
         warden scan --max-files 50 -v        # Scan max 50 files with verbose output
+        warden scan --rules custom_rules.yaml  # Use custom rules config
     """
-    asyncio.run(scan_directory(directory, config, extensions, exclude, blocker_only, verbose, max_files))
+    asyncio.run(scan_directory(directory, config, extensions, exclude, blocker_only, verbose, max_files, rules_config))
 
 
 async def scan_directory(
@@ -189,7 +242,8 @@ async def scan_directory(
     exclude: List[str],
     blocker_only: bool,
     verbose: bool,
-    max_files: int
+    max_files: int,
+    rules_config: str
 ):
     """Async scan logic"""
 
@@ -200,12 +254,17 @@ async def scan_directory(
         console.print(f"[red]Error:[/red] Directory not found: {directory}")
         raise typer.Exit(code=1)
 
+    # Load custom rules early
+    rules_path = Path(rules_config)
+    global_rules, frame_rules = await load_custom_rules(rules_path)
+
     # Display header
+    rules_info = f"\n[dim]Custom Rules:[/dim] {len(global_rules)} loaded" if global_rules else ""
     console.print(Panel.fit(
         f"[bold cyan]Warden Project Scan[/bold cyan]\n"
         f"[dim]Directory:[/dim] {dir_path}\n"
         f"[dim]Extensions:[/dim] {', '.join(extensions)}\n"
-        f"[dim]Started:[/dim] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"[dim]Started:[/dim] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{rules_info}",
         title="Scan Session",
         border_style="cyan"
     ))
@@ -284,11 +343,13 @@ async def scan_directory(
         console.print("[red]Error: No frames loaded![/red]")
         raise typer.Exit(code=1)
 
-    # Create simple pipeline config
+    # Create pipeline config WITH custom rules
     pipeline_config = PipelineConfig(
         enable_discovery=False,  # We already discovered files manually
         enable_build_context=False,  # Not needed for simple scan
         enable_suppression=False,  # Can be enabled later
+        global_rules=global_rules,  # ✅ NEW: Custom rules
+        frame_rules=frame_rules,    # ✅ NEW: Frame-specific rules
     )
 
     # Create CodeFile objects from discovered files
@@ -356,7 +417,8 @@ async def scan_directory(
     for frame_result in result.frame_results:
         if frame_result.is_blocker and not frame_result.passed:
             critical_issues += frame_result.issues_found
-        elif frame_result.priority.value <= 2:  # HIGH or CRITICAL
+        else:
+            # Non-blocker issues counted as high priority
             high_issues += frame_result.issues_found
 
     # Display results
