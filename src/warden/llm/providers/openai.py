@@ -55,7 +55,8 @@ class OpenAIClient(ILlmClient):
                     {"role": "user", "content": request.user_message}
                 ],
                 "temperature": request.temperature,
-                "max_tokens": request.max_tokens
+                "max_tokens": request.max_tokens,
+                "response_format": {"type": "json_object"}  # Force JSON response
             }
 
             if self._provider != LlmProvider.AZURE_OPENAI:
@@ -101,14 +102,17 @@ class OpenAIClient(ILlmClient):
             )
 
     async def is_available_async(self) -> bool:
+        """
+        Check if provider is available.
+
+        For Azure OpenAI, just check if credentials are configured.
+        Making a test API call would waste tokens and time.
+        """
         try:
-            test_request = LlmRequest(
-                system_prompt="You are a helpful assistant.",
-                user_message="Hi",
-                max_tokens=10,
-                timeout_seconds=10
-            )
-            response = await self.send_async(test_request)
-            return response.success
+            # Just verify we have the necessary credentials
+            if self._provider == LlmProvider.AZURE_OPENAI:
+                return bool(self._api_key and self._base_url)
+            else:
+                return bool(self._api_key)
         except:
             return False

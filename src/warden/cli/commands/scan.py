@@ -230,8 +230,39 @@ async def scan_directory(
 
     console.print(f"\n[cyan]Found {len(files)} file(s) to scan[/cyan]\n")
 
-    # Initialize components
-    analyzer = CodeAnalyzer()
+    # Initialize LLM factory (if enabled in config)
+    llm_factory = None
+    try:
+        import os
+        from dotenv import load_dotenv
+        from warden.llm import LlmClientFactory, LlmConfiguration, LlmProvider
+
+        # Load .env file
+        load_dotenv()
+
+        # Create LLM config from environment
+        llm_config = LlmConfiguration(
+            default_provider=LlmProvider.AZURE_OPENAI,
+            fallback_providers=[]
+        )
+
+        # Configure Azure OpenAI from environment
+        llm_config.azure_openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        llm_config.azure_openai.endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        llm_config.azure_openai.default_model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+        llm_config.azure_openai.api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+
+        # Only create factory if API key is present
+        if llm_config.azure_openai.api_key:
+            llm_factory = LlmClientFactory(llm_config)
+            console.print(f"[green]✓ LLM integration enabled (Azure OpenAI - {llm_config.azure_openai.default_model})[/green]")
+        else:
+            console.print("[yellow]LLM integration disabled: AZURE_OPENAI_API_KEY not found[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]LLM integration disabled: {str(e)}[/yellow]")
+
+    # Initialize components with LLM factory
+    analyzer = CodeAnalyzer(llm_factory=llm_factory, use_llm=True)
     classifier = CodeClassifier()
 
     # Register all validation frames

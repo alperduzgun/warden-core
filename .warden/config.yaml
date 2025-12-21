@@ -23,11 +23,12 @@ settings:
   timeout: 300        # 5 minutes max per frame
 
   # Enhanced pipeline features
-  enable_discovery: true        # Auto-discover project files
-  enable_build_context: true    # Load build configuration
-  enable_suppression: true      # Filter false positives
-  enable_llm: true              # Use LLM for enhanced analysis
-  llm_provider: "deepseek"      # LLM provider (deepseek/openai/groq/anthropic)
+  enable_discovery: true         # Auto-discover project files
+  enable_build_context: true     # Load build configuration
+  enable_suppression: true       # Filter false positives (comment-based)
+  enable_issue_validation: true  # Apply confidence-based false positive detection
+  enable_llm: true               # Use LLM for enhanced analysis
+  llm_provider: "azure_openai"   # LLM provider (azure_openai/openai/deepseek/groq/anthropic)
 
 # Frame-specific configurations
 frame_config:
@@ -51,6 +52,17 @@ discovery:
 # Suppression configuration
 suppression:
   config_path: ".warden/suppressions.yaml"  # Path to suppressions file
+
+# Issue validation configuration (confidence-based false positive detection)
+issue_validation:
+  minimum_confidence: 0.5      # Reject issues with confidence < 0.5 (50%)
+  minimum_title_length: 10     # Minimum title length for quality check
+  # Enabled rules (all enabled by default):
+  # - ConfidenceThresholdRule: Validates minimum confidence
+  # - LineNumberRangeRule: Validates line number exists
+  # - CodeSnippetMatchRule: Validates code snippet matches file content
+  # - EvidenceQuoteRule: Validates evidence quotes exist in code
+  # - TitleDescriptionQualityRule: Validates title quality (no placeholders)
 
 # Project-specific ignore patterns (future feature)
 # ignore_patterns:

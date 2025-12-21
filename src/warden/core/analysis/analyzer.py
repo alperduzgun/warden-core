@@ -395,9 +395,19 @@ class CodeAnalyzer:
                 # Fallback to AST analysis
                 return await self.analyze(file_path, file_content, language)
 
-            # Parse LLM response
+            # Parse LLM response (handle both raw JSON and markdown-wrapped JSON)
             import json
-            llm_data = json.loads(response.content)
+            import re
+
+            content = response.content.strip()
+
+            # Try to extract JSON from markdown code blocks if present
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+            if json_match:
+                content = json_match.group(1)
+
+            # Remove any leading/trailing whitespace and parse
+            llm_data = json.loads(content)
             result = AnalysisResult.from_dict(llm_data)
 
             duration_ms = (time.perf_counter() - start_time) * 1000
