@@ -39,6 +39,7 @@ class PipelineOrchestrator:
         self,
         frames: List[ValidationFrame],
         config: Optional[PipelineConfig] = None,
+        progress_callback: Optional[callable] = None,
     ) -> None:
         """
         Initialize orchestrator.
@@ -46,9 +47,12 @@ class PipelineOrchestrator:
         Args:
             frames: List of validation frames to execute
             config: Pipeline configuration
+            progress_callback: Optional callback for progress updates
+                               Signature: callback(event: str, data: dict)
         """
         self.frames = frames
         self.config = config or PipelineConfig()
+        self.progress_callback = progress_callback
 
         # Sort frames by priority (CRITICAL first)
         self._sort_frames_by_priority()
@@ -104,6 +108,13 @@ class PipelineOrchestrator:
             frame_count=len(self.frames),
             file_count=len(code_files),
         )
+
+        # Notify callback
+        if self.progress_callback:
+            self.progress_callback("pipeline_started", {
+                "total_frames": len(self.frames),
+                "total_files": len(code_files),
+            })
 
         try:
             # Execute based on strategy
@@ -232,6 +243,13 @@ class PipelineOrchestrator:
             frame=frame.name,
         )
 
+        # Notify callback that frame started
+        if self.progress_callback:
+            self.progress_callback("frame_started", {
+                "frame_name": frame.name,
+                "frame_id": frame.frame_id,
+            })
+
         try:
             # Execute frame on each code file
             all_findings = []
@@ -314,6 +332,20 @@ class PipelineOrchestrator:
                 issues=len(all_findings),
                 duration=frame_exec.duration,
             )
+
+            # Notify callback
+            if self.progress_callback:
+                self.progress_callback("frame_completed", {
+                    "frame_name": frame.name,
+                    "frame_status": frame_exec.status,
+                    "issues_found": len(all_findings),
+                    "frames_completed": pipeline.frames_completed,
+                    "total_frames": pipeline.total_frames,
+                    "duration": frame_exec.duration,
+                })
+
+                # Yield control to event loop to allow UI updates
+                await asyncio.sleep(0)
 
         except Exception as e:
             logger.error(
