@@ -26,17 +26,8 @@ sys.path.insert(0, str(project_root))
 
 from warden.pipeline.application.enhanced_orchestrator import EnhancedPipelineOrchestrator
 from warden.pipeline.domain.models import PipelineConfig, FrameRules
-from warden.validation.frames import (
-    SecurityFrame,
-    ChaosFrame,
-    ArchitecturalConsistencyFrame,
-    ProjectArchitectureFrame,
-    GitChangesFrame,
-    OrphanFrame,
-    FuzzFrame,
-    PropertyFrame,
-    StressFrame,
-)
+# Built-in frames are dynamically loaded via FrameRegistry
+# No need to import explicitly (registry will handle discovery)
 from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.shared.infrastructure.logging import get_logger
@@ -311,18 +302,15 @@ async def scan_directory(
             frame_names = config_data.get('frames', [])
             console.print(f"[cyan]Loading {len(frame_names)} frames from config: {config_path}[/cyan]")
 
-            # Map frame names to frame classes
-            frame_map = {
-                'security': SecurityFrame,
-                'chaos': ChaosFrame,
-                'architectural': ArchitecturalConsistencyFrame,
-                'project_architecture': ProjectArchitectureFrame,
-                'gitchanges': GitChangesFrame,
-                'orphan': OrphanFrame,
-                'fuzz': FuzzFrame,
-                'property': PropertyFrame,
-                'stress': StressFrame,
-            }
+            # Get all available frames (built-in + custom) dynamically
+            from warden.validation.infrastructure.frame_registry import get_registry
+
+            registry = get_registry()
+            frame_map = registry.get_all_frames_as_dict()
+
+            if verbose:
+                console.print(f"[dim]  Discovered {len(frame_map)} frames (built-in + custom)[/dim]")
+                console.print(f"[dim]  Available frames: {', '.join(frame_map.keys())}[/dim]")
 
             for frame_name in frame_names:
                 if frame_name in frame_map:
@@ -330,14 +318,26 @@ async def scan_directory(
                     if verbose:
                         console.print(f"  [green]✓[/green] Loaded: {frame_name}")
                 else:
-                    console.print(f"  [yellow]⚠[/yellow]  Skipped: {frame_name} (not implemented)")
+                    console.print(f"  [yellow]⚠[/yellow]  Unknown frame: {frame_name} (not found in registry)")
 
         except Exception as e:
             console.print(f"[yellow]Warning: Failed to load config ({e}), using default frames[/yellow]")
-            frames = [SecurityFrame(), ChaosFrame(), ArchitecturalConsistencyFrame()]
+            # Fallback: use registry to get built-in frames
+            from warden.validation.infrastructure.frame_registry import get_registry
+            registry = get_registry()
+            frame_map = registry.get_all_frames_as_dict()
+            # Use first 3 built-in frames as default
+            default_frame_ids = ['security', 'chaos', 'architectural']
+            frames = [frame_map[fid]() for fid in default_frame_ids if fid in frame_map]
     else:
         console.print(f"[yellow]Config not found: {config_path}, using default frames[/yellow]")
-        frames = [SecurityFrame(), ChaosFrame(), ArchitecturalConsistencyFrame()]
+        # Fallback: use registry to get built-in frames
+        from warden.validation.infrastructure.frame_registry import get_registry
+        registry = get_registry()
+        frame_map = registry.get_all_frames_as_dict()
+        # Use first 3 built-in frames as default
+        default_frame_ids = ['security', 'chaos', 'architectural']
+        frames = [frame_map[fid]() for fid in default_frame_ids if fid in frame_map]
 
     if not frames:
         console.print("[red]Error: No frames loaded![/red]")

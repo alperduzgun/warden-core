@@ -21,7 +21,7 @@ from rich.panel import Panel
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from warden.cli.commands import scan, report, infrastructure, validate, rules
+from warden.cli.commands import scan, report, infrastructure, validate, rules, frame
 
 app = typer.Typer(
     name="warden",
@@ -37,6 +37,7 @@ app.add_typer(scan.app, name="scan", help="Scan entire project or directory")
 app.add_typer(report.app, name="report", help="Generate validation reports")
 app.add_typer(infrastructure.app, name="infrastructure", help="Infrastructure management (Git hooks, CI templates, Docker)")
 app.add_typer(rules.app, name="rules", help="Manage custom validation rules")
+app.add_typer(frame.app, name="frame", help="Manage custom validation frames")
 
 
 @app.command()

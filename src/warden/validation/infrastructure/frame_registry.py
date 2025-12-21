@@ -17,29 +17,10 @@ from typing import List, Type, Dict, Any
 from dataclasses import dataclass
 
 from warden.validation.domain.frame import ValidationFrame, ValidationFrameError
+from warden.validation.infrastructure.frame_metadata import FrameMetadata
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-@dataclass
-class FrameMetadata:
-    """Frame metadata from frame.yaml."""
-
-    name: str
-    id: str
-    version: str
-    author: str
-    description: str
-    category: str
-    priority: int  # 1=CRITICAL, 2=HIGH, 3=MEDIUM, 4=LOW, 5=INFORMATIONAL
-    scope: str  # "file_level" or "repository_level"
-    is_blocker: bool = False
-    min_warden_version: str | None = None
-    max_warden_version: str | None = None
-    config_schema: Dict[str, Any] | None = None
-    applicability: List[str] | None = None
-    tags: List[str] | None = None
 
 
 class FrameRegistry:
@@ -159,6 +140,38 @@ class FrameRegistry:
         """Get all registered frames."""
         return list(self.registered_frames.values())
 
+    def get_frame_by_id(self, frame_id: str) -> Type[ValidationFrame] | None:
+        """
+        Get a frame class by its ID.
+
+        Args:
+            frame_id: Frame identifier (e.g., 'security', 'redis-security')
+
+        Returns:
+            ValidationFrame class or None if not found
+        """
+        return self.registered_frames.get(frame_id)
+
+    def get_all_frames_as_dict(self) -> Dict[str, Type[ValidationFrame]]:
+        """
+        Get all registered frames as a dictionary.
+
+        This method is used by CLI commands (scan, validate) to dynamically
+        discover and load frames from config files.
+
+        Returns:
+            Dictionary mapping frame_id to ValidationFrame class
+            Example: {'security': SecurityFrame, 'redis-security': RedisSecurityFrame}
+
+        Note:
+            Automatically calls discover_all() to ensure all frames are registered.
+        """
+        # Ensure all frames are discovered
+        if not self.registered_frames:
+            self.discover_all()
+
+        return self.registered_frames.copy()
+
     def _discover_builtin_frames(self) -> List[Type[ValidationFrame]]:
         """
         Discover built-in frames from warden.validation.frames.
@@ -169,11 +182,12 @@ class FrameRegistry:
         frames: List[Type[ValidationFrame]] = []
 
         try:
-            # Import built-in frames
-            from warden.validation.frames.security_frame import SecurityFrame
-            from warden.validation.frames.chaos_frame import ChaosFrame
+            # Import built-in frames (correct paths with directory structure)
+            from warden.validation.frames.security import SecurityFrame
+            from warden.validation.frames.chaos import ChaosFrame
+            from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
 
-            frames = [SecurityFrame, ChaosFrame]
+            frames = [SecurityFrame, ChaosFrame, ArchitecturalConsistencyFrame]
 
             logger.debug(
                 "builtin_frames_loaded",
@@ -353,16 +367,23 @@ class FrameRegistry:
             logger.debug("frame_py_not_found", path=str(frame_dir))
             return None
 
-        # Load metadata (optional)
+        # Load metadata (optional but recommended)
         metadata_file = frame_dir / "frame.yaml"
+        frame_metadata = None
         if metadata_file.exists():
             try:
-                with open(metadata_file) as f:
-                    metadata_dict = yaml.safe_load(f)
-                    metadata = FrameMetadata(**metadata_dict)
-                    logger.debug("frame_metadata_loaded", frame=metadata.name)
+                frame_metadata = FrameMetadata.from_yaml(metadata_file)
+                logger.debug(
+                    "frame_metadata_loaded",
+                    frame=frame_metadata.name,
+                    version=frame_metadata.version,
+                )
             except Exception as e:
-                logger.warning("frame_metadata_load_failed", error=str(e))
+                logger.warning(
+                    "frame_metadata_load_failed",
+                    path=str(metadata_file),
+                    error=str(e),
+                )
 
         # Load frame module
         module_name = f"warden.external.{frame_dir.name}"
@@ -386,6 +407,17 @@ class FrameRegistry:
                 and attr is not ValidationFrame
             ):
                 self._validate_frame_class(attr)
+
+                # Store metadata if loaded
+                if frame_metadata:
+                    instance = attr()
+                    self.frame_metadata[instance.frame_id] = frame_metadata
+                    logger.debug(
+                        "frame_metadata_stored",
+                        frame_id=instance.frame_id,
+                        metadata=frame_metadata.to_dict(),
+                    )
+
                 return attr
 
         logger.warning("no_frame_class_found", path=str(frame_dir))
