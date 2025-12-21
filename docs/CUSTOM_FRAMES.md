@@ -124,6 +124,35 @@ pytest ~/.warden/frames/redis-security/tests/
 warden frame list
 ```
 
+### 4. Use in Pipeline
+
+Custom frames are automatically integrated into Warden's validation pipeline:
+
+```yaml
+# .warden/config.yaml
+frames:
+  # Built-in frames
+  - security
+  - chaos
+
+  # Custom frames (auto-discovered from ~/.warden/frames/)
+  - redissecurity  # Use frame_id (snake_case), not kebab-case!
+```
+
+```bash
+# Scan with custom frames
+warden scan run . --verbose
+
+# Output:
+# Discovered 4 frames (built-in + custom)
+# Available frames: security, chaos, architecturalconsistency, redissecurity
+# ✓ Loaded: security
+# ✓ Loaded: chaos
+# ✓ Loaded: redissecurity
+```
+
+**Note:** Frame IDs are auto-converted to snake_case (e.g., `RedisSecurityFrame` → `redissecurity`). Use `warden frame list` to see exact frame IDs.
+
 ---
 
 ## Frame Architecture
@@ -152,6 +181,20 @@ warden frame list
 4. **Validation**: Verify ValidationFrame subclass exists
 5. **Registration**: Add to registry with metadata
 6. **Execution**: Run during validation pipeline
+
+### Discovery Sources (Priority Order)
+
+1. **Built-in frames**: `warden.validation.frames.*` (always available)
+2. **Entry points**: PyPI packages via `warden.frames` entry point
+3. **Local directory**: `~/.warden/frames/` (auto-discovered)
+4. **Environment variable**: `WARDEN_FRAME_PATHS` (colon-separated paths)
+
+**Example:**
+```bash
+# Multiple discovery sources
+export WARDEN_FRAME_PATHS="/company/security-frames:/team/custom-frames"
+warden frame list  # Shows all discovered frames
+```
 
 ---
 
@@ -467,7 +510,7 @@ pytest tests/test_frame.py::test_frame_detects_violation -v
 
 ## Distribution & Installation
 
-### Local Installation
+### Local Installation (Recommended for Development)
 
 ```bash
 # Copy to frames directory
@@ -475,7 +518,18 @@ cp -r my-validator ~/.warden/frames/
 
 # Verify installation
 warden frame list
+
+# Add to project config
+echo "  - myvalidator" >> .warden/config.yaml
+
+# Test in pipeline
+warden scan run . --verbose
 ```
+
+**Frame ID Naming:**
+- Class: `MyValidatorFrame` → Frame ID: `myvalidator` (snake_case)
+- Always use `warden frame list` to verify exact frame ID
+- Config uses frame ID, not class name or directory name
 
 ### Environment Variable
 
@@ -750,16 +804,104 @@ touch ~/.warden/frames/my-frame/checks/__init__.py
 
 ### Frame Not Executing
 
-```bash
-# Check applicability filters
-# Frame might not match current language/framework
+**Problem:** Frame discovered but not executing in pipeline.
 
-# Override in config
+**Solution 1: Check Frame ID in Config**
+```bash
+# Get exact frame ID
+warden frame list
+
+# Use correct ID in config (snake_case, not kebab-case!)
 # .warden/config.yaml
 frames:
-  my-frame:
+  - myvalidator  # ✅ Correct (frame_id)
+  # - my-validator  # ❌ Wrong (kebab-case not auto-converted)
+```
+
+**Solution 2: Check Verbose Output**
+```bash
+warden scan run . --verbose
+# Look for: "Available frames: ..." and "✓ Loaded: ..."
+```
+
+**Solution 3: Check Applicability Filters**
+```yaml
+# frame.yaml - Remove or adjust applicability
+applicability:
+  - language: "python"  # Only runs on Python files
+```
+
+**Solution 4: Override in Config**
+```yaml
+# .warden/config.yaml
+frames:
+  myvalidator:
     enabled: true
     force_execute: true
+```
+
+---
+
+## Pipeline Integration Details
+
+### How Custom Frames are Loaded
+
+Warden uses **dynamic frame discovery** instead of hardcoded imports:
+
+```python
+# scan.py / validate.py (automatic)
+from warden.validation.infrastructure.frame_registry import get_registry
+
+registry = get_registry()
+frame_map = registry.get_all_frames_as_dict()
+# Returns: {'security': SecurityFrame, 'redissecurity': RedisSecurityFrame, ...}
+
+# Load from config
+for frame_name in config['frames']:
+    if frame_name in frame_map:
+        frames.append(frame_map[frame_name]())
+```
+
+**Benefits:**
+- ✅ No code changes needed to add custom frames
+- ✅ Frames auto-discovered on every run
+- ✅ Works with `warden scan`, `warden validate`, and all CLI commands
+- ✅ Supports entry points, local directories, and environment paths
+
+### Configuration Examples
+
+**Basic Usage:**
+```yaml
+# .warden/config.yaml
+frames:
+  - security           # Built-in
+  - redissecurity      # Custom (from ~/.warden/frames/redis-security/)
+  - mongodbsecurity    # Custom
+```
+
+**Advanced Configuration:**
+```yaml
+frames:
+  - security
+  - redissecurity:
+      check_ssl: true
+      check_auth: true
+      allowed_hosts: ["localhost", "staging.redis.com"]
+```
+
+**Multi-Source Discovery:**
+```bash
+# Environment variable for shared frames
+export WARDEN_FRAME_PATHS="/company/security:/team/custom"
+
+# PyPI package (entry point)
+pip install warden-frame-company-security
+
+# Local development
+cp -r my-frame ~/.warden/frames/
+
+# All discovered automatically!
+warden frame list
 ```
 
 ---
@@ -773,6 +915,37 @@ frames:
 
 ---
 
+## Quick Reference
+
+### Common Commands
+```bash
+# Development
+warden frame create my-validator --priority high --blocker
+warden frame validate ~/.warden/frames/my-validator
+pytest ~/.warden/frames/my-validator/tests/
+
+# Discovery
+warden frame list                    # List all frames
+warden frame info myvalidator        # Show frame details
+
+# Integration
+warden scan run . --verbose          # Test in pipeline
+warden validate run file.py          # Test on single file
+```
+
+### Frame ID Conversion
+| Class Name | Frame ID (Use in Config) |
+|------------|--------------------------|
+| `RedisSecurityFrame` | `redissecurity` |
+| `MyValidatorFrame` | `myvalidator` |
+| `OWASPTop10Frame` | `owasp top10` |
+| `AWS_S3_SecurityFrame` | `aws_s3_security` |
+
+**Rule:** Class name → snake_case → remove "Frame" suffix = frame_id
+
+---
+
 **Last Updated**: 2025-12-22
 **Warden Version**: 1.0.0
 **Status**: Production Ready - Phase 1 (Python Custom Frames)
+**Pipeline Integration**: ✅ Fully Operational
