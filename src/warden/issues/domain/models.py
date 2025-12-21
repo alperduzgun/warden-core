@@ -84,6 +84,8 @@ class WardenIssue(BaseDomainModel):
     last_updated: datetime
     reopen_count: int
     state_history: List[StateTransition]
+    confidence: float = 0.7  # Confidence score (0.0 - 1.0), default: 0.7
+    line_number: int = 0  # Line number where issue occurs, default: 0 (extract from file_path)
 
     def to_json(self) -> Dict[str, Any]:
         """

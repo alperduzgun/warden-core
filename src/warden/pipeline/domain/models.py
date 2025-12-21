@@ -63,10 +63,12 @@ class PipelineConfig(BaseDomainModel):
 
     # Optional post-processing phases
     enable_suppression: bool = True  # Apply suppression filtering after validation
+    enable_issue_validation: bool = True  # Apply confidence-based false positive detection
 
     # Phase-specific configurations
     discovery_config: Optional[Dict[str, Any]] = None  # Discovery configuration options
     suppression_config_path: Optional[str] = None  # Path to suppression config file
+    issue_validation_config: Optional[Dict[str, Any]] = None  # Issue validator configuration (min_confidence, rules)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""

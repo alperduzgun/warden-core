@@ -20,6 +20,12 @@ from warden.validation.domain.frame import ValidationFrame, CodeFile
 from warden.analyzers.discovery import FileDiscoverer, DiscoveredFile
 from warden.build_context import BuildContextProvider, BuildContext
 from warden.suppression import SuppressionMatcher, load_suppression_config
+from warden.core.validation import IssueValidator, create_default_validator
+from warden.core.validation.content_rules import (
+    CodeSnippetMatchRule,
+    EvidenceQuoteRule,
+    TitleDescriptionQualityRule,
+)
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -27,9 +33,9 @@ logger = get_logger(__name__)
 
 class EnhancedPipelineOrchestrator(PipelineOrchestrator):
     """
-    Enhanced pipeline orchestrator with optional discovery, build context, and suppression.
+    Enhanced pipeline orchestrator with optional discovery, build context, suppression, and issue validation.
 
-    This orchestrator extends the base pipeline with three optional phases:
+    This orchestrator extends the base pipeline with four optional phases:
 
     1. **Discovery Phase** (Pre-validation):
        - Scans project directory for code files
@@ -48,6 +54,12 @@ class EnhancedPipelineOrchestrator(PipelineOrchestrator):
        - Supports inline comments and config files
        - Removes false positives
        - Only runs if enable_suppression=True
+
+    4. **Issue Validation Phase** (Post-validation):
+       - Applies confidence-based false positive detection
+       - Validates code snippets, evidence quotes, and title quality
+       - Rejects low-confidence issues
+       - Only runs if enable_issue_validation=True
 
     All phases are optional and controlled by PipelineConfig flags.
     """
@@ -70,6 +82,7 @@ class EnhancedPipelineOrchestrator(PipelineOrchestrator):
         self.discovery_result: Optional[Any] = None
         self.build_context: Optional[BuildContext] = None
         self.suppression_matcher: Optional[SuppressionMatcher] = None
+        self.issue_validator: Optional[IssueValidator] = None
 
         logger.info(
             "enhanced_orchestrator_initialized",
@@ -77,6 +90,7 @@ class EnhancedPipelineOrchestrator(PipelineOrchestrator):
             discovery_enabled=self.config.enable_discovery,
             build_context_enabled=self.config.enable_build_context,
             suppression_enabled=self.config.enable_suppression,
+            issue_validation_enabled=self.config.enable_issue_validation,
         )
 
     async def execute_with_discovery(self, project_path: str) -> PipelineResult:
@@ -118,12 +132,16 @@ class EnhancedPipelineOrchestrator(PipelineOrchestrator):
         # Phase 4: Apply suppression (if enabled)
         result = await self._apply_suppression_phase(result)
 
+        # Phase 5: Apply issue validation (if enabled)
+        result = await self._apply_issue_validation_phase(result)
+
         logger.info(
             "enhanced_pipeline_completed",
             project_path=project_path,
             total_files=len(code_files),
             total_findings=result.total_findings,
             suppressed_findings=result.metadata.get("suppressed_count", 0),
+            validation_rejected=result.metadata.get("validation_rejected_count", 0),
         )
 
         return result
@@ -463,3 +481,202 @@ class EnhancedPipelineOrchestrator(PipelineOrchestrator):
             SuppressionMatcher or None if suppression was not enabled
         """
         return self.suppression_matcher
+
+    async def _apply_issue_validation_phase(self, result: PipelineResult) -> PipelineResult:
+        """
+        Phase 5: Apply confidence-based issue validation to results.
+
+        This phase uses IssueValidator to filter out low-confidence false positives
+        based on:
+        - Confidence threshold (>= 0.5)
+        - Line number validation
+        - Code snippet matching
+        - Evidence quote verification
+        - Title/description quality
+
+        Args:
+            result: Pipeline result with findings
+
+        Returns:
+            Pipeline result with invalid issues removed
+        """
+        if not self.config.enable_issue_validation:
+            logger.info("issue_validation_phase_skipped", reason="disabled_in_config")
+            return result
+
+        logger.info(
+            "issue_validation_phase_started",
+            total_findings_before=result.total_findings,
+        )
+
+        try:
+            # Initialize validator if not already done
+            if not self.issue_validator:
+                self.issue_validator = await self._create_issue_validator()
+
+            if not self.issue_validator:
+                logger.warning("issue_validator_not_available")
+                return result
+
+            # Validate findings in each frame result
+            rejected_count = 0
+            validation_failures: Dict[str, int] = {}
+
+            for frame_result in result.frame_results:
+                original_count = len(frame_result.findings)
+                validated_findings = []
+
+                for finding in frame_result.findings:
+                    # Convert Finding to WardenIssue for validation
+                    # (IssueValidator expects WardenIssue model)
+                    issue = self._convert_finding_to_issue(finding)
+
+                    # Validate issue
+                    validation_result = self.issue_validator.validate(issue)
+
+                    if validation_result.is_valid:
+                        validated_findings.append(finding)
+                    else:
+                        rejected_count += 1
+                        # Track failed rules
+                        for rule_name in validation_result.failed_rules:
+                            validation_failures[rule_name] = (
+                                validation_failures.get(rule_name, 0) + 1
+                            )
+
+                        logger.debug(
+                            "issue_rejected",
+                            issue_id=finding.id,
+                            original_confidence=validation_result.original_confidence,
+                            adjusted_confidence=validation_result.adjusted_confidence,
+                            failed_rules=validation_result.failed_rules,
+                        )
+
+                # Update findings
+                frame_result.findings = validated_findings
+                frame_result.issues_found = len(validated_findings)
+
+            # Update totals
+            result.total_findings -= rejected_count
+            result.metadata["validation_rejected_count"] = rejected_count
+            result.metadata["validation_enabled"] = True
+            result.metadata["validation_failures"] = validation_failures
+
+            logger.info(
+                "issue_validation_phase_completed",
+                total_findings_after=result.total_findings,
+                rejected_count=rejected_count,
+                rejection_rate=f"{(rejected_count / (result.total_findings + rejected_count) * 100):.1f}%"
+                if (result.total_findings + rejected_count) > 0
+                else "0%",
+                top_failed_rules=dict(sorted(validation_failures.items(), key=lambda x: x[1], reverse=True)[:3]),
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                "issue_validation_phase_failed",
+                error=str(e),
+            )
+            # Return original result on error (fail-safe)
+            return result
+
+    async def _create_issue_validator(self) -> Optional[IssueValidator]:
+        """
+        Create IssueValidator with configured rules.
+
+        Returns:
+            IssueValidator instance or None if creation fails
+        """
+        try:
+            # Get validation config
+            validation_config = self.config.issue_validation_config or {}
+            min_confidence = validation_config.get("minimum_confidence", 0.5)
+
+            # Create validator with default rules
+            validator = create_default_validator(minimum_confidence=min_confidence)
+
+            # Add content validation rules
+            validator.add_rule(CodeSnippetMatchRule())
+            validator.add_rule(EvidenceQuoteRule())
+            validator.add_rule(TitleDescriptionQualityRule(
+                minimum_length=validation_config.get("minimum_title_length", 10)
+            ))
+
+            logger.info(
+                "issue_validator_created",
+                minimum_confidence=min_confidence,
+                rule_count=len(validator._rules),
+            )
+
+            return validator
+
+        except Exception as e:
+            logger.warning(
+                "issue_validator_creation_failed",
+                error=str(e),
+            )
+            return None
+
+    def _convert_finding_to_issue(self, finding: Any) -> Any:
+        """
+        Convert FrameResult Finding to WardenIssue for validation.
+
+        Args:
+            finding: Finding object from frame result
+
+        Returns:
+            WardenIssue object
+        """
+        from warden.issues.domain.models import WardenIssue, IssueSeverity, IssueState
+        from datetime import datetime
+
+        # Extract file path and line number from location
+        file_path = self._extract_file_path(finding.location)
+        line_number = self._extract_line_number(finding.location)
+
+        # Create WardenIssue
+        return WardenIssue(
+            id=finding.id,
+            title=finding.message,
+            message=finding.message,
+            severity=self._convert_severity(finding.severity),
+            state=IssueState.OPEN,
+            file_path=file_path,
+            line_number=line_number,
+            code_snippet=finding.code_context or "",
+            confidence=getattr(finding, "confidence", 0.8),  # Default confidence if not set
+            first_detected=datetime.utcnow(),
+            last_detected=datetime.utcnow(),
+        )
+
+    def _convert_severity(self, severity_str: str) -> "IssueSeverity":
+        """
+        Convert string severity to IssueSeverity enum.
+
+        Args:
+            severity_str: Severity string (e.g., "critical", "high")
+
+        Returns:
+            IssueSeverity enum value
+        """
+        from warden.issues.domain.models import IssueSeverity
+
+        severity_map = {
+            "critical": IssueSeverity.CRITICAL,
+            "high": IssueSeverity.HIGH,
+            "medium": IssueSeverity.MEDIUM,
+            "low": IssueSeverity.LOW,
+        }
+
+        return severity_map.get(severity_str.lower(), IssueSeverity.MEDIUM)
+
+    def get_issue_validator(self) -> Optional[IssueValidator]:
+        """
+        Get the issue validator used in the last execution.
+
+        Returns:
+            IssueValidator or None if issue validation was not enabled
+        """
+        return self.issue_validator
