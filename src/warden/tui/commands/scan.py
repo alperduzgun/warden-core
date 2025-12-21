@@ -60,7 +60,11 @@ async def handle_scan_command(
     else:
         add_message(
             "⚠️ **Pipeline not available**\n\n"
-            "Full pipeline is not loaded. Showing mock result instead.",
+            "Pipeline initialization failed. Possible causes:\n"
+            "- Missing validation frames in config\n"
+            "- Config file loading error\n"
+            "- Import errors in frame modules\n\n"
+            "Check console output for details. Showing mock result instead.",
             "error-message",
             True
         )
@@ -92,31 +96,40 @@ async def _run_pipeline_scan(
             True
         )
 
-        # Run pipeline for each file
-        results = []
+        # Create CodeFile objects from discovered files
+        from warden.validation.domain.frame import CodeFile
+
+        code_files = []
         for file_path in py_files:
             try:
                 with open(file_path) as f:
                     content = f.read()
 
-                # Execute full pipeline
-                pipeline_result = await orchestrator.execute(
-                    file_path=str(file_path),
-                    file_content=content,
-                    language="python"
+                code_file = CodeFile(
+                    path=str(file_path),
+                    content=content,
+                    language="python",
+                    framework=None,
+                    size_bytes=len(content.encode('utf-8')),
                 )
-
-                results.append({
-                    "path": file_path,
-                    "pipeline_result": pipeline_result
-                })
-
+                code_files.append(code_file)
             except Exception:
-                # Skip files that can't be analyzed
+                # Skip files that can't be read
                 continue
 
+        if not code_files:
+            add_message(
+                "❌ **No files could be loaded**",
+                "error-message",
+                True
+            )
+            return
+
+        # Execute pipeline on all files at once
+        pipeline_result = await orchestrator.execute(code_files)
+
         # Display aggregated scan summary
-        await display_scan_summary(scan_path, results, add_message)
+        await display_scan_summary(scan_path, pipeline_result, add_message)
 
     except Exception as e:
         add_message(

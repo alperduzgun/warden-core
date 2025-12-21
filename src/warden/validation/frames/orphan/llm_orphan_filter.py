@@ -302,14 +302,34 @@ class LLMOrphanFilter:
         Returns:
             LLM response
         """
+        # Build system prompt for code analysis
+        system_prompt = f"""You are an expert {language} code analyzer specializing in orphan code detection.
+Your task is to analyze code files and identify true orphan code (unused/unreferenced code) while filtering out false positives.
+
+You have deep understanding of:
+- Programming language patterns and idioms
+- Framework conventions and lifecycle methods
+- Serialization patterns
+- Public API exports and re-exports
+- Abstract classes, interfaces, and protocols"""
+
+        # Build user message with code context and analysis request
+        user_message = f"""# CODE TO ANALYZE
+
+```{language}
+{code}
+```
+
+{prompt}"""
+
         request = LlmRequest(
-            code=code,
-            prompt=prompt,
+            system_prompt=system_prompt,
+            user_message=user_message,
             max_tokens=3000,
             temperature=0.0,  # Deterministic for consistency
         )
 
-        response = await self.llm.analyze(request)
+        response = await self.llm.send_async(request)
 
         return response
 

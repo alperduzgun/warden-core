@@ -55,8 +55,7 @@ class OpenAIClient(ILlmClient):
                     {"role": "user", "content": request.user_message}
                 ],
                 "temperature": request.temperature,
-                "max_tokens": request.max_tokens,
-                "response_format": {"type": "json_object"}  # Force JSON response
+                "max_tokens": request.max_tokens
             }
 
             if self._provider != LlmProvider.AZURE_OPENAI:

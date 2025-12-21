@@ -15,6 +15,13 @@ from rich.markdown import Markdown
 from .widgets import CommandPaletteScreen, FilePickerScreen
 from .handlers import handle_chat_message, handle_slash_command
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, environment variables should be set manually
+
 # Import real Warden components
 try:
     from warden.pipeline.application.orchestrator import PipelineOrchestrator
@@ -91,43 +98,148 @@ class WardenTUI(App):
         yield Footer()
 
     def _load_pipeline_config(self, config_name: str) -> None:
-        """Load pipeline configuration using discovery system."""
+        """Load pipeline configuration from .warden/config.yaml."""
         if not PIPELINE_AVAILABLE:
             return
 
         try:
-            from warden.config.discovery import discover_config, get_config_source
+            import yaml
+            from warden.pipeline.domain.models import PipelineConfig as PipelineOrchestratorConfig
 
-            # Discover config with hierarchy
-            config = discover_config(
-                start_path=self.project_root,
-                template_name=config_name if config_name else None
-            )
+            # Find config file
+            config_file = self.project_root / ".warden" / "config.yaml"
 
-            if not config:
+            if not config_file.exists():
                 import sys
-                print(f"⚠️  No config found", file=sys.stderr)
-                self.active_config_name = "none"
-                self.orchestrator = None
+                print(f"⚠️  No config found at {config_file}, using default frames", file=sys.stderr)
+                self.active_config_name = "default"
+
+                # Use default frames when no config
+                frames = self._get_default_frames()
+                self.orchestrator = PipelineOrchestrator(frames=frames, config=None)
                 return
 
-            # Create orchestrator with discovered config
-            self.orchestrator = PipelineOrchestrator(config=config)
+            # Parse YAML directly (simple format - not visual builder format)
+            with open(config_file) as f:
+                config_data = yaml.safe_load(f)
 
-            # Set active config name based on source
-            self.active_config_name = get_config_source(
-                start_path=self.project_root,
-                template_name=config_name if config_name else None
+            # Extract frame list and frame-specific configs
+            frame_names = config_data.get('frames', [])
+            frame_config = config_data.get('frame_config', {})
+
+            if not frame_names:
+                import sys
+                print(f"⚠️  No frames in config, using defaults", file=sys.stderr)
+                frames = self._get_default_frames()
+                self.active_config_name = "default"
+            else:
+                # Load frames from list with their configs
+                frames = self._load_frames_from_list(frame_names, frame_config)
+
+                if not frames:
+                    import sys
+                    print(f"⚠️  Failed to load frames, using defaults", file=sys.stderr)
+                    frames = self._get_default_frames()
+                    self.active_config_name = "default"
+                else:
+                    self.active_config_name = config_data.get('name', 'project-config')
+
+            # Create pipeline orchestrator config (domain model, not Panel model!)
+            settings = config_data.get('settings', {})
+            pipeline_config = PipelineOrchestratorConfig(
+                fail_fast=settings.get('fail_fast', True),
+                timeout=settings.get('timeout', 300),
+                frame_timeout=settings.get('timeout', 120),
+                parallel_limit=4,
             )
 
+            # Create orchestrator with frames and config
+            self.orchestrator = PipelineOrchestrator(frames=frames, config=pipeline_config)
+
         except Exception as e:
-            # Log error but don't crash
+            # Log error but don't crash - use default frames
             import sys
             print(f"⚠️  Pipeline loading error: {str(e)}", file=sys.stderr)
             import traceback
             traceback.print_exc()
-            self.active_config_name = "error"
-            self.orchestrator = None
+            self.active_config_name = "error-fallback"
+
+            # Fallback to default frames
+            try:
+                frames = self._get_default_frames()
+                self.orchestrator = PipelineOrchestrator(frames=frames, config=None)
+            except Exception:
+                self.orchestrator = None
+
+    def _get_default_frames(self) -> list:
+        """Get default validation frames when no config is found."""
+        from warden.validation.frames import (
+            SecurityFrame,
+            ChaosFrame,
+            ArchitecturalConsistencyFrame,
+        )
+
+        return [
+            SecurityFrame(),
+            ChaosFrame(),
+            ArchitecturalConsistencyFrame(),
+        ]
+
+    def _load_frames_from_list(self, frame_names: list, frame_config: dict = None) -> list:
+        """
+        Load validation frames from frame name list with their configs.
+
+        Args:
+            frame_names: List of frame names (e.g., ['security', 'chaos', 'orphan'])
+            frame_config: Frame-specific configurations from config.yaml
+
+        Returns:
+            List of initialized ValidationFrame instances
+        """
+        from warden.validation.frames import (
+            SecurityFrame,
+            ChaosFrame,
+            ArchitecturalConsistencyFrame,
+            ProjectArchitectureFrame,
+            GitChangesFrame,
+            OrphanFrame,
+            FuzzFrame,
+            PropertyFrame,
+            StressFrame,
+        )
+
+        if frame_config is None:
+            frame_config = {}
+
+        # Map frame names to frame classes
+        # NOTE: Config uses underscore names, but frame IDs don't have underscores
+        frame_map = {
+            'security': SecurityFrame,
+            'chaos': ChaosFrame,
+            'architectural': ArchitecturalConsistencyFrame,
+            'architecturalconsistency': ArchitecturalConsistencyFrame,  # Alternative ID
+            'project_architecture': ProjectArchitectureFrame,
+            'projectarchitecture': ProjectArchitectureFrame,  # Alternative ID
+            'gitchanges': GitChangesFrame,
+            'orphan': OrphanFrame,
+            'fuzz': FuzzFrame,
+            'property': PropertyFrame,
+            'stress': StressFrame,
+        }
+
+        frames = []
+
+        # Load each frame by name with its config
+        for frame_name in frame_names:
+            if frame_name in frame_map:
+                # Get frame-specific config (e.g., orphan -> orphan config)
+                config = frame_config.get(frame_name, {})
+                frames.append(frame_map[frame_name](config=config))
+            else:
+                import sys
+                print(f"⚠️  Unknown frame: {frame_name}", file=sys.stderr)
+
+        return frames
 
     def _get_session_info(self) -> str:
         """Get session info bar text."""

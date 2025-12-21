@@ -21,9 +21,8 @@ project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from warden.pipeline.application.orchestrator import PipelineOrchestrator
-from warden.analyzers.discovery.analyzer import CodeAnalyzer
-from warden.analyzers.discovery.classifier import CodeClassifier
-from warden.validation.domain.executor import FrameExecutor
+from warden.pipeline.domain.models import PipelineConfig
+from warden.validation.domain.frame import CodeFile
 from warden.validation.frames.security import SecurityFrame
 from warden.validation.frames.chaos import ChaosFrame
 from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
@@ -173,128 +172,93 @@ async def validate_file(
         border_style="cyan"
     ))
 
-    # Initialize components (similar to scan.py)
-    analyzer = CodeAnalyzer(llm_factory=None, use_llm=False)  # LLM disabled for validate command
-    classifier = CodeClassifier()
-
     # Register all validation frames
     frames = [
         SecurityFrame(),
         ChaosFrame(),
         ArchitecturalConsistencyFrame(),
     ]
-    executor = FrameExecutor(frames)
 
-    # Create orchestrator
-    orchestrator = PipelineOrchestrator(
-        analyzer=analyzer,
-        classifier=classifier,
-        frame_executor=executor
+    # Create code file object
+    code_file = CodeFile(
+        path=file_path,
+        content=content,
+        language=language,
+        framework=None,
+        size_bytes=len(content.encode('utf-8')),
     )
 
-    # Run pipeline with progress indicator
+    # Create pipeline config and orchestrator
+    config = PipelineConfig(
+        fail_fast=True,
+        enable_discovery=False,
+        enable_build_context=False,
+        enable_suppression=False,
+    )
+
+    orchestrator = PipelineOrchestrator(frames=frames, config=config)
+
+    # Run validation frames
+    console.print(f"\n[cyan]Running {len(frames)} validation frames...[/cyan]\n")
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TimeElapsedColumn(),
         console=console,
-        transient=True
+        transient=False
     ) as progress:
+        task = progress.add_task("[cyan]Validating...", total=None)
 
-        task = progress.add_task("[cyan]Running validation pipeline...", total=None)
-
-        result = await orchestrator.execute(
-            file_path=file_path,
-            file_content=content,
-            language=language
-        )
+        # Execute frames on the code file
+        result = await orchestrator.execute([code_file])
 
         progress.update(task, completed=True)
 
     # Display results
-    console.print()
+    console.print("\n")
 
-    if not result.success:
-        console.print("[red]Pipeline failed![/red]")
-        if result.message:
-            console.print(f"[red]Error:[/red] {result.message}")
+    # Create summary table
+    summary_table = create_validation_summary_table(
+        total_frames=result.total_frames,
+        passed_frames=result.frames_passed,
+        failed_frames=result.frames_failed,
+        blocker_failures=0,  # Count blocker issues
+        duration_ms=result.duration * 1000  # Convert to ms
+    )
+    console.print(summary_table)
 
-    # Analysis results
-    if result.analysis_result:
-        score = result.analysis_result.get("score", 0)
-        console.print(f"[cyan]Analysis Score:[/cyan] [bold]{score:.1f}/10[/bold]")
-        if verbose and result.analysis_result.get("metrics"):
-            console.print(f"[dim]Metrics:[/dim] {result.analysis_result['metrics']}")
-
-    # Classification results
-    if result.classification_result and verbose:
-        console.print(f"\n[cyan]Recommended Frames:[/cyan]")
-        for frame in result.classification_result.get("recommendedFrames", []):
-            console.print(f"  - {frame}")
-
-    # Validation results
-    if result.validation_summary:
-        console.print()
-
-        # Summary table
-        total_frames = result.validation_summary.get("totalFrames", 0)
-        passed_frames = result.validation_summary.get("passedFrames", 0)
-        failed_frames = result.validation_summary.get("failedFrames", 0)
-        blocker_failures_list = result.validation_summary.get("blockerFailures", [])
-        duration_ms = result.validation_summary.get("durationMs", 0)
-
-        summary_table = create_validation_summary_table(
-            total_frames=total_frames,
-            passed_frames=passed_frames,
-            failed_frames=failed_frames,
-            blocker_failures=len(blocker_failures_list),
-            duration_ms=duration_ms
-        )
-        console.print(summary_table)
-
-        # Frame results table (results is array of JSON objects)
-        frame_results = result.validation_summary.get("results", [])
-        if frame_results:
-            console.print()
-            frame_table = create_frame_results_table(frame_results)
-            console.print(frame_table)
-
-            # Display detailed issues
-            if verbose or len(blocker_failures_list) > 0:
-                display_frame_issues(frame_results)
+    # Show frame details if verbose
+    if verbose:
+        console.print("\n[cyan]Frame Results:[/cyan]")
+        for frame_result in result.frame_results:
+            status_icon = "✓" if frame_result.passed else "✗"
+            status_color = "green" if frame_result.passed else "red"
+            console.print(
+                f"  [{status_color}]{status_icon}[/{status_color}] "
+                f"{frame_result.frame_name}: {frame_result.issues_found} issues"
+            )
 
     # Final status
     console.print()
-    if result.success and result.validation_summary:
-        failed_frames = result.validation_summary.get("failedFrames", 0)
-        blocker_failures_list = result.validation_summary.get("blockerFailures", [])
-
-        if failed_frames == 0:
-            console.print(Panel(
-                "[green bold]All validation frames passed![/green bold]",
-                border_style="green"
-            ))
-            sys.exit(0)
-        elif len(blocker_failures_list) > 0:
-            console.print(Panel(
-                f"[red bold]BLOCKER: {len(blocker_failures_list)} critical issue(s) found![/red bold]\n"
-                "[yellow]Pipeline stopped. Fix blocker issues before proceeding.[/yellow]",
-                border_style="red"
-            ))
-            sys.exit(1)
-        else:
-            console.print(Panel(
-                f"[yellow]Warning: {failed_frames} frame(s) failed[/yellow]",
-                border_style="yellow"
-            ))
-            sys.exit(0)
-    else:
+    if result.frames_failed == 0:
         console.print(Panel(
-            "[red]Validation pipeline failed![/red]",
+            "[green bold]All validation frames passed![/green bold]",
+            border_style="green"
+        ))
+        sys.exit(0)
+    elif result.critical_findings > 0:
+        console.print(Panel(
+            f"[red bold]BLOCKER: {result.critical_findings} critical issue(s) found![/red bold]\n"
+            "[yellow]Fix blocker issues before proceeding.[/yellow]",
             border_style="red"
         ))
         sys.exit(1)
+    else:
+        console.print(Panel(
+            f"[yellow]Warning: {result.frames_failed} frame(s) failed[/yellow]",
+            border_style="yellow"
+        ))
+        sys.exit(0)
 
 
 if __name__ == "__main__":
