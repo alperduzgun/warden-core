@@ -47,7 +47,7 @@ async def handle_slash_command(
     elif cmd in ["analyze", "a", "check"]:
         await handle_analyze_command(args, orchestrator, add_message)
     elif cmd in ["scan", "s"]:
-        await handle_scan_command(args, project_root, orchestrator, add_message)
+        await handle_scan_command(args, project_root, orchestrator, add_message, app)
     elif cmd in ["status", "info"]:
         handle_status_command(project_root, session_id, llm_available, add_message)
     elif cmd in ["clear", "cls"]:
