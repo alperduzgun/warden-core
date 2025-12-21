@@ -9,7 +9,7 @@ from ..display.scan import (
 )
 
 if TYPE_CHECKING:
-    from warden.core.pipeline.orchestrator import PipelineOrchestrator
+    from warden.pipeline.application.orchestrator import PipelineOrchestrator
 
 
 async def handle_scan_command(

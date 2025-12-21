@@ -20,16 +20,13 @@ from rich import box
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from warden.core.pipeline.orchestrator import PipelineOrchestrator
-from warden.core.analysis.analyzer import CodeAnalyzer
-from warden.core.analysis.classifier import CodeClassifier
-from warden.core.validation.executor import FrameExecutor
-from warden.core.validation.frames.security import SecurityFrame
-from warden.core.validation.frames.chaos import ChaosEngineeringFrame
-from warden.core.validation.frames.fuzz import FuzzTestingFrame
-from warden.core.validation.frames.property import PropertyTestingFrame
-from warden.core.validation.frames.architectural import ArchitecturalConsistencyFrame
-from warden.core.validation.frames.stress import StressTestingFrame
+from warden.pipeline.application.orchestrator import PipelineOrchestrator
+from warden.analyzers.discovery.analyzer import CodeAnalyzer
+from warden.analyzers.discovery.classifier import CodeClassifier
+from warden.validation.domain.executor import FrameExecutor
+from warden.validation.frames.security import SecurityFrame
+from warden.validation.frames.chaos import ChaosFrame
+from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
 
 app = typer.Typer()
 console = Console()
@@ -176,18 +173,15 @@ async def validate_file(
         border_style="cyan"
     ))
 
-    # Initialize components
-    analyzer = CodeAnalyzer()
+    # Initialize components (similar to scan.py)
+    analyzer = CodeAnalyzer(llm_factory=None, use_llm=False)  # LLM disabled for validate command
     classifier = CodeClassifier()
 
     # Register all validation frames
     frames = [
         SecurityFrame(),
-        ChaosEngineeringFrame(),
-        FuzzTestingFrame(),
-        PropertyTestingFrame(),
+        ChaosFrame(),
         ArchitecturalConsistencyFrame(),
-        StressTestingFrame(),
     ]
     executor = FrameExecutor(frames)
 

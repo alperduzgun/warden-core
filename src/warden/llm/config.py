@@ -1,10 +1,8 @@
 """
 LLM Configuration
 
-Based on C# LlmConfiguration.cs:
-/Users/alper/vibe-code-analyzer/src/Warden.LLM/LlmConfiguration.cs
-
-Supports multi-provider configuration with fallback chain
+Supports multi-provider configuration with fallback chain.
+Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 """
 
 from dataclasses import dataclass, field

@@ -17,7 +17,7 @@ from .handlers import handle_chat_message, handle_slash_command
 
 # Import real Warden components
 try:
-    from warden.core.pipeline.orchestrator import PipelineOrchestrator
+    from warden.pipeline.application.orchestrator import PipelineOrchestrator
     from warden.config.discovery import discover_config
     PIPELINE_AVAILABLE = True
 except ImportError:

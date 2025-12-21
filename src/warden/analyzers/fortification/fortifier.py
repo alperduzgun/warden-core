@@ -20,7 +20,7 @@ from warden.validation.domain.frame import CodeFile
 
 # AnalysisResult is optional - for future integration
 try:
-    from warden.core.analysis.analyzer import AnalysisResult
+    from warden.analyzers.discovery.analyzer import AnalysisResult
 except ImportError:
     AnalysisResult = None  # type: ignore
 

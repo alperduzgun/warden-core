@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from warden.core.pipeline.orchestrator import PipelineOrchestrator
+    from warden.pipeline.application.orchestrator import PipelineOrchestrator
 
 
 async def handle_analyze_command(

@@ -1,0 +1,296 @@
+"""
+Property Frame - Logic validation and invariants.
+
+Validates business logic correctness:
+- Function preconditions/postconditions
+- Class invariants
+- State machine transitions
+- Mathematical properties
+
+Priority: HIGH
+"""
+
+import time
+import re
+from typing import List, Dict, Any
+
+from warden.validation.domain.frame import (
+    ValidationFrame,
+    FrameResult,
+    Finding,
+    CodeFile,
+)
+from warden.validation.domain.enums import (
+    FrameCategory,
+    FramePriority,
+    FrameScope,
+    FrameApplicability,
+)
+from warden.shared.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+class PropertyFrame(ValidationFrame):
+    """
+    Property-based testing validation frame.
+
+    This frame detects logic issues:
+    - Missing precondition checks
+    - Unvalidated state transitions
+    - Invariant violations
+    - Missing assertions
+    - Logic inconsistencies
+
+    Priority: HIGH
+    Applicability: All languages
+    """
+
+    # Required metadata
+    name = "Property Testing"
+    description = "Validates business logic, invariants, and preconditions"
+    category = FrameCategory.GLOBAL
+    priority = FramePriority.HIGH
+    scope = FrameScope.FILE_LEVEL
+    is_blocker = False
+    version = "1.0.0"
+    author = "Warden Team"
+    applicability = [FrameApplicability.ALL]
+
+    # Property check patterns
+    PATTERNS = {
+        "missing_precondition": {
+            "pattern": r'def\s+\w+\s*\([^)]+\):|function\s+\w+\s*\([^)]+\)\s*{',
+            "severity": "high",
+            "message": "Function may be missing input validation (precondition)",
+            "suggestion": "Add parameter validation at function start",
+        },
+        "state_change_no_validation": {
+            "pattern": r'self\.\w+\s*=|this\.\w+\s*=',
+            "severity": "medium",
+            "message": "State change without validation",
+            "suggestion": "Validate state transitions to maintain invariants",
+        },
+        "division_no_zero_check": {
+            "pattern": r'\/\s*\w+(?!\s*(?:if|&&|\|\||\?|assert))',
+            "severity": "high",
+            "message": "Division operation without zero check",
+            "suggestion": "Check divisor is not zero before division",
+        },
+        "comparison_always_true": {
+            "pattern": r'if\s+true|if\s+True|while\s+true|while\s+True',
+            "severity": "low",
+            "message": "Always-true condition detected",
+            "suggestion": "Review logic - condition always evaluates to true",
+        },
+        "negative_index_possible": {
+            "pattern": r'\[\s*-?\w+\s*-\s*\w+\s*\]',
+            "severity": "medium",
+            "message": "Array access with possible negative index",
+            "suggestion": "Ensure index is non-negative",
+        },
+    }
+
+    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+        """
+        Initialize PropertyFrame.
+
+        Args:
+            config: Frame configuration
+        """
+        super().__init__(config)
+
+    async def execute(self, code_file: CodeFile) -> FrameResult:
+        """
+        Execute property testing checks on code file.
+
+        Args:
+            code_file: Code file to validate
+
+        Returns:
+            FrameResult with findings
+        """
+        start_time = time.perf_counter()
+
+        logger.info(
+            "property_frame_started",
+            file_path=code_file.path,
+            language=code_file.language,
+        )
+
+        findings = []
+
+        # Run pattern-based checks
+        for check_id, check_config in self.PATTERNS.items():
+            pattern_findings = self._check_pattern(
+                code_file=code_file,
+                check_id=check_id,
+                pattern=check_config["pattern"],
+                severity=check_config["severity"],
+                message=check_config["message"],
+                suggestion=check_config.get("suggestion"),
+            )
+            findings.extend(pattern_findings)
+
+        # Check for assertion usage (good practice)
+        assertion_findings = self._check_assertions(code_file)
+        findings.extend(assertion_findings)
+
+        # Determine status
+        status = self._determine_status(findings)
+
+        duration = time.perf_counter() - start_time
+
+        logger.info(
+            "property_frame_completed",
+            file_path=code_file.path,
+            status=status,
+            total_findings=len(findings),
+            duration=f"{duration:.2f}s",
+        )
+
+        return FrameResult(
+            frame_id=self.frame_id,
+            frame_name=self.name,
+            status=status,
+            duration=duration,
+            issues_found=len(findings),
+            is_blocker=False,
+            findings=findings,
+            metadata={
+                "checks_executed": len(self.PATTERNS) + 1,  # +1 for assertion check
+                "file_size": code_file.size_bytes,
+                "line_count": code_file.line_count,
+            },
+        )
+
+    def _check_pattern(
+        self,
+        code_file: CodeFile,
+        check_id: str,
+        pattern: str,
+        severity: str,
+        message: str,
+        suggestion: str | None = None,
+    ) -> List[Finding]:
+        """
+        Check for pattern matches in code.
+
+        Args:
+            code_file: Code file to check
+            check_id: Unique check identifier
+            pattern: Regex pattern to match
+            severity: Finding severity
+            message: Finding message
+            suggestion: Optional suggestion
+
+        Returns:
+            List of findings
+        """
+        findings: List[Finding] = []
+
+        try:
+            lines = code_file.content.split("\n")
+
+            for line_num, line in enumerate(lines, start=1):
+                # Skip comments
+                if line.strip().startswith(("#", "//", "/*", "*")):
+                    continue
+
+                matches = re.finditer(pattern, line)
+                for match in matches:
+                    # Additional context-based filtering
+                    if self._should_report(check_id, line, code_file.language):
+                        finding = Finding(
+                            id=f"{self.frame_id}-{check_id}-{line_num}",
+                            severity=severity,
+                            message=message,
+                            location=f"{code_file.path}:{line_num}",
+                            detail=suggestion,
+                            code=line.strip(),
+                        )
+                        findings.append(finding)
+
+        except Exception as e:
+            logger.error(
+                "pattern_check_failed",
+                check_id=check_id,
+                error=str(e),
+            )
+
+        return findings
+
+    def _should_report(self, check_id: str, line: str, language: str) -> bool:
+        """
+        Additional filtering to reduce false positives.
+
+        Args:
+            check_id: Check identifier
+            line: Code line
+            language: Programming language
+
+        Returns:
+            True if should report finding
+        """
+        # Filter out precondition check if validation keywords present
+        if check_id == "missing_precondition":
+            validation_keywords = ["if", "assert", "raise", "throw", "validate", "check"]
+            return not any(keyword in line.lower() for keyword in validation_keywords)
+
+        return True
+
+    def _check_assertions(self, code_file: CodeFile) -> List[Finding]:
+        """
+        Check for missing assertions in critical code.
+
+        Args:
+            code_file: Code file to check
+
+        Returns:
+            List of findings
+        """
+        findings: List[Finding] = []
+
+        # Count assertions vs functions
+        assertion_pattern = r'\bassert\b|Assert\.|assertThat'
+        function_pattern = r'def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\('
+
+        assertion_count = len(re.findall(assertion_pattern, code_file.content))
+        function_count = len(re.findall(function_pattern, code_file.content))
+
+        # If many functions but no assertions, warn
+        if function_count > 5 and assertion_count == 0:
+            finding = Finding(
+                id=f"{self.frame_id}-no-assertions",
+                severity="low",
+                message=f"File has {function_count} functions but no assertions",
+                location=f"{code_file.path}:1",
+                detail="Consider adding assertions to validate invariants and preconditions",
+                code=None,
+            )
+            findings.append(finding)
+
+        return findings
+
+    def _determine_status(self, findings: List[Finding]) -> str:
+        """
+        Determine frame status based on findings.
+
+        Args:
+            findings: All findings
+
+        Returns:
+            Status: 'passed', 'warning', or 'failed'
+        """
+        if not findings:
+            return "passed"
+
+        # Count high severity
+        high_count = sum(1 for f in findings if f.severity == "high")
+
+        if high_count > 3:
+            return "failed"  # Many high severity issues
+        elif high_count > 0:
+            return "warning"  # Some high severity
+        else:
+            return "passed"  # Only medium/low

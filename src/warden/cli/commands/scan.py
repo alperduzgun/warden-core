@@ -24,16 +24,21 @@ from rich import box
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from warden.core.pipeline.orchestrator import PipelineOrchestrator
-from warden.core.analysis.analyzer import CodeAnalyzer
-from warden.core.analysis.classifier import CodeClassifier
-from warden.core.validation.executor import FrameExecutor
-from warden.core.validation.frames.security import SecurityFrame
-from warden.core.validation.frames.chaos import ChaosEngineeringFrame
-from warden.core.validation.frames.fuzz import FuzzTestingFrame
-from warden.core.validation.frames.property import PropertyTestingFrame
-from warden.core.validation.frames.architectural import ArchitecturalConsistencyFrame
-from warden.core.validation.frames.stress import StressTestingFrame
+from warden.pipeline.application.orchestrator import PipelineOrchestrator
+from warden.analyzers.discovery.analyzer import CodeAnalyzer
+from warden.analyzers.discovery.classifier import CodeClassifier
+from warden.validation.domain.executor import FrameExecutor
+from warden.validation.frames import (
+    SecurityFrame,
+    ChaosFrame,
+    ArchitecturalConsistencyFrame,
+    ProjectArchitectureFrame,
+    GitChangesFrame,
+    OrphanFrame,
+    FuzzFrame,
+    PropertyFrame,
+    StressFrame,
+)
 
 app = typer.Typer()
 console = Console()
@@ -149,6 +154,10 @@ def create_file_results_table(file_results: list, limit: int = 10) -> Table:
 @app.command()
 def run(
     directory: str = typer.Argument(".", help="Directory to scan (default: current directory)"),
+    config: str = typer.Option(
+        ".warden/config.yaml", "--config", "-c",
+        help="Path to config file (default: .warden/config.yaml)"
+    ),
     extensions: List[str] = typer.Option(
         [".py"], "--ext", "-e",
         help="File extensions to scan (e.g., -e .py -e .js)"
@@ -168,14 +177,16 @@ def run(
         warden scan                          # Scan current directory for Python files
         warden scan ./src                    # Scan src directory
         warden scan -e .py -e .js            # Scan Python and JavaScript files
+        warden scan --config custom.yaml     # Use custom config file
         warden scan --blocker-only           # Only check critical/high severity issues
         warden scan --max-files 50 -v        # Scan max 50 files with verbose output
     """
-    asyncio.run(scan_directory(directory, extensions, exclude, blocker_only, verbose, max_files))
+    asyncio.run(scan_directory(directory, config, extensions, exclude, blocker_only, verbose, max_files))
 
 
 async def scan_directory(
     directory: str,
+    config_path: str,
     extensions: List[str],
     exclude: List[str],
     blocker_only: bool,
@@ -265,15 +276,51 @@ async def scan_directory(
     analyzer = CodeAnalyzer(llm_factory=llm_factory, use_llm=True)
     classifier = CodeClassifier()
 
-    # Register all validation frames
-    frames = [
-        SecurityFrame(),
-        ChaosEngineeringFrame(),
-        FuzzTestingFrame(),
-        PropertyTestingFrame(),
-        ArchitecturalConsistencyFrame(),
-        StressTestingFrame(),
-    ]
+    # Load frames from config file
+    frames = []
+    config_file = Path(config_path)
+
+    if config_file.exists():
+        try:
+            import yaml
+            with open(config_file) as f:
+                config_data = yaml.safe_load(f)
+
+            frame_names = config_data.get('frames', [])
+            console.print(f"[cyan]Loading {len(frame_names)} frames from config: {config_path}[/cyan]")
+
+            # Map frame names to frame classes
+            frame_map = {
+                'security': SecurityFrame,
+                'chaos': ChaosFrame,
+                'architectural': ArchitecturalConsistencyFrame,
+                'project_architecture': ProjectArchitectureFrame,
+                'gitchanges': GitChangesFrame,
+                'orphan': OrphanFrame,
+                'fuzz': FuzzFrame,
+                'property': PropertyFrame,
+                'stress': StressFrame,
+            }
+
+            for frame_name in frame_names:
+                if frame_name in frame_map:
+                    frames.append(frame_map[frame_name]())
+                    if verbose:
+                        console.print(f"  [green]✓[/green] Loaded: {frame_name}")
+                else:
+                    console.print(f"  [yellow]⚠[/yellow]  Skipped: {frame_name} (not implemented)")
+
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to load config ({e}), using default frames[/yellow]")
+            frames = [SecurityFrame(), ChaosFrame(), ArchitecturalConsistencyFrame()]
+    else:
+        console.print(f"[yellow]Config not found: {config_path}, using default frames[/yellow]")
+        frames = [SecurityFrame(), ChaosFrame(), ArchitecturalConsistencyFrame()]
+
+    if not frames:
+        console.print("[red]Error: No frames loaded![/red]")
+        raise typer.Exit(code=1)
+
     executor = FrameExecutor(frames)
 
     orchestrator = PipelineOrchestrator(
