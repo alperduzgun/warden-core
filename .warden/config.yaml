@@ -6,7 +6,7 @@ name: "Warden Core Development Pipeline"
 
 # Validation frames to run
 frames:
-  # Implemented frames (ACTIVE)
+  # Built-in frames (ACTIVE)
   - security             # Critical security checks
   - chaos                # Chaos engineering / resilience testing
   - architectural        # Code organization (file-level)
@@ -16,6 +16,12 @@ frames:
   - fuzz                 # Edge case testing (null, empty, boundaries)
   - property             # Logic validation (invariants, preconditions)
   - stress               # Load/stress testing (performance, resource leaks)
+
+  # Custom/Community frames (optional - install to ~/.warden/frames/)
+  - redissecurity      # Redis connection security validation (frame_id: redissecurity)
+  # - mongodbsecurity    # MongoDB security best practices
+  # - postgresqlsecurity # PostgreSQL security checks
+  # - awss3security      # AWS S3 bucket security
 
 # Pipeline settings
 settings:

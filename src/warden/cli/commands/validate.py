@@ -23,9 +23,8 @@ sys.path.insert(0, str(project_root))
 from warden.pipeline.application.orchestrator import PipelineOrchestrator
 from warden.pipeline.domain.models import PipelineConfig, FrameRules
 from warden.validation.domain.frame import CodeFile
-from warden.validation.frames.security import SecurityFrame
-from warden.validation.frames.chaos import ChaosFrame
-from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
+# Built-in frames are dynamically loaded via FrameRegistry
+# No need to import explicitly (registry will handle discovery)
 from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.shared.infrastructure.logging import get_logger
@@ -265,12 +264,19 @@ async def validate_file(
         border_style="cyan"
     ))
 
-    # Register all validation frames
-    frames = [
-        SecurityFrame(),
-        ChaosFrame(),
-        ArchitecturalConsistencyFrame(),
-    ]
+    # Load frames dynamically from registry (built-in + custom)
+    from warden.validation.infrastructure.frame_registry import get_registry
+
+    registry = get_registry()
+    frame_map = registry.get_all_frames_as_dict()
+
+    # Use default frames (security, chaos, architectural)
+    default_frame_ids = ['security', 'chaos', 'architectural']
+    frames = [frame_map[fid]() for fid in default_frame_ids if fid in frame_map]
+
+    if verbose:
+        console.print(f"[dim]Discovered {len(frame_map)} frames (built-in + custom)[/dim]")
+        console.print(f"[dim]Using frames: {', '.join(default_frame_ids)}[/dim]")
 
     # Create code file object
     code_file = CodeFile(
