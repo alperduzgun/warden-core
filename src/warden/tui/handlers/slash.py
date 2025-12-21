@@ -35,6 +35,7 @@ async def handle_slash_command(
         handle_status_command,
         handle_help_command,
     )
+    from ..commands import rules as rules_command
 
     # Parse command
     parts = command.split(maxsplit=1)
@@ -50,6 +51,8 @@ async def handle_slash_command(
         await handle_scan_command(args, project_root, orchestrator, add_message, app)
     elif cmd in ["status", "info"]:
         handle_status_command(project_root, session_id, llm_available, add_message)
+    elif cmd in ["rules", "r"]:
+        await rules_command.execute(app, args)
     elif cmd in ["clear", "cls"]:
         await app.action_clear_chat()
     elif cmd in ["quit", "exit", "q"]:

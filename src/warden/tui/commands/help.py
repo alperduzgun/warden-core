@@ -23,6 +23,11 @@ def handle_help_command(
 ## 🔧 Fixing Commands
 - `/fix <file>` or `/f <file>` - Auto-fix issues in code
 
+## 📜 Rules Management
+- `/rules` or `/r` - List all custom validation rules
+- `/rules show <id>` - Show detailed rule information
+- `/rules stats` - Display rules statistics
+
 ## ⚙️  Utility Commands
 - `/help` or `/h` or `/?` - Show this help
 - `/status` or `/info` - Show session status

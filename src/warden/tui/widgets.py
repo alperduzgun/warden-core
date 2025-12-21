@@ -101,6 +101,12 @@ class CommandPaletteScreen(ModalScreen):
                 "category": "validation"
             },
             {
+                "name": "/rules",
+                "aliases": ["/r"],
+                "description": "Manage custom validation rules",
+                "category": "rules"
+            },
+            {
                 "name": "/status",
                 "aliases": ["/info"],
                 "description": "Show current session status",
@@ -154,6 +160,7 @@ class CommandPaletteScreen(ModalScreen):
             "analysis": "🔍",
             "fixing": "🔧",
             "validation": "✅",
+            "rules": "📜",
             "utilities": "⚙️",
             "config": "⚙️",
         }
