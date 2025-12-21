@@ -20,7 +20,6 @@ from warden.validation.frames.gitchanges.git_diff_parser import (
     GitDiffParser,
     DiffHunk,
     FileDiff,
-    GitDiffResult,
 )
 
 __all__ = [
@@ -28,5 +27,4 @@ __all__ = [
     "GitDiffParser",
     "DiffHunk",
     "FileDiff",
-    "GitDiffResult",
 ]
