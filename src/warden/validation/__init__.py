@@ -19,10 +19,10 @@ from warden.validation.domain.check import (
     CheckFinding,
     CheckSeverity,
 )
-from warden.validation.frames.security_frame import SecurityFrame
-from warden.validation.frames.chaos_frame import ChaosFrame
-from warden.validation.frames.gitchanges_frame import GitChangesFrame
-from warden.validation.frames.orphan_frame import OrphanFrame
+from warden.validation.frames.security import SecurityFrame
+from warden.validation.frames.chaos import ChaosFrame
+from warden.validation.frames.gitchanges import GitChangesFrame
+from warden.validation.frames.orphan import OrphanFrame
 
 __all__ = [
     # Enums

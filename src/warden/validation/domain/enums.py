@@ -81,15 +81,18 @@ class FrameScope(str, Enum):
     Matches C# Warden.Core.Validation.FrameScope:
         public enum FrameScope {
             FileLevel,
-            RepositoryLevel
+            RepositoryLevel,
+            ProjectLevel
         }
 
-    - FileLevel: Frame executes on individual files
-    - RepositoryLevel: Frame executes on entire repository (once per run)
+    - FILE_LEVEL: Frame executes on individual files
+    - REPOSITORY_LEVEL: Frame executes on entire repository (once per run)
+    - PROJECT_LEVEL: Frame executes on entire project structure (once per run)
     """
 
     FILE_LEVEL = "file_level"  # Execute per file
-    REPOSITORY_LEVEL = "repository_level"  # Execute once per repository
+    REPOSITORY_LEVEL = "repository_level"  # Execute once per repository (alias for PROJECT_LEVEL)
+    PROJECT_LEVEL = "project_level"  # Execute once per project (architectural analysis)
 
 
 class FrameCategory(str, Enum):

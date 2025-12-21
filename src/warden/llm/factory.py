@@ -104,3 +104,28 @@ class LlmClientFactory:
                 continue
 
         raise RuntimeError("No available LLM providers found. Check your configuration.")
+
+
+# Convenience function for direct import
+def create_client(provider: Optional[LlmProvider] = None) -> ILlmClient:
+    """
+    Convenience function to create LLM client.
+
+    Args:
+        provider: Optional provider (uses default if None)
+
+    Returns:
+        Configured LLM client
+
+    Raises:
+        RuntimeError: If no configuration found
+    """
+    from .config import load_llm_config
+
+    config = load_llm_config()
+    factory = LlmClientFactory(config)
+
+    if provider:
+        return factory.create_client(provider)
+    else:
+        return factory.create_default_client()
