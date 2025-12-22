@@ -1,0 +1,11 @@
+{
+  "total_files": 218,
+  "files_scanned": 213,
+  "total_time": 5.024683952331543,
+  "connection_drops": 0,
+  "errors": 5,
+  "total_issues": 3631,
+  "avg_time_per_file": 0.023590065503903957,
+  "success": true,
+  "test_date": "2025-12-23 00:18:28"
+}
