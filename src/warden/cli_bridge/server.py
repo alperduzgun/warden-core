@@ -190,10 +190,15 @@ class IPCServer:
                 await writer.wait_closed()
                 logger.info("client_disconnected", address=addr)
 
-        # Start server
-        self.server = await asyncio.start_unix_server(handle_client, path=self.socket_path)
+        # Start server with increased line limit for large JSON responses
+        # Default limit is 64KB, we increase to 10MB to handle large analysis results
+        self.server = await asyncio.start_unix_server(
+            handle_client,
+            path=self.socket_path,
+            limit=10 * 1024 * 1024  # 10MB limit for large responses
+        )
 
-        logger.info("ipc_server_listening", socket_path=self.socket_path)
+        logger.info("ipc_server_listening", socket_path=self.socket_path, limit_mb=10)
 
         async with self.server:
             await self.server.serve_forever()
