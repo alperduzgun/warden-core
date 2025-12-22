@@ -1,0 +1,103 @@
+#!/bin/bash
+# Warden IPC Server Manager
+# Prevents duplicate servers and provides clean start/stop/status
+
+SOCKET_PATH="/tmp/warden-ipc.sock"
+PID_FILE="/tmp/warden-ipc.pid"
+
+case "$1" in
+  start)
+    # Check if already running
+    if [ -f "$PID_FILE" ]; then
+      PID=$(cat "$PID_FILE")
+      if ps -p "$PID" > /dev/null 2>&1; then
+        echo "⚠️  IPC server already running (PID: $PID)"
+        exit 1
+      else
+        # Stale PID file
+        rm -f "$PID_FILE"
+      fi
+    fi
+
+    # Clean up stale socket
+    if [ -S "$SOCKET_PATH" ]; then
+      rm -f "$SOCKET_PATH"
+    fi
+
+    # Start server
+    echo "🚀 Starting Warden IPC Server..."
+    python3 start_ipc_server.py &
+    SERVER_PID=$!
+    echo $SERVER_PID > "$PID_FILE"
+
+    # Wait for socket to be created
+    for i in {1..10}; do
+      if [ -S "$SOCKET_PATH" ]; then
+        echo "✅ IPC Server started (PID: $SERVER_PID)"
+        echo "📡 Socket: $SOCKET_PATH"
+        exit 0
+      fi
+      sleep 0.5
+    done
+
+    echo "❌ Failed to start server (socket not created)"
+    exit 1
+    ;;
+
+  stop)
+    if [ -f "$PID_FILE" ]; then
+      PID=$(cat "$PID_FILE")
+      if ps -p "$PID" > /dev/null 2>&1; then
+        echo "⏹️  Stopping IPC server (PID: $PID)..."
+        kill "$PID"
+        rm -f "$PID_FILE"
+        rm -f "$SOCKET_PATH"
+        echo "✅ Server stopped"
+      else
+        echo "⚠️  Server not running (stale PID file)"
+        rm -f "$PID_FILE"
+        rm -f "$SOCKET_PATH"
+      fi
+    else
+      # Try pkill as fallback
+      if pkill -f "start_ipc_server.py"; then
+        echo "✅ Killed orphaned server processes"
+        rm -f "$SOCKET_PATH"
+      else
+        echo "ℹ️  No server running"
+      fi
+    fi
+    ;;
+
+  restart)
+    "$0" stop
+    sleep 1
+    "$0" start
+    ;;
+
+  status)
+    if [ -f "$PID_FILE" ]; then
+      PID=$(cat "$PID_FILE")
+      if ps -p "$PID" > /dev/null 2>&1; then
+        echo "✅ IPC Server running (PID: $PID)"
+        if [ -S "$SOCKET_PATH" ]; then
+          echo "📡 Socket: $SOCKET_PATH"
+        else
+          echo "⚠️  Socket file missing!"
+        fi
+        exit 0
+      else
+        echo "❌ Server not running (stale PID file)"
+        exit 1
+      fi
+    else
+      echo "❌ Server not running"
+      exit 1
+    fi
+    ;;
+
+  *)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+    ;;
+esac

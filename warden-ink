@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Warden Ink CLI Launcher
+# Direct executable wrapper for easy access
+
+cd "$(dirname "$0")/cli"
+exec node dist/index.js "$@"

@@ -1,0 +1,249 @@
+# 🎯 Next Session: Warden Core Engine Integration with Ink CLI
+
+## 📋 Current Status
+
+### ✅ Completed (This Session)
+1. **Ink CLI Framework** - Fully functional TypeScript/React CLI
+2. **9 Commands** - All registered and working (/help, /scan, /analyze, etc.)
+3. **File Picker (@)** - Interactive file/folder browser with Tab completion
+4. **IPC Bridge** - Node.js ↔ Python communication via socket
+5. **Path Resolution** - @ prefix removal working perfectly
+6. **ESM Build** - Clean production build without errors
+
+### 🔧 Architecture Overview
+
+**Warden Core (Python)**
+- Location: `/Users/alper/Documents/Development/Personal/warden-core/`
+- TUI Commands: `src/warden/tui/commands/` (scan.py, analyze.py, etc.)
+- Pipeline: `PipelineOrchestrator` - executes validation frames
+- Validation: Custom frames in `src/warden/validation/`
+
+**Ink CLI (TypeScript/Node)**
+- Location: `/Users/alper/Documents/Development/Personal/warden-core/cli/`
+- Commands: `src/handlers/` (scanCommand.ts, analyzeCommand.ts, etc.)
+- IPC Client: `src/bridge/wardenClient.ts`
+- Global binary: `warden-chat`
+
+### ⚠️ Current Problem
+
+**Validation Framework Not Available**
+```
+Error: Warden validation framework not available
+```
+
+**Root Cause:**
+- Ink CLI calls IPC server's `execute_pipeline(file_path)`
+- IPC server tries to initialize PipelineOrchestrator
+- Orchestrator requires validation frames from config
+- Config loading or frame imports failing
+
+---
+
+## 🎯 Next Session Goal
+
+**Make Warden Core validation framework accessible from Ink CLI**
+
+### Primary Objective
+Fix the validation framework initialization so `/scan` and `/analyze` commands can:
+1. Load validation frames from config
+2. Execute full pipeline on Python files
+3. Return real security findings (not mock data)
+4. Display results in Ink CLI
+
+### Key Files to Investigate
+
+**Python Side:**
+1. `src/warden/pipeline/application/orchestrator.py` - Pipeline execution
+2. `src/warden/validation/` - Frame system
+3. `src/warden/config/` - Configuration loading
+4. `start_ipc_server.py` - IPC server initialization
+5. `src/warden/tui/commands/scan.py` - Reference implementation (WORKS in TUI)
+
+**TypeScript Side:**
+1. `cli/src/bridge/wardenClient.ts` - IPC communication
+2. `cli/src/handlers/scanCommand.ts` - Command handler
+3. `cli/src/handlers/analyzeCommand.ts` - File analysis
+
+---
+
+## 🔍 Investigation Steps
+
+### 1. Understand Why TUI Works But CLI Doesn't
+
+**TUI Scan Command:**
+```python
+# src/warden/tui/commands/scan.py:62
+if orchestrator:
+    await _run_pipeline_scan(scan_path, orchestrator, add_message, app)
+```
+
+**Question:** How does TUI initialize `orchestrator`?
+- Check: `src/warden/tui/app.py` - app initialization
+- Find: Where PipelineOrchestrator is created
+- Compare: TUI initialization vs IPC server initialization
+
+### 2. Fix IPC Server Initialization
+
+**Current IPC Server:**
+```python
+# start_ipc_server.py (needs inspection)
+# Does it:
+# - Load config properly?
+# - Initialize PipelineOrchestrator?
+# - Import validation frames?
+```
+
+**TODO:**
+- [ ] Read `start_ipc_server.py` completely
+- [ ] Identify missing initialization steps
+- [ ] Add PipelineOrchestrator setup
+- [ ] Test frame loading
+
+### 3. Configuration
+
+**Check:**
+- Where is validation config? (`pyproject.toml`? `.warden/config.yaml`?)
+- What frames are registered?
+- Are frame paths correct?
+- Are imports working?
+
+### 4. Test End-to-End
+
+```bash
+# Start backend
+python3 start_ipc_server.py
+
+# Test from CLI
+warden-chat
+> /scan @examples/
+# Should show REAL validation results, not "framework not available"
+```
+
+---
+
+## 📁 Project Structure Reference
+
+```
+warden-core/
+├── cli/                          # Ink CLI (TypeScript)
+│   ├── src/
+│   │   ├── bridge/
+│   │   │   └── wardenClient.ts   # IPC client
+│   │   ├── handlers/
+│   │   │   ├── scanCommand.ts    # /scan handler
+│   │   │   └── analyzeCommand.ts # /analyze handler
+│   │   └── components/
+│   │       └── InputBox.tsx      # File picker (@)
+│   └── dist/                     # Compiled JS
+│
+├── src/warden/
+│   ├── pipeline/
+│   │   └── application/
+│   │       └── orchestrator.py   # Pipeline execution engine
+│   ├── validation/
+│   │   ├── domain/frame.py       # Frame base classes
+│   │   └── frames/               # Validation frames
+│   ├── tui/
+│   │   ├── app.py                # TUI application (reference)
+│   │   └── commands/
+│   │       └── scan.py           # Working scan implementation
+│   └── cli_bridge/               # IPC server code
+│
+└── start_ipc_server.py           # IPC server entry point
+```
+
+---
+
+## 🎯 Success Criteria
+
+**Session Complete When:**
+
+1. ✅ `/scan @src/` shows real validation findings
+2. ✅ `/analyze @file.py` shows security issues for specific file
+3. ✅ No "framework not available" errors
+4. ✅ Progress updates work (frame execution)
+5. ✅ Results match what TUI would show
+
+**Expected Output:**
+```
+> /scan @examples/
+
+🔍 Scanning: /path/to/examples
+📊 Found 8 Python files. Running full pipeline...
+
+🚀 Pipeline started
+Running 5 frames on 8 files...
+
+✅ SQLInjectionFrame [1/5] Issues: 2 | 0.3s
+✅ XSSFrame [2/5] Issues: 0 | 0.2s
+✅ PathTraversalFrame [3/5] Issues: 1 | 0.4s
+...
+
+📊 Scan Summary
+Total Issues: 3
+Critical: 1
+High: 2
+```
+
+---
+
+## 💡 Hints
+
+1. **Compare TUI vs IPC:**
+   - TUI works → study its initialization
+   - Copy working patterns to IPC server
+
+2. **Frame Loading:**
+   - Check if frames are in Python path
+   - Verify imports don't fail
+   - Look for config file
+
+3. **Error Handling:**
+   - Add verbose logging to IPC server
+   - Log each initialization step
+   - Identify where it fails
+
+4. **Dependencies:**
+   - Are all Python deps installed?
+   - Is virtual env activated?
+   - Check import errors in console
+
+---
+
+## 🚀 Quick Start Commands (Next Session)
+
+```bash
+# Navigate to project
+cd /Users/alper/Documents/Development/Personal/warden-core
+
+# Activate venv (if exists)
+source .venv/bin/activate  # or poetry shell
+
+# Check what breaks
+python3 -c "from warden.pipeline.application.orchestrator import PipelineOrchestrator; print('OK')"
+
+# Read IPC server
+cat start_ipc_server.py
+
+# Compare with TUI
+cat src/warden/tui/app.py | grep -A 20 "PipelineOrchestrator"
+
+# Test manually
+python3
+>>> from warden.pipeline.application.orchestrator import PipelineOrchestrator
+>>> # Try to initialize...
+```
+
+---
+
+## 📝 Session Goal Summary
+
+**INPUT:** Ink CLI with "framework not available" error
+**OUTPUT:** Fully working validation pipeline accessible from CLI
+**BLOCKER:** PipelineOrchestrator initialization in IPC server
+
+**Focus:** Python backend integration, NOT TypeScript CLI fixes
+**Reference:** TUI implementation (already works)
+**Test:** `/scan @examples/` should show real findings
+
+Good luck! 🚀
