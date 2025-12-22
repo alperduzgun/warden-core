@@ -1,0 +1,17 @@
+# Grep Code Command
+# Usage: /search:grep-code "pattern"
+
+prompt = """
+Please analyze and summarize the search results for the pattern: `{{args}}`
+
+**Search Results:**
+!{grep -rn "{{args}}" --include="*.py" --include="*.js" --include="*.ts" . 2>/dev/null || echo "No matches found"}
+
+Provide:
+1. Summary of where the pattern appears
+2. Common usage patterns
+3. Potential issues or inconsistencies
+4. Refactoring suggestions if applicable
+"""
+
+description = "Search code for pattern and provide analysis"

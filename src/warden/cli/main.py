@@ -72,6 +72,56 @@ def chat():
     app_instance.run()
 
 
+@app.command()
+def ink(
+    socket_path: Optional[str] = typer.Option(
+        None,
+        "--socket",
+        "-s",
+        help="Unix socket path for IPC (default: stdio)"
+    ),
+):
+    """Launch Ink-based interactive CLI with IPC bridge"""
+    import asyncio
+    import subprocess
+    from pathlib import Path
+
+    console.print("[cyan]Starting Warden Ink CLI...[/cyan]")
+
+    # Check if Node CLI exists
+    project_root = Path(__file__).parent.parent.parent.parent
+    cli_dir = project_root / "cli"
+
+    if not cli_dir.exists():
+        console.print("[red]Error: Ink CLI not found at cli/[/red]")
+        console.print("[yellow]Please run: npm install in the cli directory[/yellow]")
+        raise typer.Exit(1)
+
+    # Start IPC server
+    async def run_bridge():
+        from warden.cli_bridge.server import run_ipc_server
+
+        transport = "socket" if socket_path else "stdio"
+        console.print(f"[dim]Starting IPC bridge (transport: {transport})...[/dim]")
+
+        try:
+            await run_ipc_server(
+                transport=transport,
+                socket_path=socket_path or "/tmp/warden-ipc.sock"
+            )
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Shutting down IPC bridge...[/yellow]")
+        except Exception as e:
+            console.print(f"[red]IPC bridge error: {e}[/red]")
+            raise typer.Exit(1)
+
+    # Run the bridge
+    try:
+        asyncio.run(run_bridge())
+    except KeyboardInterrupt:
+        console.print("\n[cyan]Ink CLI stopped.[/cyan]")
+
+
 def main():
     """Main entry point"""
     # If no arguments, start Textual TUI
