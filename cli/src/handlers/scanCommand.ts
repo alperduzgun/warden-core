@@ -5,7 +5,7 @@
  * Features:
  * - Directory validation
  * - File discovery (.py files)
- * - Live progress tracking
+ * - Real-time streaming progress (frame-by-frame updates)
  * - Aggregated results display
  * - IPC bridge integration
  *
@@ -45,10 +45,10 @@ export async function handleScanCommand(
   // Validate IPC client
   if (!client) {
     addMessage(
-      'L **Backend not connected**\n\n' +
+      '❌ **Backend not connected**\n\n' +
         'Scan requires IPC connection. Please start the backend:\n\n' +
         '```bash\n' +
-        'python3 start_ipc_server.py\n' +
+        './warden-ipc start\n' +
         '```',
       MessageType.ERROR,
       true
@@ -63,7 +63,7 @@ export async function handleScanCommand(
   // Validate directory exists
   if (!existsSync(resolvedPath)) {
     addMessage(
-      `L **Path not found:** \`${scanPath}\`\n\n` +
+      `❌ **Path not found:** \`${scanPath}\`\n\n` +
         'Please check the path and try again.',
       MessageType.ERROR,
       true
@@ -74,7 +74,7 @@ export async function handleScanCommand(
   const stats = statSync(resolvedPath);
   if (!stats.isDirectory()) {
     addMessage(
-      `L **Not a directory:** \`${scanPath}\`\n\n` +
+      `❌ **Not a directory:** \`${scanPath}\`\n\n` +
         'Use `/analyze <file>` for single files.',
       MessageType.ERROR,
       true
@@ -84,7 +84,7 @@ export async function handleScanCommand(
 
   // Initial message
   addMessage(
-    `= **Scanning:** \`${resolvedPath}\`\n\n` +
+    `🔍 **Scanning:** \`${resolvedPath}\`\n\n` +
       'Finding Python files and running full pipeline...',
     MessageType.SYSTEM,
     true
@@ -96,7 +96,7 @@ export async function handleScanCommand(
 
     if (pyFiles.length === 0) {
       addMessage(
-        `�  **No Python files found** in \`${scanPath}\``,
+        `⚠️  **No Python files found** in \`${scanPath}\``,
         MessageType.WARNING,
         true
       );
@@ -104,12 +104,12 @@ export async function handleScanCommand(
     }
 
     addMessage(
-      `=� Found **${pyFiles.length} Python files**. Running pipeline...`,
+      `📊 Found **${pyFiles.length} Python files**. Running pipeline with real-time updates...`,
       MessageType.SYSTEM,
       true
     );
 
-    // Execute scan on all files
+    // Execute scan on all files with streaming
     const results = await executeScan(
       pyFiles,
       resolvedPath,
@@ -121,7 +121,7 @@ export async function handleScanCommand(
     displayScanSummary(resolvedPath, results, addMessage);
   } catch (error) {
     addMessage(
-      `L **Scan failed**\n\n` +
+      `❌ **Scan failed**\n\n` +
         `Error: \`${error instanceof Error ? error.message : 'Unknown error'}\``,
       MessageType.ERROR,
       true
@@ -130,7 +130,7 @@ export async function handleScanCommand(
 }
 
 /**
- * Execute scan on all files with progress updates
+ * Execute scan on all files with real-time streaming progress
  */
 async function executeScan(
   files: string[],
@@ -141,30 +141,56 @@ async function executeScan(
   const results: ScanFileResult[] = [];
 
   for (let i = 0; i < files.length; i++) {
-    const file = files[i]!; // Non-null assertion - we know the array has elements
+    const file = files[i]!;
     const progress = `[${i + 1}/${files.length}]`;
     const relPath = relative(scanPath, file);
 
-    addMessage(
-      `� ${progress} Analyzing \`${relPath}\`...`,
-      MessageType.SYSTEM,
-      false
-    );
+    let lastResult: any = null;
 
     try {
-      const result = await client.executePipeline(file);
-      results.push({ file, result });
+      // Use streaming for real-time frame progress
+      for await (const update of client.executePipelineStream(file)) {
+        if (update.type === 'progress') {
+          // Real-time frame updates
+          if (update.event === 'frame_started') {
+            addMessage(
+              `⏳ ${progress} ${update.data.frame_name}... (\`${relPath}\`)`,
+              MessageType.SYSTEM,
+              false
+            );
+          } else if (update.event === 'frame_completed') {
+            const frameName = update.data.frame_name;
+            const issuesFound = update.data.issues_found || 0;
+            const duration = (update.data.duration || 0).toFixed(2);
+            const icon = issuesFound > 0 ? '⚠️' : '✅';
 
-      const issueCount = result.total_findings || 0;
-      const status = issueCount > 0 ? '�' : '';
-      addMessage(
-        `${status} ${progress} \`${relPath}\` - ${issueCount} issues`,
-        MessageType.SYSTEM,
-        true
-      );
+            addMessage(
+              `${icon} ${progress} ${frameName} - ${issuesFound} issues (${duration}s)`,
+              MessageType.SYSTEM,
+              false
+            );
+          }
+        } else if (update.type === 'result') {
+          // Final result
+          lastResult = update.data;
+        }
+      }
+
+      // Add final summary for this file
+      if (lastResult) {
+        results.push({ file, result: lastResult });
+
+        const issueCount = lastResult.total_findings || 0;
+        const status = issueCount > 0 ? '🔴' : '✅';
+        addMessage(
+          `${status} ${progress} \`${relPath}\` - **${issueCount} total issues**`,
+          MessageType.SYSTEM,
+          true
+        );
+      }
     } catch (error) {
       addMessage(
-        `L ${progress} Failed: \`${relPath}\` - ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `❌ ${progress} Failed: \`${relPath}\` - ${error instanceof Error ? error.message : 'Unknown error'}`,
         MessageType.ERROR,
         true
       );
@@ -264,17 +290,17 @@ function displayScanSummary(
   }
 
   // Build summary message
-  let summary = '## =� Scan Summary\n\n';
+  let summary = '## 📊 Scan Summary\n\n';
   summary += `**Directory:** \`${scanPath}\`\n`;
   summary += `**Files Scanned:** ${results.length}\n`;
   summary += `**Total Issues:** ${totalIssues}\n\n`;
 
   if (totalIssues > 0) {
     summary += '### Issues by Severity\n\n';
-    if (totalCritical > 0) summary += `=4 **Critical:** ${totalCritical}\n`;
-    if (totalHigh > 0) summary += `=� **High:** ${totalHigh}\n`;
-    if (totalMedium > 0) summary += `=� **Medium:** ${totalMedium}\n`;
-    if (totalLow > 0) summary += `=� **Low:** ${totalLow}\n`;
+    if (totalCritical > 0) summary += `🔴 **Critical:** ${totalCritical}\n`;
+    if (totalHigh > 0) summary += `🟠 **High:** ${totalHigh}\n`;
+    if (totalMedium > 0) summary += `🟡 **Medium:** ${totalMedium}\n`;
+    if (totalLow > 0) summary += `🟢 **Low:** ${totalLow}\n`;
 
     summary += '\n### Files with Issues\n\n';
 
@@ -289,9 +315,9 @@ function displayScanSummary(
       summary += `\n_...and ${fileIssues.length - 10} more files_\n`;
     }
 
-    summary += '\n=� **Tip:** Use `/analyze <file>` to see details for specific files.';
+    summary += '\n💡 **Tip:** Use `/analyze <file>` to see details for specific files.';
   } else {
-    summary += ' **No issues found!** Your code looks clean.\n';
+    summary += '✅ **No issues found!** Your code looks clean.\n';
   }
 
   addMessage(summary, MessageType.SUCCESS, true);
@@ -303,7 +329,7 @@ function displayScanSummary(
 export const scanCommandMetadata: CommandMetadata = {
   name: 'scan',
   aliases: ['s'],
-  description: 'Scan a directory for code issues',
+  description: 'Scan a directory for code issues with real-time progress',
   usage: '/scan [path]',
   requiresIPC: true,
   handler: handleScanCommand,
