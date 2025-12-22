@@ -361,6 +361,112 @@ export class WardenClient extends EventEmitter {
   }
 
   /**
+   * Execute validation pipeline with real-time streaming progress
+   *
+   * Yields progress events as they happen:
+   * - { type: 'progress', event: 'pipeline_started', data: {...} }
+   * - { type: 'progress', event: 'frame_started', data: { frame_name, ... } }
+   * - { type: 'progress', event: 'frame_completed', data: { frame_name, issues_found, duration, ... } }
+   * - { type: 'result', data: PipelineResult }
+   *
+   * @param filePath - Path to file to validate
+   * @param config - Optional pipeline configuration
+   * @yields Progress events and final result
+   */
+  async *executePipelineStream(
+    filePath: string,
+    config?: Record<string, any>
+  ): AsyncGenerator<any> {
+    // Check connection
+    const isSocketConnected = this.socket && !this.socket.destroyed;
+    const isProcessConnected = this.process && !this.process.killed && this.process.stdin;
+
+    if (!isSocketConnected && !isProcessConnected) {
+      throw new Error('Not connected');
+    }
+
+    const id = ++this.requestId;
+    const request: IPCRequest = {
+      jsonrpc: '2.0',
+      method: 'execute_pipeline_stream',
+      params: { file_path: filePath, config },
+      id,
+    };
+
+    // Send request
+    const message = JSON.stringify(request) + '\n';
+
+    if (isSocketConnected) {
+      this.socket!.write(message);
+    } else if (isProcessConnected) {
+      this.process!.stdin!.write(message);
+    }
+
+    // Read streaming responses (line-delimited JSON)
+    // Each line is a separate JSON-RPC response with an event
+    const eventQueue: any[] = [];
+    let streamDone = false;
+    let streamError: Error | null = null;
+
+    // Set up temporary handler for this request
+    const originalHandler = this.handleResponse.bind(this);
+
+    // Override response handler temporarily for streaming
+    const streamHandler = (response: IPCResponse) => {
+      if (response.id === id) {
+        if (response.error) {
+          streamError = new Error(response.error.message);
+          streamDone = true;
+        } else if (response.result) {
+          // Each response contains one event
+          const event = response.result;
+          eventQueue.push(event);
+
+          // If this is the final result, mark stream as done
+          if (event.type === 'result') {
+            streamDone = true;
+          }
+        }
+      } else {
+        // Not our request, handle normally
+        originalHandler(response);
+      }
+    };
+
+    // Temporarily replace handler (hacky but works)
+    this.handleResponse = streamHandler as any;
+
+    try {
+      // Yield events as they arrive
+      while (!streamDone) {
+        // Wait for next event
+        while (eventQueue.length === 0 && !streamDone && !streamError) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+
+        // Check for errors
+        if (streamError) {
+          throw streamError;
+        }
+
+        // Yield all queued events
+        while (eventQueue.length > 0) {
+          const event = eventQueue.shift();
+          yield event;
+
+          // Stop if this was the final result
+          if (event && event.type === 'result') {
+            return;
+          }
+        }
+      }
+    } finally {
+      // Restore original handler
+      this.handleResponse = originalHandler as any;
+    }
+  }
+
+  /**
    * Get Warden configuration
    */
   async getConfig(): Promise<WardenConfig> {
