@@ -5,7 +5,8 @@
  * Features:
  * - Directory validation
  * - File discovery (.py files)
- * - Real-time streaming progress (frame-by-frame updates)
+ * - Real-time streaming progress with UI updates
+ * - Frame-by-frame progress tracking
  * - Aggregated results display
  * - IPC bridge integration
  *
@@ -19,6 +20,7 @@ import { resolve, relative, join } from 'path';
 import { MessageType } from '../types/index.js';
 import type { CommandHandlerContext, CommandMetadata } from './types.js';
 import type { PipelineResult } from '../bridge/wardenClient.js';
+import type { FrameProgress } from '../components/FrameStatusDisplay.js';
 
 /**
  * Result from scanning a single file
@@ -40,7 +42,7 @@ export async function handleScanCommand(
   args: string,
   context: CommandHandlerContext
 ): Promise<void> {
-  const { addMessage, client } = context;
+  const { addMessage, client, progressContext } = context;
 
   // Validate IPC client
   if (!client) {
@@ -104,22 +106,23 @@ export async function handleScanCommand(
     }
 
     addMessage(
-      `📊 Found **${pyFiles.length} Python files**. Running pipeline with real-time updates...`,
+      `📊 Found **${pyFiles.length} Python files**. Running pipeline with real-time progress UI...`,
       MessageType.SYSTEM,
       true
     );
 
-    // Execute scan on all files with streaming
-    const results = await executeScan(
+    // Execute scan with streaming progress
+    const results = await executeScanWithProgress(
       pyFiles,
       resolvedPath,
-      addMessage,
-      client
+      client,
+      progressContext
     );
 
     // Display aggregated summary
     displayScanSummary(resolvedPath, results, addMessage);
   } catch (error) {
+    progressContext.failScan(error instanceof Error ? error.message : 'Unknown error');
     addMessage(
       `❌ **Scan failed**\n\n` +
         `Error: \`${error instanceof Error ? error.message : 'Unknown error'}\``,
@@ -130,74 +133,155 @@ export async function handleScanCommand(
 }
 
 /**
- * Execute scan on all files with real-time streaming progress
+ * Execute scan with real-time streaming progress UI
+ *
+ * This function:
+ * 1. Gets available frames from backend
+ * 2. Initializes progress UI with frame list
+ * 3. Streams events from backend
+ * 4. Updates UI incrementally as events arrive
+ * 5. Completes scan when done
  */
-async function executeScan(
+async function executeScanWithProgress(
   files: string[],
   scanPath: string,
-  addMessage: (msg: string, type: MessageType, markdown?: boolean) => void,
-  client: any
+  client: any,
+  progressContext: any
 ): Promise<ScanFileResult[]> {
   const results: ScanFileResult[] = [];
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]!;
-    const progress = `[${i + 1}/${files.length}]`;
-    const relPath = relative(scanPath, file);
+  // Get available frames from backend
+  let availableFrames: any[] = [];
+  try {
+    availableFrames = await client.getAvailableFrames();
+  } catch (error) {
+    // If we can't get frames, continue without progress UI
+    console.error('Failed to get frames:', error);
+  }
 
-    let lastResult: any = null;
+  // Initialize frame progress list
+  const frameProgressList: FrameProgress[] = availableFrames.map((frame) => ({
+    id: frame.id,
+    name: frame.name,
+    status: 'pending' as const,
+  }));
 
-    try {
-      // Use streaming for real-time frame progress
-      for await (const update of client.executePipelineStream(file)) {
-        if (update.type === 'progress') {
-          // Real-time frame updates
-          if (update.event === 'frame_started') {
-            addMessage(
-              `⏳ ${progress} ${update.data.frame_name}... (\`${relPath}\`)`,
-              MessageType.SYSTEM,
-              false
-            );
-          } else if (update.event === 'frame_completed') {
-            const frameName = update.data.frame_name;
-            const issuesFound = update.data.issues_found || 0;
-            const duration = (update.data.duration || 0).toFixed(2);
-            const icon = issuesFound > 0 ? '⚠️' : '✅';
+  // Start scan with progress UI
+  progressContext.startScan(files.length, frameProgressList);
 
-            addMessage(
-              `${icon} ${progress} ${frameName} - ${issuesFound} issues (${duration}s)`,
-              MessageType.SYSTEM,
-              false
-            );
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
+      const relPath = relative(scanPath, file);
+
+      // Update files scanned count
+      progressContext.updateProgress({ filesScanned: i });
+
+      let lastResult: any = null;
+
+      try {
+        // Stream events for this file
+        for await (const event of client.executePipelineStream(file)) {
+          handleStreamingEvent(event, relPath, progressContext);
+
+          // Save final result
+          if (event.type === 'result') {
+            lastResult = event.data;
           }
-        } else if (update.type === 'result') {
-          // Final result
-          lastResult = update.data;
         }
-      }
 
-      // Add final summary for this file
-      if (lastResult) {
-        results.push({ file, result: lastResult });
+        // Add result
+        if (lastResult) {
+          results.push({ file, result: lastResult });
 
-        const issueCount = lastResult.total_findings || 0;
-        const status = issueCount > 0 ? '🔴' : '✅';
-        addMessage(
-          `${status} ${progress} \`${relPath}\` - **${issueCount} total issues**`,
-          MessageType.SYSTEM,
-          true
-        );
+          // Update issues count
+          const totalIssues = lastResult.total_findings || 0;
+          progressContext.updateProgress({
+            issuesFound: (progressContext.progress.issuesFound || 0) + totalIssues,
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to scan ${relPath}:`, error);
+        // Continue with next file
       }
-    } catch (error) {
-      addMessage(
-        `❌ ${progress} Failed: \`${relPath}\` - ${error instanceof Error ? error.message : 'Unknown error'}`,
-        MessageType.ERROR,
-        true
-      );
     }
+
+    // Update final file count
+    progressContext.updateProgress({ filesScanned: files.length });
+
+    // Complete scan
+    progressContext.completeScan();
+  } catch (error) {
+    progressContext.failScan(error instanceof Error ? error.message : 'Unknown error');
+    throw error;
   }
 
   return results;
+}
+
+/**
+ * Handle streaming event from backend
+ *
+ * Maps backend events to UI updates
+ */
+function handleStreamingEvent(
+  event: any,
+  _filePath: string,
+  progressContext: any
+): void {
+  if (event.type !== 'progress') {
+    return;
+  }
+
+  const { event: eventName, data } = event;
+
+  switch (eventName) {
+    case 'pipeline_started':
+      // Reset all frames to pending
+      progressContext.progress.frames.forEach((frame: FrameProgress) => {
+        progressContext.updateFrame(frame.id, { status: 'pending' });
+      });
+      break;
+
+    case 'frame_started':
+      {
+        const frameId = data.frame_id;
+        const frameName = data.frame_name;
+
+        // Update frame to running
+        progressContext.updateFrame(frameId, {
+          status: 'running',
+        });
+
+        // Update current frame name
+        progressContext.updateProgress({ currentFrame: frameName });
+      }
+      break;
+
+    case 'frame_completed':
+      {
+        const frameId = data.frame_id;
+        const issuesFound = data.issues_found || 0;
+        const duration = data.duration || 0;
+        const status = data.status || 'success';
+
+        // Update frame to completed
+        progressContext.updateFrame(frameId, {
+          status: status === 'passed' ? 'success' : 'error',
+          issuesFound,
+          duration: Math.round(duration * 1000), // Convert to ms
+        });
+      }
+      break;
+
+    case 'pipeline_completed':
+      // All frames completed - no action needed (completeScan will be called)
+      break;
+
+    default:
+      // Unknown event - ignore
+      break;
+  }
 }
 
 /**

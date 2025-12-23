@@ -17,12 +17,14 @@ import { Box, useApp, useInput } from 'ink';
 import { Header } from './components/Header.js';
 import { ChatArea } from './components/ChatArea.js';
 import { InputBox } from './components/InputBox.js';
+import { ScanProgress } from './components/ScanProgress.js';
 import { useMessages } from './hooks/useMessages.js';
 import { MessageType, SessionInfo, CommandType } from './types/index.js';
 import { detectCommand } from './utils/commandDetector.js';
 import { WardenClient } from './bridge/wardenClient.js';
 import { routeCommand } from './handlers/index.js';
 import type { CommandHandlerContext } from './handlers/types.js';
+import { ProgressProvider, useProgress } from './contexts/ProgressContext.js';
 
 /**
  * App props interface
@@ -42,17 +44,16 @@ const DEFAULT_SESSION_INFO: SessionInfo = {
 };
 
 /**
- * Main App Component
- *
- * Orchestrates the Warden CLI interface
+ * App Content Component (with access to Progress context)
  */
-export const App: React.FC<AppProps> = ({
+const AppContent: React.FC<AppProps> = ({
   initialSessionInfo = {},
   onCommand,
   onSubmit,
   onExit,
 }) => {
   const { exit } = useApp();
+  const progressContext = useProgress();
 
   // State management
   const [inputValue, setInputValue] = useState('');
@@ -105,7 +106,7 @@ export const App: React.FC<AppProps> = ({
         onCommand(command, args);
       }
 
-      // Create handler context
+      // Create handler context with progressContext
       const context: CommandHandlerContext = {
         client,
         addMessage: (msg: string, type: MessageType, markdown?: boolean) => {
@@ -120,6 +121,7 @@ export const App: React.FC<AppProps> = ({
           }
           exit();
         },
+        progressContext,
         projectRoot: process.cwd(),
         sessionId,
       };
@@ -127,7 +129,7 @@ export const App: React.FC<AppProps> = ({
       // Route command to appropriate handler
       await routeCommand(command, args || '', context);
     },
-    [addMessage, clearMessages, client, exit, onCommand, onExit, sessionId]
+    [addMessage, clearMessages, client, exit, onCommand, onExit, sessionId, progressContext]
   );
 
   /**
@@ -291,16 +293,23 @@ export const App: React.FC<AppProps> = ({
   }, []);
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" padding={1} height="100%">
       {/* Header with session info */}
       <Header sessionInfo={sessionInfo} version="0.1.0" />
 
-      {/* Chat area with messages */}
-      <Box flexGrow={1}>
+      {/* Chat area with messages (scrollable, takes remaining space) */}
+      <Box flexGrow={1} flexDirection="column" minHeight={0}>
         <ChatArea messages={messages} autoScroll />
       </Box>
 
-      {/* Input box with command detection */}
+      {/* Scan progress overlay (shows when scanning) - ABOVE input */}
+      {progressContext.progress.isActive && (
+        <Box marginBottom={1}>
+          <ScanProgress />
+        </Box>
+      )}
+
+      {/* Input box with command detection - ALWAYS at bottom */}
       <InputBox
         value={inputValue}
         onChange={handleInputChange}
@@ -308,6 +317,19 @@ export const App: React.FC<AppProps> = ({
         isProcessing={isProcessing}
       />
     </Box>
+  );
+};
+
+/**
+ * Main App Component (wrapped with ProgressProvider)
+ *
+ * Provides progress context to all child components
+ */
+export const App: React.FC<AppProps> = (props) => {
+  return (
+    <ProgressProvider>
+      <AppContent {...props} />
+    </ProgressProvider>
   );
 };
 

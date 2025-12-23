@@ -10,7 +10,7 @@
  * Adapted from Qwen Code's message display patterns.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Box, Text } from 'ink';
 import type { Message, MessageType } from '../types/index.js';
 import { StreamingMessage } from './StreamingMessage.js';
@@ -21,7 +21,6 @@ import { formatMarkdown } from '../utils/markdown.js';
  */
 export interface ChatAreaProps {
   messages: Message[];
-  maxHeight?: number;
   autoScroll?: boolean;
 }
 
@@ -65,20 +64,7 @@ const formatTimestamp = (date: Date): string => {
  */
 export const ChatArea: React.FC<ChatAreaProps> = ({
   messages,
-  maxHeight,
-  autoScroll = true,
 }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  /**
-   * Auto-scroll to bottom when new messages arrive
-   */
-  useEffect(() => {
-    if (autoScroll && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, autoScroll]);
-
   if (messages.length === 0) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -100,7 +86,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }
 
   return (
-    <Box flexDirection="column" padding={1} height={maxHeight}>
+    <Box flexDirection="column" padding={1} overflow="hidden">
       {messages.map((message) => (
         <Box key={message.id} flexDirection="column" marginBottom={1}>
           {/* Message header */}
