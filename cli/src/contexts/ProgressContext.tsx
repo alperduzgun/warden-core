@@ -20,7 +20,7 @@ export interface ProgressState {
   /**
    * Current scan status
    */
-  status: 'idle' | 'scanning' | 'analyzing' | 'complete' | 'error';
+  status: 'idle' | 'scanning' | 'analyzing' | 'complete' | 'error' | 'cancelled';
 
   /**
    * Currently executing frame name
@@ -61,6 +61,11 @@ export interface ProgressState {
    * Start timestamp
    */
   startTime?: Date;
+
+  /**
+   * Cancellation flag - checked by running operations
+   */
+  isCancelled: boolean;
 }
 
 /**
@@ -98,6 +103,11 @@ export interface ProgressContextValue {
   failScan: (error: string) => void;
 
   /**
+   * Cancel the running scan
+   */
+  cancelScan: () => void;
+
+  /**
    * Reset progress to idle
    */
   resetProgress: () => void;
@@ -114,6 +124,7 @@ const DEFAULT_PROGRESS_STATE: ProgressState = {
   issuesFound: 0,
   elapsedTime: 0,
   frames: [],
+  isCancelled: false,
 };
 
 /**
@@ -161,6 +172,7 @@ export const ProgressProvider: React.FC<ProgressProviderProps> = ({ children }) 
       elapsedTime: 0,
       frames,
       startTime: new Date(),
+      isCancelled: false, // Reset cancellation flag
     });
   }, []);
 
@@ -200,6 +212,18 @@ export const ProgressProvider: React.FC<ProgressProviderProps> = ({ children }) 
   }, []);
 
   /**
+   * Cancel the running scan
+   */
+  const cancelScan = useCallback(() => {
+    setProgress((prev) => ({
+      ...prev,
+      isActive: false,
+      status: 'cancelled',
+      isCancelled: true,
+    }));
+  }, []);
+
+  /**
    * Reset progress to idle
    */
   const resetProgress = useCallback(() => {
@@ -213,6 +237,7 @@ export const ProgressProvider: React.FC<ProgressProviderProps> = ({ children }) 
     updateFrame,
     completeScan,
     failScan,
+    cancelScan,
     resetProgress,
   };
 
