@@ -166,6 +166,27 @@ export async function handleScanCommand(
     const duration = (Date.now() - startTime) / 1000;
     const totalIssues = results.reduce((sum, r) => sum + (r.result.total_findings || 0), 0);
 
+    // Check if scan was cancelled
+    if (progressContext.progress.isCancelled) {
+      // Emit scan failed event with cancellation info
+      appEvents.emit(AppEvent.SCAN_FAILED, {
+        path: resolvedPath,
+        error: 'Scan cancelled by user',
+      });
+
+      // Display cancellation summary
+      addMessage(
+        `⚠️  **Scan Cancelled**\n\n` +
+          `**Directory:** \`${resolvedPath}\`\n` +
+          `**Files Scanned:** ${results.length}/${pyFiles.length}\n` +
+          `**Duration:** ${duration.toFixed(1)}s\n\n` +
+          `Partial results available. Use \`/scan ${resolvedPath}\` to restart.`,
+        MessageType.SYSTEM,
+        true
+      );
+      return;
+    }
+
     // Emit scan completed event
     appEvents.emit(AppEvent.SCAN_COMPLETED, {
       path: resolvedPath,
@@ -248,6 +269,12 @@ async function executeScanWithProgress(
 
   try {
     for (let i = 0; i < files.length; i++) {
+      // Check for cancellation before processing each file
+      if (progressContext.progress.isCancelled) {
+        console.log('[Scan] Cancelled by user, stopping...');
+        break;
+      }
+
       const file = files[i]!;
       const relPath = relative(scanPath, file);
 
@@ -259,6 +286,12 @@ async function executeScanWithProgress(
       try {
         // Stream events for this file
         for await (const event of client.executePipelineStream(file)) {
+          // Check for cancellation during streaming
+          if (progressContext.progress.isCancelled) {
+            console.log('[Scan] Cancelled during file processing');
+            break;
+          }
+
           handleStreamingEvent(event, relPath, progressContext);
 
           // Save final result
@@ -267,8 +300,8 @@ async function executeScanWithProgress(
           }
         }
 
-        // Add result
-        if (lastResult) {
+        // Add result (if scan wasn't cancelled)
+        if (lastResult && !progressContext.progress.isCancelled) {
           results.push({ file, result: lastResult });
 
           // Update issues count
@@ -283,11 +316,13 @@ async function executeScanWithProgress(
       }
     }
 
-    // Update final file count
-    progressContext.updateProgress({ filesScanned: files.length });
-
-    // Complete scan
-    progressContext.completeScan();
+    // Update final file count (only if not cancelled)
+    if (!progressContext.progress.isCancelled) {
+      progressContext.updateProgress({ filesScanned: files.length });
+      // Complete scan
+      progressContext.completeScan();
+    }
+    // If cancelled, status is already set to 'cancelled' by cancelScan()
   } catch (error) {
     progressContext.failScan(error instanceof Error ? error.message : 'Unknown error');
     throw error;

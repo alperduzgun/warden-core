@@ -94,6 +94,15 @@ const AppContent: React.FC<AppProps> = ({
    * Handle global keyboard shortcuts
    */
   useInput((_input, key) => {
+    // Esc - Cancel running scan/analyze
+    if (key.escape) {
+      if (progressContext.progress.isActive) {
+        progressContext.cancelScan();
+        addMessage('⚠️  Scan cancelled by user', MessageType.SYSTEM);
+      }
+      return;
+    }
+
     // Ctrl+K or Ctrl+L - Clear screen
     if (keyMatchers[Command.CLEAR_SCREEN](key)) {
       clearMessages();
