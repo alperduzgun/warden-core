@@ -440,6 +440,16 @@ const AppContent: React.FC<AppProps> = ({
   }, [addMessage, clearMessages]);
 
   /**
+   * Sync isProcessing with progress context
+   * When scan/analyze is cancelled or completes, clear processing state
+   */
+  useEffect(() => {
+    if (!progressContext.progress.isActive && isProcessing) {
+      setIsProcessing(false);
+    }
+  }, [progressContext.progress.isActive, isProcessing]);
+
+  /**
    * Show welcome message after client initialization
    */
   useEffect(() => {
