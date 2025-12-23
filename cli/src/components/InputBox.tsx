@@ -105,6 +105,15 @@ export const InputBox: React.FC<InputBoxProps> = ({
       const allEntries = getDirectoryContents(basePath);
       const filtered = filterFileEntries(allEntries, search);
       setFileEntries(filtered);
+    } else if (newDetection.type === CommandType.SLASH &&
+               (newDetection.command === 'scan' || newDetection.command === 's') &&
+               newDetection.args && newDetection.args.trim().length > 0) {
+      // Auto file completion for /scan command (without @ prefix)
+      const args = newDetection.args.trim();
+      const { basePath, search } = parseMentionPath(args.startsWith('@') ? args : '@' + args);
+      const allEntries = getDirectoryContents(basePath);
+      const filtered = filterFileEntries(allEntries, search);
+      setFileEntries(filtered);
     } else {
       setFileEntries([]);
     }
@@ -139,9 +148,18 @@ export const InputBox: React.FC<InputBoxProps> = ({
    * Handle keyboard navigation
    */
   useInput((_input, key) => {
-    // Handle @ file picker navigation FIRST (higher priority than slash commands)
-    const hasFilePicker = fileEntries.length > 0 && value.includes('@');
-    if (hasFilePicker && (detection.type === CommandType.MENTION || (detection.type === CommandType.SLASH && detection.args?.includes('@')))) {
+    // Handle file picker navigation FIRST (higher priority than slash commands)
+    // Active for: @ mentions, /scan args, or /scan @ args
+    const hasFilePicker = fileEntries.length > 0 && (
+      value.includes('@') ||
+      (detection.type === CommandType.SLASH && (detection.command === 'scan' || detection.command === 's'))
+    );
+
+    if (hasFilePicker && (
+      detection.type === CommandType.MENTION ||
+      (detection.type === CommandType.SLASH && detection.args?.includes('@')) ||
+      (detection.type === CommandType.SLASH && (detection.command === 'scan' || detection.command === 's'))
+    )) {
       // Arrow down - move to next file
       if (key.downArrow) {
         setSelectedIndex(prev =>
@@ -162,21 +180,42 @@ export const InputBox: React.FC<InputBoxProps> = ({
       if (key.tab) {
         const selectedEntry = fileEntries[selectedIndex];
         if (selectedEntry) {
-          // Check if we're in a slash command or standalone @
-          const atIndex = value.lastIndexOf('@');
-          const beforeAt = value.slice(0, atIndex);
-          const mentionPart = value.slice(atIndex);
-          const { basePath } = parseMentionPath(mentionPart);
+          // Check if we're in /scan command (without @) or @ mention
+          if (detection.type === CommandType.SLASH &&
+              (detection.command === 'scan' || detection.command === 's') &&
+              !value.includes('@')) {
+            // /scan command without @ - complete path directly
+            const commandPart = value.match(/^\/[^\s]+\s*/)?.[0] || '/scan ';
 
-          if (selectedEntry.type === 'directory') {
-            // Navigate into directory
-            const newPath = selectedEntry.name === '..'
-              ? basePath.split('/').slice(0, -2).join('/') || ''
-              : (basePath + selectedEntry.name + '/');
-            onChange(`${beforeAt}@${newPath}`);
+            if (selectedEntry.type === 'directory') {
+              // Navigate into directory
+              const currentPath = detection.args?.trim() || '';
+              const basePath = currentPath.endsWith('/') ? currentPath : currentPath.split('/').slice(0, -1).join('/');
+              const newPath = selectedEntry.name === '..'
+                ? basePath.split('/').slice(0, -1).join('/') || ''
+                : (basePath ? basePath + '/' + selectedEntry.name : selectedEntry.name) + '/';
+              onChange(`${commandPart}${newPath}`);
+            } else {
+              // Select file
+              onChange(`${commandPart}${selectedEntry.relativePath} `);
+            }
           } else {
-            // Select file
-            onChange(`${beforeAt}@${selectedEntry.relativePath} `);
+            // @ mention mode - existing logic
+            const atIndex = value.lastIndexOf('@');
+            const beforeAt = value.slice(0, atIndex);
+            const mentionPart = value.slice(atIndex);
+            const { basePath } = parseMentionPath(mentionPart);
+
+            if (selectedEntry.type === 'directory') {
+              // Navigate into directory
+              const newPath = selectedEntry.name === '..'
+                ? basePath.split('/').slice(0, -2).join('/') || ''
+                : (basePath + selectedEntry.name + '/');
+              onChange(`${beforeAt}@${newPath}`);
+            } else {
+              // Select file
+              onChange(`${beforeAt}@${selectedEntry.relativePath} `);
+            }
           }
         }
         return;
@@ -321,8 +360,11 @@ export const InputBox: React.FC<InputBoxProps> = ({
         </Box>
       )}
 
-      {/* File picker list (for @ mentions - both standalone and within slash commands) */}
-      {fileEntries.length > 0 && value.includes('@') && (
+      {/* File picker list (for @ mentions and /scan command args) */}
+      {fileEntries.length > 0 && (
+        value.includes('@') ||
+        (detection.type === CommandType.SLASH && (detection.command === 'scan' || detection.command === 's'))
+      ) && (
         <Box marginTop={1} flexDirection="column">
           {fileEntries.map((entry, index) => {
             const isSelected = index === selectedIndex;

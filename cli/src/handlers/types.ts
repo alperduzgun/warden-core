@@ -9,6 +9,7 @@
 
 import type { WardenClient } from '../bridge/wardenClient.js';
 import type { MessageType } from '../types/index.js';
+import type { ProgressContextValue } from '../contexts/ProgressContext.js';
 
 /**
  * Message callback function type
@@ -44,6 +45,9 @@ export interface CommandHandlerContext {
 
   /** Exit application */
   exit: ExitFunction;
+
+  /** Progress context for real-time UI updates */
+  progressContext: ProgressContextValue;
 
   /** Project root path (optional) */
   projectRoot?: string;
