@@ -324,7 +324,10 @@ async function executeScanWithProgress(
     }
     // If cancelled, status is already set to 'cancelled' by cancelScan()
   } catch (error) {
-    progressContext.failScan(error instanceof Error ? error.message : 'Unknown error');
+    // Don't override cancel status with error status
+    if (!progressContext.progress.isCancelled) {
+      progressContext.failScan(error instanceof Error ? error.message : 'Unknown error');
+    }
     throw error;
   }
 

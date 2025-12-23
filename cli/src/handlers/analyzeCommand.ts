@@ -247,7 +247,7 @@ export async function handleAnalyzeCommand(
   args: string,
   context: CommandHandlerContext
 ): Promise<void> {
-  const { addMessage, client, lastScanPath } = context;
+  const { addMessage, client, lastScanPath, progressContext } = context;
 
   // Validate args (fail fast - Kural 4.1)
   if (!args || args.trim().length === 0) {
@@ -346,6 +346,16 @@ export async function handleAnalyzeCommand(
   try {
     // Execute pipeline via IPC
     const result = await client.executePipeline(filePath);
+
+    // Check if cancelled (analyze is typically fast, but still check)
+    if (progressContext?.progress.isCancelled) {
+      addMessage('⚠️  Analysis cancelled by user', MessageType.SYSTEM);
+      appEvents.emit(AppEvent.ANALYSIS_FAILED, {
+        file: filePath,
+        error: 'Cancelled by user',
+      });
+      return;
+    }
 
     // Calculate duration
     const duration = (Date.now() - startTime) / 1000;
