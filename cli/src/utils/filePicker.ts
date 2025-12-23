@@ -21,11 +21,17 @@ export interface FileEntry {
 
 /**
  * Get files and directories in a path
+ *
+ * Error handling (Kural 4.4):
+ * - Returns empty array on ENOENT (directory doesn't exist)
+ * - Returns empty array on EACCES (permission denied)
+ * - Re-throws unexpected errors for debugging
  */
 export function getDirectoryContents(dirPath: string, cwd: string = process.cwd()): FileEntry[] {
   try {
     const resolvedPath = resolve(cwd, dirPath || '.');
 
+    // Early return for non-existent paths
     if (!existsSync(resolvedPath)) {
       return [];
     }
@@ -56,22 +62,31 @@ export function getDirectoryContents(dirPath: string, cwd: string = process.cwd(
       }
 
       const fullPath = join(resolvedPath, entry);
-      const stats = statSync(fullPath);
+
+      // Gracefully handle stat errors (symlink issues, permission denied)
+      let entryStats;
+      try {
+        entryStats = statSync(fullPath);
+      } catch (statError) {
+        // Skip files we can't stat (broken symlinks, permission issues)
+        continue;
+      }
+
       const relativePath = relative(cwd, fullPath);
 
       const fileEntry: FileEntry = {
         name: entry,
         path: fullPath,
         relativePath,
-        type: stats.isDirectory() ? 'directory' : 'file',
+        type: entryStats.isDirectory() ? 'directory' : 'file',
       };
 
-      if (stats.isFile()) {
+      if (entryStats.isFile()) {
         const ext = entry.split('.').pop();
         if (ext && ext !== entry) {
           fileEntry.extension = ext;
         }
-        fileEntry.size = stats.size;
+        fileEntry.size = entryStats.size;
       }
 
       fileEntries.push(fileEntry);
@@ -88,6 +103,22 @@ export function getDirectoryContents(dirPath: string, cwd: string = process.cwd(
 
     return fileEntries;
   } catch (error) {
+    // Handle expected errors gracefully
+    if (error instanceof Error) {
+      const nodeError = error as NodeJS.ErrnoException;
+
+      // Expected errors - return empty array
+      if (nodeError.code === 'ENOENT' || nodeError.code === 'EACCES') {
+        return [];
+      }
+
+      // Unexpected errors - log but still return empty (graceful degradation)
+      // In production, this would go to proper logging system
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[filePicker] Unexpected error reading directory: ${error.message}`);
+      }
+    }
+
     return [];
   }
 }

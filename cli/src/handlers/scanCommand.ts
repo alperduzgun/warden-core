@@ -15,12 +15,19 @@
  * Reference: src/warden/tui/commands/scan.py
  */
 
-import { existsSync, statSync, readdirSync } from 'fs';
-import { resolve, relative, join } from 'path';
+import { readdirSync, existsSync, statSync } from 'fs';
+import { relative, join, dirname, resolve } from 'path';
 import { MessageType } from '../types/index.js';
 import type { CommandHandlerContext, CommandMetadata } from './types.js';
 import type { PipelineResult } from '../bridge/wardenClient.js';
 import type { FrameProgress } from '../components/FrameStatusDisplay.js';
+import { resolvePath, getSearchLocations } from '../utils/pathResolver.js';
+import { appEvents, AppEvent } from '../utils/events.js';
+import {
+  handleError,
+  getErrorMessage,
+  FileNotFoundError,
+} from '../utils/errors.js';
 
 /**
  * Result from scanning a single file
@@ -42,9 +49,9 @@ export async function handleScanCommand(
   args: string,
   context: CommandHandlerContext
 ): Promise<void> {
-  const { addMessage, client, progressContext } = context;
+  const { addMessage, client, progressContext, lastScanPath } = context;
 
-  // Validate IPC client
+  // Validate IPC client (fail fast - Kural 4.1)
   if (!client) {
     addMessage(
       '❌ **Backend not connected**\n\n' +
@@ -59,29 +66,50 @@ export async function handleScanCommand(
   }
 
   // Parse directory path (default: current directory)
-  const scanPath = args.trim() || process.cwd();
-  const resolvedPath = resolve(scanPath);
+  const inputPath = args.trim() || process.cwd();
 
-  // Validate directory exists
+  // Resolve path with home expansion
+  let resolvedPath = resolvePath(inputPath);
+
+  // If not absolute, make it absolute
+  if (!resolvedPath.startsWith('/')) {
+    resolvedPath = resolve(resolvedPath);
+  }
+
+  // Check if path exists (Kural 4.1 - Fail fast with proper error)
   if (!existsSync(resolvedPath)) {
+    const searchLocations = getSearchLocations(lastScanPath);
+    const error = new FileNotFoundError(resolvedPath);
+
+    // Emit scan failed event
+    appEvents.emit(AppEvent.SCAN_FAILED, {
+      path: inputPath,
+      error: error.message,
+    });
+
     addMessage(
-      `❌ **Path not found:** \`${scanPath}\`\n\n` +
-        'Please check the path and try again.',
+      `❌ **Path not found:** \`${inputPath}\`\n\n` +
+        '**Searched in:**\n' +
+        searchLocations.map((loc) => `- ${loc}`).join('\n') +
+        '\n\n💡 **Tip:** Provide a valid directory path or use `/analyze <file>` for single files.',
       MessageType.ERROR,
       true
     );
     return;
   }
 
+  // If user provided a file path, scan its parent directory instead
   const stats = statSync(resolvedPath);
   if (!stats.isDirectory()) {
+    const fileDir = dirname(resolvedPath);
     addMessage(
-      `❌ **Not a directory:** \`${scanPath}\`\n\n` +
-        'Use `/analyze <file>` for single files.',
-      MessageType.ERROR,
+      `💡 **File detected:** \`${inputPath}\`\n\n` +
+        `Scanning parent directory: \`${fileDir}\`\n\n` +
+        `(Use \`/analyze ${inputPath}\` to analyze this single file)`,
+      MessageType.SYSTEM,
       true
     );
-    return;
+    resolvedPath = fileDir;
   }
 
   // Initial message
@@ -98,10 +126,16 @@ export async function handleScanCommand(
 
     if (pyFiles.length === 0) {
       addMessage(
-        `⚠️  **No Python files found** in \`${scanPath}\``,
+        `⚠️  **No Python files found** in \`${resolvedPath}\``,
         MessageType.WARNING,
         true
       );
+
+      // Emit scan failed event (no files found)
+      appEvents.emit(AppEvent.SCAN_FAILED, {
+        path: resolvedPath,
+        error: 'No Python files found',
+      });
       return;
     }
 
@@ -111,6 +145,15 @@ export async function handleScanCommand(
       true
     );
 
+    // Emit scan started event
+    appEvents.emit(AppEvent.SCAN_STARTED, {
+      path: resolvedPath,
+      fileCount: pyFiles.length,
+    });
+
+    // Track start time for duration calculation
+    const startTime = Date.now();
+
     // Execute scan with streaming progress
     const results = await executeScanWithProgress(
       pyFiles,
@@ -119,13 +162,47 @@ export async function handleScanCommand(
       progressContext
     );
 
+    // Calculate total duration and issues
+    const duration = (Date.now() - startTime) / 1000;
+    const totalIssues = results.reduce((sum, r) => sum + (r.result.total_findings || 0), 0);
+
+    // Emit scan completed event
+    appEvents.emit(AppEvent.SCAN_COMPLETED, {
+      path: resolvedPath,
+      duration,
+      issuesFound: totalIssues,
+    });
+
     // Display aggregated summary
     displayScanSummary(resolvedPath, results, addMessage);
   } catch (error) {
-    progressContext.failScan(error instanceof Error ? error.message : 'Unknown error');
+    // Enhanced error handling (Kural 4.4)
+    const errorMsg = getErrorMessage(error);
+
+    // Log error with context
+    handleError(error, {
+      component: 'scanCommand',
+      operation: 'executeScan',
+      metadata: { path: resolvedPath },
+    });
+
+    // Emit scan failed event
+    appEvents.emit(AppEvent.SCAN_FAILED, {
+      path: resolvedPath,
+      error: errorMsg,
+    });
+
+    // Update progress UI
+    progressContext.failScan(errorMsg);
+
+    // Display user-friendly error
     addMessage(
       `❌ **Scan failed**\n\n` +
-        `Error: \`${error instanceof Error ? error.message : 'Unknown error'}\``,
+        `Error: \`${errorMsg}\`\n\n` +
+        '**Troubleshooting:**\n' +
+        '- Check if IPC server is running\n' +
+        '- Verify file permissions\n' +
+        '- Try `/status` to check connection',
       MessageType.ERROR,
       true
     );

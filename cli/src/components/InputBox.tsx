@@ -10,7 +10,7 @@
  * Inspired by Qwen Code's input component with Warden-specific enhancements.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import type { CommandDetection } from '../types/index.js';
@@ -72,9 +72,11 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const [detection, setDetection] = useState<CommandDetection>({ type: CommandType.NONE, raw: '' });
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [fileEntries, setFileEntries] = useState<FileEntry[]>([]);
-  const [shouldPreventSubmit, setShouldPreventSubmit] = useState<boolean>(false);
   const [inputKey, setInputKey] = useState<number>(0);
   const [justNavigatedToFolder, setJustNavigatedToFolder] = useState<boolean>(false);
+
+  // Use ref for shouldPreventSubmit to avoid race conditions with rapid Enter presses
+  const shouldPreventSubmitRef = useRef<boolean>(false);
 
   /**
    * Handle file/directory selection
@@ -85,7 +87,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
 
     // Always update inputKey to fix cursor position for both Tab and Enter
     if (triggerKey === 'enter') {
-      setShouldPreventSubmit(true);
+      shouldPreventSubmitRef.current = true;
     }
     setInputKey(prev => prev + 1);
 
@@ -131,12 +133,13 @@ export const InputBox: React.FC<InputBoxProps> = ({
    * Update command detection when value changes
    */
   useEffect(() => {
-    // If input is empty, reset everything
+    // If input is empty, reset everything (including shouldPreventSubmit)
     if (value.trim().length === 0) {
       setDetection({ type: CommandType.NONE, raw: '' });
       setSelectedIndex(0);
       setFileEntries([]);
       setJustNavigatedToFolder(false);
+      shouldPreventSubmitRef.current = false; // Reset submit prevention flag
       return;
     }
 
@@ -152,11 +155,19 @@ export const InputBox: React.FC<InputBoxProps> = ({
     }
 
     // Determine if file picker should be shown
-    const shouldShow = newDetection.type === CommandType.MENTION ||
+    // Don't show file picker if:
+    // 1. Args look like a complete file path (contains .py, .js, etc.)
+    // 2. User is just typing a complete path
+    const args = newDetection.args?.trim() || '';
+    const looksLikeCompleteFile = /\.(py|js|ts|tsx|jsx|java|go|rs|c|cpp|h|rb|php|swift|kt|scala|sh|json|yaml|yml|xml|html|css|md|txt)$/i.test(args);
+
+    const shouldShow = !looksLikeCompleteFile && (
+      newDetection.type === CommandType.MENTION ||
       (newDetection.type === CommandType.SLASH &&
-       (newDetection.command === 'scan' || newDetection.command === 's') &&
-       newDetection.args &&
-       newDetection.args.trim().length > 0);
+       (newDetection.command === 'scan' || newDetection.command === 's' || newDetection.command === 'analyze' || newDetection.command === 'a' || newDetection.command === 'check') &&
+       args.length > 0 &&
+       args.endsWith('/'))  // Only show for directories
+    );
 
     if (shouldShow) {
       // Calculate search path
@@ -260,7 +271,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
           if (justNavigatedToFolder) {
             // First Enter after navigation - prevent submit, clear flag for next Enter
             setJustNavigatedToFolder(false);
-            setShouldPreventSubmit(true);
+            shouldPreventSubmitRef.current = true;
             return;
           } else {
             // Second Enter (or user typed the path manually) - allow submit
@@ -301,7 +312,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
         if (selectedCmd) {
           // If Enter key, prevent submit on this cycle and reset input to move cursor
           if (key.return) {
-            setShouldPreventSubmit(true);
+            shouldPreventSubmitRef.current = true;
             setInputKey(prev => prev + 1);
           }
           onChange(`/${selectedCmd.name} `);
@@ -316,8 +327,9 @@ export const InputBox: React.FC<InputBoxProps> = ({
    */
   const handleSubmit = (submittedValue: string) => {
     // If we just prevented submit (Enter was used for selection), skip this submit
-    if (shouldPreventSubmit) {
-      setShouldPreventSubmit(false);
+    // Use ref for synchronous check (no race conditions)
+    if (shouldPreventSubmitRef.current) {
+      shouldPreventSubmitRef.current = false;
       return;
     }
 
@@ -326,13 +338,28 @@ export const InputBox: React.FC<InputBoxProps> = ({
       return;
     }
 
+    // Clean up command: remove trailing punctuation from paths/args
+    // This handles copy-paste artifacts like: /analyze file.py, or /scan dir/;
+    let processed = trimmed;
+
+    // If it's a slash command with args, clean up the args
+    if (processed.startsWith('/')) {
+      const spaceIndex = processed.indexOf(' ');
+      if (spaceIndex !== -1) {
+        const command = processed.slice(0, spaceIndex);
+        const args = processed.slice(spaceIndex + 1);
+        // Remove trailing punctuation from args only
+        const cleanedArgs = args.replace(/[,;:.!?]+$/, '');
+        processed = command + ' ' + cleanedArgs;
+      }
+    }
+
     // Process @ mentions by removing @ prefix
     // Patterns:
     //   "@" → "."
     //   "@src/" → "src/"
     //   "/scan @" → "/scan ."
     //   "/scan @src/" → "/scan src/"
-    let processed = trimmed;
 
     // Replace all @ mentions with actual paths
     if (processed.includes('@')) {
@@ -385,8 +412,8 @@ export const InputBox: React.FC<InputBoxProps> = ({
       </Box>
 
       {/* Command suggestions list (Claude Code style - two column layout with keyboard navigation) */}
-      {/* Only show if NO file picker is active */}
-      {detection.type === CommandType.SLASH && value.startsWith('/') && !value.includes('@') && fileEntries.length === 0 && filteredCommands.length > 0 && (
+      {/* Only show if NO file picker is active AND not already selected (no space after command) */}
+      {detection.type === CommandType.SLASH && value.startsWith('/') && !value.includes('@') && !value.includes(' ') && fileEntries.length === 0 && filteredCommands.length > 0 && (
         <Box marginTop={1} flexDirection="column">
           {filteredCommands.map((cmd, index) => {
             const isSelected = index === selectedIndex;
