@@ -54,6 +54,9 @@ export interface CommandHandlerContext {
 
   /** Session ID (optional) */
   sessionId?: string;
+
+  /** Last scanned directory path (for smart file search) */
+  lastScanPath?: string;
 }
 
 /**

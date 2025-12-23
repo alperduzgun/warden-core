@@ -1,0 +1,427 @@
+/**
+ * Path Resolution Utility
+ *
+ * Smart file/directory resolution with security validation.
+ * Implements DRY principle by centralizing path search logic
+ * used by analyze and scan commands.
+ *
+ * Security features:
+ * - Path traversal prevention
+ * - File size validation
+ * - Extension validation
+ *
+ * Search strategy:
+ * 1. Current directory (relative or absolute)
+ * 2. Common subdirectories (examples/, src/, tests/, lib/, app/)
+ * 3. Parent directories (walk up to 5 levels)
+ * 4. Last scanned directory (if available)
+ */
+
+import { existsSync, statSync } from 'fs';
+import { resolve, join, dirname, isAbsolute, normalize } from 'path';
+
+/**
+ * Path resolution result
+ */
+export interface PathResolutionResult {
+  /** Absolute resolved path */
+  resolvedPath: string;
+  /** Whether path exists */
+  exists: boolean;
+  /** Whether path is a file */
+  isFile: boolean;
+  /** Whether path is a directory */
+  isDirectory: boolean;
+  /** File size in bytes (if file) */
+  size?: number | undefined;
+  /** Error message (if resolution failed) */
+  error?: string | undefined;
+}
+
+/**
+ * Path resolution options
+ */
+export interface PathResolutionOptions {
+  /** Last scanned directory path (for smart fallback) */
+  lastScanPath?: string | undefined;
+  /** Maximum file size in bytes (default: 10MB) */
+  maxFileSize?: number | undefined;
+  /** Allowed file extensions (e.g., ['.py', '.js']) - undefined means all */
+  allowedExtensions?: string[] | undefined;
+  /** Whether to check parent directories (default: true) */
+  searchParentDirs?: boolean | undefined;
+  /** Maximum parent directory levels to search (default: 5) */
+  maxParentLevels?: number | undefined;
+}
+
+/**
+ * Path resolution error types
+ */
+export class PathResolutionError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly inputPath: string
+  ) {
+    super(message);
+    this.name = 'PathResolutionError';
+  }
+}
+
+/**
+ * Common subdirectories to search
+ */
+const COMMON_SEARCH_DIRS = ['examples', 'src', 'tests', 'test', 'lib', 'app'];
+
+/**
+ * Default maximum file size (10MB)
+ */
+const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Validate path for security issues
+ *
+ * Prevents:
+ * - Path traversal attacks (../, ../../etc/passwd)
+ * - Null byte injection
+ * - Invalid characters
+ *
+ * @throws {PathResolutionError} If path is invalid
+ */
+function validatePathSecurity(inputPath: string): void {
+  // Check for null bytes
+  if (inputPath.includes('\0')) {
+    throw new PathResolutionError(
+      'Path contains null bytes',
+      'INVALID_PATH',
+      inputPath
+    );
+  }
+
+  // Normalize path to detect traversal attempts
+  const normalizedPath = normalize(inputPath);
+
+  // Check if normalized path tries to escape (contains ..)
+  if (normalizedPath.includes('..')) {
+    throw new PathResolutionError(
+      'Path traversal detected',
+      'PATH_TRAVERSAL',
+      inputPath
+    );
+  }
+
+  // Check for suspicious patterns
+  const suspiciousPatterns = ['/etc/', '/proc/', '/sys/', 'C:\\Windows\\', 'C:\\System'];
+  for (const pattern of suspiciousPatterns) {
+    if (normalizedPath.includes(pattern)) {
+      throw new PathResolutionError(
+        'Access to system directories not allowed',
+        'SYSTEM_PATH',
+        inputPath
+      );
+    }
+  }
+}
+
+/**
+ * Validate file constraints
+ *
+ * @throws {PathResolutionError} If file doesn't meet constraints
+ */
+function validateFileConstraints(
+  filePath: string,
+  options: PathResolutionOptions
+): void {
+  const stats = statSync(filePath);
+
+  // Check file size
+  const maxSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
+  if (stats.size > maxSize) {
+    throw new PathResolutionError(
+      `File too large (${stats.size} bytes, max ${maxSize} bytes)`,
+      'FILE_TOO_LARGE',
+      filePath
+    );
+  }
+
+  // Check file extension
+  if (options.allowedExtensions) {
+    const hasValidExt = options.allowedExtensions.some((ext) =>
+      filePath.toLowerCase().endsWith(ext.toLowerCase())
+    );
+
+    if (!hasValidExt) {
+      throw new PathResolutionError(
+        `File extension not allowed. Allowed: ${options.allowedExtensions.join(', ')}`,
+        'INVALID_EXTENSION',
+        filePath
+      );
+    }
+  }
+}
+
+/**
+ * Try to resolve path in a specific directory
+ */
+function tryResolvePath(basePath: string, relativePath: string): string | null {
+  const testPath = join(basePath, relativePath);
+  return existsSync(testPath) ? testPath : null;
+}
+
+/**
+ * Smart path resolution with security validation
+ *
+ * Searches in multiple locations:
+ * 1. Current directory (relative or absolute)
+ * 2. Common subdirectories (examples/, src/, tests/)
+ * 3. Parent directories (walk up)
+ * 4. Last scanned directory (if available)
+ *
+ * @param inputPath - Path to resolve (relative or absolute)
+ * @param options - Resolution options
+ * @returns Resolution result with path info or error
+ *
+ * @example
+ * ```ts
+ * // Resolve a Python file
+ * const result = resolveSmartPath('test.py', {
+ *   allowedExtensions: ['.py'],
+ *   maxFileSize: 1024 * 1024, // 1MB
+ * });
+ *
+ * if (result.exists && result.isFile) {
+ *   console.log('Found:', result.resolvedPath);
+ * }
+ * ```
+ */
+export function resolveSmartPath(
+  inputPath: string,
+  options: PathResolutionOptions = {}
+): PathResolutionResult {
+  // Validate input
+  if (!inputPath || inputPath.trim().length === 0) {
+    return {
+      resolvedPath: '',
+      exists: false,
+      isFile: false,
+      isDirectory: false,
+      error: 'Path cannot be empty',
+    };
+  }
+
+  const trimmedPath = inputPath.trim();
+
+  // Security validation (fail fast)
+  try {
+    validatePathSecurity(trimmedPath);
+  } catch (error) {
+    if (error instanceof PathResolutionError) {
+      return {
+        resolvedPath: '',
+        exists: false,
+        isFile: false,
+        isDirectory: false,
+        error: error.message,
+      };
+    }
+    throw error;
+  }
+
+  // Strategy 1: If absolute path, just check and validate
+  if (isAbsolute(trimmedPath)) {
+    if (!existsSync(trimmedPath)) {
+      return {
+        resolvedPath: trimmedPath,
+        exists: false,
+        isFile: false,
+        isDirectory: false,
+        error: 'Path does not exist',
+      };
+    }
+
+    const stats = statSync(trimmedPath);
+
+    // Validate file constraints if it's a file
+    if (stats.isFile()) {
+      try {
+        validateFileConstraints(trimmedPath, options);
+      } catch (error) {
+        if (error instanceof PathResolutionError) {
+          return {
+            resolvedPath: trimmedPath,
+            exists: true,
+            isFile: true,
+            isDirectory: false,
+            size: stats.size,
+            error: error.message,
+          };
+        }
+        throw error;
+      }
+    }
+
+    return {
+      resolvedPath: trimmedPath,
+      exists: true,
+      isFile: stats.isFile(),
+      isDirectory: stats.isDirectory(),
+      size: stats.isFile() ? stats.size : undefined,
+    };
+  }
+
+  // Strategy 2: Try current directory
+  const cwdPath = resolve(trimmedPath);
+  if (existsSync(cwdPath)) {
+    const stats = statSync(cwdPath);
+
+    // Validate if file
+    if (stats.isFile()) {
+      try {
+        validateFileConstraints(cwdPath, options);
+      } catch (error) {
+        if (error instanceof PathResolutionError) {
+          return {
+            resolvedPath: cwdPath,
+            exists: true,
+            isFile: true,
+            isDirectory: false,
+            size: stats.size,
+            error: error.message,
+          };
+        }
+        throw error;
+      }
+    }
+
+    return {
+      resolvedPath: cwdPath,
+      exists: true,
+      isFile: stats.isFile(),
+      isDirectory: stats.isDirectory(),
+      size: stats.isFile() ? stats.size : undefined,
+    };
+  }
+
+  // Strategy 3: Try common subdirectories
+  const cwd = process.cwd();
+  for (const dir of COMMON_SEARCH_DIRS) {
+    const found = tryResolvePath(join(cwd, dir), trimmedPath);
+    if (found) {
+      const stats = statSync(found);
+
+      // Validate if file
+      if (stats.isFile()) {
+        try {
+          validateFileConstraints(found, options);
+        } catch (error) {
+          // Continue searching if validation fails
+          continue;
+        }
+      }
+
+      return {
+        resolvedPath: found,
+        exists: true,
+        isFile: stats.isFile(),
+        isDirectory: stats.isDirectory(),
+        size: stats.isFile() ? stats.size : undefined,
+      };
+    }
+  }
+
+  // Strategy 4: Try parent directories (if enabled)
+  if (options.searchParentDirs !== false) {
+    const maxLevels = options.maxParentLevels ?? 5;
+    let currentDir = cwd;
+
+    for (let i = 0; i < maxLevels; i++) {
+      const found = tryResolvePath(currentDir, trimmedPath);
+      if (found) {
+        const stats = statSync(found);
+
+        // Validate if file
+        if (stats.isFile()) {
+          try {
+            validateFileConstraints(found, options);
+          } catch (error) {
+            // Continue searching if validation fails
+            continue;
+          }
+        }
+
+        return {
+          resolvedPath: found,
+          exists: true,
+          isFile: stats.isFile(),
+          isDirectory: stats.isDirectory(),
+          size: stats.isFile() ? stats.size : undefined,
+        };
+      }
+
+      const parentDir = dirname(currentDir);
+      if (parentDir === currentDir) break; // Reached root
+      currentDir = parentDir;
+    }
+  }
+
+  // Strategy 5: Try last scanned directory
+  if (options.lastScanPath) {
+    const found = tryResolvePath(options.lastScanPath, trimmedPath);
+    if (found) {
+      const stats = statSync(found);
+
+      // Validate if file
+      if (stats.isFile()) {
+        try {
+          validateFileConstraints(found, options);
+        } catch (error) {
+          if (error instanceof PathResolutionError) {
+            return {
+              resolvedPath: found,
+              exists: true,
+              isFile: true,
+              isDirectory: false,
+              size: stats.size,
+              error: error.message,
+            };
+          }
+          throw error;
+        }
+      }
+
+      return {
+        resolvedPath: found,
+        exists: true,
+        isFile: stats.isFile(),
+        isDirectory: stats.isDirectory(),
+        size: stats.isFile() ? stats.size : undefined,
+      };
+    }
+  }
+
+  // Not found anywhere
+  return {
+    resolvedPath: resolve(trimmedPath),
+    exists: false,
+    isFile: false,
+    isDirectory: false,
+    error: 'Path not found in any search location',
+  };
+}
+
+/**
+ * Get human-readable search locations for error messages
+ */
+export function getSearchLocations(lastScanPath?: string): string[] {
+  const locations = [
+    `Current directory: \`${process.cwd()}\``,
+    `Common subdirectories: ${COMMON_SEARCH_DIRS.map((d) => `\`${d}/\``).join(', ')}`,
+    'Parent directories (up to 5 levels)',
+  ];
+
+  if (lastScanPath) {
+    locations.push(`Last scanned directory: \`${lastScanPath}\``);
+  }
+
+  return locations;
+}

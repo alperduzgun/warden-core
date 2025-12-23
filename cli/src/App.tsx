@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, useApp, useInput } from 'ink';
+import { resolve as resolvePath } from 'path';
 import { Header } from './components/Header.js';
 import { ChatArea } from './components/ChatArea.js';
 import { InputBox } from './components/InputBox.js';
@@ -26,6 +27,9 @@ import { routeCommand } from './handlers/index.js';
 import type { CommandHandlerContext } from './handlers/types.js';
 import { ProgressProvider, useProgress } from './contexts/ProgressContext.js';
 import { keyMatchers, Command } from './config/keyBindings.js';
+import { setupCleanupHandlers, registerCleanup } from './utils/cleanup.js';
+import { appEvents, AppEvent, createScopedListener } from './utils/events.js';
+import { ConsolePatcher } from './utils/ConsolePatcher.js';
 
 /**
  * App props interface
@@ -65,6 +69,7 @@ const AppContent: React.FC<AppProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [client, setClient] = useState<WardenClient | null>(null);
   const [sessionId] = useState<string>(() => `session-${Date.now()}`);
+  const [lastScanPath, setLastScanPath] = useState<string | undefined>(undefined);
 
   // Configuration available via environment variables
   // Currently unused but kept for future features
@@ -160,12 +165,20 @@ const AppContent: React.FC<AppProps> = ({
         progressContext,
         projectRoot: process.cwd(),
         sessionId,
+        ...(lastScanPath && { lastScanPath }),
       };
+
+      // Update lastScanPath if this is a scan command
+      if (command === 'scan' || command === 's') {
+        // Extract path from args or use current directory
+        const scanPath = args?.trim() || process.cwd();
+        setLastScanPath(scanPath.startsWith('/') ? scanPath : resolvePath(scanPath));
+      }
 
       // Route command to appropriate handler
       await routeCommand(command, args || '', context);
     },
-    [addMessage, clearMessages, client, exit, onCommand, onExit, sessionId, progressContext]
+    [addMessage, clearMessages, client, exit, onCommand, onExit, sessionId, progressContext, lastScanPath]
   );
 
   /**
@@ -219,10 +232,9 @@ const AppContent: React.FC<AppProps> = ({
           }));
         }
       } catch (error) {
-        addMessage(
-          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          MessageType.ERROR
-        );
+        // Error handling (Kural 4.4) - Specific exception handling
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        addMessage(`Error: ${errorMessage}`, MessageType.ERROR);
         setSessionInfo((prev) => ({
           ...prev,
           llmStatus: 'error',
@@ -252,12 +264,28 @@ const AppContent: React.FC<AppProps> = ({
    * Handle input submission
    */
   const handleInputSubmit = useCallback(
-    (value: string) => {
-      handleMessageSubmit(value);
+    async (value: string) => {
+      // Clear input IMMEDIATELY (don't wait for async operations)
+      // This ensures file picker/command list disappears right away
       setInputValue('');
+
+      // Then submit message (async operation continues in background)
+      await handleMessageSubmit(value);
     },
     [handleMessageSubmit]
   );
+
+  /**
+   * Setup cleanup handlers on mount (MUST run first)
+   */
+  useEffect(() => {
+    // Setup automatic cleanup on process exit signals
+    setupCleanupHandlers({
+      handleExceptions: true,
+      handleRejections: true,
+      exitAfterCleanup: true,
+    });
+  }, []);
 
   /**
    * Initialize IPC client on mount
@@ -272,6 +300,9 @@ const AppContent: React.FC<AppProps> = ({
         setClient(wardenClient);
         setSessionInfo((prev) => ({ ...prev, llmStatus: 'connected' }));
 
+        // Emit IPC status event
+        appEvents.emit(AppEvent.IPC_STATUS_CHANGED, { connected: true });
+
         addMessage(
           '✅ Connected to Warden backend\n\n' +
             'Type `/help` to see available commands or `/status` to check configuration.',
@@ -282,6 +313,9 @@ const AppContent: React.FC<AppProps> = ({
         // Connection failed - continue without IPC
         setClient(null);
         setSessionInfo((prev) => ({ ...prev, llmStatus: 'disconnected' }));
+
+        // Emit IPC status event
+        appEvents.emit(AppEvent.IPC_STATUS_CHANGED, { connected: false });
 
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
@@ -306,7 +340,7 @@ const AppContent: React.FC<AppProps> = ({
     // Initialize client
     initializeClient();
 
-    // Cleanup on unmount
+    // Cleanup on unmount (fallback - cleanup handlers will also handle this)
     return () => {
       if (client) {
         client.disconnect().catch(() => {
@@ -315,6 +349,86 @@ const AppContent: React.FC<AppProps> = ({
       }
     };
   }, [addMessage]);
+
+  /**
+   * Register IPC cleanup when client changes
+   */
+  useEffect(() => {
+    if (client) {
+      // Register cleanup for IPC client
+      registerCleanup(async () => {
+        console.log('[Cleanup] Disconnecting IPC client...');
+        await client.disconnect();
+      });
+    }
+  }, [client]);
+
+  /**
+   * Setup console patcher for capturing console output
+   */
+  useEffect(() => {
+    const patcher = new ConsolePatcher({
+      onNewMessage: (msg) => {
+        // Format console message for UI
+        const prefix = msg.count > 1 ? `[${msg.count}x] ` : '';
+        const typePrefix = `[${msg.type.toUpperCase()}]`;
+        const content = `${prefix}${typePrefix} ${msg.content}`;
+
+        // Add to chat with appropriate type
+        const messageType =
+          msg.type === 'error' ? MessageType.ERROR :
+          msg.type === 'warn' ? MessageType.SYSTEM :
+          MessageType.SYSTEM;
+
+        addMessage(content, messageType);
+      },
+      debugMode: false, // Set to true to see debug console messages
+      aggregateDuplicates: true,
+      aggregationWindow: 1000, // 1 second
+    });
+
+    // Patch console
+    patcher.patch();
+
+    // Register cleanup
+    registerCleanup(() => {
+      patcher.cleanup();
+    });
+
+    // Return cleanup for React unmount
+    return () => {
+      patcher.cleanup();
+    };
+  }, [addMessage]);
+
+  /**
+   * Setup global event listeners
+   */
+  useEffect(() => {
+    // Listen for error events
+    const errorCleanup = createScopedListener(AppEvent.LOG_ERROR, ({ message, stack }) => {
+      console.error(`[ERROR] ${message}`);
+      if (stack) {
+        console.error(`Stack: ${stack}`);
+      }
+    });
+
+    // Listen for clear screen events
+    const clearCleanup = createScopedListener(AppEvent.CLEAR_SCREEN, () => {
+      clearMessages();
+      addMessage(
+        '🧹 Screen cleared!\n\nType `/help` to see available commands.',
+        MessageType.SYSTEM,
+        { markdown: true }
+      );
+    });
+
+    // Return cleanup function
+    return () => {
+      errorCleanup();
+      clearCleanup();
+    };
+  }, [addMessage, clearMessages]);
 
   /**
    * Show welcome message after client initialization

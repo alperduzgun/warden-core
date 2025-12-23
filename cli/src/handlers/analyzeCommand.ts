@@ -11,11 +11,71 @@
  * Reference: src/warden/tui/commands/analyze.py
  */
 
-import { existsSync, statSync } from 'fs';
-import { resolve } from 'path';
+import { existsSync } from 'fs';
+import { resolve, join, dirname } from 'path';
 import { MessageType } from '../types/index.js';
 import type { CommandHandlerContext } from './types.js';
 import type { PipelineResult, FrameResult, Finding } from '../bridge/wardenClient.js';
+import { resolvePath, isFile, hasValidExtension, getSearchLocations, COMMON_SEARCH_DIRS } from '../utils/pathResolver.js';
+import {
+  ValidationError,
+  getErrorMessage,
+  handleError,
+  FileNotFoundError,
+  IPCConnectionError,
+} from '../utils/errors.js';
+import { appEvents, AppEvent } from '../utils/events.js';
+
+/**
+ * Smart file search: tries multiple locations
+ * 1. Current directory (relative or absolute)
+ * 2. Common subdirectories (examples/, src/, tests/)
+ * 3. Parent directories (walk up)
+ * 4. Last scanned directory (if available)
+ *
+ * @param inputPath - File path to search
+ * @param lastScanPath - Last scanned directory
+ * @returns Resolved file path or null
+ */
+function findFile(inputPath: string, lastScanPath?: string): string | null {
+  // 1. Try resolving with home expansion and normalization
+  const resolved = resolvePath(inputPath);
+
+  if (existsSync(resolved)) {
+    return resolve(resolved);
+  }
+
+  // 2. Try common subdirectories
+  const cwd = process.cwd();
+  for (const dir of COMMON_SEARCH_DIRS) {
+    const testPath = join(cwd, dir, inputPath);
+    if (existsSync(testPath)) {
+      return testPath;
+    }
+  }
+
+  // 3. Try parent directories (walk up to root)
+  let currentDir = cwd;
+  for (let i = 0; i < 5; i++) {
+    const testPath = join(currentDir, inputPath);
+    if (existsSync(testPath)) {
+      return testPath;
+    }
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break; // Reached root
+    currentDir = parentDir;
+  }
+
+  // 4. Try last scanned directory
+  if (lastScanPath) {
+    const scanPath = join(lastScanPath, inputPath);
+    if (existsSync(scanPath)) {
+      return scanPath;
+    }
+  }
+
+  return null;
+}
 
 /**
  * Format severity with emoji
@@ -34,14 +94,27 @@ function formatSeverity(severity: string): string {
 /**
  * Format pipeline status
  */
-function formatStatus(status: string): string {
+function formatStatus(status: string | number | any): string {
+  // Handle enum values from backend (0, 1, 2, etc.)
+  if (typeof status === 'number') {
+    const enumMap: Record<number, string> = {
+      0: '⏳ RUNNING',
+      1: '❌ FAILED',
+      2: '✅ SUCCESS',
+      3: '⚠️  PARTIAL',
+    };
+    return enumMap[status] || `Status ${status}`;
+  }
+
+  // Handle string status
+  const statusStr = typeof status === 'string' ? status : String(status);
   const statusMap: Record<string, string> = {
     success: '✅ SUCCESS',
     failed: '❌ FAILED',
     partial: '⚠️  PARTIAL',
     running: '⏳ RUNNING',
   };
-  return statusMap[status.toLowerCase()] || status.toUpperCase();
+  return statusMap[statusStr.toLowerCase()] || statusStr.toUpperCase();
 }
 
 /**
@@ -69,16 +142,25 @@ function formatFinding(finding: Finding, index: number): string {
   let result = `\n### Finding #${index + 1}: ${formatSeverity(finding.severity)}\n\n`;
   result += `**Message**: ${finding.message}\n\n`;
 
-  if (finding.line !== undefined) {
+  // Only show location if line number is valid (not null/undefined)
+  if (finding.line !== undefined && finding.line !== null) {
     result += `**Location**: Line ${finding.line}`;
-    if (finding.column !== undefined) {
+    if (finding.column !== undefined && finding.column !== null) {
       result += `, Column ${finding.column}`;
     }
     result += '\n\n';
   }
 
   if (finding.code) {
-    result += `**Code**:\n\`\`\`python\n${finding.code}\n\`\`\`\n`;
+    // Clean up code: backend might already include backticks
+    let code = finding.code.trim();
+
+    // Remove existing markdown code block wrapper if present
+    if (code.startsWith('```') || code.startsWith('`')) {
+      code = code.replace(/^`+(\w+)?\n?/, '').replace(/\n?`+$/, '').trim();
+    }
+
+    result += `**Code**:\n\`\`\`python\n${code}\n\`\`\`\n`;
   }
 
   return result;
@@ -165,20 +247,26 @@ export async function handleAnalyzeCommand(
   args: string,
   context: CommandHandlerContext
 ): Promise<void> {
-  const { addMessage, client } = context;
+  const { addMessage, client, lastScanPath } = context;
 
-  // Validate args
+  // Validate args (fail fast - Kural 4.1)
   if (!args || args.trim().length === 0) {
-    addMessage(
-      '❌ **Missing file path**\n\nUsage: `/analyze <file>`\n\nExample: `/analyze src/main.py`',
-      MessageType.ERROR,
-      true
-    );
-    return;
+    throw new ValidationError('Missing file path. Usage: /analyze <file>');
   }
 
-  // Validate IPC client
+  // Extract input path early
+  const inputPath = args.trim();
+
+  // Validate IPC client (fail fast - Kural 4.1)
   if (!client) {
+    const error = new IPCConnectionError();
+
+    // Emit analysis failed event
+    appEvents.emit(AppEvent.ANALYSIS_FAILED, {
+      file: inputPath,
+      error: error.message,
+    });
+
     addMessage(
       '❌ **IPC connection not available**\n\n' +
         'The backend is not connected. Please ensure:\n' +
@@ -191,22 +279,32 @@ export async function handleAnalyzeCommand(
     return;
   }
 
-  const filePath = resolve(args.trim());
+  // Smart file search (path is already cleaned in InputBox)
+  const filePath = findFile(inputPath, lastScanPath);
 
   // Check file exists
-  if (!existsSync(filePath)) {
-    addMessage(
-      `❌ **File not found**: \`${filePath}\`\n\n` +
-        'Please check the file path and try again.',
-      MessageType.ERROR,
-      true
-    );
+  if (!filePath) {
+    const searchLocations = getSearchLocations(lastScanPath);
+    const error = new FileNotFoundError(inputPath);
+
+    // Emit analysis failed event
+    appEvents.emit(AppEvent.ANALYSIS_FAILED, {
+      file: inputPath,
+      error: error.message,
+    });
+
+    const errorMsg =
+      `❌ **File not found**: \`${inputPath}\`\n\n` +
+      '**Searched in:**\n' +
+      searchLocations.map((loc) => `- ${loc}`).join('\n') +
+      '\n\n💡 **Tip:** Try `/scan examples/` first, then copy-paste paths from summary.';
+
+    addMessage(errorMsg, MessageType.ERROR, true);
     return;
   }
 
   // Check if it's a file (not directory)
-  const stats = statSync(filePath);
-  if (!stats.isFile()) {
+  if (!isFile(filePath)) {
     addMessage(
       `❌ **Not a file**: \`${filePath}\`\n\n` +
         'Please provide a file path, not a directory.\n' +
@@ -218,7 +316,7 @@ export async function handleAnalyzeCommand(
   }
 
   // Check file extension (currently only .py supported)
-  if (!filePath.endsWith('.py')) {
+  if (!hasValidExtension(filePath, ['.py'])) {
     addMessage(
       `⚠️  **Warning**: Only Python files (\`.py\`) are currently supported.\n\n` +
         `File: \`${filePath}\`\n\n` +
@@ -237,16 +335,51 @@ export async function handleAnalyzeCommand(
     true
   );
 
+  // Emit analysis started event
+  appEvents.emit(AppEvent.ANALYSIS_STARTED, {
+    file: filePath,
+  });
+
+  // Track start time
+  const startTime = Date.now();
+
   try {
     // Execute pipeline via IPC
     const result = await client.executePipeline(filePath);
 
+    // Calculate duration
+    const duration = (Date.now() - startTime) / 1000;
+    const issuesFound = result.total_findings || 0;
+
+    // Emit analysis completed event
+    appEvents.emit(AppEvent.ANALYSIS_COMPLETED, {
+      file: filePath,
+      duration,
+      issuesFound,
+    });
+
     // Display results
     displayPipelineResult(filePath, result, addMessage);
   } catch (error) {
+    // Enhanced error handling (Kural 4.4)
+    const errorMessage = getErrorMessage(error);
+
+    // Log error with context
+    handleError(error, {
+      component: 'analyzeCommand',
+      operation: 'executePipeline',
+      metadata: { file: filePath },
+    });
+
+    // Emit analysis failed event
+    appEvents.emit(AppEvent.ANALYSIS_FAILED, {
+      file: filePath,
+      error: errorMessage,
+    });
+
     addMessage(
       `❌ **Pipeline execution failed**\n\n` +
-        `Error: \`${error instanceof Error ? error.message : 'Unknown error'}\`\n\n` +
+        `Error: \`${errorMessage}\`\n\n` +
         '**Troubleshooting:**\n' +
         '1. Check if the file is valid Python code\n' +
         '2. Ensure IPC server is running\n' +
