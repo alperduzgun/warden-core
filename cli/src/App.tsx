@@ -25,6 +25,7 @@ import { WardenClient } from './bridge/wardenClient.js';
 import { routeCommand } from './handlers/index.js';
 import type { CommandHandlerContext } from './handlers/types.js';
 import { ProgressProvider, useProgress } from './contexts/ProgressContext.js';
+import { keyMatchers, Command } from './config/keyBindings.js';
 
 /**
  * App props interface
@@ -85,15 +86,50 @@ const AppContent: React.FC<AppProps> = ({
   } = useMessages();
 
   /**
-   * Handle Ctrl+C for graceful exit
+   * Handle global keyboard shortcuts
    */
-  useInput((input, key) => {
-    if (key.ctrl && input === 'c') {
-      addMessage('Goodbye!', MessageType.SYSTEM);
+  useInput((_input, key) => {
+    // Ctrl+K or Ctrl+L - Clear screen
+    if (keyMatchers[Command.CLEAR_SCREEN](key)) {
+      clearMessages();
+      addMessage(
+        '🧹 Screen cleared!\n\nType `/help` to see available commands.',
+        MessageType.SYSTEM,
+        { markdown: true }
+      );
+      return;
+    }
+
+    // Ctrl+U - Clear current input line
+    if (keyMatchers[Command.CLEAR_LINE](key)) {
+      setInputValue('');
+      return;
+    }
+
+    // Ctrl+C - Clear input OR exit (if input is empty)
+    if (keyMatchers[Command.CLEAR_INPUT](key)) {
+      if (inputValue.trim().length === 0) {
+        // Input is empty, exit application
+        addMessage('👋 Goodbye!', MessageType.SYSTEM);
+        if (onExit) {
+          onExit();
+        }
+        setTimeout(() => exit(), 500);
+      } else {
+        // Input has text, clear it
+        setInputValue('');
+      }
+      return;
+    }
+
+    // Ctrl+D - Exit application
+    if (keyMatchers[Command.EXIT](key)) {
+      addMessage('👋 Goodbye!', MessageType.SYSTEM);
       if (onExit) {
         onExit();
       }
       setTimeout(() => exit(), 500);
+      return;
     }
   });
 

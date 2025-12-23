@@ -72,6 +72,60 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const [detection, setDetection] = useState<CommandDetection>({ type: CommandType.NONE, raw: '' });
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [fileEntries, setFileEntries] = useState<FileEntry[]>([]);
+  const [shouldPreventSubmit, setShouldPreventSubmit] = useState<boolean>(false);
+  const [inputKey, setInputKey] = useState<number>(0);
+  const [justNavigatedToFolder, setJustNavigatedToFolder] = useState<boolean>(false);
+
+  /**
+   * Handle file/directory selection
+   */
+  const handleSelection = (entry: FileEntry, triggerKey: 'tab' | 'enter') => {
+    const isScanMode = detection.type === CommandType.SLASH &&
+      (detection.command === 'scan' || detection.command === 's');
+
+    // Always update inputKey to fix cursor position for both Tab and Enter
+    if (triggerKey === 'enter') {
+      setShouldPreventSubmit(true);
+    }
+    setInputKey(prev => prev + 1);
+
+    if (isScanMode) {
+      // /scan mode - no @ prefix
+      const commandPart = value.match(/^\/[^\s]+\s*/)?.[0] || '/scan ';
+      const currentPath = detection.args?.trim().replace(/^@/, '') || '';
+
+      if (entry.type === 'directory') {
+        const basePath = currentPath.endsWith('/') ? currentPath : currentPath.split('/').slice(0, -1).join('/');
+        const newPath = entry.name === '..'
+          ? basePath.split('/').slice(0, -1).join('/') || ''
+          : (basePath ? basePath + '/' + entry.name : entry.name) + '/';
+        onChange(`${commandPart}${newPath}`);
+        setJustNavigatedToFolder(true);
+      } else {
+        onChange(`${commandPart}${entry.relativePath} `);
+        setJustNavigatedToFolder(false);
+        setFileEntries([]);
+      }
+    } else {
+      // @ mention mode
+      const atIndex = value.lastIndexOf('@');
+      const beforeAt = value.slice(0, atIndex);
+      const mentionPart = value.slice(atIndex);
+      const { basePath } = parseMentionPath(mentionPart);
+
+      if (entry.type === 'directory') {
+        const newPath = entry.name === '..'
+          ? basePath.split('/').slice(0, -2).join('/') || ''
+          : (basePath + entry.name + '/');
+        onChange(`${beforeAt}@${newPath}`);
+        setJustNavigatedToFolder(true);
+      } else {
+        onChange(`${beforeAt}@${entry.relativePath} `);
+        setJustNavigatedToFolder(false);
+        setFileEntries([]);
+      }
+    }
+  };
 
   /**
    * Update command detection when value changes
@@ -82,35 +136,45 @@ export const InputBox: React.FC<InputBoxProps> = ({
       setDetection({ type: CommandType.NONE, raw: '' });
       setSelectedIndex(0);
       setFileEntries([]);
+      setJustNavigatedToFolder(false);
       return;
     }
 
     const newDetection = detectCommand(value);
-    setDetection(newDetection);
-    // Reset selected index when detection changes
-    setSelectedIndex(0);
+    const detectionChanged = newDetection.type !== detection.type ||
+      newDetection.command !== detection.command;
 
-    // Update file entries for @ mentions
-    // Handle both standalone @ and @ within slash command args (/scan @)
-    if (newDetection.type === CommandType.MENTION) {
-      const { basePath, search } = parseMentionPath(value);
-      const allEntries = getDirectoryContents(basePath);
-      const filtered = filterFileEntries(allEntries, search);
-      setFileEntries(filtered);
-    } else if (newDetection.type === CommandType.SLASH && newDetection.args?.includes('@')) {
-      // Extract @ mention from slash command args
-      const atIndex = value.lastIndexOf('@');
-      const mentionPart = value.slice(atIndex);
-      const { basePath, search } = parseMentionPath(mentionPart);
-      const allEntries = getDirectoryContents(basePath);
-      const filtered = filterFileEntries(allEntries, search);
-      setFileEntries(filtered);
-    } else if (newDetection.type === CommandType.SLASH &&
-               (newDetection.command === 'scan' || newDetection.command === 's') &&
-               newDetection.args && newDetection.args.trim().length > 0) {
-      // Auto file completion for /scan command (without @ prefix)
-      const args = newDetection.args.trim();
-      const { basePath, search } = parseMentionPath(args.startsWith('@') ? args : '@' + args);
+    setDetection(newDetection);
+
+    // Only reset selection if detection type/command changed (not just args)
+    if (detectionChanged) {
+      setSelectedIndex(0);
+    }
+
+    // Determine if file picker should be shown
+    const shouldShow = newDetection.type === CommandType.MENTION ||
+      (newDetection.type === CommandType.SLASH &&
+       (newDetection.command === 'scan' || newDetection.command === 's') &&
+       newDetection.args &&
+       newDetection.args.trim().length > 0);
+
+    if (shouldShow) {
+      // Calculate search path
+      let searchPath: string;
+
+      if (newDetection.type === CommandType.MENTION) {
+        // @ mention mode: use value as-is
+        searchPath = value;
+      } else if (newDetection.args?.includes('@')) {
+        // /scan @path mode: extract @ part
+        const atIndex = value.lastIndexOf('@');
+        searchPath = value.slice(atIndex);
+      } else {
+        // /scan path mode: prepend @ for parsing
+        searchPath = '@' + newDetection.args!.trim();
+      }
+
+      const { basePath, search } = parseMentionPath(searchPath);
       const allEntries = getDirectoryContents(basePath);
       const filtered = filterFileEntries(allEntries, search);
       setFileEntries(filtered);
@@ -176,47 +240,38 @@ export const InputBox: React.FC<InputBoxProps> = ({
         return;
       }
 
-      // Tab - auto-complete selected file/directory
+      // Tab - select highlighted file/directory
       if (key.tab) {
         const selectedEntry = fileEntries[selectedIndex];
         if (selectedEntry) {
-          // Check if we're in /scan command (without @) or @ mention
-          if (detection.type === CommandType.SLASH &&
-              (detection.command === 'scan' || detection.command === 's') &&
-              !value.includes('@')) {
-            // /scan command without @ - complete path directly
-            const commandPart = value.match(/^\/[^\s]+\s*/)?.[0] || '/scan ';
+          handleSelection(selectedEntry, 'tab');
+        }
+        return;
+      }
 
-            if (selectedEntry.type === 'directory') {
-              // Navigate into directory
-              const currentPath = detection.args?.trim() || '';
-              const basePath = currentPath.endsWith('/') ? currentPath : currentPath.split('/').slice(0, -1).join('/');
-              const newPath = selectedEntry.name === '..'
-                ? basePath.split('/').slice(0, -1).join('/') || ''
-                : (basePath ? basePath + '/' + selectedEntry.name : selectedEntry.name) + '/';
-              onChange(`${commandPart}${newPath}`);
-            } else {
-              // Select file
-              onChange(`${commandPart}${selectedEntry.relativePath} `);
-            }
+      // Enter - smart behavior:
+      // - If just navigated to folder, SECOND Enter submits
+      // - Otherwise, select the highlighted entry from list
+      if (key.return) {
+        const args = detection.args?.trim().replace(/^@/, '') || '';
+
+        // If args end with '/' AND we just navigated, check if it's first or second Enter
+        if (args.endsWith('/')) {
+          if (justNavigatedToFolder) {
+            // First Enter after navigation - prevent submit, clear flag for next Enter
+            setJustNavigatedToFolder(false);
+            setShouldPreventSubmit(true);
+            return;
           } else {
-            // @ mention mode - existing logic
-            const atIndex = value.lastIndexOf('@');
-            const beforeAt = value.slice(0, atIndex);
-            const mentionPart = value.slice(atIndex);
-            const { basePath } = parseMentionPath(mentionPart);
-
-            if (selectedEntry.type === 'directory') {
-              // Navigate into directory
-              const newPath = selectedEntry.name === '..'
-                ? basePath.split('/').slice(0, -2).join('/') || ''
-                : (basePath + selectedEntry.name + '/');
-              onChange(`${beforeAt}@${newPath}`);
-            } else {
-              // Select file
-              onChange(`${beforeAt}@${selectedEntry.relativePath} `);
-            }
+            // Second Enter (or user typed the path manually) - allow submit
+            return;
           }
+        }
+
+        // Otherwise, select the highlighted entry
+        const selectedEntry = fileEntries[selectedIndex];
+        if (selectedEntry) {
+          handleSelection(selectedEntry, 'enter');
         }
         return;
       }
@@ -240,10 +295,15 @@ export const InputBox: React.FC<InputBoxProps> = ({
         return;
       }
 
-      // Tab - auto-complete selected command
-      if (key.tab) {
+      // Tab or Enter - auto-complete selected command
+      if (key.tab || key.return) {
         const selectedCmd = filteredCommands[selectedIndex];
         if (selectedCmd) {
+          // If Enter key, prevent submit on this cycle and reset input to move cursor
+          if (key.return) {
+            setShouldPreventSubmit(true);
+            setInputKey(prev => prev + 1);
+          }
           onChange(`/${selectedCmd.name} `);
         }
         return;
@@ -255,6 +315,12 @@ export const InputBox: React.FC<InputBoxProps> = ({
    * Handle submission
    */
   const handleSubmit = (submittedValue: string) => {
+    // If we just prevented submit (Enter was used for selection), skip this submit
+    if (shouldPreventSubmit) {
+      setShouldPreventSubmit(false);
+      return;
+    }
+
     const trimmed = submittedValue.trim();
     if (trimmed.length === 0) {
       return;
@@ -287,7 +353,11 @@ export const InputBox: React.FC<InputBoxProps> = ({
 
   // File picker (@) is always valid, even without specific command
   const isFilePicker = detection.type === CommandType.MENTION && value.startsWith('@');
-  const isValid = detection.type === CommandType.NONE || isFilePicker || isValidCommand(detection);
+  // /scan with @ is valid (file picker mode)
+  const isScanWithFilePicker = detection.type === CommandType.SLASH &&
+    (detection.command === 'scan' || detection.command === 's') &&
+    (detection.args?.includes('@') || fileEntries.length > 0);
+  const isValid = detection.type === CommandType.NONE || isFilePicker || isScanWithFilePicker || isValidCommand(detection);
 
   return (
     <Box flexDirection="column">
@@ -305,6 +375,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
 
         {/* Input field - Always show to allow typing during processing */}
         <TextInput
+          key={inputKey}
           value={value}
           onChange={onChange}
           onSubmit={handleSubmit}
@@ -315,7 +386,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
 
       {/* Command suggestions list (Claude Code style - two column layout with keyboard navigation) */}
       {/* Only show if NO file picker is active */}
-      {detection.type === CommandType.SLASH && value.startsWith('/') && !value.includes('@') && filteredCommands.length > 0 && (
+      {detection.type === CommandType.SLASH && value.startsWith('/') && !value.includes('@') && fileEntries.length === 0 && filteredCommands.length > 0 && (
         <Box marginTop={1} flexDirection="column">
           {filteredCommands.map((cmd, index) => {
             const isSelected = index === selectedIndex;
@@ -354,7 +425,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
           {/* Navigation hint */}
           <Box marginTop={1}>
             <Text color="gray" dimColor>
-              ↑↓ Navigate • Tab Complete • Enter Submit
+              ↑↓ Navigate • Tab/Enter Select
             </Text>
           </Box>
         </Box>
@@ -408,7 +479,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
           {/* Navigation hint */}
           <Box marginTop={1}>
             <Text color="gray" dimColor>
-              ↑↓ Navigate • Tab Select/Enter • Enter to use in message
+              ↑↓ Navigate • Tab/Enter Select
             </Text>
           </Box>
         </Box>
