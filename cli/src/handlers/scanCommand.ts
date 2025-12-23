@@ -28,6 +28,11 @@ import {
   getErrorMessage,
   FileNotFoundError,
 } from '../utils/errors.js';
+import {
+  createScanReport,
+  saveReport,
+  getReportsDirectory,
+} from '../utils/reportGenerator.js';
 
 /**
  * Result from scanning a single file
@@ -174,16 +179,41 @@ export async function handleScanCommand(
         error: 'Scan cancelled by user',
       });
 
-      // Display cancellation summary
-      addMessage(
-        `⚠️  **Scan Cancelled**\n\n` +
-          `**Directory:** \`${resolvedPath}\`\n` +
-          `**Files Scanned:** ${results.length}/${pyFiles.length}\n` +
-          `**Duration:** ${duration.toFixed(1)}s\n\n` +
-          `Partial results available. Use \`/scan ${resolvedPath}\` to restart.`,
-        MessageType.SYSTEM,
-        true
-      );
+      // Save partial report for cancelled scan
+      try {
+        const report = createScanReport(resolvedPath, results, {
+          totalFiles: pyFiles.length,
+          duration,
+          status: 'cancelled',
+        });
+
+        const reportsDir = getReportsDirectory(resolvedPath);
+        const { json, markdown } = saveReport(report, reportsDir);
+
+        addMessage(
+          `⚠️  **Scan Cancelled**\n\n` +
+            `**Directory:** \`${resolvedPath}\`\n` +
+            `**Files Scanned:** ${results.length}/${pyFiles.length}\n` +
+            `**Duration:** ${duration.toFixed(1)}s\n\n` +
+            `📁 **Partial report saved:**\n` +
+            `- JSON: \`${json}\`\n` +
+            `- Summary: \`${markdown}\`\n\n` +
+            `Use \`/scan ${resolvedPath}\` to restart.`,
+          MessageType.SYSTEM,
+          true
+        );
+      } catch (error) {
+        // Fallback if report saving fails
+        addMessage(
+          `⚠️  **Scan Cancelled**\n\n` +
+            `**Directory:** \`${resolvedPath}\`\n` +
+            `**Files Scanned:** ${results.length}/${pyFiles.length}\n` +
+            `**Duration:** ${duration.toFixed(1)}s\n\n` +
+            `Partial results available. Use \`/scan ${resolvedPath}\` to restart.`,
+          MessageType.SYSTEM,
+          true
+        );
+      }
       return;
     }
 
@@ -193,6 +223,34 @@ export async function handleScanCommand(
       duration,
       issuesFound: totalIssues,
     });
+
+    // Generate and save report
+    try {
+      const report = createScanReport(resolvedPath, results, {
+        totalFiles: pyFiles.length,
+        duration,
+        status: 'completed',
+      });
+
+      const reportsDir = getReportsDirectory(resolvedPath);
+      const { json, markdown } = saveReport(report, reportsDir);
+
+      addMessage(
+        `📁 **Reports saved:**\n` +
+          `- JSON: \`${json}\`\n` +
+          `- Summary: \`${markdown}\``,
+        MessageType.SYSTEM,
+        true
+      );
+    } catch (error) {
+      // Report saving failed - log but don't fail the scan
+      console.error('[Scan] Failed to save report:', error);
+      addMessage(
+        '⚠️  Report generation failed (scan results still available above)',
+        MessageType.WARNING,
+        true
+      );
+    }
 
     // Display aggregated summary
     displayScanSummary(resolvedPath, results, addMessage);

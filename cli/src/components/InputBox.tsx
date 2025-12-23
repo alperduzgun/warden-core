@@ -164,9 +164,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
     const shouldShow = !looksLikeCompleteFile && (
       newDetection.type === CommandType.MENTION ||
       (newDetection.type === CommandType.SLASH &&
-       (newDetection.command === 'scan' || newDetection.command === 's' || newDetection.command === 'analyze' || newDetection.command === 'a' || newDetection.command === 'check') &&
-       args.length > 0 &&
-       args.endsWith('/'))  // Only show for directories
+       (newDetection.command === 'scan' || newDetection.command === 's' || newDetection.command === 'analyze' || newDetection.command === 'a' || newDetection.command === 'check'))
     );
 
     if (shouldShow) {
@@ -182,7 +180,9 @@ export const InputBox: React.FC<InputBoxProps> = ({
         searchPath = value.slice(atIndex);
       } else {
         // /scan path mode: prepend @ for parsing
-        searchPath = '@' + newDetection.args!.trim();
+        // If args is empty, default to current directory
+        const pathArg = newDetection.args?.trim() || './';
+        searchPath = '@' + pathArg;
       }
 
       const { basePath, search } = parseMentionPath(searchPath);
