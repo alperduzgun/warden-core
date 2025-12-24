@@ -1,15 +1,17 @@
 {
-  "timestamp": "2025-12-24T15:59:10.048505",
-  "project": "cli",
+  "timestamp": "2025-12-24T16:42:47.647193",
+  "project": "warden-core",
   "total_files": 1,
   "analyzed_files": 1,
   "total_issues": 0,
   "critical_issues": 0,
   "high_issues": 0,
-  "duration_seconds": 0.005246,
+  "duration_seconds": 0.005616,
   "frames": [
     "SecurityFrame",
-    "ChaosFrame"
+    "ChaosFrame",
+    "OrphanFrame",
+    "StressFrame"
   ],
   "frame_results": [
     {
@@ -20,6 +22,18 @@
     },
     {
       "frame": "Chaos Engineering",
+      "passed": true,
+      "issues": 0,
+      "is_blocker": false
+    },
+    {
+      "frame": "Orphan Code Analysis",
+      "passed": true,
+      "issues": 0,
+      "is_blocker": false
+    },
+    {
+      "frame": "Stress Testing",
       "passed": true,
       "issues": 0,
       "is_blocker": false

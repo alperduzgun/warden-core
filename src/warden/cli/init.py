@@ -224,24 +224,8 @@ async def _init_project_async(
             console.print("[yellow]Initialization cancelled[/yellow]")
             raise typer.Exit(0)
 
-    # STEP 5: Create project.toml
-    console.print("\n[cyan]Creating .warden/project.toml...[/cyan]")
-
-    try:
-        config_manager = ProjectConfigManager(project_root)
-
-        # Force create if --force is used
-        if force and config_manager.config_exists():
-            await config_manager.delete()
-
-        project_config = await config_manager.create_and_save()
-        console.print("[green]✓ Project metadata saved[/green]")
-    except Exception as e:
-        console.print(f"[red]✗ Failed to create project.toml: {e}[/red]")
-        raise typer.Exit(1)
-
-    # STEP 6: Generate config.yaml
-    console.print("[cyan]Creating .warden/config.yaml...[/cyan]")
+    # STEP 5: Generate unified config.yaml (includes project metadata)
+    console.print("\n[cyan]Creating .warden/config.yaml...[/cyan]")
 
     try:
         generator = ConfigGenerator(project_root)
@@ -250,11 +234,12 @@ async def _init_project_async(
             project_name=project_name,
             framework=framework,
             sdk_version=sdk_version,
+            project_type=project_type,
             interactive=interactive,
         )
 
         config_path = await generator.save_config(config_data)
-        console.print("[green]✓ Pipeline configuration saved[/green]")
+        console.print("[green]✓ Configuration saved (project metadata + validation settings)[/green]")
     except Exception as e:
         console.print(f"[red]✗ Failed to create config.yaml: {e}[/red]")
         raise typer.Exit(1)
