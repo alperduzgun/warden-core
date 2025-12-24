@@ -1,0 +1,14 @@
+# Include documentation
+include README.md
+include LICENSE
+
+# Include package marker
+include src/warden_ast_java/py.typed
+
+# Exclude build artifacts
+exclude .gitignore
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .pytest_cache
+recursive-exclude * .mypy_cache
+recursive-exclude * .ruff_cache
