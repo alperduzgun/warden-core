@@ -3,10 +3,12 @@ Warden CLI - AI Code Guardian
 Main entry point for the command-line interface
 
 Usage:
+    warden init                 # Initialize project configuration
     warden validate <file>       # Validate single file
     warden scan <directory>      # Scan directory
     warden report               # Generate report
     warden config show          # Show configuration
+    warden providers list       # List installed AST providers
 """
 
 import sys
@@ -21,7 +23,8 @@ from rich.panel import Panel
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from warden.cli.commands import scan, report, infrastructure, validate, rules, frame
+from warden.cli.commands import scan, report, infrastructure, validate, init,rules, frame
+from warden.cli import providers
 
 app = typer.Typer(
     name="warden",
@@ -32,12 +35,14 @@ app = typer.Typer(
 console = Console()
 
 # Register commands
+app.add_typer(init.app, name="init", help="Initialize Warden configuration for a project")
 app.add_typer(validate.app, name="validate", help="Run validation strategies on code files")
 app.add_typer(scan.app, name="scan", help="Scan entire project or directory")
 app.add_typer(report.app, name="report", help="Generate validation reports")
 app.add_typer(infrastructure.app, name="infrastructure", help="Infrastructure management (Git hooks, CI templates, Docker)")
 app.add_typer(rules.app, name="rules", help="Manage custom validation rules")
 app.add_typer(frame.app, name="frame", help="Manage custom validation frames")
+app.add_typer(providers.app, name="providers", help="Manage AST providers for different programming languages")
 
 
 @app.command()
