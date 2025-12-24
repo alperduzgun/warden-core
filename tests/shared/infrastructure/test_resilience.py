@@ -471,3 +471,117 @@ class TestIntegrationScenarios:
 
         assert result == "Service recovered"
         assert pipeline.circuit_breaker.state == CircuitState.CLOSED
+
+
+class TestTimeoutInteractions:
+    """Test timeout interaction with retry and circuit breaker."""
+
+    @pytest.mark.asyncio
+    async def test_retry_policy_with_timeout(self):
+        """Test retry policy respects timeout."""
+        policy = RetryPolicy(
+            RetryOptions(max_attempts=3, initial_delay=0.1, use_jitter=False)
+        )
+
+        async def slow_function():
+            await asyncio.sleep(5)  # Exceeds timeout
+            return "success"
+
+        # Should timeout before all retries complete
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(policy.execute(slow_function), timeout=1.0)
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_with_timeout(self):
+        """Test circuit breaker handles timeout correctly when timeout happens inside function."""
+        cb = CircuitBreaker(CircuitBreakerOptions(minimum_throughput=1))
+
+        async def timeout_func():
+            # Timeout exception raised inside function
+            raise asyncio.TimeoutError("Operation timed out")
+
+        # Execute - TimeoutError should count as failure
+        try:
+            await cb.execute(timeout_func)
+        except asyncio.TimeoutError:
+            pass
+
+        # Circuit breaker should track timeout as failure
+        assert len(cb.failures) > 0
+        assert cb.metrics["total_failures"] == 1
+
+    @pytest.mark.asyncio
+    async def test_resilience_pipeline_with_timeout(self):
+        """Test full resilience pipeline with timeout exception inside function."""
+        pipeline = ResiliencePipeline(
+            retry_options=RetryOptions(max_attempts=2, initial_delay=0.05),
+            circuit_breaker_options=CircuitBreakerOptions(minimum_throughput=5),  # Higher to avoid circuit opening on first failure
+        )
+
+        async def slow_service():
+            # Raise timeout error from inside function
+            raise asyncio.TimeoutError("Service timeout")
+
+        # Pipeline should handle timeout as failure
+        with pytest.raises(asyncio.TimeoutError):
+            await pipeline.execute(slow_service)
+
+        # Failures should be recorded (2 attempts due to retry)
+        assert pipeline.circuit_breaker.metrics["total_failures"] == 2
+        assert pipeline.circuit_breaker.metrics["total_requests"] == 2
+        # Circuit should stay CLOSED (not enough throughput to trigger opening)
+        assert pipeline.circuit_breaker.state == CircuitState.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_timeout_does_not_trigger_circuit_breaker_prematurely(self):
+        """Test timeout doesn't incorrectly open circuit breaker."""
+        cb = CircuitBreaker(
+            CircuitBreakerOptions(
+                failure_threshold=0.7,
+                minimum_throughput=3,
+                sampling_duration=10.0,
+            )
+        )
+
+        async def fast_success():
+            return "success"
+
+        async def slow_timeout():
+            await asyncio.sleep(5)
+            return "timeout"
+
+        # Execute 2 successful calls
+        await cb.execute(fast_success)
+        await cb.execute(fast_success)
+
+        # Execute 1 timeout (should count as failure)
+        try:
+            await asyncio.wait_for(cb.execute(slow_timeout), timeout=0.1)
+        except asyncio.TimeoutError:
+            pass
+
+        # Circuit should stay CLOSED (2 success, 1 failure = 33% failure rate < 70%)
+        assert cb.state == CircuitState.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_metrics_with_timeouts(self):
+        """Test circuit breaker metrics track timeouts correctly."""
+        cb = CircuitBreaker(CircuitBreakerOptions())
+
+        async def timeout_func():
+            # Raise timeout from inside function
+            raise asyncio.TimeoutError("Operation timed out")
+
+        # Execute 3 timeouts
+        timeout_count = 0
+        for _ in range(3):
+            try:
+                await cb.execute(timeout_func)
+            except asyncio.TimeoutError:
+                timeout_count += 1
+
+        # Metrics should show 3 requests and 3 failures
+        metrics = cb.get_metrics()
+        assert metrics["total_requests"] == 3
+        assert metrics["total_failures"] == 3
+        assert timeout_count == 3

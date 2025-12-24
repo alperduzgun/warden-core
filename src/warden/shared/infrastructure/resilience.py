@@ -25,6 +25,14 @@ logger = get_logger(__name__)
 T = TypeVar("T")
 
 
+# Default timeout constants for different operation types
+DEFAULT_TIMEOUT_EXTERNAL_API = 30.0  # External 3rd party APIs
+DEFAULT_TIMEOUT_INTERNAL_SERVICE = 10.0  # Internal microservices
+DEFAULT_TIMEOUT_DATABASE = 5.0  # Database queries
+DEFAULT_TIMEOUT_LLM = 60.0  # LLM operations (can be slow)
+DEFAULT_TIMEOUT_FRAME = 120.0  # Validation frame execution
+
+
 class CircuitState(Enum):
     """Circuit breaker states."""
 
@@ -41,6 +49,7 @@ class RetryOptions:
     initial_delay: float = 1.0  # Initial retry delay in seconds
     use_exponential_backoff: bool = True
     use_jitter: bool = True  # Add randomness to prevent thundering herd
+    jitter_range: float = 0.2  # Jitter percentage (default: ±20%)
     max_delay: float = 30.0  # Maximum delay between retries
 
 
@@ -67,6 +76,14 @@ class CircuitBreaker:
         self.failures: list[datetime] = []
         self.successes: list[datetime] = []
         self.opened_at: datetime | None = None
+
+        # Metrics tracking
+        self.metrics = {
+            "total_requests": 0,
+            "total_failures": 0,
+            "total_successes": 0,
+            "state_changes": [],
+        }
 
     def _clean_old_records(self):
         """Remove records outside sampling window."""
@@ -103,6 +120,37 @@ class CircuitBreaker:
         elapsed = (datetime.utcnow() - self.opened_at).total_seconds()
         return elapsed >= self.options.break_duration
 
+    def _change_state(self, new_state: CircuitState):
+        """Change circuit state and track metrics."""
+        old_state = self.state
+        self.state = new_state
+        self.metrics["state_changes"].append(
+            {
+                "from": old_state.value,
+                "to": new_state.value,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
+
+    def get_metrics(self) -> dict:
+        """
+        Return circuit breaker metrics for monitoring.
+
+        Returns:
+            Dictionary containing metrics:
+            - total_requests: Total number of requests
+            - total_failures: Total number of failures
+            - total_successes: Total number of successes
+            - state_changes: History of state changes
+            - current_state: Current circuit state
+            - failure_ratio: Current failure ratio
+        """
+        return {
+            **self.metrics,
+            "current_state": self.state.value,
+            "failure_ratio": self._get_failure_ratio(),
+        }
+
     async def execute(self, func: Callable[[], Any]) -> Any:
         """
         Execute function with circuit breaker protection.
@@ -117,13 +165,16 @@ class CircuitBreaker:
             Exception: If circuit is OPEN (fail fast)
             Exception: If function raises
         """
+        # Update metrics
+        self.metrics["total_requests"] += 1
+
         # Check if should attempt reset
         if self._should_attempt_reset():
             logger.info(
                 "circuit_breaker_half_open",
                 message="Circuit breaker HALF-OPEN: Testing recovery",
             )
-            self.state = CircuitState.HALF_OPEN
+            self._change_state(CircuitState.HALF_OPEN)
 
         # Fail fast if circuit is open
         if self.state == CircuitState.OPEN:
@@ -139,6 +190,7 @@ class CircuitBreaker:
 
             # Record success
             self.successes.append(datetime.utcnow())
+            self.metrics["total_successes"] += 1
 
             # Close circuit if was half-open
             if self.state == CircuitState.HALF_OPEN:
@@ -146,7 +198,7 @@ class CircuitBreaker:
                     "circuit_breaker_closed",
                     message="Circuit breaker CLOSED: Normal operation resumed",
                 )
-                self.state = CircuitState.CLOSED
+                self._change_state(CircuitState.CLOSED)
                 self.failures.clear()
                 self.successes.clear()
 
@@ -155,10 +207,10 @@ class CircuitBreaker:
         except Exception as e:
             # Record failure
             self.failures.append(datetime.utcnow())
+            self.metrics["total_failures"] += 1
 
             # Check if should open circuit
             if self.state == CircuitState.CLOSED and self._should_open():
-                self.state = CircuitState.OPEN
                 self.opened_at = datetime.utcnow()
                 failure_ratio = self._get_failure_ratio()
 
@@ -168,15 +220,16 @@ class CircuitBreaker:
                     break_duration=self.options.break_duration,
                     message=f"Circuit breaker OPENED: Too many failures ({failure_ratio:.1%}). Breaking for {self.options.break_duration}s",
                 )
+                self._change_state(CircuitState.OPEN)
 
             # If half-open test failed, reopen circuit
             if self.state == CircuitState.HALF_OPEN:
-                self.state = CircuitState.OPEN
                 self.opened_at = datetime.utcnow()
                 logger.warning(
                     "circuit_breaker_reopened",
                     message="Circuit breaker REOPENED: Half-open test failed",
                 )
+                self._change_state(CircuitState.OPEN)
 
             raise
 
@@ -205,8 +258,8 @@ class RetryPolicy:
 
         # Add jitter (randomness) to prevent thundering herd
         if self.options.use_jitter:
-            # Jitter: ±20% randomness
-            jitter_range = delay * 0.2
+            # Jitter: configurable percentage (default: ±20%)
+            jitter_range = delay * self.options.jitter_range
             delay += random.uniform(-jitter_range, jitter_range)
             delay = max(0.1, delay)  # Ensure positive delay
 

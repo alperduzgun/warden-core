@@ -462,13 +462,45 @@ class PipelineOrchestrator:
                     pipeline.frames_failed += 1
                     return
 
+                except asyncio.CancelledError:
+                    # Task cancellation - propagate to allow clean shutdown
+                    logger.warning(
+                        "frame_cancelled",
+                        frame=frame.name,
+                        file=code_file.path,
+                        message="Frame execution cancelled",
+                    )
+                    raise  # Propagate cancellation
+
                 except Exception as e:
                     logger.error(
                         "frame_execution_error",
                         frame=frame.name,
                         file=code_file.path,
                         error=str(e),
+                        error_type=type(e).__name__,
                     )
+
+                    # Graceful degradation: try to use cached result if available
+                    if (
+                        frame.scope == FrameScope.REPOSITORY_LEVEL
+                        and frame.name in self._repository_level_cache
+                    ):
+                        logger.info(
+                            "using_cached_fallback",
+                            frame=frame.name,
+                            file=code_file.path,
+                            message="Using cached result as fallback after execution error",
+                        )
+                        frame_exec.result = self._repository_level_cache[frame.name]
+                        frame_exec.status = "completed"
+                        frame_exec.duration = 0.0
+                    else:
+                        # No cache available - mark as failed and continue
+                        frame_exec.error = str(e)
+                        frame_exec.status = "failed"
+                        pipeline.frames_failed += 1
+
                     # Continue with other files
                     continue
 
