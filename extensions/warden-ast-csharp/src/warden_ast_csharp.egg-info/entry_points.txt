@@ -1,0 +1,2 @@
+[warden.ast_providers]
+csharp = warden_ast_csharp.provider:CSharpParserProvider

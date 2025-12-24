@@ -1,0 +1,2 @@
+[warden.ast_providers]
+typescript = warden_ast_typescript.provider:TypeScriptParserProvider

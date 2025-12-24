@@ -1,0 +1,15 @@
+LICENSE
+MANIFEST.in
+README.md
+pyproject.toml
+src/warden_ast_csharp/__init__.py
+src/warden_ast_csharp/provider.py
+src/warden_ast_csharp/py.typed
+src/warden_ast_csharp.egg-info/PKG-INFO
+src/warden_ast_csharp.egg-info/SOURCES.txt
+src/warden_ast_csharp.egg-info/dependency_links.txt
+src/warden_ast_csharp.egg-info/entry_points.txt
+src/warden_ast_csharp.egg-info/requires.txt
+src/warden_ast_csharp.egg-info/top_level.txt
+tests/__init__.py
+tests/test_csharp_provider.py

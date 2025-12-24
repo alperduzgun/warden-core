@@ -1,0 +1,379 @@
+# warden-ast-typescript
+
+TypeScript/TSX AST provider for Warden using tree-sitter-typescript.
+
+## Features
+
+- **TypeScript 5.x Support**: Full syntax support for modern TypeScript
+- **TSX Support**: React/JSX syntax in TypeScript files (.tsx)
+- **Dual Grammar**: Automatic grammar selection based on file extension
+- **Pure Python**: No Node.js or TypeScript compiler required
+- **Fast Parsing**: Uses tree-sitter's C implementation for performance
+- **Universal AST**: Converts to Warden's language-agnostic AST format
+- **Modern Features**: Decorators, generics, async/await, arrow functions
+
+## Supported TypeScript Constructs
+
+### Type Definitions
+- Interfaces (`interface User { ... }`)
+- Type aliases (`type ID = string | number`)
+- Enums (`enum Status { ... }`)
+- Classes with TypeScript features
+
+### Functions
+- Function declarations
+- Arrow functions
+- Async functions
+- Generator functions
+- Generic functions
+
+### Decorators
+- Class decorators (`@Component`)
+- Method decorators (`@Get('/users')`)
+- Property decorators
+- Parameter decorators
+
+### Modifiers
+- Access modifiers (`public`, `private`, `protected`)
+- `static`, `readonly`, `abstract`
+- `async`, `declare`, `export`
+
+### Modern TypeScript
+- Generics (functions, classes, interfaces)
+- Optional parameters and properties
+- Union and intersection types
+- Type assertions (`as Type`)
+- Await expressions
+
+### JSX/TSX
+- JSX elements (`<div>...</div>`)
+- Self-closing elements (`<Avatar />`)
+- JSX fragments (`<>...</>`)
+- React components
+
+## Installation
+
+```bash
+# Install from source
+cd extensions/warden-ast-typescript
+pip install -e .
+
+# Or install dependencies directly
+pip install tree-sitter>=0.21.0 tree-sitter-typescript>=0.23.0
+```
+
+## Usage
+
+### Standalone Usage
+
+```python
+from warden_ast_typescript.provider import TypeScriptParserProvider
+from warden.ast.domain.enums import CodeLanguage, ParseStatus
+
+# Create provider
+provider = TypeScriptParserProvider()
+
+# Validate dependencies
+if await provider.validate():
+    # Parse TypeScript code
+    code = """
+    interface User {
+        id: number;
+        name: string;
+    }
+
+    class UserService {
+        async getUser(id: number): Promise<User> {
+            return { id, name: "John" };
+        }
+    }
+    """
+
+    result = await provider.parse(
+        code,
+        CodeLanguage.TYPESCRIPT,
+        "UserService.ts"
+    )
+
+    if result.status == ParseStatus.SUCCESS:
+        print(f"Parsed {len(result.ast_root.children)} top-level nodes")
+
+        # Access AST nodes
+        for node in result.ast_root.children:
+            print(f"- {node.node_type.value}: {node.name}")
+```
+
+### With Warden Framework
+
+The provider is automatically discovered via entry points:
+
+```python
+from warden.ast.application.code_file import CodeFile
+from warden.ast.domain.enums import CodeLanguage
+
+# Create TypeScript file
+ts_file = CodeFile(
+    file_path="src/services/user.service.ts",
+    language=CodeLanguage.TYPESCRIPT,
+    content="""
+    @Injectable()
+    export class UserService {
+        constructor(private db: Database) {}
+
+        async findAll(): Promise<User[]> {
+            return this.db.users.find();
+        }
+    }
+    """
+)
+
+# Parse with auto-discovery
+result = await ts_file.parse()
+
+if result.status == ParseStatus.SUCCESS:
+    # Warden automatically uses TypeScriptParserProvider
+    print("AST parsed successfully!")
+```
+
+### TSX Support
+
+The provider automatically detects TSX files by extension:
+
+```python
+# Parse TSX React component
+tsx_code = """
+import React from 'react';
+
+interface Props {
+    name: string;
+    age: number;
+}
+
+export const UserCard: React.FC<Props> = ({ name, age }) => {
+    return (
+        <div className="user-card">
+            <h2>{name}</h2>
+            <p>Age: {age}</p>
+        </div>
+    );
+};
+"""
+
+result = await provider.parse(
+    tsx_code,
+    CodeLanguage.TYPESCRIPT,
+    "UserCard.tsx"  # .tsx triggers TSX grammar
+)
+```
+
+## Architecture
+
+### Dual Grammar System
+
+tree-sitter-typescript provides two grammars:
+
+1. **TypeScript Grammar** (`.ts` files)
+   - Pure TypeScript syntax
+   - Type annotations, interfaces, enums
+   - No JSX support
+
+2. **TSX Grammar** (`.tsx` files)
+   - TypeScript + JSX syntax
+   - React components
+   - JSX elements and fragments
+
+The provider automatically selects the correct grammar based on file extension.
+
+### AST Node Mapping
+
+TypeScript nodes are mapped to universal AST types:
+
+| TypeScript Node | Universal AST Type |
+|----------------|-------------------|
+| `class_declaration` | `CLASS` |
+| `interface_declaration` | `CLASS` |
+| `function_declaration` | `FUNCTION` |
+| `method_definition` | `FUNCTION` |
+| `import_statement` | `IMPORT` |
+| `decorator` | `ANNOTATION` |
+| `jsx_element` | `CALL_EXPRESSION` |
+
+### Attribute Extraction
+
+The provider extracts TypeScript-specific metadata:
+
+- **Modifiers**: `public`, `private`, `protected`, `static`, `async`, `readonly`, `abstract`
+- **Decorators**: `@Component`, `@Injectable`, `@Get`, etc.
+- **Generics**: Type parameters (`<T>`, `<K, V>`)
+- **Import/Export**: Module paths and export types
+- **Parameters**: Function parameters with types
+- **Return Types**: Function return type annotations
+- **Inheritance**: `extends` and `implements` clauses
+
+### Provider Priority
+
+The provider registers with `ASTProviderPriority.NATIVE`, making it the preferred provider for TypeScript files.
+
+## Examples
+
+### Parsing Decorators
+
+```python
+code = """
+@Component({
+    selector: 'app-root',
+    templateUrl: './app.component.html'
+})
+export class AppComponent {
+    @Input() title: string;
+
+    @Output()
+    titleChange = new EventEmitter<string>();
+}
+"""
+
+result = await provider.parse(code, CodeLanguage.TYPESCRIPT, "app.component.ts")
+
+# Access decorator information
+for node in result.ast_root.children:
+    if node.node_type == ASTNodeType.CLASS:
+        print(f"Class: {node.name}")
+        print(f"Decorators: {node.attributes.get('decorators', [])}")
+```
+
+### Parsing Generics
+
+```python
+code = """
+interface Repository<T> {
+    findById(id: number): Promise<T>;
+    save(entity: T): Promise<T>;
+}
+
+class UserRepository implements Repository<User> {
+    async findById(id: number): Promise<User> {
+        // ...
+    }
+}
+"""
+
+result = await provider.parse(code, CodeLanguage.TYPESCRIPT, "repository.ts")
+
+# Check for generic types
+for node in result.ast_root.children:
+    if node.attributes.get('generic'):
+        print(f"{node.name} uses generics: {node.attributes['type_parameters']}")
+```
+
+### Parsing Async Functions
+
+```python
+code = """
+async function fetchUserData(userId: number): Promise<User> {
+    const response = await fetch(`/api/users/${userId}`);
+    return response.json();
+}
+"""
+
+result = await provider.parse(code, CodeLanguage.TYPESCRIPT, "api.ts")
+
+# Check for async functions
+for node in result.ast_root.children:
+    if node.node_type == ASTNodeType.FUNCTION:
+        is_async = node.attributes.get('async', False)
+        return_type = node.attributes.get('return_type', 'unknown')
+        print(f"{node.name} - async: {is_async}, returns: {return_type}")
+```
+
+## Limitations
+
+### Syntax-Only Parsing
+
+This provider performs **syntax-level parsing** only:
+
+- ✅ Parses TypeScript syntax structure
+- ✅ Extracts types from annotations
+- ❌ Does not perform type checking
+- ❌ Does not resolve type inference
+- ❌ Does not validate type correctness
+
+For semantic analysis, you need the TypeScript compiler (`tsc`).
+
+### No Type Resolution
+
+```typescript
+// The parser sees the syntax but doesn't resolve types
+const user = getUserById(123);  // Type of 'user' is not resolved
+```
+
+### Best For
+
+- Static code analysis
+- Code structure validation
+- Linting and formatting
+- AST-based transformations
+- Code metrics and statistics
+
+## Development
+
+### Running Tests
+
+```bash
+cd extensions/warden-ast-typescript
+
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=warden_ast_typescript --cov-report=html
+```
+
+### Project Structure
+
+```
+warden-ast-typescript/
+├── src/
+│   └── warden_ast_typescript/
+│       ├── __init__.py
+│       └── provider.py          # Main provider implementation
+├── tests/
+│   ├── __init__.py
+│   └── test_typescript_provider.py
+├── pyproject.toml               # Package configuration
+├── README.md                    # This file
+├── LICENSE                      # MIT License
+└── MANIFEST.in                  # Package manifest
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new features
+4. Ensure all tests pass
+5. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Dependencies
+
+- **tree-sitter** (>=0.21.0): Python bindings for tree-sitter
+- **tree-sitter-typescript** (>=0.23.0): TypeScript/TSX grammar
+- **structlog** (>=23.0): Structured logging
+
+## Related
+
+- [tree-sitter](https://tree-sitter.github.io/tree-sitter/): Official tree-sitter documentation
+- [tree-sitter-typescript](https://github.com/tree-sitter/tree-sitter-typescript): TypeScript grammar
+- [Warden](https://github.com/warden-team/warden-core): Main Warden framework
+
+## Support
+
+For issues and questions:
+- GitHub Issues: https://github.com/warden-team/warden-core/issues
+- Documentation: https://warden.dev/docs

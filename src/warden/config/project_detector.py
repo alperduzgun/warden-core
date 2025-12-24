@@ -422,6 +422,87 @@ class ProjectDetector:
             except (Exception, OSError, UnicodeDecodeError):
                 pass
 
+        # Maven multi-module (Java)
+        pom_path = self.project_root / "pom.xml"
+        if pom_path.exists():
+            try:
+                content = pom_path.read_text()
+                # Check for <modules> tag indicating multi-module project
+                if re.search(r"<modules>.*</modules>", content, re.DOTALL):
+                    return True
+                # Alternative: multiple pom.xml in subdirectories
+                sub_poms = list(self.project_root.glob("*/pom.xml"))
+                if len(sub_poms) > 1:
+                    return True
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        # Gradle multi-project (Java/Kotlin)
+        settings_gradle = self.project_root / "settings.gradle"
+        settings_gradle_kts = self.project_root / "settings.gradle.kts"
+
+        for settings_file in [settings_gradle, settings_gradle_kts]:
+            if settings_file.exists():
+                try:
+                    content = settings_file.read_text()
+                    # Check for include() statements indicating subprojects
+                    if re.search(r"include\s*\(", content):
+                        return True
+                    # Alternative: multiple build.gradle in subdirectories
+                    sub_builds = list(self.project_root.glob("*/build.gradle"))
+                    sub_builds_kts = list(self.project_root.glob("*/build.gradle.kts"))
+                    if len(sub_builds) > 1 or len(sub_builds_kts) > 1:
+                        return True
+                except (OSError, UnicodeDecodeError):
+                    pass
+
+        # .NET solutions (.sln files indicate multiple projects)
+        sln_files = list(self.project_root.glob("*.sln"))
+        if sln_files:
+            try:
+                # A .sln file typically contains multiple projects
+                content = sln_files[0].read_text()
+                # Count project references in solution
+                project_count = len(re.findall(r'Project\("', content))
+                if project_count > 1:
+                    return True
+                # Alternative: multiple .csproj files
+                csproj_files = list(self.project_root.glob("**/*.csproj"))
+                if len(csproj_files) > 1:
+                    return True
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        # Go workspaces (go.work file indicates workspace)
+        go_work = self.project_root / "go.work"
+        if go_work.exists():
+            try:
+                content = go_work.read_text()
+                # Check for use directives indicating multiple modules
+                if re.search(r"use\s+", content):
+                    return True
+            except (OSError, UnicodeDecodeError):
+                pass
+        # Alternative: multiple go.mod files
+        go_mods = list(self.project_root.glob("*/go.mod"))
+        if len(go_mods) > 1:
+            return True
+
+        # Rust workspaces (Cargo.toml with [workspace] section)
+        cargo_toml = self.project_root / "Cargo.toml"
+        if cargo_toml.exists():
+            try:
+                data = tomllib.loads(cargo_toml.read_text())
+                # Check for workspace section with members
+                if "workspace" in data and "members" in data["workspace"]:
+                    return True
+            except (Exception, OSError, UnicodeDecodeError):
+                pass
+        # Alternative: multiple Cargo.toml files
+        cargo_tomls = list(self.project_root.glob("*/Cargo.toml"))
+        if len(cargo_tomls) > 1:
+            return True
+
         # Multiple package.json or pyproject.toml in subdirectories
         package_jsons = list(self.project_root.glob("*/package.json"))
         pyprojects = list(self.project_root.glob("*/pyproject.toml"))
