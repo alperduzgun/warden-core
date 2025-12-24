@@ -93,6 +93,9 @@ class ProjectDetector:
                             ".git",
                             "vendor",
                             "target",
+                            "cli",  # Ignore TypeScript CLI folder
+                            "frontend",  # Also ignore frontend folders
+                            "client",  # Common client-side folder
                         ]
                     )
                 ]

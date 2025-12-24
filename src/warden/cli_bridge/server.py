@@ -68,6 +68,8 @@ class IPCServer:
             "get_config": self.bridge.get_config,
             "analyze_with_llm": self._handle_streaming_method,
             "get_available_frames": self.bridge.get_available_frames,
+            "get_available_providers": self.bridge.get_available_providers,
+            "test_provider": self.bridge.test_provider,
         }
 
         logger.info("ipc_server_initialized", transport=transport)

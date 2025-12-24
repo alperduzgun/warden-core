@@ -33,7 +33,8 @@ export async function handleStatusCommand(
   // Session info
   statusMessage += '## Session Information\n';
   statusMessage += `- **Session ID**: ${sessionId || 'N/A'}\n`;
-  statusMessage += `- **Project Root**: \`${projectRoot || process.cwd()}\`\n\n`;
+  statusMessage += `- **Project Root**: \`${projectRoot || process.cwd()}\`\n`;
+  statusMessage += `- **Reports Directory**: \`.warden/reports/\`\n\n`;
 
   // IPC connection status
   statusMessage += '## Backend Connection\n';
@@ -94,6 +95,15 @@ export async function handleStatusCommand(
       statusMessage += `- **Status**: ⚠️ Failed to fetch config\n`;
       statusMessage += `- **Error**: ${configError instanceof Error ? configError.message : 'Unknown error'}\n`;
     }
+
+    // CLI Features (NEW)
+    statusMessage += '\n## CLI Features\n';
+    statusMessage += '- ✅ Real-time scan progress with streaming\n';
+    statusMessage += '- ✅ Esc key cancellation (graceful shutdown)\n';
+    statusMessage += '- ✅ Auto-report generation (JSON + Markdown)\n';
+    statusMessage += '- ✅ File picker with @ trigger\n';
+    statusMessage += '- ✅ Frame-specific validation (/validate)\n';
+    statusMessage += '- ✅ Custom rules support (rules.yaml)\n\n';
   } catch (pingError) {
     statusMessage += `- **Status**: ❌ Connection failed\n`;
     statusMessage += `- **Error**: ${pingError instanceof Error ? pingError.message : 'Unknown error'}\n`;

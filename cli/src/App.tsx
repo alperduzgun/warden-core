@@ -19,6 +19,7 @@ import { Header } from './components/Header.js';
 import { ChatArea } from './components/ChatArea.js';
 import { InputBox } from './components/InputBox.js';
 import { ScanProgress } from './components/ScanProgress.js';
+import { FramePicker } from './components/FramePicker.js';
 import { useMessages } from './hooks/useMessages.js';
 import { MessageType, SessionInfo, CommandType } from './types/index.js';
 import { detectCommand } from './utils/commandDetector.js';
@@ -70,6 +71,13 @@ const AppContent: React.FC<AppProps> = ({
   const [client, setClient] = useState<WardenClient | null>(null);
   const [sessionId] = useState<string>(() => `session-${Date.now()}`);
   const [lastScanPath, setLastScanPath] = useState<string | undefined>(undefined);
+
+  // Frame picker state for /validate command
+  const [showFramePicker, setShowFramePicker] = useState(false);
+  const [pendingValidation, setPendingValidation] = useState<{
+    filePath: string;
+    frames: import('./bridge/wardenClient.js').FrameInfo[];
+  } | null>(null);
 
   // Configuration available via environment variables
   // Currently unused but kept for future features
@@ -175,6 +183,10 @@ const AppContent: React.FC<AppProps> = ({
         projectRoot: process.cwd(),
         sessionId,
         ...(lastScanPath && { lastScanPath }),
+        showFramePicker: (filePath: string, frames: import('./bridge/wardenClient.js').FrameInfo[]) => {
+          setPendingValidation({ filePath, frames });
+          setShowFramePicker(true);
+        },
       };
 
       // Update lastScanPath if this is a scan command
@@ -261,6 +273,44 @@ const AppContent: React.FC<AppProps> = ({
       onSubmit,
     ]
   );
+
+  /**
+   * Handle frame picker confirm
+   */
+  const handleFramePickerConfirm = useCallback(
+    async (selectedFrameIds: string[]) => {
+      setShowFramePicker(false);
+
+      if (!pendingValidation || selectedFrameIds.length === 0) {
+        addMessage('⚠️  No frames selected. Validation cancelled.', MessageType.SYSTEM);
+        setPendingValidation(null);
+        return;
+      }
+
+      // Execute validation with selected frames
+      const { filePath } = pendingValidation;
+      const frameNames = selectedFrameIds.join(',');
+
+      addMessage(`🎯 Validating \`${filePath}\` with frames: ${frameNames}`, MessageType.SYSTEM, {
+        markdown: true,
+      });
+
+      // Execute validation directly via message submit (will route to validateCommand)
+      const validationMessage = `/validate ${filePath} ${frameNames}`;
+      await handleMessageSubmit(validationMessage);
+      setPendingValidation(null);
+    },
+    [pendingValidation, addMessage, handleMessageSubmit]
+  );
+
+  /**
+   * Handle frame picker cancel
+   */
+  const handleFramePickerCancel = useCallback(() => {
+    setShowFramePicker(false);
+    setPendingValidation(null);
+    addMessage('Validation cancelled', MessageType.SYSTEM);
+  }, [addMessage]);
 
   /**
    * Handle input value change
@@ -478,13 +528,26 @@ const AppContent: React.FC<AppProps> = ({
         </Box>
       )}
 
+      {/* Frame picker overlay (shows when selecting frames for /validate) */}
+      {showFramePicker && pendingValidation && (
+        <Box marginBottom={1}>
+          <FramePicker
+            frames={pendingValidation.frames}
+            onConfirm={handleFramePickerConfirm}
+            onCancel={handleFramePickerCancel}
+          />
+        </Box>
+      )}
+
       {/* Input box with command detection - ALWAYS at bottom */}
-      <InputBox
-        value={inputValue}
-        onChange={handleInputChange}
-        onSubmit={handleInputSubmit}
-        isProcessing={isProcessing}
-      />
+      {!showFramePicker && (
+        <InputBox
+          value={inputValue}
+          onChange={handleInputChange}
+          onSubmit={handleInputSubmit}
+          isProcessing={isProcessing}
+        />
+      )}
     </Box>
   );
 };

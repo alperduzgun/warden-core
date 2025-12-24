@@ -101,10 +101,10 @@ def display_rule_violations(violations: list[CustomRuleViolation]) -> None:
 
         console.print(f"\n  [{severity_color}]●[/{severity_color}] {v.rule_name}{blocker_marker}")
         console.print(f"    {v.message}")
-        console.print(f"    [dim]File: {v.file_path}[/dim]")
+        console.print(f"    [dim]File: {v.file}[/dim]")
 
-        if v.line_number:
-            console.print(f"    [dim]Line: {v.line_number}[/dim]")
+        if v.line:
+            console.print(f"    [dim]Line: {v.line}[/dim]")
 
     if len(violations) > 10:
         console.print(f"\n  [dim]... and {len(violations) - 10} more violations[/dim]")

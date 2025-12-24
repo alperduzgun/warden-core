@@ -94,7 +94,7 @@ function formatSeverity(severity: string): string {
 /**
  * Format pipeline status
  */
-function formatStatus(status: string | number | any): string {
+function formatStatus(status: string | number | unknown): string {
   // Handle enum values from backend (0, 1, 2, etc.)
   if (typeof status === 'number') {
     const enumMap: Record<number, string> = {
@@ -107,14 +107,18 @@ function formatStatus(status: string | number | any): string {
   }
 
   // Handle string status
-  const statusStr = typeof status === 'string' ? status : String(status);
-  const statusMap: Record<string, string> = {
-    success: '✅ SUCCESS',
-    failed: '❌ FAILED',
-    partial: '⚠️  PARTIAL',
-    running: '⏳ RUNNING',
-  };
-  return statusMap[statusStr.toLowerCase()] || statusStr.toUpperCase();
+  if (typeof status === 'string') {
+    const statusMap: Record<string, string> = {
+      success: '✅ SUCCESS',
+      failed: '❌ FAILED',
+      partial: '⚠️  PARTIAL',
+      running: '⏳ RUNNING',
+    };
+    return statusMap[status.toLowerCase()] || status.toUpperCase();
+  }
+
+  // Handle unknown types safely
+  return status === null || status === undefined ? 'UNKNOWN' : String(status).toUpperCase();
 }
 
 /**

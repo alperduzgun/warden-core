@@ -33,6 +33,8 @@ import {
   saveReport,
   getReportsDirectory,
 } from '../utils/reportGenerator.js';
+import type { WardenClient } from '../bridge/wardenClient.js';
+import type { ProgressContextValue } from '../contexts/ProgressContext.js';
 
 /**
  * Result from scanning a single file
@@ -301,13 +303,13 @@ export async function handleScanCommand(
 async function executeScanWithProgress(
   files: string[],
   scanPath: string,
-  client: any,
-  progressContext: any
+  client: WardenClient,
+  progressContext: ProgressContextValue
 ): Promise<ScanFileResult[]> {
   const results: ScanFileResult[] = [];
 
   // Get available frames from backend
-  let availableFrames: any[] = [];
+  let availableFrames: Array<{ id: string; name: string; description: string; priority: string; is_blocker: boolean }> = [];
   try {
     availableFrames = await client.getAvailableFrames();
   } catch (error) {
@@ -339,7 +341,7 @@ async function executeScanWithProgress(
       // Update files scanned count
       progressContext.updateProgress({ filesScanned: i });
 
-      let lastResult: any = null;
+      let lastResult: PipelineResult | null = null;
 
       try {
         // Stream events for this file
@@ -398,9 +400,9 @@ async function executeScanWithProgress(
  * Maps backend events to UI updates
  */
 function handleStreamingEvent(
-  event: any,
+  event: { type: string; event?: string; data?: Record<string, unknown> },
   _filePath: string,
-  progressContext: any
+  progressContext: ProgressContextValue
 ): void {
   if (event.type !== 'progress') {
     return;
@@ -418,8 +420,9 @@ function handleStreamingEvent(
 
     case 'frame_started':
       {
-        const frameId = data.frame_id;
-        const frameName = data.frame_name;
+        if (!data) return;
+        const frameId = data.frame_id as string;
+        const frameName = data.frame_name as string;
 
         // Update frame to running
         progressContext.updateFrame(frameId, {
@@ -433,10 +436,11 @@ function handleStreamingEvent(
 
     case 'frame_completed':
       {
-        const frameId = data.frame_id;
-        const issuesFound = data.issues_found || 0;
-        const duration = data.duration || 0;
-        const status = data.status || 'success';
+        if (!data) return;
+        const frameId = data.frame_id as string;
+        const issuesFound = (data.issues_found as number) || 0;
+        const duration = (data.duration as number) || 0;
+        const status = (data.status as string) || 'success';
 
         // Update frame to completed
         progressContext.updateFrame(frameId, {

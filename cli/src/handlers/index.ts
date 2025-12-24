@@ -16,8 +16,9 @@ export { handleClearCommand, clearCommandMetadata, handleQuitCommand, quitComman
 export { handleStatusCommand, statusCommandMetadata } from './statusCommand.js';
 export { handleAnalyzeCommand, analyzeCommandMetadata } from './analyzeCommand.js';
 export { handleScanCommand, scanCommandMetadata } from './scanCommand.js';
+export { handleValidateCommand, validateCommandMetadata } from './validateCommand.js';
+export { handleProvidersCommand, providersCommandMetadata } from './providersCommand.js';
 
 // TODO: Export additional handlers as they are implemented
-// export { handleValidateCommand, validateCommandMetadata } from './validateCommand.js';
 // export { handleFixCommand, fixCommandMetadata } from './fixCommand.js';
 // export { handleRulesCommand, rulesCommandMetadata } from './rulesCommand.js';

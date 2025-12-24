@@ -1,0 +1,28 @@
+{
+  "timestamp": "2025-12-24T15:59:10.048505",
+  "project": "cli",
+  "total_files": 1,
+  "analyzed_files": 1,
+  "total_issues": 0,
+  "critical_issues": 0,
+  "high_issues": 0,
+  "duration_seconds": 0.005246,
+  "frames": [
+    "SecurityFrame",
+    "ChaosFrame"
+  ],
+  "frame_results": [
+    {
+      "frame": "Security Analysis",
+      "passed": true,
+      "issues": 0,
+      "is_blocker": true
+    },
+    {
+      "frame": "Chaos Engineering",
+      "passed": true,
+      "issues": 0,
+      "is_blocker": false
+    }
+  ]
+}

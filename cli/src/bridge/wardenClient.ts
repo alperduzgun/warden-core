@@ -67,6 +67,7 @@ export interface Finding {
   line?: number;
   column?: number;
   code?: string;
+  file?: string;  // Added file field for file path
 }
 
 export interface WardenConfig {
@@ -91,6 +92,25 @@ export interface FrameInfo {
   priority: string;
   is_blocker: boolean;
   tags?: string[];
+}
+
+export interface ProviderInfo {
+  name: string;
+  languages: string[];
+  priority: string;
+  version: string;
+  source: string;
+}
+
+export interface ProviderTestResult {
+  available: boolean;
+  providerName?: string;
+  priority?: string;
+  version?: string;
+  validated?: boolean;
+  language?: string;
+  error?: string;
+  supportedLanguages?: string[];
 }
 
 // ============================================================================
@@ -478,6 +498,20 @@ export class WardenClient extends EventEmitter {
    */
   async getAvailableFrames(): Promise<FrameInfo[]> {
     return this.request('get_available_frames');
+  }
+
+  /**
+   * Get available AST providers
+   */
+  async getAvailableProviders(): Promise<ProviderInfo[]> {
+    return this.request('get_available_providers');
+  }
+
+  /**
+   * Test if a language provider is available
+   */
+  async testProvider(language: string): Promise<ProviderTestResult> {
+    return this.request('test_provider', { language });
   }
 
   /**

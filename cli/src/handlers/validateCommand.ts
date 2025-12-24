@@ -237,8 +237,9 @@ export async function handleValidateCommand(
       '❌ **Missing file path**\n\n' +
         'Usage: `/validate <file> [frame1,frame2,...]`\n\n' +
         'Examples:\n' +
-        '- `/validate file.py` - Run all frames\n' +
+        '- `/validate file.py` - Interactive frame picker\n' +
         '- `/validate file.py security` - Run only security frame\n' +
+        '- `/validate file.py security,orphan` - Run multiple frames\n' +
         '- `/validate --list` - Show available frames',
       MessageType.ERROR,
       true
@@ -263,7 +264,7 @@ export async function handleValidateCommand(
   const filePath = resolve(parts[0]);
   const frameSelection = parts.length > 1 ? parseFrameSelection(parts.slice(1).join(' ')) : [];
 
-  // Check file exists
+  // Check file exists BEFORE showing frame picker
   if (!existsSync(filePath)) {
     addMessage(
       `❌ **File not found**: \`${filePath}\`\n\n` +
@@ -295,6 +296,37 @@ export async function handleValidateCommand(
       MessageType.ERROR,
       true
     );
+    // Don't return - continue with validation
+  }
+
+  // If no frames specified and showFramePicker is available, show interactive picker
+  if (frameSelection.length === 0 && context.showFramePicker) {
+    try {
+      // Get available frames from backend
+      const frames = await client.getAvailableFrames();
+
+      if (frames.length === 0) {
+        addMessage(
+          '⚠️  **No validation frames available**\n\n' +
+            'The backend did not return any validation frames.',
+          MessageType.ERROR,
+          true
+        );
+        return;
+      }
+
+      // Show interactive frame picker
+      context.showFramePicker(filePath, frames);
+      return; // Frame picker will handle the rest
+    } catch (error) {
+      addMessage(
+        `❌ **Failed to get available frames**\n\n` +
+          `Error: \`${error instanceof Error ? error.message : 'Unknown error'}\``,
+        MessageType.ERROR,
+        true
+      );
+      return;
+    }
   }
 
   // Start validation

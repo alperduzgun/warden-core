@@ -1,0 +1,75 @@
+# JavaScript Security Rules
+# Security best practices for JavaScript/Node.js
+
+rules:
+  - id: js-eval-usage
+    name: "Avoid eval()"
+    description: "eval() executes arbitrary code"
+    severity: critical
+    tags: [security, code-injection]
+    pattern: |
+      eval\s*\(
+    message: "eval() is dangerous. Use JSON.parse() or other safe alternatives"
+
+  - id: js-innerhtml
+    name: "Avoid innerHTML"
+    description: "innerHTML can lead to XSS attacks"
+    severity: high
+    tags: [security, xss]
+    pattern: |
+      \.innerHTML\s*=
+    message: "Use textContent or createElement instead of innerHTML"
+
+  - id: js-sql-injection
+    name: "SQL Injection Risk"
+    description: "Detect string concatenation in SQL queries"
+    severity: critical
+    tags: [security, sql, injection]
+    pattern: |
+      (query|execute)\s*\([`"'].*\$\{.*\}.*[`"']
+    message: "Use parameterized queries to prevent SQL injection"
+
+  - id: js-hardcoded-secret
+    name: "Hardcoded Secrets"
+    description: "Secrets should not be in code"
+    severity: high
+    tags: [security, credentials]
+    pattern: |
+      (apiKey|api_key|secret|password|token)\s*[:=]\s*["'][^"']+["']
+    message: "Use environment variables for sensitive data"
+
+  - id: js-unsafe-regex
+    name: "ReDoS Vulnerability"
+    description: "Regex that can cause denial of service"
+    severity: medium
+    tags: [security, dos]
+    pattern: |
+      new\s+RegExp\s*\([^)]*(\+|\*){2}
+    message: "This regex pattern might be vulnerable to ReDoS attacks"
+
+  - id: js-no-tls-reject
+    name: "TLS Verification"
+    description: "Don't disable TLS certificate verification"
+    severity: high
+    tags: [security, tls]
+    pattern: |
+      rejectUnauthorized\s*:\s*false
+    message: "TLS certificate verification should not be disabled"
+
+  - id: js-open-redirect
+    name: "Open Redirect"
+    description: "Potential open redirect vulnerability"
+    severity: medium
+    tags: [security, redirect]
+    pattern: |
+      (redirect|location\.href)\s*=\s*req\.(query|params|body)
+    message: "Validate and whitelist redirect URLs"
+
+  - id: js-command-injection
+    name: "Command Injection"
+    description: "Potential command injection via child_process"
+    severity: critical
+    tags: [security, command-injection]
+    pattern: |
+      (exec|execSync|spawn)\s*\([^)]*\$\{
+    message: "Avoid string interpolation in shell commands"

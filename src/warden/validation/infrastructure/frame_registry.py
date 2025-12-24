@@ -186,8 +186,24 @@ class FrameRegistry:
             from warden.validation.frames.security import SecurityFrame
             from warden.validation.frames.chaos import ChaosFrame
             from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
+            from warden.validation.frames.orphan import OrphanFrame
+            from warden.validation.frames.project_architecture import ProjectArchitectureFrame
+            from warden.validation.frames.gitchanges import GitChangesFrame
+            from warden.validation.frames.fuzz import FuzzFrame
+            from warden.validation.frames.property import PropertyFrame
+            from warden.validation.frames.stress import StressFrame
 
-            frames = [SecurityFrame, ChaosFrame, ArchitecturalConsistencyFrame]
+            frames = [
+                SecurityFrame,
+                ChaosFrame,
+                ArchitecturalConsistencyFrame,
+                OrphanFrame,
+                ProjectArchitectureFrame,
+                GitChangesFrame,
+                FuzzFrame,
+                PropertyFrame,
+                StressFrame,
+            ]
 
             logger.debug(
                 "builtin_frames_loaded",
