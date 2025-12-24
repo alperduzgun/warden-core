@@ -19,10 +19,18 @@ from warden.pipeline.domain.models import (
 )
 from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
 from warden.validation.domain.frame import ValidationFrame, FrameResult, CodeFile
+from warden.validation.domain.enums import FrameScope
+from warden.validation.domain.code_characteristics import CodeCharacteristics
+from warden.validation.domain.memory_context import ValidationMemoryContext
 from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.exceptions import ValidationError
+from warden.shared.infrastructure.resilience import (
+    ResiliencePipeline,
+    RetryOptions,
+    CircuitBreakerOptions,
+)
 
 logger = get_logger(__name__)
 
@@ -61,6 +69,37 @@ class PipelineOrchestrator:
         # Initialize custom rule validator
         self.rule_validator = CustomRuleValidator(self.config.global_rules)
 
+        # Repository-level frame cache (optimization: avoid redundant execution)
+        # Frames with scope=REPOSITORY_LEVEL are executed once and cached
+        self._repository_level_cache: Dict[str, FrameResult] = {}
+
+        # Resilience pipeline (Polly-style: retry + circuit breaker)
+        self._resilience_pipeline: Optional[ResiliencePipeline] = None
+        if self.config.enable_retry or self.config.enable_circuit_breaker:
+            retry_opts = (
+                RetryOptions(max_attempts=self.config.max_retry_attempts)
+                if self.config.enable_retry
+                else None
+            )
+            circuit_breaker_opts = (
+                CircuitBreakerOptions(
+                    failure_threshold=self.config.circuit_breaker_threshold
+                )
+                if self.config.enable_circuit_breaker
+                else None
+            )
+            self._resilience_pipeline = ResiliencePipeline(
+                retry_options=retry_opts,
+                circuit_breaker_options=circuit_breaker_opts,
+            )
+            logger.info(
+                "resilience_pipeline_enabled",
+                retry=self.config.enable_retry,
+                max_attempts=self.config.max_retry_attempts if self.config.enable_retry else 0,
+                circuit_breaker=self.config.enable_circuit_breaker,
+                threshold=self.config.circuit_breaker_threshold if self.config.enable_circuit_breaker else 0,
+            )
+
         # Sort frames by priority (CRITICAL first)
         self._sort_frames_by_priority()
 
@@ -70,6 +109,7 @@ class PipelineOrchestrator:
             strategy=self.config.strategy.value,
             global_rules_count=len(self.config.global_rules),
             frame_rules_count=len(self.config.frame_rules),
+            resilience_enabled=self._resilience_pipeline is not None,
         )
 
     def _sort_frames_by_priority(self) -> None:
@@ -243,6 +283,58 @@ class PipelineOrchestrator:
         code_files: List[CodeFile],
     ) -> None:
         """Execute a single frame on all code files with PRE/POST rules."""
+        # OPTIMIZATION: Check cache for repository-level frames
+        # Repository-level frames analyze entire codebase (not file-specific)
+        # Cache key: frame.name (e.g., "SecurityFrame", "ChaosEngineeringFrame")
+        if frame.scope == FrameScope.REPOSITORY_LEVEL:
+            if frame.name in self._repository_level_cache:
+                cached_result = self._repository_level_cache[frame.name]
+
+                logger.debug(
+                    "repository_cache_hit",
+                    frame_name=frame.name,
+                    frame_id=frame.frame_id,
+                    cached_issues=cached_result.issues_found,
+                    message="⚡ Using cached result for repository-level frame"
+                )
+
+                # Reuse cached result
+                frame_exec.result = cached_result
+                frame_exec.status = "completed"
+                frame_exec.started_at = datetime.utcnow()
+                frame_exec.completed_at = datetime.utcnow()
+                frame_exec.duration = 0.0  # Cached, no execution time
+
+                # Update pipeline counters with cached data
+                pipeline.frames_completed += 1
+                pipeline.total_issues += cached_result.issues_found
+
+                # Count blocker issues from cached result
+                if frame.is_blocker and cached_result.issues_found > 0:
+                    pipeline.blocker_issues += cached_result.issues_found
+
+                # Update frames_failed if cached result was failed
+                if cached_result.status == "failed":
+                    pipeline.frames_failed += 1
+
+                # Notify callback (optional: indicate this was from cache)
+                if self.progress_callback:
+                    panel_status = self._map_frame_status_for_panel(cached_result.status)
+                    self.progress_callback("frame_completed", {
+                        "frame_name": frame.name,
+                        "frame_status": panel_status,
+                        "internal_status": cached_result.status,
+                        "has_warnings": cached_result.status == "warning",
+                        "frame_exec_status": frame_exec.status,
+                        "issues_found": cached_result.issues_found,
+                        "from_cache": True,  # Indicate cached result
+                        "frames_completed": pipeline.frames_completed,
+                        "total_frames": pipeline.total_frames,
+                        "duration": 0.0,
+                    })
+
+                return  # Skip execution, use cached result
+
         frame_exec.status = "running"
         frame_exec.started_at = datetime.utcnow()
 
@@ -307,10 +399,33 @@ class PipelineOrchestrator:
                                 continue
 
                     # 2. Execute frame (if no blocker PRE rules or on_fail="continue")
-                    result = await asyncio.wait_for(
-                        frame.execute(code_file),
-                        timeout=self.config.frame_timeout,
-                    )
+                    # TODO: Future enhancement - pass actual characteristics and memory_context
+                    # For now, pass empty contexts for backwards compatibility
+
+                    # Execute with resilience pipeline if enabled
+                    if self._resilience_pipeline:
+                        async def execute_frame_with_timeout():
+                            return await asyncio.wait_for(
+                                frame.execute(
+                                    code_file,
+                                    characteristics=CodeCharacteristics.empty(),
+                                    memory_context=ValidationMemoryContext.empty(),
+                                ),
+                                timeout=self.config.frame_timeout,
+                            )
+
+                        result = await self._resilience_pipeline.execute(
+                            execute_frame_with_timeout
+                        )
+                    else:
+                        result = await asyncio.wait_for(
+                            frame.execute(
+                                code_file,
+                                characteristics=CodeCharacteristics.empty(),
+                                memory_context=ValidationMemoryContext.empty(),
+                            ),
+                            timeout=self.config.frame_timeout,
+                        )
 
                     all_findings.extend(result.findings)
                     total_duration += result.duration
@@ -408,6 +523,19 @@ class PipelineOrchestrator:
             frame_exec.duration = (
                 frame_exec.completed_at - frame_exec.started_at
             ).total_seconds()
+
+            # OPTIMIZATION: Cache repository-level frame results
+            # Store the result for future pipeline executions to avoid redundant work
+            if frame.scope == FrameScope.REPOSITORY_LEVEL:
+                self._repository_level_cache[frame.name] = frame_exec.result
+                logger.debug(
+                    "repository_cache_stored",
+                    frame_name=frame.name,
+                    frame_id=frame.frame_id,
+                    issues_found=len(all_findings),
+                    status=frame_status,
+                    message="💾 Cached result for repository-level frame"
+                )
 
             # Update pipeline counters
             pipeline.frames_completed += 1

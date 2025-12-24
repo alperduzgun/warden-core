@@ -1,0 +1,210 @@
+# Warden CI/CD Analysis - Azure Pipelines
+# https://docs.microsoft.com/azure/devops/pipelines/yaml-schema
+
+trigger:
+  branches:
+    include:
+      - main
+      - dev
+  paths:
+    exclude:
+      - docs/**
+      - '*.md'
+
+pr:
+  branches:
+    include:
+      - main
+      - dev
+
+schedules:
+  - cron: "0 2 * * 1"  # Weekly on Monday at 2 AM
+    displayName: Weekly Warden Full Scan
+    branches:
+      include:
+        - main
+    always: true
+
+variables:
+  pythonVersion: '3.11'
+  pipCacheDir: $(Pipeline.Workspace)/.cache/pip
+  wardenCacheDir: $(Pipeline.Workspace)/.cache/warden
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Setup
+    displayName: 'Environment Setup'
+    jobs:
+      - job: SetupPython
+        displayName: 'Setup Python Environment'
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Use Python $(pythonVersion)'
+            inputs:
+              versionSpec: '$(pythonVersion)'
+              addToPath: true
+
+          - task: Cache@2
+            displayName: 'Cache pip packages'
+            inputs:
+              key: 'python | "$(Agent.OS)" | **/requirements*.txt | **/pyproject.toml'
+              path: $(pipCacheDir)
+              cacheHitVar: CACHE_RESTORED
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -e ".[dev]"
+            displayName: 'Install Warden dependencies'
+
+  - stage: Analyze
+    displayName: 'Warden Analysis'
+    dependsOn: Setup
+    jobs:
+      - job: WardenScan
+        displayName: 'Run Warden Validation Frames'
+        timeoutInMinutes: 30
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Use Python $(pythonVersion)'
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - task: Cache@2
+            displayName: 'Restore pip cache'
+            inputs:
+              key: 'python | "$(Agent.OS)" | **/requirements*.txt | **/pyproject.toml'
+              path: $(pipCacheDir)
+
+          - script: |
+              pip install -e ".[dev]"
+            displayName: 'Restore dependencies'
+
+          - script: |
+              echo "🔍 Running Warden Analysis with 4 validation frames..."
+              warden scan . \
+                --frame security \
+                --frame chaos \
+                --frame fuzz \
+                --frame property \
+                --ci \
+                --output $(Build.ArtifactStagingDirectory)/warden-report.json \
+                --format json \
+                --verbose || true
+            displayName: 'Run Warden Analysis'
+            continueOnError: true
+
+          - script: |
+              python -c "
+              import json
+              from pathlib import Path
+
+              report_path = Path('$(Build.ArtifactStagingDirectory)/warden-report.json')
+              if report_path.exists():
+                  report = json.loads(report_path.read_text())
+
+                  # Count issues by severity
+                  critical = len([i for i in report.get('issues', []) if i.get('severity') == 0])
+                  high = len([i for i in report.get('issues', []) if i.get('severity') == 1])
+                  medium = len([i for i in report.get('issues', []) if i.get('severity') == 2])
+                  low = len([i for i in report.get('issues', []) if i.get('severity') == 3])
+                  total = len(report.get('issues', []))
+
+                  # Generate summary markdown
+                  summary = f'''
+              # Warden Analysis Summary
+
+              **Total Issues Found:** {total}
+
+              | Severity | Count |
+              |----------|-------|
+              | 🔴 Critical | {critical} |
+              | 🟠 High | {high} |
+              | 🟡 Medium | {medium} |
+              | 🔵 Low | {low} |
+
+              ## Validation Frames Executed
+              - ✅ Security Analysis (Critical, Blocker)
+              - ✅ Chaos Engineering (High)
+              - ✅ Fuzz Testing (High)
+              - ✅ Property Testing (Medium)
+
+              {f'⚠️ **BLOCKER**: {critical} critical security issues found!' if critical > 0 else '✅ No blocker issues found'}
+              '''
+
+                  Path('$(Build.ArtifactStagingDirectory)/WARDEN_SUMMARY.md').write_text(summary)
+
+                  # Set pipeline variables
+                  print(f'##vso[task.setvariable variable=wardenTotalIssues]{total}')
+                  print(f'##vso[task.setvariable variable=wardenCriticalIssues]{critical}')
+
+                  # Add build tag
+                  if critical > 0:
+                      print('##vso[build.addbuildtag]warden-critical')
+                  elif high > 0:
+                      print('##vso[build.addbuildtag]warden-high')
+                  else:
+                      print('##vso[build.addbuildtag]warden-clean')
+              "
+            displayName: 'Generate Analysis Summary'
+            condition: always()
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Warden Report'
+            condition: always()
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)'
+              artifactName: 'warden-analysis'
+              publishLocation: 'Container'
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/warden-junit.xml'
+              failTaskOnFailedTests: false
+              testRunTitle: 'Warden Validation Results'
+
+          - script: |
+              if [ -f $(Build.ArtifactStagingDirectory)/warden-report.json ]; then
+                critical_count=$(python -c "import json; report=json.load(open('$(Build.ArtifactStagingDirectory)/warden-report.json')); print(len([i for i in report.get('issues', []) if i.get('severity') == 0]))")
+                if [ "$critical_count" -gt 0 ]; then
+                  echo "##vso[task.logissue type=error]❌ BLOCKER: $critical_count critical security issues found!"
+                  echo "##vso[task.complete result=Failed;]Critical security issues detected"
+                  exit 1
+                fi
+              fi
+              echo "✅ No blocker issues found"
+            displayName: 'Check for Blocker Issues'
+            condition: always()
+
+  - stage: Report
+    displayName: 'Generate Reports'
+    dependsOn: Analyze
+    condition: always()
+    jobs:
+      - job: GenerateReport
+        displayName: 'Create Detailed Report'
+        steps:
+          - task: DownloadBuildArtifacts@1
+            displayName: 'Download Warden Artifacts'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'warden-analysis'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - script: |
+              if [ -f $(System.ArtifactsDirectory)/warden-analysis/WARDEN_SUMMARY.md ]; then
+                cat $(System.ArtifactsDirectory)/warden-analysis/WARDEN_SUMMARY.md
+              fi
+            displayName: 'Display Summary'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Final Report'
+            inputs:
+              targetPath: '$(System.ArtifactsDirectory)/warden-analysis'
+              artifact: 'warden-final-report'
+              publishLocation: 'pipeline'

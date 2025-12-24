@@ -1,0 +1,290 @@
+name: Warden Full Matrix Analysis
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Weekly on Monday at 3 AM
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      python_versions:
+        description: 'Python versions (comma-separated)'
+        required: false
+        default: '3.9,3.10,3.11,3.12'
+      all_frames:
+        description: 'Run all validation frames'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+  issues: write
+
+jobs:
+  matrix-analysis:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false  # Continue other matrix jobs even if one fails
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        exclude:
+          # Skip some combinations to save CI time
+          - os: macos-latest
+            python-version: '3.9'
+          - os: windows-latest
+            python-version: '3.9'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Cache Warden dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.warden/cache
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-warden-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python-version }}-warden-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Verify installation
+        run: |
+          python --version
+          pip --version
+          warden --version || echo "Warden CLI not yet available"
+
+      - name: Run Warden Full Analysis (All Frames)
+        if: github.event.inputs.all_frames == 'true' || github.event_name == 'schedule'
+        run: |
+          warden scan . \
+            --frame security \
+            --frame chaos \
+            --frame fuzz \
+            --frame property \
+            --frame stress \
+            --frame architectural \
+            --ci \
+            --output warden-report-${{ matrix.os }}-py${{ matrix.python-version }}.json \
+            --format json \
+            --verbose
+        continue-on-error: true
+
+      - name: Run Warden Core Analysis (Critical Frames)
+        if: github.event.inputs.all_frames != 'true' && github.event_name != 'schedule'
+        run: |
+          warden scan . \
+            --frame security \
+            --frame chaos \
+            --frame fuzz \
+            --frame property \
+            --ci \
+            --output warden-report-${{ matrix.os }}-py${{ matrix.python-version }}.json \
+            --format json \
+            --verbose
+        continue-on-error: true
+
+      - name: Generate platform-specific summary
+        if: always()
+        shell: bash
+        run: |
+          python -c "
+          import json
+          import platform
+          from pathlib import Path
+
+          report_file = 'warden-report-${{ matrix.os }}-py${{ matrix.python-version }}.json'
+          if Path(report_file).exists():
+              report = json.loads(Path(report_file).read_text())
+
+              critical = len([i for i in report.get('issues', []) if i.get('severity') == 0])
+              high = len([i for i in report.get('issues', []) if i.get('severity') == 1])
+              medium = len([i for i in report.get('issues', []) if i.get('severity') == 2])
+              low = len([i for i in report.get('issues', []) if i.get('severity') == 3])
+              total = len(report.get('issues', []))
+
+              summary = f'''
+          # Warden Analysis - ${{ matrix.os }} / Python ${{ matrix.python-version }}
+
+          **Platform:** {platform.platform()}
+          **Python:** {platform.python_version()}
+
+          | Severity | Count |
+          |----------|-------|
+          | Critical | {critical} |
+          | High     | {high} |
+          | Medium   | {medium} |
+          | Low      | {low} |
+          | **Total** | **{total}** |
+          '''
+
+              Path('WARDEN_SUMMARY.md').write_text(summary)
+              print(summary)
+          "
+
+      - name: Upload Analysis Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-report-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            warden-report-*.json
+            WARDEN_SUMMARY.md
+          retention-days: 30
+
+  aggregate-results:
+    name: Aggregate Matrix Results
+    needs: matrix-analysis
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Aggregate results
+        run: |
+          python -c "
+          import json
+          from pathlib import Path
+          from collections import defaultdict
+
+          # Find all report files
+          artifacts_dir = Path('artifacts')
+          reports = list(artifacts_dir.glob('**/warden-report-*.json'))
+
+          print(f'Found {len(reports)} reports')
+
+          # Aggregate by platform and Python version
+          aggregated = defaultdict(lambda: {
+              'total_issues': 0,
+              'critical': 0,
+              'high': 0,
+              'medium': 0,
+              'low': 0,
+              'platforms': []
+          })
+
+          for report_path in reports:
+              report = json.loads(report_path.read_text())
+
+              # Extract platform/version from filename
+              filename = report_path.stem
+              platform_py = filename.replace('warden-report-', '')
+
+              issues = report.get('issues', [])
+              critical = len([i for i in issues if i.get('severity') == 0])
+              high = len([i for i in issues if i.get('severity') == 1])
+              medium = len([i for i in issues if i.get('severity') == 2])
+              low = len([i for i in issues if i.get('severity') == 3])
+
+              aggregated['overall']['total_issues'] += len(issues)
+              aggregated['overall']['critical'] += critical
+              aggregated['overall']['high'] += high
+              aggregated['overall']['medium'] += medium
+              aggregated['overall']['low'] += low
+              aggregated['overall']['platforms'].append({
+                  'name': platform_py,
+                  'issues': len(issues),
+                  'critical': critical,
+                  'high': high,
+              })
+
+          # Generate summary report
+          summary = '''
+          # Warden Full Matrix Analysis Summary
+
+          ## Overall Statistics
+
+          | Metric | Count |
+          |--------|-------|
+          | Total Platforms Tested | ''' + str(len(reports)) + ''' |
+          | Total Issues Found | ''' + str(aggregated['overall']['total_issues']) + ''' |
+          | Critical Issues | ''' + str(aggregated['overall']['critical']) + ''' |
+          | High Severity | ''' + str(aggregated['overall']['high']) + ''' |
+          | Medium Severity | ''' + str(aggregated['overall']['medium']) + ''' |
+          | Low Severity | ''' + str(aggregated['overall']['low']) + ''' |
+
+          ## Platform Breakdown
+
+          | Platform | Total Issues | Critical | High |
+          |----------|-------------|----------|------|
+          '''
+
+          for platform in sorted(aggregated['overall']['platforms'], key=lambda x: x['critical'], reverse=True):
+              summary += f\"| {platform['name']} | {platform['issues']} | {platform['critical']} | {platform['high']} |\n\"
+
+          summary += '''
+          ## Recommendations
+
+          '''
+
+          if aggregated['overall']['critical'] > 0:
+              summary += f\"- ⚠️ **ACTION REQUIRED**: {aggregated['overall']['critical']} critical issues found across platforms\\n\"
+
+          if aggregated['overall']['high'] > 0:
+              summary += f\"- ⚠️ {aggregated['overall']['high']} high severity issues require attention\\n\"
+
+          if aggregated['overall']['total_issues'] == 0:
+              summary += '- ✅ No issues found across all tested platforms!\\n'
+
+          Path('AGGREGATED_SUMMARY.md').write_text(summary)
+          print(summary)
+
+          # Save aggregated JSON
+          Path('aggregated-results.json').write_text(json.dumps(aggregated, indent=2))
+          "
+
+      - name: Upload aggregated report
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-aggregated-results
+          path: |
+            AGGREGATED_SUMMARY.md
+            aggregated-results.json
+          retention-days: 90
+
+      - name: Comment summary on commit (if push)
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('AGGREGATED_SUMMARY.md')) {
+              const summary = fs.readFileSync('AGGREGATED_SUMMARY.md', 'utf8');
+
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body: summary
+              });
+            }

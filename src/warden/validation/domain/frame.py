@@ -191,12 +191,21 @@ class ValidationFrame(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'description' attribute")
 
     @abstractmethod
-    async def execute(self, code_file: "CodeFile") -> FrameResult:  # type: ignore[name-defined]
+    async def execute(
+        self,
+        code_file: "CodeFile",  # type: ignore[name-defined]
+        characteristics: "CodeCharacteristics | None" = None,  # type: ignore[name-defined]
+        memory_context: "ValidationMemoryContext | None" = None,  # type: ignore[name-defined]
+    ) -> FrameResult:
         """
         Execute validation frame on code file.
 
         Args:
             code_file: Code file to validate (contains path, content, language, etc.)
+            characteristics: Optional code characteristics detected by classifier
+                            (async patterns, security-sensitive operations, etc.)
+            memory_context: Optional memory context from previous validations
+                           (project info, learned patterns, similar issues)
 
         Returns:
             FrameResult with findings and metadata
@@ -211,6 +220,13 @@ class ValidationFrame(ABC):
             - Set status='failed' if frame execution fails
             - Set status='warning' for non-critical findings
             - Set status='passed' if no issues found
+            - Use characteristics to optimize validation (e.g., skip DB checks if no DB operations)
+            - Use memory_context to provide more accurate validations based on project history
+
+        Backwards Compatibility:
+            - characteristics and memory_context are optional (default None)
+            - Existing frames will continue to work without modification
+            - New frames can leverage these parameters for smarter validation
         """
         pass
 

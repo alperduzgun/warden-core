@@ -1,0 +1,48 @@
+# Minimal Warden Security Check
+# Fast PR validation with security frame only
+# Runtime: ~30 seconds for small PRs
+
+name: Security Check
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security:
+    name: Warden Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Warden
+        run: pip install -e ".[dev]"
+
+      - name: Run Security Analysis
+        run: |
+          warden scan . \
+            --frame security \
+            --ci \
+            --fail-on-critical \
+            --output warden-security.json
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-security-report
+          path: warden-security.json
+          retention-days: 7

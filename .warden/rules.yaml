@@ -414,3 +414,176 @@ exclude:
     - ".env.example"
     - "*.md"
     - "*.yaml.example"
+
+  # ============================================================================
+  # CI/CD & Git Workflow Rules
+  # ============================================================================
+
+  - id: "no-auto-commit"
+    name: "Automated Commits Are Prohibited"
+    category: workflow
+    severity: critical
+    isBlocker: true
+    description: |
+      Prevents automated systems (including AI assistants) from making git commits.
+
+      Rationale:
+      - Commits should be deliberate, human-reviewed actions
+      - Automated commits bypass code review and quality gates
+      - Git history should reflect intentional development decisions
+      - CI/CD pipelines should validate, not commit
+
+      Policy:
+      - Humans make commits (manual process)
+      - AI assistants propose changes, humans approve and commit
+      - CI/CD validates code but never pushes commits
+      - Warden enforces this rule to maintain code quality
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # Detect git commit commands in code/scripts
+        - "git\\s+commit\\s+-m"
+        - "subprocess.*git.*commit"
+        - "os\\.system.*git.*commit"
+        - "exec.*git.*commit"
+        - "shell.*git.*commit"
+        # Detect automated commit patterns
+        - "auto[_-]?commit"
+        - "automatic[_-]?commit"
+        - "commit[_-]?automatically"
+        # Detect CI commit patterns
+        - "\\[ci\\s+skip\\].*commit"
+        - "\\[skip\\s+ci\\].*commit"
+        - "github_token.*commit"
+        - "GITHUB_TOKEN.*commit"
+    examples:
+      invalid:
+        - 'subprocess.run(["git", "commit", "-m", "Auto commit"])'
+        - 'os.system("git commit -m \'Automated update\'")'
+        - 'def auto_commit(message): ...'
+        - '# Auto-commit after validation'
+        - 'if ci_mode: git_commit()'
+      valid:
+        - '# User must manually commit changes'
+        - 'print("Ready to commit. Run: git commit -m \'message\'")'
+        - '# CI validates only, no commits'
+        - 'logger.info("Validation complete. Waiting for manual commit")'
+    message: |
+      🚫 AUTOMATED COMMITS ARE PROHIBITED
+
+      This codebase enforces a strict no-auto-commit policy:
+
+      ❌ What you CANNOT do:
+      - Execute git commit programmatically
+      - Create auto-commit functions/scripts
+      - Make CI/CD pipelines push commits
+      - Let AI assistants commit on your behalf
+
+      ✅ What you SHOULD do:
+      - Propose changes for human review
+      - Generate commit suggestions
+      - Validate changes in CI
+      - Let developers commit manually
+
+      Why this matters:
+      - Maintains deliberate git history
+      - Ensures code review process
+      - Prevents accidental/malicious commits
+      - Enforces quality gates
+
+      Next steps:
+      1. Review the proposed changes
+      2. Run tests manually
+      3. Create commit message
+      4. Execute: git commit -m "your message"
+    exceptions:
+      - "**/tests/**"
+      - "**/test_*.py"
+      - "**/*_test.py"
+      - "**/examples/**"
+      - "**/docs/**"
+      - "*.md"
+    metadata:
+      rule_type: "workflow_enforcement"
+      enforcement_level: "strict"
+      auto_fix: false
+      requires_manual_action: true
+
+  - id: "ci-commit-blocker"
+    name: "CI/CD Must Not Make Commits"
+    category: cicd
+    severity: critical
+    isBlocker: true
+    description: |
+      CI/CD pipelines should validate and report, but NEVER commit changes back.
+
+      This is a critical security and workflow rule:
+      - CI validates code quality
+      - CI generates reports (SARIF, annotations)
+      - CI may upload artifacts
+      - CI NEVER pushes commits
+
+      Exceptions:
+      - Version bumping scripts (with explicit approval)
+      - Automated dependency updates (via approved bots like Dependabot)
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # GitHub Actions commit patterns
+        - "uses:.*git-auto-commit"
+        - "git-auto-commit-action"
+        - "github-push-action"
+        # GitLab CI commit patterns
+        - "git\\s+push.*origin"
+        - "CI_COMMIT.*git.*push"
+        # Azure DevOps commit patterns
+        - "Build\\.SourcesDirectory.*git.*push"
+        # Generic CI commit patterns
+        - "if.*CI.*commit"
+        - "on_success:.*commit"
+        - "after_success:.*git push"
+    examples:
+      invalid:
+        - 'uses: stefanzweifel/git-auto-commit-action@v4'
+        - 'run: git config user.name "CI Bot" && git commit'
+        - 'after_success: git push origin main'
+        - 'if: github.event_name == "push" then: git commit'
+      valid:
+        - 'uses: github/codeql-action/upload-sarif@v2'
+        - 'run: pytest && echo "Tests passed"'
+        - 'after_success: echo "Deployment ready"'
+        - '# Validation only, no commits'
+    message: |
+      🔒 CI/CD COMMIT BLOCKER ACTIVATED
+
+      Your CI/CD workflow is attempting to make commits, which violates policy.
+
+      CI/CD pipelines should:
+      ✅ Run tests and validations
+      ✅ Generate reports (SARIF, JUnit, coverage)
+      ✅ Upload artifacts
+      ✅ Deploy to staging/production
+      ✅ Send notifications
+
+      CI/CD pipelines should NOT:
+      ❌ Make git commits
+      ❌ Push changes to branches
+      ❌ Modify source code
+      ❌ Auto-merge PRs without review
+
+      If you need automated updates:
+      - Use Dependabot for dependency updates
+      - Use approved version-bumping workflows
+      - Require manual approval for commits
+
+      Current action: BLOCKED
+    exceptions:
+      - "**/.github/workflows/version-bump.yml"  # Approved version bumping
+      - "**/.github/dependabot.yml"              # Dependency updates
+    metadata:
+      rule_type: "cicd_enforcement"
+      enforcement_level: "critical"
+      security_impact: "high"
+      requires_approval: true

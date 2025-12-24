@@ -30,6 +30,12 @@ from warden.validation.domain.test_results import (
     StressTestDetails,
     ValidationTestDetails,
 )
+from warden.validation.domain.code_characteristics import CodeCharacteristics
+from warden.validation.domain.memory_context import (
+    ValidationMemoryContext,
+    MemoryEntry,
+    ProjectContext,
+)
 
 __all__ = [
     # Enums
@@ -58,4 +64,9 @@ __all__ = [
     "StressTestMetrics",
     "StressTestDetails",
     "ValidationTestDetails",
+    # Context models
+    "CodeCharacteristics",
+    "ValidationMemoryContext",
+    "MemoryEntry",
+    "ProjectContext",
 ]

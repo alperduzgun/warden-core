@@ -1,0 +1,50 @@
+# Example Custom Security Rules for Warden
+# Place in: .warden/rules/custom-security.yml
+
+rules:
+  # Detect hardcoded URLs
+  - id: no-hardcoded-urls
+    name: No Hardcoded URLs
+    category: security
+    severity: high
+    pattern: 'https?://[a-zA-Z0-9.-]+'
+    message: "Hardcoded URL detected. Use configuration or environment variables."
+    execution: PRE
+
+  # Detect hardcoded IP addresses
+  - id: no-hardcoded-ips
+    name: No Hardcoded IP Addresses
+    category: security
+    severity: high
+    pattern: '\b(?:\d{1,3}\.){3}\d{1,3}\b'
+    message: "Hardcoded IP address found. Use DNS names or configuration."
+    execution: PRE
+
+  # Detect weak password hashing
+  - id: no-weak-hashing
+    name: No Weak Password Hashing
+    category: security
+    severity: critical
+    pattern: '(md5|sha1)\s*\('
+    message: "Weak hashing algorithm detected. Use bcrypt, argon2, or scrypt for passwords."
+    execution: PRE
+    blocker: true
+
+  # Detect insecure random number generation
+  - id: secure-random
+    name: Use Secure Random
+    category: security
+    severity: high
+    pattern: 'random\.(random|randint|choice)'
+    message: "Insecure random detected. Use secrets module for security-sensitive operations."
+    execution: PRE
+
+  # Detect eval() usage
+  - id: no-eval
+    name: No eval() Usage
+    category: security
+    severity: critical
+    pattern: '\beval\s*\('
+    message: "eval() is dangerous and can execute arbitrary code. Find alternative."
+    execution: PRE
+    blocker: true

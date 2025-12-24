@@ -95,9 +95,15 @@ class PipelineConfig(BaseDomainModel):
     suppression_config_path: Optional[str] = None  # Path to suppression config file
     issue_validation_config: Optional[Dict[str, Any]] = None  # Issue validator configuration (min_confidence, rules)
 
-    # Custom Rules (NEW)
+    # Custom Rules
     global_rules: List["CustomRule"] = field(default_factory=list)  # Rules applied to all frames
     frame_rules: Dict[str, FrameRules] = field(default_factory=dict)  # Frame-specific rules (key: frame_id)
+
+    # Resilience Patterns (Polly-style)
+    enable_retry: bool = False  # Enable retry with exponential backoff
+    max_retry_attempts: int = 3  # Total attempts (1 original + 2 retries)
+    enable_circuit_breaker: bool = False  # Enable circuit breaker for LLM failures
+    circuit_breaker_threshold: float = 0.7  # Open circuit if 70% of requests fail
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
