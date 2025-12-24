@@ -36,6 +36,7 @@ class ConfigGenerator:
         project_name: str,
         framework: str | None = None,
         sdk_version: str | None = None,
+        project_type: str | None = None,
         interactive: bool = True,
     ) -> Dict[str, Any]:
         """
@@ -69,8 +70,10 @@ class ConfigGenerator:
                 reason="No specific template found",
             )
 
-        # Build base configuration
-        config = self._build_base_config(template, project_name)
+        # Build base configuration with full project metadata
+        config = self._build_base_config(
+            template, project_name, language, sdk_version, framework, project_type
+        )
 
         # Add LLM configuration if recommended
         if template.llm_recommended:
@@ -97,23 +100,40 @@ class ConfigGenerator:
         return config
 
     def _build_base_config(
-        self, template: LanguageTemplate, project_name: str
+        self,
+        template: LanguageTemplate,
+        project_name: str,
+        language: str,
+        sdk_version: str | None,
+        framework: str | None,
+        project_type: str | None,
     ) -> Dict[str, Any]:
         """
-        Build base configuration from template.
+        Build base configuration from template with full project metadata.
 
         Args:
             template: Language template
             project_name: Project name
+            language: Programming language
+            sdk_version: SDK/runtime version
+            framework: Framework name
+            project_type: Project type
 
         Returns:
             Base configuration dictionary
         """
+        from datetime import datetime
+
         config = {
             "# Warden Configuration": f"Generated for {template.language} project",
             "project": {
                 "name": project_name,
                 "description": f"Warden configuration for {project_name}",
+                "language": language,
+                "sdk_version": sdk_version or "",
+                "framework": framework or "",
+                "project_type": project_type or "application",
+                "detected_at": datetime.now().isoformat(),
             },
             "frames": template.recommended_frames.copy(),
         }
@@ -133,15 +153,26 @@ class ConfigGenerator:
 
     def _build_llm_config(self) -> Dict[str, Any]:
         """
-        Build default LLM configuration.
+        Build default LLM configuration with Azure OpenAI.
 
         Returns:
             LLM configuration dictionary
         """
         return {
-            "provider": "anthropic",  # Default to Claude
-            "model": "claude-3-5-sonnet-20241022",
-            "# api_key": "${ANTHROPIC_API_KEY}  # Set via environment variable",
+            "provider": "azure_openai",  # Default to Azure OpenAI
+            "model": "gpt-4o",
+            "# Azure OpenAI specific settings": "",
+            "azure": {
+                "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+                "api_key": "${AZURE_OPENAI_API_KEY}",
+                "deployment_name": "${AZURE_OPENAI_DEPLOYMENT_NAME}",
+                "api_version": "${AZURE_OPENAI_API_VERSION}",
+            },
+            "# Fallback provider": "",
+            "fallback": {
+                "provider": "groq",
+                "api_key": "${GROQ_API_KEY}",
+            },
             "timeout": 300,
             "max_retries": 2,
         }
@@ -274,21 +305,30 @@ class ConfigGenerator:
         lines.append("# Customize as needed for your project")
         lines.append("")
 
-        # Project section
+        # Project section with all metadata
         if "project" in config:
-            lines.append("# Project metadata")
+            lines.append("# Project metadata (from warden init)")
             lines.append("project:")
             for key, value in config["project"].items():
-                lines.append(f'  {key}: "{value}"')
+                if value:  # Only include non-empty values
+                    lines.append(f'  {key}: "{value}"')
             lines.append("")
 
-        # LLM section
+        # LLM section with nested structures
         if "llm" in config:
             lines.append("# LLM Configuration (for AI-powered analysis)")
             lines.append("llm:")
             for key, value in config["llm"].items():
                 if key.startswith("#"):
                     lines.append(f"  {key}")
+                elif isinstance(value, dict):
+                    # Handle nested dicts (azure, fallback)
+                    lines.append(f"  {key}:")
+                    for sub_key, sub_value in value.items():
+                        if isinstance(sub_value, str):
+                            lines.append(f'    {sub_key}: "{sub_value}"')
+                        else:
+                            lines.append(f"    {sub_key}: {sub_value}")
                 elif isinstance(value, str):
                     lines.append(f'  {key}: "{value}"')
                 else:
