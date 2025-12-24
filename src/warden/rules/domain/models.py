@@ -51,6 +51,12 @@ class CustomRule(BaseDomainModel):
     exceptions: Optional[List[str]] = None
     script_path: Optional[str] = None
     timeout: Optional[int] = None
+    # Additional fields for default rules compatibility
+    pattern: Optional[str] = None
+    tags: Optional[List[str]] = None
+    file_pattern: Optional[str] = None
+    excluded_paths: Optional[List[str]] = None
+    auto_fix: Optional[Dict[str, Any]] = None
 
     def to_json(self) -> dict:
         """Convert to Panel-compatible JSON (camelCase).
@@ -74,6 +80,11 @@ class CustomRule(BaseDomainModel):
             "exceptions": self.exceptions,
             "scriptPath": self.script_path,
             "timeout": self.timeout,
+            "pattern": self.pattern,
+            "tags": self.tags,
+            "filePattern": self.file_pattern,
+            "excludedPaths": self.excluded_paths,
+            "autoFix": self.auto_fix,
         }
 
     @classmethod
@@ -102,6 +113,11 @@ class CustomRule(BaseDomainModel):
             exceptions=data.get("exceptions"),
             script_path=data.get("scriptPath"),
             timeout=data.get("timeout"),
+            pattern=data.get("pattern"),
+            tags=data.get("tags"),
+            file_pattern=data.get("filePattern"),
+            excluded_paths=data.get("excludedPaths"),
+            auto_fix=data.get("autoFix"),
         )
 
 

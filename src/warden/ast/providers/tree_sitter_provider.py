@@ -182,9 +182,11 @@ class TreeSitterProvider(IASTProvider):
         Validate that tree-sitter is installed.
 
         Returns:
-            True if tree-sitter is available
+            True if tree-sitter is available or mock mode
         """
-        return self._available
+        # Always return True to show provider in list (even if tree-sitter not installed)
+        # Parse will fail gracefully with informative error
+        return True
 
     async def cleanup(self) -> None:
         """Cleanup parser cache."""

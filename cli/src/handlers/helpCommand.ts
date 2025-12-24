@@ -30,6 +30,10 @@ const HELP_TEXT = `# 📖 Warden Commands
 - \`/rules show <id>\` - Show detailed rule information
 - \`/rules stats\` - Display rules statistics
 
+## 📦 Provider Management
+- \`/providers list\` or \`/p list\` - List installed AST providers
+- \`/providers test <language>\` - Test provider availability
+
 ## ⚙️  Utility Commands
 - \`/help\` or \`/h\` or \`/?\` - Show this help
 - \`/status\` or \`/info\` - Show session status
@@ -37,16 +41,16 @@ const HELP_TEXT = `# 📖 Warden Commands
 - \`/quit\` or \`/exit\` or \`/q\` - Exit Warden
 
 ## ⌨️  Keyboard Shortcuts
-- \`Ctrl+P\` or \`/\` - **Open command palette** (shows all commands)
-- \`Ctrl+Q\` - Quit Warden
-- \`Ctrl+L\` - Clear chat
-- \`Ctrl+S\` - Save session
+- \`Esc\` - **Cancel active scan/analyze** (graceful shutdown)
+- \`@\` - **File picker** (browse and select files)
+- \`Ctrl+C\` - Quit Warden (immediate exit)
 
 ## 💡 Pro Tips
-- **Command Palette**: Press \`Ctrl+P\` or type \`/\` to see all commands in a searchable list
-- **Chat Naturally**: You can also chat without slash commands (e.g., "analyze my code")
+- **File Picker**: Type \`@\` to browse files, use arrows to navigate, Tab/Enter to select
+- **Scan Cancellation**: Press \`Esc\` during scan to stop and save partial results
 - **Aliases**: Most commands have shortcuts (e.g., \`/a\` = \`/analyze\`, \`/s\` = \`/scan\`)
-- **Markdown Support**: Messages support rich formatting with **bold**, \`code\`, and more`;
+- **Reports**: Scan results auto-saved to \`.warden/reports/\` (JSON + Markdown)
+- **Validate Frames**: Use \`/validate --list\` to see available validation frames`;
 
 /**
  * Handle /help command

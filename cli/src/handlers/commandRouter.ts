@@ -21,6 +21,7 @@ import { statusCommandMetadata } from './statusCommand.js';
 import { analyzeCommandMetadata } from './analyzeCommand.js';
 import { scanCommandMetadata } from './scanCommand.js';
 import { validateCommandMetadata } from './validateCommand.js';
+import { providersCommandMetadata } from './providersCommand.js';
 import { fixCommandMetadata } from './fixCommand.js';
 import { rulesCommandMetadata } from './rulesCommand.js';
 
@@ -58,6 +59,7 @@ function initializeRegistry(): void {
   registerCommand(analyzeCommandMetadata);
   registerCommand(scanCommandMetadata);
   registerCommand(validateCommandMetadata);
+  registerCommand(providersCommandMetadata);
   registerCommand(fixCommandMetadata);
   registerCommand(rulesCommandMetadata);
 }

@@ -30,6 +30,8 @@ from warden.pipeline.domain.models import PipelineConfig, FrameRules
 # No need to import explicitly (registry will handle discovery)
 from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
+from warden.rules.defaults.loader import DefaultRulesLoader
+from warden.reports.generator import ReportGenerator
 from warden.shared.infrastructure.logging import get_logger
 
 app = typer.Typer()
@@ -249,6 +251,23 @@ async def scan_directory(
     rules_path = Path(rules_config)
     global_rules, frame_rules = await load_custom_rules(rules_path)
 
+    # Load language-specific default rules if no custom rules exist
+    if not global_rules:
+        # Try to detect the primary language of the project
+        from warden.config.project_detector import ProjectDetector
+        detector = ProjectDetector(dir_path)
+        language = await detector.detect_language()
+
+        if language != "unknown":
+            default_loader = DefaultRulesLoader()
+            default_rules = default_loader.get_rules_for_language(language)
+
+            if default_rules:
+                global_rules = default_rules
+                console.print(f"[cyan]Loaded {len(default_rules)} default {language} rules[/cyan]")
+            else:
+                console.print(f"[yellow]No default rules available for {language}[/yellow]")
+
     # Display header
     rules_info = f"\n[dim]Custom Rules:[/dim] {len(global_rules)} loaded" if global_rules else ""
     console.print(Panel.fit(
@@ -292,6 +311,8 @@ async def scan_directory(
     # Load frames from config file
     frames = []
     config_file = Path(config_path)
+    frames_config = {}  # Store frame-specific configurations
+    llm_config = {}  # Store LLM configuration
 
     if config_file.exists():
         try:
@@ -300,6 +321,8 @@ async def scan_directory(
                 config_data = yaml.safe_load(f)
 
             frame_names = config_data.get('frames', [])
+            frames_config = config_data.get('frames_config', {})  # Load frame configs
+            llm_config = config_data.get('llm', {})  # Load LLM config
             console.print(f"[cyan]Loading {len(frame_names)} frames from config: {config_path}[/cyan]")
 
             # Get all available frames (built-in + custom) dynamically
@@ -314,9 +337,21 @@ async def scan_directory(
 
             for frame_name in frame_names:
                 if frame_name in frame_map:
-                    frames.append(frame_map[frame_name]())
-                    if verbose:
-                        console.print(f"  [green]✓[/green] Loaded: {frame_name}")
+                    # Check if frame has specific config
+                    frame_conf = frames_config.get(frame_name, {})
+                    if frame_conf.get('enabled', True):  # Only load if enabled
+                        frame_instance = frame_map[frame_name]()
+
+                        # Apply frame-specific configuration
+                        if hasattr(frame_instance, 'configure'):
+                            frame_instance.configure(frame_conf)
+
+                        frames.append(frame_instance)
+                        if verbose:
+                            console.print(f"  [green]✓[/green] Loaded: {frame_name}")
+                    else:
+                        if verbose:
+                            console.print(f"  [dim]⊝[/dim]  Disabled: {frame_name}")
                 else:
                     console.print(f"  [yellow]⚠[/yellow]  Unknown frame: {frame_name} (not found in registry)")
 
@@ -344,6 +379,7 @@ async def scan_directory(
         raise typer.Exit(code=1)
 
     # Create pipeline config WITH custom rules
+    # Note: LLM config should be passed to frames that need it (like Orphan frame)
     pipeline_config = PipelineConfig(
         enable_discovery=False,  # We already discovered files manually
         enable_build_context=False,  # Not needed for simple scan
@@ -420,6 +456,95 @@ async def scan_directory(
         else:
             # Non-blocker issues counted as high priority
             high_issues += frame_result.issues_found
+
+    # Save reports if CI config exists
+    ci_config = config_data.get('ci', {}) if config_file.exists() else {}
+    if ci_config.get('enabled', False):
+        outputs = ci_config.get('output', [])
+        for output in outputs:
+            format_type = output.get('format', 'json')
+            output_path = Path(output.get('path', './warden-report.json'))
+
+            try:
+                # Prepare report data for all formats
+                report_data = {
+                    'timestamp': datetime.now().isoformat(),
+                    'project': dir_path.name,
+                    'total_files': len(files),
+                    'analyzed_files': len(code_files),
+                    'total_issues': total_issues,
+                    'critical_issues': critical_issues,
+                    'high_issues': high_issues,
+                    'duration_seconds': duration,
+                    'frames': [f.__class__.__name__ for f in frames],
+                    'frame_results': [
+                        {
+                            'frame': fr.frame_name,
+                            'passed': fr.passed,
+                            'issues': fr.issues_found,
+                            'is_blocker': fr.is_blocker
+                        } for fr in result.frame_results
+                    ]
+                }
+
+                if format_type == 'json':
+                    # Save as JSON
+                    import json
+                    with open(output_path, 'w') as f:
+                        json.dump(report_data, f, indent=2)
+                    if verbose:
+                        console.print(f"[dim]Report saved to: {output_path}[/dim]")
+
+                elif format_type == 'markdown':
+                    # Save as Markdown
+                    markdown_content = f"""# Warden Scan Report
+
+**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Project:** {dir_path.name}
+**Directory:** {dir_path}
+
+## Summary
+
+- **Total Files:** {len(files)}
+- **Analyzed Files:** {len(code_files)}
+- **Total Issues:** {total_issues}
+- **Critical Issues:** {critical_issues}
+- **High Priority Issues:** {high_issues}
+- **Scan Duration:** {duration:.2f}s
+
+## Frame Results
+
+| Frame | Status | Issues | Blocker |
+|-------|--------|--------|---------|
+"""
+                    for fr in result.frame_results:
+                        status = "✅ Passed" if fr.passed else "❌ Failed"
+                        blocker = "Yes" if fr.is_blocker else "No"
+                        markdown_content += f"| {fr.frame_name} | {status} | {fr.issues_found} | {blocker} |\n"
+
+                    markdown_content += f"\n---\n*Generated by Warden v0.1.0*"
+
+                    with open(output_path, 'w') as f:
+                        f.write(markdown_content)
+                    if verbose:
+                        console.print(f"[dim]Report saved to: {output_path}[/dim]")
+
+                elif format_type == 'html':
+                    # Save as HTML
+                    report_gen = ReportGenerator()
+                    report_gen.generate_html_report(report_data, output_path)
+                    if verbose:
+                        console.print(f"[dim]HTML report saved to: {output_path}[/dim]")
+
+                elif format_type == 'pdf':
+                    # Save as PDF
+                    report_gen = ReportGenerator()
+                    report_gen.generate_pdf_report(report_data, output_path)
+                    if verbose:
+                        console.print(f"[dim]PDF report saved to: {output_path}[/dim]")
+
+            except Exception as e:
+                console.print(f"[yellow]Warning: Failed to save {format_type} report: {e}[/yellow]")
 
     # Display results
     console.print("\n")

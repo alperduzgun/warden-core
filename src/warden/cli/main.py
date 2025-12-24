@@ -19,12 +19,14 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-# Add project root to path for imports
+# Add project root to path for imports (if not already there)
 project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
+project_root_str = str(project_root)
+if project_root_str not in sys.path:
+    sys.path.insert(0, project_root_str)
 
-from warden.cli.commands import scan, report, infrastructure, validate, init,rules, frame
-from warden.cli import providers
+from warden.cli.commands import scan, report, infrastructure, validate, rules, frame
+from warden.cli import providers, init
 
 app = typer.Typer(
     name="warden",

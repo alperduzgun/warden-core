@@ -1,0 +1,75 @@
+# Python Security Rules
+# Default security rules for Python projects
+
+rules:
+  - id: py-no-eval
+    name: "Avoid using eval()"
+    description: "eval() can execute arbitrary code and poses security risks"
+    severity: critical
+    tags: [security, code-injection]
+    pattern: |
+      eval\s*\(
+    message: "Using eval() is dangerous. Consider using ast.literal_eval() for safe evaluation"
+
+  - id: py-no-exec
+    name: "Avoid using exec()"
+    description: "exec() can execute arbitrary code"
+    severity: critical
+    tags: [security, code-injection]
+    pattern: |
+      exec\s*\(
+    message: "exec() poses security risks. Refactor to avoid dynamic code execution"
+
+  - id: py-sql-injection
+    name: "SQL Injection Prevention"
+    description: "Detect potential SQL injection vulnerabilities"
+    severity: critical
+    tags: [security, sql, injection]
+    pattern: |
+      (execute|executemany)\s*\(\s*[f"'].*%s.*["']
+    message: "Use parameterized queries to prevent SQL injection"
+
+  - id: py-hardcoded-password
+    name: "No Hardcoded Passwords"
+    description: "Passwords should not be hardcoded in source code"
+    severity: high
+    tags: [security, credentials]
+    pattern: |
+      (password|passwd|pwd|secret|api_key|apikey|token)\s*=\s*["'][^"']+["']
+    message: "Use environment variables or secure vaults for sensitive data"
+
+  - id: py-pickle-insecure
+    name: "Insecure Pickle Usage"
+    description: "Pickle can execute arbitrary code during deserialization"
+    severity: high
+    tags: [security, deserialization]
+    pattern: |
+      pickle\.loads?\s*\(
+    message: "Pickle is insecure for untrusted data. Use JSON or other safe formats"
+
+  - id: py-yaml-unsafe
+    name: "Unsafe YAML Loading"
+    description: "yaml.load() can execute arbitrary code"
+    severity: high
+    tags: [security, deserialization]
+    pattern: |
+      yaml\.load\s*\([^,)]*\)(?!.*Loader=)
+    message: "Use yaml.safe_load() instead of yaml.load()"
+
+  - id: py-subprocess-shell
+    name: "Subprocess with Shell=True"
+    description: "Using shell=True can lead to command injection"
+    severity: high
+    tags: [security, command-injection]
+    pattern: |
+      subprocess\.[^(]+\([^)]*shell\s*=\s*True
+    message: "Avoid shell=True in subprocess calls. Use list arguments instead"
+
+  - id: py-requests-no-verify
+    name: "SSL Verification Disabled"
+    description: "Disabling SSL verification is insecure"
+    severity: medium
+    tags: [security, ssl]
+    pattern: |
+      verify\s*=\s*False
+    message: "SSL verification should not be disabled in production"

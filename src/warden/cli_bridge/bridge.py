@@ -150,12 +150,14 @@ class WardenBridge:
             SecurityFrame,
             ChaosFrame,
             ArchitecturalConsistencyFrame,
+            OrphanFrame,
         )
 
         return [
             SecurityFrame(),
             ChaosFrame(),
             ArchitecturalConsistencyFrame(),
+            OrphanFrame(),
         ]
 
     def _load_frames_from_list(self, frame_names: list, frame_config: dict = None) -> list:
@@ -590,6 +592,121 @@ class WardenBridge:
                 data={"error_type": type(e).__name__},
             )
 
+    async def get_available_providers(self) -> List[Dict[str, Any]]:
+        """
+        Get installed AST providers with metadata.
+
+        Returns:
+            List of provider information dictionaries (camelCase for Panel compatibility)
+        """
+        try:
+            logger.info("get_available_providers_called")
+
+            # Import AST provider registry
+            from warden.ast.application.provider_registry import ASTProviderRegistry
+
+            # Initialize registry and discover providers
+            registry = ASTProviderRegistry()
+            await registry.discover_providers()
+
+            # Get all providers
+            providers = []
+            for metadata in registry.list_providers():
+                providers.append({
+                    "name": metadata.name,
+                    "languages": [lang.value for lang in metadata.supported_languages],
+                    "priority": metadata.priority.name,
+                    "version": metadata.version,
+                    "source": "built-in" if metadata.name in ["Python AST", "Tree-sitter"] else "PyPI",
+                })
+
+            logger.info("get_available_providers_success", provider_count=len(providers))
+            return providers
+
+        except Exception as e:
+            logger.error("get_available_providers_failed", error=str(e))
+            raise IPCError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Failed to get providers: {str(e)}",
+                data={"error_type": type(e).__name__},
+            )
+
+    async def test_provider(self, language: str) -> Dict[str, Any]:
+        """
+        Test if a language provider is available and functional.
+
+        Args:
+            language: Programming language name (e.g., 'python', 'java')
+
+        Returns:
+            Test result with provider details (camelCase for Panel compatibility)
+        """
+        try:
+            logger.info("test_provider_called", language=language)
+
+            # Import AST dependencies
+            from warden.ast.application.provider_registry import ASTProviderRegistry
+            from warden.ast.domain.enums import CodeLanguage
+
+            # Parse language enum
+            try:
+                lang = CodeLanguage(language.lower())
+            except ValueError:
+                # Invalid language
+                logger.warning("test_provider_invalid_language", language=language)
+                return {
+                    "available": False,
+                    "error": f"Unknown language: {language}",
+                    "supportedLanguages": [lang.value for lang in CodeLanguage if lang != CodeLanguage.UNKNOWN],
+                }
+
+            # Initialize registry and discover providers
+            registry = ASTProviderRegistry()
+            await registry.discover_providers()
+
+            # Get provider for language
+            provider = registry.get_provider(lang)
+
+            if not provider:
+                # No provider found
+                logger.warning("test_provider_not_found", language=language)
+                return {
+                    "available": False,
+                    "language": language,
+                }
+
+            # Provider found - validate it
+            is_valid = await provider.validate()
+
+            if is_valid:
+                # Provider is functional
+                logger.info("test_provider_success", language=language, provider=provider.metadata.name)
+                return {
+                    "available": True,
+                    "providerName": provider.metadata.name,
+                    "priority": provider.metadata.priority.name,
+                    "version": provider.metadata.version,
+                    "validated": True,
+                }
+            else:
+                # Provider found but validation failed
+                logger.warning("test_provider_validation_failed", language=language, provider=provider.metadata.name)
+                return {
+                    "available": True,
+                    "providerName": provider.metadata.name,
+                    "priority": provider.metadata.priority.name,
+                    "version": provider.metadata.version,
+                    "validated": False,
+                }
+
+        except Exception as e:
+            logger.error("test_provider_failed", language=language, error=str(e))
+            raise IPCError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Provider test failed: {str(e)}",
+                data={"language": language, "error_type": type(e).__name__},
+            )
+
     def _detect_language(self, path: Path) -> str:
         """
         Detect programming language from file extension
@@ -658,10 +775,10 @@ class WardenBridge:
                         {
                             "severity": getattr(f, "severity", "unknown"),
                             "message": getattr(f, "message", str(f)),
-                            "line": getattr(f, "line", None),
+                            "line": getattr(f, "line_number", getattr(f, "line", None)),  # Support both line_number and line
                             "column": getattr(f, "column", None),
                             "code": getattr(f, "code", None),
-                            "file_path": getattr(f, "file_path", None),
+                            "file": getattr(f, "file_path", getattr(f, "file", None)),  # Map file_path to file for CLI
                         }
                         for f in fr.findings
                     ],

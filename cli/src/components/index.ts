@@ -8,6 +8,7 @@ export { Header } from './Header.js';
 export { ChatArea } from './ChatArea.js';
 export { InputBox } from './InputBox.js';
 export { StreamingMessage } from './StreamingMessage.js';
+export { FramePicker } from './FramePicker.js';
 
 // Progress & Streaming Components
 export { WardenSpinner, StatusSpinner } from './WardenSpinner.js';
@@ -24,6 +25,7 @@ export type { HeaderProps } from './Header.js';
 export type { ChatAreaProps } from './ChatArea.js';
 export type { InputBoxProps } from './InputBox.js';
 export type { StreamingMessageProps } from '../types/index.js';
+export type { FramePickerProps } from './FramePicker.js';
 export type { WardenSpinnerProps, StatusSpinnerProps } from './WardenSpinner.js';
 export type {
   ProgressIndicatorProps,

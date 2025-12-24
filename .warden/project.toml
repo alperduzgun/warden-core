@@ -1,7 +1,7 @@
 [project]
 name = "warden-core"
-language = "python"
-sdk_version = "3.11"
+language = "typescript"
+# sdk_version = ""
 framework = "fastapi"
 project_type = "monorepo"
-detected_at = "2025-12-21T19:33:22.691143"
+detected_at = "2025-12-24T15:25:43.594491"

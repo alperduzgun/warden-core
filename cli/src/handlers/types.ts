@@ -29,6 +29,14 @@ export type ClearMessagesFunction = () => void;
 export type ExitFunction = () => void;
 
 /**
+ * Show frame picker callback
+ */
+export type ShowFramePickerFunction = (
+  filePath: string,
+  frames: import('../bridge/wardenClient.js').FrameInfo[]
+) => void;
+
+/**
  * Command handler context
  *
  * Provides all dependencies a handler needs
@@ -57,6 +65,9 @@ export interface CommandHandlerContext {
 
   /** Last scanned directory path (for smart file search) */
   lastScanPath?: string;
+
+  /** Show frame picker for /validate command (optional) */
+  showFramePicker?: ShowFramePickerFunction;
 }
 
 /**
