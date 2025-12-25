@@ -18,9 +18,31 @@ from dataclasses import dataclass
 
 from warden.validation.domain.frame import ValidationFrame, ValidationFrameError
 from warden.validation.infrastructure.frame_metadata import FrameMetadata
+from warden.validation.domain.enums import FramePriority
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class FrameListItem:
+    """
+    Frame metadata for UI display (Claude Code plugin style).
+
+    Used by CLI commands to show frame information in a user-friendly format.
+    """
+
+    frame_id: str
+    name: str
+    description: str
+    enabled: bool
+    source: str  # "Built-in" | "Custom" | "Community"
+    priority: str  # "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+    is_blocker: bool
+    version: str
+    author: str
+    check_count: int  # Number of checks/validators in frame
+    category: str  # "Global" | "Language-Specific" | "Framework-Specific"
 
 
 class FrameRegistry:
@@ -171,6 +193,95 @@ class FrameRegistry:
             self.discover_all()
 
         return self.registered_frames.copy()
+
+    def get_all_frames_with_metadata(self) -> List[FrameListItem]:
+        """
+        Get all registered frames with display metadata (for CLI UI).
+
+        Returns UI-friendly frame metadata for commands like `warden frame list`.
+        Includes frame status, source, version, and other display information.
+
+        Returns:
+            List of FrameListItem objects with display metadata
+
+        Example:
+            >>> registry = get_registry()
+            >>> frames = registry.get_all_frames_with_metadata()
+            >>> for frame in frames:
+            ...     print(f"{frame.name} - {frame.source} - {frame.priority}")
+            Security Analysis - Built-in - CRITICAL
+            Redis Security - Custom - HIGH
+        """
+        # Ensure all frames are discovered
+        if not self.registered_frames:
+            self.discover_all()
+
+        frames_list: List[FrameListItem] = []
+
+        for frame_id, frame_class in self.registered_frames.items():
+            # Instantiate to get metadata
+            instance = frame_class()
+
+            # Determine source
+            module_name = frame_class.__module__
+            if module_name.startswith("warden.validation.frames."):
+                source = "Built-in"
+            elif module_name.startswith("warden.external."):
+                source = "Custom"
+            else:
+                source = "Community"
+
+            # Get priority as string (use enum name, not value)
+            if hasattr(instance.priority, "name"):
+                priority_str = instance.priority.name  # CRITICAL, HIGH, etc.
+            else:
+                priority_str = str(instance.priority).upper()
+
+            # Get category as string (use enum value for display)
+            if hasattr(instance.category, "value"):
+                category_str = str(instance.category.value)
+            else:
+                category_str = str(instance.category)
+
+            # Count checks (heuristic: count methods starting with check_ or validate_)
+            check_count = sum(
+                1
+                for attr_name in dir(instance)
+                if (attr_name.startswith("check_") or attr_name.startswith("validate_"))
+                and callable(getattr(instance, attr_name))
+            )
+
+            # Default to 0 if no checks found (frame might use different pattern)
+            if check_count == 0:
+                check_count = 1  # Assume at least 1 validation
+
+            # Create FrameListItem
+            item = FrameListItem(
+                frame_id=frame_id,
+                name=instance.name,
+                description=instance.description,
+                enabled=True,  # TODO: Get from config (.warden/config.yaml)
+                source=source,
+                priority=priority_str.upper(),
+                is_blocker=instance.is_blocker,
+                version=instance.version,
+                author=instance.author,
+                check_count=check_count,
+                category=category_str,
+            )
+
+            frames_list.append(item)
+
+        # Sort by priority (CRITICAL > HIGH > MEDIUM > LOW) then name
+        priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        frames_list.sort(
+            key=lambda f: (
+                priority_order.get(f.priority, 999),
+                f.name,
+            )
+        )
+
+        return frames_list
 
     def _discover_builtin_frames(self) -> List[Type[ValidationFrame]]:
         """
