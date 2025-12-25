@@ -12,6 +12,7 @@ import {Scan} from './commands/scan.js';
 import {Status} from './commands/status.js';
 import {Analyze} from './commands/analyze.js';
 import {Chat} from './commands/chat.js';
+import {Frames} from './commands/frames.js';
 
 const cli = meow(
   `
@@ -22,6 +23,7 @@ const cli = meow(
     chat                Interactive chat mode (default)
     scan <path>         Scan directory or file for issues
     analyze <file>      Analyze a single file
+    frames              Show available validation frames
     status              Check Warden backend status
     help                Show this help message
 
@@ -34,6 +36,7 @@ const cli = meow(
     $ warden scan src/
     $ warden scan src/ --frames security,orphan
     $ warden analyze src/app.py
+    $ warden frames
     $ warden status
 `,
   {
@@ -77,6 +80,10 @@ async function main() {
 
     case 'status':
       render(<Status />);
+      break;
+
+    case 'frames':
+      render(<Frames />);
       break;
 
     case 'chat':

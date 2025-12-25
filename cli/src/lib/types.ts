@@ -91,3 +91,15 @@ export interface FrameConfig {
   enabled: boolean;
   options: Record<string, string | number | boolean>;
 }
+
+/**
+ * Validation Frame metadata
+ */
+export interface Frame {
+  id: string;
+  name: string;
+  description: string;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  is_blocker: boolean;
+  tags?: string[];
+}

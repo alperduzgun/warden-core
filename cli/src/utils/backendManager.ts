@@ -63,7 +63,7 @@ export class BackendManager {
     });
 
     // Ensure .warden directory exists
-    const wardenDir = join(process.cwd(), '.warden');
+    const wardenDir = join(PROJECT_ROOT, '.warden');
     if (!existsSync(wardenDir)) {
       await import('fs/promises').then(fs => fs.mkdir(wardenDir, {recursive: true}));
     }
@@ -72,12 +72,31 @@ export class BackendManager {
     this.process = spawn('python3', [BACKEND_SCRIPT], {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      cwd: process.cwd(),
+      cwd: PROJECT_ROOT, // Run from project root, not cli directory
     });
 
     // Save PID
     if (this.process.pid) {
       writeFileSync(PID_FILE, this.process.pid.toString());
+    }
+
+    // Capture stdout/stderr for debugging
+    if (this.process.stdout) {
+      this.process.stdout.on('data', (data) => {
+        logger.debug('backend_stdout', {output: data.toString().trim()});
+      });
+    }
+
+    if (this.process.stderr) {
+      this.process.stderr.on('data', (data) => {
+        const output = data.toString().trim();
+        // Only log errors, not info messages
+        if (output.includes('ERROR') || output.includes('Error') || output.includes('Traceback')) {
+          logger.error('backend_stderr', {output});
+        } else {
+          logger.debug('backend_stderr', {output});
+        }
+      });
     }
 
     // Handle process events

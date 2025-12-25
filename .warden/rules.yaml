@@ -50,6 +50,8 @@ frame_rules:
     pre_rules:
       - env-var-api-keys      # No hardcoded API keys
       - no-secrets            # Double-check: no secrets at all
+      # Backend/IPC Configuration Checks
+      - backend-manager-use-project-root   # Backend spawn must use PROJECT_ROOT
       # LLM Configuration Checks (Sprint 1 - TypeScript/JavaScript)
       - llm-azure-deployment-name-usage    # Azure: use deploymentName, not model
       # llm-azure-deployment-env-required  # Disabled (false positives)
@@ -387,6 +389,84 @@ rules:
       - "*_test.py"
       - "test_*.py"
       - "*.test.py"
+      - "**/tests/**"
+
+  # ============================================================================
+  # Backend/IPC Management Rules
+  # ============================================================================
+
+  - id: "backend-manager-use-project-root"
+    name: "Backend Manager Must Use PROJECT_ROOT for cwd"
+    category: backend-ipc
+    severity: critical
+    isBlocker: true
+    description: "When spawning backend processes (IPC server), always use PROJECT_ROOT as working directory, not process.cwd(). This ensures .env and config files are found."
+    enabled: true
+    type: security
+    conditions:
+      patterns:
+        # Catch spawn() calls with cwd: process.cwd() in backend-related files
+        - "spawn\\s*\\([^)]*start_ipc_server[^)]*cwd:\\s*process\\.cwd\\(\\)"
+        - "spawn\\s*\\([^)]*backend[^)]*cwd:\\s*process\\.cwd\\(\\)"
+        # Also catch general spawn with process.cwd in backend manager files
+        - "backendManager.*spawn.*cwd:\\s*process\\.cwd\\(\\)"
+    examples:
+      invalid:
+        - |
+          // WRONG: Using process.cwd() as working directory
+          this.process = spawn('python3', [BACKEND_SCRIPT], {
+            detached: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            cwd: process.cwd(),  // ❌ Backend won't find .env!
+          });
+        - |
+          // WRONG: Backend script relative to current dir
+          spawn('python3', ['start_ipc_server.py'], {
+            cwd: process.cwd()  // ❌ Wrong directory!
+          });
+      valid:
+        - |
+          // CORRECT: Using PROJECT_ROOT as working directory
+          this.process = spawn('python3', [BACKEND_SCRIPT], {
+            detached: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            cwd: PROJECT_ROOT,  // ✅ Backend finds .env at project root
+          });
+        - |
+          // CORRECT: Explicit project root
+          const PROJECT_ROOT = findProjectRoot();
+          spawn('python3', [BACKEND_SCRIPT], {
+            cwd: PROJECT_ROOT  // ✅ Correct!
+          });
+    message: |
+      Backend Manager spawn() using wrong working directory!
+
+      Problem: Using process.cwd() instead of PROJECT_ROOT
+      Impact: Backend can't find .env file, timeout on startup
+
+      Why this happens:
+      - CLI runs from cli/ directory (process.cwd() = /path/warden-core/cli)
+      - Backend needs project root to find .env (/path/warden-core/.env)
+      - Using process.cwd() makes backend look in cli/ directory
+
+      Fix:
+      1. Define PROJECT_ROOT constant (use findProjectRoot() helper)
+      2. Use cwd: PROJECT_ROOT in spawn() options
+      3. Never use cwd: process.cwd() for backend processes
+
+      Example fix:
+      const PROJECT_ROOT = findProjectRoot();
+      spawn('python3', [BACKEND_SCRIPT], {
+        cwd: PROJECT_ROOT  // ✅ Backend finds .env
+      });
+
+      This was a production bug in Sprint 1 - backend timeout on first start!
+    language:
+      - "typescript"
+      - "javascript"
+    exceptions:
+      - "**/*.test.ts"
+      - "**/*.spec.ts"
       - "**/tests/**"
 
   # ============================================================================
