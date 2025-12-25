@@ -72,11 +72,29 @@ def config(
 
 @app.command()
 def chat():
-    """Start Warden TUI - Modern terminal interface"""
-    from warden.tui import WardenTUI
+    """Start Warden Interactive CLI - Modern terminal interface (Node.js)"""
+    import subprocess
+    from pathlib import Path
 
-    app_instance = WardenTUI()
-    app_instance.run()
+    # Find warden-cli executable
+    project_root = Path(__file__).parent.parent.parent.parent
+    cli_executable = project_root / "cli" / "dist" / "cli.js"
+
+    if not cli_executable.exists():
+        console.print("[red]Error: Warden CLI not built. Please run:[/red]")
+        console.print("[yellow]  cd cli && npm install && npm run build[/yellow]")
+        raise typer.Exit(1)
+
+    console.print("[cyan]🛡️  Starting Warden Interactive CLI...[/cyan]")
+
+    try:
+        # Run the Node.js CLI
+        subprocess.run(["node", str(cli_executable)], check=True)
+    except KeyboardInterrupt:
+        console.print("\n[cyan]Warden CLI stopped.[/cyan]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Error running CLI: {e}[/red]")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -131,9 +149,9 @@ def ink(
 
 def main():
     """Main entry point"""
-    # If no arguments, start Textual TUI
+    # If no arguments, start Node.js CLI
     if len(sys.argv) == 1:
-        console.print("[cyan]🛡️  Starting Warden TUI...[/cyan]")
+        console.print("[cyan]🛡️  Starting Warden Interactive CLI...[/cyan]")
         console.print("[dim]Use 'warden --help' for command-line options[/dim]\n")
         chat()
     else:

@@ -1,141 +1,290 @@
 /**
- * Backend Manager
- *
- * Automatically manages Warden backend IPC server lifecycle.
- * Detects if backend is running, starts if needed, and ensures socket availability.
+ * Backend Manager - Auto-start and manage Warden backend server
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import { existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import {spawn, ChildProcess} from 'child_process';
+import {existsSync, readFileSync, writeFileSync, unlinkSync} from 'fs';
+import {join} from 'path';
+import {logger} from './logger.js';
 
+// Find project root by looking for start_ipc_server.py
+const findProjectRoot = (): string => {
+  let currentDir = process.cwd();
+
+  // Check current directory and parent directories
+  for (let i = 0; i < 5; i++) {
+    const scriptPath = join(currentDir, 'start_ipc_server.py');
+    if (existsSync(scriptPath)) {
+      return currentDir;
+    }
+    const parentDir = join(currentDir, '..');
+    if (parentDir === currentDir) break; // Reached root
+    currentDir = parentDir;
+  }
+
+  // Default to parent of cli directory
+  return join(process.cwd(), '..');
+};
+
+const PROJECT_ROOT = findProjectRoot();
+const PID_FILE = join(PROJECT_ROOT, '.warden', 'backend.pid');
+const BACKEND_SCRIPT = join(PROJECT_ROOT, 'start_ipc_server.py');
 const SOCKET_PATH = '/tmp/warden-ipc.sock';
-const STARTUP_TIMEOUT_MS = 5000;
+const HEALTH_CHECK_INTERVAL = 5000; // 5 seconds
+const STARTUP_TIMEOUT = 10000; // 10 seconds
 
-let backendProcess: ChildProcess | null = null;
+export class BackendManager {
+  private process: ChildProcess | null = null;
+  private healthCheckTimer: NodeJS.Timeout | null = null;
+  private isShuttingDown = false;
 
-/**
- * Get project root directory
- */
-function getProjectRoot(): string {
-  // CLI is in warden-core/cli, so go up one level
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  return join(__dirname, '..', '..', '..');
-}
-
-/**
- * Check if backend socket exists and is accessible
- */
-function isBackendRunning(): boolean {
-  try {
-    return existsSync(SOCKET_PATH);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Find backend server script
- */
-function findBackendScript(): string | null {
-  const projectRoot = getProjectRoot();
-
-  // Option 1: start_ipc_server.py in root
-  const startScript = join(projectRoot, 'start_ipc_server.py');
-  if (existsSync(startScript)) {
-    return startScript;
-  }
-
-  // Option 2: Python module (warden.cli_bridge.server)
-  return null;
-}
-
-/**
- * Start backend IPC server
- */
-async function startBackend(): Promise<boolean> {
-  const projectRoot = getProjectRoot();
-  const backendScript = findBackendScript();
-
-  return new Promise((resolve) => {
-    let args: string[];
-    let cwd: string;
-
-    if (backendScript) {
-      // Use start_ipc_server.py
-      args = [backendScript];
-      cwd = projectRoot;
-    } else {
-      // Use Python module
-      args = [
-        '-m',
-        'warden.cli_bridge.server',
-        '--transport',
-        'socket',
-        '--socket-path',
-        SOCKET_PATH,
-      ];
-      cwd = projectRoot;
+  /**
+   * Start the backend server
+   */
+  async start(): Promise<boolean> {
+    // Check if already running
+    if (this.isRunning()) {
+      logger.info('backend_already_running', {pid: this.getPID()});
+      return true;
     }
 
-    // Spawn backend process
-    backendProcess = spawn('python3', args, {
-      cwd,
-      detached: true,
-      stdio: 'ignore', // Run silently in background
+    // Check if backend script exists
+    if (!existsSync(BACKEND_SCRIPT)) {
+      logger.error('backend_script_not_found', {
+        script_path: BACKEND_SCRIPT,
+        project_root: PROJECT_ROOT,
+      });
+      throw new Error(`Backend script not found: ${BACKEND_SCRIPT}`);
+    }
+
+    logger.info('backend_starting', {
+      script: BACKEND_SCRIPT,
+      project_root: PROJECT_ROOT,
     });
 
-    // Unref so it doesn't block CLI exit
-    backendProcess.unref();
+    // Ensure .warden directory exists
+    const wardenDir = join(process.cwd(), '.warden');
+    if (!existsSync(wardenDir)) {
+      await import('fs/promises').then(fs => fs.mkdir(wardenDir, {recursive: true}));
+    }
 
-    // Wait for socket to appear
-    const startTime = Date.now();
-    const checkInterval = setInterval(() => {
-      if (isBackendRunning()) {
-        clearInterval(checkInterval);
-        resolve(true);
-      } else if (Date.now() - startTime > STARTUP_TIMEOUT_MS) {
-        clearInterval(checkInterval);
-        resolve(false);
+    // Start backend process
+    this.process = spawn('python3', [BACKEND_SCRIPT], {
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: process.cwd(),
+    });
+
+    // Save PID
+    if (this.process.pid) {
+      writeFileSync(PID_FILE, this.process.pid.toString());
+    }
+
+    // Handle process events
+    this.process.on('error', (error) => {
+      console.error('Backend process error:', error);
+    });
+
+    this.process.on('exit', (code) => {
+      if (!this.isShuttingDown) {
+        console.error(`Backend exited unexpectedly with code ${code}`);
+        this.cleanup();
       }
-    }, 100);
-  });
-}
+    });
 
-/**
- * Ensure backend is running, start if needed
- *
- * Returns true if backend is available, false otherwise
- */
-export async function ensureBackend(): Promise<boolean> {
-  // Check if already running
-  if (isBackendRunning()) {
+    // Wait for server to be ready
+    const isReady = await this.waitForReady();
+
+    if (!isReady) {
+      logger.error('backend_startup_timeout', {
+        timeout_ms: STARTUP_TIMEOUT,
+        socket_path: SOCKET_PATH,
+      });
+      throw new Error(`Backend failed to start within ${STARTUP_TIMEOUT}ms`);
+    }
+
+    logger.info('backend_started_successfully', {
+      pid: this.process?.pid,
+      socket_path: SOCKET_PATH,
+    });
+
+    // Start health check
+    this.startHealthCheck();
+
     return true;
   }
 
-  // Try to start backend
-  console.log('🔄 Starting Warden backend...');
-  const started = await startBackend();
+  /**
+   * Stop the backend server
+   */
+  async stop(): Promise<void> {
+    this.isShuttingDown = true;
 
-  if (started) {
-    console.log('✅ Backend started successfully\n');
-    return true;
-  } else {
-    console.log('⚠️  Backend could not be started automatically');
-    console.log('   You can start it manually:');
-    console.log('   cd ' + getProjectRoot());
-    console.log('   python3 start_ipc_server.py\n');
+    // Stop health check
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+
+    // Kill process
+    if (this.process) {
+      this.process.kill();
+      this.process = null;
+    }
+
+    // Cleanup
+    this.cleanup();
+  }
+
+  /**
+   * Check if backend is running
+   */
+  isRunning(): boolean {
+    // Check PID file
+    if (!existsSync(PID_FILE)) {
+      return false;
+    }
+
+    try {
+      const pid = parseInt(readFileSync(PID_FILE, 'utf-8'));
+
+      // Check if process exists
+      try {
+        process.kill(pid, 0); // Signal 0 = check if process exists
+        return true;
+      } catch {
+        // Process doesn't exist
+        this.cleanup();
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Health check - ping backend
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      // Check if socket exists
+      if (!existsSync(SOCKET_PATH)) {
+        logger.debug('health_check_socket_missing', {socket_path: SOCKET_PATH});
+        return false;
+      }
+
+      // Try to connect (simple check)
+      const {ipcClient} = await import('../lib/ipc-client.js');
+
+      if (!ipcClient.isConnected()) {
+        logger.debug('health_check_reconnecting', {});
+        await ipcClient.connect();
+      }
+
+      const response = await ipcClient.send('ping', {});
+      const isHealthy = response.success === true;
+
+      if (!isHealthy) {
+        logger.warning('health_check_unhealthy', {
+          response_success: response.success,
+          response_error: response.error,
+        });
+      }
+
+      return isHealthy;
+    } catch (error) {
+      logger.debug('health_check_failed', {
+        error: error instanceof Error ? error.message : 'Unknown',
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Restart backend
+   */
+  async restart(): Promise<void> {
+    await this.stop();
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s
+    await this.start();
+  }
+
+  /**
+   * Get backend PID
+   */
+  getPID(): number | null {
+    if (!existsSync(PID_FILE)) {
+      return null;
+    }
+
+    try {
+      return parseInt(readFileSync(PID_FILE, 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Wait for backend to be ready
+   */
+  private async waitForReady(): Promise<boolean> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < STARTUP_TIMEOUT) {
+      if (existsSync(SOCKET_PATH)) {
+        // Socket exists, try to ping
+        const healthy = await this.healthCheck();
+        if (healthy) {
+          return true;
+        }
+      }
+
+      // Wait 500ms before retry
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
     return false;
   }
-}
 
-/**
- * Cleanup backend on exit (optional - backend can run independently)
- */
-export function cleanupBackend(): void {
-  if (backendProcess && !backendProcess.killed) {
-    backendProcess.kill();
+  /**
+   * Start periodic health check
+   */
+  private startHealthCheck(): void {
+    this.healthCheckTimer = setInterval(async () => {
+      if (this.isShuttingDown) {
+        return;
+      }
+
+      const healthy = await this.healthCheck();
+
+      if (!healthy && !this.isShuttingDown) {
+        console.error('Backend health check failed, restarting...');
+        await this.restart();
+      }
+    }, HEALTH_CHECK_INTERVAL);
+  }
+
+  /**
+   * Cleanup PID file and socket
+   */
+  private cleanup(): void {
+    try {
+      if (existsSync(PID_FILE)) {
+        unlinkSync(PID_FILE);
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    try {
+      if (existsSync(SOCKET_PATH)) {
+        unlinkSync(SOCKET_PATH);
+      }
+    } catch {
+      // Ignore errors
+    }
   }
 }
+
+// Singleton instance
+export const backendManager = new BackendManager();

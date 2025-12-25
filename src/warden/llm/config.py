@@ -204,6 +204,26 @@ def load_llm_config() -> LlmConfiguration:
     """
     import os
 
+    # Load .env file if available (for local development)
+    try:
+        from dotenv import load_dotenv
+        from pathlib import Path
+
+        # Look for .env in project root (up to 5 levels)
+        current = Path.cwd()
+        for _ in range(5):
+            env_file = current / ".env"
+            if env_file.exists():
+                load_dotenv(env_file)
+                break
+            parent = current.parent
+            if parent == current:  # Reached root
+                break
+            current = parent
+    except ImportError:
+        # python-dotenv not installed - skip
+        pass
+
     # Create base configuration (without default provider chain)
     config = LlmConfiguration(
         default_provider=LlmProvider.AZURE_OPENAI,  # Will be updated if not configured

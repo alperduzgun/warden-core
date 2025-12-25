@@ -63,6 +63,8 @@ class IPCServer:
         # Method routing table
         self.methods = {
             "ping": self.bridge.ping,
+            "scan": self.bridge.scan,  # Scan directory/file
+            "analyze": self.bridge.analyze,  # Analyze single file
             "execute_pipeline": self.bridge.execute_pipeline,
             "execute_pipeline_stream": self.bridge.execute_pipeline_stream,  # NEW: Real-time streaming
             "get_config": self.bridge.get_config,

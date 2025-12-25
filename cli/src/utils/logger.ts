@@ -1,80 +1,115 @@
 /**
- * Logger Utility
- *
- * Provides structured logging for the CLI application
+ * Structured Logger
+ * Provides structured logging with context for better debugging
  */
 
-export enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error',
-}
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical';
 
-const LOG_LEVELS: Record<LogLevel, number> = {
-  [LogLevel.DEBUG]: 0,
-  [LogLevel.INFO]: 1,
-  [LogLevel.WARN]: 2,
-  [LogLevel.ERROR]: 3,
-};
+export interface LogContext {
+  [key: string]: string | number | boolean | undefined | null;
+}
 
 class Logger {
   private level: LogLevel;
-  private enabled: boolean;
 
   constructor() {
-    this.level = this.parseLogLevel(process.env.WARDEN_LOG_LEVEL);
-    this.enabled = process.env.NODE_ENV !== 'production';
+    // Set log level from environment or default to 'info'
+    const envLevel = process.env.WARDEN_LOG_LEVEL?.toLowerCase() as LogLevel;
+    this.level = envLevel || 'info';
   }
 
-  private parseLogLevel(level?: string): LogLevel {
-    if (!level) return LogLevel.INFO;
-
-    const normalized = level.toLowerCase() as LogLevel;
-    return Object.values(LogLevel).includes(normalized)
-      ? normalized
-      : LogLevel.INFO;
+  /**
+   * Log debug message (development only)
+   */
+  debug(event: string, context?: LogContext): void {
+    if (this.shouldLog('debug')) {
+      this.log('debug', event, context);
+    }
   }
 
-  private shouldLog(level: LogLevel): boolean {
-    return (
-      this.enabled && LOG_LEVELS[level] >= LOG_LEVELS[this.level]
-    );
+  /**
+   * Log info message (normal flow)
+   */
+  info(event: string, context?: LogContext): void {
+    if (this.shouldLog('info')) {
+      this.log('info', event, context);
+    }
   }
 
-  private formatMessage(level: LogLevel, message: string, data?: unknown): string {
+  /**
+   * Log warning message (potential issues)
+   */
+  warning(event: string, context?: LogContext): void {
+    if (this.shouldLog('warning')) {
+      this.log('warning', event, context);
+    }
+  }
+
+  /**
+   * Log error message (failures)
+   */
+  error(event: string, context?: LogContext): void {
+    if (this.shouldLog('error')) {
+      this.log('error', event, context);
+    }
+  }
+
+  /**
+   * Log critical message (system failures)
+   */
+  critical(event: string, context?: LogContext): void {
+    if (this.shouldLog('critical')) {
+      this.log('critical', event, context);
+    }
+  }
+
+  /**
+   * Internal log method
+   */
+  private log(level: LogLevel, event: string, context?: LogContext): void {
     const timestamp = new Date().toISOString();
-    const dataStr = data ? ` ${JSON.stringify(data)}` : '';
-    return `[${timestamp}] [${level.toUpperCase()}] ${message}${dataStr}`;
-  }
+    const logEntry = {
+      timestamp,
+      level: level.toUpperCase(),
+      event,
+      ...context,
+    };
 
-  debug(message: string, data?: unknown): void {
-    if (this.shouldLog(LogLevel.DEBUG)) {
-      console.debug(this.formatMessage(LogLevel.DEBUG, message, data));
+    // Format output based on level
+    const output = JSON.stringify(logEntry);
+
+    if (level === 'error' || level === 'critical') {
+      console.error(output);
+    } else {
+      console.log(output);
     }
   }
 
-  info(message: string, data?: unknown): void {
-    if (this.shouldLog(LogLevel.INFO)) {
-      console.info(this.formatMessage(LogLevel.INFO, message, data));
-    }
+  /**
+   * Check if should log at this level
+   */
+  private shouldLog(level: LogLevel): boolean {
+    const levels: LogLevel[] = ['debug', 'info', 'warning', 'error', 'critical'];
+    const currentLevelIndex = levels.indexOf(this.level);
+    const requestedLevelIndex = levels.indexOf(level);
+
+    return requestedLevelIndex >= currentLevelIndex;
   }
 
-  warn(message: string, data?: unknown): void {
-    if (this.shouldLog(LogLevel.WARN)) {
-      console.warn(this.formatMessage(LogLevel.WARN, message, data));
-    }
+  /**
+   * Set log level
+   */
+  setLevel(level: LogLevel): void {
+    this.level = level;
   }
 
-  error(message: string, error?: Error | unknown): void {
-    if (this.shouldLog(LogLevel.ERROR)) {
-      const errorData = error instanceof Error
-        ? { message: error.message, stack: error.stack }
-        : error;
-      console.error(this.formatMessage(LogLevel.ERROR, message, errorData));
-    }
+  /**
+   * Get current log level
+   */
+  getLevel(): LogLevel {
+    return this.level;
   }
 }
 
-// Export singleton instance
+// Singleton instance
 export const logger = new Logger();

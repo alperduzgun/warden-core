@@ -76,6 +76,32 @@ class LlmClientFactory:
         """
         return self.create_client(self._config.default_provider)
 
+    async def get_provider(self, provider: Optional[LlmProvider] = None) -> Optional[ILlmClient]:
+        """
+        Get LLM client for specific provider (async version)
+
+        This is an alias for backward compatibility with bridge.py usage.
+        If provider is None, returns default client. Returns None if provider
+        is not available or not configured.
+
+        Args:
+            provider: Optional provider to get (uses default if None)
+
+        Returns:
+            LLM client instance or None if not available
+        """
+        try:
+            if provider is None:
+                return self.create_default_client()
+            else:
+                client = self.create_client(provider)
+                # Check if actually available
+                if await client.is_available_async():
+                    return client
+                return None
+        except Exception:
+            return None
+
     async def create_client_with_fallback(self) -> ILlmClient:
         """
         Create client with automatic fallback
