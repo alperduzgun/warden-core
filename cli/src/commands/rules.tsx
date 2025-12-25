@@ -3,220 +3,66 @@
  * Manage frame rules with expand/collapse and CRUD operations
  */
 
-import React, {useState, useEffect} from 'react';
+import React, {useEffect} from 'react';
 import {Box, Text, useInput, useApp} from 'ink';
 import SelectInput from 'ink-select-input';
 import {Spinner} from '../components/Spinner.js';
-import fs from 'fs/promises';
-import path from 'path';
-import yaml from 'js-yaml';
-
-interface RulesProps {
-  onExit?: () => void;
-}
-
-interface FrameRule {
-  pre_rules?: string[];
-  post_rules?: string[];
-  on_fail?: string;
-}
-
-interface RulesData {
-  frame_rules: Record<string, FrameRule>;
-  rules: any[];
-  global_rules: string[];
-}
-
-type NavigationLevel = 'frame' | 'pre_rules' | 'post_rules';
-type ModalType = 'none' | 'add_rule' | 'confirm_delete';
-
-interface NavigationState {
-  level: NavigationLevel;
-  frameIndex: number;
-  ruleIndex: number;
-}
+import {useRulesManager, getAvailableRules} from './rules-hooks.js';
+import type {RulesProps} from './rules-types.js';
 
 export function Rules({onExit}: RulesProps = {}) {
   const {exit} = useApp();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [rulesData, setRulesData] = useState<RulesData | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
-  // Navigation state
-  const [expandedFrames, setExpandedFrames] = useState<Set<string>>(new Set());
-  const [nav, setNav] = useState<NavigationState>({
-    level: 'frame',
-    frameIndex: 0,
-    ruleIndex: 0,
-  });
+  const {
+    // State
+    isLoading,
+    error,
+    rulesData,
+    message,
+    expandedFrames,
+    nav,
+    modalType,
+    ruleToDelete,
 
-  // Modal state
-  const [modalType, setModalType] = useState<ModalType>('none');
-  const [ruleToDelete, setRuleToDelete] = useState<{frame: string; rule: string; position: 'pre' | 'post'} | null>(null);
+    // Setters
+    setExpandedFrames,
+    setNav,
+    setModalType,
+    setRuleToDelete,
+    setMessage,
+
+    // Actions
+    loadRules,
+    handleDeleteRule,
+    handleMoveRule,
+    handleAddRule,
+    handleUndo,
+    handleRedo,
+  } = useRulesManager();
 
   useEffect(() => {
     loadRules();
   }, []);
-
-  // Auto-clear messages after 3 seconds
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [message]);
-
-  const loadRules = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const rulesPath = path.join(process.cwd(), '.warden', 'rules.yaml');
-      const rulesContent = await fs.readFile(rulesPath, 'utf-8');
-      const rulesYaml = yaml.load(rulesContent) as any;
-
-      setRulesData({
-        frame_rules: rulesYaml.frame_rules || {},
-        rules: rulesYaml.rules || [],
-        global_rules: rulesYaml.global_rules || [],
-      });
-
-      setIsLoading(false);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      setError(`Failed to load rules: ${errorMsg}`);
-      setIsLoading(false);
-    }
-  };
-
-  const saveRules = async (newRulesData: RulesData) => {
-    try {
-      const rulesPath = path.join(process.cwd(), '.warden', 'rules.yaml');
-      const rulesContent = await fs.readFile(rulesPath, 'utf-8');
-      const rulesYaml = yaml.load(rulesContent) as any;
-
-      // Update frame_rules only
-      rulesYaml.frame_rules = newRulesData.frame_rules;
-
-      // Write back
-      await fs.writeFile(rulesPath, yaml.dump(rulesYaml, {indent: 2, lineWidth: -1}));
-      setRulesData(newRulesData);
-    } catch (err) {
-      setMessage(`❌ Failed to save: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
-
-  const handleDeleteRule = async (confirmed: boolean) => {
-    if (!confirmed || !ruleToDelete || !rulesData) {
-      setModalType('none');
-      setRuleToDelete(null);
-      return;
-    }
-
-    const {frame, rule, position} = ruleToDelete;
-    const newRulesData = {...rulesData};
-    const frameRule = {...newRulesData.frame_rules[frame]};
-
-    if (position === 'pre') {
-      frameRule.pre_rules = (frameRule.pre_rules || []).filter((r) => r !== rule);
-    } else {
-      frameRule.post_rules = (frameRule.post_rules || []).filter((r) => r !== rule);
-    }
-
-    newRulesData.frame_rules[frame] = frameRule;
-
-    await saveRules(newRulesData);
-    setMessage(`✅ Removed ${rule} from ${frame}/${position}_rules`);
-    setModalType('none');
-    setRuleToDelete(null);
-  };
-
-  const handleMoveRule = async () => {
-    if (!rulesData || nav.level === 'frame') return;
-
-    const currentFrame = frameRuleEntries[nav.frameIndex];
-    if (!currentFrame) return;
-
-    const [frameName, frameRule] = currentFrame;
-    const isInPre = nav.level === 'pre_rules';
-    const sourceRules = isInPre ? (frameRule.pre_rules || []) : (frameRule.post_rules || []);
-    const ruleToMove = sourceRules[nav.ruleIndex];
-
-    if (!ruleToMove) return;
-
-    const newRulesData = {...rulesData};
-    const newFrameRule = {...newRulesData.frame_rules[frameName]};
-
-    if (isInPre) {
-      // Move from pre to post
-      newFrameRule.pre_rules = (newFrameRule.pre_rules || []).filter((r) => r !== ruleToMove);
-      newFrameRule.post_rules = [...(newFrameRule.post_rules || []), ruleToMove];
-      setNav({...nav, level: 'post_rules', ruleIndex: newFrameRule.post_rules.length - 1});
-    } else {
-      // Move from post to pre
-      newFrameRule.post_rules = (newFrameRule.post_rules || []).filter((r) => r !== ruleToMove);
-      newFrameRule.pre_rules = [...(newFrameRule.pre_rules || []), ruleToMove];
-      setNav({...nav, level: 'pre_rules', ruleIndex: newFrameRule.pre_rules.length - 1});
-    }
-
-    newRulesData.frame_rules[frameName] = newFrameRule;
-
-    await saveRules(newRulesData);
-    setMessage(`✅ Moved ${ruleToMove}: ${isInPre ? 'pre → post' : 'post → pre'}`);
-  };
-
-  const handleAddRule = async (ruleId: string) => {
-    if (!rulesData || nav.level === 'frame') return;
-
-    const currentFrame = frameRuleEntries[nav.frameIndex];
-    if (!currentFrame) return;
-
-    const [frameName, frameRule] = currentFrame;
-    const position = nav.level === 'pre_rules' ? 'pre' : 'post';
-
-    const newRulesData = {...rulesData};
-    const newFrameRule = {...newRulesData.frame_rules[frameName]};
-
-    if (position === 'pre') {
-      newFrameRule.pre_rules = [...(newFrameRule.pre_rules || []), ruleId];
-    } else {
-      newFrameRule.post_rules = [...(newFrameRule.post_rules || []), ruleId];
-    }
-
-    newRulesData.frame_rules[frameName] = newFrameRule;
-
-    await saveRules(newRulesData);
-    setMessage(`✅ Added ${ruleId} to ${frameName}/${position}_rules`);
-    setModalType('none');
-  };
 
   const frameRuleEntries = Object.entries(rulesData?.frame_rules || {});
   const currentFrame = frameRuleEntries[nav.frameIndex];
   const currentFrameName = currentFrame?.[0];
   const currentFrameRules = currentFrame?.[1];
 
-  // Get available rules for picker (excluding already added)
-  const getAvailableRules = () => {
-    if (!rulesData || !currentFrameRules) return [];
-
-    const existingRules = new Set([
-      ...(currentFrameRules.pre_rules || []),
-      ...(currentFrameRules.post_rules || []),
-    ]);
-
-    return (rulesData.rules || [])
-      .filter((rule: any) => !existingRules.has(rule.id))
-      .map((rule: any) => ({
-        label: `${rule.id} (${rule.category}, ${rule.severity})`,
-        value: rule.id,
-      }));
-  };
-
   // Keyboard controls - Main navigation
   useInput((input, key) => {
     if (!rulesData || frameRuleEntries.length === 0) return;
+
+    // Undo/Redo (Ctrl+Z / Ctrl+Y)
+    if (key.ctrl && input === 'z') {
+      handleUndo();
+      return;
+    }
+
+    if (key.ctrl && input === 'y') {
+      handleRedo();
+      return;
+    }
 
     // Modal handlers
     if (modalType === 'confirm_delete') {
@@ -274,7 +120,7 @@ export function Rules({onExit}: RulesProps = {}) {
 
     // Move rule
     if (input === 'm' && nav.level !== 'frame') {
-      handleMoveRule();
+      handleMoveRule(frameRuleEntries);
       return;
     }
 
@@ -374,7 +220,7 @@ export function Rules({onExit}: RulesProps = {}) {
 
   // Show rule picker modal
   if (modalType === 'add_rule') {
-    const availableRules = getAvailableRules();
+    const availableRules = getAvailableRules(rulesData, currentFrameRules);
 
     if (availableRules.length === 0) {
       setModalType('none');
@@ -395,7 +241,7 @@ export function Rules({onExit}: RulesProps = {}) {
         <Box marginTop={1}>
           <SelectInput
             items={availableRules}
-            onSelect={(item) => handleAddRule(item.value)}
+            onSelect={(item) => handleAddRule(item.value, frameRuleEntries)}
           />
         </Box>
       </Box>
@@ -547,8 +393,8 @@ export function Rules({onExit}: RulesProps = {}) {
       <Box marginTop={1}>
         <Text dimColor>
           {nav.level === 'frame'
-            ? '[↑↓] Navigate  [→] Expand  [q/Esc] Back'
-            : '[↑↓] Navigate  [←] Collapse  [d] Delete  [m] Move  [+/Enter] Add  [q/Esc] Back'}
+            ? '[↑↓] Navigate  [→] Expand  [Ctrl+Z] Undo  [Ctrl+Y] Redo  [q/Esc] Back'
+            : '[↑↓] Navigate  [←] Collapse  [d] Delete  [m] Move  [+/Enter] Add  [Ctrl+Z] Undo  [Ctrl+Y] Redo  [q/Esc] Back'}
         </Text>
       </Box>
 
