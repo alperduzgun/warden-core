@@ -28,6 +28,8 @@ export interface Session {
     llmModel?: string;
     backend?: string;
     framesUsed?: string[];
+    tokensUsed?: number;
+    tokenLimit?: number;
   };
 }
 
@@ -137,6 +139,27 @@ export class SessionManager {
   addMessage(session: Session, message: SessionMessage): void {
     session.messages.push(message);
     this.save(session);
+  }
+
+  /**
+   * Update token usage in session
+   */
+  updateTokens(session: Session, tokensUsed: number, tokenLimit?: number): void {
+    session.metadata.tokensUsed = tokensUsed;
+    if (tokenLimit !== undefined) {
+      session.metadata.tokenLimit = tokenLimit;
+    }
+    this.save(session);
+  }
+
+  /**
+   * Get token usage from session
+   */
+  getTokens(session: Session): {used: number; limit: number} {
+    return {
+      used: session.metadata.tokensUsed || 0,
+      limit: session.metadata.tokenLimit || 200000, // Default 200K tokens
+    };
   }
 
   /**
