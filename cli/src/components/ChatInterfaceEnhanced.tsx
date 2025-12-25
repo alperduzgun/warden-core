@@ -14,6 +14,9 @@ import {scanDirectory, filterFiles, type FileItem} from '../utils/fileScanner.js
 import {sessionManager, type Session, type SessionMessage} from '../utils/sessionManager.js';
 import {llmClient} from '../lib/llm-client.js';
 import type {WardenConfig} from '../utils/configLoader.js';
+import {AdvancedInput} from './AdvancedInput.js';
+import {StreamingMessage} from './StreamingMessage.js';
+import {StatusLine, type StatusInfo} from './StatusLine.js';
 
 interface Message {
   id: string;
@@ -134,6 +137,8 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
   const [allFiles, setAllFiles] = useState<FileItem[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<Array<{label: string; value: string}>>([]);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   // Load all files once on mount
   useEffect(() => {
@@ -187,6 +192,12 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
 
     // Strip @ prefix from file paths (file picker adds @filepath, we only want filepath)
     const cleanedValue = value.replace(/@(\/[^\s]+)/g, '$1');
+
+    // Add to history (avoid duplicates)
+    if (cleanedValue.trim() && !commandHistory.includes(cleanedValue)) {
+      setCommandHistory(prev => [...prev, cleanedValue]);
+    }
+    setHistoryIndex(-1);
 
     const userMessage: Message = {
       id: nanoid(),
@@ -322,6 +333,12 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
               ...assistantMsg,
               timestamp: assistantMsg.timestamp.getTime(),
             });
+
+            // Update token usage
+            if (response.tokensUsed) {
+              const currentTokens = sessionManager.getTokens(session);
+              sessionManager.updateTokens(session, currentTokens.used + response.tokensUsed, currentTokens.limit);
+            }
           }
         } catch (error) {
           setMessages((prev) => [...prev, {
@@ -359,6 +376,28 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
 
     // Don't process other shortcuts when palettes are open
     if (showCommandPalette || showFilePicker) {
+      return;
+    }
+
+    // Up Arrow - Navigate history (previous)
+    if (key.upArrow && commandHistory.length > 0) {
+      const newIndex = historyIndex + 1;
+      if (newIndex < commandHistory.length) {
+        setHistoryIndex(newIndex);
+        setInput(commandHistory[commandHistory.length - 1 - newIndex] || '');
+      }
+      return;
+    }
+
+    // Down Arrow - Navigate history (next)
+    if (key.downArrow && historyIndex >= 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      if (newIndex >= 0) {
+        setInput(commandHistory[commandHistory.length - 1 - newIndex] || '');
+      } else {
+        setInput('');
+      }
       return;
     }
 
@@ -420,7 +459,15 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
               <Text bold color={msg.type === 'user' ? 'cyan' : msg.type === 'assistant' ? 'green' : 'gray'}>
                 {msg.type === 'user' ? '>' : msg.type === 'assistant' ? '🤖' : 'ℹ️ '}
               </Text>
-              <Text> {msg.content}</Text>
+              {msg.type === 'assistant' ? (
+                <StreamingMessage
+                  content={msg.content}
+                  isStreaming={isProcessing && msg.id === messages[messages.length - 1]?.id}
+                  showCursor={true}
+                />
+              ) : (
+                <Text> {msg.content}</Text>
+              )}
             </Box>
             {/* Show issues if present */}
             {msg.issues && msg.issues.length > 0 && (
@@ -432,22 +479,28 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
         ))}
       </Box>
 
-      {/* Status */}
-      <Box borderStyle="single" borderColor="gray" paddingX={1}>
-        <Text dimColor>
-          {backendConnected ? '✓' : '⚠'} | {messages.length} msgs | /: commands | @: files | Ctrl+P: palette | Ctrl+C: exit
-        </Text>
-      </Box>
+      {/* Enhanced Status Line */}
+      <StatusLine
+        status={{
+          backend: backendConnected ? 'connected' : 'disconnected',
+          messages: messages.length,
+          thinking: isProcessing,
+          ...(session ? {session: session.id.slice(0, 8)} : {}),
+          ...(session ? {tokens: sessionManager.getTokens(session)} : {}),
+          ...(llmClient.getProvider() ? {model: llmClient.getProvider()!} : {}),
+        }}
+        shortcuts="/: commands | @: files | Ctrl+R: history | Ctrl+P: palette | Ctrl+C: exit"
+      />
 
-      {/* Input */}
+      {/* Advanced Input */}
       <Box paddingX={1} paddingY={1}>
         <Text bold color="cyan">&gt; </Text>
-        <TextInput
+        <AdvancedInput
           value={input}
           onChange={setInput}
           onSubmit={handleSubmit}
           placeholder={isProcessing ? 'Processing...' : 'Type / or @ or ask...'}
-          showCursor={!isProcessing}
+          isDisabled={isProcessing}
         />
       </Box>
     </Box>

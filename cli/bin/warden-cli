@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+# Warden CLI Wrapper
+# Loads .env and runs the CLI
+
+# Resolve symlinks to find real script location
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$( readlink "$SOURCE" )"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+# Find CLI and .env paths
+CLI_JS="$SCRIPT_DIR/../dist/cli.js"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+ENV_FILE="$PROJECT_ROOT/.env"
+
+# Run CLI with environment variables from .env
+if [ -f "$ENV_FILE" ]; then
+  # Use env command to inject .env variables into node process
+  exec env $(grep -v '^#' "$ENV_FILE" | grep -v '^$' | xargs) node "$CLI_JS" "$@"
+else
+  # No .env, run with system environment only
+  exec node "$CLI_JS" "$@"
+fi

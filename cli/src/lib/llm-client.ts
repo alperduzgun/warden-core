@@ -10,6 +10,7 @@ export interface LLMConfig {
   apiKey: string;
   endpoint?: string;
   model?: string;
+  deploymentName?: string; // Azure deployment name (different from model)
 }
 
 export interface LLMResponse {
@@ -30,6 +31,10 @@ export class LLMClient {
    * Load LLM configuration from .warden/config.yaml or environment
    */
   private loadConfig(): void {
+    // Debug: Check environment variables
+    const hasAzureKey = !!process.env.AZURE_OPENAI_API_KEY;
+    const hasAzureEndpoint = !!process.env.AZURE_OPENAI_ENDPOINT;
+
     // Try to load from .warden/config.yaml first
     try {
       const {configLoader} = require('../utils/configLoader.js');
@@ -55,14 +60,16 @@ export class LLMClient {
     // Fallback to environment variables
     const azureKey = process.env.AZURE_OPENAI_API_KEY;
     const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+    const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
 
-    if (azureKey && azureEndpoint) {
+    if (azureKey && azureEndpoint && azureDeployment) {
       this.config = {
         provider: 'azure',
         apiKey: azureKey,
         endpoint: azureEndpoint,
-        model: process.env.AZURE_OPENAI_MODEL || 'gpt-4',
+        model: process.env.DEFAULT_LLM_MODEL || 'gpt-4o',
+        deploymentName: azureDeployment, // Use deployment name from env
       };
       this.available = true;
     } else if (anthropicKey) {
@@ -151,8 +158,9 @@ export class LLMClient {
     messages.push({role: 'user', content: message});
 
     // Call Azure OpenAI
+    const deploymentName = this.config.deploymentName || this.config.model;
     const response = await fetch(
-      `${this.config.endpoint}/openai/deployments/${this.config.model}/chat/completions?api-version=2024-02-15-preview`,
+      `${this.config.endpoint}/openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview`,
       {
         method: 'POST',
         headers: {
