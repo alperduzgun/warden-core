@@ -11,9 +11,9 @@ frame_rules:
       - env-var-api-keys
       - no-secrets
       - backend-manager-use-project-root
-      - llm-azure-deployment-name-usage
       - llm-no-hardcoded-deployment-names
       - llm-azure-url-pattern-valid
+      - llm-azure-deployment-name-usage
     post_rules:
       - security-audit
     on_fail: stop
@@ -60,7 +60,8 @@ rules:
         - api_key = os.getenv("AZURE_OPENAI_API_KEY")
         - api_key = ${AZURE_OPENAI_API_KEY}
         - azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    message: API keys must use environment variables (os.getenv) or config templates (${VAR}). Never hardcode secrets!
+    message: API keys must use environment variables (os.getenv) or config templates
+      (${VAR}). Never hardcode secrets!
     exceptions:
       - '*/test_*.py'
       - '*_test.py'
@@ -90,7 +91,8 @@ rules:
         - 'async def validate_file_async(file_path: str):'
         - 'async def load_from_file_async(path: Path):'
         - 'async def detect_frameworks_async(root: Path):'
-    message: Async methods must end with '_async' suffix for code clarity (e.g., validate_file -> validate_file_async)
+    message: Async methods must end with '_async' suffix for code clarity (e.g.,
+      validate_file -> validate_file_async)
     language:
       - python
     exceptions:
@@ -104,7 +106,8 @@ rules:
     category: security
     severity: critical
     isBlocker: true
-    description: Detects common secret patterns (passwords, tokens, private keys) that should never be committed
+    description: Detects common secret patterns (passwords, tokens, private keys)
+      that should never be committed
     enabled: true
     type: security
     conditions:
@@ -135,7 +138,8 @@ rules:
         - token = ${AUTH_TOKEN}
         - aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
         - db_url = os.getenv("DATABASE_URL")
-    message: Secrets, passwords, tokens, or private keys detected. Use environment variables or secret management instead!
+    message: Secrets, passwords, tokens, or private keys detected. Use environment
+      variables or secret management instead!
     exceptions:
       - '*/test_*.py'
       - '*_test.py'
@@ -150,7 +154,8 @@ rules:
     category: performance
     severity: medium
     isBlocker: false
-    description: Prevents processing excessively large files that could cause performance issues
+    description: Prevents processing excessively large files that could cause
+      performance issues
     enabled: true
     type: script
     scriptPath: .warden/scripts/check_file_size.sh
@@ -216,7 +221,8 @@ rules:
               if 'name' not in data:
                   raise ValueError("Missing 'name' field")
               return data['name']
-    message: Functions accepting user input must validate/sanitize inputs. Add type checks, None checks, or validation logic.
+    message: Functions accepting user input must validate/sanitize inputs. Add type
+      checks, None checks, or validation logic.
     language:
       - python
     exceptions:
@@ -232,7 +238,8 @@ rules:
     category: security
     severity: high
     isBlocker: true
-    description: Detects common security vulnerabilities (SQL injection, XSS, command injection, path traversal)
+    description: Detects common security vulnerabilities (SQL injection, XSS,
+      command injection, path traversal)
     enabled: true
     type: security
     conditions:
@@ -266,7 +273,8 @@ rules:
         - file = open(Path("data") / sanitized_filename)
         - data = json.loads(request.data)
         - config = yaml.safe_load(file)
-    message: Potential security vulnerability detected. Use parameterized queries, avoid eval/exec, validate file paths, and use safe deserialization.
+    message: Potential security vulnerability detected. Use parameterized queries,
+      avoid eval/exec, validate file paths, and use safe deserialization.
     language:
       - python
       - javascript
@@ -282,7 +290,9 @@ rules:
     category: backend-ipc
     severity: critical
     isBlocker: true
-    description: When spawning backend processes (IPC server), always use PROJECT_ROOT as working directory, not process.cwd(). This ensures .env and config files are found.
+    description: When spawning backend processes (IPC server), always use
+      PROJECT_ROOT as working directory, not process.cwd(). This ensures .env
+      and config files are found.
     enabled: true
     type: security
     conditions:
@@ -351,7 +361,8 @@ rules:
     category: security
     severity: critical
     isBlocker: true
-    description: Azure OpenAI API calls must use deploymentName field in URLs, not model field. The deployment name and model name are different in Azure.
+    description: Azure OpenAI API calls must use deploymentName field in URLs, not
+      model field. The deployment name and model name are different in Azure.
     enabled: true
     type: security
     conditions:
@@ -410,7 +421,8 @@ rules:
     category: security
     severity: critical
     isBlocker: true
-    description: When using Azure OpenAI, AZURE_OPENAI_DEPLOYMENT_NAME must be loaded from environment variables
+    description: When using Azure OpenAI, AZURE_OPENAI_DEPLOYMENT_NAME must be
+      loaded from environment variables
     enabled: false
     type: security
     conditions:
@@ -474,7 +486,8 @@ rules:
     category: security
     severity: critical
     isBlocker: true
-    description: LLM deployment names must come from environment variables or configuration, never hardcoded in URLs
+    description: LLM deployment names must come from environment variables or
+      configuration, never hardcoded in URLs
     enabled: true
     type: security
     conditions:
