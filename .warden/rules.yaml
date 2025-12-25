@@ -1,294 +1,201 @@
-# Warden Core - Production Rules Configuration
-# Real-world rules for warden-core codebase
-
 project:
-  name: "warden-core"
-  language: "python"
-  framework: "cli"
-
-# ============================================================================
-# GLOBAL RULES (Run on ALL frames, PRE-execution)
-# ============================================================================
-# Global rules are applied before ANY frame executes. They act as a first-pass
-# filter to catch common issues across all validation types.
-#
-# Use global_rules for:
-#   - Universal security checks (secrets, credentials)
-#   - File size/resource limits
-#   - Basic sanity checks that apply everywhere
-#
-# Note: These run BEFORE frame-specific logic, so they're fast gatekeepers.
-# ============================================================================
+  name: warden-core
+  language: python
+  framework: cli
 global_rules:
-  - no-secrets           # Prevent any secrets from being committed
-  - file-size-limit      # Ensure files don't exceed size limits
-
-# ============================================================================
-# FRAME RULES (Frame-specific rule attachments)
-# ============================================================================
-# Frame rules attach specific rules to validation frames. Each frame can have:
-#   - pre_rules:  Run BEFORE the frame's validation logic
-#   - post_rules: Run AFTER the frame's validation logic (if pre_rules pass)
-#   - on_fail:    Behavior when rules fail ("stop" or "continue")
-#
-# Available frames:
-#   - security:      Security vulnerability checks
-#   - chaos:         Chaos engineering (error handling, edge cases)
-#   - orphan:        Orphan code detection (unused imports, dead code)
-#   - architectural: Project architecture validation
-#   - stress:        Performance and resource testing
-#
-# on_fail behavior:
-#   - "stop":     Halt validation immediately if rule fails (blocker)
-#   - "continue": Log failure but continue validation (warning)
-#
-# ============================================================================
+  - no-secrets
+  - file-size-limit
 frame_rules:
-  # Security Frame - Critical security checks
   security:
     pre_rules:
-      - env-var-api-keys      # No hardcoded API keys
-      - no-secrets            # Double-check: no secrets at all
-      # Backend/IPC Configuration Checks
-      - backend-manager-use-project-root   # Backend spawn must use PROJECT_ROOT
-      # LLM Configuration Checks (Sprint 1 - TypeScript/JavaScript)
-      - llm-azure-deployment-name-usage    # Azure: use deploymentName, not model
-      # llm-azure-deployment-env-required  # Disabled (false positives)
-      - llm-no-hardcoded-deployment-names  # No hardcoded deployment names
-      - llm-azure-url-pattern-valid        # Azure URL must have api-version
+      - env-var-api-keys
+      - no-secrets
+      - backend-manager-use-project-root
+      - llm-azure-deployment-name-usage
+      - llm-no-hardcoded-deployment-names
+      - llm-azure-url-pattern-valid
     post_rules:
-      - security-audit        # Post-validation: check for vulnerabilities
-    on_fail: "stop"           # Security failures are blockers
-
-  # Chaos Frame - Error handling and resilience
+      - security-audit
+    on_fail: stop
   chaos:
     pre_rules:
-      - async-method-naming   # Ensure async methods are properly named
-    on_fail: "continue"       # Convention issues are warnings
-
-  # Orphan Frame - Orphan code detection
+      - async-method-naming
+    on_fail: continue
   orphan:
     pre_rules:
-      - no-secrets              # No secrets in orphan code detection
-    on_fail: "continue"
-
-  # Architectural Frame - Project structure validation
+      - no-secrets
+    on_fail: continue
   architectural:
     pre_rules:
-      - no-secrets              # No secrets in architecture files
-    on_fail: "continue"
-
-  # Stress Frame - Performance and resource checks
+      - no-secrets
+    on_fail: continue
   stress:
     pre_rules:
-      - file-size-limit         # Don't stress-test huge files
-    on_fail: "continue"
-
-# ============================================================================
-# RULES (Individual validation rules)
-# ============================================================================
+      - file-size-limit
+    on_fail: continue
 rules:
-  # ============================================================================
-  # Security Rules
-  # ============================================================================
-
-  - id: "env-var-api-keys"
-    name: "API Keys Must Use Environment Variables"
+  - id: env-var-api-keys
+    name: API Keys Must Use Environment Variables
     category: security
     severity: critical
     isBlocker: true
-    description: "All API keys must be loaded from environment variables, never hardcoded"
+    description: All API keys must be loaded from environment variables, never hardcoded
     enabled: true
     type: security
     conditions:
       secrets:
         patterns:
-          # Azure OpenAI patterns (matches both quoted and unquoted)
-          - "AZURE_OPENAI_API_KEY\\s*=\\s*[\"']?[^$\\s][A-Za-z0-9+/]{30,}[\"']?"
-          - "AZURE_OPENAI_ENDPOINT\\s*=\\s*[\"']?https://[^\\s\"']+[\"']?"
-          # Groq pattern (both quoted and unquoted)
-          - "GROQ_API_KEY\\s*=\\s*[\"']?gsk_[A-Za-z0-9]{30,}[\"']?"
-          # Generic OpenAI pattern
-          - "OPENAI_API_KEY\\s*=\\s*[\"']?sk-[A-Za-z0-9]{20,}[\"']?"
-          # DeepSeek pattern
-          - "DEEPSEEK_API_KEY\\s*=\\s*[\"']?sk-[A-Za-z0-9]{20,}[\"']?"
-          # Generic API key pattern (catches most) - both quoted and unquoted
-          - "api[_-]?key\\s*=\\s*[\"']?(sk-|gsk_|key-)[A-Za-z0-9+/_-]{15,}[\"']?"
+          - AZURE_OPENAI_API_KEY\s*=\s*["']?[^$\s][A-Za-z0-9+/]{30,}["']?
+          - AZURE_OPENAI_ENDPOINT\s*=\s*["']?https://[^\s"']+["']?
+          - GROQ_API_KEY\s*=\s*["']?gsk_[A-Za-z0-9]{30,}["']?
+          - OPENAI_API_KEY\s*=\s*["']?sk-[A-Za-z0-9]{20,}["']?
+          - DEEPSEEK_API_KEY\s*=\s*["']?sk-[A-Za-z0-9]{20,}["']?
+          - api[_-]?key\s*=\s*["']?(sk-|gsk_|key-)[A-Za-z0-9+/_-]{15,}["']?
     examples:
       invalid:
-        - 'AZURE_OPENAI_API_KEY = "3QESZxaQXEKI0a4z..."'
-        - 'api_key = "sk-1234567890abcdef"'
-        - 'groq_key = "gsk_KdgDwd7ne6..."'
+        - AZURE_OPENAI_API_KEY = "3QESZxaQXEKI0a4z..."
+        - api_key = "sk-1234567890abcdef"
+        - groq_key = "gsk_KdgDwd7ne6..."
       valid:
-        - 'api_key = os.getenv("AZURE_OPENAI_API_KEY")'
-        - 'api_key = ${AZURE_OPENAI_API_KEY}'
-        - 'azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")'
-    message: "API keys must use environment variables (os.getenv) or config templates (${VAR}). Never hardcode secrets!"
-    # No language filter - secrets check applies to ALL files (.env, .py, .js, etc.)
+        - api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        - api_key = ${AZURE_OPENAI_API_KEY}
+        - azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    message: API keys must use environment variables (os.getenv) or config templates (${VAR}). Never hardcode secrets!
     exceptions:
-      - "*/test_*.py"
-      - "*_test.py"
-      - "test_*.py"
-      - "*.test.py"
-      - ".env.example"  # Template file is OK
-      - "*.example.*"
-      - "**/examples/**"
-      - "**/docs/**"
-      # NOTE: .env is NOT excluded - we want to catch secrets there!
-
-  # ============================================================================
-  # Convention Rules
-  # ============================================================================
-
-  - id: "async-method-naming"
-    name: "Async Methods Must End with _async"
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - .env.example
+      - '*.example.*'
+      - '**/examples/**'
+      - '**/docs/**'
+  - id: async-method-naming
+    name: Async Methods Must End with _async
     category: convention
     severity: medium
     isBlocker: false
-    description: "All async methods must have _async suffix for code clarity"
+    description: All async methods must have _async suffix for code clarity
     enabled: true
     type: convention
     conditions:
       naming:
-        asyncMethodSuffix: "_async"
+        asyncMethodSuffix: _async
     examples:
       invalid:
-        - "async def validate_file(file_path: str):"
-        - "async def load_from_file(path: Path):"
-        - "async def detect_frameworks(root: Path):"
+        - 'async def validate_file(file_path: str):'
+        - 'async def load_from_file(path: Path):'
+        - 'async def detect_frameworks(root: Path):'
       valid:
-        - "async def validate_file_async(file_path: str):"
-        - "async def load_from_file_async(path: Path):"
-        - "async def detect_frameworks_async(root: Path):"
-    message: "Async methods must end with '_async' suffix for code clarity (e.g., validate_file -> validate_file_async)"
+        - 'async def validate_file_async(file_path: str):'
+        - 'async def load_from_file_async(path: Path):'
+        - 'async def detect_frameworks_async(root: Path):'
+    message: Async methods must end with '_async' suffix for code clarity (e.g., validate_file -> validate_file_async)
     language:
-      - "python"
+      - python
     exceptions:
-      - "*/test_*.py"
-      - "*_test.py"
-      - "test_*.py"
-      - "*.test.py"
-      - "**/tests/**"
-
-  # ============================================================================
-  # Global Security Rules
-  # ============================================================================
-
-  - id: "no-secrets"
-    name: "No Secrets or Credentials in Code"
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - '**/tests/**'
+  - id: no-secrets
+    name: No Secrets or Credentials in Code
     category: security
     severity: critical
     isBlocker: true
-    description: "Detects common secret patterns (passwords, tokens, private keys) that should never be committed"
+    description: Detects common secret patterns (passwords, tokens, private keys) that should never be committed
     enabled: true
     type: security
     conditions:
       secrets:
         patterns:
-          # Password patterns
-          - "password\\s*=\\s*[\"'][^$\\s][^\"']{6,}[\"']"
-          - "passwd\\s*=\\s*[\"'][^$\\s][^\"']{6,}[\"']"
-          - "pwd\\s*=\\s*[\"'][^$\\s][^\"']{6,}[\"']"
-          # Token patterns
-          - "token\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
-          - "auth_token\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
-          - "access_token\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
-          # Private keys
-          - "BEGIN\\s+(RSA|DSA|EC|OPENSSH)\\s+PRIVATE\\s+KEY"
-          - "private_key\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/=]{40,}[\"']"
-          # AWS credentials
-          - "AWS_SECRET_ACCESS_KEY\\s*=\\s*[\"']?[^$\\s][A-Za-z0-9+/]{40}[\"']?"
-          - "aws_secret_access_key\\s*=\\s*[\"']?[^$\\s][A-Za-z0-9+/]{40}[\"']?"
-          # Database connection strings with embedded passwords
-          - "(mysql|postgresql|mongodb)://[^:]+:[^@]+@"
-          # Generic secret patterns
-          - "secret\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
-          - "client_secret\\s*=\\s*[\"'][^$\\s][A-Za-z0-9+/]{20,}[\"']"
+          - password\s*=\s*["'][^$\s][^"']{6,}["']
+          - passwd\s*=\s*["'][^$\s][^"']{6,}["']
+          - pwd\s*=\s*["'][^$\s][^"']{6,}["']
+          - token\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - auth_token\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - access_token\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - BEGIN\s+(RSA|DSA|EC|OPENSSH)\s+PRIVATE\s+KEY
+          - private_key\s*=\s*["'][^$\s][A-Za-z0-9+/=]{40,}["']
+          - AWS_SECRET_ACCESS_KEY\s*=\s*["']?[^$\s][A-Za-z0-9+/]{40}["']?
+          - aws_secret_access_key\s*=\s*["']?[^$\s][A-Za-z0-9+/]{40}["']?
+          - (mysql|postgresql|mongodb)://[^:]+:[^@]+@
+          - secret\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - client_secret\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
     examples:
       invalid:
-        - 'password = "MySecretPass123"'
-        - 'token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."'
-        - 'AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"'
-        - 'db_url = "postgresql://user:password@localhost/db"'
+        - password = "MySecretPass123"
+        - token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        - AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        - db_url = "postgresql://user:password@localhost/db"
         - '-----BEGIN RSA PRIVATE KEY-----'
       valid:
-        - 'password = os.getenv("DB_PASSWORD")'
-        - 'token = ${AUTH_TOKEN}'
-        - 'aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")'
-        - 'db_url = os.getenv("DATABASE_URL")'
-    message: "Secrets, passwords, tokens, or private keys detected. Use environment variables or secret management instead!"
+        - password = os.getenv("DB_PASSWORD")
+        - token = ${AUTH_TOKEN}
+        - aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        - db_url = os.getenv("DATABASE_URL")
+    message: Secrets, passwords, tokens, or private keys detected. Use environment variables or secret management instead!
     exceptions:
-      - "*/test_*.py"
-      - "*_test.py"
-      - "test_*.py"
-      - "*.test.py"
-      - ".env.example"
-      - "*.example.*"
-      - "**/examples/**"
-      - "**/docs/**"
-
-  # ============================================================================
-  # Resource Management Rules
-  # ============================================================================
-
-  - id: "file-size-limit"
-    name: "File Size Must Not Exceed 10MB"
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - .env.example
+      - '*.example.*'
+      - '**/examples/**'
+      - '**/docs/**'
+  - id: file-size-limit
+    name: File Size Must Not Exceed 10MB
     category: performance
     severity: medium
     isBlocker: false
-    description: "Prevents processing excessively large files that could cause performance issues"
+    description: Prevents processing excessively large files that could cause performance issues
     enabled: true
     type: script
-    scriptPath: ".warden/scripts/check_file_size.sh"
+    scriptPath: .warden/scripts/check_file_size.sh
     timeout: 10
-    message: "File exceeds maximum size limit of 500KB"
+    message: File exceeds maximum size limit of 500KB
     conditions: {}
     examples:
       invalid:
-        - "15MB log file"
-        - "20MB dataset"
+        - 15MB log file
+        - 20MB dataset
       valid:
-        - "5MB source file"
-        - "2KB configuration file"
+        - 5MB source file
+        - 2KB configuration file
     exceptions:
-      - "**/node_modules/**"
-      - "**/venv/**"
-      - "**/.venv/**"
-      - "**/dist/**"
-      - "**/build/**"
-      - "**/*.min.js"
-      - "**/*.bundle.js"
-
-  # ============================================================================
-  # Input Validation Rules
-  # ============================================================================
-
-  - id: "input-validation-check"
-    name: "Input Validation Must Be Present"
+      - '**/node_modules/**'
+      - '**/venv/**'
+      - '**/.venv/**'
+      - '**/dist/**'
+      - '**/build/**'
+      - '**/*.min.js'
+      - '**/*.bundle.js'
+  - id: input-validation-check
+    name: Input Validation Must Be Present
     category: security
     severity: high
     isBlocker: true
-    description: "Ensures functions that accept user input have validation/sanitization logic"
+    description: Ensures functions that accept user input have validation/sanitization logic
     enabled: true
     type: security
     conditions:
       patterns:
-        # Functions accepting input WITHOUT validation keywords nearby
-        # This is a heuristic check - looks for input params without validate/sanitize/clean
         must_have_nearby:
-          - pattern: "def\\s+\\w+\\([^)]*(?:input|user_input|data|payload|request)[^)]*\\):"
+          - pattern: 'def\s+\w+\([^)]*(?:input|user_input|data|payload|request)[^)]*\):'
             requires_within_lines: 10
             any_of:
-              - "validate"
-              - "sanitize"
-              - "clean"
-              - "escape"
-              - "strip"
-              - "isinstance"
-              - "type\\s*=="
-              - "if\\s+not\\s+"
-              - "raise\\s+ValueError"
-              - "raise\\s+TypeError"
+              - validate
+              - sanitize
+              - clean
+              - escape
+              - strip
+              - isinstance
+              - type\s*==
+              - if\s+not\s+
+              - raise\s+ValueError
+              - raise\s+TypeError
     examples:
       invalid:
         - |
@@ -309,94 +216,78 @@ rules:
               if 'name' not in data:
                   raise ValueError("Missing 'name' field")
               return data['name']
-    message: "Functions accepting user input must validate/sanitize inputs. Add type checks, None checks, or validation logic."
+    message: Functions accepting user input must validate/sanitize inputs. Add type checks, None checks, or validation logic.
     language:
-      - "python"
+      - python
     exceptions:
-      - "*/test_*.py"
-      - "*_test.py"
-      - "test_*.py"
-      - "*.test.py"
-      - "**/tests/**"
-      - "**/models.py"      # Data models often just define structure
-      - "**/schemas.py"     # Schema definitions
-
-  # ============================================================================
-  # Security Audit Rules (Post-validation)
-  # ============================================================================
-
-  - id: "security-audit"
-    name: "Common Vulnerability Patterns"
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - '**/tests/**'
+      - '**/models.py'
+      - '**/schemas.py'
+  - id: security-audit
+    name: Common Vulnerability Patterns
     category: security
     severity: high
     isBlocker: true
-    description: "Detects common security vulnerabilities (SQL injection, XSS, command injection, path traversal)"
+    description: Detects common security vulnerabilities (SQL injection, XSS, command injection, path traversal)
     enabled: true
     type: security
     conditions:
       patterns:
-        # SQL Injection patterns
-        - "execute\\s*\\([^)]*[\"'].*%s.*[\"']\\s*%"  # String formatting in SQL
-        - "execute\\s*\\([^)]*f[\"'].*\\{.*\\}.*[\"']"  # F-strings in SQL
-        - "\\+\\s*[\"']SELECT\\s+"                    # String concat with SELECT
-        # Command Injection patterns
-        - "os\\.system\\s*\\([^)]*\\+[^)]*\\)"        # os.system with concatenation
-        - "subprocess\\.call\\s*\\([^)]*\\+[^)]*\\)"  # subprocess with concat
-        - "eval\\s*\\("                               # eval() usage (dangerous)
-        - "exec\\s*\\("                               # exec() usage (dangerous)
-        # Path Traversal patterns
-        - "open\\s*\\([^)]*\\.\\.\\/[^)]*\\)"        # Hardcoded ../ in open()
-        - "Path\\s*\\([^)]*\\.\\.\\/[^)]*\\)"        # ../ in Path()
-        # XSS patterns (for web frameworks)
-        - "innerHTML\\s*="                           # Direct innerHTML assignment
-        - "dangerouslySetInnerHTML"                  # React unsafe HTML
-        # Insecure deserialization
-        - "pickle\\.loads\\s*\\([^)]*input[^)]*\\)"  # pickle.loads on user input
-        - "yaml\\.load\\s*\\([^)]*\\)"               # yaml.load without safe_load
+        - execute\s*\([^)]*["'].*%s.*["']\s*%
+        - execute\s*\([^)]*f["'].*\{.*\}.*["']
+        - \+\s*["']SELECT\s+
+        - os\.system\s*\([^)]*\+[^)]*\)
+        - subprocess\.call\s*\([^)]*\+[^)]*\)
+        - eval\s*\(
+        - exec\s*\(
+        - open\s*\([^)]*\.\.\/[^)]*\)
+        - Path\s*\([^)]*\.\.\/[^)]*\)
+        - innerHTML\s*=
+        - dangerouslySetInnerHTML
+        - pickle\.loads\s*\([^)]*input[^)]*\)
+        - yaml\.load\s*\([^)]*\)
     examples:
       invalid:
-        - 'cursor.execute("SELECT * FROM users WHERE id = %s" % user_id)'
-        - 'cursor.execute(f"SELECT * FROM users WHERE name = {name}")'
-        - 'os.system("rm -rf " + user_path)'
-        - 'eval(user_input)'
-        - 'file = open("data/" + "../etc/passwd")'
-        - 'data = pickle.loads(request.data)'
-        - 'config = yaml.load(file)'
+        - cursor.execute("SELECT * FROM users WHERE id = %s" % user_id)
+        - cursor.execute(f"SELECT * FROM users WHERE name = {name}")
+        - os.system("rm -rf " + user_path)
+        - eval(user_input)
+        - file = open("data/" + "../etc/passwd")
+        - data = pickle.loads(request.data)
+        - config = yaml.load(file)
       valid:
-        - 'cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))'
-        - 'subprocess.run(["rm", "-rf", user_path], check=True)'
+        - cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        - subprocess.run(["rm", "-rf", user_path], check=True)
         - 'ast.literal_eval(user_input)  # Safe alternative'
-        - 'file = open(Path("data") / sanitized_filename)'
-        - 'data = json.loads(request.data)'
-        - 'config = yaml.safe_load(file)'
-    message: "Potential security vulnerability detected. Use parameterized queries, avoid eval/exec, validate file paths, and use safe deserialization."
+        - file = open(Path("data") / sanitized_filename)
+        - data = json.loads(request.data)
+        - config = yaml.safe_load(file)
+    message: Potential security vulnerability detected. Use parameterized queries, avoid eval/exec, validate file paths, and use safe deserialization.
     language:
-      - "python"
-      - "javascript"
-      - "typescript"
+      - python
+      - javascript
+      - typescript
     exceptions:
-      - "*/test_*.py"
-      - "*_test.py"
-      - "test_*.py"
-      - "*.test.py"
-      - "**/tests/**"
-
-  # ============================================================================
-  # Backend/IPC Management Rules
-  # ============================================================================
-
-  - id: "backend-manager-use-project-root"
-    name: "Backend Manager Must Use PROJECT_ROOT for cwd"
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - '**/tests/**'
+  - id: backend-manager-use-project-root
+    name: Backend Manager Must Use PROJECT_ROOT for cwd
     category: backend-ipc
     severity: critical
     isBlocker: true
-    description: "When spawning backend processes (IPC server), always use PROJECT_ROOT as working directory, not process.cwd(). This ensures .env and config files are found."
+    description: When spawning backend processes (IPC server), always use PROJECT_ROOT as working directory, not process.cwd(). This ensures .env and config files are found.
     enabled: true
     type: security
     conditions:
       patterns:
-        # Primary pattern: Catch cwd: process.cwd() usage in spawn options
-        - "cwd:\\s*process\\.cwd\\(\\)"
+        - cwd:\s*process\.cwd\(\)
     examples:
       invalid:
         - |
@@ -449,35 +340,26 @@ rules:
 
       This was a production bug in Sprint 1 - backend timeout on first start!
     language:
-      - "typescript"
-      - "javascript"
+      - typescript
+      - javascript
     exceptions:
-      - "**/*.test.ts"
-      - "**/*.spec.ts"
-      - "**/tests/**"
-
-  # ============================================================================
-  # LLM Configuration Rules (Sprint 1 - TypeScript/JavaScript LLM Integration)
-  # ============================================================================
-  # These rules prevent common LLM deployment configuration errors that we
-  # encountered during Sprint 1 implementation.
-  # Target: TypeScript/JavaScript projects using Azure OpenAI or similar LLMs
-  # ============================================================================
-
-  - id: "llm-azure-deployment-name-usage"
-    name: "Azure OpenAI Must Use deploymentName Field"
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+  - id: llm-azure-deployment-name-usage
+    name: Azure OpenAI Must Use deploymentName Field
     category: security
     severity: critical
     isBlocker: true
-    description: "Azure OpenAI API calls must use deploymentName field in URLs, not model field. The deployment name and model name are different in Azure."
+    description: Azure OpenAI API calls must use deploymentName field in URLs, not model field. The deployment name and model name are different in Azure.
     enabled: true
     type: security
     conditions:
       secrets:
         patterns:
-          - '/deployments/\$\{[^}]*\.model'
-          - 'deployments/\$\{this\.config\.model'
-          - 'deployments/\$\{config\.model'
+          - /deployments/\$\{[^}]*\.model
+          - deployments/\$\{this\.config\.model
+          - deployments/\$\{config\.model
     examples:
       invalid:
         - |
@@ -516,28 +398,26 @@ rules:
       const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
       fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
     language:
-      - "typescript"
-      - "javascript"
+      - typescript
+      - javascript
     exceptions:
-      - "**/*.test.ts"
-      - "**/*.spec.ts"
-      - "**/tests/**"
-      - "**/test/**"
-
-  - id: "llm-azure-deployment-env-required"
-    name: "AZURE_OPENAI_DEPLOYMENT_NAME Environment Variable Required"
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+      - '**/test/**'
+  - id: llm-azure-deployment-env-required
+    name: AZURE_OPENAI_DEPLOYMENT_NAME Environment Variable Required
     category: security
     severity: critical
     isBlocker: true
-    description: "When using Azure OpenAI, AZURE_OPENAI_DEPLOYMENT_NAME must be loaded from environment variables"
-    enabled: false  # Disabled: Requires multi-line context checking (too many false positives)
+    description: When using Azure OpenAI, AZURE_OPENAI_DEPLOYMENT_NAME must be loaded from environment variables
+    enabled: false
     type: security
     conditions:
       secrets:
         patterns:
-          # Check if Azure env vars are used without deployment name
-          - 'process\.env\.AZURE_OPENAI_API_KEY'
-          - 'process\.env\.AZURE_OPENAI_ENDPOINT'
+          - process\.env\.AZURE_OPENAI_API_KEY
+          - process\.env\.AZURE_OPENAI_ENDPOINT
     examples:
       invalid:
         - |
@@ -583,30 +463,29 @@ rules:
       Add to your .env file:
       AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
     language:
-      - "typescript"
-      - "javascript"
+      - typescript
+      - javascript
     exceptions:
-      - "**/*.test.ts"
-      - "**/*.spec.ts"
-      - "**/tests/**"
-
-  - id: "llm-no-hardcoded-deployment-names"
-    name: "No Hardcoded LLM Deployment Names"
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+  - id: llm-no-hardcoded-deployment-names
+    name: No Hardcoded LLM Deployment Names
     category: security
     severity: critical
     isBlocker: true
-    description: "LLM deployment names must come from environment variables or configuration, never hardcoded in URLs"
+    description: LLM deployment names must come from environment variables or configuration, never hardcoded in URLs
     enabled: true
     type: security
     conditions:
       secrets:
         patterns:
-          - 'deployments/gpt-4'
-          - 'deployments/gpt-35-turbo'
-          - 'deployments/text-embedding'
-          - 'deployments/whisper'
-          - "deployments/[\"']gpt"
-          - "deployments/[\"']text-"
+          - deployments/gpt-4
+          - deployments/gpt-35-turbo
+          - deployments/text-embedding
+          - deployments/whisper
+          - deployments/["']gpt
+          - deployments/["']text-
     examples:
       invalid:
         - |
@@ -653,30 +532,28 @@ rules:
       const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
       fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
     language:
-      - "typescript"
-      - "javascript"
+      - typescript
+      - javascript
     exceptions:
-      - "**/*.test.ts"
-      - "**/*.spec.ts"
-      - "**/tests/**"
-      - "**/*.md"
-      - "**/docs/**"
-
-  - id: "llm-azure-url-pattern-valid"
-    name: "Azure OpenAI URL Must Include api-version"
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+      - '**/*.md'
+      - '**/docs/**'
+  - id: llm-azure-url-pattern-valid
+    name: Azure OpenAI URL Must Include api-version
     category: security
     severity: critical
     isBlocker: true
-    description: "All Azure OpenAI API URLs must include api-version query parameter"
+    description: All Azure OpenAI API URLs must include api-version query parameter
     enabled: true
     type: security
     conditions:
       secrets:
         patterns:
-          # Match Azure OpenAI endpoints (will catch most, needs manual review for api-version)
-          - '/openai/deployments/.*/chat/completions[^?]'
-          - '/openai/deployments/.*/embeddings[^?]'
-          - 'openai\.azure\.com'
+          - /openai/deployments/.*/chat/completions[^?]
+          - /openai/deployments/.*/embeddings[^?]
+          - openai\.azure\.com
     examples:
       invalid:
         - |
@@ -721,41 +598,33 @@ rules:
       ❌ /openai/deployments/${this.config.model}/chat/completions
       ✅ /openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview
     language:
-      - "typescript"
-      - "javascript"
+      - typescript
+      - javascript
     exceptions:
-      - "**/*.test.ts"
-      - "**/*.spec.ts"
-      - "**/tests/**"
-      - "**/docs/**"
-
-# ============================================================================
-# AI Validation Configuration
-# ============================================================================
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+      - '**/docs/**'
 ai_validation:
   enabled: true
-  llm_provider: "azure_openai"
-
-# ============================================================================
-# Exclusion Patterns
-# ============================================================================
+  llm_provider: azure_openai
 exclude:
   paths:
-    - "node_modules/"
-    - "venv/"
-    - ".venv/"
-    - "dist/"
-    - "build/"
-    - "__pycache__/"
-    - ".pytest_cache/"
-    - ".git/"
-    - "docs/"
-    - "examples/"
+    - node_modules/
+    - venv/
+    - .venv/
+    - dist/
+    - build/
+    - __pycache__/
+    - .pytest_cache/
+    - .git/
+    - docs/
+    - examples/
   files:
-    - "*.test.py"
-    - "*.spec.py"
-    - "test_*.py"
-    - "*_test.py"
-    - ".env.example"
-    - "*.md"
-    - "*.yaml.example"
+    - '*.test.py'
+    - '*.spec.py'
+    - test_*.py
+    - '*_test.py'
+    - .env.example
+    - '*.md'
+    - '*.yaml.example'
