@@ -46,11 +46,15 @@ const AVAILABLE_COMMANDS = [
 function formatCommandResponse(cmdName: string, data: CommandData): string {
   switch (cmdName) {
     case 'scan': {
-      const scanData = data as ScanResult;
+      const scanData = data as any; // Backend returns {total_files, files, message, path}
+      const totalFiles = scanData.total_files || scanData.filesScanned || 0;
+      const files = scanData.files || [];
       const summary = scanData.summary || {critical: 0, high: 0, medium: 0, low: 0};
+
       return `Scan Complete!
-Files scanned: ${scanData.filesScanned || 0}
-Duration: ${scanData.duration?.toFixed(2) || 0}s
+Path: ${scanData.path || 'unknown'}
+Files found: ${totalFiles}
+${files.length > 0 ? `\nSample files:\n${files.slice(0, 5).map((f: string) => `  • ${f}`).join('\n')}` : ''}
 
 Issues found: ${scanData.issues?.length || 0}
   🔴 Critical: ${summary.critical}
@@ -204,9 +208,9 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
       });
     }
 
-    // Handle commands
-    if (value.startsWith('/')) {
-      const command = value.slice(1).trim();
+    // Handle commands (use cleanedValue, not original value!)
+    if (cleanedValue.startsWith('/')) {
+      const command = cleanedValue.slice(1).trim();
 
       if (command === 'exit' || command === 'quit') {
         exit();
