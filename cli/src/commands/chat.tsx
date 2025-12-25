@@ -10,6 +10,7 @@ import path from 'path';
 import {ChatInterfaceEnhanced} from '../components/ChatInterfaceEnhanced.js';
 import {FileBrowser} from '../components/FileBrowser.js';
 import {Frames} from './frames.js';
+import {Rules} from './rules.js';
 import {ipcClient} from '../lib/ipc-client.js';
 import {backendManager} from '../utils/backendManager.js';
 import {sessionManager, type Session} from '../utils/sessionManager.js';
@@ -22,6 +23,7 @@ export function Chat() {
   const [backendConnected, setBackendConnected] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showFrames, setShowFrames] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isStarting, setIsStarting] = useState(true);
@@ -154,6 +156,10 @@ export function Chat() {
         setShowFrames(!showFrames);
         return {success: true};
 
+      case 'rules':
+        setShowRules(!showRules);
+        return {success: true};
+
       case 'browse':
         setShowFileBrowser(!showFileBrowser);
         return {success: true};
@@ -222,6 +228,10 @@ export function Chat() {
 
   if (showFrames) {
     return <Frames onExit={() => setShowFrames(false)} />;
+  }
+
+  if (showRules) {
+    return <Rules onExit={() => setShowRules(false)} />;
   }
 
   return (

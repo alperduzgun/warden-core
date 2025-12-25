@@ -38,6 +38,7 @@ const AVAILABLE_COMMANDS = [
   {label: '/scan <path> - Scan directory', value: '/scan '},
   {label: '/analyze <file> - Analyze file', value: '/analyze '},
   {label: '/frames - Show validation frames', value: '/frames'},
+  {label: '/rules - Show validation rules', value: '/rules'},
   {label: '/status - Backend status', value: '/status'},
   {label: '/browse - File browser', value: '/browse'},
   {label: '/clear - Clear history', value: '/clear'},
@@ -243,6 +244,7 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
   /scan <path> - Scan directory
   /analyze <file> - Analyze file
   /frames     - Show validation frames
+  /rules      - Show validation rules
   /status     - Backend status
   /browse     - File browser
   /clear      - Clear chat
