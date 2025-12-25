@@ -50,6 +50,11 @@ frame_rules:
     pre_rules:
       - env-var-api-keys      # No hardcoded API keys
       - no-secrets            # Double-check: no secrets at all
+      # LLM Configuration Checks (Sprint 1 - TypeScript/JavaScript)
+      - llm-azure-deployment-name-usage    # Azure: use deploymentName, not model
+      # llm-azure-deployment-env-required  # Disabled (false positives)
+      - llm-no-hardcoded-deployment-names  # No hardcoded deployment names
+      - llm-azure-url-pattern-valid        # Azure URL must have api-version
     post_rules:
       - security-audit        # Post-validation: check for vulnerabilities
     on_fail: "stop"           # Security failures are blockers
@@ -383,6 +388,279 @@ rules:
       - "test_*.py"
       - "*.test.py"
       - "**/tests/**"
+
+  # ============================================================================
+  # LLM Configuration Rules (Sprint 1 - TypeScript/JavaScript LLM Integration)
+  # ============================================================================
+  # These rules prevent common LLM deployment configuration errors that we
+  # encountered during Sprint 1 implementation.
+  # Target: TypeScript/JavaScript projects using Azure OpenAI or similar LLMs
+  # ============================================================================
+
+  - id: "llm-azure-deployment-name-usage"
+    name: "Azure OpenAI Must Use deploymentName Field"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "Azure OpenAI API calls must use deploymentName field in URLs, not model field. The deployment name and model name are different in Azure."
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - '/deployments/\$\{[^}]*\.model'
+          - 'deployments/\$\{this\.config\.model'
+          - 'deployments/\$\{config\.model'
+    examples:
+      invalid:
+        - |
+          # WRONG: Using model field for deployment name
+          const response = await fetch(
+            `${this.config.endpoint}/openai/deployments/${this.config.model}/chat/completions`
+          );
+        - |
+          # WRONG: Using model in URL
+          fetch(`${endpoint}/openai/deployments/${config.model}/chat/completions`)
+      valid:
+        - |
+          # CORRECT: Using deploymentName field
+          const deploymentName = this.config.deploymentName || this.config.model;
+          const response = await fetch(
+            `${this.config.endpoint}/openai/deployments/${deploymentName}/chat/completions`
+          );
+        - |
+          # CORRECT: Separate deploymentName field
+          fetch(`${endpoint}/openai/deployments/${config.deploymentName}/chat/completions`)
+    message: |
+      Azure OpenAI deployment name error detected!
+
+      Problem: Using 'model' field for deployment name in API URL
+      Solution: Use 'deploymentName' field instead
+
+      Why: In Azure OpenAI, deployment name (e.g., 'gpt-4o') is different from model name.
+      The deployment name is what you created in Azure Portal, not the model identifier.
+
+      Fix:
+      1. Add deploymentName field to your LLMConfig interface
+      2. Load from AZURE_OPENAI_DEPLOYMENT_NAME environment variable
+      3. Use deploymentName in API URLs, not model
+
+      Example:
+      const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+      fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+    language:
+      - "typescript"
+      - "javascript"
+    exceptions:
+      - "**/*.test.ts"
+      - "**/*.spec.ts"
+      - "**/tests/**"
+      - "**/test/**"
+
+  - id: "llm-azure-deployment-env-required"
+    name: "AZURE_OPENAI_DEPLOYMENT_NAME Environment Variable Required"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "When using Azure OpenAI, AZURE_OPENAI_DEPLOYMENT_NAME must be loaded from environment variables"
+    enabled: false  # Disabled: Requires multi-line context checking (too many false positives)
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          # Check if Azure env vars are used without deployment name
+          - 'process\.env\.AZURE_OPENAI_API_KEY'
+          - 'process\.env\.AZURE_OPENAI_ENDPOINT'
+    examples:
+      invalid:
+        - |
+          # WRONG: Missing deployment name env var
+          const azureKey = process.env.AZURE_OPENAI_API_KEY;
+          const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+          // Missing: const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+        - |
+          # WRONG: Only loading key and endpoint
+          if (azureKey && azureEndpoint) {
+            this.config = { provider: 'azure', apiKey: azureKey, endpoint: azureEndpoint };
+          }
+      valid:
+        - |
+          # CORRECT: Loading all three required variables
+          const azureKey = process.env.AZURE_OPENAI_API_KEY;
+          const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+          const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+        - |
+          # CORRECT: Checking deployment in config
+          if (azureKey && azureEndpoint && azureDeployment) {
+            this.config = {
+              provider: 'azure',
+              apiKey: azureKey,
+              endpoint: azureEndpoint,
+              deploymentName: azureDeployment
+            };
+          }
+    message: |
+      Missing AZURE_OPENAI_DEPLOYMENT_NAME environment variable!
+
+      Problem: Code loads AZURE_OPENAI_API_KEY but not AZURE_OPENAI_DEPLOYMENT_NAME
+      Solution: Load deployment name from environment variables
+
+      Required environment variables for Azure OpenAI:
+      - AZURE_OPENAI_API_KEY ✅ (found)
+      - AZURE_OPENAI_ENDPOINT ✅ (found)
+      - AZURE_OPENAI_DEPLOYMENT_NAME ❌ (missing!)
+
+      Add to your code:
+      const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+
+      Add to your .env file:
+      AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+    language:
+      - "typescript"
+      - "javascript"
+    exceptions:
+      - "**/*.test.ts"
+      - "**/*.spec.ts"
+      - "**/tests/**"
+
+  - id: "llm-no-hardcoded-deployment-names"
+    name: "No Hardcoded LLM Deployment Names"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "LLM deployment names must come from environment variables or configuration, never hardcoded in URLs"
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - 'deployments/gpt-4'
+          - 'deployments/gpt-35-turbo'
+          - 'deployments/text-embedding'
+          - 'deployments/whisper'
+          - "deployments/[\"']gpt"
+          - "deployments/[\"']text-"
+    examples:
+      invalid:
+        - |
+          # WRONG: Hardcoded deployment name
+          fetch(`${endpoint}/openai/deployments/gpt-4o/chat/completions`)
+        - |
+          # WRONG: Hardcoded in template
+          const url = `https://my-resource.openai.azure.com/openai/deployments/gpt-35-turbo/chat/completions`;
+        - |
+          # WRONG: String literal
+          await fetch(endpoint + '/openai/deployments/text-embedding-ada-002/embeddings');
+      valid:
+        - |
+          # CORRECT: From environment variable
+          const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+        - |
+          # CORRECT: From config
+          const deployment = this.config.deploymentName;
+          const url = `${endpoint}/openai/deployments/${deployment}/chat/completions`;
+        - |
+          # CORRECT: From variable
+          await fetch(`${endpoint}/openai/deployments/${deploymentName}/embeddings`);
+    message: |
+      Hardcoded LLM deployment name detected!
+
+      Problem: Deployment name is hardcoded in the URL
+      Solution: Use environment variables or configuration
+
+      Why this is bad:
+      - Deployment names vary by environment (dev, staging, prod)
+      - Hardcoding makes it impossible to change without code changes
+      - Creates security and configuration management issues
+
+      Fix:
+      1. Move deployment name to .env file
+      2. Load via process.env.AZURE_OPENAI_DEPLOYMENT_NAME
+      3. Use variable in URL construction
+
+      .env file:
+      AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+
+      Code:
+      const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+      fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+    language:
+      - "typescript"
+      - "javascript"
+    exceptions:
+      - "**/*.test.ts"
+      - "**/*.spec.ts"
+      - "**/tests/**"
+      - "**/*.md"
+      - "**/docs/**"
+
+  - id: "llm-azure-url-pattern-valid"
+    name: "Azure OpenAI URL Must Include api-version"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "All Azure OpenAI API URLs must include api-version query parameter"
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          # Match Azure OpenAI endpoints (will catch most, needs manual review for api-version)
+          - '/openai/deployments/.*/chat/completions[^?]'
+          - '/openai/deployments/.*/embeddings[^?]'
+          - 'openai\.azure\.com'
+    examples:
+      invalid:
+        - |
+          # WRONG: Missing api-version parameter
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+        - |
+          # WRONG: URL without query params
+          const url = `${endpoint}/openai/deployments/gpt-4o/chat/completions`;
+        - |
+          # WRONG: Other params but no api-version
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions?timeout=30`)
+      valid:
+        - |
+          # CORRECT: Includes api-version
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-02-15-preview`)
+        - |
+          # CORRECT: Latest API version
+          const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+        - |
+          # CORRECT: With additional params
+          fetch(`${endpoint}/openai/deployments/${deployment}/embeddings?api-version=2024-02-01&timeout=30`)
+    message: |
+      Azure OpenAI URL missing required api-version parameter!
+
+      Problem: API call to Azure OpenAI without api-version in URL
+      Solution: Add ?api-version=YYYY-MM-DD-preview to all Azure OpenAI URLs
+
+      Why this is required:
+      - Azure OpenAI requires api-version for all requests
+      - Different API versions have different features and behaviors
+      - Missing api-version causes 400 Bad Request errors
+
+      Recommended API versions:
+      - 2024-08-01-preview (latest, for GPT-4o)
+      - 2024-02-15-preview (stable)
+      - 2024-02-01 (for embeddings)
+
+      Fix:
+      fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-02-15-preview`)
+
+      Common mistake we fixed in Sprint 1:
+      ❌ /openai/deployments/${this.config.model}/chat/completions
+      ✅ /openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview
+    language:
+      - "typescript"
+      - "javascript"
+    exceptions:
+      - "**/*.test.ts"
+      - "**/*.spec.ts"
+      - "**/tests/**"
+      - "**/docs/**"
 
 # ============================================================================
 # AI Validation Configuration
