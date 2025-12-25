@@ -1,12 +1,12 @@
 {
-  "timestamp": "2025-12-24T16:42:47.647193",
-  "project": "warden-core",
-  "total_files": 1,
-  "analyzed_files": 1,
-  "total_issues": 0,
+  "timestamp": "2025-12-25T16:44:47.565317",
+  "project": "secrets",
+  "total_files": 5,
+  "analyzed_files": 5,
+  "total_issues": 13,
   "critical_issues": 0,
-  "high_issues": 0,
-  "duration_seconds": 0.005616,
+  "high_issues": 5,
+  "duration_seconds": 13.044546,
   "frames": [
     "SecurityFrame",
     "ChaosFrame",
@@ -22,8 +22,8 @@
     },
     {
       "frame": "Chaos Engineering",
-      "passed": true,
-      "issues": 0,
+      "passed": false,
+      "issues": 1,
       "is_blocker": false
     },
     {
@@ -34,8 +34,8 @@
     },
     {
       "frame": "Stress Testing",
-      "passed": true,
-      "issues": 0,
+      "passed": false,
+      "issues": 4,
       "is_blocker": false
     }
   ]

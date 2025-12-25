@@ -34,6 +34,14 @@ tree-sitter = {version = "^0.21.0", optional = true}
 typer = "^0.20.1"
 rich = "^14.2.0"
 
+# Azure Key Vault (optional - for production secret management)
+azure-identity = {version = "^1.15.0", optional = true}
+azure-keyvault-secrets = {version = "^4.7.0", optional = true}
+
+[tool.poetry.extras]
+azure = ["azure-identity", "azure-keyvault-secrets"]
+treesitter = ["tree-sitter"]
+
 [tool.poetry.group.dev.dependencies]
 # Testing
 pytest = "^7.4.4"
@@ -130,6 +138,7 @@ ignore_missing_imports = false
 module = [
     "qdrant_client.*",
     "openai.*",
+    "azure.*",
 ]
 ignore_missing_imports = true
 
