@@ -564,13 +564,15 @@ class WardenBridge:
         try:
             logger.info("scan_called", path=path)
 
+            # Resolve to absolute path (handles relative paths like cli/src)
+            scan_path = Path(path).resolve()
+
             # Validate path exists
-            scan_path = Path(path)
             if not scan_path.exists():
                 raise IPCError(
                     code=ErrorCode.FILE_NOT_FOUND,
                     message=f"Path not found: {path}",
-                    data={"path": path},
+                    data={"path": str(scan_path)},
                 )
 
             # Find all code files in the path
@@ -585,10 +587,19 @@ class WardenBridge:
 
             logger.info("scan_files_found", count=len(files_to_scan), path=path)
 
+            # Safe relative path conversion (fallback to absolute if relative fails)
+            file_list = []
+            for f in files_to_scan[:50]:  # Limit to first 50
+                try:
+                    file_list.append(str(f.relative_to(scan_path)))
+                except ValueError:
+                    # Can't make relative, use absolute
+                    file_list.append(str(f))
+
             return {
                 "path": str(scan_path.absolute()),
                 "total_files": len(files_to_scan),
-                "files": [str(f.relative_to(scan_path.parent)) for f in files_to_scan[:50]],  # Limit to first 50
+                "files": file_list,
                 "message": f"Found {len(files_to_scan)} files to scan",
             }
 
