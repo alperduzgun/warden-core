@@ -541,6 +541,83 @@ class WardenBridge:
                 data={"provider": provider, "error_type": type(e).__name__},
             )
 
+    async def scan(self, path: str) -> Dict[str, Any]:
+        """
+        Scan a directory or file for validation
+
+        Args:
+            path: Directory or file path to scan
+
+        Returns:
+            Scan results with found files and issues
+
+        Raises:
+            IPCError: If scan fails
+        """
+        if not WARDEN_AVAILABLE:
+            raise IPCError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="Warden validation framework not available",
+                data={"feature": "scan", "requires": "warden.pipeline"},
+            )
+
+        try:
+            logger.info("scan_called", path=path)
+
+            # Validate path exists
+            scan_path = Path(path)
+            if not scan_path.exists():
+                raise IPCError(
+                    code=ErrorCode.FILE_NOT_FOUND,
+                    message=f"Path not found: {path}",
+                    data={"path": path},
+                )
+
+            # Find all code files in the path
+            files_to_scan = []
+            if scan_path.is_file():
+                files_to_scan = [scan_path]
+            else:
+                # Scan directory for code files
+                extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cs', '.go', '.rs', '.cpp', '.c', '.h'}
+                for ext in extensions:
+                    files_to_scan.extend(scan_path.rglob(f"*{ext}"))
+
+            logger.info("scan_files_found", count=len(files_to_scan), path=path)
+
+            return {
+                "path": str(scan_path.absolute()),
+                "total_files": len(files_to_scan),
+                "files": [str(f.relative_to(scan_path.parent)) for f in files_to_scan[:50]],  # Limit to first 50
+                "message": f"Found {len(files_to_scan)} files to scan",
+            }
+
+        except IPCError:
+            raise
+        except Exception as e:
+            logger.error("scan_failed", error=str(e), path=path)
+            raise IPCError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Scan failed: {str(e)}",
+                data={"path": path, "error_type": type(e).__name__},
+            )
+
+    async def analyze(self, filePath: str) -> Dict[str, Any]:
+        """
+        Analyze a single file with validation pipeline
+
+        Args:
+            filePath: Path to file to analyze
+
+        Returns:
+            Analysis results
+
+        Raises:
+            IPCError: If analysis fails
+        """
+        # Delegate to execute_pipeline
+        return await self.execute_pipeline(filePath)
+
     async def ping(self) -> Dict[str, str]:
         """
         Health check endpoint
