@@ -660,17 +660,28 @@ class WardenBridge:
         try:
             logger.info("get_available_frames_called")
 
-            return [
-                {
+            # Import config manager to get frame enabled status
+            from warden.cli_bridge.config_manager import ConfigManager
+            config_mgr = ConfigManager(self.project_root)
+
+            frames_info = []
+            for frame in self.orchestrator.frames:
+                # Get enabled status from config (default True if not configured)
+                enabled = config_mgr.get_frame_status(frame.frame_id)
+                if enabled is None:
+                    enabled = True  # Default to enabled if not in config
+
+                frames_info.append({
                     "id": frame.frame_id,
                     "name": frame.name,
                     "description": frame.description,
                     "priority": frame.priority.name,
                     "is_blocker": frame.is_blocker,
+                    "enabled": enabled,
                     "tags": getattr(frame, "tags", []),
-                }
-                for frame in self.orchestrator.frames
-            ]
+                })
+
+            return frames_info
 
         except Exception as e:
             logger.error("get_available_frames_failed", error=str(e))
@@ -875,3 +886,54 @@ class WardenBridge:
             ],
             "metadata": result.metadata,
         }
+
+    async def update_frame_status(self, frame_id: str, enabled: bool) -> Dict[str, Any]:
+        """
+        Update frame enabled status in config
+
+        Args:
+            frame_id: Frame identifier (e.g., 'security', 'chaos')
+            enabled: Whether frame should be enabled
+
+        Returns:
+            Updated frame configuration
+
+        Raises:
+            IPCError: If update fails
+        """
+        try:
+            logger.info("update_frame_status_called", frame_id=frame_id, enabled=enabled)
+
+            # Import config manager
+            from warden.cli_bridge.config_manager import ConfigManager
+
+            # Create config manager with project root
+            config_mgr = ConfigManager(self.project_root)
+
+            # Update frame status
+            result = config_mgr.update_frame_status(frame_id, enabled)
+
+            logger.info("update_frame_status_success", frame_id=frame_id, enabled=enabled)
+
+            return {
+                "success": True,
+                "frame_id": result["frame_id"],
+                "enabled": result["enabled"],
+                "message": f"Frame '{frame_id}' {'enabled' if enabled else 'disabled'}",
+            }
+
+        except FileNotFoundError as e:
+            logger.error("update_frame_status_config_not_found", error=str(e))
+            raise IPCError(
+                code=ErrorCode.FILE_NOT_FOUND,
+                message=f"Config file not found: {str(e)}",
+                data={"frame_id": frame_id},
+            )
+
+        except Exception as e:
+            logger.error("update_frame_status_failed", frame_id=frame_id, error=str(e))
+            raise IPCError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message=f"Failed to update frame status: {str(e)}",
+                data={"frame_id": frame_id, "error_type": type(e).__name__},
+            )

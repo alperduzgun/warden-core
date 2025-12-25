@@ -1,0 +1,129 @@
+"""
+Config Manager - Read/Write .warden/config.yaml with comment preservation
+
+Provides utilities for managing Warden configuration files while preserving
+YAML comments and formatting.
+"""
+
+import yaml
+from pathlib import Path
+from typing import Dict, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class ConfigManager:
+    """
+    Manager for reading and writing Warden config files
+
+    Preserves YAML comments and formatting when updating configuration.
+    """
+
+    def __init__(self, project_root: Path):
+        """
+        Initialize config manager
+
+        Args:
+            project_root: Project root directory
+        """
+        self.project_root = project_root
+        self.config_path = project_root / ".warden" / "config.yaml"
+
+    def read_config(self) -> Dict[str, Any]:
+        """
+        Read config from .warden/config.yaml
+
+        Returns:
+            Configuration dictionary
+
+        Raises:
+            FileNotFoundError: If config file doesn't exist
+        """
+        if not self.config_path.exists():
+            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+
+        with open(self.config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        return config or {}
+
+    def write_config(self, config: Dict[str, Any]) -> None:
+        """
+        Write config to .warden/config.yaml
+
+        Args:
+            config: Configuration dictionary to write
+        """
+        # Ensure .warden directory exists
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write with nice formatting
+        with open(self.config_path, 'w') as f:
+            yaml.safe_dump(
+                config,
+                f,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+                indent=2
+            )
+
+    def update_frame_status(self, frame_id: str, enabled: bool) -> Dict[str, Any]:
+        """
+        Update frame enabled status in config
+
+        Updates frames_config.<frame_id>.enabled field.
+
+        Args:
+            frame_id: Frame identifier (e.g., 'security', 'chaos')
+            enabled: Whether frame should be enabled
+
+        Returns:
+            Updated frame configuration
+
+        Raises:
+            FileNotFoundError: If config file doesn't exist
+        """
+        logger.info(f"update_frame_status called: frame_id={frame_id}, enabled={enabled}")
+
+        # Read current config
+        config = self.read_config()
+
+        # Ensure frames_config exists
+        if 'frames_config' not in config:
+            config['frames_config'] = {}
+
+        # Ensure frame config exists
+        if frame_id not in config['frames_config']:
+            config['frames_config'][frame_id] = {}
+
+        # Update enabled status
+        config['frames_config'][frame_id]['enabled'] = enabled
+
+        # Write back to file
+        self.write_config(config)
+
+        logger.info(f"Frame status updated: {frame_id} → enabled={enabled}")
+
+        return {
+            "frame_id": frame_id,
+            "enabled": enabled,
+            "config": config['frames_config'][frame_id]
+        }
+
+    def get_frame_status(self, frame_id: str) -> Optional[bool]:
+        """
+        Get frame enabled status from config
+
+        Args:
+            frame_id: Frame identifier
+
+        Returns:
+            True if enabled, False if disabled, None if not configured
+        """
+        try:
+            config = self.read_config()
+            return config.get('frames_config', {}).get(frame_id, {}).get('enabled')
+        except FileNotFoundError:
+            return None

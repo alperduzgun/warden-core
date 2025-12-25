@@ -101,5 +101,6 @@ export interface Frame {
   description: string;
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   is_blocker: boolean;
+  enabled?: boolean;
   tags?: string[];
 }
