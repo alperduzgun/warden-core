@@ -9,6 +9,7 @@ import Gradient from 'ink-gradient';
 import path from 'path';
 import {ChatInterfaceEnhanced} from '../components/ChatInterfaceEnhanced.js';
 import {FileBrowser} from '../components/FileBrowser.js';
+import {Frames} from './frames.js';
 import {ipcClient} from '../lib/ipc-client.js';
 import {backendManager} from '../utils/backendManager.js';
 import {sessionManager, type Session} from '../utils/sessionManager.js';
@@ -20,6 +21,7 @@ import {logger} from '../utils/logger.js';
 export function Chat() {
   const [backendConnected, setBackendConnected] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [showFrames, setShowFrames] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isStarting, setIsStarting] = useState(true);
@@ -148,6 +150,10 @@ export function Chat() {
         const analyzeResult = await ipcClient.send('analyze', {filePath: validatedAnalyzePath});
         return analyzeResult as CommandResult;
 
+      case 'frames':
+        setShowFrames(!showFrames);
+        return {success: true};
+
       case 'browse':
         setShowFileBrowser(!showFileBrowser);
         return {success: true};
@@ -212,6 +218,10 @@ export function Chat() {
         <FileBrowser onSelect={handleFileSelect} />
       </Box>
     );
+  }
+
+  if (showFrames) {
+    return <Frames onExit={() => setShowFrames(false)} />;
   }
 
   return (

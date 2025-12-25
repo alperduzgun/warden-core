@@ -72,6 +72,7 @@ class IPCServer:
             "get_available_frames": self.bridge.get_available_frames,
             "get_available_providers": self.bridge.get_available_providers,
             "test_provider": self.bridge.test_provider,
+            "update_frame_status": self.bridge.update_frame_status,  # NEW: Update frame enabled status
         }
 
         logger.info("ipc_server_initialized", transport=transport)

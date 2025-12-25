@@ -1,10 +1,10 @@
 /**
- * Frames command
- * Shows available validation frames (Claude Code style)
+ * Frames command - Interactive frame manager
+ * Claude Code /plugin style UI
  */
 
 import React, {useState, useEffect} from 'react';
-import {Box, Text} from 'ink';
+import {Box, Text, useInput, useApp} from 'ink';
 import {Spinner} from '../components/Spinner.js';
 import {useIPC} from '../hooks/useIPC.js';
 import {backendManager} from '../utils/backendManager.js';
@@ -33,12 +33,12 @@ function getPriorityColor(priority: string): string {
  * Get frame category based on ID (Built-in, Custom, Community)
  */
 function getFrameCategory(frameId: string): string {
-  // Built-in frames from warden.validation.frames
   const builtInFrames = [
     'security',
     'chaos',
     'orphan',
     'architectural',
+    'architecturalconsistency',
     'gitchanges',
     'fuzz',
     'property',
@@ -49,7 +49,6 @@ function getFrameCategory(frameId: string): string {
     return 'Built-in';
   }
 
-  // Custom frames start with "custom_"
   if (frameId.toLowerCase().startsWith('custom_')) {
     return 'Custom';
   }
@@ -57,20 +56,26 @@ function getFrameCategory(frameId: string): string {
   return 'Community';
 }
 
-export function Frames() {
+interface FramesProps {
+  onExit?: () => void;
+}
+
+export function Frames({onExit}: FramesProps = {}) {
+  const {exit} = useApp();
   const [isStarting, setIsStarting] = useState(true);
   const [startupError, setStartupError] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [frames, setFrames] = useState<Frame[]>([]);
+  const [isToggling, setIsToggling] = useState(false);
 
   // Auto-start backend on mount
   useEffect(() => {
     const initializeBackend = async () => {
       try {
-        // Start backend if not running
         if (!backendManager.isRunning()) {
           await backendManager.start();
         }
 
-        // Connect to backend
         if (!ipcClient.isConnected()) {
           await ipcClient.connect();
         }
@@ -88,8 +93,61 @@ export function Frames() {
 
   const {data, loading, error} = useIPC<Frame[]>({
     command: 'get_available_frames',
-    autoExecute: !isStarting, // Only execute after backend is ready
+    autoExecute: !isStarting,
   });
+
+  // Update frames when data changes
+  useEffect(() => {
+    if (data) {
+      setFrames(data);
+    }
+  }, [data]);
+
+  // Keyboard controls
+  useInput((input, key) => {
+    if (key.upArrow) {
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : frames.length - 1));
+    } else if (key.downArrow) {
+      setSelectedIndex((prev) => (prev < frames.length - 1 ? prev + 1 : 0));
+    } else if (input === ' ' && frames.length > 0) {
+      // Toggle frame
+      handleToggle();
+    } else if (input === 'q' || key.escape) {
+      // Exit frames UI (back to chat if callback provided, otherwise exit app)
+      if (onExit) {
+        onExit();
+      } else {
+        exit();
+      }
+    }
+  });
+
+  const handleToggle = async () => {
+    if (isToggling || frames.length === 0) return;
+
+    setIsToggling(true);
+    try {
+      const frame = frames[selectedIndex];
+      if (!frame) return;
+
+      const newEnabled = !(frame.enabled ?? true);
+
+      // Call backend to update status
+      await ipcClient.send('update_frame_status', {
+        frame_id: frame.id,
+        enabled: newEnabled,
+      });
+
+      // Update local state
+      const updatedFrames = [...frames];
+      updatedFrames[selectedIndex] = {...frame, enabled: newEnabled};
+      setFrames(updatedFrames);
+    } catch (error) {
+      // Error handling - could show toast/message
+    } finally {
+      setIsToggling(false);
+    }
+  };
 
   // Show startup spinner
   if (isStarting) {
@@ -121,7 +179,7 @@ export function Frames() {
     );
   }
 
-  if (!data || data.length === 0) {
+  if (!frames || frames.length === 0) {
     return (
       <Box flexDirection="column">
         <Text color="yellow">No frames available</Text>
@@ -130,8 +188,7 @@ export function Frames() {
     );
   }
 
-  const frames = data;
-  const activeCount = frames.length;
+  const enabledCount = frames.filter((f) => f.enabled !== false).length;
 
   return (
     <Box flexDirection="column">
@@ -142,13 +199,13 @@ export function Frames() {
         </Text>
       </Box>
 
-      {/* Tab navigation (static for now) */}
+      {/* Tab navigation */}
       <Box marginTop={1}>
         <Text>
           <Text bold color="cyan">
             [Installed]
           </Text>
-          <Text dimColor>  Discover  Community  Errors</Text>
+          <Text dimColor>  Discover  Marketplace  Errors</Text>
           <Text dimColor> (tab to cycle)</Text>
         </Text>
       </Box>
@@ -156,40 +213,44 @@ export function Frames() {
       {/* Frame count */}
       <Box marginTop={1}>
         <Text>
-          Installed frames ({activeCount}/{activeCount} active)
+          Installed frames ({enabledCount}/{frames.length} enabled)
         </Text>
       </Box>
 
-      {/* Search bar (static placeholder) */}
+      {/* Search bar placeholder */}
       <Box marginTop={1}>
         <Text dimColor>🔍 Search frames...</Text>
       </Box>
 
-      {/* Frame list */}
-      <Box marginTop={1} flexDirection="column">
-        {frames.map((frame) => {
+      {/* Frame list - Single bordered box */}
+      <Box marginTop={1} borderStyle="round" borderColor="gray" flexDirection="column">
+        {frames.map((frame, index) => {
           const category = getFrameCategory(frame.id);
           const priorityColor = getPriorityColor(frame.priority);
+          const isSelected = index === selectedIndex;
+          const enabled = frame.enabled !== false;
 
           return (
             <Box
               key={frame.id}
-              borderStyle="round"
               paddingX={2}
               paddingY={1}
-              marginY={1}
             >
-              <Box flexDirection="column">
+              <Box flexDirection="column" width="100%">
                 {/* Frame title line */}
                 <Box>
-                  <Text color="green">✓ </Text>
-                  <Text bold color="cyan">
+                  <Text color={isSelected ? 'cyan' : enabled ? 'green' : 'gray'}>
+                    {isSelected ? '▶' : enabled ? '✓' : '○'}{' '}
+                  </Text>
+                  <Text bold color={isSelected ? 'white' : 'cyan'}>
                     {frame.name}
                   </Text>
                   <Text dimColor> · </Text>
-                  <Text color="green">{category}</Text>
+                  <Text color={isSelected ? 'white' : 'green'}>{category}</Text>
                   <Text dimColor> · </Text>
-                  <Text color={priorityColor}>{frame.priority}</Text>
+                  <Text color={isSelected ? 'white' : priorityColor}>
+                    {frame.priority}
+                  </Text>
                   {frame.is_blocker && (
                     <>
                       <Text dimColor> · </Text>
@@ -198,19 +259,17 @@ export function Frames() {
                       </Text>
                     </>
                   )}
+                  {!enabled && (
+                    <>
+                      <Text dimColor> · </Text>
+                      <Text dimColor>[DISABLED]</Text>
+                    </>
+                  )}
                 </Box>
 
                 {/* Description */}
                 <Box marginTop={1}>
-                  <Text>{frame.description}</Text>
-                </Box>
-
-                {/* Metadata */}
-                <Box marginTop={1}>
-                  <Text dimColor>ID: {frame.id} · Version: 1.0.0</Text>
-                  {frame.tags && frame.tags.length > 0 && (
-                    <Text dimColor> · Tags: {frame.tags.join(', ')}</Text>
-                  )}
+                  <Text dimColor={!isSelected}>{frame.description}</Text>
                 </Box>
               </Box>
             </Box>
@@ -218,17 +277,11 @@ export function Frames() {
         })}
       </Box>
 
-      {/* Footer help text */}
-      <Box marginTop={1}>
-        <Text dimColor>
-          ↓ Use warden frame info &lt;id&gt; for detailed information
-        </Text>
-      </Box>
-
       {/* Controls */}
       <Box marginTop={1}>
         <Text dimColor>
-          [↑↓] Navigate  [Space] Toggle  [Enter] Details  [/] Search  [q] Quit
+          [↑↓] Navigate  [Space] Toggle  [q/Esc] {onExit ? 'Back' : 'Quit'}
+          {isToggling && '  (Updating...)'}
         </Text>
       </Box>
     </Box>
