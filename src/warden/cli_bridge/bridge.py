@@ -68,6 +68,9 @@ class WardenBridge:
         # Initialize pipeline orchestrator (like TUI does)
         self._load_pipeline_config(config_path)
 
+        # Validate frame consistency between config.yaml and rules.yaml
+        self._validate_frame_consistency()
+
         logger.info(
             "warden_bridge_initialized",
             providers=len(self.llm_config.get_all_providers_chain()),
@@ -143,6 +146,25 @@ class WardenBridge:
                 self.orchestrator = PipelineOrchestrator(frames=frames, config=None)
             except Exception:
                 self.orchestrator = None
+
+    def _validate_frame_consistency(self) -> None:
+        """Validate frame IDs are consistent between config.yaml and rules.yaml"""
+        try:
+            from warden.cli_bridge.config_manager import ConfigManager
+
+            config_mgr = ConfigManager(self.project_root)
+            validation_result = config_mgr.validate_frame_consistency()
+
+            if not validation_result.get("valid"):
+                # Log warnings but don't crash
+                for warning in validation_result.get("warnings", []):
+                    logger.warning(f"Frame consistency: {warning}")
+            else:
+                logger.info("Frame consistency validation passed")
+
+        except Exception as e:
+            # Don't crash on validation errors, just log
+            logger.warning(f"Frame consistency validation failed: {e}")
 
     def _get_default_frames(self) -> list:
         """Get default validation frames when no config is found (TUI pattern)."""

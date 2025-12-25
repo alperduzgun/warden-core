@@ -34,10 +34,9 @@ global_rules:
 # Available frames:
 #   - security:      Security vulnerability checks
 #   - chaos:         Chaos engineering (error handling, edge cases)
-#   - fuzz:          Fuzz testing (input validation, boundary cases)
-#   - property:      Property-based testing (invariants, contracts)
+#   - orphan:        Orphan code detection (unused imports, dead code)
+#   - architectural: Project architecture validation
 #   - stress:        Performance and resource testing
-#   - architecture:  Project architecture validation
 #
 # on_fail behavior:
 #   - "stop":     Halt validation immediately if rule fails (blocker)
@@ -67,31 +66,22 @@ frame_rules:
       - async-method-naming   # Ensure async methods are properly named
     on_fail: "continue"       # Convention issues are warnings
 
-  # Fuzz Frame - Input validation and boundary testing
-  fuzz:
+  # Orphan Frame - Orphan code detection
+  orphan:
     pre_rules:
-      - input-validation-check  # Ensure input sanitization exists
-      - file-size-limit         # Prevent processing huge files
-    post_rules:
-      - security-audit          # Check for injection vulnerabilities
-    on_fail: "stop"             # Input validation failures are critical
+      - no-secrets              # No secrets in orphan code detection
+    on_fail: "continue"
 
-  # Property Frame - Invariant and contract checking
-  property:
+  # Architectural Frame - Project structure validation
+  architectural:
     pre_rules:
-      - no-secrets              # No secrets in property tests
+      - no-secrets              # No secrets in architecture files
     on_fail: "continue"
 
   # Stress Frame - Performance and resource checks
   stress:
     pre_rules:
       - file-size-limit         # Don't stress-test huge files
-    on_fail: "continue"
-
-  # Architecture Frame - Project structure validation
-  architecture:
-    pre_rules:
-      - no-secrets              # No secrets in architecture files
     on_fail: "continue"
 
 # ============================================================================

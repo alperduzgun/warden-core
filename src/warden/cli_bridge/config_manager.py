@@ -29,6 +29,7 @@ class ConfigManager:
         """
         self.project_root = project_root
         self.config_path = project_root / ".warden" / "config.yaml"
+        self.rules_path = project_root / ".warden" / "rules.yaml"
 
     def read_config(self) -> Dict[str, Any]:
         """
@@ -127,3 +128,87 @@ class ConfigManager:
             return config.get('frames_config', {}).get(frame_id, {}).get('enabled')
         except FileNotFoundError:
             return None
+
+    def read_rules(self) -> Dict[str, Any]:
+        """
+        Read rules from .warden/rules.yaml
+
+        Returns:
+            Rules dictionary
+
+        Raises:
+            FileNotFoundError: If rules file doesn't exist
+        """
+        if not self.rules_path.exists():
+            raise FileNotFoundError(f"Rules file not found: {self.rules_path}")
+
+        with open(self.rules_path, 'r') as f:
+            rules = yaml.safe_load(f)
+
+        return rules or {}
+
+    def validate_frame_consistency(self) -> Dict[str, Any]:
+        """
+        Validate frame IDs are consistent between config.yaml and rules.yaml
+
+        Checks that all frames in config.yaml have corresponding entries in rules.yaml
+        and warns about mismatches.
+
+        Returns:
+            Dictionary with validation results:
+            {
+                "valid": bool,
+                "config_frames": list,
+                "rules_frames": list,
+                "missing_in_rules": list,
+                "missing_in_config": list,
+                "warnings": list
+            }
+        """
+        warnings = []
+
+        try:
+            config = self.read_config()
+            rules = self.read_rules()
+        except FileNotFoundError as e:
+            logger.error(f"Frame consistency validation failed: {e}")
+            return {
+                "valid": False,
+                "error": str(e),
+                "warnings": [str(e)]
+            }
+
+        # Get frame lists
+        config_frames = set(config.get('frames', []))
+        rules_frames = set(rules.get('frame_rules', {}).keys())
+
+        # Find mismatches
+        missing_in_rules = config_frames - rules_frames
+        missing_in_config = rules_frames - config_frames
+
+        # Generate warnings
+        if missing_in_rules:
+            warning = f"Frames in config.yaml but not in rules.yaml: {sorted(missing_in_rules)}"
+            logger.warning(warning)
+            warnings.append(warning)
+
+        if missing_in_config:
+            warning = f"Frames in rules.yaml but not in config.yaml: {sorted(missing_in_config)}"
+            logger.warning(warning)
+            warnings.append(warning)
+
+        valid = len(missing_in_rules) == 0 and len(missing_in_config) == 0
+
+        if valid:
+            logger.info(f"Frame consistency validation passed: {len(config_frames)} frames synchronized")
+        else:
+            logger.warning(f"Frame consistency validation failed: {len(warnings)} warnings")
+
+        return {
+            "valid": valid,
+            "config_frames": sorted(config_frames),
+            "rules_frames": sorted(rules_frames),
+            "missing_in_rules": sorted(missing_in_rules),
+            "missing_in_config": sorted(missing_in_config),
+            "warnings": warnings
+        }
