@@ -340,12 +340,8 @@ async def scan_directory(
                     # Check if frame has specific config
                     frame_conf = frames_config.get(frame_name, {})
                     if frame_conf.get('enabled', True):  # Only load if enabled
-                        frame_instance = frame_map[frame_name]()
-
-                        # Apply frame-specific configuration
-                        if hasattr(frame_instance, 'configure'):
-                            frame_instance.configure(frame_conf)
-
+                        # Pass config to frame constructor
+                        frame_instance = frame_map[frame_name](config=frame_conf)
                         frames.append(frame_instance)
                         if verbose:
                             console.print(f"  [green]✓[/green] Loaded: {frame_name}")

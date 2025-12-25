@@ -7,6 +7,7 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 
 from dataclasses import dataclass, field
 from typing import Optional
+
 from .types import LlmProvider
 
 
@@ -175,59 +176,65 @@ def create_default_config() -> LlmConfiguration:
 
 def load_llm_config() -> LlmConfiguration:
     """
-    Load LLM configuration from environment variables and config files.
+    Load LLM configuration using SecretManager.
 
-    Supports multiple providers with automatic configuration from environment:
-    - Azure OpenAI: AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, etc.
-    - OpenAI: OPENAI_API_KEY
-    - Anthropic: ANTHROPIC_API_KEY
-    - DeepSeek: DEEPSEEK_API_KEY
-    - And more...
+    Supports multiple secret sources with auto-detection:
+    - Local .env file (development)
+    - Environment variables (GitHub Actions CI/CD)
+    - Azure Key Vault (production)
 
     Returns:
-        LlmConfiguration with configured providers based on available env vars
+        LlmConfiguration with configured providers based on available secrets
 
-    Environment Variables:
-        Azure OpenAI:
-            - AZURE_OPENAI_API_KEY (required)
-            - AZURE_OPENAI_ENDPOINT (required)
-            - AZURE_OPENAI_DEPLOYMENT_NAME (required)
-            - AZURE_OPENAI_API_VERSION (optional, default: "2024-02-01")
+    Secret Sources (in priority order):
+        1. Azure Key Vault (if AZURE_KEY_VAULT_URL is set)
+        2. Environment variables (if GITHUB_ACTIONS=true)
+        3. .env file (local development)
+        4. Environment variables (fallback)
 
-        Other providers (optional):
-            - OPENAI_API_KEY
-            - ANTHROPIC_API_KEY
-            - DEEPSEEK_API_KEY
-            - QWENCODE_API_KEY
-            - GROQ_API_KEY
-            - OPENROUTER_API_KEY
+    Required Secrets for Azure OpenAI:
+        - AZURE_OPENAI_API_KEY
+        - AZURE_OPENAI_ENDPOINT
+        - AZURE_OPENAI_DEPLOYMENT_NAME
+        - AZURE_OPENAI_API_VERSION (optional, default: "2024-02-01")
+
+    Other provider secrets (optional):
+        - OPENAI_API_KEY
+        - ANTHROPIC_API_KEY
+        - DEEPSEEK_API_KEY
+        - QWENCODE_API_KEY
+        - GROQ_API_KEY
+        - OPENROUTER_API_KEY
     """
-    import os
+    import asyncio
 
-    # Load .env file if available (for local development)
+    # Use async version internally
     try:
-        from dotenv import load_dotenv
-        from pathlib import Path
+        asyncio.get_running_loop()
+        # If we're already in an async context, we need to run in a new thread
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(asyncio.run, load_llm_config_async())
+            return future.result()
+    except RuntimeError:
+        # No running loop - we can use asyncio.run directly
+        return asyncio.run(load_llm_config_async())
 
-        # Look for .env in project root (up to 5 levels)
-        current = Path.cwd()
-        for _ in range(5):
-            env_file = current / ".env"
-            if env_file.exists():
-                load_dotenv(env_file)
-                break
-            parent = current.parent
-            if parent == current:  # Reached root
-                break
-            current = parent
-    except ImportError:
-        # python-dotenv not installed - skip
-        pass
 
-    # Create base configuration (without default provider chain)
+async def load_llm_config_async() -> LlmConfiguration:
+    """
+    Async version of load_llm_config using SecretManager.
+
+    Use this in async contexts for better performance.
+    """
+    from warden.secrets import SecretManager
+
+    manager = SecretManager()
+
+    # Create base configuration
     config = LlmConfiguration(
-        default_provider=LlmProvider.AZURE_OPENAI,  # Will be updated if not configured
-        fallback_providers=[]  # Build dynamically based on available keys
+        default_provider=LlmProvider.AZURE_OPENAI,
+        fallback_providers=[]
     )
 
     # Set default models for all providers
@@ -237,61 +244,75 @@ def load_llm_config() -> LlmConfiguration:
             provider_config.default_model = model
 
     # Track which providers are configured
-    configured_providers = []
+    configured_providers: list[LlmProvider] = []
+
+    # Get all secrets at once for efficiency
+    secrets = await manager.get_secrets([
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_OPENAI_DEPLOYMENT_NAME",
+        "AZURE_OPENAI_API_VERSION",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "QWENCODE_API_KEY",
+        "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
+    ])
 
     # Configure Azure OpenAI (primary provider for Warden)
-    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
-    azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+    azure_api_key = secrets["AZURE_OPENAI_API_KEY"]
+    azure_endpoint = secrets["AZURE_OPENAI_ENDPOINT"]
+    azure_deployment = secrets["AZURE_OPENAI_DEPLOYMENT_NAME"]
+    azure_api_version = secrets["AZURE_OPENAI_API_VERSION"]
 
-    if azure_api_key and azure_endpoint and azure_deployment:
-        config.azure_openai.api_key = azure_api_key
-        config.azure_openai.endpoint = azure_endpoint
-        config.azure_openai.default_model = azure_deployment
-        config.azure_openai.api_version = azure_api_version
+    if azure_api_key.found and azure_endpoint.found and azure_deployment.found:
+        config.azure_openai.api_key = azure_api_key.value
+        config.azure_openai.endpoint = azure_endpoint.value
+        config.azure_openai.default_model = azure_deployment.value
+        config.azure_openai.api_version = azure_api_version.value or "2024-02-01"
         config.azure_openai.enabled = True
         configured_providers.append(LlmProvider.AZURE_OPENAI)
 
     # Configure OpenAI
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if openai_api_key:
-        config.openai.api_key = openai_api_key
+    openai_secret = secrets["OPENAI_API_KEY"]
+    if openai_secret.found:
+        config.openai.api_key = openai_secret.value
         config.openai.enabled = True
         configured_providers.append(LlmProvider.OPENAI)
 
     # Configure Anthropic
-    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-    if anthropic_api_key:
-        config.anthropic.api_key = anthropic_api_key
+    anthropic_secret = secrets["ANTHROPIC_API_KEY"]
+    if anthropic_secret.found:
+        config.anthropic.api_key = anthropic_secret.value
         config.anthropic.enabled = True
         configured_providers.append(LlmProvider.ANTHROPIC)
 
     # Configure DeepSeek
-    deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
-    if deepseek_api_key:
-        config.deepseek.api_key = deepseek_api_key
+    deepseek_secret = secrets["DEEPSEEK_API_KEY"]
+    if deepseek_secret.found:
+        config.deepseek.api_key = deepseek_secret.value
         config.deepseek.enabled = True
         configured_providers.append(LlmProvider.DEEPSEEK)
 
     # Configure QwenCode
-    qwencode_api_key = os.getenv("QWENCODE_API_KEY")
-    if qwencode_api_key:
-        config.qwencode.api_key = qwencode_api_key
+    qwencode_secret = secrets["QWENCODE_API_KEY"]
+    if qwencode_secret.found:
+        config.qwencode.api_key = qwencode_secret.value
         config.qwencode.enabled = True
         configured_providers.append(LlmProvider.QWENCODE)
 
     # Configure Groq
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if groq_api_key:
-        config.groq.api_key = groq_api_key
+    groq_secret = secrets["GROQ_API_KEY"]
+    if groq_secret.found:
+        config.groq.api_key = groq_secret.value
         config.groq.enabled = True
         configured_providers.append(LlmProvider.GROQ)
 
     # Configure OpenRouter
-    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-    if openrouter_api_key:
-        config.openrouter.api_key = openrouter_api_key
+    openrouter_secret = secrets["OPENROUTER_API_KEY"]
+    if openrouter_secret.found:
+        config.openrouter.api_key = openrouter_secret.value
         config.openrouter.enabled = True
         configured_providers.append(LlmProvider.OPENROUTER)
 
