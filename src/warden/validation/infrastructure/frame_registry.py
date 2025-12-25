@@ -11,6 +11,7 @@ Discovers and loads frames from:
 import os
 import sys
 import yaml
+import importlib
 import importlib.util
 from pathlib import Path
 from typing import List, Type, Dict, Any
@@ -287,42 +288,106 @@ class FrameRegistry:
         """
         Discover built-in frames from warden.validation.frames.
 
+        Auto-discovers frames by scanning the frames directory for frame modules.
+        Each frame must follow the naming convention: <frame_name>/<frame_name>_frame.py
+
         Returns:
             List of built-in ValidationFrame classes
         """
         frames: List[Type[ValidationFrame]] = []
 
         try:
-            # Import built-in frames (correct paths with directory structure)
-            from warden.validation.frames.security import SecurityFrame
-            from warden.validation.frames.chaos import ChaosFrame
-            from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
-            from warden.validation.frames.orphan import OrphanFrame
-            from warden.validation.frames.project_architecture import ProjectArchitectureFrame
-            from warden.validation.frames.gitchanges import GitChangesFrame
-            from warden.validation.frames.fuzz import FuzzFrame
-            from warden.validation.frames.property import PropertyFrame
-            from warden.validation.frames.stress import StressFrame
+            # Get frames directory path
+            frames_dir = Path(__file__).parent.parent / "frames"
 
-            frames = [
-                SecurityFrame,
-                ChaosFrame,
-                ArchitecturalConsistencyFrame,
-                OrphanFrame,
-                ProjectArchitectureFrame,
-                GitChangesFrame,
-                FuzzFrame,
-                PropertyFrame,
-                StressFrame,
-            ]
+            if not frames_dir.exists():
+                logger.error(
+                    "frames_directory_not_found",
+                    path=str(frames_dir),
+                )
+                return frames
 
             logger.debug(
-                "builtin_frames_loaded",
+                "scanning_builtin_frames",
+                frames_dir=str(frames_dir),
+            )
+
+            # Scan each subdirectory in frames/
+            for frame_path in frames_dir.iterdir():
+                # Skip non-directories, __pycache__, and private directories
+                if not frame_path.is_dir() or frame_path.name.startswith("_"):
+                    continue
+
+                # Expected frame file: <frame_name>/<frame_name>_frame.py
+                frame_file = frame_path / f"{frame_path.name}_frame.py"
+
+                if not frame_file.exists():
+                    logger.debug(
+                        "frame_file_not_found",
+                        frame_name=frame_path.name,
+                        expected_file=str(frame_file),
+                    )
+                    continue
+
+                try:
+                    # Dynamically import the frame module
+                    module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
+                    module = importlib.import_module(module_path)
+
+                    # Find ValidationFrame subclass in the module
+                    frame_class = None
+                    for attr_name in dir(module):
+                        attr = getattr(module, attr_name)
+
+                        # Check if it's a ValidationFrame subclass (but not ValidationFrame itself)
+                        if (
+                            isinstance(attr, type)
+                            and issubclass(attr, ValidationFrame)
+                            and attr is not ValidationFrame
+                        ):
+                            frame_class = attr
+                            break
+
+                    if frame_class:
+                        frames.append(frame_class)
+                        logger.debug(
+                            "builtin_frame_discovered",
+                            frame_name=frame_path.name,
+                            frame_class=frame_class.__name__,
+                        )
+                    else:
+                        logger.warning(
+                            "no_frame_class_found_in_module",
+                            frame_name=frame_path.name,
+                            module=module_path,
+                        )
+
+                except ImportError as e:
+                    logger.warning(
+                        "builtin_frame_import_failed",
+                        frame_name=frame_path.name,
+                        error=str(e),
+                    )
+                except Exception as e:
+                    logger.error(
+                        "builtin_frame_discovery_error",
+                        frame_name=frame_path.name,
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
+
+            logger.info(
+                "builtin_frames_discovered",
+                count=len(frames),
                 frames=[f.__name__ for f in frames],
             )
 
-        except ImportError as e:
-            logger.warning("builtin_frames_import_failed", error=str(e))
+        except Exception as e:
+            logger.error(
+                "builtin_frames_discovery_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
 
         return frames
 
