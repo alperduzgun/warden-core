@@ -1,0 +1,263 @@
+// ============================================================================
+// Warden gRPC Service Definition
+//
+// Protocol Buffers definition for C# Panel <-> Python Backend communication.
+// Port: 50051
+// ============================================================================
+
+syntax = "proto3";
+
+package warden;
+
+option csharp_namespace = "Warden.Grpc";
+
+// ============================================================================
+// EMPTY MESSAGE
+// ============================================================================
+
+message Empty {}
+
+// ============================================================================
+// COMMON TYPES
+// ============================================================================
+
+enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    CRITICAL = 1;
+    HIGH = 2;
+    MEDIUM = 3;
+    LOW = 4;
+    INFO = 5;
+}
+
+message Finding {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+    Severity severity = 4;
+    string file_path = 5;
+    int32 line_number = 6;
+    int32 column_number = 7;
+    string code_snippet = 8;
+    string suggestion = 9;
+    string frame_id = 10;
+    string cwe_id = 11;
+    string owasp_category = 12;
+    map<string, string> metadata = 13;
+}
+
+message Fortification {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+    string file_path = 4;
+    int32 line_number = 5;
+    string original_code = 6;
+    string suggested_code = 7;
+    string rationale = 8;
+    Severity priority = 9;
+}
+
+message Cleaning {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+    string file_path = 4;
+    int32 line_number = 5;
+    string detail = 6;
+}
+
+// ============================================================================
+// PIPELINE MESSAGES
+// ============================================================================
+
+message PipelineRequest {
+    string path = 1;
+    repeated string frames = 2;           // Empty = all frames
+    bool parallel = 3;                    // Run frames in parallel
+    int32 timeout_seconds = 4;            // 0 = default (300s)
+    map<string, string> options = 5;      // Additional options
+}
+
+message PipelineResult {
+    bool success = 1;
+    string run_id = 2;
+    int32 total_findings = 3;
+    int32 critical_count = 4;
+    int32 high_count = 5;
+    int32 medium_count = 6;
+    int32 low_count = 7;
+    repeated Finding findings = 8;
+    repeated Fortification fortifications = 9;
+    repeated Cleaning cleanings = 10;
+    int64 duration_ms = 11;
+    repeated string frames_executed = 12;
+    string error_message = 13;
+}
+
+message PipelineEvent {
+    string event_type = 1;               // pipeline_start, stage_start, stage_complete, finding, progress, pipeline_complete, error
+    string stage = 2;                    // Current stage name
+    float progress = 3;                  // 0.0 - 1.0
+    string message = 4;                  // Status message
+    Finding finding = 5;                 // When event_type = "finding"
+    Fortification fortification = 6;    // When event_type = "fortification"
+    Cleaning cleaning = 7;              // When event_type = "cleaning"
+    int64 timestamp_ms = 8;
+}
+
+// ============================================================================
+// LLM MESSAGES
+// ============================================================================
+
+message LlmAnalyzeRequest {
+    string code = 1;
+    string prompt = 2;
+    string provider = 3;                 // Optional: azure_openai, openai, anthropic, etc.
+    string model = 4;                    // Optional: specific model
+    float temperature = 5;               // 0.0 - 1.0
+    int32 max_tokens = 6;
+}
+
+message LlmAnalyzeResult {
+    bool success = 1;
+    string response = 2;
+    string provider_used = 3;
+    string model_used = 4;
+    int32 tokens_used = 5;
+    int64 duration_ms = 6;
+    LlmError error = 7;
+}
+
+message LlmError {
+    string code = 1;
+    string message = 2;
+    string provider = 3;
+}
+
+message ClassifyRequest {
+    string code = 1;
+    string file_path = 2;                // Optional: for context
+}
+
+message ClassifyResult {
+    bool has_async_operations = 1;
+    bool has_user_input = 2;
+    bool has_database_operations = 3;
+    bool has_network_calls = 4;
+    bool has_file_operations = 5;
+    bool has_authentication = 6;
+    bool has_cryptography = 7;
+    repeated string detected_frameworks = 8;
+    repeated string recommended_frames = 9;
+    float confidence = 10;
+}
+
+// ============================================================================
+// CONFIGURATION MESSAGES
+// ============================================================================
+
+message Frame {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    int32 priority = 4;
+    bool is_blocker = 5;
+    bool enabled = 6;
+    repeated string tags = 7;
+}
+
+message FrameList {
+    repeated Frame frames = 1;
+}
+
+message Provider {
+    string id = 1;
+    string name = 2;
+    bool available = 3;
+    bool is_default = 4;
+    string status = 5;                   // ready, error, not_configured
+}
+
+message ProviderList {
+    repeated Provider providers = 1;
+    string default_provider = 2;
+}
+
+message ConfigurationResponse {
+    string project_root = 1;
+    string config_file = 2;
+    string active_profile = 3;
+    FrameList available_frames = 4;
+    ProviderList available_providers = 5;
+    map<string, string> settings = 6;
+}
+
+// ============================================================================
+// HEALTH & STATUS MESSAGES
+// ============================================================================
+
+message HealthResponse {
+    bool healthy = 1;
+    string version = 2;
+    int64 uptime_seconds = 3;
+    map<string, bool> components = 4;    // llm: true, qdrant: false, etc.
+}
+
+message StatusResponse {
+    bool running = 1;
+    int32 active_pipelines = 2;
+    int64 total_scans = 3;
+    int64 total_findings = 4;
+    int64 memory_mb = 5;
+    float cpu_percent = 6;
+}
+
+// ============================================================================
+// SERVICE DEFINITION
+// ============================================================================
+
+service WardenService {
+    // ─────────────────────────────────────────────────────────────────────
+    // Pipeline Operations
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Execute full validation pipeline (sync)
+    rpc ExecutePipeline(PipelineRequest) returns (PipelineResult);
+
+    // Execute pipeline with real-time streaming events
+    rpc ExecutePipelineStream(PipelineRequest) returns (stream PipelineEvent);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // LLM Operations
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Analyze code with LLM
+    rpc AnalyzeWithLlm(LlmAnalyzeRequest) returns (LlmAnalyzeResult);
+
+    // Classify code to determine recommended frames
+    rpc ClassifyCode(ClassifyRequest) returns (ClassifyResult);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Configuration
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Get available validation frames
+    rpc GetAvailableFrames(Empty) returns (FrameList);
+
+    // Get available LLM providers
+    rpc GetAvailableProviders(Empty) returns (ProviderList);
+
+    // Get full configuration
+    rpc GetConfiguration(Empty) returns (ConfigurationResponse);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Health & Status
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Health check
+    rpc HealthCheck(Empty) returns (HealthResponse);
+
+    // Get server status
+    rpc GetStatus(Empty) returns (StatusResponse);
+}
