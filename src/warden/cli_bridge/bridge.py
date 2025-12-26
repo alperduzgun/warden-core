@@ -184,53 +184,63 @@ class WardenBridge:
 
     def _load_frames_from_list(self, frame_names: list, frame_config: dict = None) -> list:
         """
-        Load validation frames from frame name list (TUI pattern).
+        Load validation frames from frame name list using FrameRegistry.
+
+        Supports both built-in and custom frames through frame discovery.
 
         Args:
-            frame_names: List of frame names (e.g., ['security', 'chaos', 'orphan'])
+            frame_names: List of frame names (e.g., ['security', 'chaos', 'env-security'])
             frame_config: Frame-specific configurations from config.yaml
 
         Returns:
             List of initialized ValidationFrame instances
         """
-        from warden.validation.frames import (
-            SecurityFrame,
-            ChaosFrame,
-            ArchitecturalConsistencyFrame,
-            ProjectArchitectureFrame,
-            GitChangesFrame,
-            OrphanFrame,
-            FuzzFrame,
-            PropertyFrame,
-            StressFrame,
-        )
+        from warden.validation.infrastructure.frame_registry import FrameRegistry
 
         if frame_config is None:
             frame_config = {}
 
-        # Map frame names to frame classes
-        frame_map = {
-            'security': SecurityFrame,
-            'chaos': ChaosFrame,
-            'architectural': ArchitecturalConsistencyFrame,
-            'architecturalconsistency': ArchitecturalConsistencyFrame,
-            'project_architecture': ProjectArchitectureFrame,
-            'projectarchitecture': ProjectArchitectureFrame,
-            'gitchanges': GitChangesFrame,
-            'orphan': OrphanFrame,
-            'fuzz': FuzzFrame,
-            'property': PropertyFrame,
-            'stress': StressFrame,
-        }
+        # Use FrameRegistry to discover ALL frames (built-in + custom)
+        registry = FrameRegistry()
+        all_frames = registry.discover_all()
+
+        logger.info("frame_discovery_complete", total=len(registry.registered_frames))
 
         frames = []
 
-        # Load each frame by name with its config
+        # Load each requested frame by name
         for frame_name in frame_names:
-            if frame_name in frame_map:
+            # Normalize frame name (remove hyphens for lookup)
+            normalized_name = frame_name.replace('-', '').replace('_', '').lower()
+
+            # Try to find frame in registry
+            frame_class = None
+            for fid, cls in registry.registered_frames.items():
+                if fid == normalized_name:
+                    frame_class = cls
+                    break
+
+            # Special case: 'architectural' should map to 'architecturalconsistency'
+            if not frame_class and normalized_name == 'architectural':
+                frame_class = registry.registered_frames.get('architecturalconsistency')
+
+            # Also check metadata for original ID match (for custom frames)
+            if not frame_class and frame_name in [meta.id for meta in registry.frame_metadata.values()]:
+                for fid, meta in registry.frame_metadata.items():
+                    if meta.id == frame_name:
+                        frame_class = registry.registered_frames.get(fid)
+                        break
+
+            if frame_class:
                 # Get frame-specific config
                 config = frame_config.get(frame_name, {})
-                frames.append(frame_map[frame_name](config=config))
+
+                # Instantiate frame with config
+                try:
+                    frames.append(frame_class(config=config))
+                    logger.info("frame_loaded", frame_name=frame_name, frame_class=frame_class.__name__)
+                except Exception as e:
+                    logger.error("frame_instantiation_failed", frame_name=frame_name, error=str(e))
             else:
                 logger.warning("unknown_frame", frame_name=frame_name)
 
