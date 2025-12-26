@@ -60,6 +60,8 @@ frames_config:
     checks:
     - api_load_testing
     - async_performance
+  ? ''
+  : enabled: false
 ci:
   enabled: true
   fail_on_blocker: true
