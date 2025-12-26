@@ -22,6 +22,12 @@ except ImportError:
     warden_pb2 = None
     warden_pb2_grpc = None
 
+# gRPC Reflection (for Postman auto-discovery)
+try:
+    from grpc_reflection.v1alpha import reflection
+except ImportError:
+    reflection = None
+
 # Import Warden components
 from warden.cli_bridge.bridge import WardenBridge
 
@@ -508,6 +514,15 @@ class GrpcServer:
             self.servicer,
             self.server
         )
+
+        # Enable gRPC Reflection for Postman auto-discovery
+        if reflection is not None and warden_pb2 is not None:
+            SERVICE_NAMES = (
+                warden_pb2.DESCRIPTOR.services_by_name['WardenService'].full_name,
+                reflection.SERVICE_NAME,
+            )
+            reflection.enable_server_reflection(SERVICE_NAMES, self.server)
+            logger.info("grpc_reflection_enabled")
 
         # Add insecure port (TODO: add TLS support)
         listen_addr = f"[::]:{self.port}"
