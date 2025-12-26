@@ -870,7 +870,7 @@ class WardenBridge:
         }
         return extension_map.get(path.suffix.lower(), "unknown")
 
-    def _serialize_pipeline_result(self, result: PipelineResult) -> Dict[str, Any]:
+    def _serialize_pipeline_result(self, result: "PipelineResult") -> Dict[str, Any]:
         """
         Convert PipelineResult to serializable dictionary
 
