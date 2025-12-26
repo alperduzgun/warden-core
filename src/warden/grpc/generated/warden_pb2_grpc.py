@@ -27,12 +27,9 @@ if _version_not_supported:
 
 class WardenServiceStub(object):
     """============================================================================
-    SERVICE DEFINITION
+    SERVICE DEFINITION (51 ENDPOINTS)
     ============================================================================
 
-    ─────────────────────────────────────────────────────────────────────
-    Pipeline Operations
-    ─────────────────────────────────────────────────────────────────────
     """
 
     def __init__(self, channel):
@@ -51,6 +48,141 @@ class WardenServiceStub(object):
                 request_serializer=warden__pb2.PipelineRequest.SerializeToString,
                 response_deserializer=warden__pb2.PipelineEvent.FromString,
                 _registered_method=True)
+        self.GetAllIssues = channel.unary_unary(
+                '/warden.WardenService/GetAllIssues',
+                request_serializer=warden__pb2.IssueFilter.SerializeToString,
+                response_deserializer=warden__pb2.IssueList.FromString,
+                _registered_method=True)
+        self.GetOpenIssues = channel.unary_unary(
+                '/warden.WardenService/GetOpenIssues',
+                request_serializer=warden__pb2.IssueFilter.SerializeToString,
+                response_deserializer=warden__pb2.IssueList.FromString,
+                _registered_method=True)
+        self.GetIssueByHash = channel.unary_unary(
+                '/warden.WardenService/GetIssueByHash',
+                request_serializer=warden__pb2.IssueHashRequest.SerializeToString,
+                response_deserializer=warden__pb2.Issue.FromString,
+                _registered_method=True)
+        self.ResolveIssue = channel.unary_unary(
+                '/warden.WardenService/ResolveIssue',
+                request_serializer=warden__pb2.IssueActionRequest.SerializeToString,
+                response_deserializer=warden__pb2.IssueActionResponse.FromString,
+                _registered_method=True)
+        self.SuppressIssue = channel.unary_unary(
+                '/warden.WardenService/SuppressIssue',
+                request_serializer=warden__pb2.IssueActionRequest.SerializeToString,
+                response_deserializer=warden__pb2.IssueActionResponse.FromString,
+                _registered_method=True)
+        self.ReopenIssue = channel.unary_unary(
+                '/warden.WardenService/ReopenIssue',
+                request_serializer=warden__pb2.IssueActionRequest.SerializeToString,
+                response_deserializer=warden__pb2.IssueActionResponse.FromString,
+                _registered_method=True)
+        self.GetIssueHistory = channel.unary_unary(
+                '/warden.WardenService/GetIssueHistory',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.IssueHistory.FromString,
+                _registered_method=True)
+        self.GetIssueStats = channel.unary_unary(
+                '/warden.WardenService/GetIssueStats',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.IssueStats.FromString,
+                _registered_method=True)
+        self.AnalyzeResults = channel.unary_unary(
+                '/warden.WardenService/AnalyzeResults',
+                request_serializer=warden__pb2.AnalyzeResultsRequest.SerializeToString,
+                response_deserializer=warden__pb2.AnalysisResult.FromString,
+                _registered_method=True)
+        self.GetTrends = channel.unary_unary(
+                '/warden.WardenService/GetTrends',
+                request_serializer=warden__pb2.TrendRequest.SerializeToString,
+                response_deserializer=warden__pb2.TrendResponse.FromString,
+                _registered_method=True)
+        self.GetFrameStats = channel.unary_unary(
+                '/warden.WardenService/GetFrameStats',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.FrameStats.FromString,
+                _registered_method=True)
+        self.GetSeverityStats = channel.unary_unary(
+                '/warden.WardenService/GetSeverityStats',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.SeverityStats.FromString,
+                _registered_method=True)
+        self.GetQualityScore = channel.unary_unary(
+                '/warden.WardenService/GetQualityScore',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.QualityScoreResponse.FromString,
+                _registered_method=True)
+        self.GenerateHtmlReport = channel.unary_unary(
+                '/warden.WardenService/GenerateHtmlReport',
+                request_serializer=warden__pb2.ReportRequest.SerializeToString,
+                response_deserializer=warden__pb2.ReportResponse.FromString,
+                _registered_method=True)
+        self.GeneratePdfReport = channel.unary_unary(
+                '/warden.WardenService/GeneratePdfReport',
+                request_serializer=warden__pb2.ReportRequest.SerializeToString,
+                response_deserializer=warden__pb2.ReportResponse.FromString,
+                _registered_method=True)
+        self.GenerateJsonReport = channel.unary_unary(
+                '/warden.WardenService/GenerateJsonReport',
+                request_serializer=warden__pb2.ReportRequest.SerializeToString,
+                response_deserializer=warden__pb2.ReportResponse.FromString,
+                _registered_method=True)
+        self.GetReportStatus = channel.unary_unary(
+                '/warden.WardenService/GetReportStatus',
+                request_serializer=warden__pb2.ReportStatusRequest.SerializeToString,
+                response_deserializer=warden__pb2.ReportStatusResponse.FromString,
+                _registered_method=True)
+        self.SearchCode = channel.unary_unary(
+                '/warden.WardenService/SearchCode',
+                request_serializer=warden__pb2.SearchRequest.SerializeToString,
+                response_deserializer=warden__pb2.SearchResult.FromString,
+                _registered_method=True)
+        self.SearchSimilarCode = channel.unary_unary(
+                '/warden.WardenService/SearchSimilarCode',
+                request_serializer=warden__pb2.SimilarCodeRequest.SerializeToString,
+                response_deserializer=warden__pb2.SearchResult.FromString,
+                _registered_method=True)
+        self.SearchByDescription = channel.unary_unary(
+                '/warden.WardenService/SearchByDescription',
+                request_serializer=warden__pb2.SearchRequest.SerializeToString,
+                response_deserializer=warden__pb2.SearchResult.FromString,
+                _registered_method=True)
+        self.IndexProject = channel.unary_unary(
+                '/warden.WardenService/IndexProject',
+                request_serializer=warden__pb2.IndexRequest.SerializeToString,
+                response_deserializer=warden__pb2.IndexResponse.FromString,
+                _registered_method=True)
+        self.GetIndexStats = channel.unary_unary(
+                '/warden.WardenService/GetIndexStats',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.IndexStats.FromString,
+                _registered_method=True)
+        self.ClearIndex = channel.unary_unary(
+                '/warden.WardenService/ClearIndex',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.IndexResponse.FromString,
+                _registered_method=True)
+        self.DiscoverFiles = channel.unary_unary(
+                '/warden.WardenService/DiscoverFiles',
+                request_serializer=warden__pb2.DiscoverRequest.SerializeToString,
+                response_deserializer=warden__pb2.DiscoverResponse.FromString,
+                _registered_method=True)
+        self.GetFilesByType = channel.unary_unary(
+                '/warden.WardenService/GetFilesByType',
+                request_serializer=warden__pb2.FileTypeFilter.SerializeToString,
+                response_deserializer=warden__pb2.DiscoverResponse.FromString,
+                _registered_method=True)
+        self.DetectFrameworks = channel.unary_unary(
+                '/warden.WardenService/DetectFrameworks',
+                request_serializer=warden__pb2.DiscoverRequest.SerializeToString,
+                response_deserializer=warden__pb2.DiscoverResponse.FromString,
+                _registered_method=True)
+        self.GetProjectStats = channel.unary_unary(
+                '/warden.WardenService/GetProjectStats',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.ProjectStats.FromString,
+                _registered_method=True)
         self.AnalyzeWithLlm = channel.unary_unary(
                 '/warden.WardenService/AnalyzeWithLlm',
                 request_serializer=warden__pb2.LlmAnalyzeRequest.SerializeToString,
@@ -60,6 +192,71 @@ class WardenServiceStub(object):
                 '/warden.WardenService/ClassifyCode',
                 request_serializer=warden__pb2.ClassifyRequest.SerializeToString,
                 response_deserializer=warden__pb2.ClassifyResult.FromString,
+                _registered_method=True)
+        self.TestLlmProvider = channel.unary_unary(
+                '/warden.WardenService/TestLlmProvider',
+                request_serializer=warden__pb2.TestProviderRequest.SerializeToString,
+                response_deserializer=warden__pb2.TestProviderResponse.FromString,
+                _registered_method=True)
+        self.GetAvailableModels = channel.unary_unary(
+                '/warden.WardenService/GetAvailableModels',
+                request_serializer=warden__pb2.AvailableModelsRequest.SerializeToString,
+                response_deserializer=warden__pb2.AvailableModelsResponse.FromString,
+                _registered_method=True)
+        self.ValidateLlmConfig = channel.unary_unary(
+                '/warden.WardenService/ValidateLlmConfig',
+                request_serializer=warden__pb2.ValidateLlmConfigRequest.SerializeToString,
+                response_deserializer=warden__pb2.ValidateLlmConfigResponse.FromString,
+                _registered_method=True)
+        self.AnalyzeCleanup = channel.unary_unary(
+                '/warden.WardenService/AnalyzeCleanup',
+                request_serializer=warden__pb2.CleanupRequest.SerializeToString,
+                response_deserializer=warden__pb2.CleanupResult.FromString,
+                _registered_method=True)
+        self.GetCleanupSuggestions = channel.unary_unary(
+                '/warden.WardenService/GetCleanupSuggestions',
+                request_serializer=warden__pb2.CleanupRequest.SerializeToString,
+                response_deserializer=warden__pb2.CleanupResult.FromString,
+                _registered_method=True)
+        self.GetCleanupScore = channel.unary_unary(
+                '/warden.WardenService/GetCleanupScore',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.CleanupScoreResponse.FromString,
+                _registered_method=True)
+        self.GetFortificationSuggestions = channel.unary_unary(
+                '/warden.WardenService/GetFortificationSuggestions',
+                request_serializer=warden__pb2.FortificationRequest.SerializeToString,
+                response_deserializer=warden__pb2.FortificationResult.FromString,
+                _registered_method=True)
+        self.ApplyFortification = channel.unary_unary(
+                '/warden.WardenService/ApplyFortification',
+                request_serializer=warden__pb2.ApplyFortificationRequest.SerializeToString,
+                response_deserializer=warden__pb2.ApplyFortificationResponse.FromString,
+                _registered_method=True)
+        self.GetSecurityScore = channel.unary_unary(
+                '/warden.WardenService/GetSecurityScore',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.SecurityScoreResponse.FromString,
+                _registered_method=True)
+        self.AddSuppression = channel.unary_unary(
+                '/warden.WardenService/AddSuppression',
+                request_serializer=warden__pb2.AddSuppressionRequest.SerializeToString,
+                response_deserializer=warden__pb2.AddSuppressionResponse.FromString,
+                _registered_method=True)
+        self.RemoveSuppression = channel.unary_unary(
+                '/warden.WardenService/RemoveSuppression',
+                request_serializer=warden__pb2.RemoveSuppressionRequest.SerializeToString,
+                response_deserializer=warden__pb2.RemoveSuppressionResponse.FromString,
+                _registered_method=True)
+        self.GetSuppressions = channel.unary_unary(
+                '/warden.WardenService/GetSuppressions',
+                request_serializer=warden__pb2.Empty.SerializeToString,
+                response_deserializer=warden__pb2.SuppressionList.FromString,
+                _registered_method=True)
+        self.CheckSuppression = channel.unary_unary(
+                '/warden.WardenService/CheckSuppression',
+                request_serializer=warden__pb2.CheckSuppressionRequest.SerializeToString,
+                response_deserializer=warden__pb2.CheckSuppressionResponse.FromString,
                 _registered_method=True)
         self.GetAvailableFrames = channel.unary_unary(
                 '/warden.WardenService/GetAvailableFrames',
@@ -76,6 +273,16 @@ class WardenServiceStub(object):
                 request_serializer=warden__pb2.Empty.SerializeToString,
                 response_deserializer=warden__pb2.ConfigurationResponse.FromString,
                 _registered_method=True)
+        self.UpdateConfiguration = channel.unary_unary(
+                '/warden.WardenService/UpdateConfiguration',
+                request_serializer=warden__pb2.UpdateConfigRequest.SerializeToString,
+                response_deserializer=warden__pb2.UpdateConfigResponse.FromString,
+                _registered_method=True)
+        self.UpdateFrameStatus = channel.unary_unary(
+                '/warden.WardenService/UpdateFrameStatus',
+                request_serializer=warden__pb2.UpdateFrameStatusRequest.SerializeToString,
+                response_deserializer=warden__pb2.UpdateFrameStatusResponse.FromString,
+                _registered_method=True)
         self.HealthCheck = channel.unary_unary(
                 '/warden.WardenService/HealthCheck',
                 request_serializer=warden__pb2.Empty.SerializeToString,
@@ -90,85 +297,349 @@ class WardenServiceStub(object):
 
 class WardenServiceServicer(object):
     """============================================================================
-    SERVICE DEFINITION
+    SERVICE DEFINITION (51 ENDPOINTS)
     ============================================================================
 
-    ─────────────────────────────────────────────────────────────────────
-    Pipeline Operations
-    ─────────────────────────────────────────────────────────────────────
     """
 
     def ExecutePipeline(self, request, context):
-        """Execute full validation pipeline (sync)
+        """─────────────────────────────────────────────────────────────────────
+        Pipeline Operations (2)
+        ─────────────────────────────────────────────────────────────────────
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ExecutePipelineStream(self, request, context):
-        """Execute pipeline with real-time streaming events
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAllIssues(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        Issue Management (8)
+        ─────────────────────────────────────────────────────────────────────
         """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetOpenIssues(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetIssueByHash(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ResolveIssue(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SuppressIssue(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReopenIssue(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetIssueHistory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetIssueStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AnalyzeResults(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        Result Analysis (5)
+        ─────────────────────────────────────────────────────────────────────
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetTrends(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetFrameStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSeverityStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetQualityScore(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GenerateHtmlReport(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        Report Generation (4)
+        ─────────────────────────────────────────────────────────────────────
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GeneratePdfReport(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GenerateJsonReport(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetReportStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SearchCode(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        Semantic Search (6)
+        ─────────────────────────────────────────────────────────────────────
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SearchSimilarCode(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SearchByDescription(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def IndexProject(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetIndexStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ClearIndex(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DiscoverFiles(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        File Discovery (4)
+        ─────────────────────────────────────────────────────────────────────
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetFilesByType(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DetectFrameworks(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetProjectStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def AnalyzeWithLlm(self, request, context):
         """─────────────────────────────────────────────────────────────────────
-        LLM Operations
+        LLM Operations (5)
         ─────────────────────────────────────────────────────────────────────
-
-        Analyze code with LLM
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ClassifyCode(self, request, context):
-        """Classify code to determine recommended frames
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def TestLlmProvider(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAvailableModels(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ValidateLlmConfig(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AnalyzeCleanup(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        Cleanup Analysis (3)
+        ─────────────────────────────────────────────────────────────────────
         """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetCleanupSuggestions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetCleanupScore(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetFortificationSuggestions(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        Fortification (3)
+        ─────────────────────────────────────────────────────────────────────
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ApplyFortification(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSecurityScore(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddSuppression(self, request, context):
+        """─────────────────────────────────────────────────────────────────────
+        Suppression (4)
+        ─────────────────────────────────────────────────────────────────────
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RemoveSuppression(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSuppressions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CheckSuppression(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetAvailableFrames(self, request, context):
         """─────────────────────────────────────────────────────────────────────
-        Configuration
+        Configuration (5)
         ─────────────────────────────────────────────────────────────────────
-
-        Get available validation frames
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetAvailableProviders(self, request, context):
-        """Get available LLM providers
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetConfiguration(self, request, context):
-        """Get full configuration
-        """
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateConfiguration(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateFrameStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def HealthCheck(self, request, context):
         """─────────────────────────────────────────────────────────────────────
-        Health & Status
+        Health & Status (2)
         ─────────────────────────────────────────────────────────────────────
-
-        Health check
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetStatus(self, request, context):
-        """Get server status
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -186,6 +657,141 @@ def add_WardenServiceServicer_to_server(servicer, server):
                     request_deserializer=warden__pb2.PipelineRequest.FromString,
                     response_serializer=warden__pb2.PipelineEvent.SerializeToString,
             ),
+            'GetAllIssues': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAllIssues,
+                    request_deserializer=warden__pb2.IssueFilter.FromString,
+                    response_serializer=warden__pb2.IssueList.SerializeToString,
+            ),
+            'GetOpenIssues': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetOpenIssues,
+                    request_deserializer=warden__pb2.IssueFilter.FromString,
+                    response_serializer=warden__pb2.IssueList.SerializeToString,
+            ),
+            'GetIssueByHash': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetIssueByHash,
+                    request_deserializer=warden__pb2.IssueHashRequest.FromString,
+                    response_serializer=warden__pb2.Issue.SerializeToString,
+            ),
+            'ResolveIssue': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResolveIssue,
+                    request_deserializer=warden__pb2.IssueActionRequest.FromString,
+                    response_serializer=warden__pb2.IssueActionResponse.SerializeToString,
+            ),
+            'SuppressIssue': grpc.unary_unary_rpc_method_handler(
+                    servicer.SuppressIssue,
+                    request_deserializer=warden__pb2.IssueActionRequest.FromString,
+                    response_serializer=warden__pb2.IssueActionResponse.SerializeToString,
+            ),
+            'ReopenIssue': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReopenIssue,
+                    request_deserializer=warden__pb2.IssueActionRequest.FromString,
+                    response_serializer=warden__pb2.IssueActionResponse.SerializeToString,
+            ),
+            'GetIssueHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetIssueHistory,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.IssueHistory.SerializeToString,
+            ),
+            'GetIssueStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetIssueStats,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.IssueStats.SerializeToString,
+            ),
+            'AnalyzeResults': grpc.unary_unary_rpc_method_handler(
+                    servicer.AnalyzeResults,
+                    request_deserializer=warden__pb2.AnalyzeResultsRequest.FromString,
+                    response_serializer=warden__pb2.AnalysisResult.SerializeToString,
+            ),
+            'GetTrends': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTrends,
+                    request_deserializer=warden__pb2.TrendRequest.FromString,
+                    response_serializer=warden__pb2.TrendResponse.SerializeToString,
+            ),
+            'GetFrameStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetFrameStats,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.FrameStats.SerializeToString,
+            ),
+            'GetSeverityStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSeverityStats,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.SeverityStats.SerializeToString,
+            ),
+            'GetQualityScore': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetQualityScore,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.QualityScoreResponse.SerializeToString,
+            ),
+            'GenerateHtmlReport': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenerateHtmlReport,
+                    request_deserializer=warden__pb2.ReportRequest.FromString,
+                    response_serializer=warden__pb2.ReportResponse.SerializeToString,
+            ),
+            'GeneratePdfReport': grpc.unary_unary_rpc_method_handler(
+                    servicer.GeneratePdfReport,
+                    request_deserializer=warden__pb2.ReportRequest.FromString,
+                    response_serializer=warden__pb2.ReportResponse.SerializeToString,
+            ),
+            'GenerateJsonReport': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenerateJsonReport,
+                    request_deserializer=warden__pb2.ReportRequest.FromString,
+                    response_serializer=warden__pb2.ReportResponse.SerializeToString,
+            ),
+            'GetReportStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetReportStatus,
+                    request_deserializer=warden__pb2.ReportStatusRequest.FromString,
+                    response_serializer=warden__pb2.ReportStatusResponse.SerializeToString,
+            ),
+            'SearchCode': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchCode,
+                    request_deserializer=warden__pb2.SearchRequest.FromString,
+                    response_serializer=warden__pb2.SearchResult.SerializeToString,
+            ),
+            'SearchSimilarCode': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchSimilarCode,
+                    request_deserializer=warden__pb2.SimilarCodeRequest.FromString,
+                    response_serializer=warden__pb2.SearchResult.SerializeToString,
+            ),
+            'SearchByDescription': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchByDescription,
+                    request_deserializer=warden__pb2.SearchRequest.FromString,
+                    response_serializer=warden__pb2.SearchResult.SerializeToString,
+            ),
+            'IndexProject': grpc.unary_unary_rpc_method_handler(
+                    servicer.IndexProject,
+                    request_deserializer=warden__pb2.IndexRequest.FromString,
+                    response_serializer=warden__pb2.IndexResponse.SerializeToString,
+            ),
+            'GetIndexStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetIndexStats,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.IndexStats.SerializeToString,
+            ),
+            'ClearIndex': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClearIndex,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.IndexResponse.SerializeToString,
+            ),
+            'DiscoverFiles': grpc.unary_unary_rpc_method_handler(
+                    servicer.DiscoverFiles,
+                    request_deserializer=warden__pb2.DiscoverRequest.FromString,
+                    response_serializer=warden__pb2.DiscoverResponse.SerializeToString,
+            ),
+            'GetFilesByType': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetFilesByType,
+                    request_deserializer=warden__pb2.FileTypeFilter.FromString,
+                    response_serializer=warden__pb2.DiscoverResponse.SerializeToString,
+            ),
+            'DetectFrameworks': grpc.unary_unary_rpc_method_handler(
+                    servicer.DetectFrameworks,
+                    request_deserializer=warden__pb2.DiscoverRequest.FromString,
+                    response_serializer=warden__pb2.DiscoverResponse.SerializeToString,
+            ),
+            'GetProjectStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetProjectStats,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.ProjectStats.SerializeToString,
+            ),
             'AnalyzeWithLlm': grpc.unary_unary_rpc_method_handler(
                     servicer.AnalyzeWithLlm,
                     request_deserializer=warden__pb2.LlmAnalyzeRequest.FromString,
@@ -195,6 +801,71 @@ def add_WardenServiceServicer_to_server(servicer, server):
                     servicer.ClassifyCode,
                     request_deserializer=warden__pb2.ClassifyRequest.FromString,
                     response_serializer=warden__pb2.ClassifyResult.SerializeToString,
+            ),
+            'TestLlmProvider': grpc.unary_unary_rpc_method_handler(
+                    servicer.TestLlmProvider,
+                    request_deserializer=warden__pb2.TestProviderRequest.FromString,
+                    response_serializer=warden__pb2.TestProviderResponse.SerializeToString,
+            ),
+            'GetAvailableModels': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAvailableModels,
+                    request_deserializer=warden__pb2.AvailableModelsRequest.FromString,
+                    response_serializer=warden__pb2.AvailableModelsResponse.SerializeToString,
+            ),
+            'ValidateLlmConfig': grpc.unary_unary_rpc_method_handler(
+                    servicer.ValidateLlmConfig,
+                    request_deserializer=warden__pb2.ValidateLlmConfigRequest.FromString,
+                    response_serializer=warden__pb2.ValidateLlmConfigResponse.SerializeToString,
+            ),
+            'AnalyzeCleanup': grpc.unary_unary_rpc_method_handler(
+                    servicer.AnalyzeCleanup,
+                    request_deserializer=warden__pb2.CleanupRequest.FromString,
+                    response_serializer=warden__pb2.CleanupResult.SerializeToString,
+            ),
+            'GetCleanupSuggestions': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetCleanupSuggestions,
+                    request_deserializer=warden__pb2.CleanupRequest.FromString,
+                    response_serializer=warden__pb2.CleanupResult.SerializeToString,
+            ),
+            'GetCleanupScore': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetCleanupScore,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.CleanupScoreResponse.SerializeToString,
+            ),
+            'GetFortificationSuggestions': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetFortificationSuggestions,
+                    request_deserializer=warden__pb2.FortificationRequest.FromString,
+                    response_serializer=warden__pb2.FortificationResult.SerializeToString,
+            ),
+            'ApplyFortification': grpc.unary_unary_rpc_method_handler(
+                    servicer.ApplyFortification,
+                    request_deserializer=warden__pb2.ApplyFortificationRequest.FromString,
+                    response_serializer=warden__pb2.ApplyFortificationResponse.SerializeToString,
+            ),
+            'GetSecurityScore': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSecurityScore,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.SecurityScoreResponse.SerializeToString,
+            ),
+            'AddSuppression': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddSuppression,
+                    request_deserializer=warden__pb2.AddSuppressionRequest.FromString,
+                    response_serializer=warden__pb2.AddSuppressionResponse.SerializeToString,
+            ),
+            'RemoveSuppression': grpc.unary_unary_rpc_method_handler(
+                    servicer.RemoveSuppression,
+                    request_deserializer=warden__pb2.RemoveSuppressionRequest.FromString,
+                    response_serializer=warden__pb2.RemoveSuppressionResponse.SerializeToString,
+            ),
+            'GetSuppressions': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSuppressions,
+                    request_deserializer=warden__pb2.Empty.FromString,
+                    response_serializer=warden__pb2.SuppressionList.SerializeToString,
+            ),
+            'CheckSuppression': grpc.unary_unary_rpc_method_handler(
+                    servicer.CheckSuppression,
+                    request_deserializer=warden__pb2.CheckSuppressionRequest.FromString,
+                    response_serializer=warden__pb2.CheckSuppressionResponse.SerializeToString,
             ),
             'GetAvailableFrames': grpc.unary_unary_rpc_method_handler(
                     servicer.GetAvailableFrames,
@@ -210,6 +881,16 @@ def add_WardenServiceServicer_to_server(servicer, server):
                     servicer.GetConfiguration,
                     request_deserializer=warden__pb2.Empty.FromString,
                     response_serializer=warden__pb2.ConfigurationResponse.SerializeToString,
+            ),
+            'UpdateConfiguration': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateConfiguration,
+                    request_deserializer=warden__pb2.UpdateConfigRequest.FromString,
+                    response_serializer=warden__pb2.UpdateConfigResponse.SerializeToString,
+            ),
+            'UpdateFrameStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateFrameStatus,
+                    request_deserializer=warden__pb2.UpdateFrameStatusRequest.FromString,
+                    response_serializer=warden__pb2.UpdateFrameStatusResponse.SerializeToString,
             ),
             'HealthCheck': grpc.unary_unary_rpc_method_handler(
                     servicer.HealthCheck,
@@ -231,12 +912,9 @@ def add_WardenServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class WardenService(object):
     """============================================================================
-    SERVICE DEFINITION
+    SERVICE DEFINITION (51 ENDPOINTS)
     ============================================================================
 
-    ─────────────────────────────────────────────────────────────────────
-    Pipeline Operations
-    ─────────────────────────────────────────────────────────────────────
     """
 
     @staticmethod
@@ -294,6 +972,735 @@ class WardenService(object):
             _registered_method=True)
 
     @staticmethod
+    def GetAllIssues(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetAllIssues',
+            warden__pb2.IssueFilter.SerializeToString,
+            warden__pb2.IssueList.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetOpenIssues(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetOpenIssues',
+            warden__pb2.IssueFilter.SerializeToString,
+            warden__pb2.IssueList.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetIssueByHash(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetIssueByHash',
+            warden__pb2.IssueHashRequest.SerializeToString,
+            warden__pb2.Issue.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResolveIssue(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/ResolveIssue',
+            warden__pb2.IssueActionRequest.SerializeToString,
+            warden__pb2.IssueActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SuppressIssue(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/SuppressIssue',
+            warden__pb2.IssueActionRequest.SerializeToString,
+            warden__pb2.IssueActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReopenIssue(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/ReopenIssue',
+            warden__pb2.IssueActionRequest.SerializeToString,
+            warden__pb2.IssueActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetIssueHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetIssueHistory',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.IssueHistory.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetIssueStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetIssueStats',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.IssueStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AnalyzeResults(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/AnalyzeResults',
+            warden__pb2.AnalyzeResultsRequest.SerializeToString,
+            warden__pb2.AnalysisResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTrends(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetTrends',
+            warden__pb2.TrendRequest.SerializeToString,
+            warden__pb2.TrendResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetFrameStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetFrameStats',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.FrameStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSeverityStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetSeverityStats',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.SeverityStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetQualityScore(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetQualityScore',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.QualityScoreResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GenerateHtmlReport(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GenerateHtmlReport',
+            warden__pb2.ReportRequest.SerializeToString,
+            warden__pb2.ReportResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GeneratePdfReport(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GeneratePdfReport',
+            warden__pb2.ReportRequest.SerializeToString,
+            warden__pb2.ReportResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GenerateJsonReport(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GenerateJsonReport',
+            warden__pb2.ReportRequest.SerializeToString,
+            warden__pb2.ReportResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetReportStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetReportStatus',
+            warden__pb2.ReportStatusRequest.SerializeToString,
+            warden__pb2.ReportStatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchCode(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/SearchCode',
+            warden__pb2.SearchRequest.SerializeToString,
+            warden__pb2.SearchResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchSimilarCode(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/SearchSimilarCode',
+            warden__pb2.SimilarCodeRequest.SerializeToString,
+            warden__pb2.SearchResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchByDescription(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/SearchByDescription',
+            warden__pb2.SearchRequest.SerializeToString,
+            warden__pb2.SearchResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def IndexProject(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/IndexProject',
+            warden__pb2.IndexRequest.SerializeToString,
+            warden__pb2.IndexResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetIndexStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetIndexStats',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.IndexStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClearIndex(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/ClearIndex',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.IndexResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DiscoverFiles(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/DiscoverFiles',
+            warden__pb2.DiscoverRequest.SerializeToString,
+            warden__pb2.DiscoverResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetFilesByType(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetFilesByType',
+            warden__pb2.FileTypeFilter.SerializeToString,
+            warden__pb2.DiscoverResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DetectFrameworks(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/DetectFrameworks',
+            warden__pb2.DiscoverRequest.SerializeToString,
+            warden__pb2.DiscoverResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetProjectStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetProjectStats',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.ProjectStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def AnalyzeWithLlm(request,
             target,
             options=(),
@@ -337,6 +1744,357 @@ class WardenService(object):
             '/warden.WardenService/ClassifyCode',
             warden__pb2.ClassifyRequest.SerializeToString,
             warden__pb2.ClassifyResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TestLlmProvider(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/TestLlmProvider',
+            warden__pb2.TestProviderRequest.SerializeToString,
+            warden__pb2.TestProviderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAvailableModels(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetAvailableModels',
+            warden__pb2.AvailableModelsRequest.SerializeToString,
+            warden__pb2.AvailableModelsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ValidateLlmConfig(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/ValidateLlmConfig',
+            warden__pb2.ValidateLlmConfigRequest.SerializeToString,
+            warden__pb2.ValidateLlmConfigResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AnalyzeCleanup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/AnalyzeCleanup',
+            warden__pb2.CleanupRequest.SerializeToString,
+            warden__pb2.CleanupResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetCleanupSuggestions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetCleanupSuggestions',
+            warden__pb2.CleanupRequest.SerializeToString,
+            warden__pb2.CleanupResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetCleanupScore(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetCleanupScore',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.CleanupScoreResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetFortificationSuggestions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetFortificationSuggestions',
+            warden__pb2.FortificationRequest.SerializeToString,
+            warden__pb2.FortificationResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ApplyFortification(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/ApplyFortification',
+            warden__pb2.ApplyFortificationRequest.SerializeToString,
+            warden__pb2.ApplyFortificationResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSecurityScore(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetSecurityScore',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.SecurityScoreResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddSuppression(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/AddSuppression',
+            warden__pb2.AddSuppressionRequest.SerializeToString,
+            warden__pb2.AddSuppressionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RemoveSuppression(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/RemoveSuppression',
+            warden__pb2.RemoveSuppressionRequest.SerializeToString,
+            warden__pb2.RemoveSuppressionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSuppressions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/GetSuppressions',
+            warden__pb2.Empty.SerializeToString,
+            warden__pb2.SuppressionList.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CheckSuppression(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/CheckSuppression',
+            warden__pb2.CheckSuppressionRequest.SerializeToString,
+            warden__pb2.CheckSuppressionResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -418,6 +2176,60 @@ class WardenService(object):
             '/warden.WardenService/GetConfiguration',
             warden__pb2.Empty.SerializeToString,
             warden__pb2.ConfigurationResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateConfiguration(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/UpdateConfiguration',
+            warden__pb2.UpdateConfigRequest.SerializeToString,
+            warden__pb2.UpdateConfigResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateFrameStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/warden.WardenService/UpdateFrameStatus',
+            warden__pb2.UpdateFrameStatusRequest.SerializeToString,
+            warden__pb2.UpdateFrameStatusResponse.FromString,
             options,
             channel_credentials,
             insecure,

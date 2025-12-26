@@ -10,6 +10,7 @@ Usage:
     await server.start()
 """
 
-from .server import GrpcServer, WardenServicer
+from .server import GrpcServer
+from .servicer import WardenServicer
 
 __all__ = ["GrpcServer", "WardenServicer"]
