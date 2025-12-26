@@ -1,0 +1,83 @@
+name: "Environment Security Validator"
+id: "env-security"
+version: "1.0.0"
+author: "Warden Security Team"
+description: "Detects environment variable security issues and best practices violations"
+
+# Frame classification
+category: "global"
+priority: "critical"
+scope: "file_level"
+is_blocker: true
+
+# Applicability
+applicability:
+  - language: "python"
+  - language: "javascript"
+  - language: "typescript"
+
+# Warden version
+min_warden_version: "1.0.0"
+
+# Configuration schema (will be auto-generated!)
+config_schema:
+  enabled:
+    type: "boolean"
+    default: true
+    description: "Enable environment security validation"
+
+  check_hardcoded_credentials:
+    type: "boolean"
+    default: true
+    description: "Detect hardcoded API keys, tokens, and secrets"
+
+  check_missing_env_validation:
+    type: "boolean"
+    default: true
+    description: "Ensure environment variables are validated before use"
+
+  check_insecure_defaults:
+    type: "boolean"
+    default: true
+    description: "Detect insecure default values for sensitive configs"
+
+  sensitive_patterns:
+    type: "array"
+    default:
+      - "API_KEY"
+      - "SECRET"
+      - "TOKEN"
+      - "PASSWORD"
+      - "PRIVATE_KEY"
+      - "AWS_"
+      - "AZURE_"
+      - "GOOGLE_"
+    description: "Patterns that indicate sensitive environment variables"
+
+  allowed_default_values:
+    type: "array"
+    default:
+      - "localhost"
+      - "127.0.0.1"
+      - "0.0.0.0"
+      - "development"
+      - "test"
+    description: "Safe default values for non-sensitive configs"
+
+  severity_level:
+    type: "string"
+    default: "critical"
+    description: "Default severity for security findings"
+
+  fail_on_missing_dotenv:
+    type: "boolean"
+    default: false
+    description: "Fail if .env.example is missing but env vars are used"
+
+# Tags for discoverability
+tags:
+  - "security"
+  - "environment"
+  - "credentials"
+  - "best-practices"
+  - "production-ready"

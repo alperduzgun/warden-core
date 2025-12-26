@@ -460,42 +460,70 @@ class FrameRegistry:
 
     def _discover_local_frames(self) -> List[Type[ValidationFrame]]:
         """
-        Discover frames from ~/.warden/frames/.
+        Discover frames from local directories.
+
+        Searches in TWO locations:
+        1. Global: ~/.warden/frames/ (for all projects)
+        2. Project-specific: <cwd>/.warden/frames/ (for current project only)
 
         Each frame should be in its own directory with:
         - frame.py (contains ValidationFrame subclass)
         - frame.yaml (metadata)
 
         Returns:
-            List of ValidationFrame classes from local directory
+            List of ValidationFrame classes from local directories
         """
         frames: List[Type[ValidationFrame]] = []
-        frames_dir = Path.home() / ".warden" / "frames"
 
-        if not frames_dir.exists():
-            logger.debug("local_frames_directory_not_found", path=str(frames_dir))
-            return frames
+        # 1. Global frames directory (~/.warden/frames/)
+        global_frames_dir = Path.home() / ".warden" / "frames"
 
-        # Scan for frame directories
-        for frame_path in frames_dir.iterdir():
-            if not frame_path.is_dir():
+        # 2. Project-specific frames directory (<cwd>/.warden/frames/)
+        project_frames_dir = Path.cwd() / ".warden" / "frames"
+
+        # Scan both locations
+        search_paths = [
+            ("global", global_frames_dir),
+            ("project", project_frames_dir),
+        ]
+
+        for source, frames_dir in search_paths:
+            if not frames_dir.exists():
+                logger.debug(
+                    "local_frames_directory_not_found",
+                    source=source,
+                    path=str(frames_dir),
+                )
                 continue
 
-            try:
-                frame_class = self._load_local_frame(frame_path)
-                if frame_class:
-                    frames.append(frame_class)
-                    logger.info(
-                        "local_frame_loaded",
+            logger.debug(
+                "scanning_local_frames",
+                source=source,
+                path=str(frames_dir),
+            )
+
+            # Scan for frame directories
+            for frame_path in frames_dir.iterdir():
+                if not frame_path.is_dir():
+                    continue
+
+                try:
+                    frame_class = self._load_local_frame(frame_path)
+                    if frame_class:
+                        frames.append(frame_class)
+                        logger.info(
+                            "local_frame_loaded",
+                            source=source,
+                            path=str(frame_path),
+                            frame=frame_class.__name__,
+                        )
+                except Exception as e:
+                    logger.error(
+                        "local_frame_load_failed",
+                        source=source,
                         path=str(frame_path),
-                        frame=frame_class.__name__,
+                        error=str(e),
                     )
-            except Exception as e:
-                logger.error(
-                    "local_frame_load_failed",
-                    path=str(frame_path),
-                    error=str(e),
-                )
 
         return frames
 
