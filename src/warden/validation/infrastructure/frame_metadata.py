@@ -124,15 +124,15 @@ class FrameMetadata:
         if self.category not in valid_categories:
             errors.append(
                 f"Invalid category: {self.category}. "
-                f"Must be one of: {', '.join(valid_categories)}"
+                f"Must be one of: {', '.join(str(c) for c in valid_categories)}"
             )
 
-        # Validate priority
-        valid_priorities = [pri.value for pri in FramePriority]
-        if self.priority not in valid_priorities:
+        # Validate priority (FramePriority uses int values, but YAML uses string names)
+        valid_priority_names = [pri.name.lower() for pri in FramePriority]
+        if self.priority.lower() not in valid_priority_names:
             errors.append(
                 f"Invalid priority: {self.priority}. "
-                f"Must be one of: {', '.join(valid_priorities)}"
+                f"Must be one of: {', '.join(valid_priority_names)}"
             )
 
         # Validate scope
@@ -140,7 +140,7 @@ class FrameMetadata:
         if self.scope not in valid_scopes:
             errors.append(
                 f"Invalid scope: {self.scope}. "
-                f"Must be one of: {', '.join(valid_scopes)}"
+                f"Must be one of: {', '.join(str(s) for s in valid_scopes)}"
             )
 
         # Validate ID format (kebab-case)
@@ -163,7 +163,7 @@ class FrameMetadata:
             for i, app in enumerate(self.applicability):
                 if not isinstance(app, dict):
                     errors.append(
-                        f"Invalid applicability[{i}]: Must be a dictionary"
+                        f"Invalid applicability[{i}]: Must be a dictionary with 'language' or 'framework' field"
                     )
                     continue
 
@@ -171,6 +171,15 @@ class FrameMetadata:
                     errors.append(
                         f"Invalid applicability[{i}]: Must have 'language' or 'framework' field"
                     )
+
+        # Validate tags (should be list of strings)
+        if self.tags:
+            if not isinstance(self.tags, list):
+                errors.append(f"Invalid tags: Must be a list of strings")
+            else:
+                for i, tag in enumerate(self.tags):
+                    if not isinstance(tag, str):
+                        errors.append(f"Invalid tags[{i}]: Must be a string, got {type(tag).__name__}")
 
         if errors:
             raise ValueError(

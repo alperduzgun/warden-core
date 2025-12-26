@@ -61,6 +61,7 @@ class FrameRegistry:
         """Initialize frame registry."""
         self.registered_frames: Dict[str, Type[ValidationFrame]] = {}
         self.frame_metadata: Dict[str, FrameMetadata] = {}
+        self._config_cache: Dict[str, Dict[str, Any]] = {}  # Cache for merged configs
 
     def discover_all(self) -> List[Type[ValidationFrame]]:
         """
@@ -672,6 +673,122 @@ class FrameRegistry:
                 )
 
         return unique_frames
+
+    def get_frame_config(
+        self, frame_id: str, user_config: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
+        """
+        Get merged frame configuration (defaults from metadata + user overrides).
+
+        Merges configuration from multiple sources:
+        1. Frame metadata (frame.yaml config_schema defaults)
+        2. User configuration (.warden/config.yaml frames_config)
+
+        Args:
+            frame_id: Frame identifier
+            user_config: Optional user configuration from .warden/config.yaml
+
+        Returns:
+            Merged configuration dictionary
+
+        Example:
+            >>> # frame.yaml
+            >>> config_schema:
+            >>>   enabled:
+            >>>     type: "boolean"
+            >>>     default: true
+            >>>   check_ssl:
+            >>>     type: "boolean"
+            >>>     default: true
+            >>>
+            >>> # .warden/config.yaml
+            >>> frames_config:
+            >>>   redis-security:
+            >>>     check_ssl: false  # Override
+            >>>
+            >>> # Result
+            >>> {"enabled": true, "check_ssl": false}
+        """
+        # Check cache first
+        cache_key = f"{frame_id}:{hash(str(user_config))}"
+        if cache_key in self._config_cache:
+            return self._config_cache[cache_key].copy()
+
+        # Start with empty config
+        merged_config: Dict[str, Any] = {}
+
+        # 1. Get defaults from frame metadata (if available)
+        if frame_id in self.frame_metadata:
+            metadata = self.frame_metadata[frame_id]
+            default_config = self._generate_default_config(metadata)
+            merged_config.update(default_config)
+
+            logger.debug(
+                "frame_default_config_generated",
+                frame_id=frame_id,
+                defaults=default_config,
+            )
+
+        # 2. Merge user configuration (overrides defaults)
+        if user_config:
+            merged_config.update(user_config)
+
+            logger.debug(
+                "frame_config_merged",
+                frame_id=frame_id,
+                user_overrides=user_config,
+                final_config=merged_config,
+            )
+
+        # Cache the result
+        self._config_cache[cache_key] = merged_config.copy()
+
+        return merged_config
+
+    def _generate_default_config(self, metadata: FrameMetadata) -> Dict[str, Any]:
+        """
+        Generate default configuration from frame metadata schema.
+
+        Extracts default values from config_schema in frame.yaml.
+
+        Args:
+            metadata: Frame metadata with config_schema
+
+        Returns:
+            Default configuration dictionary
+
+        Example:
+            >>> # frame.yaml
+            >>> config_schema:
+            >>>   enabled:
+            >>>     type: "boolean"
+            >>>     default: true
+            >>>   check_ssl:
+            >>>     type: "boolean"
+            >>>     default: true
+            >>>
+            >>> # Generated config
+            >>> {"enabled": true, "check_ssl": true}
+        """
+        default_config: Dict[str, Any] = {}
+
+        # Always default to enabled unless explicitly configured
+        default_config["enabled"] = True
+
+        # Extract defaults from config_schema
+        if metadata.config_schema:
+            for field_name, field_schema in metadata.config_schema.items():
+                if isinstance(field_schema, dict) and "default" in field_schema:
+                    default_config[field_name] = field_schema["default"]
+
+        logger.debug(
+            "default_config_generated",
+            frame_id=metadata.id,
+            schema_fields=len(metadata.config_schema),
+            defaults=default_config,
+        )
+
+        return default_config
 
 
 # Singleton instance
