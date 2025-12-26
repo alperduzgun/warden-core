@@ -254,13 +254,22 @@ class WardenServicer(warden_pb2_grpc.WardenServiceServicer if warden_pb2_grpc el
         try:
             result = await self.bridge.get_available_frames()
 
+            # Handle both dict and list formats from bridge
+            frames = result if isinstance(result, list) else result.get("frames", [])
+
             response = warden_pb2.FrameList()
-            for frame in result.get("frames", []):
+            for frame in frames:
+                # Handle priority as int or string
+                priority = frame.get("priority", 0)
+                if isinstance(priority, str):
+                    priority_map = {"critical": 1, "high": 2, "medium": 3, "low": 4, "info": 5}
+                    priority = priority_map.get(priority.lower(), 0)
+
                 response.frames.append(warden_pb2.Frame(
                     id=frame.get("id", ""),
                     name=frame.get("name", ""),
                     description=frame.get("description", ""),
-                    priority=frame.get("priority", 0),
+                    priority=priority,
                     is_blocker=frame.get("is_blocker", False),
                     enabled=frame.get("enabled", True),
                     tags=frame.get("tags", [])
@@ -279,17 +288,23 @@ class WardenServicer(warden_pb2_grpc.WardenServiceServicer if warden_pb2_grpc el
         try:
             result = await self.bridge.get_available_providers()
 
-            response = warden_pb2.ProviderList(
-                default_provider=result.get("default", "")
-            )
+            # Handle both dict and list formats from bridge
+            if isinstance(result, list):
+                providers = result
+                default_provider = ""
+            else:
+                providers = result.get("providers", [])
+                default_provider = result.get("default", "")
 
-            for provider in result.get("providers", []):
+            response = warden_pb2.ProviderList(default_provider=default_provider)
+
+            for provider in providers:
                 response.providers.append(warden_pb2.Provider(
-                    id=provider.get("id", ""),
+                    id=provider.get("id", provider.get("name", "")),
                     name=provider.get("name", ""),
-                    available=provider.get("available", False),
+                    available=provider.get("available", True),
                     is_default=provider.get("is_default", False),
-                    status=provider.get("status", "not_configured")
+                    status=provider.get("status", "ready")
                 ))
 
             return response
@@ -305,7 +320,7 @@ class WardenServicer(warden_pb2_grpc.WardenServiceServicer if warden_pb2_grpc el
         try:
             config = await self.bridge.get_config()
             frames = await self.bridge.get_available_frames()
-            providers = await self.bridge.get_available_providers()
+            providers_result = await self.bridge.get_available_providers()
 
             response = warden_pb2.ConfigurationResponse(
                 project_root=str(self.bridge.project_root),
@@ -313,23 +328,31 @@ class WardenServicer(warden_pb2_grpc.WardenServiceServicer if warden_pb2_grpc el
                 active_profile=config.get("active_profile", "default")
             )
 
-            # Add frames
-            for frame in frames.get("frames", []):
+            # Add frames - handle both dict and list formats
+            frames_list = frames if isinstance(frames, list) else frames.get("frames", [])
+            for frame in frames_list:
+                # Handle priority as int or string
+                priority = frame.get("priority", 0)
+                if isinstance(priority, str):
+                    priority_map = {"critical": 1, "high": 2, "medium": 3, "low": 4, "info": 5}
+                    priority = priority_map.get(priority.lower(), 0)
+
                 response.available_frames.frames.append(warden_pb2.Frame(
                     id=frame.get("id", ""),
                     name=frame.get("name", ""),
                     description=frame.get("description", ""),
-                    priority=frame.get("priority", 0),
+                    priority=priority,
                     is_blocker=frame.get("is_blocker", False),
                     enabled=frame.get("enabled", True)
                 ))
 
-            # Add providers
-            for provider in providers.get("providers", []):
+            # Add providers - handle both dict and list formats
+            providers = providers_result if isinstance(providers_result, list) else providers_result.get("providers", [])
+            for provider in providers:
                 response.available_providers.providers.append(warden_pb2.Provider(
-                    id=provider.get("id", ""),
+                    id=provider.get("id", provider.get("name", "")),
                     name=provider.get("name", ""),
-                    available=provider.get("available", False),
+                    available=provider.get("available", True),
                     is_default=provider.get("is_default", False)
                 ))
 
