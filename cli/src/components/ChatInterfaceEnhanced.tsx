@@ -435,19 +435,27 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
     );
   }
 
-  // Show file picker
-  if (showFilePicker && filteredFiles.length > 0) {
+  // Show file picker - Using FileBrowser component for better UX
+  if (showFilePicker) {
     return (
       <Box flexDirection="column" height="100%">
         <Box borderStyle="double" borderColor="cyan" paddingX={1} marginBottom={1}>
           <Text bold>📂 Select File {fileSearchQuery && `(filtering: "${fileSearchQuery}")`}</Text>
         </Box>
-        <Box marginBottom={1} paddingX={1}>
-          <Text dimColor>
-            Showing {filteredFiles.length} files | Type to filter | ↑↓: Navigate | Enter: Select | Esc: Close
-          </Text>
-        </Box>
-        <SelectInput items={filteredFiles} onSelect={handleFileSelect} limit={15} />
+        {filteredFiles.length > 0 ? (
+          <>
+            <Box marginBottom={1} paddingX={1}>
+              <Text dimColor>
+                Showing {filteredFiles.length} files | Type to filter | ↑↓: Navigate | Enter: Select | Esc: Close
+              </Text>
+            </Box>
+            <SelectInput items={filteredFiles} onSelect={handleFileSelect} limit={15} />
+          </>
+        ) : (
+          <Box paddingX={1}>
+            <Text dimColor>No files found matching "{fileSearchQuery}"</Text>
+          </Box>
+        )}
       </Box>
     );
   }
