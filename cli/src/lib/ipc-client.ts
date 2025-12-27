@@ -183,6 +183,137 @@ export class IPCClient {
   }
 
   /**
+   * Send a streaming command to the IPC server
+   * @param command Command to execute
+   * @param params Command parameters
+   * @param onData Callback for each data chunk
+   */
+  async sendStream<T>(
+    command: string,
+    params: Record<string, unknown>,
+    onData: (data: T) => void
+  ): Promise<void> {
+    if (!this.connected || !this.socket) {
+      throw new Error('Not connected to IPC server');
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.socket) {
+        reject(new Error('Socket not available'));
+        return;
+      }
+
+      const requestId = Date.now();
+
+      // JSON-RPC 2.0 format for streaming
+      const message = JSON.stringify({
+        jsonrpc: '2.0',
+        id: requestId,
+        method: command,
+        params: params
+      });
+
+      logger.debug('ipc_send_stream', {
+        command,
+        request_id: requestId,
+        params_count: Object.keys(params).length,
+      });
+
+      let buffer = '';
+      let streamEnded = false;
+
+      // Stream timeout (longer than normal)
+      const streamTimeout = setTimeout(() => {
+        if (!streamEnded) {
+          this.socket?.off('data', onStreamData);
+          this.socket?.off('error', onError);
+          logger.error('ipc_stream_timeout', {
+            command,
+            request_id: requestId,
+            timeout_ms: 60000,
+          });
+          reject(new Error(`Stream timeout after 60s for command: ${command}`));
+        }
+      }, 60000); // 60s for stream
+
+      const onStreamData = (data: Buffer) => {
+        buffer += data.toString();
+
+        // Process all complete lines
+        while (buffer.includes('\n')) {
+          const lineEnd = buffer.indexOf('\n');
+          const line = buffer.substring(0, lineEnd);
+          buffer = buffer.substring(lineEnd + 1);
+
+          if (line.trim()) {
+            try {
+              const response = JSON.parse(line.trim());
+
+              // Handle JSON-RPC response wrapper
+              if (response.jsonrpc === '2.0' && response.id === requestId) {
+                if (response.error) {
+                  // Error response
+                  streamEnded = true;
+                  clearTimeout(streamTimeout);
+                  this.socket?.off('data', onStreamData);
+                  this.socket?.off('error', onError);
+                  reject(new Error(response.error.message || 'Stream error'));
+                } else if (response.result) {
+                  // Stream event wrapped in result
+                  const event = response.result;
+
+                  logger.debug('ipc_stream_event', {
+                    command,
+                    event_type: event.type,
+                    event_name: event.event,
+                  });
+
+                  // Check for stream end
+                  if (event.type === 'result') {
+                    streamEnded = true;
+                    clearTimeout(streamTimeout);
+                    this.socket?.off('data', onStreamData);
+                    this.socket?.off('error', onError);
+
+                    // Send final result as complete event
+                    onData(event as T);
+                    resolve();
+                  } else {
+                    // Send progress/other events
+                    onData(event as T);
+                  }
+                }
+              }
+            } catch (e) {
+              logger.error('ipc_stream_parse_error', {
+                command,
+                error: e instanceof Error ? e.message : 'Unknown',
+                line_preview: line.substring(0, 100),
+              });
+            }
+          }
+        }
+      };
+
+      const onError = (error: Error) => {
+        streamEnded = true;
+        clearTimeout(streamTimeout);
+        this.socket?.off('data', onStreamData);
+        this.socket?.off('error', onError);
+        logger.error('ipc_stream_socket_error', {
+          command,
+          error: error.message,
+        });
+        reject(error);
+      };
+
+      this.socket.on('data', onStreamData);
+      this.socket.once('error', onError);
+      this.socket.write(message + '\n');
+    });
+  }
+
+  /**
    * Check if connected
    */
   isConnected(): boolean {

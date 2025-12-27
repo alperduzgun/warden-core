@@ -20,9 +20,10 @@ const cli = meow(
     $ warden <command> [options]
 
   Commands
-    chat                Interactive chat mode (default)
+    start <file>        Analyze a file with all validation frames (PRIMARY)
+    chat                Interactive chat mode (default if no command)
     scan <path>         Scan directory or file for issues
-    analyze <file>      Analyze a single file
+    analyze <file>      Analyze a single file (alias for start)
     frames              Show available validation frames
     status              Check Warden backend status
     help                Show this help message
@@ -33,6 +34,7 @@ const cli = meow(
     --help, -h          Show this help message
 
   Examples
+    $ warden start src/main.py
     $ warden scan src/
     $ warden scan src/ --frames security,orphan
     $ warden analyze src/app.py
@@ -55,6 +57,18 @@ const [command, ...args] = cli.input;
 // Main CLI router
 async function main() {
   switch (command) {
+    case 'start':
+    case 'analyze': {
+      const filePath = args[0];
+      if (!filePath) {
+        console.error(`Error: File path required for ${command} command`);
+        console.log(`Usage: warden ${command} <file>`);
+        process.exit(1);
+      }
+      render(<Analyze filePath={filePath} />);
+      break;
+    }
+
     case 'scan': {
       const path = args[0];
       if (!path) {
@@ -64,17 +78,6 @@ async function main() {
       }
       const frames = cli.flags.frames?.split(',');
       render(<Scan path={path} frames={frames} />);
-      break;
-    }
-
-    case 'analyze': {
-      const filePath = args[0];
-      if (!filePath) {
-        console.error('Error: File path required for analyze command');
-        console.log('Usage: warden analyze <file>');
-        process.exit(1);
-      }
-      render(<Analyze filePath={filePath} />);
       break;
     }
 
