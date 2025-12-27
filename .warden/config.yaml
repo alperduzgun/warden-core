@@ -66,7 +66,7 @@ frames_config:
     enabled: true
     # Config auto-generated from frame.yaml!
     # Override only what you need:
-    # check_hardcoded_credentials: false
+    # check_hardcoded_credentia ls: false
     # severity_level: high
   demo-security:
     enabled: true
