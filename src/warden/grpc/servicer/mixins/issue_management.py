@@ -3,10 +3,13 @@ Issue Management Mixin
 
 Endpoints: GetAllIssues, GetOpenIssues, GetIssueByHash, ResolveIssue,
            SuppressIssue, ReopenIssue, GetIssueHistory, GetIssueStats
+
+Uses repository pattern for persistent storage.
 """
 
 import fnmatch
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import grpc
 
@@ -17,11 +20,16 @@ except ImportError:
 
 from warden.grpc.converters import ProtoConverters
 
+if TYPE_CHECKING:
+    from warden.shared.domain.repository import IIssueHistoryRepository
+
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -101,106 +109,145 @@ class IssueManagementMixin:
             return warden_pb2.Issue()
 
     async def ResolveIssue(self, request, context) -> "warden_pb2.IssueActionResponse":
-        """Mark issue as resolved."""
+        """Mark issue as resolved with persistence."""
         logger.info("grpc_resolve_issue", issue_id=request.issue_id)
 
         try:
             if request.issue_id not in self._issues:
                 return warden_pb2.IssueActionResponse(
                     success=False,
-                    error_message=f"Issue {request.issue_id} not found"
+                    error_message=f"Issue {request.issue_id} not found",
                 )
 
             issue = self._issues[request.issue_id]
+            old_state = issue.get("state", "open")
             issue["state"] = "resolved"
             issue["resolved_at"] = datetime.now().isoformat()
             issue["resolved_by"] = request.actor
 
+            # Log state change to history repository
+            await self.history_repository.add_event(
+                issue_id=request.issue_id,
+                event={
+                    "event_type": "state_changed",
+                    "from_state": old_state,
+                    "to_state": "resolved",
+                    "actor": request.actor,
+                    "comment": request.comment if hasattr(request, "comment") else "",
+                },
+            )
+
             return warden_pb2.IssueActionResponse(
-                success=True,
-                issue=ProtoConverters.convert_issue(issue)
+                success=True, issue=ProtoConverters.convert_issue(issue)
             )
 
         except Exception as e:
             logger.error("grpc_resolve_issue_error: %s", str(e))
             return warden_pb2.IssueActionResponse(
-                success=False,
-                error_message=str(e)
+                success=False, error_message=str(e)
             )
 
     async def SuppressIssue(self, request, context) -> "warden_pb2.IssueActionResponse":
-        """Mark issue as suppressed (false positive)."""
+        """Mark issue as suppressed (false positive) with persistence."""
         logger.info("grpc_suppress_issue", issue_id=request.issue_id)
 
         try:
             if request.issue_id not in self._issues:
                 return warden_pb2.IssueActionResponse(
                     success=False,
-                    error_message=f"Issue {request.issue_id} not found"
+                    error_message=f"Issue {request.issue_id} not found",
                 )
 
             issue = self._issues[request.issue_id]
+            old_state = issue.get("state", "open")
             issue["state"] = "suppressed"
             issue["suppressed_at"] = datetime.now().isoformat()
             issue["suppressed_by"] = request.actor
             issue["suppression_reason"] = request.comment
 
+            # Log state change to history repository
+            await self.history_repository.add_event(
+                issue_id=request.issue_id,
+                event={
+                    "event_type": "state_changed",
+                    "from_state": old_state,
+                    "to_state": "suppressed",
+                    "actor": request.actor,
+                    "comment": request.comment,
+                },
+            )
+
             return warden_pb2.IssueActionResponse(
-                success=True,
-                issue=ProtoConverters.convert_issue(issue)
+                success=True, issue=ProtoConverters.convert_issue(issue)
             )
 
         except Exception as e:
             logger.error("grpc_suppress_issue_error: %s", str(e))
             return warden_pb2.IssueActionResponse(
-                success=False,
-                error_message=str(e)
+                success=False, error_message=str(e)
             )
 
     async def ReopenIssue(self, request, context) -> "warden_pb2.IssueActionResponse":
-        """Reopen a resolved/suppressed issue."""
+        """Reopen a resolved/suppressed issue with persistence."""
         logger.info("grpc_reopen_issue", issue_id=request.issue_id)
 
         try:
             if request.issue_id not in self._issues:
                 return warden_pb2.IssueActionResponse(
                     success=False,
-                    error_message=f"Issue {request.issue_id} not found"
+                    error_message=f"Issue {request.issue_id} not found",
                 )
 
             issue = self._issues[request.issue_id]
-            issue["state"] = "reopened"
+            old_state = issue.get("state", "open")
+            issue["state"] = "open"
             issue["resolved_at"] = None
             issue["suppressed_at"] = None
+            issue["reopen_count"] = issue.get("reopen_count", 0) + 1
+
+            # Log state change to history repository
+            await self.history_repository.add_event(
+                issue_id=request.issue_id,
+                event={
+                    "event_type": "state_changed",
+                    "from_state": old_state,
+                    "to_state": "open",
+                    "actor": request.actor,
+                    "comment": request.comment if hasattr(request, "comment") else "",
+                },
+            )
 
             return warden_pb2.IssueActionResponse(
-                success=True,
-                issue=ProtoConverters.convert_issue(issue)
+                success=True, issue=ProtoConverters.convert_issue(issue)
             )
 
         except Exception as e:
             logger.error("grpc_reopen_issue_error: %s", str(e))
             return warden_pb2.IssueActionResponse(
-                success=False,
-                error_message=str(e)
+                success=False, error_message=str(e)
             )
 
     async def GetIssueHistory(self, request, context) -> "warden_pb2.IssueHistory":
-        """Get issue history snapshots."""
+        """Get issue history from repository."""
         logger.info("grpc_get_issue_history")
 
         try:
             response = warden_pb2.IssueHistory()
 
-            for snapshot in self._issue_history[-50:]:
+            # Get events from history repository
+            events = await self.history_repository.get_all_events(limit=50)
+
+            for event in events:
                 proto_snapshot = warden_pb2.IssueSnapshot(
-                    snapshot_id=snapshot.get("snapshot_id", ""),
-                    timestamp=snapshot.get("timestamp", ""),
-                    run_id=snapshot.get("run_id", ""),
-                    total_issues=snapshot.get("total_issues", 0),
-                    new_issues=snapshot.get("new_issues", 0),
-                    resolved_issues=snapshot.get("resolved_issues", 0),
-                    reopened_issues=snapshot.get("reopened_issues", 0)
+                    snapshot_id=event.get("issue_id", ""),
+                    timestamp=event.get("timestamp", ""),
+                    run_id=event.get("run_id", ""),
+                    total_issues=event.get("total_issues", 0),
+                    new_issues=1 if event.get("event_type") == "issue_created" else 0,
+                    resolved_issues=(
+                        1 if event.get("to_state") == "resolved" else 0
+                    ),
+                    reopened_issues=1 if event.get("to_state") == "open" else 0,
                 )
                 response.snapshots.append(proto_snapshot)
 
