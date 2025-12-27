@@ -312,6 +312,12 @@ class IPCServer:
                 return
 
             # Extract params and call method
+            import inspect
+
+            # First check if the method is an async generator function (for streaming)
+            # This needs to be checked BEFORE calling the method
+            is_streaming_method = inspect.isasyncgenfunction(method)
+
             if isinstance(request.params, dict):
                 result = method(**request.params)
             elif isinstance(request.params, list):
@@ -328,8 +334,7 @@ class IPCServer:
                 return
 
             # Check if result is async generator (streaming)
-            import inspect
-            if inspect.isasyncgen(result):
+            if is_streaming_method or inspect.isasyncgen(result):
                 # Streaming response - write multiple line-delimited JSON events
                 logger.info("ipc_streaming_started", method=request.method, id=request_id)
 

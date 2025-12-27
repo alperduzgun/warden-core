@@ -140,9 +140,10 @@ export function Chat() {
         const scanResult = await ipcClient.send('scan', {path: validatedScanPath});
         return scanResult as CommandResult;
 
+      case 'start':
       case 'analyze':
         if (args.length === 0) {
-          throw new Error('Usage: /analyze <file>');
+          throw new Error(`Usage: /${cmd} <file>`);
         }
         if (!ipcClient.isConnected()) {
           await ipcClient.connect();
