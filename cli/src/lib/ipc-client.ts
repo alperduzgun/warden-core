@@ -8,8 +8,8 @@ import type {IPCResponse} from './types.js';
 import {logger} from '../utils/logger.js';
 
 const IPC_SOCKET_PATH = '/tmp/warden-ipc.sock';
-const CONNECTION_TIMEOUT = 10000; // Increased from 5s to 10s
-const RESPONSE_TIMEOUT = 15000; // 15s for command responses
+const CONNECTION_TIMEOUT = 15000; // 15s for slower systems
+const RESPONSE_TIMEOUT = 45000; // 45s for command responses (scan can take time)
 
 export class IPCClient {
   private socket: Socket | null = null;
@@ -108,47 +108,55 @@ export class IPCClient {
           has_newline: buffer.includes('\n'),
         });
 
-        // Check if we have a complete line (JSON-RPC uses line-delimited JSON)
-        if (buffer.includes('\n')) {
-          responseReceived = true;
-          clearTimeout(responseTimeout);
+        // Process all complete lines (JSON-RPC uses line-delimited JSON)
+        while (buffer.includes('\n')) {
+          const lineEnd = buffer.indexOf('\n');
+          const line = buffer.substring(0, lineEnd).trim();
+          buffer = buffer.substring(lineEnd + 1);
 
-          try {
-            const jsonRpcResponse = JSON.parse(buffer.trim());
-            this.socket?.off('data', onData);
-            this.socket?.off('error', onError);
+          if (line && !responseReceived) {
+            responseReceived = true;
+            clearTimeout(responseTimeout);
 
-            logger.debug('ipc_response_parsed', {
-              command,
-              request_id: requestId,
-              has_error: !!jsonRpcResponse.error,
-              has_result: !!jsonRpcResponse.result,
-            });
+            try {
+              const jsonRpcResponse = JSON.parse(line);
+              this.socket?.off('data', onData);
+              this.socket?.off('error', onError);
 
-            // Convert JSON-RPC response to our IPCResponse format
-            if (jsonRpcResponse.error) {
-              logger.warning('ipc_command_error', {
+              logger.debug('ipc_response_parsed', {
                 command,
-                error: jsonRpcResponse.error.message,
+                request_id: requestId,
+                has_error: !!jsonRpcResponse.error,
+                has_result: !!jsonRpcResponse.result,
               });
-              resolve({
-                success: false,
-                error: jsonRpcResponse.error.message || 'Unknown error'
+
+              // Convert JSON-RPC response to our IPCResponse format
+              if (jsonRpcResponse.error) {
+                logger.warning('ipc_command_error', {
+                  command,
+                  error: jsonRpcResponse.error.message,
+                });
+                resolve({
+                  success: false,
+                  error: jsonRpcResponse.error.message || 'Unknown error'
+                });
+                break; // Exit the while loop after processing error response
+              } else {
+                logger.debug('ipc_command_success', {command});
+                resolve({
+                  success: true,
+                  data: jsonRpcResponse.result as T
+                });
+                break; // Exit the while loop after successfully processing the response
+              }
+            } catch (e) {
+              logger.error('ipc_parse_error', {
+                command,
+                error: e instanceof Error ? e.message : 'Unknown',
+                buffer_preview: buffer.substring(0, 100),
               });
-            } else {
-              logger.debug('ipc_command_success', {command});
-              resolve({
-                success: true,
-                data: jsonRpcResponse.result as T
-              });
+              reject(new Error('Failed to parse response: ' + e));
             }
-          } catch (e) {
-            logger.error('ipc_parse_error', {
-              command,
-              error: e instanceof Error ? e.message : 'Unknown',
-              buffer_preview: buffer.substring(0, 100),
-            });
-            reject(new Error('Failed to parse response: ' + e));
           }
         }
       };
