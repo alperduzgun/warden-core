@@ -20,12 +20,10 @@ const cli = meow(
     $ warden <command> [options]
 
   Commands
-    start <file>        Analyze a file with all validation frames (PRIMARY)
-    chat                Interactive chat mode (default if no command)
-    scan <path>         Scan directory or file for issues
-    analyze <file>      Analyze a single file (alias for start)
-    frames              Show available validation frames
+    scan <path>         Scan directory or file for security issues
+    analyze <file>      Analyze a file with all validation frames
     status              Check Warden backend status
+    frames              Show available validation frames
     help                Show this help message
 
   Options
@@ -34,12 +32,12 @@ const cli = meow(
     --help, -h          Show this help message
 
   Examples
-    $ warden start src/main.py
     $ warden scan src/
-    $ warden scan src/ --frames security,orphan
+    $ warden scan file.py
     $ warden analyze src/app.py
-    $ warden frames
+    $ warden analyze main.py --frames security,orphan
     $ warden status
+    $ warden frames
 `,
   {
     importMeta: import.meta,
@@ -86,6 +84,12 @@ async function main() {
       break;
 
     case 'frames':
+      // Check if running in TTY mode
+      if (!process.stdout.isTTY) {
+        console.error('Error: frames command requires an interactive terminal (TTY)');
+        console.error('Try running directly in a terminal, not through a pipe or non-interactive environment');
+        process.exit(1);
+      }
       render(<Frames />);
       break;
 

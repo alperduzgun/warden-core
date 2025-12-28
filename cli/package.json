@@ -14,7 +14,10 @@
     "start": "node -r dotenv/config dist/cli.js dotenv_config_path=../.env",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "npm run build && node tests/integration/cli-integration.test.js",
+    "test:quick": "node tests/integration/cli-integration.test.js",
+    "precommit": "npm run test"
   },
   "keywords": [
     "warden",

@@ -7,7 +7,7 @@ import React, {useState, useEffect} from 'react';
 import {Box, Text, useInput, useApp} from 'ink';
 import {Spinner} from '../components/Spinner.js';
 import {useIPC} from '../hooks/useIPC.js';
-import {backendManager} from '../utils/backendManager.js';
+import {backendManager} from '../lib/backend-manager.js';
 import {ipcClient} from '../lib/ipc-client.js';
 import type {Frame} from '../lib/types.js';
 
@@ -72,14 +72,8 @@ export function Frames({onExit}: FramesProps = {}) {
   useEffect(() => {
     const initializeBackend = async () => {
       try {
-        if (!backendManager.isRunning()) {
-          await backendManager.start();
-        }
-
-        if (!ipcClient.isConnected()) {
-          await ipcClient.connect();
-        }
-
+        // Use ensureRunning which handles all the startup logic
+        await backendManager.ensureRunning();
         setIsStarting(false);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
