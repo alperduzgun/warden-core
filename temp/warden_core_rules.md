@@ -1,8 +1,9 @@
 # Warden Core - Python Backend Kodlama Standartları ve Mimari Kararlar
 
 > **Proje:** warden-core (Python Backend)
-> **Son Güncelleme:** 2025-12-19
+> **Son Güncelleme:** December 27, 2024
 > **Durum:** PRODUCTION RULES - KESİN KURALLAR
+> **Migration Status:** ~65% Complete
 
 ---
 
@@ -11,7 +12,38 @@
 ### 0. Sakın Commit Atma
 Commitler kullanıcı tarafından atılır.
 
-### 1. Kod Organizasyon Kuralları (KRİTİK)
+### 1. Dogfooding Kuralı (ZORUNLU TEST)
+**Kural:** Her değişiklikten sonra `examples/` klasöründe dogfooding yapılmalı.
+
+```bash
+# ✅ ZORUNLU: Her implementation sonrası
+cd /Users/alper/Documents/Development/Personal/warden-core
+
+# Tüm example dosyaları test et
+warden analyze examples/vulnerable_code.py
+warden validate examples/test_warden_with_llm.py
+warden scan examples/
+
+# Veya CLI üzerinden
+cd cli/
+npm run dev
+# Test all files in examples/
+```
+
+**Neden Dogfooding?**
+- Gerçek kullanım senaryolarını test eder
+- CLI'ın çalıştığından emin olur
+- Integration sorunlarını hemen yakalar
+- "It works on my machine" problemini önler
+
+**Ne zaman yapılmalı?**
+- ✅ Yeni feature eklendiğinde
+- ✅ Bug fix yapıldığında
+- ✅ Refactoring sonrası
+- ✅ Pipeline değişikliklerinde
+- ✅ Frame güncellemelerinde
+
+### 2. Kod Organizasyon Kuralları (KRİTİK)
 
 #### 1.1 Dosya Boyut Limiti
 - ⚠️ **Maksimum 500 satır per Python file**
@@ -534,7 +566,21 @@ def analyze_code(code: str) -> AnalysisResult:
 
 ### 9. Async/Await Best Practices
 
-#### 9.1 Use Async for I/O
+#### 9.1 Async Method Naming Convention
+```python
+# ✅ GOOD: _async suffix for async methods
+async def analyze_file_async(file_path: str) -> AnalysisResult:
+    pass
+
+async def load_config_async(config_path: str) -> Config:
+    pass
+
+# ❌ BAD: No _async suffix
+async def analyze_file(file_path: str) -> AnalysisResult:
+    pass
+```
+
+#### 9.2 Use Async for I/O
 ```python
 import aiofiles
 from httpx import AsyncClient
@@ -555,7 +601,7 @@ async def read_file(file_path: str) -> str:
         return f.read()
 ```
 
-#### 9.2 Don't Mix Sync and Async
+#### 9.3 Don't Mix Sync and Async
 ```python
 # ✅ GOOD: Consistent async
 async def process_pipeline(pipeline_id: str) -> PipelineResult:
@@ -665,15 +711,22 @@ def test_panel_json_roundtrip():
 - **HTTP Client:** httpx (async)
 - **File I/O:** aiofiles (async)
 
-### 2. Panel Integration (SOURCE OF TRUTH)
+### 2. Current Implementation Status
 
-#### Reference Paths
-```
-Panel TypeScript Types: /Users/ibrahimcaglar/warden-panel-development/src/lib/types/
-- warden.ts          → Issue, Report, Metrics models
-- pipeline.ts        → Pipeline execution models
-- frame.ts           → Validation frames
-```
+#### What's Working
+- ✅ PRE-ANALYSIS Phase (100% complete)
+- ✅ Validation Frames (90% - all 7 frames operational)
+- ✅ Azure OpenAI Integration
+- ✅ Thread-safe PipelineContext
+- ⚠️ ANALYSIS Phase (60% - needs LLM integration)
+- ⚠️ CLASSIFICATION Phase (40% - basic implementation)
+- ❌ FORTIFICATION Phase (10% - structure only)
+- ❌ CLEANING Phase (10% - structure only)
+
+#### Known Issues
+- 3 files exceed 500 line limit (orchestrator.py: 728 lines)
+- Some async methods missing _async suffix
+- Phases work independently, need context sharing
 
 #### Implementation Order
 1. Check Panel TypeScript type
@@ -716,7 +769,9 @@ Panel TypeScript Types: /Users/ibrahimcaglar/warden-panel-development/src/lib/ty
 ## 📝 NOTLAR
 
 ### Version History
-- **v1.0.0** - Initial Python backend rules (2025-12-19)
+- **v1.0.0** - Initial Python backend rules (December 19, 2024)
+- **v1.1.0** - Updated with implementation status (December 27, 2024)
+- **v1.1.1** - Added dogfooding rule for examples/ testing (December 27, 2024)
 
 ### Enforcement
 Bu kurallar **ihlal edilemez**. Code review'da bu kurallara uygunluk kontrol edilmelidir.
@@ -954,6 +1009,6 @@ class TestMyFrame:
 
 ---
 
-**Son Güncelleme:** 2025-12-21
+**Son Güncelleme:** December 27, 2024
 **Durum:** ACTIVE - Tüm yeni kod bu kurallara uymalı
-**Panel Reference:** /Users/ibrahimcaglar/warden-panel-development/src/lib/types/
+**Current Focus:** Pipeline integration & FORTIFICATION/CLEANING implementation

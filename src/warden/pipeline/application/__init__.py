@@ -1,5 +1,8 @@
 """Pipeline application package."""
 
-from warden.pipeline.application.orchestrator import PipelineOrchestrator
+from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator
 
-__all__ = ["PipelineOrchestrator"]
+# Legacy alias for compatibility
+PipelineOrchestrator = PhaseOrchestrator
+
+__all__ = ["PipelineOrchestrator", "PhaseOrchestrator"]

@@ -196,7 +196,7 @@ class PreAnalysisPhase:
         logger.info("analyzing_project_structure")
 
         # Run project structure analysis
-        project_context = await self.project_analyzer.analyze()
+        project_context = await self.project_analyzer.analyze_async()
 
         logger.info(
             "project_structure_analyzed",
