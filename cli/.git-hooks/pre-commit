@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Pre-commit hook for Warden CLI
+# Runs integration tests before allowing commit
+
+echo "🔍 Running Warden CLI pre-commit checks..."
+
+# Change to CLI directory
+CLI_DIR="$(git rev-parse --show-toplevel)/cli"
+cd "$CLI_DIR"
+
+# Check if changes affect CLI
+CLI_CHANGED=$(git diff --cached --name-only | grep -E "^cli/" || true)
+
+if [ -z "$CLI_CHANGED" ]; then
+    echo "✅ No CLI changes detected, skipping tests"
+    exit 0
+fi
+
+echo "📦 CLI changes detected, running integration tests..."
+
+# Run quick tests (without rebuild)
+npm run test:quick
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ Pre-commit tests failed!"
+    echo "Fix the issues and try again."
+    echo ""
+    echo "To bypass (not recommended):"
+    echo "  git commit --no-verify"
+    exit 1
+fi
+
+echo "✅ Pre-commit tests passed!"
+exit 0

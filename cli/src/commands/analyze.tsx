@@ -6,8 +6,12 @@
 import React, {useState, useEffect} from 'react';
 import {Box, Text} from 'ink';
 import {ipcClient} from '../lib/ipc-client.js';
+import {backendManager} from '../lib/backend-manager.js';
 import {PipelineProgressDisplay, type FrameProgress} from '../components/PipelineProgressDisplay.js';
 import {logger} from '../utils/logger.js';
+import {resolvePath, validatePath} from '../lib/path-utils.js';
+import {LoadingIndicator} from '../components/LoadingIndicator.js';
+import {ErrorDisplay} from '../utils/errors.js';
 
 interface AnalyzeProps {
   filePath: string;
@@ -59,19 +63,35 @@ export function Analyze({filePath}: AnalyzeProps) {
     runAnalysis();
   }, [filePath]);
 
-  // Exit after showing results for a moment
+  // Exit after showing results for a longer time to let users read
   useEffect(() => {
     if (result || error) {
       const timer = setTimeout(() => {
         setShouldExit(true);
-        process.exit(result ? 0 : 1);
-      }, 2000); // Show results for 2 seconds then exit
+        // Give more time for errors to be read
+        const delay = error ? 5000 : 3000;
+        setTimeout(() => process.exit(result ? 0 : 1), delay);
+      }, 100);
       return () => clearTimeout(timer);
     }
+    return undefined; // Explicitly return undefined when there's no cleanup needed
   }, [result, error]);
 
   const runAnalysis = async () => {
     try {
+      // Validate and resolve the file path
+      const pathValidation = validatePath(filePath);
+      if (!pathValidation.valid) {
+        setError(pathValidation.error || 'Invalid file path');
+        setLoading(false);
+        return;
+      }
+
+      const resolvedPath = resolvePath(filePath);
+
+      // Ensure backend is running (auto-start if needed)
+      await backendManager.ensureRunning();
+
       // Connect to backend if not connected
       if (!ipcClient.isConnected()) {
         await ipcClient.connect();
@@ -89,10 +109,10 @@ export function Analyze({filePath}: AnalyzeProps) {
         setFrames(initialFrames);
       }
 
-      // Start streaming pipeline execution
+      // Start streaming pipeline execution with resolved path
       await ipcClient.sendStream<StreamEvent>(
         'execute_pipeline_stream',
-        {file_path: filePath},
+        {file_path: resolvedPath},
         (event: StreamEvent) => {
           logger.debug('stream_event_received', {
             type: event.type,
@@ -146,8 +166,8 @@ export function Analyze({filePath}: AnalyzeProps) {
                   status: data.status === 'passed' ? ('completed' as const)
                         : data.status === 'failed' ? ('failed' as const)
                         : ('warning' as const),
-                  duration: `${data.duration.toFixed(1)}s`,
-                  issues: data.issues_found,
+                  ...(data.duration && { duration: `${data.duration.toFixed(1)}s` }),
+                  ...(data.issues_found && { issues: data.issues_found }),
                 }
               : frame
           )
@@ -171,23 +191,21 @@ export function Analyze({filePath}: AnalyzeProps) {
     setLoading(false);
   };
 
-  // Show connection status
+  // Show connection status with better feedback
   if (connecting) {
     return (
-      <Box flexDirection="column">
-        <Text color="cyan">⚡ Connecting to backend...</Text>
-      </Box>
+      <LoadingIndicator
+        message="Connecting to Warden backend"
+        subMessage="Establishing connection to analysis service..."
+        showTimer={true}
+        timeoutWarning={10}
+      />
     );
   }
 
-  // Show error
+  // Show error with helpful context
   if (error) {
-    return (
-      <Box flexDirection="column">
-        <Text color="red">✗ Error:</Text>
-        <Text color="red">{error}</Text>
-      </Box>
-    );
+    return <ErrorDisplay error={error} showDetails={true} />;
   }
 
   // Show progress while running
@@ -311,10 +329,12 @@ export function Analyze({filePath}: AnalyzeProps) {
     );
   }
 
-  // Loading state (initial)
+  // Loading state (initial) with better feedback
   return (
-    <Box flexDirection="column">
-      <Text color="cyan">⚡ Initializing analysis...</Text>
-    </Box>
+    <LoadingIndicator
+      message="Initializing analysis pipeline"
+      subMessage="Preparing validation frames..."
+      showTimer={false}
+    />
   );
 }
