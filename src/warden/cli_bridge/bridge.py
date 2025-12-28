@@ -13,7 +13,7 @@ from warden.cli_bridge.protocol import IPCError, ErrorCode
 
 # Optional imports - graceful degradation if Warden validation framework not available
 try:
-    from warden.pipeline.application.orchestrator import PipelineOrchestrator
+    from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator
     from warden.pipeline.domain.models import PipelineConfig, PipelineResult
     from warden.validation.domain.frame import CodeFile
     from warden.llm.config import load_llm_config
@@ -96,7 +96,7 @@ class WardenBridge:
 
                 # Use default frames when no config
                 frames = self._get_default_frames()
-                self.orchestrator = PipelineOrchestrator(frames=frames, config=None)
+                self.orchestrator = PhaseOrchestrator(frames=frames, config=None)
                 return
 
             # Parse YAML
@@ -127,12 +127,19 @@ class WardenBridge:
             pipeline_config = PipelineOrchestratorConfig(
                 fail_fast=settings.get('fail_fast', True),
                 timeout=settings.get('timeout', 300),
-                frame_timeout=settings.get('timeout', 120),
+                frame_timeout=settings.get('frame_timeout', 120),
                 parallel_limit=4,
+                enable_pre_analysis=settings.get('enable_pre_analysis', False),
+                enable_analysis=settings.get('enable_analysis', True),
+                enable_classification=settings.get('enable_classification', False),
+                enable_validation=settings.get('enable_validation', True),
+                enable_fortification=settings.get('enable_fortification', False),
+                enable_cleaning=settings.get('enable_cleaning', False),
+                pre_analysis_config=settings.get('pre_analysis_config', None),
             )
 
             # Create orchestrator with frames and config
-            self.orchestrator = PipelineOrchestrator(frames=frames, config=pipeline_config)
+            self.orchestrator = PhaseOrchestrator(frames=frames, config=pipeline_config)
             logger.info("pipeline_loaded", config_name=self.active_config_name, frame_count=len(frames))
 
         except Exception as e:
@@ -143,7 +150,7 @@ class WardenBridge:
             # Fallback to default frames
             try:
                 frames = self._get_default_frames()
-                self.orchestrator = PipelineOrchestrator(frames=frames, config=None)
+                self.orchestrator = PhaseOrchestrator(frames=frames, config=None)
             except Exception:
                 self.orchestrator = None
 
@@ -293,11 +300,14 @@ class WardenBridge:
                 language=self._detect_language(path),
             )
 
-            # Execute pipeline with persistent orchestrator
-            result = await self.orchestrator.execute([code_file])
+            # Execute pipeline with persistent orchestrator (now returns tuple)
+            result, context = await self.orchestrator.execute([code_file])
 
-            # Convert to serializable dict
-            return self._serialize_pipeline_result(result)
+            # Convert to serializable dict and include context summary
+            serialized_result = self._serialize_pipeline_result(result)
+            serialized_result["context_summary"] = context.get_summary()
+
+            return serialized_result
 
         except IPCError:
             raise
@@ -384,9 +394,11 @@ class WardenBridge:
                 """Run pipeline in background task."""
                 nonlocal pipeline_error
                 try:
-                    result = await self.orchestrator.execute([code_file])
-                    # Enqueue final result
-                    await progress_queue.put({"type": "result", "data": self._serialize_pipeline_result(result)})
+                    result, context = await self.orchestrator.execute([code_file])
+                    # Enqueue final result with context
+                    serialized_result = self._serialize_pipeline_result(result)
+                    serialized_result["context_summary"] = context.get_summary()
+                    await progress_queue.put({"type": "result", "data": serialized_result})
                 except Exception as e:
                     pipeline_error = e
                 finally:
@@ -593,8 +605,18 @@ class WardenBridge:
                 data={"feature": "scan", "requires": "warden.pipeline"},
             )
 
+        if not self.orchestrator:
+            raise IPCError(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="Pipeline orchestrator not initialized",
+                data={"hint": "Check config loading in bridge initialization"},
+            )
+
         try:
             logger.info("scan_called", path=path)
+
+            import time
+            start_time = time.time()
 
             # Resolve to absolute path (handles relative paths like cli/src)
             scan_path = Path(path).resolve()
@@ -619,20 +641,61 @@ class WardenBridge:
 
             logger.info("scan_files_found", count=len(files_to_scan), path=path)
 
-            # Safe relative path conversion (fallback to absolute if relative fails)
-            file_list = []
-            for f in files_to_scan[:50]:  # Limit to first 50
+            # Limit to first 10 files for performance
+            files_to_scan = files_to_scan[:10]
+
+            # Collect all issues from scanning
+            all_issues = []
+            files_scanned = 0
+
+            # Scan each file
+            for file_path in files_to_scan:
                 try:
-                    file_list.append(str(f.relative_to(scan_path)))
-                except ValueError:
-                    # Can't make relative, use absolute
-                    file_list.append(str(f))
+                    # Create code file
+                    code_file = CodeFile(
+                        path=str(file_path.absolute()),
+                        content=file_path.read_text(encoding="utf-8"),
+                        language=self._detect_language(file_path),
+                    )
+
+                    # Execute pipeline on this file
+                    result, context = await self.orchestrator.execute([code_file])
+                    files_scanned += 1
+
+                    # Extract issues from frame results
+                    for frame_result in result.frame_results:
+                        for finding in frame_result.findings:
+                            all_issues.append({
+                                "id": f"{frame_result.frame_id}_{len(all_issues)}",
+                                "filePath": str(file_path),
+                                "line": getattr(finding, "line_number", getattr(finding, "line", 0)),
+                                "column": getattr(finding, "column", 0),
+                                "severity": getattr(finding, "severity", "medium").lower(),
+                                "message": getattr(finding, "message", str(finding)),
+                                "rule": getattr(finding, "code", "unknown"),
+                                "frame": frame_result.frame_id,
+                            })
+
+                except Exception as e:
+                    logger.warning("scan_file_failed", file=str(file_path), error=str(e))
+                    continue
+
+            # Calculate summary
+            summary = {
+                "critical": sum(1 for i in all_issues if i["severity"] == "critical"),
+                "high": sum(1 for i in all_issues if i["severity"] == "high"),
+                "medium": sum(1 for i in all_issues if i["severity"] == "medium"),
+                "low": sum(1 for i in all_issues if i["severity"] == "low"),
+            }
+
+            duration_ms = int((time.time() - start_time) * 1000)
 
             return {
-                "path": str(scan_path.absolute()),
-                "total_files": len(files_to_scan),
-                "files": file_list,
-                "message": f"Found {len(files_to_scan)} files to scan",
+                "success": True,
+                "filesScanned": files_scanned,
+                "issues": all_issues,
+                "duration": duration_ms,
+                "summary": summary,
             }
 
         except IPCError:

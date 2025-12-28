@@ -318,6 +318,16 @@ class ProjectContext(BaseDomainModel):
 
         return " | ".join(summary_parts)
 
+    @property
+    def name(self) -> str:
+        """
+        Get the context name based on project_type.
+
+        Returns:
+            The project type value as a string
+        """
+        return self.project_type.value
+
     def should_apply_strict_rules(self) -> bool:
         """
         Determine if strict analysis rules should be applied.

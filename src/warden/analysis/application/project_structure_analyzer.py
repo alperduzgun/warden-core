@@ -15,10 +15,6 @@ try:
     import tomllib  # Python 3.11+
 except ImportError:
     import tomli as tomllib  # Fallback for older versions
-try:
-    import yaml
-except ImportError:
-    yaml = None  # Optional dependency
 
 from warden.analysis.domain.project_context import (
     ProjectContext,
@@ -53,8 +49,9 @@ class ProjectStructureAnalyzer:
         self.special_dirs: Dict[str, List[str]] = {}
         self.file_extensions: Set[str] = set()
         self.directory_structure: Dict[str, int] = {}  # dir -> file count
+        self.framework = None  # Will be set during analysis
 
-    async def analyze(self) -> ProjectContext:
+    async def analyze_async(self) -> ProjectContext:
         """
         Analyze project structure and detect characteristics.
 
@@ -77,9 +74,9 @@ class ProjectStructureAnalyzer:
         try:
             # Run all detection tasks in parallel
             detection_tasks = [
-                self._detect_config_files(),
-                self._analyze_directory_structure(),
-                self._collect_statistics(),
+                self._detect_config_files_async(),
+                self._analyze_directory_structure_async(),
+                self._collect_statistics_async(),
             ]
 
             results = await asyncio.gather(*detection_tasks, return_exceptions=True)
@@ -104,7 +101,7 @@ class ProjectStructureAnalyzer:
             # Set collected data
             context.config_files = self.config_files
             context.special_dirs = self.special_dirs
-            context.statistics = await self._collect_statistics()
+            context.statistics = await self._collect_statistics_async()
 
             # Calculate confidence
             context.confidence = self._calculate_confidence(context)
@@ -131,7 +128,7 @@ class ProjectStructureAnalyzer:
             context.detection_time = time.perf_counter() - start_time
             return context
 
-    async def _detect_config_files(self) -> None:
+    async def _detect_config_files_async(self) -> None:
         """Detect and categorize configuration files."""
         config_patterns = {
             # Python
@@ -199,7 +196,7 @@ class ProjectStructureAnalyzer:
                 # For directories like .github/workflows
                 self.config_files[pattern] = file_type
 
-    async def _analyze_directory_structure(self) -> None:
+    async def _analyze_directory_structure_async(self) -> None:
         """Analyze directory structure and identify special directories."""
         special_patterns = {
             "vendor": ["vendor", "node_modules", "bower_components", ".vendor"],
@@ -244,61 +241,12 @@ class ProjectStructureAnalyzer:
                 dir_str = str(parent_dir) if str(parent_dir) != "." else "root"
                 self.directory_structure[dir_str] = self.directory_structure.get(dir_str, 0) + 1
 
-    async def _collect_statistics(self) -> ProjectStatistics:
+    async def _collect_statistics_async(self) -> ProjectStatistics:
         """Collect statistical information about the project."""
-        stats = ProjectStatistics()
+        from warden.analysis.application.statistics_collector import StatisticsCollector
 
-        # Count files by type
-        for file_path in self.project_root.rglob("*"):
-            if file_path.is_file():
-                # Skip hidden and special directories
-                if any(part.startswith('.') for part in file_path.parts[:-1]):
-                    continue
-                if any(vendor in str(file_path) for vendor in self.special_dirs.get("vendor", [])):
-                    continue
-
-                stats.total_files += 1
-
-                # Categorize by extension
-                ext = file_path.suffix.lower()
-                if ext in ['.py', '.pyw']:
-                    stats.language_distribution["Python"] = stats.language_distribution.get("Python", 0) + 1
-                    if "test" in file_path.name.lower() or "test" in str(file_path.parent).lower():
-                        stats.test_files += 1
-                    else:
-                        stats.code_files += 1
-                elif ext in ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']:
-                    stats.language_distribution["JavaScript/TypeScript"] = stats.language_distribution.get("JavaScript/TypeScript", 0) + 1
-                    if "test" in file_path.name.lower() or "spec" in file_path.name.lower():
-                        stats.test_files += 1
-                    else:
-                        stats.code_files += 1
-                elif ext in ['.json', '.yaml', '.yml', '.toml', '.ini', '.cfg']:
-                    stats.config_files += 1
-                elif ext in ['.md', '.rst', '.txt', '.doc', '.docx']:
-                    stats.documentation_files += 1
-
-                # Count lines (for small files only to avoid performance issues)
-                if file_path.stat().st_size < 100000:  # < 100KB
-                    try:
-                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                            lines = len(f.readlines())
-                            stats.total_lines += lines
-                    except:
-                        pass
-
-        # Calculate directory depth
-        max_depth = 0
-        for dirpath, _, _ in self.project_root.walk():
-            depth = len(Path(dirpath).relative_to(self.project_root).parts)
-            max_depth = max(max_depth, depth)
-        stats.max_depth = max_depth
-
-        # Calculate average file size
-        if stats.code_files > 0:
-            stats.average_file_size = stats.total_lines / stats.code_files
-
-        return stats
+        collector = StatisticsCollector(self.project_root, self.special_dirs)
+        return await collector.collect_async()
 
     def _detect_project_type(self) -> ProjectType:
         """Detect the type of project."""
@@ -320,8 +268,9 @@ class ProjectStructureAnalyzer:
             if "src" in self.special_dirs.get("source", []) or "lib" in self.special_dirs.get("source", []):
                 return ProjectType.LIBRARY
 
-        # API indicators
-        if self.framework in [Framework.FASTAPI, Framework.FLASK, Framework.EXPRESS]:
+        # API indicators (detect framework inline since it's not set yet)
+        framework = self._detect_framework()
+        if framework in [Framework.FASTAPI, Framework.FLASK, Framework.EXPRESS]:
             return ProjectType.API
 
         # Frontend indicators
@@ -350,49 +299,10 @@ class ProjectStructureAnalyzer:
 
     def _detect_framework(self) -> Framework:
         """Detect the main framework used."""
-        # Python frameworks
-        if "django" in str(self.config_files.values()) or \
-           any("django" in str(p).lower() for p in self.project_root.rglob("*settings.py")):
-            return Framework.DJANGO
+        from warden.analysis.application.framework_detector import FrameworkDetector
 
-        if any("fastapi" in str(p).lower() for p in self.project_root.rglob("*requirements*.txt")):
-            return Framework.FASTAPI
-
-        if any("flask" in str(p).lower() for p in self.project_root.rglob("*requirements*.txt")):
-            return Framework.FLASK
-
-        # JavaScript frameworks
-        if "package.json" in self.config_files:
-            package_json = self.project_root / "package.json"
-            try:
-                with open(package_json) as f:
-                    data = json.load(f)
-                    deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-
-                    if "react" in deps:
-                        return Framework.REACT
-                    if "vue" in deps:
-                        return Framework.VUE
-                    if "@angular/core" in deps:
-                        return Framework.ANGULAR
-                    if "svelte" in deps:
-                        return Framework.SVELTE
-                    if "next" in deps:
-                        return Framework.NEXTJS
-                    if "express" in deps:
-                        return Framework.EXPRESS
-            except:
-                pass
-
-        # Config file indicators
-        if "angular.json" in self.config_files:
-            return Framework.ANGULAR
-        if "next.config.js" in self.config_files:
-            return Framework.NEXTJS
-        if "vue.config.js" in self.config_files:
-            return Framework.VUE
-
-        return Framework.NONE
+        detector = FrameworkDetector(self.project_root, self.config_files)
+        return detector.detect()
 
     def _detect_architecture(self) -> Architecture:
         """Detect the architecture pattern."""
@@ -526,46 +436,15 @@ class ProjectStructureAnalyzer:
 
     def _detect_conventions(self) -> ProjectConventions:
         """Detect project conventions and patterns."""
-        conv = ProjectConventions()
+        from warden.analysis.application.convention_detector import ConventionDetector
 
-        # Detect file naming convention
-        file_names = [f.stem for f in self.project_root.rglob("*.py") if f.is_file()][:100]
-        if file_names:
-            if all("_" in name or name.islower() for name in file_names if name):
-                conv.file_naming = "snake_case"
-            elif all("-" in name or name.islower() for name in file_names if name):
-                conv.file_naming = "kebab-case"
-            elif any(name[0].isupper() for name in file_names if name):
-                conv.file_naming = "PascalCase"
-
-        # Detect test location
-        if "test" in self.special_dirs:
-            conv.test_location = self.special_dirs["test"][0]
-        if "source" in self.special_dirs:
-            conv.source_location = self.special_dirs["source"][0]
-        if "docs" in self.special_dirs:
-            conv.docs_location = self.special_dirs["docs"][0]
-
-        # Check for type hints (Python)
-        if ".py" in self.file_extensions:
-            # Sample a few Python files
-            py_files = list(self.project_root.rglob("*.py"))[:10]
-            type_hint_count = 0
-            for py_file in py_files:
-                try:
-                    with open(py_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        if "-> " in content or ": " in content:
-                            type_hint_count += 1
-                except:
-                    pass
-            conv.uses_type_hints = type_hint_count > len(py_files) / 2
-
-        # Check for linter/formatter configs
-        conv.uses_linter = any(f in self.config_files for f in [".flake8", ".eslintrc.json", "ruff.toml", ".ruff.toml"])
-        conv.uses_formatter = any(f in self.config_files for f in [".prettierrc", "black", ".style.yapf"])
-
-        return conv
+        detector = ConventionDetector(
+            self.project_root,
+            self.config_files,
+            self.special_dirs,
+            self.file_extensions,
+        )
+        return detector.detect()
 
     def _calculate_confidence(self, context: ProjectContext) -> float:
         """
@@ -616,7 +495,4 @@ class ProjectStructureAnalyzer:
             factors += 1
 
         # Normalize confidence
-        if factors > 0:
-            return min(1.0, confidence)
-
-        return 0.0
+        return min(1.0, confidence) if factors > 0 else 0.0

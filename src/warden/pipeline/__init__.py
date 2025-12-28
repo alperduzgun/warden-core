@@ -7,8 +7,10 @@ from warden.pipeline.domain.models import (
     FrameExecution,
 )
 from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
-from warden.pipeline.application.orchestrator import PipelineOrchestrator
-from warden.pipeline.application.enhanced_orchestrator import EnhancedPipelineOrchestrator
+from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator
+# Legacy names for compatibility
+PipelineOrchestrator = PhaseOrchestrator
+EnhancedPipelineOrchestrator = PhaseOrchestrator
 
 __all__ = [
     "ValidationPipeline",
