@@ -92,7 +92,7 @@ settings:
   enable_fortification: true  # Enable FORTIFICATION phase for security fixes
   enable_cleaning: true  # Enable CLEANING phase for code improvements
   pre_analysis_config:
-    use_llm: false  # Disable LLM for testing (avoid API calls)
+    use_llm: true  # ✅ Enable LLM for better analysis
     llm_threshold: 0.7  # Use LLM when confidence < threshold
     batch_size: 10  # Files to analyze per LLM call
     cache_enabled: true  # Cache LLM responses for similar patterns
