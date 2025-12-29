@@ -1,0 +1,7 @@
+#!/bin/bash
+# Warden CLI wrapper script
+# Always runs from project root
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+node cli/dist/cli.js "$@"

@@ -104,3 +104,88 @@ export interface Frame {
   enabled?: boolean;
   tags?: string[];
 }
+
+/**
+ * Pipeline execution event types
+ */
+export type PipelineEventType =
+  | 'pipeline_started'
+  | 'pipeline_completed'
+  | 'pipeline_failed'
+  | 'phase_started'
+  | 'phase_completed'
+  | 'frame_started'
+  | 'frame_completed'
+  | 'result';
+
+export interface PipelineEvent {
+  type: 'progress' | 'result';
+  event?: PipelineEventType;
+  data: {
+    phase?: string;
+    frame?: string;
+    status?: string;
+    duration?: number;
+    message?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface PipelineStreamResponse {
+  events: AsyncIterableIterator<PipelineEvent>;
+}
+
+export interface PipelineResult {
+  pipeline_id: string;
+  pipeline_name: string;
+  status: string;
+  duration: number;
+  total_frames: number;
+  frames_passed: number;
+  frames_failed: number;
+  frames_skipped: number;
+  total_findings: number;
+  critical_findings: number;
+  high_findings: number;
+  medium_findings: number;
+  low_findings: number;
+  frame_results: FrameResult[];
+  context_summary?: {
+    phases_completed: string[];
+    errors: string[];
+    [key: string]: unknown;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export interface FrameResult {
+  frame_id: string;
+  frame_name: string;
+  status: string;
+  duration: number;
+  issues_found: number;
+  is_blocker: boolean;
+  findings: Finding[];
+}
+
+export interface Finding {
+  severity: string;
+  message: string;
+  line?: number;
+  column?: number;
+  code?: string;
+  file?: string;
+}
+
+/**
+ * Pre-flight check result types
+ */
+export interface PreFlightCheckResult {
+  passed: boolean;
+  checks: Array<{
+    name: string;
+    description: string;
+    passed: boolean;
+    error: string | null;
+  }>;
+}

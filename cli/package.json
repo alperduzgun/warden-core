@@ -11,12 +11,15 @@
     "dev": "tsx -r dotenv/config src/cli.tsx dotenv_config_path=../.env",
     "dev:watch": "tsx watch -r dotenv/config src/cli.tsx dotenv_config_path=../.env",
     "build": "tsc && chmod +x dist/cli.js",
-    "start": "node -r dotenv/config dist/cli.js dotenv_config_path=../.env",
+    "start": "bash bin/ensure-backend.sh node -r dotenv/config dist/cli.js dotenv_config_path=../.env",
+    "start:raw": "node -r dotenv/config dist/cli.js dotenv_config_path=../.env",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "clean": "rm -rf dist",
     "test": "npm run build && node tests/integration/cli-integration.test.js",
     "test:quick": "node tests/integration/cli-integration.test.js",
+    "test:backend": "bash tests/integration/test-backend-health.sh",
+    "scan": "npm run test:backend && npm run start scan",
     "precommit": "npm run test"
   },
   "keywords": [
@@ -30,6 +33,7 @@
   "author": "Warden Team",
   "license": "MIT",
   "dependencies": {
+    "ansi-escapes": "^7.2.0",
     "chalk": "^5.4.1",
     "dotenv": "^17.2.3",
     "ink": "^5.0.1",
