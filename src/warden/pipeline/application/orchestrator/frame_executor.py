@@ -451,10 +451,19 @@ class FrameExecutor:
         suppression_rules: List[Dict[str, Any]],
     ) -> bool:
         """Check if a finding is a false positive based on suppression rules."""
+        if not suppression_rules:
+            return False
+
         for rule in suppression_rules:
-            if (
-                rule.get("issue_type") == finding.get("type") and
-                rule.get("file_context") == finding.get("file_context")
-            ):
-                return True
+            # Handle both dict and string rules
+            if isinstance(rule, dict):
+                if (
+                    rule.get("issue_type") == finding.get("type") and
+                    rule.get("file_context") == finding.get("file_context")
+                ):
+                    return True
+            elif isinstance(rule, str):
+                # Simple string rule matching
+                if finding.get("type") == rule or finding.get("message", "").find(rule) != -1:
+                    return True
         return False
