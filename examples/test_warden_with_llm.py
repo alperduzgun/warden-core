@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator
 from warden.validation.domain.frame import CodeFile
 from warden.llm.factory import create_client
+from warden.validation.infrastructure.frame_registry import get_registry
 
 
 async def run_warden_with_llm():
@@ -93,11 +94,27 @@ async def run_warden_with_llm():
             status = "✅" if data.get('frame_status') == 'completed' else "❌"
             print(f"[{timestamp}]   {status} {data.get('frame_name')}: {data.get('issues_found', 0)} issues")
 
+    # Get available frames
+    registry = get_registry()
+    available_frames = registry.discover_all()
+
+    # Instantiate frames
+    frames = []
+    for frame_class in available_frames:
+        try:
+            frame = frame_class()
+            frames.append(frame)
+            print(f"✅ Loaded frame: {frame.frame_id}")
+        except Exception as e:
+            print(f"⚠️ Failed to load frame {frame_class.__name__}: {e}")
+
     # Initialize orchestrator
     orchestrator = PhaseOrchestrator(
+        frames=frames,
         project_root=Path(__file__).parent,
         config=config,
         progress_callback=progress_callback,
+        llm_service=llm_client,
     )
 
     print(f"\nAnalyzing: {vulnerable_file}")
@@ -120,9 +137,22 @@ async def run_warden_with_llm():
         if context.findings:
             print(f"\n🔍 SECURITY ISSUES FOUND: {len(context.findings)}")
             for i, finding in enumerate(context.findings[:5], 1):
-                print(f"  {i}. {finding.get('type', 'Unknown')}: {finding.get('message', 'No message')}")
-                print(f"     Severity: {finding.get('severity', 'unknown')}")
-                print(f"     Line: {finding.get('line_number', 'unknown')}")
+                # Handle both dict and Finding object
+                if hasattr(finding, 'to_dict'):
+                    finding_dict = finding.to_dict()
+                elif isinstance(finding, dict):
+                    finding_dict = finding
+                else:
+                    # Try to access attributes directly
+                    finding_dict = {
+                        'type': getattr(finding, 'type', 'Unknown'),
+                        'message': getattr(finding, 'message', 'No message'),
+                        'severity': getattr(finding, 'severity', 'unknown'),
+                        'line_number': getattr(finding, 'line_number', 'unknown'),
+                    }
+                print(f"  {i}. {finding_dict.get('type', 'Unknown')}: {finding_dict.get('message', 'No message')}")
+                print(f"     Severity: {finding_dict.get('severity', 'unknown')}")
+                print(f"     Line: {finding_dict.get('line_number', 'unknown')}")
 
         # Fortifications (Security Fixes)
         if context.fortifications:
