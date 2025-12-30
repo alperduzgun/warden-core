@@ -47,6 +47,7 @@ class PhaseOrchestrator:
         config: Optional[PipelineConfig] = None,
         progress_callback: Optional[Callable] = None,
         project_root: Optional[Path] = None,
+        llm_service: Optional[Any] = None,
     ):
         """
         Initialize phase orchestrator.
@@ -56,11 +57,13 @@ class PhaseOrchestrator:
             config: Pipeline configuration
             progress_callback: Optional callback for progress updates
             project_root: Root directory of the project
+            llm_service: Optional LLM service for AI-powered phases
         """
         self.frames = frames or []
         self.config = config or PipelineConfig()
         self.progress_callback = progress_callback
         self.project_root = project_root or Path.cwd()
+        self.llm_service = llm_service
 
         # Initialize rule validator if global rules exist
         self.rule_validator = None
@@ -154,21 +157,40 @@ class PhaseOrchestrator:
             if getattr(self.config, 'enable_analysis', True):
                 await self._execute_analysis_async(context, code_files)
 
-            # Phase 2: CLASSIFICATION - Skip for now as it's not implemented
-            if getattr(self.config, 'enable_classification', False):  # Disabled by default
-                await self._execute_classification_async(context, code_files)
+            # Phase 2: CLASSIFICATION (ALWAYS ENABLED - Cannot be disabled)
+            # Classification is critical for intelligent frame selection
+            logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
+            await self._execute_classification_async(context, code_files)
 
             # Phase 3: VALIDATION with execution strategies
-            if getattr(self.config, 'enable_validation', True):
+            enable_validation = getattr(self.config, 'enable_validation', True)
+            if enable_validation:
+                logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
                 await self._execute_validation_with_strategy_async(context, code_files)
+            else:
+                logger.info("phase_skipped", phase="VALIDATION", reason="disabled_in_config")
+                if self.progress_callback:
+                    self.progress_callback("phase_skipped", {"phase": "VALIDATION", "reason": "disabled_in_config"})
 
             # Phase 4: FORTIFICATION
-            if getattr(self.config, 'enable_fortification', False):  # Off by default
+            enable_fortification = getattr(self.config, 'enable_fortification', True)
+            if enable_fortification:
+                logger.info("phase_enabled", phase="FORTIFICATION", enabled=enable_fortification)
                 await self._execute_fortification_async(context, code_files)
+            else:
+                logger.info("phase_skipped", phase="FORTIFICATION", reason="disabled_in_config")
+                if self.progress_callback:
+                    self.progress_callback("phase_skipped", {"phase": "FORTIFICATION", "reason": "disabled_in_config"})
 
             # Phase 5: CLEANING
-            if getattr(self.config, 'enable_cleaning', False):  # Off by default
+            enable_cleaning = getattr(self.config, 'enable_cleaning', True)
+            if enable_cleaning:
+                logger.info("phase_enabled", phase="CLEANING", enabled=enable_cleaning)
                 await self._execute_cleaning_async(context, code_files)
+            else:
+                logger.info("phase_skipped", phase="CLEANING", reason="disabled_in_config")
+                if self.progress_callback:
+                    self.progress_callback("phase_skipped", {"phase": "CLEANING", "reason": "disabled_in_config"})
 
             self.pipeline.status = PipelineStatus.COMPLETED
             self.pipeline.ended_at = datetime.now()
@@ -180,12 +202,15 @@ class PhaseOrchestrator:
             )
 
         except Exception as e:
+            import traceback
             self.pipeline.status = PipelineStatus.FAILED
             self.pipeline.ended_at = datetime.now()
             logger.error(
                 "pipeline_execution_failed",
                 pipeline_id=context.pipeline_id,
                 error=str(e),
+                error_type=type(e).__name__,
+                traceback=traceback.format_exc(),
             )
             context.errors.append(f"Pipeline failed: {str(e)}")
             raise
@@ -252,14 +277,41 @@ class PhaseOrchestrator:
             self.progress_callback("phase_started", {"phase": "ANALYSIS"})
 
         try:
-            from warden.analysis.application.analysis_phase import AnalysisPhase
+            # Use LLM version if LLM service is available and configured
+            # Default to using LLM if service is available
+            use_llm = self.llm_service is not None
+
+            # Check pre_analysis_config for use_llm setting
+            if hasattr(self.config, 'pre_analysis_config') and isinstance(self.config.pre_analysis_config, dict):
+                # If config explicitly sets use_llm, respect that
+                config_use_llm = self.config.pre_analysis_config.get('use_llm', True)
+                use_llm = self.llm_service and config_use_llm
+
+            logger.info(
+                "analysis_phase_config",
+                has_llm_service=self.llm_service is not None,
+                pre_analysis_config=self.config.pre_analysis_config if hasattr(self.config, 'pre_analysis_config') else None,
+                use_llm_final=use_llm
+            )
 
             # Get context from previous phases
             phase_context = context.get_context_for_phase("ANALYSIS")
 
-            phase = AnalysisPhase(
-                config=getattr(self.config, 'analysis_config', {}),
-            )
+            if use_llm:
+                from warden.analysis.application.llm_analysis_phase import LLMAnalysisPhase as AnalysisPhase
+                from warden.analysis.application.llm_phase_base import LLMPhaseConfig
+
+                # Create LLM phase with service
+                phase = AnalysisPhase(
+                    config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
+                    llm_service=self.llm_service
+                )
+                logger.info("using_llm_analysis_phase")
+            else:
+                from warden.analysis.application.analysis_phase import AnalysisPhase
+                phase = AnalysisPhase(
+                    config=getattr(self.config, 'analysis_config', {}),
+                )
 
             result = await phase.execute(code_files)
 
@@ -291,7 +343,13 @@ class PhaseOrchestrator:
             context.errors.append(f"ANALYSIS failed: {str(e)}")
 
         if self.progress_callback:
-            self.progress_callback("phase_completed", {"phase": "ANALYSIS"})
+            # Include LLM analysis info in progress
+            analysis_data = {"phase": "ANALYSIS"}
+            if hasattr(context, 'quality_metrics') and context.quality_metrics:
+                analysis_data["llm_used"] = True
+                analysis_data["quality_score"] = getattr(context.quality_metrics, 'overall_score', None)
+                analysis_data["llm_reasoning"] = getattr(context.quality_metrics, 'summary', '')[:200] if hasattr(context.quality_metrics, 'summary') else None
+            self.progress_callback("phase_completed", analysis_data)
 
     async def _execute_classification_async(
         self,
@@ -305,15 +363,28 @@ class PhaseOrchestrator:
             self.progress_callback("phase_started", {"phase": "CLASSIFICATION"})
 
         try:
-            from warden.classification.application.classification_phase import ClassificationPhase
+            # Use LLM version if LLM service is available
+            use_llm = self.llm_service is not None
 
             # Get context from previous phases
             phase_context = context.get_context_for_phase("CLASSIFICATION")
 
-            phase = ClassificationPhase(
-                config=getattr(self.config, 'classification_config', {}),
-                context=phase_context,
-            )
+            if use_llm:
+                from warden.classification.application.llm_classification_phase import LLMClassificationPhase as ClassificationPhase
+                from warden.analysis.application.llm_phase_base import LLMPhaseConfig
+
+                # Create LLM phase with service
+                phase = ClassificationPhase(
+                    config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
+                    llm_service=self.llm_service
+                )
+                logger.info("using_llm_classification_phase")
+            else:
+                from warden.classification.application.classification_phase import ClassificationPhase
+                phase = ClassificationPhase(
+                    config=getattr(self.config, 'classification_config', {}),
+                    context=phase_context,
+                )
 
             result = await phase.execute_async(code_files)
 
@@ -342,7 +413,13 @@ class PhaseOrchestrator:
             context.errors.append(f"CLASSIFICATION failed: {str(e)}")
 
         if self.progress_callback:
-            self.progress_callback("phase_completed", {"phase": "CLASSIFICATION"})
+            # Include LLM classification info in progress
+            classification_data = {"phase": "CLASSIFICATION"}
+            if hasattr(context, 'classification_reasoning') and context.classification_reasoning:
+                classification_data["llm_used"] = True
+                classification_data["llm_reasoning"] = context.classification_reasoning[:200]
+                classification_data["selected_frames"] = context.selected_frames if hasattr(context, 'selected_frames') else []
+            self.progress_callback("phase_completed", classification_data)
 
     async def _execute_validation_with_strategy_async(
         self,
@@ -393,7 +470,37 @@ class PhaseOrchestrator:
         code_files: List[CodeFile],
     ) -> None:
         """Execute frames sequentially."""
-        for frame in self.frames:
+        # Use frames selected by Classification phase if available
+        frames_to_execute = self.frames
+        if hasattr(context, 'selected_frames') and context.selected_frames:
+            # Filter frames to only include those selected by Classification
+            # Normalize frame names for matching (handle various formats)
+            selected_frame_ids = []
+            for f in context.selected_frames:
+                # Handle different formats: SecurityFrame, security, security-frame, etc.
+                normalized = f.lower().replace('frame', '').replace('-', '').replace('_', '')
+                selected_frame_ids.append(normalized)
+
+            frames_to_execute = []
+            for frame in self.frames:
+                # Normalize frame ID for comparison
+                frame_id_normalized = frame.frame_id.lower().replace('frame', '').replace('-', '').replace('_', '')
+                frame_name_normalized = frame.name.lower().replace(' ', '').replace('-', '').replace('_', '') if hasattr(frame, 'name') else ''
+
+                # Check if this frame was selected
+                if frame_id_normalized in selected_frame_ids or frame_name_normalized in selected_frame_ids:
+                    frames_to_execute.append(frame)
+                    logger.debug(f"Including frame: {frame.frame_id} (matched with Classification selection)")
+                else:
+                    logger.debug(f"Skipping frame: {frame.frame_id} (not selected by Classification)")
+            logger.info(
+                "using_classification_selected_frames",
+                selected_count=len(frames_to_execute),
+                selected_ids=selected_frame_ids,
+                original_count=len(self.frames)
+            )
+
+        for frame in frames_to_execute:
             if self.config.fail_fast and self.pipeline.frames_failed > 0:
                 logger.info("skipping_frame_fail_fast", frame_id=frame.frame_id)
                 continue
@@ -408,11 +515,41 @@ class PhaseOrchestrator:
         """Execute frames in parallel with concurrency limit."""
         semaphore = asyncio.Semaphore(self.config.parallel_limit or 3)
 
+        # Use frames selected by Classification phase if available
+        frames_to_execute = self.frames
+        if hasattr(context, 'selected_frames') and context.selected_frames:
+            # Filter frames to only include those selected by Classification
+            # Normalize frame names for matching (handle various formats)
+            selected_frame_ids = []
+            for f in context.selected_frames:
+                # Handle different formats: SecurityFrame, security, security-frame, etc.
+                normalized = f.lower().replace('frame', '').replace('-', '').replace('_', '')
+                selected_frame_ids.append(normalized)
+
+            frames_to_execute = []
+            for frame in self.frames:
+                # Normalize frame ID for comparison
+                frame_id_normalized = frame.frame_id.lower().replace('frame', '').replace('-', '').replace('_', '')
+                frame_name_normalized = frame.name.lower().replace(' ', '').replace('-', '').replace('_', '') if hasattr(frame, 'name') else ''
+
+                # Check if this frame was selected
+                if frame_id_normalized in selected_frame_ids or frame_name_normalized in selected_frame_ids:
+                    frames_to_execute.append(frame)
+                    logger.debug(f"Including frame: {frame.frame_id} (matched with Classification selection)")
+                else:
+                    logger.debug(f"Skipping frame: {frame.frame_id} (not selected by Classification)")
+            logger.info(
+                "using_classification_selected_frames_parallel",
+                selected_count=len(frames_to_execute),
+                selected_ids=selected_frame_ids,
+                original_count=len(self.frames)
+            )
+
         async def execute_with_semaphore(frame):
             async with semaphore:
                 await self._execute_frame_with_rules(context, frame, code_files)
 
-        tasks = [execute_with_semaphore(frame) for frame in self.frames]
+        tasks = [execute_with_semaphore(frame) for frame in frames_to_execute]
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _execute_frames_fail_fast(
@@ -421,7 +558,37 @@ class PhaseOrchestrator:
         code_files: List[CodeFile],
     ) -> None:
         """Execute frames sequentially, stop on first blocker failure."""
-        for frame in self.frames:
+        # Use frames selected by Classification phase if available
+        frames_to_execute = self.frames
+        if hasattr(context, 'selected_frames') and context.selected_frames:
+            # Filter frames to only include those selected by Classification
+            # Normalize frame names for matching (handle various formats)
+            selected_frame_ids = []
+            for f in context.selected_frames:
+                # Handle different formats: SecurityFrame, security, security-frame, etc.
+                normalized = f.lower().replace('frame', '').replace('-', '').replace('_', '')
+                selected_frame_ids.append(normalized)
+
+            frames_to_execute = []
+            for frame in self.frames:
+                # Normalize frame ID for comparison
+                frame_id_normalized = frame.frame_id.lower().replace('frame', '').replace('-', '').replace('_', '')
+                frame_name_normalized = frame.name.lower().replace(' ', '').replace('-', '').replace('_', '') if hasattr(frame, 'name') else ''
+
+                # Check if this frame was selected
+                if frame_id_normalized in selected_frame_ids or frame_name_normalized in selected_frame_ids:
+                    frames_to_execute.append(frame)
+                    logger.debug(f"Including frame: {frame.frame_id} (matched with Classification selection)")
+                else:
+                    logger.debug(f"Skipping frame: {frame.frame_id} (not selected by Classification)")
+            logger.info(
+                "using_classification_selected_frames_failfast",
+                selected_count=len(frames_to_execute),
+                selected_ids=selected_frame_ids,
+                original_count=len(self.frames)
+            )
+
+        for frame in frames_to_execute:
             result = await self._execute_frame_with_rules(context, frame, code_files)
 
             # Check if frame has blocker issues
@@ -548,9 +715,15 @@ class PhaseOrchestrator:
             phase = FortificationPhase(
                 config=getattr(self.config, 'fortification_config', {}),
                 context=phase_context,
+                llm_service=self.llm_service,
             )
 
-            result = await phase.execute_async(context.validated_issues)
+            # Ensure validated_issues exists and is a list
+            validated_issues = getattr(context, 'validated_issues', [])
+            if validated_issues is None:
+                validated_issues = []
+
+            result = await phase.execute_async(validated_issues)
 
             # Store results in context
             context.fortifications = result.fortifications
@@ -571,7 +744,12 @@ class PhaseOrchestrator:
             )
 
         except Exception as e:
-            logger.error("phase_failed", phase="FORTIFICATION", error=str(e))
+            import traceback
+            logger.error("phase_failed",
+                        phase="FORTIFICATION",
+                        error=str(e),
+                        error_type=type(e).__name__,
+                        traceback=traceback.format_exc())
             context.errors.append(f"FORTIFICATION failed: {str(e)}")
 
         if self.progress_callback:
@@ -715,6 +893,9 @@ class PhaseOrchestrator:
     def _store_validation_results(self, context: PipelineContext) -> None:
         """Store validation results in context."""
         if not hasattr(context, 'frame_results'):
+            # Initialize empty results if no frame results
+            context.findings = []
+            context.validated_issues = []
             return
 
         # Aggregate findings from all frames
@@ -725,13 +906,21 @@ class PhaseOrchestrator:
                 all_findings.extend(frame_result.findings)
 
         context.findings = all_findings
-        context.validated_issues = [
-            f for f in all_findings
+
+        # Ensure validated_issues is always set, even if empty
+        validated_issues = []
+        for finding in all_findings:
+            # Convert finding to dict if it has to_dict method
+            finding_dict = finding.to_dict() if hasattr(finding, 'to_dict') else finding
+
+            # Check if it's a false positive
             if not self._is_false_positive(
-                f.to_dict() if hasattr(f, 'to_dict') else f,
-                context.suppression_rules if hasattr(context, 'suppression_rules') else []
-            )
-        ]
+                finding_dict,
+                getattr(context, 'suppression_rules', [])
+            ):
+                validated_issues.append(finding_dict)
+
+        context.validated_issues = validated_issues
 
         # Add phase result
         context.add_phase_result("VALIDATION", {

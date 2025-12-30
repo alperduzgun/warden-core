@@ -89,7 +89,7 @@ class PipelineConfig(BaseDomainModel):
 
     # Main pipeline phases (6-phase system)
     enable_analysis: bool = True  # Run ANALYSIS phase for quality metrics
-    enable_classification: bool = False  # Run CLASSIFICATION phase for frame selection
+    enable_classification: bool = True  # ALWAYS ENABLED - Run CLASSIFICATION phase for intelligent frame selection
     enable_validation: bool = True  # Run VALIDATION phase (frames)
     enable_fortification: bool = False  # Run FORTIFICATION phase for security fixes
     enable_cleaning: bool = False  # Run CLEANING phase for code improvements

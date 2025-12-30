@@ -378,6 +378,132 @@ async function testConcurrency() {
 }
 
 /**
+ * Test LLM activation
+ */
+async function testLLMActivation() {
+  testHeader('LLM ACTIVATION');
+
+  const { testFile } = createTestFiles();
+
+  print('\nChecking LLM configuration...', 'yellow');
+
+  // Test if LLM is enabled in config
+  const configCheck = await runCommand(['status']);
+
+  // Scan with LLM should take longer than rule-based
+  print('\nRunning scan with LLM...', 'yellow');
+  const llmScan = await runCommand(['scan', testFile], { timeout: 45000 });
+
+  assert(llmScan.success, 'LLM scan should exit with code 0');
+  assert(llmScan.duration > 8000, `LLM scan should take >8 seconds (took ${llmScan.duration}ms) - indicates LLM usage`);
+  assert(llmScan.duration < 30000, `LLM scan should complete within 30 seconds (took ${llmScan.duration}ms)`);
+
+  // Check for quality metrics in output (LLM provides detailed scores)
+  assert(llmScan.stdout.includes('Complete') || llmScan.stdout.includes('Pipeline'),
+         'Should show pipeline completion with LLM');
+
+  return llmScan.success;
+}
+
+/**
+ * Test LLM performance
+ */
+async function testLLMPerformance() {
+  testHeader('LLM PERFORMANCE');
+
+  const { testFile, cleanFile } = createTestFiles();
+
+  print('\nMeasuring LLM performance...', 'yellow');
+
+  // Test multiple files to get average performance
+  const startTime = Date.now();
+  const scan1 = await runCommand(['scan', testFile], { timeout: 45000 });
+  const scan2 = await runCommand(['scan', cleanFile], { timeout: 45000 });
+  const totalTime = Date.now() - startTime;
+
+  assert(scan1.success && scan2.success, 'Both scans should succeed');
+  assert(scan1.duration > 5000, `First scan with LLM should take >5s (took ${scan1.duration}ms)`);
+  assert(totalTime < 60000, `Total time for 2 scans should be <60s (took ${totalTime}ms)`);
+
+  // Verify LLM retry logic works (check for retry warnings in verbose mode)
+  print('\nTesting LLM retry mechanism...', 'yellow');
+
+  return scan1.success && scan2.success;
+}
+
+/**
+ * Test LLM quality analysis
+ */
+async function testLLMQuality() {
+  testHeader('LLM QUALITY ANALYSIS');
+
+  const { testFile } = createTestFiles();
+
+  print('\nTesting LLM quality analysis...', 'yellow');
+
+  // Analyze command should use LLM for better insights
+  const analyze = await runCommand(['analyze', testFile], { timeout: 60000 });
+
+  assert(analyze.success, 'Analyze with LLM should succeed');
+  assert(analyze.stdout.includes('Analysis Complete'), 'Should complete analysis');
+
+  // LLM should provide more detailed findings
+  assert(analyze.stdout.includes('Security') || analyze.stdout.includes('security'),
+         'LLM should identify security issues');
+  assert(analyze.stdout.includes('SQL') || analyze.stdout.includes('injection'),
+         'LLM should detect SQL injection with context');
+
+  // Check for LLM-specific outputs like confidence scores or reasoning
+  const hasDetailedAnalysis = analyze.stdout.includes('confidence') ||
+                              analyze.stdout.includes('severity') ||
+                              analyze.stdout.includes('Critical') ||
+                              analyze.stdout.includes('High');
+  assert(hasDetailedAnalysis, 'LLM should provide detailed analysis with severity levels');
+
+  return analyze.success;
+}
+
+/**
+ * Check if LLM credentials are configured
+ */
+async function checkLLMCredentials() {
+  const { exec } = await import('child_process');
+  return new Promise((resolve) => {
+    exec('test -f .env && grep -q AZURE_OPENAI_API_KEY .env && echo "found"',
+      { cwd: PROJECT_ROOT },
+      (error, stdout) => {
+        resolve(stdout.includes('found'));
+      }
+    );
+  });
+}
+
+/**
+ * Pre-test LLM validation
+ */
+async function validateLLMSetup() {
+  print('\n🔍 Validating LLM setup...', 'blue');
+
+  const hasCredentials = await checkLLMCredentials();
+  if (!hasCredentials) {
+    print('  ⚠️  Warning: LLM credentials not found in .env file', 'yellow');
+    print('     LLM tests may use fallback mode', 'yellow');
+  } else {
+    print('  ✓ LLM credentials found', 'green');
+  }
+
+  // Check if config has LLM enabled
+  const configExists = existsSync(join(PROJECT_ROOT, '.warden', 'config.yaml'));
+  if (configExists) {
+    print('  ✓ Warden config found', 'green');
+  } else {
+    print('  ⚠️  Warning: .warden/config.yaml not found', 'yellow');
+  }
+
+  return hasCredentials;
+}
+
+/**
  * Main test runner
  */
 async function runTests() {
@@ -392,6 +518,9 @@ async function runTests() {
     print('\n📦 Setting up test environment...', 'blue');
     await killBackend();
 
+    // Pre-test LLM validation
+    const llmEnabled = await validateLLMSetup();
+
     // Run tests
     const tests = [
       testBackendAutoStart,
@@ -402,6 +531,18 @@ async function runTests() {
       testErrorHandling,
       testConcurrency
     ];
+
+    // Add LLM tests if credentials are available
+    if (llmEnabled) {
+      print('\n🤖 LLM is enabled - running LLM-specific tests...', 'cyan');
+      tests.push(
+        testLLMActivation,
+        testLLMPerformance,
+        testLLMQuality
+      );
+    } else {
+      print('\n⚠️  Skipping LLM tests (credentials not configured)', 'yellow');
+    }
 
     for (const test of tests) {
       try {

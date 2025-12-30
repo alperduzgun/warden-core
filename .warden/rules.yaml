@@ -12,8 +12,9 @@ frame_rules:
       - no-secrets
       - backend-manager-use-project-root
       - llm-no-hardcoded-deployment-names
-      - llm-azure-url-pattern-valid
       - llm-azure-deployment-name-usage
+      - llm-azure-url-pattern-valid
+      - llm-azure-deployment-env-required
     post_rules:
       - security-audit
     on_fail: stop
@@ -708,7 +709,8 @@ rules:
     category: consistency
     severity: high
     isBlocker: false
-    description: Ensure phase contexts are accessed correctly based on their actual structure
+    description: Ensure phase contexts are accessed correctly based on their actual
+      structure
     enabled: true
     type: convention
     conditions:
@@ -744,7 +746,8 @@ rules:
     category: consistency
     severity: critical
     isBlocker: true
-    description: Method calls must use correct method names (e.g., analyze_async not analyze)
+    description: Method calls must use correct method names (e.g., analyze_async not
+      analyze)
     enabled: true
     type: convention
     conditions:

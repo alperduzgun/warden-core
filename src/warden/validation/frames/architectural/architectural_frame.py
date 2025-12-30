@@ -94,15 +94,18 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         """
         super().__init__(config)
 
+        # Ensure config is a dict
+        config_dict = self.config if isinstance(self.config, dict) else {}
+
         # Size limits
-        self.max_file_lines = self.config.get("max_file_lines", 500)
-        self.max_function_lines = self.config.get("max_function_lines", 50)
-        self.max_classes_per_file = self.config.get("max_classes_per_file", 5)
+        self.max_file_lines = config_dict.get("max_file_lines", 500)
+        self.max_function_lines = config_dict.get("max_function_lines", 50)
+        self.max_classes_per_file = config_dict.get("max_classes_per_file", 5)
 
         # Organization checks
-        self.check_organization = self.config.get("check_organization", True)
-        self.check_test_mirror = self.config.get("check_test_mirror", True)
-        self.check_naming = self.config.get("check_naming", True)
+        self.check_organization = config_dict.get("check_organization", True)
+        self.check_test_mirror = config_dict.get("check_test_mirror", True)
+        self.check_naming = config_dict.get("check_naming", True)
 
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """

@@ -3,10 +3,35 @@
 
 import asyncio
 import json
-from aiohttp import web
-from bridge import WardenBridge
-import structlog
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+from aiohttp import web
+from .bridge import WardenBridge
+import structlog
+
+# Load environment variables from .env file BEFORE any other imports
+# This ensures Azure OpenAI credentials are available
+env_path = Path.cwd() / '.env'
+if not env_path.exists():
+    # Try parent directory
+    env_path = Path.cwd().parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"Loaded .env from: {env_path}")
+else:
+    print("Warning: No .env file found")
+
+# Verify Azure OpenAI credentials are loaded
+azure_key = os.getenv("AZURE_OPENAI_API_KEY")
+azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+if azure_key:
+    print(f"✅ Azure OpenAI credentials loaded successfully")
+    print(f"   Endpoint: {azure_endpoint}")
+    print(f"   Key: {azure_key[:10]}...")
+else:
+    print("⚠️ Azure OpenAI credentials not found in environment")
+    print(f"   Current env vars: {list(os.environ.keys())[:10]}")
 
 logger = structlog.get_logger()
 
@@ -45,8 +70,8 @@ class HTTPServer:
             elif method == 'get_config':
                 result = await self.handle_get_config(params)
             elif method == 'execute_pipeline_stream':
-                # For now, just return a non-streaming result
-                result = await self.handle_scan(params)
+                # Handle streaming via SSE
+                return await self.handle_stream(request, params)
             else:
                 return web.json_response({
                     "jsonrpc": "2.0",
@@ -73,6 +98,61 @@ class HTTPServer:
                 },
                 "id": data.get('id')
             })
+
+    async def handle_stream(self, request, params):
+        """Handle streaming pipeline execution via Server-Sent Events"""
+        response = web.StreamResponse(
+            status=200,
+            reason='OK',
+            headers={
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*',
+            }
+        )
+        await response.prepare(request)
+
+        path = params.get('path')
+        if not path:
+            error_msg = json.dumps({'error': 'Path is required'})
+            await response.write(f"event: error\ndata: {error_msg}\n\n".encode('utf-8'))
+            return response
+
+        # Resolve path
+        path = Path(path).resolve()
+        if not path.exists():
+            # Try relative to project root
+            project_root = Path.cwd()
+            path = project_root / params.get('path')
+            if not path.exists():
+                error_msg = json.dumps({'error': f'File not found: {params.get("path")}'})
+                await response.write(f"event: error\ndata: {error_msg}\n\n".encode('utf-8'))
+                return response
+
+        logger.info("streaming_pipeline", path=str(path))
+
+        try:
+            # Execute pipeline with streaming
+            async for event in self.bridge.execute_pipeline_stream(str(path)):
+                # Send SSE event
+                event_type = event.get('type', 'progress')
+                event_data = json.dumps(event)
+                await response.write(f"event: {event_type}\ndata: {event_data}\n\n".encode('utf-8'))
+                await response.drain()  # Ensure data is sent immediately
+
+            # Send complete event
+            await response.write(b"event: complete\ndata: {\"status\": \"completed\"}\n\n")
+
+        except Exception as e:
+            logger.error("stream_error", error=str(e))
+            error_data = json.dumps({"error": str(e)})
+            await response.write(f"event: error\ndata: {error_data}\n\n".encode('utf-8'))
+
+        finally:
+            await response.write_eof()
+
+        return response
 
     async def handle_scan(self, params):
         """Handle scan request"""

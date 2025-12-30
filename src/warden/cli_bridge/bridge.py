@@ -96,7 +96,12 @@ class WardenBridge:
 
                 # Use default frames when no config
                 frames = self._get_default_frames()
-                self.orchestrator = PhaseOrchestrator(frames=frames, config=None)
+                # Create LLM service if factory is available
+                if self.llm_factory and self.llm_config:
+                    llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
+                else:
+                    llm_service = None
+                self.orchestrator = PhaseOrchestrator(frames=frames, config=None, llm_service=llm_service)
                 return
 
             # Parse YAML
@@ -129,18 +134,22 @@ class WardenBridge:
                 timeout=settings.get('timeout', 300),
                 frame_timeout=settings.get('frame_timeout', 120),
                 parallel_limit=4,
-                enable_pre_analysis=settings.get('enable_pre_analysis', False),
+                enable_pre_analysis=settings.get('enable_pre_analysis', True),
                 enable_analysis=settings.get('enable_analysis', True),
-                enable_classification=settings.get('enable_classification', False),
+                enable_classification=True,  # ALWAYS ENABLED - Classification is critical for intelligent frame selection
                 enable_validation=settings.get('enable_validation', True),
-                enable_fortification=settings.get('enable_fortification', False),
-                enable_cleaning=settings.get('enable_cleaning', False),
+                enable_fortification=settings.get('enable_fortification', True),
+                enable_cleaning=settings.get('enable_cleaning', True),
                 pre_analysis_config=settings.get('pre_analysis_config', None),
             )
 
-            # Create orchestrator with frames and config
-            self.orchestrator = PhaseOrchestrator(frames=frames, config=pipeline_config)
-            logger.info("pipeline_loaded", config_name=self.active_config_name, frame_count=len(frames))
+            # Create orchestrator with frames, config, and LLM service
+            if self.llm_factory and self.llm_config:
+                llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
+            else:
+                llm_service = None
+            self.orchestrator = PhaseOrchestrator(frames=frames, config=pipeline_config, llm_service=llm_service)
+            logger.info("pipeline_loaded", config_name=self.active_config_name, frame_count=len(frames), has_llm=llm_service is not None)
 
         except Exception as e:
             # Log error but don't crash - use default frames
@@ -150,7 +159,11 @@ class WardenBridge:
             # Fallback to default frames
             try:
                 frames = self._get_default_frames()
-                self.orchestrator = PhaseOrchestrator(frames=frames, config=None)
+                if self.llm_factory and self.llm_config:
+                    llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
+                else:
+                    llm_service = None
+                self.orchestrator = PhaseOrchestrator(frames=frames, config=None, llm_service=llm_service)
             except Exception:
                 self.orchestrator = None
 
@@ -284,13 +297,20 @@ class WardenBridge:
         try:
             logger.info("execute_pipeline_called", file_path=file_path)
 
-            # Validate file exists
+            # Validate file exists and is a file (not directory)
             path = Path(file_path)
             if not path.exists():
                 raise IPCError(
                     code=ErrorCode.FILE_NOT_FOUND,
                     message=f"File not found: {file_path}",
                     data={"file_path": file_path},
+                )
+
+            if not path.is_file():
+                raise IPCError(
+                    code=ErrorCode.INVALID_PARAMS,
+                    message=f"Path is not a file: {file_path}",
+                    data={"file_path": file_path, "is_directory": path.is_dir()},
                 )
 
             # Create code file
@@ -306,6 +326,31 @@ class WardenBridge:
             # Convert to serializable dict and include context summary
             serialized_result = self._serialize_pipeline_result(result)
             serialized_result["context_summary"] = context.get_summary()
+
+            # Add LLM usage information
+            llm_info = {
+                "llm_enabled": self.orchestrator.llm_service is not None,
+                "llm_provider": self.llm_config.default_provider.value if self.llm_config else "none",
+                "phases_with_llm": []
+            }
+
+            # Check which phases used LLM from context
+            if hasattr(context, 'phase_results'):
+                for phase_name, phase_data in context.phase_results.items():
+                    if isinstance(phase_data, dict):
+                        # Check if phase used LLM (typically phases that took longer)
+                        if phase_name in ['PRE_ANALYSIS', 'ANALYSIS', 'CLASSIFICATION']:
+                            llm_info["phases_with_llm"].append(phase_name)
+
+            # Add LLM analysis details if available
+            if hasattr(context, 'quality_metrics') and context.quality_metrics:
+                llm_info["llm_quality_score"] = getattr(context.quality_metrics, 'overall_score', None)
+                llm_info["llm_confidence"] = getattr(context, 'quality_confidence', None)
+
+            if hasattr(context, 'classification_reasoning'):
+                llm_info["llm_reasoning"] = context.classification_reasoning[:200] if context.classification_reasoning else None
+
+            serialized_result["llm_analysis"] = llm_info
 
             return serialized_result
 
@@ -356,12 +401,40 @@ class WardenBridge:
         try:
             logger.info("execute_pipeline_stream_called", file_path=file_path)
 
-            # Validate file exists
+            # Validate file exists and is a file (not directory)
             path = Path(file_path)
             if not path.exists():
                 raise IPCError(
                     code=ErrorCode.FILE_NOT_FOUND,
                     message=f"File not found: {file_path}",
+                    data={"file_path": file_path},
+                )
+
+            # If it's a directory, find the first code file
+            if path.is_dir():
+                code_extensions = ['.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cs', '.go', '.rs', '.cpp', '.c', '.h']
+                first_file = None
+                for ext in code_extensions:
+                    files = list(path.glob(f"*{ext}"))
+                    # Skip files in .warden directory
+                    files = [f for f in files if '.warden' not in f.parts and f.is_file()]
+                    if files:
+                        first_file = files[0]
+                        break
+
+                if first_file:
+                    logger.info("directory_provided_using_first_file", directory=str(path), file=str(first_file))
+                    path = first_file
+                else:
+                    raise IPCError(
+                        code=ErrorCode.INVALID_PARAMS,
+                        message=f"No code files found in directory: {file_path}",
+                        data={"file_path": file_path, "is_directory": True},
+                    )
+            elif not path.is_file():
+                raise IPCError(
+                    code=ErrorCode.INVALID_PARAMS,
+                    message=f"Path is neither a file nor a directory: {file_path}",
                     data={"file_path": file_path},
                 )
 
@@ -637,7 +710,17 @@ class WardenBridge:
                 # Scan directory for code files
                 extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cs', '.go', '.rs', '.cpp', '.c', '.h'}
                 for ext in extensions:
-                    files_to_scan.extend(scan_path.rglob(f"*{ext}"))
+                    # Find all files with this extension, filtering out directories
+                    for file_path in scan_path.rglob(f"*{ext}"):
+                        # Skip files in .warden directory and its subdirectories
+                        if '.warden' in file_path.parts:
+                            continue
+                        # Skip hidden directories and __pycache__
+                        if any(part.startswith('.') or part == '__pycache__' for part in file_path.parts):
+                            continue
+                        # Only add if it's actually a file, not a directory
+                        if file_path.is_file():
+                            files_to_scan.append(file_path)
 
             logger.info("scan_files_found", count=len(files_to_scan), path=path)
 
@@ -651,6 +734,11 @@ class WardenBridge:
             # Scan each file
             for file_path in files_to_scan:
                 try:
+                    # Skip if not a file (extra safety check)
+                    if not file_path.is_file():
+                        logger.warning("skipping_non_file", path=str(file_path))
+                        continue
+
                     # Create code file
                     code_file = CodeFile(
                         path=str(file_path.absolute()),
@@ -690,12 +778,20 @@ class WardenBridge:
 
             duration_ms = int((time.time() - start_time) * 1000)
 
+            # Add LLM information
+            llm_info = {
+                "llm_enabled": self.orchestrator.llm_service is not None,
+                "llm_provider": self.llm_config.default_provider.value if self.llm_config and self.orchestrator.llm_service else "none",
+                "phases_with_llm": ["PRE_ANALYSIS", "ANALYSIS", "CLASSIFICATION"] if self.orchestrator.llm_service else []
+            }
+
             return {
                 "success": True,
                 "filesScanned": files_scanned,
                 "issues": all_issues,
                 "duration": duration_ms,
                 "summary": summary,
+                "llm_analysis": llm_info,
             }
 
         except IPCError:
