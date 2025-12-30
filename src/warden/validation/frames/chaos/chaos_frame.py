@@ -86,10 +86,11 @@ class ChaosFrame(ValidationFrame):
         from warden.validation.frames.chaos._internal.error_handling_check import ErrorHandlingCheck
 
         # Register all built-in checks
-        self.checks.register(TimeoutCheck(self.config.get("timeout", {})))
-        self.checks.register(RetryCheck(self.config.get("retry", {})))
-        self.checks.register(CircuitBreakerCheck(self.config.get("circuit_breaker", {})))
-        self.checks.register(ErrorHandlingCheck(self.config.get("error_handling", {})))
+        config = self.config if isinstance(self.config, dict) else {}
+        self.checks.register(TimeoutCheck(config.get("timeout", {})))
+        self.checks.register(RetryCheck(config.get("retry", {})))
+        self.checks.register(CircuitBreakerCheck(config.get("circuit_breaker", {})))
+        self.checks.register(ErrorHandlingCheck(config.get("error_handling", {})))
 
         logger.info(
             "builtin_checks_registered",
@@ -104,7 +105,8 @@ class ChaosFrame(ValidationFrame):
 
         for check_class in external_checks:
             try:
-                check_config = self.config.get("checks", {}).get(
+                config = self.config if isinstance(self.config, dict) else {}
+                check_config = config.get("checks", {}).get(
                     check_class.id, {}  # type: ignore[attr-defined]
                 )
                 check_instance = check_class(config=check_config)

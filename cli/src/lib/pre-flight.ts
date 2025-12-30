@@ -60,11 +60,12 @@ async function startHTTPBackend(): Promise<void> {
 
   // Start new HTTP server
   const httpProcess = spawn('python3', [
-    'src/warden/cli_bridge/http_server.py'
+    '-m',
+    'warden.cli_bridge.http_server'
   ], {
     cwd: projectRoot,
     detached: false,
-    stdio: 'ignore',
+    stdio: 'inherit', // Changed from 'ignore' to 'inherit' for debugging
     env: {
       ...process.env,
       PYTHONPATH: projectRoot,

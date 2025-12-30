@@ -146,7 +146,8 @@ class PreAnalysisPhase:
 
     async def _initialize_llm_analyzer(self) -> None:
         """Initialize LLM analyzer if enabled in config."""
-        use_llm = self.config.get("pre_analysis", {}).get("use_llm", False)
+        # Check for use_llm in config - it should be directly in config dict
+        use_llm = self.config.get("use_llm", True)  # Default to True if not specified
 
         if not use_llm:
             logger.info("llm_disabled_for_pre_analysis")

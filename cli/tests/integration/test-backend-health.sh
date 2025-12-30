@@ -18,6 +18,50 @@ check_backend() {
     return $?
 }
 
+# Function to check LLM status
+check_llm_status() {
+    echo ""
+    echo "🤖 Checking LLM configuration..."
+
+    # Check if .env file exists with Azure OpenAI credentials
+    ENV_FILE="/Users/alper/Documents/Development/Personal/warden-core/.env"
+    if [ -f "$ENV_FILE" ]; then
+        if grep -q "AZURE_OPENAI_API_KEY" "$ENV_FILE" 2>/dev/null; then
+            echo "  ✅ Azure OpenAI credentials found in .env"
+        else
+            echo "  ⚠️  No Azure OpenAI credentials in .env (LLM will use fallback)"
+        fi
+    else
+        echo "  ⚠️  No .env file found (LLM will use fallback)"
+    fi
+
+    # Check if config has LLM enabled
+    CONFIG_FILE="/Users/alper/Documents/Development/Personal/warden-core/.warden/config.yaml"
+    if [ -f "$CONFIG_FILE" ]; then
+        if grep -q "use_llm: true" "$CONFIG_FILE" 2>/dev/null; then
+            echo "  ✅ LLM is enabled in config.yaml"
+        else
+            echo "  ⚠️  LLM not enabled in config.yaml"
+        fi
+    else
+        echo "  ⚠️  No config.yaml found"
+    fi
+
+    # Test LLM service availability via backend
+    echo "  🔄 Testing LLM service availability..."
+    LLM_TEST=$(curl -s -X POST "${BACKEND_URL}/rpc" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"status","params":{},"id":1}' 2>/dev/null || echo "{}")
+
+    if echo "$LLM_TEST" | grep -q "result"; then
+        echo "  ✅ Backend RPC is responding"
+    else
+        echo "  ⚠️  Backend RPC not responding properly"
+    fi
+
+    echo ""
+}
+
 # Function to start backend
 start_backend() {
     echo "🚀 Starting backend server..."
@@ -68,6 +112,10 @@ run_test() {
             HEALTH_RESPONSE=$(curl -s "${BACKEND_URL}/health")
             if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
                 echo "✅ Health check passed: ${HEALTH_RESPONSE}"
+
+                # Check LLM configuration
+                check_llm_status
+
                 return 0
             fi
         fi
