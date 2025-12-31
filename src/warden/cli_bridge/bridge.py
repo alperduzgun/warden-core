@@ -62,8 +62,13 @@ class WardenBridge:
             self.llm_factory = None
             return
 
-        self.llm_config = load_llm_config()
-        self.llm_factory = LlmClientFactory(self.llm_config)
+        try:
+            self.llm_config = load_llm_config()
+            self.llm_factory = LlmClientFactory(self.llm_config)
+        except Exception as e:
+            logger.warning("LLM config loading failed, continuing without LLM", error=str(e))
+            self.llm_config = None
+            self.llm_factory = None
 
         # Initialize pipeline orchestrator (like TUI does)
         self._load_pipeline_config(config_path)
@@ -78,7 +83,7 @@ class WardenBridge:
             config_name=self.active_config_name
         )
 
-    def _load_pipeline_config(self, config_name: str) -> None:
+    def _load_pipeline_config(self, config_path: Optional[str] = None) -> None:
         """Load pipeline configuration from .warden/config.yaml (TUI pattern)."""
         if not WARDEN_AVAILABLE:
             return
