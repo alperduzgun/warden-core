@@ -121,7 +121,12 @@ class WardenBridge:
                     enable_cleaning=True,
                 )
 
-                self.orchestrator = PhaseOrchestrator(frames=frames, config=default_config, llm_service=llm_service)
+                self.orchestrator = PhaseOrchestrator(
+                    frames=frames,
+                    config=default_config,
+                    progress_callback=None,  # Will be set dynamically in execute_pipeline_stream
+                    llm_service=llm_service
+                )
                 return
 
             # Parse YAML
@@ -168,7 +173,12 @@ class WardenBridge:
                 llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
             else:
                 llm_service = None
-            self.orchestrator = PhaseOrchestrator(frames=frames, config=pipeline_config, llm_service=llm_service)
+            self.orchestrator = PhaseOrchestrator(
+                frames=frames,
+                config=pipeline_config,
+                progress_callback=None,  # Will be set dynamically in execute_pipeline_stream
+                llm_service=llm_service
+            )
             logger.info("pipeline_loaded", config_name=self.active_config_name, frame_count=len(frames), has_llm=llm_service is not None)
 
         except Exception as e:
@@ -198,7 +208,12 @@ class WardenBridge:
                     enable_cleaning=True,
                 )
 
-                self.orchestrator = PhaseOrchestrator(frames=frames, config=default_config, llm_service=llm_service)
+                self.orchestrator = PhaseOrchestrator(
+                    frames=frames,
+                    config=default_config,
+                    progress_callback=None,  # Will be set dynamically in execute_pipeline_stream
+                    llm_service=llm_service
+                )
             except Exception:
                 self.orchestrator = None
 
