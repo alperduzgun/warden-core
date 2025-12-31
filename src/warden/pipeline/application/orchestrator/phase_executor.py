@@ -45,10 +45,10 @@ class PhaseExecutor:
         code_files: List[CodeFile],
     ) -> None:
         """Execute PRE-ANALYSIS phase."""
-        logger.info("executing_phase", phase="PRE-ANALYSIS")
+        logger.info("executing_phase", phase="PRE_ANALYSIS")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "PRE-ANALYSIS"})
+            self.progress_callback("phase_started", {"phase": "PRE_ANALYSIS"})
 
         try:
             from warden.analysis.application.pre_analysis_phase import PreAnalysisPhase
@@ -76,16 +76,16 @@ class PhaseExecutor:
 
             logger.info(
                 "phase_completed",
-                phase="PRE-ANALYSIS",
+                phase="PRE_ANALYSIS",
                 project_type=result.project_context.project_type.value if result.project_context else None,
             )
 
         except Exception as e:
-            logger.error("phase_failed", phase="PRE-ANALYSIS", error=str(e))
-            context.errors.append(f"PRE-ANALYSIS failed: {str(e)}")
+            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e))
+            context.errors.append(f"PRE_ANALYSIS failed: {str(e)}")
 
         if self.progress_callback:
-            self.progress_callback("phase_completed", {"phase": "PRE-ANALYSIS"})
+            self.progress_callback("phase_completed", {"phase": "PRE_ANALYSIS"})
 
     async def execute_analysis_async(
         self,
