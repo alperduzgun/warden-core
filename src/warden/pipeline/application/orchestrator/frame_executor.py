@@ -425,7 +425,14 @@ class FrameExecutor:
         validated_issues = []
         for finding in all_findings:
             # Convert finding to dict if it has to_dict method
-            finding_dict = finding.to_dict() if hasattr(finding, 'to_dict') else finding
+            if hasattr(finding, 'to_dict'):
+                finding_dict = finding.to_dict()
+            elif isinstance(finding, dict):
+                finding_dict = finding
+            else:
+                # If it's neither, skip it (shouldn't happen but be safe)
+                logger.warning("Unexpected finding type", finding_type=type(finding).__name__)
+                continue
 
             # Check if it's a false positive
             if not self._is_false_positive(

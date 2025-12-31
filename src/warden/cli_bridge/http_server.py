@@ -181,7 +181,7 @@ class HTTPServer:
     async def handle_get_config(self, params):
         """Handle get_config request"""
         try:
-            config = self.bridge.get_config()
+            config = await self.bridge.get_config()
 
             # Extract available frames
             frames_available = []
