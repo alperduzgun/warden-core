@@ -48,7 +48,10 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="PRE_ANALYSIS")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "PRE_ANALYSIS"})
+            self.progress_callback("phase_started", {
+                "phase": "PRE_ANALYSIS",
+                "phase_name": "PRE_ANALYSIS"
+            })
 
         try:
             from warden.analysis.application.pre_analysis_phase import PreAnalysisPhase
@@ -85,7 +88,11 @@ class PhaseExecutor:
             context.errors.append(f"PRE_ANALYSIS failed: {str(e)}")
 
         if self.progress_callback:
-            self.progress_callback("phase_completed", {"phase": "PRE_ANALYSIS"})
+            self.progress_callback("phase_completed", {
+                "phase": "PRE_ANALYSIS",
+                "phase_name": "PRE_ANALYSIS",
+                "duration": 0.0  # Will be calculated by orchestrator
+            })
 
     async def execute_analysis_async(
         self,
@@ -96,7 +103,10 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="ANALYSIS")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "ANALYSIS"})
+            self.progress_callback("phase_started", {
+                "phase": "ANALYSIS",
+                "phase_name": "ANALYSIS"
+            })
 
         try:
             # Use LLM version if LLM service is available and configured
@@ -163,7 +173,11 @@ class PhaseExecutor:
 
         if self.progress_callback:
             # Include LLM analysis info in progress
-            analysis_data = {"phase": "ANALYSIS"}
+            analysis_data = {
+                "phase": "ANALYSIS",
+                "phase_name": "ANALYSIS",
+                "duration": 0.0  # Will be calculated by orchestrator
+            }
             if hasattr(context, 'quality_metrics') and context.quality_metrics:
                 analysis_data["llm_used"] = True
                 analysis_data["quality_score"] = getattr(context.quality_metrics, 'overall_score', None)
@@ -179,7 +193,10 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="CLASSIFICATION")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "CLASSIFICATION"})
+            self.progress_callback("phase_started", {
+                "phase": "CLASSIFICATION",
+                "phase_name": "CLASSIFICATION"
+            })
 
         try:
             # Use LLM version if LLM service is available
@@ -235,7 +252,11 @@ class PhaseExecutor:
             # This will be handled by frame executor
 
         if self.progress_callback:
-            classification_data = {"phase": "CLASSIFICATION"}
+            classification_data = {
+                "phase": "CLASSIFICATION",
+                "phase_name": "CLASSIFICATION",
+                "duration": 0.0  # Will be calculated by orchestrator
+            }
             if hasattr(context, 'classification_reasoning') and context.classification_reasoning:
                 classification_data["llm_used"] = True
                 classification_data["llm_reasoning"] = context.classification_reasoning[:200]
@@ -251,7 +272,10 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="FORTIFICATION")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "FORTIFICATION"})
+            self.progress_callback("phase_started", {
+                "phase": "FORTIFICATION",
+                "phase_name": "FORTIFICATION"
+            })
 
         try:
             from warden.fortification.application.fortification_phase import FortificationPhase
@@ -300,7 +324,17 @@ class PhaseExecutor:
             context.errors.append(f"FORTIFICATION failed: {str(e)}")
 
         if self.progress_callback:
-            self.progress_callback("phase_completed", {"phase": "FORTIFICATION"})
+            fortification_data = {
+                "phase": "FORTIFICATION",
+                "phase_name": "FORTIFICATION",
+                "duration": 0.0  # Will be calculated by orchestrator
+            }
+            # Check if LLM was used in this phase
+            if self.llm_service and hasattr(context, 'fortifications') and context.fortifications:
+                 fortification_data["llm_used"] = True
+                 fortification_data["fixes_generated"] = len(context.fortifications)
+            
+            self.progress_callback("phase_completed", fortification_data)
 
     async def execute_cleaning_async(
         self,
@@ -311,7 +345,10 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="CLEANING")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "CLEANING"})
+            self.progress_callback("phase_started", {
+                "phase": "CLEANING",
+                "phase_name": "CLEANING"
+            })
 
         try:
             from warden.cleaning.application.cleaning_phase import CleaningPhase
@@ -351,4 +388,12 @@ class PhaseExecutor:
             context.errors.append(f"CLEANING failed: {str(e)}")
 
         if self.progress_callback:
-            self.progress_callback("phase_completed", {"phase": "CLEANING"})
+            cleaning_data = {
+                "phase": "CLEANING",
+                "phase_name": "CLEANING",
+                "duration": 0.0  # Will be calculated by orchestrator
+            }
+            # Cleaning doesn't use LLM by default yet in this version, but if we add it:
+            # if self.llm_service and ...: cleaning_data["llm_used"] = True
+            
+            self.progress_callback("phase_completed", cleaning_data)
