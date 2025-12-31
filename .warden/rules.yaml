@@ -33,6 +33,15 @@ frame_rules:
     pre_rules:
       - file-size-limit
     on_fail: continue
+  env-security:
+    pre_rules:
+      - env-var-api-keys
+      - no-secrets
+    on_fail: stop
+  demo-security:
+    pre_rules:
+      - no-secrets
+    on_fail: continue
 rules:
   - id: env-var-api-keys
     name: API Keys Must Use Environment Variables
@@ -618,6 +627,150 @@ rules:
       - '**/*.spec.ts'
       - '**/tests/**'
       - '**/docs/**'
+  - id: enum-consistency-check
+    name: Enum Values Must Be Defined Before Use
+    category: consistency
+    severity: critical
+    isBlocker: true
+    description: When using enum values in code, ensure they are defined in the enum class
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - CleanupIssueType\.POOR_DOC
+        - CleanupIssueType\.[\w]+
+    examples:
+      invalid:
+        - |
+          # Using undefined enum value
+          issue = CleanupIssue(
+              issue_type=CleanupIssueType.POOR_DOC,  # ❌ POOR_DOC not defined
+              description="Poor documentation"
+          )
+      valid:
+        - |
+          # First define in enum
+          class CleanupIssueType(Enum):
+              POOR_DOC = "poor_doc"
+          # Then use it
+          issue = CleanupIssue(issue_type=CleanupIssueType.POOR_DOC, ...)
+    message: |
+      Enum value used but not defined in enum class!
+
+      Problem: Using CleanupIssueType.{value} but it's not defined
+      Solution: Add the missing enum value to the enum class definition
+
+      This prevents AttributeError at runtime.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+  - id: attribute-existence-check
+    name: Object Attributes Must Exist Before Access
+    category: consistency
+    severity: critical
+    isBlocker: true
+    description: Ensure objects have required attributes before accessing them
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - self\.pipeline\.frames_executed
+        - self\.pipeline\.frames_passed
+        - self\.pipeline\.frames_failed
+    examples:
+      invalid:
+        - |
+          # Accessing undefined attributes
+          self.pipeline.frames_executed += 1  # ❌ frames_executed not in ValidationPipeline
+      valid:
+        - |
+          # Define in class first
+          @dataclass
+          class ValidationPipeline:
+              frames_executed: int = 0
+              frames_passed: int = 0
+              frames_failed: int = 0
+    message: |
+      Accessing undefined attribute on object!
+
+      Problem: Object doesn't have this attribute defined
+      Solution: Add the attribute to the class definition
+
+      This prevents AttributeError at runtime.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+  - id: phase-context-compatibility
+    name: Phase Context Must Match Expected Structure
+    category: consistency
+    severity: high
+    isBlocker: false
+    description: Ensure phase contexts are accessed correctly based on their actual structure
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - result\.framework\.name
+        - result\.project_metadata
+        - result\.confidence
+    examples:
+      invalid:
+        - |
+          # Accessing non-existent attributes
+          context.framework = result.framework  # ❌ result has project_context.framework
+          name = result.framework.name  # ❌ framework is enum, not object
+      valid:
+        - |
+          # Correct access pattern
+          context.framework = result.project_context.framework if result.project_context else None
+          name = result.project_context.framework.value if result.project_context else None
+    message: |
+      Phase result attribute access error!
+
+      Problem: Accessing attributes that don't exist or have different structure
+      Solution: Check actual object structure and access correctly
+
+      Common mistakes:
+      - result.framework → result.project_context.framework
+      - framework.name → framework.value (for enums)
+      - result.confidence → result.project_context.confidence
+    language:
+      - python
+  - id: method-name-consistency
+    name: Method Names Must Match Implementation
+    category: consistency
+    severity: critical
+    isBlocker: true
+    description: Method calls must use correct method names (e.g., analyze_async not analyze)
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - self\.project_analyzer\.analyze\(\)
+        - await\s+\w+\.execute\(
+    examples:
+      invalid:
+        - |
+          # Wrong method name
+          result = await self.project_analyzer.analyze()  # ❌ Method is analyze_async
+      valid:
+        - |
+          # Correct method name
+          result = await self.project_analyzer.analyze_async()  # ✅
+    message: |
+      Method name mismatch!
+
+      Problem: Calling method with wrong name
+      Solution: Use the correct method name as defined in the class
+
+      Common mistakes:
+      - analyze() → analyze_async()
+      - execute() → execute_async()
+    language:
+      - python
 ai_validation:
   enabled: true
   llm_provider: azure_openai

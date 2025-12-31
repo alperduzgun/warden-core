@@ -2,6 +2,47 @@
 
 **Create your own validation frames for any technology, framework, or security standard.**
 
+## 🆕 What's New (v1.1.0 - December 2025)
+
+### 🎉 Major Infrastructure Upgrades
+
+1. **Config Auto-Generation** ✨
+   - Define `config_schema` in `frame.yaml`
+   - Warden automatically generates default config
+   - No manual configuration needed!
+   - Example: 8 config fields auto-created
+
+2. **Project-Specific Frames** ✨
+   - New location: `.warden/frames/` (project-local)
+   - Version-controlled custom frames
+   - Team-specific validation rules
+   - Coexists with global frames
+
+3. **CLI Integration** ✨
+   - Custom frames visible in Warden CLI UI
+   - Real-time status updates
+   - Backend auto-discovery
+   - Frame metadata display
+
+**Quick Example:**
+```yaml
+# frame.yaml - Define schema
+config_schema:
+  check_ssl:
+    type: "boolean"
+    default: true
+
+# .warden/config.yaml - Auto-generated!
+frames_config:
+  my-frame:
+    enabled: true
+    check_ssl: true  # ← Auto-generated from schema!
+```
+
+**See:** [FRAME_INFRASTRUCTURE_UPDATE.md](./FRAME_INFRASTRUCTURE_UPDATE.md) for full details.
+
+---
+
 ## 📖 Table of Contents
 
 - [Overview](#overview)
@@ -35,15 +76,48 @@ Warden's custom frame system allows you to create validation frames for:
    - Maintained by Warden team
    - Location: `warden.validation.frames`
 
-2. **Community Frames** (Python-based)
-   - Created by developers
-   - Installed locally: `~/.warden/frames/`
+2. **Custom Frames** (Python-based)
+   - Created by developers or teams
+   - **Global location**: `~/.warden/frames/` (all projects)
+   - **Project location**: `.warden/frames/` (current project only) ✨ NEW!
    - Discovered automatically
+   - Config auto-generated from `frame.yaml` ✨ NEW!
 
 3. **Marketplace Frames** (WASM - Future)
    - Multi-language support (Rust, Go, Python)
    - Sandboxed execution
    - Community distribution
+
+### Frame Locations ✨
+
+Warden discovers frames from **TWO locations** (in priority order):
+
+```
+# 1. Global frames (all projects)
+~/.warden/frames/
+├── redis-security/
+├── company-standards/
+└── shared-utilities/
+
+# 2. Project-specific frames (current project only)
+<project>/.warden/frames/
+├── team-custom-frame/
+├── project-specific-validation/
+└── temporary-dev-frame/
+```
+
+**When to use which:**
+
+| Location | Use Case | Benefits |
+|----------|----------|----------|
+| **Global** (`~/.warden/frames/`) | Company-wide standards, reusable validations | Available in all projects |
+| **Project** (`.warden/frames/`) | Team-specific rules, project requirements | Version controlled, isolated |
+
+**Discovery order:**
+1. Built-in frames (always available)
+2. Entry points (PyPI packages)
+3. Global frames (`~/.warden/frames/`)
+4. Project frames (`.warden/frames/`) ← Highest priority for overrides
 
 ---
 
@@ -348,6 +422,132 @@ tags:
 - **Category**: Must be one of the enum values
 - **Priority**: Must be one of the enum values
 - **Applicability**: Must have `language` or `framework` field
+
+---
+
+## Config Auto-Generation ✨ NEW!
+
+### Overview
+
+Warden automatically generates default configuration from your `frame.yaml` schema. No need to manually write config for every frame!
+
+**How it works:**
+1. Define `config_schema` in `frame.yaml`
+2. Warden reads schema and extracts `default` values
+3. Auto-generates config in `.warden/config.yaml`
+4. You only override what you need!
+
+### Basic Example
+
+**frame.yaml:**
+```yaml
+config_schema:
+  check_ssl:
+    type: "boolean"
+    default: true
+    description: "Validate SSL usage"
+
+  max_connections:
+    type: "integer"
+    default: 100
+    description: "Maximum allowed connections"
+```
+
+**Auto-Generated Config:**
+```yaml
+# .warden/config.yaml
+frames_config:
+  my-frame:
+    enabled: true
+    check_ssl: true          # ← Auto-generated from schema!
+    max_connections: 100     # ← Auto-generated from schema!
+```
+
+### Advanced Example (8 Config Fields)
+
+**frame.yaml:**
+```yaml
+config_schema:
+  enabled:
+    type: "boolean"
+    default: true
+
+  check_hardcoded_credentials:
+    type: "boolean"
+    default: true
+
+  check_missing_validation:
+    type: "boolean"
+    default: true
+
+  check_insecure_defaults:
+    type: "boolean"
+    default: true
+
+  sensitive_patterns:
+    type: "array"
+    default: ["API_KEY", "SECRET", "TOKEN", "PASSWORD"]
+
+  allowed_values:
+    type: "array"
+    default: ["localhost", "127.0.0.1"]
+
+  severity_level:
+    type: "string"
+    default: "critical"
+
+  fail_on_missing:
+    type: "boolean"
+    default: false
+```
+
+**Auto-Generated Config (8 fields!):**
+```yaml
+frames_config:
+  env-security:
+    enabled: true
+    check_hardcoded_credentials: true
+    check_missing_validation: true
+    check_insecure_defaults: true
+    sensitive_patterns: ["API_KEY", "SECRET", "TOKEN", "PASSWORD"]
+    allowed_values: ["localhost", "127.0.0.1"]
+    severity_level: "critical"
+    fail_on_missing: false
+```
+
+### Overriding Defaults
+
+**Only override what you need:**
+```yaml
+# .warden/config.yaml
+frames_config:
+  env-security:
+    enabled: true
+    # Override only 2 out of 8 fields:
+    severity_level: "high"              # Changed from "critical"
+    sensitive_patterns: ["API_KEY"]     # Reduced from 4 to 1
+    # Other 6 fields use auto-generated defaults!
+```
+
+### Supported Types
+
+| Type | Example Default | Description |
+|------|----------------|-------------|
+| `boolean` | `true` / `false` | Enable/disable features |
+| `string` | `"value"` | Text values |
+| `integer` | `100` | Numeric values |
+| `array` | `["a", "b"]` | Lists |
+| `object` | `{key: value}` | Nested structures |
+
+### Benefits
+
+✅ **Zero Manual Config** - Defaults auto-generated
+✅ **Type Safety** - Schema validates config
+✅ **Documentation** - Schema describes each field
+✅ **DRY Principle** - Single source of truth (frame.yaml)
+✅ **Easy Overrides** - Only change what you need
+
+**See also:** [FRAME_INFRASTRUCTURE_UPDATE.md](./FRAME_INFRASTRUCTURE_UPDATE.md) for implementation details.
 
 ---
 
@@ -906,10 +1106,191 @@ warden frame list
 
 ---
 
+## CLI Integration ✨ NEW!
+
+### Overview
+
+Custom frames are now fully integrated into the Warden CLI! They appear alongside built-in frames in the UI, with real-time status updates.
+
+### How It Works
+
+1. **Backend Discovery**
+   - Backend scans `.warden/frames/` and `~/.warden/frames/` on startup
+   - Loads frame metadata from `frame.yaml`
+   - Registers frames in FrameRegistry
+   - Merges config (defaults + overrides)
+
+2. **CLI Display**
+   - Frames appear in "Installed Frames" list
+   - Shows frame name, priority, blocker status
+   - Real-time status updates
+   - Config management UI
+
+### CLI UI Example
+
+```
+🛡️  WARDEN CODE ANALYSIS
+
+Installed frames (7/7 enabled)
+
+🔍 Search frames...
+
+╭───────────────────────────────────────────────────────────────────────────╮
+│                                                                           │
+│  ▶  Security Analysis · Built-in · CRITICAL · ⚠ BLOCKER                   │
+│                                                                           │
+│  Detects SQL injection, XSS, secrets, and other security vulnerabilities  │
+│                                                                           │
+│                                                                           │
+│  ✓ Chaos Engineering · Built-in · HIGH                                    │
+│                                                                           │
+│  Validates resilience against network failures and timeouts              │
+│                                                                           │
+│                                                                           │
+│  ✓ Environment Security Validator · Custom · CRITICAL · ⚠ BLOCKER  ✨     │
+│                                                                           │
+│  Detects environment variable security issues and best practices         │
+│                                                                           │
+│                                                                           │
+│  ✓ Demo Security Validator · Custom · HIGH  ✨                            │
+│                                                                           │
+│  Demo custom frame with auto-generated config                            │
+│                                                                           │
+╰───────────────────────────────────────────────────────────────────────────╯
+```
+
+### Backend Integration
+
+**Frame Discovery Process:**
+
+```
+1. Backend starts (start_ipc_server.py)
+   ↓
+2. FrameRegistry.discover_all()
+   ↓
+3. Scans locations:
+   - Built-in frames
+   - Global: ~/.warden/frames/
+   - Project: .warden/frames/  ✨
+   ↓
+4. Loads metadata (frame.yaml)
+   ↓
+5. Generates default config  ✨
+   ↓
+6. Merges with .warden/config.yaml
+   ↓
+7. Registers in CLI bridge
+   ↓
+8. Available in UI!
+```
+
+### Viewing Frames in CLI
+
+```bash
+# Start CLI
+warden-cli
+
+# Navigate to Frames section
+# → Press Tab to cycle through sections
+# → Arrow keys to navigate frames
+# → Enter to view details
+
+# Backend logs show discovery:
+[info] local_frame_loaded frame=EnvironmentSecurityFrame source=project
+[info] local_frame_loaded frame=DemoSecurityFrame source=project
+[info] 🎯 Loaded 7 validation frames
+```
+
+### Troubleshooting
+
+**Frame Not Appearing in CLI:**
+
+```bash
+# 1. Check backend is running
+ps aux | grep start_ipc_server.py
+
+# 2. Check frame was discovered
+tail -f .warden/backend.log | grep "frame_loaded"
+
+# 3. Restart backend
+pkill -9 -f start_ipc_server.py
+rm -f .warden/backend.pid
+warden-cli  # Auto-restarts backend
+
+# 4. Check frame ID matches config
+python3 << 'EOF'
+from warden.validation.infrastructure.frame_registry import FrameRegistry
+registry = FrameRegistry()
+frames = registry.discover_all()
+for fid in registry.registered_frames:
+    print(f"Frame ID: {fid}")
+EOF
+```
+
+**Config Not Taking Effect:**
+
+```yaml
+# Ensure frame ID matches (use snake_case)
+frames:
+  - env-security  # ✅ Correct (from frame.yaml)
+
+frames_config:
+  env-security:   # ✅ Same ID
+    enabled: true
+```
+
+### Real-Time Updates
+
+The CLI updates frame status in real-time:
+
+| Status | UI Display | Description |
+|--------|------------|-------------|
+| **Enabled** | `✓ Frame Name` | Frame is active and will execute |
+| **Disabled** | `○ Frame Name [DISABLED]` | Frame is inactive |
+| **Error** | `✗ Frame Name [ERROR]` | Frame failed to load |
+| **Custom** | `Frame Name · Custom ✨` | Custom frame (non-built-in) |
+| **Blocker** | `Frame Name · ⚠ BLOCKER` | Will block validation if fails |
+
+### Frame Metadata Display
+
+Click on a frame in CLI to see:
+
+```
+╭─── Environment Security Validator ───────────────────────────────────────╮
+│                                                                           │
+│  Type: Custom · Project-Specific                                         │
+│  Priority: CRITICAL                                                       │
+│  Blocker: Yes                                                             │
+│  Version: 1.0.0                                                           │
+│  Author: Warden Security Team                                             │
+│                                                                           │
+│  Description:                                                             │
+│  Detects environment variable security issues and best practices         │
+│  violations in your codebase.                                             │
+│                                                                           │
+│  Configuration (8 fields):                                                │
+│  ✓ check_hardcoded_credentials: true                                     │
+│  ✓ check_missing_env_validation: true                                    │
+│  ✓ check_insecure_defaults: true                                         │
+│  ✓ sensitive_patterns: ["API_KEY", "SECRET", ...]                        │
+│  ✓ severity_level: critical                                              │
+│  ... (3 more)                                                             │
+│                                                                           │
+│  Location: .warden/frames/env-security/                                  │
+│                                                                           │
+│  [E]dit Config | [V]iew Source | [T]est Frame | [D]isable               │
+╰───────────────────────────────────────────────────────────────────────────╯
+```
+
+**See also:** [FRAME_INFRASTRUCTURE_UPDATE.md](./FRAME_INFRASTRUCTURE_UPDATE.md) for backend integration details.
+
+---
+
 ## Additional Resources
 
 - [Built-in Frames Source Code](../src/warden/validation/frames/)
 - [Frame Development Examples](../examples/custom-frames/)
+- [Frame Infrastructure Update](./FRAME_INFRASTRUCTURE_UPDATE.md) ✨ **NEW!**
 - [Panel Integration Guide](./PANEL_INTEGRATION.md)
 - [Marketplace Documentation](./FRAME_MARKETPLACE.md) *(Coming Soon)*
 
@@ -945,7 +1326,8 @@ warden validate run file.py          # Test on single file
 
 ---
 
-**Last Updated**: 2025-12-22
-**Warden Version**: 1.0.0
-**Status**: Production Ready - Phase 1 (Python Custom Frames)
+**Last Updated**: 2025-12-26
+**Warden Version**: 1.1.0
+**Status**: Production Ready - Phase 2 (Config Auto-Generation + CLI Integration)
 **Pipeline Integration**: ✅ Fully Operational
+**New Features**: ✨ Config Auto-Generation | Project-Specific Frames | CLI Integration

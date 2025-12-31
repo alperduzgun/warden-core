@@ -48,3 +48,4 @@ Thumbs.db
 # Mem0 local memories
 .mem0/
 .warden/reports/
+.test-passed

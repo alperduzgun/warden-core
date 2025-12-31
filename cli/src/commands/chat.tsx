@@ -11,11 +11,13 @@ import {ChatInterfaceEnhanced} from '../components/ChatInterfaceEnhanced.js';
 import {FileBrowser} from '../components/FileBrowser.js';
 import {Frames} from './frames.js';
 import {Rules} from './rules.js';
+import {Scan} from './scan.js';
 import {ipcClient} from '../lib/ipc-client.js';
 import {backendManager} from '../utils/backendManager.js';
 import {sessionManager, type Session} from '../utils/sessionManager.js';
 import {llmClient} from '../lib/llm-client.js';
 import {configLoader, type WardenConfig} from '../utils/configLoader.js';
+import {runPreFlightChecks} from '../lib/pre-flight.js';
 import type {CommandResult} from '../lib/types.js';
 import {logger} from '../utils/logger.js';
 
@@ -24,6 +26,8 @@ export function Chat() {
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showFrames, setShowFrames] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showScan, setShowScan] = useState(false);
+  const [scanPath, setScanPath] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isStarting, setIsStarting] = useState(true);
@@ -49,12 +53,17 @@ export function Chat() {
       const wardenConfig = configLoader.load();
       setConfig(wardenConfig);
 
-      // 2. Start backend if not running
-      if (!backendManager.isRunning()) {
-        await backendManager.start();
+      // 2. Run pre-flight checks to ensure all backends are ready
+      const preFlightResult = await runPreFlightChecks();
+      if (!preFlightResult.passed) {
+        const failedChecks = preFlightResult.checks
+          .filter(c => !c.passed)
+          .map(c => `${c.name}: ${c.error || 'Failed'}`)
+          .join(', ');
+        throw new Error(`Pre-flight checks failed: ${failedChecks}`);
       }
 
-      // 3. Connect to backend
+      // 3. Connect to backend (Socket for interactive mode)
       await checkConnection();
 
       // 4. Initialize or resume session
@@ -132,17 +141,16 @@ export function Chat() {
         if (args.length === 0) {
           throw new Error('Usage: /scan <path>');
         }
-        if (!ipcClient.isConnected()) {
-          await ipcClient.connect();
-        }
         // Validate path to prevent path traversal
         const validatedScanPath = validatePath(args[0] || '.');
-        const scanResult = await ipcClient.send('scan', {path: validatedScanPath});
-        return scanResult as CommandResult;
+        setScanPath(validatedScanPath);
+        setShowScan(true);
+        return {success: true} as CommandResult;
 
+      case 'start':
       case 'analyze':
         if (args.length === 0) {
-          throw new Error('Usage: /analyze <file>');
+          throw new Error(`Usage: /${cmd} <file>`);
         }
         if (!ipcClient.isConnected()) {
           await ipcClient.connect();
@@ -185,8 +193,9 @@ export function Chat() {
         </Box>
         <Box flexDirection="column" paddingX={2}>
           <Text>🚀 Starting Warden...</Text>
-          <Text dimColor>  • Starting backend server</Text>
-          <Text dimColor>  • Connecting to IPC</Text>
+          <Text dimColor>  • Running pre-flight checks</Text>
+          <Text dimColor>  • Ensuring backend services are ready</Text>
+          <Text dimColor>  • Connecting to IPC socket</Text>
           <Text dimColor>  • Initializing session</Text>
         </Box>
       </Box>
@@ -232,6 +241,17 @@ export function Chat() {
 
   if (showRules) {
     return <Rules onExit={() => setShowRules(false)} />;
+  }
+
+  if (showScan) {
+    return (
+      <Box flexDirection="column">
+        <Scan path={scanPath} />
+        <Box marginTop={1}>
+          <Text dimColor>Press Ctrl+C to return to chat</Text>
+        </Box>
+      </Box>
+    );
   }
 
   return (

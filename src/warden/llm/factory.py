@@ -133,12 +133,12 @@ class LlmClientFactory:
 
 
 # Convenience function for direct import
-def create_client(provider: Optional[LlmProvider] = None) -> ILlmClient:
+def create_client(provider_or_config: Optional[any] = None) -> ILlmClient:
     """
     Convenience function to create LLM client.
 
     Args:
-        provider: Optional provider (uses default if None)
+        provider_or_config: Optional LlmProvider, LlmConfiguration, or None
 
     Returns:
         Configured LLM client
@@ -148,10 +148,23 @@ def create_client(provider: Optional[LlmProvider] = None) -> ILlmClient:
     """
     from .config import load_llm_config
 
-    config = load_llm_config()
-    factory = LlmClientFactory(config)
-
-    if provider:
-        return factory.create_client(provider)
+    # Handle different argument types
+    if provider_or_config is None:
+        # Load default config
+        config = load_llm_config()
+        factory = LlmClientFactory(config)
+        return factory.create_default_client()
+    elif isinstance(provider_or_config, LlmConfiguration):
+        # Use provided config
+        factory = LlmClientFactory(provider_or_config)
+        return factory.create_default_client()
+    elif isinstance(provider_or_config, LlmProvider):
+        # Use default config with specific provider
+        config = load_llm_config()
+        factory = LlmClientFactory(config)
+        return factory.create_client(provider_or_config)
     else:
+        # Try to interpret as provider
+        config = load_llm_config()
+        factory = LlmClientFactory(config)
         return factory.create_default_client()

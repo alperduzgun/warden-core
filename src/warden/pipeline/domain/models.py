@@ -85,6 +85,14 @@ class PipelineConfig(BaseDomainModel):
     # Optional pre-processing phases
     enable_discovery: bool = True  # Run file discovery before validation
     enable_build_context: bool = True  # Load build context at pipeline start
+    enable_pre_analysis: bool = True  # Run PRE-ANALYSIS phase for context detection (NEW!)
+
+    # Main pipeline phases (6-phase system)
+    enable_analysis: bool = True  # Run ANALYSIS phase for quality metrics
+    enable_classification: bool = False  # Run CLASSIFICATION phase for frame selection
+    enable_validation: bool = True  # Run VALIDATION phase (frames)
+    enable_fortification: bool = False  # Run FORTIFICATION phase for security fixes
+    enable_cleaning: bool = False  # Run CLEANING phase for code improvements
 
     # Optional post-processing phases
     enable_suppression: bool = True  # Apply suppression filtering after validation
@@ -94,6 +102,9 @@ class PipelineConfig(BaseDomainModel):
     discovery_config: Optional[Dict[str, Any]] = None  # Discovery configuration options
     suppression_config_path: Optional[str] = None  # Path to suppression config file
     issue_validation_config: Optional[Dict[str, Any]] = None  # Issue validator configuration (min_confidence, rules)
+
+    # PRE-ANALYSIS configuration (NEW!)
+    pre_analysis_config: Optional[Dict[str, Any]] = None  # PRE-ANALYSIS phase config (use_llm, llm_threshold, etc.)
 
     # Custom Rules (NEW)
     global_rules: List["CustomRule"] = field(default_factory=list)  # Rules applied to all frames
@@ -112,6 +123,10 @@ class PipelineConfig(BaseDomainModel):
         }
 
         return data
+
+
+# Alias for backwards compatibility
+PipelineOrchestratorConfig = PipelineConfig
 
 
 @dataclass
@@ -141,6 +156,8 @@ class ValidationPipeline(BaseDomainModel):
     total_frames: int = 0
     frames_completed: int = 0
     frames_failed: int = 0
+    frames_executed: int = 0  # Total frames executed (including failed)
+    frames_passed: int = 0  # Frames that passed validation
     total_issues: int = 0
     blocker_issues: int = 0
 
