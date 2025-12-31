@@ -106,7 +106,22 @@ class WardenBridge:
                     llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
                 else:
                     llm_service = None
-                self.orchestrator = PhaseOrchestrator(frames=frames, config=None, llm_service=llm_service)
+
+                # Create default config with all phases enabled
+                default_config = PipelineOrchestratorConfig(
+                    fail_fast=True,
+                    timeout=300,
+                    frame_timeout=120,
+                    parallel_limit=4,
+                    enable_pre_analysis=True,
+                    enable_analysis=True,
+                    enable_classification=True,
+                    enable_validation=True,
+                    enable_fortification=True,
+                    enable_cleaning=True,
+                )
+
+                self.orchestrator = PhaseOrchestrator(frames=frames, config=default_config, llm_service=llm_service)
                 return
 
             # Parse YAML
@@ -168,7 +183,22 @@ class WardenBridge:
                     llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
                 else:
                     llm_service = None
-                self.orchestrator = PhaseOrchestrator(frames=frames, config=None, llm_service=llm_service)
+
+                # Create default config with all phases enabled
+                default_config = PipelineOrchestratorConfig(
+                    fail_fast=True,
+                    timeout=300,
+                    frame_timeout=120,
+                    parallel_limit=4,
+                    enable_pre_analysis=True,
+                    enable_analysis=True,
+                    enable_classification=True,
+                    enable_validation=True,
+                    enable_fortification=True,
+                    enable_cleaning=True,
+                )
+
+                self.orchestrator = PhaseOrchestrator(frames=frames, config=default_config, llm_service=llm_service)
             except Exception:
                 self.orchestrator = None
 
