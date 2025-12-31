@@ -7,13 +7,13 @@ import {existsSync, readFileSync, writeFileSync, unlinkSync} from 'fs';
 import {join} from 'path';
 import {logger} from './logger.js';
 
-// Find project root by looking for start_ipc_server.py
+// Find project root by looking for src/warden/cli_bridge/server.py
 const findProjectRoot = (): string => {
   let currentDir = process.cwd();
 
   // Check current directory and parent directories
   for (let i = 0; i < 5; i++) {
-    const scriptPath = join(currentDir, 'start_ipc_server.py');
+    const scriptPath = join(currentDir, 'src', 'warden', 'cli_bridge', 'server.py');
     if (existsSync(scriptPath)) {
       return currentDir;
     }
@@ -28,7 +28,7 @@ const findProjectRoot = (): string => {
 
 const PROJECT_ROOT = findProjectRoot();
 const PID_FILE = join(PROJECT_ROOT, '.warden', 'backend.pid');
-const BACKEND_SCRIPT = join(PROJECT_ROOT, 'start_ipc_server.py');
+const BACKEND_SCRIPT = join(PROJECT_ROOT, 'src', 'warden', 'cli_bridge', 'server.py');
 const SOCKET_PATH = '/tmp/warden-ipc.sock';
 const HEALTH_CHECK_INTERVAL = 5000; // 5 seconds
 const STARTUP_TIMEOUT = 10000; // 10 seconds
@@ -69,7 +69,7 @@ export class BackendManager {
     }
 
     // Start backend process
-    this.process = spawn('python3', [BACKEND_SCRIPT], {
+    this.process = spawn('python3', [BACKEND_SCRIPT, '--transport', 'socket'], {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       cwd: PROJECT_ROOT, // Run from project root, not cli directory

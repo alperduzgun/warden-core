@@ -24,6 +24,10 @@ class CleanupIssueType(Enum):
     UNUSED_CODE = "unused_code"
     COMMENTED_CODE = "commented_code"
     DEAD_CODE = "dead_code"
+    DESIGN_SMELL = "design_smell"  # For maintainability analyzer
+    MISSING_DOC = "missing_doc"  # For documentation analyzer
+    TESTABILITY_ISSUE = "testability_issue"  # For testability analyzer
+    POOR_DOC = "poor_doc"  # Poor documentation quality
 
 
 class CleanupIssueSeverity(Enum):

@@ -29,7 +29,7 @@ frames:
 - demo-security     # Demo custom frame
 frames_config:
   orphan:
-    enabled: false
+    enabled: true    # Enabled olarak değiştirdim
     use_llm_filter: true
     ignore_test_files: true
     ignore_private: false
@@ -39,7 +39,7 @@ frames_config:
   security:
     enabled: true
     priority: critical
-    is_blocker: true
+    is_blocker: false  # Blocker'ı false yaptım ki diğer frame'ler de çalışsın
     checks:
     - sql_injection
     - xss
@@ -55,7 +55,7 @@ frames_config:
     - circuit_breaker
     - error_recovery
   architectural:
-    enabled: false
+    enabled: true    # Enabled olarak değiştirdim
     priority: low
   stress:
     enabled: true
@@ -81,6 +81,21 @@ ci:
     path: ./WARDEN_REPORT.md
   - format: json
     path: ./warden-report.json
+settings:
+  fail_fast: false  # Tüm frame'lerin çalışması için false yaptım
+  timeout: 300
+  frame_timeout: 120
+  enable_pre_analysis: true  # Enable PRE-ANALYSIS phase for context detection
+  enable_analysis: true  # Enable ANALYSIS phase for quality metrics
+  enable_classification: true  # Enable CLASSIFICATION phase for frame selection
+  enable_validation: true  # Enable VALIDATION phase (frames)
+  enable_fortification: true  # Enable FORTIFICATION phase for security fixes
+  enable_cleaning: true  # Enable CLEANING phase for code improvements
+  pre_analysis_config:
+    use_llm: true  # ✅ Enable LLM for better analysis
+    llm_threshold: 0.7  # Use LLM when confidence < threshold
+    batch_size: 10  # Files to analyze per LLM call
+    cache_enabled: true  # Cache LLM responses for similar patterns
 advanced:
   max_workers: 4
   frame_timeout: 300

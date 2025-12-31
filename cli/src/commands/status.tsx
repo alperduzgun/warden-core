@@ -3,29 +3,48 @@
  * Shows Warden backend status and configuration
  */
 
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
-import {Spinner} from '../components/Spinner.js';
 import {useIPC} from '../hooks/useIPC.js';
+import {backendManager} from '../lib/backend-manager.js';
+import {LoadingIndicator} from '../components/LoadingIndicator.js';
+import {ErrorDisplay} from '../utils/errors.js';
 import type {StatusResponse} from '../lib/types.js';
 
 export function Status() {
+  const [backendReady, setBackendReady] = useState(false);
+  const [startupError, setStartupError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Ensure backend is running before checking status
+    backendManager.ensureRunning()
+      .then(() => setBackendReady(true))
+      .catch((error) => setStartupError(error.message));
+  }, []);
+
   const {data, loading, error} = useIPC<StatusResponse>({
     command: 'ping',
+    // Only send command when backend is ready
+    autoExecute: backendReady,
   });
 
-  if (loading) {
-    return <Spinner message="Checking status..." />;
+  if (startupError) {
+    return <ErrorDisplay error={startupError} showDetails={true} />;
+  }
+
+  if (!backendReady || loading) {
+    return (
+      <LoadingIndicator
+        message="Checking Warden backend status"
+        subMessage="Connecting to backend service..."
+        showTimer={true}
+        timeoutWarning={5}
+      />
+    );
   }
 
   if (error) {
-    return (
-      <Box flexDirection="column">
-        <Text color="red">✗ Backend not connected</Text>
-        <Text dimColor>Make sure Warden backend is running:</Text>
-        <Text dimColor>  python3 start_ipc_server.py</Text>
-      </Box>
-    );
+    return <ErrorDisplay error={error} showDetails={true} />;
   }
 
   if (!data) {

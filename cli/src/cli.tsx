@@ -20,11 +20,10 @@ const cli = meow(
     $ warden <command> [options]
 
   Commands
-    chat                Interactive chat mode (default)
-    scan <path>         Scan directory or file for issues
-    analyze <file>      Analyze a single file
-    frames              Show available validation frames
+    scan <path>         Scan directory or file for security issues
+    analyze <file>      Analyze a file with all validation frames
     status              Check Warden backend status
+    frames              Show available validation frames
     help                Show this help message
 
   Options
@@ -34,10 +33,11 @@ const cli = meow(
 
   Examples
     $ warden scan src/
-    $ warden scan src/ --frames security,orphan
+    $ warden scan file.py
     $ warden analyze src/app.py
-    $ warden frames
+    $ warden analyze main.py --frames security,orphan
     $ warden status
+    $ warden frames
 `,
   {
     importMeta: import.meta,
@@ -55,6 +55,18 @@ const [command, ...args] = cli.input;
 // Main CLI router
 async function main() {
   switch (command) {
+    case 'start':
+    case 'analyze': {
+      const filePath = args[0];
+      if (!filePath) {
+        console.error(`Error: File path required for ${command} command`);
+        console.log(`Usage: warden ${command} <file>`);
+        process.exit(1);
+      }
+      render(<Analyze filePath={filePath} />);
+      break;
+    }
+
     case 'scan': {
       const path = args[0];
       if (!path) {
@@ -67,22 +79,17 @@ async function main() {
       break;
     }
 
-    case 'analyze': {
-      const filePath = args[0];
-      if (!filePath) {
-        console.error('Error: File path required for analyze command');
-        console.log('Usage: warden analyze <file>');
-        process.exit(1);
-      }
-      render(<Analyze filePath={filePath} />);
-      break;
-    }
-
     case 'status':
       render(<Status />);
       break;
 
     case 'frames':
+      // Check if running in TTY mode
+      if (!process.stdout.isTTY) {
+        console.error('Error: frames command requires an interactive terminal (TTY)');
+        console.error('Try running directly in a terminal, not through a pipe or non-interactive environment');
+        process.exit(1);
+      }
       render(<Frames />);
       break;
 

@@ -159,23 +159,25 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
       setShowCommandPalette(false);
     }
 
-    // Detect @ file picker
+    // Detect @ file picker - only when user explicitly types @
     if (input.endsWith('@')) {
       setShowFilePicker(true);
       setFileSearchQuery('');
       setFilteredFiles(allFiles.slice(0, 50).map(f => ({label: f.label, value: f.value})));
-    } else if (input.match(/@(.+)$/)) {
-      // User is typing after @
-      const match = input.match(/@(.+)$/);
+    } else if (showFilePicker && input.includes('@')) {
+      // User is typing after @ - only process if file picker is already showing
+      const match = input.match(/@([^@]*)$/);
       const query = match?.[1] || '';
-      setFileSearchQuery(query);
-      const filtered = filterFiles(allFiles, query);
-      setFilteredFiles(filtered.slice(0, 50).map(f => ({label: f.label, value: f.value})));
-      setShowFilePicker(true);
+      if (query !== fileSearchQuery) {
+        setFileSearchQuery(query);
+        const filtered = filterFiles(allFiles, query.trim());
+        setFilteredFiles(filtered.slice(0, 50).map(f => ({label: f.label, value: f.value})));
+      }
     } else if (!input.includes('@')) {
       setShowFilePicker(false);
+      setFileSearchQuery('');
     }
-  }, [input, allFiles]);
+  }, [input, allFiles, showFilePicker, fileSearchQuery]);
 
   const handleCommandSelect = (item: {label: string; value: string}) => {
     setInput(item.value);
@@ -435,19 +437,27 @@ export function ChatInterfaceEnhanced({onCommand, backendConnected, session, con
     );
   }
 
-  // Show file picker
-  if (showFilePicker && filteredFiles.length > 0) {
+  // Show file picker - Using FileBrowser component for better UX
+  if (showFilePicker) {
     return (
       <Box flexDirection="column" height="100%">
         <Box borderStyle="double" borderColor="cyan" paddingX={1} marginBottom={1}>
           <Text bold>📂 Select File {fileSearchQuery && `(filtering: "${fileSearchQuery}")`}</Text>
         </Box>
-        <Box marginBottom={1} paddingX={1}>
-          <Text dimColor>
-            Showing {filteredFiles.length} files | Type to filter | ↑↓: Navigate | Enter: Select | Esc: Close
-          </Text>
-        </Box>
-        <SelectInput items={filteredFiles} onSelect={handleFileSelect} limit={15} />
+        {filteredFiles.length > 0 ? (
+          <>
+            <Box marginBottom={1} paddingX={1}>
+              <Text dimColor>
+                Showing {filteredFiles.length} files | Type to filter | ↑↓: Navigate | Enter: Select | Esc: Close
+              </Text>
+            </Box>
+            <SelectInput items={filteredFiles} onSelect={handleFileSelect} limit={15} />
+          </>
+        ) : (
+          <Box paddingX={1}>
+            <Text dimColor>No files found matching "{fileSearchQuery}"</Text>
+          </Box>
+        )}
       </Box>
     );
   }
