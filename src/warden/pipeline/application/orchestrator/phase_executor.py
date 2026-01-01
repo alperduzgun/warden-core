@@ -9,7 +9,7 @@ from typing import Any, List, Optional, Callable
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.pipeline.domain.models import PipelineConfig
-from warden.validation.domain.frame import CodeFile
+from warden.validation.domain.frame import CodeFile, ValidationFrame
 from warden.shared.infrastructure.logging import get_logger
 
 # Import specific executors
@@ -35,6 +35,7 @@ class PhaseExecutor:
         progress_callback: Optional[Callable] = None,
         project_root: Optional[Path] = None,
         llm_service: Optional[Any] = None,
+        frames: Optional[List[ValidationFrame]] = None,
     ):
         """
         Initialize phase executor.
@@ -44,11 +45,13 @@ class PhaseExecutor:
             progress_callback: Optional callback for progress updates
             project_root: Root directory of the project
             llm_service: Optional LLM service for AI-powered phases
+            frames: List of all available validation frames
         """
         self.config = config or PipelineConfig()
         self._progress_callback = progress_callback
         self.project_root = project_root or Path.cwd()
         self.llm_service = llm_service
+        self.frames = frames or []
 
         # Initialize specific executors
         self.pre_analysis_executor = PreAnalysisExecutor(
@@ -67,7 +70,9 @@ class PhaseExecutor:
             config=self.config,
             progress_callback=self._progress_callback,
             project_root=self.project_root,
-            llm_service=self.llm_service
+            llm_service=self.llm_service,
+            # Pass all available frames to classification for dynamic selection
+            frames=self.frames
         )
         self.fortification_executor = FortificationExecutor(
             config=self.config,

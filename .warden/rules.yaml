@@ -29,6 +29,7 @@ frame_rules:
   architectural:
     pre_rules:
       - no-secrets
+      - cli-pipeline-status-check
     on_fail: continue
   stress:
     pre_rules:
@@ -778,6 +779,36 @@ rules:
       - execute() → execute_async()
     language:
       - python
+  - id: cli-pipeline-status-check
+    name: Robust Pipeline Status Checks
+    category: robustness
+    severity: high
+    isBlocker: true
+    description: Avoid fragile status checks (e.g., status === 'success'). Backend may return 'completed', '2', or 'success'.
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - status\s*===\s*['"]success['"]
+        - status\s*!==\s*['"]success['"]
+    examples:
+      invalid:
+        - "if (result.status === 'success') { ... }"
+      valid:
+        - "if (['success', 'completed', '2'].includes(String(result.status))) { ... }"
+    message: |
+      Fragile pipeline status check detected!
+      
+      Problem: Checking only for 'success' string.
+      Risk: Backend status codes vary (completed, 2, success).
+      
+      Fix: Use a robust check that covers all success states.
+      Example: ['success', 'completed', '2', 2].includes(status)
+    language:
+      - typescript
+      - javascript
+    exceptions:
+      - '**/*.test.ts'
 ai_validation:
   enabled: true
   llm_provider: azure_openai

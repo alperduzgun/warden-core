@@ -3,10 +3,11 @@ Classification Phase Executor.
 """
 
 import time
-from typing import List
+from typing import List, Any
+from pathlib import Path
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
-from warden.validation.domain.frame import CodeFile
+from warden.validation.domain.frame import CodeFile, ValidationFrame
 from warden.shared.infrastructure.logging import get_logger
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 
@@ -15,6 +16,17 @@ logger = get_logger(__name__)
 
 class ClassificationExecutor(BasePhaseExecutor):
     """Executor for the CLASSIFICATION phase."""
+
+    def __init__(
+        self,
+        config: PipelineContext = None,
+        progress_callback: callable = None,
+        project_root: Path = None,
+        llm_service: Any = None,
+        frames: List[ValidationFrame] = None,
+    ):
+        super().__init__(config, progress_callback, project_root, llm_service)
+        self.frames = frames or []
 
     async def execute_async(
         self,
@@ -44,14 +56,16 @@ class ClassificationExecutor(BasePhaseExecutor):
 
                 phase = ClassificationPhase(
                     config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
-                    llm_service=self.llm_service
+                    llm_service=self.llm_service,
+                    available_frames=self.frames
                 )
-                logger.info("using_llm_classification_phase")
+                logger.info("using_llm_classification_phase", available_frames=len(self.frames))
             else:
                 from warden.classification.application.classification_phase import ClassificationPhase
                 phase = ClassificationPhase(
                     config=getattr(self.config, 'classification_config', {}),
                     context=phase_context,
+                    available_frames=self.frames
                 )
 
             result = await phase.execute_async(code_files)

@@ -30,7 +30,7 @@ from warden.validation.domain.enums import (
     FrameScope,
     FrameApplicability,
 )
-from warden.validation.frames.orphan.orphan_detector import OrphanDetector, OrphanFinding
+from warden.validation.frames.orphan.orphan_detector import OrphanDetectorFactory, OrphanFinding
 from warden.validation.frames.orphan.llm_orphan_filter import LLMOrphanFilter
 from warden.shared.infrastructure.logging import get_logger
 
@@ -98,6 +98,115 @@ class OrphanFrame(ValidationFrame):
                 )
                 self.use_llm_filter = False  # Fallback to basic filtering
 
+    async def execute_batch(self, code_files: List[CodeFile]) -> List[FrameResult]:
+        """
+        Execute orphan detection on multiple files with Smart Batching.
+        """
+        start_time = time.perf_counter()
+        logger.info("orphan_batch_execution_started", file_count=len(code_files))
+        
+        # 1. AST Analysis Phase (CPU Bound - fast)
+        findings_map: Dict[str, List[OrphanFinding]] = {}
+        valid_files_map: Dict[str, CodeFile] = {}
+        
+        results: List[FrameResult] = []
+        
+        for code_file in code_files:
+            # Skip non-applicable
+            if not self._is_applicable(code_file):
+                results.append(self._create_skipped_result(time.perf_counter())) # duration approx 0
+                continue
+                
+            try:
+                detector = OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
+                if not detector:
+                    # Language not supported
+                    results.append(FrameResult(
+                        frame_id=self.frame_id, 
+                        frame_name=self.name, 
+                        status="skipped", 
+                        duration=0.0, 
+                        findings=[],
+                        metadata={"reason": "unsupported_language"}
+                    ))
+                    continue
+                    
+                orphan_findings = detector.detect_all()
+                if orphan_findings:
+                    findings_map[code_file.path] = orphan_findings
+                    valid_files_map[code_file.path] = code_file
+                else:
+                    # No orphans found by AST, create passed result immediately
+                    # Reuse helper or create new
+                    results.append(FrameResult(
+                        frame_id=self.frame_id, 
+                        frame_name=self.name, 
+                        status="passed", 
+                        duration=0.0, 
+                        issues_found=0, 
+                        is_blocker=False, 
+                        findings=[]
+                    ))
+            except Exception as e:
+                logger.error("orphan_ast_error", file=code_file.path, error=str(e))
+                # Add error result
+                results.append(FrameResult(
+                     frame_id=self.frame_id, 
+                     frame_name=self.name, 
+                     status="error", 
+                     duration=0.0, 
+                     issues_found=0, 
+                     is_blocker=False, 
+                     findings=[],
+                     metadata={"error": str(e)}
+                ))
+
+        # 2. Filtering Phase (LLM or Basic)
+        final_findings_map = {}
+        
+        if self.use_llm_filter and self.llm_filter and findings_map:
+            # Smart Batch LLM Filtering
+            logger.info("starting_smart_batch_filter", total_candidates=sum(len(l) for l in findings_map.values()))
+            final_findings_map = await self.llm_filter.filter_findings_batch(
+                findings_map, 
+                valid_files_map,
+                self.project_context
+            )
+        else:
+            # Basic Filtering per file
+            for path, findings in findings_map.items():
+                code_file = valid_files_map[path]
+                final_findings_map[path] = self._filter_findings(findings, code_file)
+
+        # 3. Result Construction Phase
+        for path, filtered_findings in final_findings_map.items():
+            code_file = valid_files_map[path]
+            
+            # Convert to Frame Findings
+            frame_findings = self._convert_to_findings(filtered_findings, code_file)
+            status = self._determine_status(frame_findings)
+            
+            # Metadata construction (simplified for batch)
+            metadata = {
+                 "total_orphans": len(findings_map.get(path, [])),
+                 "final_orphans": len(filtered_findings),
+                 "batch_processed": True
+            }
+
+            results.append(FrameResult(
+                frame_id=self.frame_id,
+                frame_name=self.name,
+                status=status,
+                duration=time.perf_counter() - start_time, # Total batch duration average? Or just total
+                issues_found=len(frame_findings),
+                is_blocker=False,
+                findings=frame_findings,
+                metadata=metadata
+            ))
+
+        logger.info("orphan_batch_completed", processed=len(results), duration=time.perf_counter() - start_time)
+        return results
+
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
         Execute orphan code detection on code file.
@@ -128,7 +237,23 @@ class OrphanFrame(ValidationFrame):
         # Run orphan detection
         try:
             # STAGE 1: AST-based detection (fast, language-specific)
-            detector = OrphanDetector(code_file.content, code_file.path)
+            detector = OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
+            
+            if not detector:
+                logger.info(
+                    "orphan_frame_skipped",
+                    file_path=code_file.path,
+                    reason="Unsupported language for orphan detection",
+                )
+                return FrameResult(
+                    frame_id=self.frame_id,
+                    frame_name=self.name,
+                    status="skipped",
+                    duration=time.perf_counter() - start_time,
+                    findings=[],
+                    metadata={"reason": "unsupported_language"}
+                )
+            
             orphan_findings = detector.detect_all()
 
             logger.debug(

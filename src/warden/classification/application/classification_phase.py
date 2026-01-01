@@ -37,16 +37,18 @@ class ClassificationPhase:
     Determines which frames to run and which issues to suppress.
     """
 
-    def __init__(self, config: Dict[str, Any] = None, context: Dict[str, Any] = None):
+    def __init__(self, config: Dict[str, Any] = None, context: Dict[str, Any] = None, available_frames: List[ValidationFrame] = None):
         """
         Initialize classification phase.
 
         Args:
             config: Phase configuration
             context: Context from previous phases
+            available_frames: List of validation frames to choose from
         """
         self.config = config or {}
         self.context = context or {}
+        self.available_frames = available_frames or []
 
         logger.info(
             "classification_phase_initialized",

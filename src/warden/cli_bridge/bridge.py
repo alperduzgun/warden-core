@@ -139,15 +139,78 @@ class WardenBridge:
 
             # Extract frame list and frame-specific configs
             frame_names = config_data.get('frames', [])
-            frame_config = config_data.get('frame_config', {})
+            # Fix: config.yaml uses "frames_config" (plural), handle both for backward compatibility
+            frame_config = config_data.get('frames_config', config_data.get('frame_config', {}))
+            
+            # Use FrameRegistry to discover ALL frames (built-in + custom)
+            from warden.validation.infrastructure.frame_registry import FrameRegistry
+            registry = FrameRegistry()
+            registry.discover_all()
+            
+            # Instantiate ALL available frames
+            available_frames = []
+            frame_map = {}  # Map normalized ID to instance
+            
+            for fid, cls in registry.registered_frames.items():
+                # Get config for this frame if available
+                # Search by normalized ID or some other matching strategy could be used,
+                # but for now rely on direct ID match or name match in config
+                f_config = frame_config.get(fid, {})
+                
+                # Also check if config uses the class name or other aliases
+                if not f_config:
+                    # Try alternate names from metadata
+                    if fid in registry.frame_metadata:
+                         meta = registry.frame_metadata[fid]
+                         if meta.id in frame_config:
+                             f_config = frame_config[meta.id]
+
+                try:
+                    instance = cls(config=f_config)
+                    available_frames.append(instance)
+                    frame_map[fid] = instance
+                    # Also map by name for easier lookup
+                    normalized_name = instance.name.replace(' ', '').replace('-', '').replace('_', '').lower()
+                    frame_map[normalized_name] = instance
+                except Exception as e:
+                    logger.warning(f"Failed to instantiate frame {fid}: {e}")
 
             if not frame_names:
                 logger.warning("no_frames_in_config")
+                # Default behavior: Use default frames as user frames
                 frames = self._get_default_frames()
                 self.active_config_name = "default"
             else:
-                # Load frames from list with their configs
-                frames = self._load_frames_from_list(frame_names, frame_config)
+                # Select user frames from available frames
+                frames = []
+                for name in frame_names:
+                    # Normalize name
+                    norm_name = name.replace('-', '').replace('_', '').lower()
+                    
+                    found = False
+                    # 1. Try exact ID match
+                    if norm_name in frame_map:
+                        frames.append(frame_map[norm_name])
+                        found = True
+                    else:
+                        # 2. Try match by instance name property
+                        for f in available_frames:
+                            f_norm = f.name.replace(' ', '').replace('-', '').replace('_', '').lower()
+                            if f_norm == norm_name:
+                                frames.append(f)
+                                found = True
+                                break
+                    
+                    if not found:
+                         # Special case for architectural
+                         if norm_name == 'architectural':
+                             if 'architecturalconsistency' in frame_map:
+                                 frames.append(frame_map['architecturalconsistency'])
+                                 found = True
+                    
+                    if not found:
+                        logger.warning(f"Configured frame not found: {name}")
+
                 logger.warning(f"DEBUG: Successfully loaded frames: {[f.frame_id for f in frames]}")
 
                 if not frames:
@@ -178,13 +241,15 @@ class WardenBridge:
                 llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
             else:
                 llm_service = None
+            
             self.orchestrator = PhaseOrchestrator(
                 frames=frames,
                 config=pipeline_config,
                 progress_callback=None,  # Will be set dynamically in execute_pipeline_stream
-                llm_service=llm_service
+                llm_service=llm_service,
+                available_frames=available_frames  # Pass all available frames for AI selection
             )
-            logger.info("pipeline_loaded", config_name=self.active_config_name, frame_count=len(frames), has_llm=llm_service is not None)
+            logger.info("pipeline_loaded", config_name=self.active_config_name, frame_count=len(frames), available_count=len(available_frames), has_llm=llm_service is not None)
 
         except Exception as e:
             # Log error but don't crash - use default frames
@@ -483,39 +548,81 @@ class WardenBridge:
                 )
 
             # If it's a directory, find the first code file
+            # If it's a directory, find ALL code files
             if path.is_dir():
-                code_extensions = ['.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cs', '.go', '.rs', '.cpp', '.c', '.h']
-                first_file = None
-                for ext in code_extensions:
-                    files = list(path.glob(f"*{ext}"))
-                    # Skip files in .warden directory
-                    files = [f for f in files if '.warden' not in f.parts and f.is_file()]
-                    if files:
-                        first_file = files[0]
-                        break
-
-                if first_file:
-                    logger.info("directory_provided_using_first_file", directory=str(path), file=str(first_file))
-                    path = first_file
-                else:
-                    raise IPCError(
+                code_extensions = {
+                    '.py', '.js', '.ts', '.jsx', '.tsx', 
+                    '.java', '.cs', '.go', '.rs', '.cpp', '.c', '.h', 
+                    '.php', '.rb', '.swift', '.kt'
+                }
+                
+                logger.info("scanning_directory", directory=str(path))
+                
+                files_to_scan = []
+                # Recursively find all files
+                for item in path.rglob("*"):
+                    if item.is_file() and item.suffix in code_extensions:
+                        # Skip files in .warden, .git, node_modules, __pycache__, .venv
+                        parts = item.parts
+                        if any(p.startswith('.') and p != '.' for p in parts) or \
+                           'node_modules' in parts or \
+                           '__pycache__' in parts or \
+                           'venv' in parts or \
+                           'env' in parts:
+                            continue
+                            
+                        files_to_scan.append(item)
+                        
+                if not files_to_scan:
+                     raise IPCError(
                         code=ErrorCode.INVALID_PARAMS,
-                        message=f"No code files found in directory: {file_path}",
-                        data={"file_path": file_path, "is_directory": True},
+                        message=f"No supported code files found in directory: {file_path}",
+                        data={"file_path": file_path, "extensions": list(code_extensions)},
                     )
-            elif not path.is_file():
-                raise IPCError(
+                
+                logger.info("collected_files", count=len(files_to_scan))
+                
+                # Check file count limit to prevent OOM on huge repos (can be configured later)
+                if len(files_to_scan) > 1000:
+                    logger.warning("file_limit_exceeded", count=len(files_to_scan), limit=1000)
+                    files_to_scan = files_to_scan[:1000]
+
+                # Convert all valid files to CodeFile objects
+                code_files = []
+                for p in files_to_scan:
+                    try:
+                        code_files.append(CodeFile(
+                            path=str(p.absolute()),
+                            content=p.read_text(encoding="utf-8", errors='replace'),
+                            language=self._detect_language(p),
+                        ))
+                    except Exception as e:
+                        logger.warning("file_read_error", file=str(p), error=str(e))
+                        
+                if not code_files:
+                    raise IPCError(
+                        code=ErrorCode.INTERNAL_ERROR,
+                        message="Failed to read any of the found files",
+                        data={"found": len(files_to_scan)},
+                    )
+            
+            elif path.is_file():
+                # Single file mode
+                code_files = [CodeFile(
+                    path=str(path.absolute()),
+                    content=path.read_text(encoding="utf-8"),
+                    language=self._detect_language(path),
+                )]
+            else:
+                 raise IPCError(
                     code=ErrorCode.INVALID_PARAMS,
                     message=f"Path is neither a file nor a directory: {file_path}",
                     data={"file_path": file_path},
                 )
 
-            # Create code file
-            code_file = CodeFile(
-                path=str(path.absolute()),
-                content=path.read_text(encoding="utf-8"),
-                language=self._detect_language(path),
-            )
+            # We now have a list of CodeFile objects in 'code_files'
+            # The original code initialized 'code_file' (singular). 
+            # We need to adapt the execute call below.
 
             # Create async queue for real-time progress streaming
             progress_queue: asyncio.Queue = asyncio.Queue()
@@ -539,10 +646,14 @@ class WardenBridge:
                 """Run pipeline in background task."""
                 nonlocal pipeline_error
                 try:
-                    result, context = await self.orchestrator.execute([code_file], frames_to_execute=frames)
-                    # Enqueue final result with context
+                    # Pass the list of collected code files
+                    result, context = await self.orchestrator.execute(code_files, frames_to_execute=frames)
+                    
+                    # Store result but do NOT enqueue it yet - we yield it properly in the main loop
+                    # This avoids race conditions where result is sent before usage events
                     serialized_result = self._serialize_pipeline_result(result)
                     serialized_result["context_summary"] = context.get_summary()
+                    
                     await progress_queue.put({"type": "result", "data": serialized_result})
                 except Exception as e:
                     pipeline_error = e

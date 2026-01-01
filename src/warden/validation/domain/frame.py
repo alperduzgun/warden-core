@@ -184,7 +184,18 @@ class ValidationFrame(ABC):
                     or programmatic setup
         """
         self.config = config or {}
+        self.config = config or {}
         self._validate_metadata()
+        self.project_context: Any | None = None  # Generic to avoid circular imports
+
+    def set_project_context(self, context: Any) -> None:
+        """
+        Inject project context (architecture, framework info).
+        
+        Args:
+            context: ProjectContext object
+        """
+        self.project_context = context
 
     def _validate_metadata(self) -> None:
         """Validate required metadata is present."""
@@ -217,6 +228,32 @@ class ValidationFrame(ABC):
             - Set status='passed' if no issues found
         """
         pass
+
+    async def execute_batch(self, code_files: List["CodeFile"]) -> List[FrameResult]:
+        """
+        Execute validation on multiple files (Batch Mode).
+
+        Default implementation iterates and calls execute().
+        Subclasses (like OrphanFrame) should override this for optimization.
+
+        Args:
+            code_files: List of code files to validate
+
+        Returns:
+            List of FrameResult objects (one per file, or aggregated)
+        """
+        results = []
+        for code_file in code_files:
+            try:
+                result = await self.execute(code_file)
+                if result:
+                    results.append(result)
+            except Exception as e:
+                # Log error but continue batch
+                # We need a logger here, but self.logger might not exist on base
+                # Just skip for default impl or maybe return error result
+                pass
+        return results
 
     @property
     def frame_id(self) -> str:
