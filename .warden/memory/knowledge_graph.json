@@ -1,0 +1,801 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": 1767279745.88273,
+  "facts": [
+    {
+      "id": "service:ProviderConfig",
+      "category": "service_abstraction",
+      "subject": "ProviderConfig",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.88269,
+      "updatedAt": 1767279745.8826911,
+      "metadata": {
+        "name": "ProviderConfig",
+        "file_path": "src/warden/llm/config.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides validate functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "validate"
+        ],
+        "confidence": 0.5,
+        "description": "Configuration for a specific LLM provider\n\nMatches C# ProviderConfig\nSecurity: API keys should be loaded from environment variables"
+      }
+    },
+    {
+      "id": "service:LlmProvider",
+      "category": "service_abstraction",
+      "subject": "LlmProvider",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882694,
+      "updatedAt": 1767279745.882694,
+      "metadata": {
+        "name": "LlmProvider",
+        "file_path": "src/warden/llm/types.py",
+        "category": "custom",
+        "responsibilities": [],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [],
+        "confidence": 0.5,
+        "description": "LLM provider types (matches C# LlmProvider enum)"
+      }
+    },
+    {
+      "id": "service:ConfigManager",
+      "category": "service_abstraction",
+      "subject": "ConfigManager",
+      "predicate": "implements",
+      "object": "config_management",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.8,
+      "createdAt": 1767279745.882695,
+      "updatedAt": 1767279745.882696,
+      "metadata": {
+        "name": "ConfigManager",
+        "file_path": "src/warden/cli_bridge/config_manager.py",
+        "category": "config_management",
+        "responsibilities": [
+          "Manages application configuration",
+          "Provides read config functionality",
+          "Provides write config functionality",
+          "Provides update frame status functionality",
+          "Provides get frame status functionality"
+        ],
+        "bypass_patterns": [
+          "yaml.safe_load",
+          "json.load",
+          "toml.load",
+          "configparser"
+        ],
+        "responsibility_keywords": [
+          "CONFIG",
+          "SETTING",
+          "CONFIGURATION"
+        ],
+        "public_methods": [
+          "read_config",
+          "write_config",
+          "update_frame_status",
+          "get_frame_status",
+          "read_rules",
+          "validate_frame_consistency"
+        ],
+        "confidence": 0.8,
+        "description": "Manager for reading and writing Warden config files\n\nPreserves YAML comments and formatting when updating configuration."
+      }
+    },
+    {
+      "id": "service:ProjectConfigManager",
+      "category": "service_abstraction",
+      "subject": "ProjectConfigManager",
+      "predicate": "implements",
+      "object": "config_management",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.8,
+      "createdAt": 1767279745.882698,
+      "updatedAt": 1767279745.882698,
+      "metadata": {
+        "name": "ProjectConfigManager",
+        "file_path": "src/warden/config/project_manager.py",
+        "category": "config_management",
+        "responsibilities": [
+          "Manages application configuration",
+          "Provides load or create functionality",
+          "Provides config exists functionality",
+          "Provides load functionality",
+          "Provides create and save functionality"
+        ],
+        "bypass_patterns": [
+          "yaml.safe_load",
+          "json.load",
+          "toml.load",
+          "configparser"
+        ],
+        "responsibility_keywords": [
+          "CONFIG",
+          "SETTING",
+          "CONFIGURATION"
+        ],
+        "public_methods": [
+          "load_or_create",
+          "config_exists",
+          "load",
+          "create_and_save",
+          "save",
+          "update",
+          "delete",
+          "reset"
+        ],
+        "confidence": 0.8,
+        "description": "Manages .warden/project.toml creation, loading, and caching."
+      }
+    },
+    {
+      "id": "service:TreeSitterProvider",
+      "category": "service_abstraction",
+      "subject": "TreeSitterProvider",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.8827,
+      "updatedAt": 1767279745.8827,
+      "metadata": {
+        "name": "TreeSitterProvider",
+        "file_path": "src/warden/ast/providers/tree_sitter_provider.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides metadata functionality",
+          "Provides parse functionality",
+          "Provides supports language functionality",
+          "Provides validate functionality",
+          "Provides cleanup functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "metadata",
+          "parse",
+          "supports_language",
+          "validate",
+          "cleanup"
+        ],
+        "confidence": 0.5,
+        "description": "Universal AST provider using tree-sitter.\n\nSupports 40+ programming languages through tree-sitter grammars.\nRequires tree-sitter package to be installed.\n\nAdvantages:\n    - Multi-language support (40+"
+      }
+    },
+    {
+      "id": "service:PythonASTProvider",
+      "category": "service_abstraction",
+      "subject": "PythonASTProvider",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882702,
+      "updatedAt": 1767279745.882702,
+      "metadata": {
+        "name": "PythonASTProvider",
+        "file_path": "src/warden/ast/providers/python_ast_provider.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides metadata functionality",
+          "Provides parse functionality",
+          "Provides supports language functionality",
+          "Provides validate functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "metadata",
+          "parse",
+          "supports_language",
+          "validate"
+        ],
+        "confidence": 0.5,
+        "description": "Native Python AST provider using built-in ast module.\n\nThis is the highest priority provider for Python code.\nNo external dependencies required - uses stdlib only.\n\nAdvantages:\n    - Native Python par"
+      }
+    },
+    {
+      "id": "service:ASTProviderLoader",
+      "category": "service_abstraction",
+      "subject": "ASTProviderLoader",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882703,
+      "updatedAt": 1767279745.882703,
+      "metadata": {
+        "name": "ASTProviderLoader",
+        "file_path": "src/warden/ast/application/provider_loader.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides load all functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "load_all"
+        ],
+        "confidence": 0.5,
+        "description": "Auto-discovery and loading of AST providers.\n\nDiscovery order:\n    1. Built-in providers (always available)\n    2. PyPI entry points (installed via pip)\n    3. Local plugin directory (~/.warden/ast-pr"
+      }
+    },
+    {
+      "id": "service:ASTProviderRegistry",
+      "category": "service_abstraction",
+      "subject": "ASTProviderRegistry",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.8827038,
+      "updatedAt": 1767279745.882705,
+      "metadata": {
+        "name": "ASTProviderRegistry",
+        "file_path": "src/warden/ast/application/provider_registry.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides register functionality",
+          "Provides unregister functionality",
+          "Provides get provider functionality",
+          "Provides get all providers functionality",
+          "Provides list providers functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "register",
+          "unregister",
+          "get_provider",
+          "get_all_providers",
+          "list_providers",
+          "list_supported_languages",
+          "get_provider_by_name",
+          "clear",
+          "discover_providers"
+        ],
+        "confidence": 0.5,
+        "description": "Registry for AST providers with priority-based selection.\n\nManages provider registration and automatically selects the best provider\nfor each language based on priority (lower value = higher priority)"
+      }
+    },
+    {
+      "id": "service:IASTProvider",
+      "category": "service_abstraction",
+      "subject": "IASTProvider",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882706,
+      "updatedAt": 1767279745.882706,
+      "metadata": {
+        "name": "IASTProvider",
+        "file_path": "src/warden/ast/application/provider_interface.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides metadata functionality",
+          "Provides parse functionality",
+          "Provides supports language functionality",
+          "Provides validate functionality",
+          "Provides get priority functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "metadata",
+          "parse",
+          "supports_language",
+          "validate",
+          "get_priority",
+          "cleanup"
+        ],
+        "confidence": 0.5,
+        "description": "Interface for AST providers.\n\nAll AST providers (tree-sitter, native parsers, community plugins) must\nimplement this interface. This ensures consistent behavior across providers.\n\nExample providers:\n "
+      }
+    },
+    {
+      "id": "service:ASTProviderPriority",
+      "category": "service_abstraction",
+      "subject": "ASTProviderPriority",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.8827069,
+      "updatedAt": 1767279745.882708,
+      "metadata": {
+        "name": "ASTProviderPriority",
+        "file_path": "src/warden/ast/domain/enums.py",
+        "category": "custom",
+        "responsibilities": [],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [],
+        "confidence": 0.5,
+        "description": "AST provider priority for auto-selection.\n\nLower values are preferred (higher priority).\nWhen multiple providers support a language, highest priority is used."
+      }
+    },
+    {
+      "id": "service:ASTProviderMetadata",
+      "category": "service_abstraction",
+      "subject": "ASTProviderMetadata",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882709,
+      "updatedAt": 1767279745.882709,
+      "metadata": {
+        "name": "ASTProviderMetadata",
+        "file_path": "src/warden/ast/domain/models.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides supports language functionality",
+          "Provides to dict functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "supports_language",
+          "to_dict"
+        ],
+        "confidence": 0.5,
+        "description": "Metadata about an AST provider.\n\nUsed for provider registration and discovery."
+      }
+    },
+    {
+      "id": "service:Settings",
+      "category": "service_abstraction",
+      "subject": "Settings",
+      "predicate": "implements",
+      "object": "config_management",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.8,
+      "createdAt": 1767279745.88271,
+      "updatedAt": 1767279745.88271,
+      "metadata": {
+        "name": "Settings",
+        "file_path": "src/warden/shared/infrastructure/config.py",
+        "category": "config_management",
+        "responsibilities": [
+          "Manages application configuration",
+          "Provides is development functionality",
+          "Provides is production functionality"
+        ],
+        "bypass_patterns": [
+          "yaml.safe_load",
+          "json.load",
+          "toml.load",
+          "configparser"
+        ],
+        "responsibility_keywords": [
+          "CONFIG",
+          "SETTING",
+          "CONFIGURATION"
+        ],
+        "public_methods": [
+          "is_development",
+          "is_production"
+        ],
+        "confidence": 0.8,
+        "description": "Application settings loaded from environment."
+      }
+    },
+    {
+      "id": "service:ExternalServiceError",
+      "category": "service_abstraction",
+      "subject": "ExternalServiceError",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.8827121,
+      "updatedAt": 1767279745.8827121,
+      "metadata": {
+        "name": "ExternalServiceError",
+        "file_path": "src/warden/shared/infrastructure/exceptions.py",
+        "category": "custom",
+        "responsibilities": [],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [],
+        "confidence": 0.5,
+        "description": "Raised when an external service (Qdrant, LLM, etc.) fails."
+      }
+    },
+    {
+      "id": "service:LLMService",
+      "category": "service_abstraction",
+      "subject": "LLMService",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882713,
+      "updatedAt": 1767279745.882713,
+      "metadata": {
+        "name": "LLMService",
+        "file_path": "src/warden/shared/services/__init__.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides generate suggestion functionality",
+          "Provides analyze code functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "generate_suggestion",
+          "analyze_code"
+        ],
+        "confidence": 0.5,
+        "description": "Service for LLM-based analysis and suggestions."
+      }
+    },
+    {
+      "id": "service:SecuritySuggestionService",
+      "category": "service_abstraction",
+      "subject": "SecuritySuggestionService",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882714,
+      "updatedAt": 1767279745.882715,
+      "metadata": {
+        "name": "SecuritySuggestionService",
+        "file_path": "src/warden/shared/services/__init__.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides generate fortification functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "generate_fortification"
+        ],
+        "confidence": 0.5,
+        "description": "Service for generating security fix suggestions."
+      }
+    },
+    {
+      "id": "service:CodeImprovementService",
+      "category": "service_abstraction",
+      "subject": "CodeImprovementService",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882716,
+      "updatedAt": 1767279745.882716,
+      "metadata": {
+        "name": "CodeImprovementService",
+        "file_path": "src/warden/shared/services/__init__.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides generate cleaning suggestion functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "generate_cleaning_suggestion"
+        ],
+        "confidence": 0.5,
+        "description": "Service for generating code quality improvements."
+      }
+    },
+    {
+      "id": "service:AzureKeyVaultProvider",
+      "category": "service_abstraction",
+      "subject": "AzureKeyVaultProvider",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882717,
+      "updatedAt": 1767279745.882717,
+      "metadata": {
+        "name": "AzureKeyVaultProvider",
+        "file_path": "src/warden/secrets/providers/azure_keyvault_provider.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides source functionality",
+          "Provides priority functionality",
+          "Provides get secret functionality",
+          "Provides is available functionality",
+          "Provides cleanup functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "source",
+          "priority",
+          "get_secret",
+          "is_available",
+          "cleanup"
+        ],
+        "confidence": 0.5,
+        "description": "Reads secrets from Azure Key Vault.\n\nRequires:\n- azure-identity package\n- azure-keyvault-secrets package\n- AZURE_KEY_VAULT_URL environment variable\n\nAuthentication:\n- Uses DefaultAzureCredential (supp"
+      }
+    },
+    {
+      "id": "service:ISecretProvider",
+      "category": "service_abstraction",
+      "subject": "ISecretProvider",
+      "predicate": "implements",
+      "object": "secret_management",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 1.0,
+      "createdAt": 1767279745.8827178,
+      "updatedAt": 1767279745.8827178,
+      "metadata": {
+        "name": "ISecretProvider",
+        "file_path": "src/warden/secrets/providers/base.py",
+        "category": "secret_management",
+        "responsibilities": [
+          "Manages secret and credential access",
+          "Provides environment-aware secret loading",
+          "Provides source functionality",
+          "Provides priority functionality",
+          "Provides get secret functionality"
+        ],
+        "bypass_patterns": [
+          "os.getenv",
+          "os.environ.get",
+          "os.environ["
+        ],
+        "responsibility_keywords": [
+          "API_KEY",
+          "SECRET",
+          "TOKEN",
+          "PASSWORD",
+          "CREDENTIAL",
+          "KEY_VAULT"
+        ],
+        "public_methods": [
+          "source",
+          "priority",
+          "get_secret",
+          "is_available",
+          "cleanup"
+        ],
+        "confidence": 1.0,
+        "description": "Interface for secret providers.\n\nAll providers (Env, DotEnv, Azure Key Vault) must implement this.\nPattern follows warden.llm.providers.base.ILlmClient.\n\nExample:\n    class MyProvider(ISecretProvider)"
+      }
+    },
+    {
+      "id": "service:SecretManager",
+      "category": "service_abstraction",
+      "subject": "SecretManager",
+      "predicate": "implements",
+      "object": "secret_management",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 1.0,
+      "createdAt": 1767279745.88272,
+      "updatedAt": 1767279745.88272,
+      "metadata": {
+        "name": "SecretManager",
+        "file_path": "src/warden/secrets/application/secret_manager.py",
+        "category": "secret_management",
+        "responsibilities": [
+          "Manages secret and credential access",
+          "Provides environment-aware secret loading",
+          "Provides get secret functionality",
+          "Provides get secrets functionality",
+          "Provides clear cache functionality"
+        ],
+        "bypass_patterns": [
+          "os.getenv",
+          "os.environ.get",
+          "os.environ["
+        ],
+        "responsibility_keywords": [
+          "API_KEY",
+          "SECRET",
+          "TOKEN",
+          "PASSWORD",
+          "CREDENTIAL",
+          "KEY_VAULT"
+        ],
+        "public_methods": [
+          "get_secret",
+          "get_secrets",
+          "clear_cache",
+          "cleanup",
+          "providers"
+        ],
+        "confidence": 1.0,
+        "description": "Manages secret retrieval from multiple sources.\n\nUses chain of responsibility pattern - tries each provider in priority order.\n\nAuto-detection:\n- If AZURE_KEY_VAULT_URL is set -> Azure Key Vault first"
+      }
+    },
+    {
+      "id": "service:SecretProviderConfig",
+      "category": "service_abstraction",
+      "subject": "SecretProviderConfig",
+      "predicate": "implements",
+      "object": "secret_management",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.8,
+      "createdAt": 1767279745.882721,
+      "updatedAt": 1767279745.8827221,
+      "metadata": {
+        "name": "SecretProviderConfig",
+        "file_path": "src/warden/secrets/domain/models.py",
+        "category": "secret_management",
+        "responsibilities": [
+          "Manages secret and credential access",
+          "Provides environment-aware secret loading"
+        ],
+        "bypass_patterns": [
+          "os.getenv",
+          "os.environ.get",
+          "os.environ["
+        ],
+        "responsibility_keywords": [
+          "API_KEY",
+          "SECRET",
+          "TOKEN",
+          "PASSWORD",
+          "CREDENTIAL",
+          "KEY_VAULT"
+        ],
+        "public_methods": [],
+        "confidence": 0.8,
+        "description": "Configuration for a secret provider.\n\nAttributes:\n    enabled: Whether this provider is enabled.\n    priority: Provider priority (lower = tried first).\n    cache_ttl_seconds: How long to cache secrets"
+      }
+    },
+    {
+      "id": "service:MemoryManager",
+      "category": "service_abstraction",
+      "subject": "MemoryManager",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882723,
+      "updatedAt": 1767279745.882723,
+      "metadata": {
+        "name": "MemoryManager",
+        "file_path": "src/warden/memory/application/memory_manager.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides initialize async functionality",
+          "Provides load async functionality",
+          "Provides save async functionality",
+          "Provides add fact functionality",
+          "Provides get facts by category functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "initialize_async",
+          "load_async",
+          "save_async",
+          "add_fact",
+          "get_facts_by_category",
+          "get_service_abstractions",
+          "store_service_abstraction"
+        ],
+        "confidence": 0.5,
+        "description": "Manages the persistent knowledge graph.\n\nResponsibilities:\n1. Load/Save Knowledge Graph from/to JSON\n2. Provide interface for adding/querying facts\n3. Manage memory persistence lifecycle"
+      }
+    },
+    {
+      "id": "service:ServiceCategory",
+      "category": "service_abstraction",
+      "subject": "ServiceCategory",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882724,
+      "updatedAt": 1767279745.8827252,
+      "metadata": {
+        "name": "ServiceCategory",
+        "file_path": "src/warden/analysis/application/service_abstraction_detector.py",
+        "category": "custom",
+        "responsibilities": [],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [],
+        "confidence": 0.5,
+        "description": "Category of service abstraction."
+      }
+    },
+    {
+      "id": "service:ServiceAbstraction",
+      "category": "service_abstraction",
+      "subject": "ServiceAbstraction",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882726,
+      "updatedAt": 1767279745.882726,
+      "metadata": {
+        "name": "ServiceAbstraction",
+        "file_path": "src/warden/analysis/application/service_abstraction_detector.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides to dict functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "to_dict"
+        ],
+        "confidence": 0.5,
+        "description": "Represents a detected service abstraction in the project."
+      }
+    },
+    {
+      "id": "service:ServiceAbstractionDetector",
+      "category": "service_abstraction",
+      "subject": "ServiceAbstractionDetector",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882727,
+      "updatedAt": 1767279745.882727,
+      "metadata": {
+        "name": "ServiceAbstractionDetector",
+        "file_path": "src/warden/analysis/application/service_abstraction_detector.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides detect async functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "detect_async"
+        ],
+        "confidence": 0.5,
+        "description": "Detects service abstractions in a project for context-aware consistency enforcement.\n\nThis detector:\n1. Scans all Python files for class definitions\n2. Matches against known service patterns\n3. Extrac"
+      }
+    },
+    {
+      "id": "service:JavaParserProvider",
+      "category": "service_abstraction",
+      "subject": "JavaParserProvider",
+      "predicate": "implements",
+      "object": "custom",
+      "source": "ServiceAbstractionDetector",
+      "confidence": 0.5,
+      "createdAt": 1767279745.882729,
+      "updatedAt": 1767279745.882729,
+      "metadata": {
+        "name": "JavaParserProvider",
+        "file_path": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+        "category": "custom",
+        "responsibilities": [
+          "Provides metadata functionality",
+          "Provides supports language functionality",
+          "Provides parse functionality",
+          "Provides validate functionality"
+        ],
+        "bypass_patterns": [],
+        "responsibility_keywords": [],
+        "public_methods": [
+          "metadata",
+          "supports_language",
+          "parse",
+          "validate"
+        ],
+        "confidence": 0.5,
+        "description": "Java AST provider using javalang library.\n\nProvides AST parsing for Java code (Java 8 syntax).\nPure Python implementation, no JVM required.\n\nFeatures:\n    - Java 8 syntax support\n    - Pure Python (ze"
+      }
+    }
+  ]
+}

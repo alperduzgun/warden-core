@@ -24,11 +24,14 @@ check_backend() {
 # Function to start backend
 start_backend() {
     echo -e "${YELLOW}🚀 Starting Warden backend...${NC}"
-    cd "${PROJECT_ROOT}"
-    python3 src/warden/cli_bridge/http_server.py > /tmp/warden-backend.log 2>&1 &
-    local pid=$!
-    echo $pid > /tmp/warden-backend.pid
-
+    # Start backend from project root but return to current dir
+    (
+        cd "${PROJECT_ROOT}"
+        export PYTHONPATH="src"
+        python3 -m warden.cli_bridge.http_server > /tmp/warden-backend.log 2>&1 &
+        echo $! > /tmp/warden-backend.pid
+    )
+    
     # Wait for backend to be ready
     local retries=0
     while [ $retries -lt 10 ]; do

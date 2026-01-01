@@ -10,28 +10,36 @@ from aiohttp import web
 from .bridge import WardenBridge
 import structlog
 
-# Load environment variables from .env file BEFORE any other imports
-# This ensures Azure OpenAI credentials are available
-env_path = Path.cwd() / '.env'
-if not env_path.exists():
-    # Try parent directory
-    env_path = Path.cwd().parent / '.env'
-if env_path.exists():
-    load_dotenv(env_path)
-    print(f"Loaded .env from: {env_path}")
-else:
-    print("Warning: No .env file found")
+import structlog
 
-# Verify Azure OpenAI credentials are loaded
-azure_key = os.getenv("AZURE_OPENAI_API_KEY")
-azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-if azure_key:
-    print(f"✅ Azure OpenAI credentials loaded successfully")
-    print(f"   Endpoint: {azure_endpoint}")
-    print(f"   Key: {azure_key[:10]}...")
-else:
-    print("⚠️ Azure OpenAI credentials not found in environment")
-    print(f"   Current env vars: {list(os.environ.keys())[:10]}")
+# Verify credentials using SecretManager (environment-aware)
+# This respects the environment: .env for local, env vars for CI/CD, Key Vault for production
+async def verify_credentials():
+    """Verify Azure OpenAI credentials are available using SecretManager."""
+    from warden.secrets import SecretManager
+    
+    manager = SecretManager()
+    
+    secrets = await manager.get_secrets([
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_OPENAI_ENDPOINT",
+    ])
+    
+    azure_key = secrets["AZURE_OPENAI_API_KEY"]
+    azure_endpoint = secrets["AZURE_OPENAI_ENDPOINT"]
+    
+    if azure_key.found:
+        print(f"✅ Azure OpenAI credentials loaded successfully")
+        print(f"   Source: {azure_key.source.value}")
+        print(f"   Endpoint: {azure_endpoint.value if azure_endpoint.found else 'not set'}")
+        print(f"   Key: {azure_key.value[:10]}...")
+    else:
+        print("⚠️ Azure OpenAI credentials not found")
+        print(f"   Checked sources: {[p.__class__.__name__ for p in manager.providers]}")
+
+# Run verification
+import asyncio
+asyncio.run(verify_credentials())
 
 logger = structlog.get_logger()
 
@@ -132,9 +140,12 @@ class HTTPServer:
 
         logger.info("streaming_pipeline", path=str(path))
 
+        # Prepare frames list
+        frames = params.get('frames')
+
         try:
             # Execute pipeline with streaming
-            async for event in self.bridge.execute_pipeline_stream(str(path)):
+            async for event in self.bridge.execute_pipeline_stream(str(path), frames=frames):
                 # Send SSE event
                 event_type = event.get('type', 'progress')
                 event_data = json.dumps(event)
@@ -173,8 +184,8 @@ class HTTPServer:
 
         logger.info("scanning_file", path=str(path), frames=frames)
 
-        # Perform scan (bridge.scan doesn't accept frames parameter)
-        result = await self.bridge.scan(str(path))
+        # Perform scan
+        result = await self.bridge.scan(str(path), frames=frames)
 
         return result
 

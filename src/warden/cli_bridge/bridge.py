@@ -52,7 +52,11 @@ class WardenBridge:
             project_root: Project root directory (default: cwd)
             config_path: Optional config file path
         """
-        self.project_root = project_root or Path.cwd()
+        if project_root is None:
+            self.project_root = Path.cwd()
+        else:
+            self.project_root = Path(project_root) if isinstance(project_root, str) else project_root
+            
         self.orchestrator = None
         self.active_config_name = "no-config"
 
@@ -144,6 +148,7 @@ class WardenBridge:
             else:
                 # Load frames from list with their configs
                 frames = self._load_frames_from_list(frame_names, frame_config)
+                logger.warning(f"DEBUG: Successfully loaded frames: {[f.frame_id for f in frames]}")
 
                 if not frames:
                     logger.warning("failed_to_load_frames")
@@ -184,6 +189,8 @@ class WardenBridge:
         except Exception as e:
             # Log error but don't crash - use default frames
             logger.error("pipeline_loading_error", error=str(e))
+            import sys
+            print(f"CRITICAL: Pipeline loading failed in backend: {e}", file=sys.stderr)
             self.active_config_name = "error-fallback"
 
             # Fallback to default frames
@@ -244,13 +251,27 @@ class WardenBridge:
             ArchitecturalConsistencyFrame,
             OrphanFrame,
         )
-
-        return [
+        # Try to import new frames if available
+        frames = [
             SecurityFrame(),
             ChaosFrame(),
             ArchitecturalConsistencyFrame(),
             OrphanFrame(),
         ]
+        
+        try:
+            from warden.validation.frames.fuzz.fuzz_frame import FuzzFrame
+            frames.append(FuzzFrame())
+        except ImportError:
+            pass
+            
+        try:
+            from warden.validation.frames.property.property_frame import PropertyFrame
+            frames.append(PropertyFrame())
+        except ImportError:
+            pass
+            
+        return frames
 
     def _load_frames_from_list(self, frame_names: list, frame_config: dict = None) -> list:
         """
@@ -414,7 +435,7 @@ class WardenBridge:
                 data={"file_path": file_path, "error_type": type(e).__name__},
             )
 
-    async def execute_pipeline_stream(self, file_path: str, config: Optional[Dict[str, Any]] = None) -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream(self, file_path: str, config: Optional[Dict[str, Any]] = None, frames: Optional[List[str]] = None) -> AsyncIterator[Dict[str, Any]]:
         """
         Execute validation pipeline on a file with streaming progress updates.
 
@@ -423,6 +444,7 @@ class WardenBridge:
         Args:
             file_path: Path to file to validate
             config: Optional pipeline configuration override
+            frames: Optional list of specific frames to run (overrides classification)
 
         Yields:
             Progress updates and final result as JSON events:
@@ -449,7 +471,7 @@ class WardenBridge:
             )
 
         try:
-            logger.info("execute_pipeline_stream_called", file_path=file_path)
+            logger.info("execute_pipeline_stream_called", file_path=file_path, frames=frames)
 
             # Validate file exists and is a file (not directory)
             path = Path(file_path)
@@ -517,7 +539,7 @@ class WardenBridge:
                 """Run pipeline in background task."""
                 nonlocal pipeline_error
                 try:
-                    result, context = await self.orchestrator.execute([code_file])
+                    result, context = await self.orchestrator.execute([code_file], frames_to_execute=frames)
                     # Enqueue final result with context
                     serialized_result = self._serialize_pipeline_result(result)
                     serialized_result["context_summary"] = context.get_summary()
@@ -708,12 +730,13 @@ class WardenBridge:
                 data={"provider": provider, "error_type": type(e).__name__},
             )
 
-    async def scan(self, path: str) -> Dict[str, Any]:
+    async def scan(self, path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Scan a directory or file for validation
 
         Args:
             path: Directory or file path to scan
+            frames: Optional list of specific frames to run (overrides classification)
 
         Returns:
             Scan results with found files and issues
@@ -736,7 +759,7 @@ class WardenBridge:
             )
 
         try:
-            logger.info("scan_called", path=path)
+            logger.info("scan_called", path=path, frames=frames)
 
             import time
             start_time = time.time()
@@ -797,7 +820,7 @@ class WardenBridge:
                     )
 
                     # Execute pipeline on this file
-                    result, context = await self.orchestrator.execute([code_file])
+                    result, context = await self.orchestrator.execute([code_file], frames_to_execute=frames)
                     files_scanned += 1
 
                     # Extract issues from frame results

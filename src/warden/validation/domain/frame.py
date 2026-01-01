@@ -58,6 +58,10 @@ class Finding:
             "code": self.code,
         }
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Alias for to_json for compatibility."""
+        return self.to_json()
+
 
 @dataclass
 class FrameResult:

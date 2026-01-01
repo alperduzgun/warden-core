@@ -129,8 +129,9 @@ export async function runPreFlightChecks(
   };
 
   // Determine which checks to run based on command
+  // For scan command, we need both backends (HTTP for health checks, Socket for IPC)
   const checksToRun = command === 'scan'
-    ? preFlightChecks.filter(c => c.name === 'HTTP Backend')
+    ? preFlightChecks // Run all checks for scan
     : preFlightChecks.filter(c => c.name === 'Socket Backend');
 
   for (const check of checksToRun) {

@@ -278,6 +278,10 @@ class ProjectContext(BaseDomainModel):
     # Detection metadata
     detection_time: float = 0.0  # Time taken for detection in seconds
     detection_warnings: List[str] = field(default_factory=list)
+    
+    # Service abstractions detected in the project
+    # Maps class name to abstraction info (e.g., {"SecretManager": ServiceAbstraction})
+    service_abstractions: Dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -296,7 +300,28 @@ class ProjectContext(BaseDomainModel):
             "confidence": round(self.confidence, 2),
             "detectionTime": round(self.detection_time, 3),
             "detectionWarnings": self.detection_warnings,
+            "serviceAbstractions": self.service_abstractions,
         }
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> 'ProjectContext':
+        """Create from JSON dict."""
+        return cls(
+            project_root=data.get("projectRoot", ""),
+            project_name=data.get("projectName", ""),
+            project_type=ProjectType(data.get("projectType", ProjectType.UNKNOWN.value)),
+            framework=Framework(data.get("framework", Framework.NONE.value)),
+            architecture=Architecture(data.get("architecture", Architecture.UNKNOWN.value)),
+            test_framework=TestFramework(data.get("testFramework", TestFramework.NONE.value)),
+            build_tools=[BuildTool(t) for t in data.get("buildTools", [])],
+            # Note: conventions/statistics deserialization simplified for now
+            config_files=data.get("configFiles", {}),
+            special_dirs=data.get("specialDirs", {}),
+            confidence=data.get("confidence", 0.0),
+            detection_time=data.get("detectionTime", 0.0),
+            detection_warnings=data.get("detectionWarnings", []),
+            service_abstractions=data.get("serviceAbstractions", {}),
+        )
 
     def get_context_summary(self) -> str:
         """

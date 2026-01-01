@@ -27,6 +27,8 @@ frames:
 - stress
 - env-security      # Custom frame (auto-discovered from ~/.warden/frames/)
 - demo-security     # Demo custom frame
+- property
+- fuzz
 frames_config:
   orphan:
     enabled: true    # Enabled olarak değiştirdim

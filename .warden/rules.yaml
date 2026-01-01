@@ -43,6 +43,10 @@ frame_rules:
     pre_rules:
       - no-secrets
     on_fail: continue
+  fuzz:
+    on_fail: continue
+  property:
+    on_fail: continue
 rules:
   - id: env-var-api-keys
     name: API Keys Must Use Environment Variables
