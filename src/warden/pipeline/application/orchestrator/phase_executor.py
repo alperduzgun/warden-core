@@ -5,6 +5,7 @@ Handles execution of PRE-ANALYSIS, ANALYSIS, CLASSIFICATION, FORTIFICATION, and 
 """
 
 from pathlib import Path
+import time
 from typing import Any, Dict, List, Optional, Callable
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -48,6 +49,7 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="PRE_ANALYSIS")
 
         if self.progress_callback:
+            start_time = time.perf_counter()
             self.progress_callback("phase_started", {
                 "phase": "PRE_ANALYSIS",
                 "phase_name": "PRE_ANALYSIS"
@@ -88,10 +90,11 @@ class PhaseExecutor:
             context.errors.append(f"PRE_ANALYSIS failed: {str(e)}")
 
         if self.progress_callback:
+            duration = time.perf_counter() - start_time
             self.progress_callback("phase_completed", {
                 "phase": "PRE_ANALYSIS",
                 "phase_name": "PRE_ANALYSIS",
-                "duration": 0.0  # Will be calculated by orchestrator
+                "duration": duration
             })
 
     async def execute_analysis_async(
@@ -103,6 +106,7 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="ANALYSIS")
 
         if self.progress_callback:
+            start_time = time.perf_counter()
             self.progress_callback("phase_started", {
                 "phase": "ANALYSIS",
                 "phase_name": "ANALYSIS"
@@ -172,11 +176,12 @@ class PhaseExecutor:
             context.errors.append(f"ANALYSIS failed: {str(e)}")
 
         if self.progress_callback:
+            duration = time.perf_counter() - start_time
             # Include LLM analysis info in progress
             analysis_data = {
                 "phase": "ANALYSIS",
                 "phase_name": "ANALYSIS",
-                "duration": 0.0  # Will be calculated by orchestrator
+                "duration": duration
             }
             if hasattr(context, 'quality_metrics') and context.quality_metrics:
                 analysis_data["llm_used"] = True
@@ -193,6 +198,7 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="CLASSIFICATION")
 
         if self.progress_callback:
+            start_time = time.perf_counter()
             self.progress_callback("phase_started", {
                 "phase": "CLASSIFICATION",
                 "phase_name": "CLASSIFICATION"
@@ -252,10 +258,11 @@ class PhaseExecutor:
             # This will be handled by frame executor
 
         if self.progress_callback:
+            duration = time.perf_counter() - start_time
             classification_data = {
                 "phase": "CLASSIFICATION",
                 "phase_name": "CLASSIFICATION",
-                "duration": 0.0  # Will be calculated by orchestrator
+                "duration": duration
             }
             if hasattr(context, 'classification_reasoning') and context.classification_reasoning:
                 classification_data["llm_used"] = True
@@ -272,6 +279,7 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="FORTIFICATION")
 
         if self.progress_callback:
+            start_time = time.perf_counter()
             self.progress_callback("phase_started", {
                 "phase": "FORTIFICATION",
                 "phase_name": "FORTIFICATION"
@@ -324,10 +332,11 @@ class PhaseExecutor:
             context.errors.append(f"FORTIFICATION failed: {str(e)}")
 
         if self.progress_callback:
+            duration = time.perf_counter() - start_time
             fortification_data = {
                 "phase": "FORTIFICATION",
                 "phase_name": "FORTIFICATION",
-                "duration": 0.0  # Will be calculated by orchestrator
+                "duration": duration
             }
             # Check if LLM was used in this phase
             if self.llm_service and hasattr(context, 'fortifications') and context.fortifications:
@@ -345,6 +354,7 @@ class PhaseExecutor:
         logger.info("executing_phase", phase="CLEANING")
 
         if self.progress_callback:
+            start_time = time.perf_counter()
             self.progress_callback("phase_started", {
                 "phase": "CLEANING",
                 "phase_name": "CLEANING"
@@ -388,10 +398,11 @@ class PhaseExecutor:
             context.errors.append(f"CLEANING failed: {str(e)}")
 
         if self.progress_callback:
+            duration = time.perf_counter() - start_time
             cleaning_data = {
                 "phase": "CLEANING",
                 "phase_name": "CLEANING",
-                "duration": 0.0  # Will be calculated by orchestrator
+                "duration": duration
             }
             # Cleaning doesn't use LLM by default yet in this version, but if we add it:
             # if self.llm_service and ...: cleaning_data["llm_used"] = True

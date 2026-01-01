@@ -71,9 +71,23 @@ class PhaseOrchestrator:
         else:
             self.config = config
 
-        self.progress_callback = progress_callback
+        self._progress_callback = progress_callback
         self.project_root = project_root or Path.cwd()
         self.llm_service = llm_service
+
+    @property
+    def progress_callback(self) -> Optional[Callable]:
+        """Get progress callback."""
+        return self._progress_callback
+
+    @progress_callback.setter
+    def progress_callback(self, value: Optional[Callable]) -> None:
+        """Set progress callback and propagate to executors."""
+        self._progress_callback = value
+        if hasattr(self, 'phase_executor'):
+            self.phase_executor.progress_callback = value
+        if hasattr(self, 'frame_executor'):
+            self.frame_executor.progress_callback = value
 
         # Initialize rule validator if global rules exist
         self.rule_validator = None
@@ -94,6 +108,7 @@ class PhaseOrchestrator:
             config=self.config,
             progress_callback=self.progress_callback,
             rule_validator=self.rule_validator,
+            llm_service=self.llm_service,
         )
 
         # Sort frames by priority
