@@ -1,7 +1,7 @@
 """
 Frame executor for validation frames.
 
-Handles frame matching, execution strategies, and fallback mechanisms.
+Handles frame execution strategies and validation orchestration.
 """
 
 import time
@@ -20,6 +20,10 @@ from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.validation.domain.frame import CodeFile, ValidationFrame
 from warden.shared.infrastructure.logging import get_logger
+
+# Import helper modules
+from .frame_matcher import FrameMatcher
+from .result_aggregator import ResultAggregator
 
 logger = get_logger(__name__)
 
@@ -43,13 +47,17 @@ class FrameExecutor:
             config: Pipeline configuration
             progress_callback: Optional callback for progress updates
             rule_validator: Optional rule validator for PRE/POST rules
+            llm_service: Optional LLM service for AI-powered validation
         """
         self.frames = frames or []
         self.config = config or PipelineConfig()
         self.progress_callback = progress_callback
-        self.progress_callback = progress_callback
         self.rule_validator = rule_validator
         self.llm_service = llm_service
+
+        # Initialize helper components
+        self.frame_matcher = FrameMatcher(frames)
+        self.result_aggregator = ResultAggregator()
 
     async def execute_validation_with_strategy_async(
         self,
@@ -73,7 +81,8 @@ class FrameExecutor:
             filtered_files = self._filter_files_by_context(code_files, file_contexts)
 
             # Get frames to execute (with fallback logic)
-            frames_to_execute = self._get_frames_to_execute(context)
+            selected_frames = getattr(context, 'selected_frames', None)
+            frames_to_execute = self.frame_matcher.get_frames_to_execute(selected_frames)
 
             if not frames_to_execute:
                 logger.warning("no_frames_to_execute",
@@ -112,7 +121,7 @@ class FrameExecutor:
                 await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
 
             # Store results in context
-            self._store_validation_results(context, pipeline)
+            self.result_aggregator.store_validation_results(context, pipeline)
 
             logger.info(
                 "phase_completed",
@@ -133,78 +142,6 @@ class FrameExecutor:
                 "llm_used": self.llm_service is not None
             })
 
-    def _get_frames_to_execute(self, context: PipelineContext) -> List[ValidationFrame]:
-        """
-        Get frames to execute with improved matching and fallback logic.
-
-        Args:
-            context: Pipeline context with classification results
-
-        Returns:
-            List of frames to execute
-        """
-        # Check if Classification phase selected frames
-        if hasattr(context, 'selected_frames') and context.selected_frames:
-            logger.info("using_classification_selected_frames",
-                       selected=context.selected_frames)
-
-            # Improved frame matching logic
-            frames_to_execute = []
-            for selected_name in context.selected_frames:
-                frame = self._find_frame_by_name(selected_name)
-                if frame:
-                    frames_to_execute.append(frame)
-                    logger.debug(f"Matched frame: {selected_name} -> {frame.frame_id}")
-                else:
-                    logger.warning(f"Could not match frame: {selected_name}")
-
-            # If we matched at least one frame, use them
-            if frames_to_execute:
-                logger.info(f"Executing {len(frames_to_execute)} frames from Classification")
-                return frames_to_execute
-
-            # If no frames matched, fall back to all frames
-            logger.warning("classification_frames_not_matched_using_all_frames",
-                          selected=context.selected_frames,
-                          available=[f.frame_id for f in self.frames])
-        else:
-            logger.info("no_classification_results_using_all_frames")
-
-        # Fallback: Use all configured frames
-        logger.info(f"Using all {len(self.frames)} configured frames")
-        return self.frames
-
-    def _find_frame_by_name(self, name: str) -> Optional[ValidationFrame]:
-        """
-        Find a frame by various name formats.
-
-        Handles formats like:
-        - "security" -> SecurityFrame
-        - "Security" -> SecurityFrame
-        - "security-frame" -> SecurityFrame
-        - "security_frame" -> SecurityFrame
-        - "Security Analysis" -> SecurityFrame (by frame.name)
-        """
-        # Normalize the search name
-        search_normalized = name.lower().replace('frame', '').replace('-', '').replace('_', '').strip()
-
-        for frame in self.frames:
-            # Try matching by frame_id
-            frame_id_normalized = frame.frame_id.lower().replace('frame', '').replace('-', '').replace('_', '').strip()
-            if frame_id_normalized == search_normalized:
-                return frame
-
-            # Try matching by frame name
-            if hasattr(frame, 'name'):
-                frame_name_normalized = frame.name.lower().replace(' ', '').replace('-', '').replace('_', '').replace('frame', '').replace('analysis', '').strip()
-                if frame_name_normalized == search_normalized:
-                    return frame
-
-            # Try partial matching
-            if search_normalized in frame_id_normalized or frame_id_normalized in search_normalized:
-                return frame
-
-        return None
 
     async def _execute_frames_sequential(
         self,
@@ -441,73 +378,3 @@ class FrameExecutor:
         """Check if any violations are blockers."""
         return any(v.is_blocker for v in violations)
 
-    def _store_validation_results(self, context: PipelineContext, pipeline: ValidationPipeline) -> None:
-        """Store validation results in context."""
-        if not hasattr(context, 'frame_results'):
-            # Initialize empty results if no frame results
-            context.findings = []
-            context.validated_issues = []
-            return
-
-        # Aggregate findings from all frames
-        all_findings = []
-        for frame_id, frame_data in context.frame_results.items():
-            frame_result = frame_data.get('result')
-            if frame_result and hasattr(frame_result, 'findings'):
-                all_findings.extend(frame_result.findings)
-
-        context.findings = all_findings
-
-        # Ensure validated_issues is always set, even if empty
-        validated_issues = []
-        for finding in all_findings:
-            # Convert finding to dict if it has to_dict method
-            if hasattr(finding, 'to_dict'):
-                finding_dict = finding.to_dict()
-            elif isinstance(finding, dict):
-                finding_dict = finding
-            else:
-                # If it's neither, skip it (shouldn't happen but be safe)
-                logger.warning("Unexpected finding type", finding_type=type(finding).__name__)
-                continue
-
-            # Check if it's a false positive
-            if not self._is_false_positive(
-                finding_dict,
-                getattr(context, 'suppression_rules', [])
-            ):
-                validated_issues.append(finding_dict)
-
-        context.validated_issues = validated_issues
-
-        # Add phase result
-        context.add_phase_result("VALIDATION", {
-            "total_findings": len(all_findings),
-            "validated_issues": len(context.validated_issues),
-            "frames_executed": pipeline.frames_executed,
-            "frames_passed": pipeline.frames_passed,
-            "frames_failed": pipeline.frames_failed,
-        })
-
-    def _is_false_positive(
-        self,
-        finding: Dict[str, Any],
-        suppression_rules: List[Dict[str, Any]],
-    ) -> bool:
-        """Check if a finding is a false positive based on suppression rules."""
-        if not suppression_rules:
-            return False
-
-        for rule in suppression_rules:
-            # Handle both dict and string rules
-            if isinstance(rule, dict):
-                if (
-                    rule.get("issue_type") == finding.get("type") and
-                    rule.get("file_context") == finding.get("file_context")
-                ):
-                    return True
-            elif isinstance(rule, str):
-                # Simple string rule matching
-                if finding.get("type") == rule or finding.get("message", "").find(rule) != -1:
-                    return True
-        return False
