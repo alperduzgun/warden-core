@@ -239,7 +239,11 @@ class PhaseOrchestrator:
             else:
                 logger.info("phase_skipped", phase="VALIDATION", reason="disabled_in_config")
                 if self.progress_callback:
-                    self.progress_callback("phase_skipped", {"phase": "VALIDATION", "reason": "disabled_in_config"})
+                    self.progress_callback("phase_skipped", {
+                        "phase": "VALIDATION",
+                        "phase_name": "VALIDATION",
+                        "reason": "disabled_in_config"
+                    })
 
             # Phase 4: FORTIFICATION
             enable_fortification = getattr(self.config, 'enable_fortification', True)
@@ -249,7 +253,11 @@ class PhaseOrchestrator:
             else:
                 logger.info("phase_skipped", phase="FORTIFICATION", reason="disabled_in_config")
                 if self.progress_callback:
-                    self.progress_callback("phase_skipped", {"phase": "FORTIFICATION", "reason": "disabled_in_config"})
+                    self.progress_callback("phase_skipped", {
+                        "phase": "FORTIFICATION",
+                        "phase_name": "FORTIFICATION",
+                        "reason": "disabled_in_config"
+                    })
 
             # Phase 5: CLEANING
             enable_cleaning = getattr(self.config, 'enable_cleaning', True)
@@ -259,7 +267,11 @@ class PhaseOrchestrator:
             else:
                 logger.info("phase_skipped", phase="CLEANING", reason="disabled_in_config")
                 if self.progress_callback:
-                    self.progress_callback("phase_skipped", {"phase": "CLEANING", "reason": "disabled_in_config"})
+                    self.progress_callback("phase_skipped", {
+                        "phase": "CLEANING",
+                        "phase_name": "CLEANING",
+                        "reason": "disabled_in_config"
+                    })
 
             self.pipeline.status = PipelineStatus.COMPLETED
             self.pipeline.ended_at = datetime.now()
