@@ -4,6 +4,7 @@ Frame executor for validation frames.
 Handles frame matching, execution strategies, and fallback mechanisms.
 """
 
+import time
 import asyncio
 from typing import Any, Dict, List, Optional, Callable
 
@@ -32,6 +33,7 @@ class FrameExecutor:
         config: Optional[PipelineConfig] = None,
         progress_callback: Optional[Callable] = None,
         rule_validator: Optional[CustomRuleValidator] = None,
+        llm_service: Optional[Any] = None,
     ):
         """
         Initialize frame executor.
@@ -45,7 +47,9 @@ class FrameExecutor:
         self.frames = frames or []
         self.config = config or PipelineConfig()
         self.progress_callback = progress_callback
+        self.progress_callback = progress_callback
         self.rule_validator = rule_validator
+        self.llm_service = llm_service
 
     async def execute_validation_with_strategy_async(
         self,
@@ -54,10 +58,14 @@ class FrameExecutor:
         pipeline: ValidationPipeline,
     ) -> None:
         """Execute VALIDATION phase with execution strategies."""
+        start_time = time.perf_counter()
         logger.info("executing_phase", phase="VALIDATION")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "VALIDATION"})
+            self.progress_callback("phase_started", {
+                "phase": "VALIDATION",
+                "phase_name": "VALIDATION"
+            })
 
         try:
             # Filter files based on context if needed
@@ -82,6 +90,14 @@ class FrameExecutor:
                     "frames_failed": 0,
                     "no_frames_reason": "no_frames_selected"
                 })
+                
+                # Emit completion event even for early return
+                if self.progress_callback:
+                    self.progress_callback("phase_completed", {
+                        "phase": "VALIDATION",
+                        "phase_name": "VALIDATION",
+                        "duration": time.perf_counter() - start_time
+                    })
                 return
 
             # Execute frames based on strategy
@@ -109,7 +125,13 @@ class FrameExecutor:
             context.errors.append(f"VALIDATION failed: {str(e)}")
 
         if self.progress_callback:
-            self.progress_callback("phase_completed", {"phase": "VALIDATION"})
+            duration = time.perf_counter() - start_time
+            self.progress_callback("phase_completed", {
+                "phase": "VALIDATION",
+                "phase_name": "VALIDATION",
+                "duration": duration,
+                "llm_used": self.llm_service is not None
+            })
 
     def _get_frames_to_execute(self, context: PipelineContext) -> List[ValidationFrame]:
         """
@@ -248,6 +270,10 @@ class FrameExecutor:
         """Execute a frame with PRE/POST rules."""
         frame_rules = self.config.frame_rules.get(frame.frame_id) if self.config.frame_rules else None
 
+        # Inject LLM service if available
+        if self.llm_service:
+            frame.llm_service = self.llm_service
+
         # Execute PRE rules
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:
@@ -341,6 +367,7 @@ class FrameExecutor:
             self.progress_callback("frame_completed", {
                 "frame_id": frame.frame_id,
                 "findings": len(frame_result.findings) if hasattr(frame_result, 'findings') else 0,
+                "duration": getattr(frame_result, 'duration', 0.0)
             })
 
         return frame_result

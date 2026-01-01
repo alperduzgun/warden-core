@@ -3,12 +3,12 @@
  * Shows 6-phase pipeline execution with live updates
  */
 
-import React, {useEffect, useState, useRef} from 'react';
-import {Box, Text, useApp} from 'ink';
+import React, { useEffect, useState, useRef } from 'react';
+import { Box, Text, useApp } from 'ink';
 import ansiEscapes from 'ansi-escapes';
 import Spinner from 'ink-spinner';
-import {IssueList} from '../components/IssueList.js';
-import {useIPC} from '../hooks/useIPC.js';
+import { IssueList } from '../components/IssueList.js';
+import { useIPC } from '../hooks/useIPC.js';
 import {
   PipelineDisplay,
   PipelinePhase,
@@ -17,19 +17,19 @@ import {
   updatePhaseStatus,
   updateSubStepStatus
 } from '../components/PipelineDisplay.js';
-import {backendManager} from '../lib/backend-manager.js';
-import {resolvePath, validatePath} from '../lib/path-utils.js';
-import {LoadingIndicator, ConnectionStatus} from '../components/LoadingIndicator.js';
-import {ErrorDisplay} from '../utils/errors.js';
-import {runPreFlightChecks} from '../lib/pre-flight.js';
-import type {PipelineEvent, PipelineResult, Finding, ConfigResult} from '../lib/types.js';
+import { backendManager } from '../lib/backend-manager.js';
+import { resolvePath, validatePath } from '../lib/path-utils.js';
+import { LoadingIndicator, ConnectionStatus } from '../components/LoadingIndicator.js';
+import { ErrorDisplay } from '../utils/errors.js';
+import { runPreFlightChecks } from '../lib/pre-flight.js';
+import type { PipelineEvent, PipelineResult, Finding, ConfigResult } from '../lib/types.js';
 
 interface ScanProps {
   path: string;
   frames?: string[] | undefined;
 }
 
-export function Scan({path, frames}: ScanProps) {
+export function Scan({ path, frames }: ScanProps) {
   const [backendReady, setBackendReady] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
   const [startupError, setStartupError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ export function Scan({path, frames}: ScanProps) {
   }>>({});
 
   // Get config to determine active frames
-  const {data: configData, error: configError} = useIPC<ConfigResult>({
+  const { data: configData, error: configError } = useIPC<ConfigResult>({
     command: 'get_config',
     autoExecute: backendReady,
   });
@@ -240,27 +240,37 @@ export function Scan({path, frames}: ScanProps) {
                   if (progressEvent === 'phase_started') {
                     const phaseName = data.phase || data.phase_name;
                     const phaseId = phaseMapping[phaseName] || phaseName?.toLowerCase();
+                    console.log('[DEBUG] Phase started:', { phaseName, phaseId, data });
                     if (phaseId) {
                       phaseStartTimes[phaseId] = Date.now();
                       setCurrentPhase(phaseId);
                       setPhases(prev => updatePhaseStatus(prev, phaseId, 'running'));
                       // Track that this phase has executed
-                      setExecutedPhases(prev => ({
-                        ...prev,
-                        [phaseId]: {
-                          executed: true,
-                          status: 'running',
-                          llmUsed: false
-                        }
-                      }));
+                      setExecutedPhases(prev => {
+                        const newState = {
+                          ...prev,
+                          [phaseId]: {
+                            executed: true,
+                            status: 'running' as const,
+                            llmUsed: false
+                          }
+                        };
+                        console.log('[DEBUG] Updated executedPhases:', newState);
+                        return newState;
+                      });
                     }
                   } else if (progressEvent === 'phase_completed') {
                     const phaseName = data.phase || data.phase_name;
                     const phaseId = phaseMapping[phaseName] || phaseName?.toLowerCase();
                     if (phaseId) {
-                      const phaseDuration = phaseStartTimes[phaseId]
-                        ? `${((Date.now() - phaseStartTimes[phaseId]) / 1000).toFixed(1)}s`
-                        : data.duration || '0.0s';
+                      // Use backend-reported duration if available (more accurate), otherwise fallback to client-side timer
+                      let phaseDuration = '0.0s';
+                      if (data.duration !== undefined && data.duration !== null) {
+                        const durationVal = typeof data.duration === 'string' ? parseFloat(data.duration) : data.duration;
+                        phaseDuration = `${Number(durationVal).toFixed(2)}s`;
+                      } else if (phaseStartTimes[phaseId]) {
+                        phaseDuration = `${((Date.now() - phaseStartTimes[phaseId]) / 1000).toFixed(2)}s`;
+                      }
 
                       // Capture selected frames from Classification phase
                       if (phaseId === 'classification' && data.selected_frames) {
@@ -327,7 +337,7 @@ export function Scan({path, frames}: ScanProps) {
                     }));
                   } else if (progressEvent === 'frame_completed') {
                     const frameId = data.frame_id;
-                    const frameDuration = data.duration ? `${data.duration.toFixed(1)}s` : '0.0s';
+                    const frameDuration = data.duration ? `${Number(data.duration).toFixed(2)}s` : '0.0s';
                     setPhases(prev => updateSubStepStatus(prev, 'validation', frameId, 'completed', frameDuration));
 
                     // Track that this frame completed
@@ -509,6 +519,8 @@ export function Scan({path, frames}: ScanProps) {
                 const phaseInfo = phases.find(p => p.id === phaseId);
                 const phaseName = phaseInfo?.name || phaseId;
 
+                console.log('[DEBUG] Phase summary:', { phaseId, phase, executed: phase?.executed });
+
                 if (!phase || !phase.executed) {
                   return (
                     <Text key={phaseId} dimColor>
@@ -549,7 +561,7 @@ export function Scan({path, frames}: ScanProps) {
               {pipelineResult.llm_analysis.llm_quality_score && (
                 <Text>  📊 Code Quality Score: <Text bold color={
                   pipelineResult.llm_analysis.llm_quality_score >= 7 ? "green" :
-                  pipelineResult.llm_analysis.llm_quality_score >= 5 ? "yellow" : "red"
+                    pipelineResult.llm_analysis.llm_quality_score >= 5 ? "yellow" : "red"
                 }>{pipelineResult.llm_analysis.llm_quality_score.toFixed(1)}/10</Text></Text>
               )}
               {pipelineResult.llm_analysis.llm_confidence && (
