@@ -273,6 +273,16 @@ class FrameExecutor:
         # Inject LLM service if available
         if self.llm_service:
             frame.llm_service = self.llm_service
+        
+        # Inject project context for context-aware checks (e.g., service abstraction detection)
+        if hasattr(frame, 'set_project_context'):
+            # Extract ProjectContext from PipelineContext
+            # PipelineContext.project_type might hold the ProjectContext object
+            project_context = getattr(context, 'project_type', None)
+            
+            # Verify it's the actual context object (has service_abstractions)
+            if project_context and hasattr(project_context, 'service_abstractions'):
+                frame.set_project_context(project_context)
 
         # Execute PRE rules
         pre_violations = []

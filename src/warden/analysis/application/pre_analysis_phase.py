@@ -18,6 +18,7 @@ from warden.analysis.domain.file_context import (
 from warden.analysis.domain.project_context import ProjectContext
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 from warden.analysis.application.file_context_analyzer import FileContextAnalyzer
+from warden.memory.application.memory_manager import MemoryManager
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -54,6 +55,7 @@ class PreAnalysisPhase:
         self.project_analyzer = ProjectStructureAnalyzer(self.project_root)
         self.file_analyzer: Optional[FileContextAnalyzer] = None  # Created after project analysis
         self.llm_analyzer = None  # Will be initialized if enabled
+        self.memory_manager = MemoryManager(self.project_root)
 
     async def execute(self, code_files: List[CodeFile]) -> PreAnalysisResult:
         """
@@ -83,9 +85,16 @@ class PreAnalysisPhase:
         try:
             # Step 1: Initialize LLM analyzer if enabled
             await self._initialize_llm_analyzer()
+            
+            # Initialize memory
+            await self.memory_manager.initialize_async()
 
             # Step 2: Analyze project structure
+            # Attempt to load relevant facts from memory first
             project_context = await self._analyze_project_structure()
+            
+            # Enrich with memory facts
+            self._enrich_context_from_memory(project_context)
 
             # Step 3: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
@@ -125,6 +134,9 @@ class PreAnalysisPhase:
                     "contexts": result.get_context_summary(),
                     "duration": f"{result.analysis_duration:.2f}s",
                 })
+
+            # Step 6: Save learning to memory
+            await self._save_context_to_memory(project_context)
 
             return result
 
@@ -432,4 +444,34 @@ class PreAnalysisPhase:
             )
             return True
 
+        if context_info.has_ignore_marker:
+            logger.debug(
+                "skipping_file",
+                file=file_path,
+                reason="ignore_marker",
+            )
+            return True
+
         return False
+
+    def _enrich_context_from_memory(self, context: ProjectContext) -> None:
+        """Enrich project context with facts from memory."""
+        # Load service abstractions from memory if not detected in current run
+        # (or merge with detected ones)
+        memory_abstractions = self.memory_manager.get_service_abstractions()
+        
+        for fact in memory_abstractions:
+            if fact.metadata and fact.subject not in context.service_abstractions:
+                # Restore abstraction from memory
+                context.service_abstractions[fact.subject] = fact.metadata
+                logger.debug("service_abstraction_restored_from_memory", service=fact.subject)
+
+    async def _save_context_to_memory(self, context: ProjectContext) -> None:
+        """Save project context facts to memory."""
+        # Save service abstractions
+        if hasattr(context, 'service_abstractions'):
+            for abstraction in context.service_abstractions.values():
+                self.memory_manager.store_service_abstraction(abstraction)
+                
+            # Persist to disk
+            await self.memory_manager.save_async()

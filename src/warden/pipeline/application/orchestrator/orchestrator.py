@@ -75,20 +75,6 @@ class PhaseOrchestrator:
         self.project_root = project_root or Path.cwd()
         self.llm_service = llm_service
 
-    @property
-    def progress_callback(self) -> Optional[Callable]:
-        """Get progress callback."""
-        return self._progress_callback
-
-    @progress_callback.setter
-    def progress_callback(self, value: Optional[Callable]) -> None:
-        """Set progress callback and propagate to executors."""
-        self._progress_callback = value
-        if hasattr(self, 'phase_executor'):
-            self.phase_executor.progress_callback = value
-        if hasattr(self, 'frame_executor'):
-            self.frame_executor.progress_callback = value
-
         # Initialize rule validator if global rules exist
         self.rule_validator = None
         if self.config.global_rules:
@@ -122,6 +108,20 @@ class PhaseOrchestrator:
             frame_rules_count=len(self.config.frame_rules) if self.config.frame_rules else 0,
         )
 
+    @property
+    def progress_callback(self) -> Optional[Callable]:
+        """Get progress callback."""
+        return self._progress_callback
+
+    @progress_callback.setter
+    def progress_callback(self, value: Optional[Callable]) -> None:
+        """Set progress callback and propagate to executors."""
+        self._progress_callback = value
+        if hasattr(self, 'phase_executor'):
+            self.phase_executor.progress_callback = value
+        if hasattr(self, 'frame_executor'):
+            self.frame_executor.progress_callback = value
+
     def _sort_frames_by_priority(self) -> None:
         """Sort frames by priority value (lower value = higher priority)."""
         if self.frames:
@@ -130,6 +130,7 @@ class PhaseOrchestrator:
     async def execute(
         self,
         code_files: List[CodeFile],
+        frames_to_execute: Optional[List[str]] = None,
     ) -> tuple[PipelineResult, PipelineContext]:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -137,11 +138,12 @@ class PhaseOrchestrator:
 
         Args:
             code_files: List of code files to process
+            frames_to_execute: Optional list of frame IDs to execute (overrides classification)
 
         Returns:
             Tuple of (PipelineResult, PipelineContext)
         """
-        context = await self.execute_pipeline_async(code_files)
+        context = await self.execute_pipeline_async(code_files, frames_to_execute)
 
         # Build PipelineResult from context for compatibility
         result = self._build_pipeline_result(context)
@@ -151,15 +153,17 @@ class PhaseOrchestrator:
     async def execute_pipeline_async(
         self,
         code_files: List[CodeFile],
+        frames_to_execute: Optional[List[str]] = None,
     ) -> PipelineContext:
         """
         Execute the complete 6-phase pipeline with shared context.
 
         Args:
             code_files: List of code files to process
+            frames_to_execute: Optional list of frame IDs to execute (overrides classification)
 
         Returns:
-            PipelineContext with results from all phases
+            PipelineContext with results from results of all phases
         """
         # Initialize shared context
         context = PipelineContext(
@@ -181,6 +185,7 @@ class PhaseOrchestrator:
             "pipeline_execution_started",
             pipeline_id=context.pipeline_id,
             file_count=len(code_files),
+            frames_override=frames_to_execute,
         )
 
         if self.progress_callback:
@@ -198,10 +203,30 @@ class PhaseOrchestrator:
             if getattr(self.config, 'enable_analysis', True):
                 await self.phase_executor.execute_analysis_async(context, code_files)
 
-            # Phase 2: CLASSIFICATION (ALWAYS ENABLED - Cannot be disabled)
-            # Classification is critical for intelligent frame selection
-            logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
-            await self.phase_executor.execute_classification_async(context, code_files)
+            # Phase 2: CLASSIFICATION
+            # If frames override is provided, use it and skip AI classification
+            if frames_to_execute:
+                context.selected_frames = frames_to_execute
+                context.classification_reasoning = "User manually selected frames via CLI"
+                logger.info("using_frame_override", selected_frames=frames_to_execute)
+                
+                # Add phase result placeholder
+                context.add_phase_result("CLASSIFICATION", {
+                    "selected_frames": frames_to_execute,
+                    "suppression_rules_count": 0,
+                    "reasoning": "Manual override",
+                    "skipped": True
+                })
+                
+                if self.progress_callback:
+                    self.progress_callback("phase_skipped", {
+                        "phase": "CLASSIFICATION",
+                        "reason": "manual_frame_override"
+                    })
+            else:
+                # Classification is critical for intelligent frame selection
+                logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
+                await self.phase_executor.execute_classification_async(context, code_files)
 
             # Phase 3: VALIDATION with execution strategies
             enable_validation = getattr(self.config, 'enable_validation', True)
