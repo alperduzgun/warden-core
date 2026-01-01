@@ -332,7 +332,7 @@ class FrameRegistry:
 
                 try:
                     # Dynamically import the frame module
-                    print(f"DEBUG: Attempting to import frame: {frame_path.name}", file=sys.stderr)
+                    logger.debug(f"Attempting to import frame: {frame_path.name}")
                     module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
                     module = importlib.import_module(module_path)
 
@@ -352,14 +352,14 @@ class FrameRegistry:
 
                     if frame_class:
                         frames.append(frame_class)
-                        print(f"DEBUG: Discovered built-in frame: {frame_path.name}", file=sys.stderr)
+                        logger.debug(f"Discovered built-in frame: {frame_path.name}")
                         logger.debug(
                             "builtin_frame_discovered",
                             frame_name=frame_path.name,
                             frame_class=frame_class.__name__,
                         )
                     else:
-                        print(f"DEBUG: No class found in frame: {frame_path.name}", file=sys.stderr)
+                        logger.debug(f"No class found in frame: {frame_path.name}")
                         logger.warning(
                             "no_frame_class_found_in_module",
                             frame_name=frame_path.name,
@@ -367,14 +367,14 @@ class FrameRegistry:
                         )
 
                 except ImportError as e:
-                    print(f"DEBUG: Import failed for {frame_path.name}: {e}", file=sys.stderr)
+                    logger.debug(f"Import failed for {frame_path.name}: {e}")
                     logger.warning(
                         "builtin_frame_import_failed",
                         frame_name=frame_path.name,
                         error=str(e),
                     )
                 except Exception as e:
-                    print(f"DEBUG: Exception discovering {frame_path.name}: {e}", file=sys.stderr)
+                    logger.debug(f"Exception discovering {frame_path.name}: {e}")
                     logger.error(
                         "builtin_frame_discovery_error",
                         frame_name=frame_path.name,
