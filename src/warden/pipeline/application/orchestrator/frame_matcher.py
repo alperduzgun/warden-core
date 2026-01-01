@@ -14,14 +14,16 @@ logger = get_logger(__name__)
 class FrameMatcher:
     """Handles frame matching and discovery."""
 
-    def __init__(self, frames: Optional[List[ValidationFrame]] = None):
+    def __init__(self, frames: Optional[List[ValidationFrame]] = None, available_frames: Optional[List[ValidationFrame]] = None):
         """
         Initialize frame matcher.
 
         Args:
-            frames: List of available validation frames
+            frames: List of configured validation frames (Default fallback)
+            available_frames: List of all available frames (For discovery/matching)
         """
         self.frames = frames or []
+        self.available_frames = available_frames or self.frames
 
     def find_frame_by_name(self, name: str) -> Optional[ValidationFrame]:
         """
@@ -49,7 +51,9 @@ class FrameMatcher:
             .strip()
         )
 
-        for frame in self.frames:
+        # Search in all available frames, not just configured ones
+        # Pass 1: Exact matches (ID or Name)
+        for frame in self.available_frames:
             # Try matching by frame_id
             frame_id_normalized = (
                 frame.frame_id.lower()
@@ -75,9 +79,25 @@ class FrameMatcher:
                 if frame_name_normalized == search_normalized:
                     return frame
 
-            # Try partial matching
-            if (search_normalized in frame_id_normalized or
-                frame_id_normalized in search_normalized):
+        # Pass 2: Partial matches (only if no exact match found)
+        # We want to match "security" to "security-analysis" but NOT "environmentsecurity" to "security"
+        # The previous logic was too loose: (search in frame OR frame in search)
+        
+        # Valid partial match: search term is a substring of frame ID/Name (e.g. search "env" -> matches "environment-security")
+        # Invalid partial match: frame ID is substring of search term (e.g. search "environment-security" -> matches "security")
+        
+        for frame in self.available_frames:
+            frame_id_normalized = (
+                frame.frame_id.lower()
+                .replace('frame', '')
+                .replace('-', '')
+                .replace('_', '')
+                .strip()
+            )
+            
+            # Only match if search term is part of frame ID (e.g. user typed "env", matched "environment")
+            # Do NOT match if frame ID is part of search term (e.g. user typed "environment-security", matched "security")
+            if len(search_normalized) > 3 and search_normalized in frame_id_normalized:
                 return frame
 
         return None

@@ -38,6 +38,7 @@ class FrameExecutor:
         progress_callback: Optional[Callable] = None,
         rule_validator: Optional[CustomRuleValidator] = None,
         llm_service: Optional[Any] = None,
+        available_frames: Optional[List[ValidationFrame]] = None,
     ):
         """
         Initialize frame executor.
@@ -48,15 +49,17 @@ class FrameExecutor:
             progress_callback: Optional callback for progress updates
             rule_validator: Optional rule validator for PRE/POST rules
             llm_service: Optional LLM service for AI-powered validation
+            available_frames: List of all available frames (for discovery)
         """
         self.frames = frames or []
         self.config = config or PipelineConfig()
         self.progress_callback = progress_callback
         self.rule_validator = rule_validator
         self.llm_service = llm_service
+        self.available_frames = available_frames or self.frames
 
         # Initialize helper components
-        self.frame_matcher = FrameMatcher(frames)
+        self.frame_matcher = FrameMatcher(frames, available_frames=self.available_frames)
         self.result_aggregator = ResultAggregator()
 
     async def execute_validation_with_strategy_async(
@@ -240,36 +243,85 @@ class FrameExecutor:
             })
 
         try:
-            # Frames expect a single CodeFile, not a list
-            if code_files and len(code_files) > 0:
-                # Execute frame on first file (later we can iterate over all files)
-                frame_result = await asyncio.wait_for(
-                    frame.execute(code_files[0]),
-                    timeout=self.config.frame_timeout or 30.0
-                )
-            else:
-                # No files to process
-                frame_result = FrameResult(
-                    frame_id=frame.frame_id,
-                    frame_name=frame.name,
-                    status="skipped",
-                    duration=0.0,
-                    issues_found=0,
-                    is_blocker=False,
-                    findings=[],
-                )
+            frame_findings = []
+            files_scanned = 0
+            execution_errors = 0
+            
+            # Helper to execute single file
+            async def execute_single_file(c_file: CodeFile) -> Optional[FrameResult]:
+                try:
+                    # frames usually return FrameResult
+                    return await frame.execute(c_file)
+                except Exception as ex:
+                    logger.error("frame_file_execution_error", 
+                                frame=frame.frame_id, 
+                                file=c_file.path, 
+                                error=str(ex))
+                    return None
+
+            if code_files:
+                # Use batch execution if available (default impl iterates anyway)
+                # But optimized frames (like OrphanFrame) will use smart batching
+                try:
+                    f_results = await asyncio.wait_for(
+                        frame.execute_batch(code_files),
+                        timeout=self.config.frame_timeout or 300.0  # Increased timeout for batch
+                    )
+                    
+                    if f_results:
+                        files_scanned = len(f_results)
+                        for res in f_results:
+                            if res and res.findings:
+                                frame_findings.extend(res.findings)
+                                
+                except asyncio.TimeoutError:
+                    logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
+                    execution_errors += 1
+                except Exception as ex:
+                    logger.error("frame_batch_execution_error", frame=frame.frame_id, error=str(ex))
+                    execution_errors += 1
+
+            
+            # Determine overall status based on aggregated findings
+            # Re-use logic from frame if possible, or simple aggregation
+            status = "passed"
+            if any(f.severity == 'critical' for f in frame_findings):
+                status = "failed"
+            elif any(f.severity == 'high' for f in frame_findings):
+                status = "warning"
+                
+            frame_result = FrameResult(
+                frame_id=frame.frame_id,
+                frame_name=frame.name,
+                status=status,
+                # We don't have total duration for all files easily here without measuring, 
+                # but this block is inside a function that doesn't measure total.
+                # Actually _execute_frame_with_rules doesn't set duration on result usually?
+                # The frame.execute does. We can sum them or just use 0 here and let caller measure wall time.
+                duration=0.0, 
+                issues_found=len(frame_findings),
+                is_blocker=frame.is_blocker and status == "failed",
+                findings=frame_findings,
+                metadata={
+                    "files_scanned": files_scanned,
+                    "execution_errors": execution_errors
+                }
+            )
 
             pipeline.frames_executed += 1
-            if hasattr(frame_result, 'has_critical_issues') and frame_result.has_critical_issues:
+            if status == "failed": # simplified check
                 pipeline.frames_failed += 1
             else:
                 pipeline.frames_passed += 1
 
             logger.info("frame_executed_successfully",
                        frame_id=frame.frame_id,
-                       findings=len(frame_result.findings) if hasattr(frame_result, 'findings') else 0)
+                       files_scanned=files_scanned,
+                       findings=len(frame_result.findings))
 
         except asyncio.TimeoutError:
+            # This outer timeout technically catches only if we wrapped the whole loop in timeout
+            # which we didn't. But keeping for safety if structure changes.
             logger.error("frame_timeout", frame_id=frame.frame_id)
             frame_result = FrameResult(
                 frame_id=frame.frame_id,

@@ -47,18 +47,21 @@ class PhaseOrchestrator:
         progress_callback: Optional[Callable] = None,
         project_root: Optional[Path] = None,
         llm_service: Optional[Any] = None,
+        available_frames: Optional[List[ValidationFrame]] = None,
     ):
         """
         Initialize phase orchestrator.
 
         Args:
-            frames: List of validation frames to execute
+            frames: List of validation frames to execute (User configured)
             config: Pipeline configuration (can be dict or PipelineConfig)
             progress_callback: Optional callback for progress updates
             project_root: Root directory of the project
             llm_service: Optional LLM service for AI-powered phases
+            available_frames: List of all discoverable frames (for AI selection)
         """
         self.frames = frames or []
+        self.available_frames = available_frames or self.frames  # Fallback to frames if not provided
 
         # Handle both dict and PipelineConfig for backward compatibility
         if config is None:
@@ -86,15 +89,18 @@ class PhaseOrchestrator:
             progress_callback=self.progress_callback,
             project_root=self.project_root,
             llm_service=self.llm_service,
+            # Validation logic needs all available frames for AI selection
+            frames=self.available_frames
         )
 
         # Initialize frame executor
         self.frame_executor = FrameExecutor(
-            frames=self.frames,
+            frames=self.frames,  # User configured frames (default fallback)
             config=self.config,
             progress_callback=self.progress_callback,
             rule_validator=self.rule_validator,
             llm_service=self.llm_service,
+            available_frames=self.available_frames # All available frames for lookup
         )
 
         # Sort frames by priority

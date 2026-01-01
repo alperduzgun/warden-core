@@ -138,6 +138,189 @@ class LLMOrphanFilter:
             max_retries=max_retries,
         )
 
+    async def filter_findings_batch(
+        self,
+        findings_map: Dict[str, List[OrphanFinding]], # file_path -> findings
+        code_files: Dict[str, CodeFile],
+        project_context: Optional[Any] = None,
+    ) -> Dict[str, List[OrphanFinding]]:
+        """
+        Filter findings for multiple files in efficient batches.
+        
+        This method groups findings from all files, batches them by token/count limit,
+        processes them via LLM, and redistributes results back to files.
+        """
+        if not findings_map:
+            return {}
+
+        start_time = time.perf_counter()
+        
+        # 1. Flatten all findings
+        all_flattened: List[tuple[str, OrphanFinding]] = [] # (file_path, finding)
+        total_findings = 0
+        
+        for f_path, f_list in findings_map.items():
+            for finding in f_list:
+                all_flattened.append((f_path, finding))
+            total_findings += len(f_list)
+            
+        logger.info(
+            "llm_batch_filter_started", 
+            total_files=len(findings_map), 
+            total_findings=total_findings
+        )
+        
+        # 2. Create batches (simple count-based for now, can be token-based later)
+        # We use a larger batch size for bulk processing if possible, or keep conservative
+        batch_size = 20  # Process 20 findings per request across files
+        
+        batches = []
+        for i in range(0, len(all_flattened), batch_size):
+            batches.append(all_flattened[i:i + batch_size])
+            
+        logger.info("created_smart_batches", count=len(batches), approx_size=batch_size)
+        
+        # 3. Process batches
+        results_map: Dict[str, List[OrphanFinding]] = {path: [] for path in findings_map.keys()}
+        
+        for i, batch in enumerate(batches):
+            logger.info("processing_smart_batch", index=i+1, total=len(batches), items=len(batch))
+            
+            # Group by file execution context for the prompt
+            # We need to provide code snippets. Since we can't provide 20 full files,
+            # we rely on the snippet in finding + maybe small context if needed.
+            # But wait, logic in _filter_batch uses 'code_file.content'.
+            # For multi-file batch, we can't send ALL filed contents.
+            # We must rely on 'code' field in OrphanFinding or snippet.
+            # Let's adjust _filter_batch to be context-aware or use snippets.
+            
+            try:
+                # We need a new internal method that handles multi-file prompt
+                batch_results = await self._filter_multi_file_batch(
+                    batch, 
+                    code_files,
+                    project_context
+                )
+                
+                # Redistribute successful results
+                for f_path, finding in batch_results:
+                    results_map[f_path].append(finding)
+                    
+            except Exception as e:
+                logger.error("smart_batch_failed", batch=i, error=str(e))
+                # Fallback: keep all as potential orphans (conservative)
+                for f_path, finding in batch:
+                    results_map[f_path].append(finding)
+                    
+        return results_map
+
+    async def _filter_multi_file_batch(
+        self,
+        batch: List[tuple[str, OrphanFinding]],
+        code_files: Dict[str, CodeFile],
+        project_context: Optional[Any] = None,
+    ) -> List[tuple[str, OrphanFinding]]:
+        """
+        Process a mixed batch of findings from different files.
+        """
+        # Construct prompt
+        prompt = self._build_multi_file_prompt(batch, code_files, project_context)
+        
+        # Send to LLM
+        # We use a generic 'multi-language' or 'mixed' context
+        response = await self._call_llm(
+            code="", # No single code file
+            prompt=prompt,
+            language="mixed"
+        )
+        
+        # Parse
+        decisions = self._parse_llm_response(response.content, len(batch))
+        
+        # Filter
+        true_orphans = []
+        for (f_path, finding), decision in zip(batch, decisions):
+            if decision.is_true_orphan:
+                true_orphans.append((f_path, finding))
+                
+        return true_orphans
+
+    def _build_multi_file_prompt(
+        self,
+        batch: List[tuple[str, OrphanFinding]],
+        code_files: Dict[str, CodeFile],
+        project_context: Optional[Any] = None,
+    ) -> str:
+        # Build project context string
+        context_str = "Type: Generic Project\n"
+        if project_context:
+            # Extract useful details from ProjectContext object
+            # Note: We rely on standard attributes of ProjectContext
+            try:
+                root_name = getattr(project_context, 'root_path', 'unknown')
+                if hasattr(root_name, 'name'): root_name = root_name.name
+                
+                # Metadata might hold useful keys
+                meta = getattr(project_context, 'metadata', {})
+                framework = "Unknown"
+                
+                # If it's a Clean Architecture?
+                is_clean = getattr(project_context, 'has_clean_architecture_pattern', lambda: False)()
+                is_cli = getattr(project_context, 'is_cli_tool', lambda: False)()
+                
+                arch_type = "Standard"
+                if is_clean: arch_type = "Clean Architecture (Layers: api, application, domain, infrastructure)"
+                if is_cli: arch_type = "CLI Tool"
+                
+                context_str = (
+                    f"Project: {root_name}\n"
+                    f"Architecture: {arch_type}\n"
+                    f"Stats: {len(getattr(project_context, 'modules', []))} modules detected\n"
+                    f"Framework Pattern: {meta.get('framework', 'Auto-detect')}\n"
+                )
+            except Exception:
+                context_str = "Context: Partial project information available"
+
+        findings_text = ""
+        for idx, (f_path, finding) in enumerate(batch):
+            # We use snippet from finding, plus maybe we can peek at file if needed
+            # For high efficiency, rely on snippet.
+            findings_text += (
+                f"**Finding {idx}:**\n"
+                f"  - File: {f_path}\n"
+                f"  - Type: {finding.orphan_type}\n"
+                f"  - Name: `{finding.name}`\n"
+                f"  - Code:\n```\n{finding.code_snippet}\n```\n"
+                f"  - Reason: {finding.reason}\n\n"
+            )
+            
+        prompt = f"""You are an expert code analyzer.
+        
+        # PROJECT CONTEXT
+        {context_str}
+        
+        TIMEFRAME: Analyze these {len(batch)} potential orphan code findings across multiple files.
+        
+        # FINDINGS
+        {findings_text}
+        
+        # INSTRUCTIONS
+        For each finding, determine if it is a TRUE ORPHAN or FALSE POSITIVE.
+        Consider common false positives:
+        - Interfaces/Abstractions
+        - Framework entries (decorators, lifecycle hooks)
+        - Public API exports
+        
+        Return JSON with exactly {len(batch)} decisions decision objects.
+        
+        ```json
+        {{
+            "decisions": [ ... ]
+        }}
+        ```
+        """
+        return prompt
+
     async def filter_findings(
         self,
         findings: List[OrphanFinding],

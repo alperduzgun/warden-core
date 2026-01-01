@@ -1,15 +1,23 @@
 """
-Orphan Code Detector - AST-based dead code detection.
+Orphan Code Detector - Strategy Pattern for Multi-Language Support.
 
-Detects:
-- Unused imports (imported but never referenced)
-- Unreferenced functions/classes (defined but never called)
-- Dead code (unreachable code after return/break/continue)
+Defines the interface for orphan detection and concrete implementations
+for supported languages.
+
+Strategies:
+1. PythonOrphanDetector (Native AST)
+2. TreeSitterOrphanDetector (Generic / Future)
 """
 
+import abc
 import ast
-from typing import List, Dict, Set, Tuple
+import os
 from dataclasses import dataclass
+from typing import List, Dict, Set, Tuple, Optional, Any
+from pathlib import Path
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -23,28 +31,56 @@ class OrphanFinding:
     reason: str
 
 
-class OrphanDetector:
+class AbstractOrphanDetector(abc.ABC):
     """
-    AST-based orphan code detector.
-
-    Uses Python's AST module to analyze code and detect:
-    1. Unused imports
-    2. Unreferenced functions/classes
-    3. Dead code (unreachable statements)
+    Abstract base class for orphan code detectors.
     """
 
     def __init__(self, code: str, file_path: str) -> None:
         """
-        Initialize orphan detector.
+        Initialize detector.
 
         Args:
-            code: Python source code to analyze
+            code: Source code to analyze
             file_path: Path to the file (for context)
         """
         self.code = code
         self.file_path = file_path
         self.lines = code.split("\n")
 
+    @abc.abstractmethod
+    def detect_all(self) -> List[OrphanFinding]:
+        """
+        Detect all orphan code issues.
+
+        Returns:
+            List of OrphanFinding objects
+        """
+        pass
+
+    def _get_line(self, line_num: int) -> str:
+        """
+        Get source code line by line number.
+
+        Args:
+            line_num: Line number (1-indexed)
+
+        Returns:
+            Source code line (stripped)
+        """
+        if 1 <= line_num <= len(self.lines):
+            return self.lines[line_num - 1].strip()
+        return ""
+
+
+class PythonOrphanDetector(AbstractOrphanDetector):
+    """
+    Python-specific orphan detector using native AST.
+    """
+
+    def __init__(self, code: str, file_path: str) -> None:
+        super().__init__(code, file_path)
+        
         # Parse AST
         try:
             self.tree = ast.parse(code)
@@ -53,10 +89,7 @@ class OrphanDetector:
 
     def detect_all(self) -> List[OrphanFinding]:
         """
-        Detect all orphan code issues.
-
-        Returns:
-            List of OrphanFinding objects
+        Detect all orphan code issues using Python AST.
         """
         if self.tree is None:
             return []  # Can't analyze invalid syntax
@@ -75,12 +108,7 @@ class OrphanDetector:
         return findings
 
     def detect_unused_imports(self) -> List[OrphanFinding]:
-        """
-        Detect unused imports.
-
-        Returns:
-            List of unused import findings
-        """
+        """Detect unused imports."""
         if self.tree is None:
             return []
 
@@ -146,32 +174,27 @@ class OrphanDetector:
         return findings
 
     def detect_unreferenced_definitions(self) -> List[OrphanFinding]:
-        """
-        Detect unreferenced functions and classes.
-
-        Returns:
-            List of unreferenced definition findings
-        """
+        """Detect unreferenced functions and classes."""
         if self.tree is None:
             return []
 
         findings: List[OrphanFinding] = []
 
         # Collect all function/class definitions
-        definitions: Dict[str, Tuple[int, str, str]] = {}  # name -> (line, type, code)
+        definitions: Dict[str, Tuple[int, str, str, ast.AST]] = {}  # name -> (line, type, code, node)
 
         for node in ast.walk(self.tree):
             if isinstance(node, ast.FunctionDef):
                 # Skip private functions (often used internally)
                 if not node.name.startswith("_"):
                     line_num = node.lineno
-                    definitions[node.name] = (line_num, "function", f"def {node.name}")
+                    definitions[node.name] = (line_num, "function", f"def {node.name}", node)
 
             elif isinstance(node, ast.ClassDef):
                 # Skip private classes
                 if not node.name.startswith("_"):
                     line_num = node.lineno
-                    definitions[node.name] = (line_num, "class", f"class {node.name}")
+                    definitions[node.name] = (line_num, "class", f"class {node.name}", node)
 
         # Collect all name references (excluding the definitions themselves)
         references: Set[str] = set()
@@ -211,13 +234,15 @@ class OrphanDetector:
         references = collector.refs
 
         # Find unreferenced definitions
-        for def_name, (line_num, def_type, def_code) in definitions.items():
+        for def_name, (line_num, def_type, def_code, node) in definitions.items():
             if def_name not in references:
                 # Check if it's a special method/function (skip those)
                 if def_name in ["main", "__init__", "__str__", "__repr__"]:
                     continue
 
-                code_snippet = self._get_line(line_num)
+                # Get accurate snippet including decorators
+                code_snippet = self._get_definition_snippet(node)
+                
                 findings.append(
                     OrphanFinding(
                         orphan_type=f"unreferenced_{def_type}",
@@ -230,26 +255,50 @@ class OrphanDetector:
 
         return findings
 
+    def _get_definition_snippet(self, node: ast.AST) -> str:
+        """
+        Get full definition snippet including decorators.
+        """
+        if not hasattr(node, 'lineno'):
+            return ""
+            
+        start_line = node.lineno
+        end_line = getattr(node, 'end_lineno', start_line)
+        
+        # Include decorators if present
+        if hasattr(node, 'decorator_list') and node.decorator_list:
+            # Find the earliest line among decorators
+            for dec in node.decorator_list:
+                if hasattr(dec, 'lineno'):
+                    start_line = min(start_line, dec.lineno)
+        
+        lines = []
+        # Get lines from start_line to end_line (or limit to 15 lines)
+        max_lines = 15
+        current_line = start_line
+        
+        while current_line <= len(self.lines) and len(lines) < max_lines:
+            line = self.lines[current_line - 1] # 0-indexed list
+            lines.append(line)
+            
+            # Stop if we found the end of definition (colon)
+            # But handle multi-line args
+            if line.strip().endswith(":") and current_line >= node.lineno:
+                break
+                
+            current_line += 1
+            
+        return "\n".join(lines).strip()
+
     def detect_dead_code(self) -> List[OrphanFinding]:
-        """
-        Detect dead code (unreachable statements).
-
-        Detects code after:
-        - return statements
-        - break statements
-        - continue statements
-        - raise statements
-
-        Returns:
-            List of dead code findings
-        """
+        """Detect dead code (unreachable statements)."""
         if self.tree is None:
             return []
 
         findings: List[OrphanFinding] = []
 
         class DeadCodeFinder(ast.NodeVisitor):
-            def __init__(self, detector: "OrphanDetector") -> None:
+            def __init__(self, detector: "PythonOrphanDetector") -> None:
                 self.findings: List[OrphanFinding] = []
                 self.detector = detector
 
@@ -279,9 +328,6 @@ class OrphanDetector:
             def _check_block(self, statements: List[ast.stmt]) -> None:
                 """
                 Check a block of statements for dead code.
-
-                Args:
-                    statements: List of AST statements
                 """
                 found_terminal = False
                 terminal_line = 0
@@ -312,15 +358,7 @@ class OrphanDetector:
                         break
 
             def _is_terminal(self, stmt: ast.stmt) -> bool:
-                """
-                Check if statement is terminal (ends execution).
-
-                Args:
-                    stmt: AST statement
-
-                Returns:
-                    True if statement terminates execution
-                """
+                """Check if statement terminates execution."""
                 return isinstance(
                     stmt, (ast.Return, ast.Break, ast.Continue, ast.Raise)
                 )
@@ -331,16 +369,56 @@ class OrphanDetector:
 
         return findings
 
-    def _get_line(self, line_num: int) -> str:
-        """
-        Get source code line by line number.
 
-        Args:
-            line_num: Line number (1-indexed)
-
-        Returns:
-            Source code line (stripped)
+class TreeSitterOrphanDetector(AbstractOrphanDetector):
+    """
+    Generic Tree Sitter based orphan detector for multiple languages.
+    """
+    
+    def __init__(self, code: str, file_path: str) -> None:
+        super().__init__(code, file_path)
+        # TODO: Initialize tree-sitter parser here
+        # self.parser = ...
+    
+    def detect_all(self) -> List[OrphanFinding]:
         """
-        if 1 <= line_num <= len(self.lines):
-            return self.lines[line_num - 1].strip()
-        return ""
+        Detect orphan code using Tree Sitter.
+        """
+        # Placeholder implementation
+        logger.warning(
+            "tree_sitter_orphan_detection_not_implemented", 
+            file=str(self.file_path)
+        )
+        return []
+
+
+class OrphanDetectorFactory:
+    """
+    Factory for creating the appropriate OrphanDetector strategy.
+    
+    Selection Logic:
+    1. Native Parser (if available for language)
+    2. Tree Sitter (if available and configured)
+    3. None (Not supported)
+    """
+    
+    @staticmethod
+    def create_detector(code: str, file_path: str) -> Optional[AbstractOrphanDetector]:
+        """
+        Create detector instance based on file type.
+        """
+        _, ext = os.path.splitext(file_path)
+        ext = ext.lower()
+        
+        # Priority 1: Native Parsers
+        if ext == ".py":
+            return PythonOrphanDetector(code, file_path)
+            
+        # Priority 2: Tree Sitter (For JS/TS/Go etc.)
+        supported_ts_extensions = [".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java"]
+        if ext in supported_ts_extensions:
+            # Check if tree-sitter is actually installed/available
+            # For now, return the class, it will log warning
+            return TreeSitterOrphanDetector(code, file_path)
+            
+        return None

@@ -40,6 +40,18 @@ class LLMClassificationPhase(LLMPhaseBase):
     Intelligently selects validation frames and suppresses false positives.
     """
 
+    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None) -> None:
+        """
+        Initialize LLM classification phase.
+        
+        Args:
+            config: Phase configuration
+            llm_service: LLM service instance
+            available_frames: List of validation frames to choose from
+        """
+        super().__init__(config, llm_service)
+        self.available_frames = available_frames or []
+
     @property
     def phase_name(self) -> str:
         """Get phase name."""
@@ -47,7 +59,23 @@ class LLMClassificationPhase(LLMPhaseBase):
 
     def get_system_prompt(self) -> str:
         """Get classification system prompt."""
-        return PromptTemplates.FRAME_SELECTION + """
+        # Dynamically build frame list
+        if self.available_frames:
+            frames_list = "\n".join([
+                f"- {f.frame_id}: {f.description}" 
+                for f in self.available_frames
+            ])
+        else:
+            # Fallback to hardcoded list if no frames provided
+            frames_list = """- SecurityFrame: SQL injection, XSS, hardcoded secrets
+- ChaosFrame: Error handling, timeouts, resilience
+- OrphanFrame: Unused code detection
+- ArchitecturalFrame: Design pattern compliance
+- StressFrame: Performance and load testing
+- PropertyFrame: Invariant and contract validation
+- FuzzFrame: Input validation and edge cases"""
+
+        return PromptTemplates.FRAME_SELECTION + f"""
 
 Frame Selection Criteria:
 1. Project Type: Match frames to project characteristics
@@ -57,13 +85,7 @@ Frame Selection Criteria:
 5. Risk Level: Focus on high-risk areas
 
 Available Frames:
-- SecurityFrame: SQL injection, XSS, hardcoded secrets
-- ChaosFrame: Error handling, timeouts, resilience
-- OrphanFrame: Unused code detection
-- ArchitecturalFrame: Design pattern compliance
-- StressFrame: Performance and load testing
-- PropertyFrame: Invariant and contract validation
-- FuzzFrame: Input validation and edge cases
+{frames_list}
 
 Suppression Guidelines:
 - Test files with intentional vulnerabilities
