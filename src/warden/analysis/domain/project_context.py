@@ -5,7 +5,7 @@ Provides comprehensive project structure understanding and context detection
 for the context-aware analysis system.
 """
 
-from dataclasses import dataclass, field
+from pydantic import Field
 from enum import Enum
 from typing import Dict, List, Optional, Any
 from pathlib import Path
@@ -142,7 +142,6 @@ class BuildTool(Enum):
     UNKNOWN = "unknown"
 
 
-@dataclass
 class ProjectStatistics(BaseDomainModel):
     """
     Statistical information about the project.
@@ -158,7 +157,7 @@ class ProjectStatistics(BaseDomainModel):
     documentation_files: int = 0
 
     # Language distribution (language -> file count)
-    language_distribution: Dict[str, int] = field(default_factory=dict)
+    language_distribution: Dict[str, int] = Field(default_factory=dict)
 
     # Directory statistics
     max_depth: int = 0  # Maximum directory depth
@@ -166,20 +165,14 @@ class ProjectStatistics(BaseDomainModel):
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return {
-            "totalFiles": self.total_files,
-            "totalLines": self.total_lines,
-            "codeFiles": self.code_files,
-            "testFiles": self.test_files,
-            "configFiles": self.config_files,
-            "documentationFiles": self.documentation_files,
-            "languageDistribution": self.language_distribution,
-            "maxDepth": self.max_depth,
-            "averageFileSize": round(self.average_file_size, 2),
-        }
+        return self.model_dump(by_alias=True, mode='json')
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> 'ProjectStatistics':
+        """Create from JSON dict."""
+        return cls.model_validate(data)
 
 
-@dataclass
 class ProjectConventions(BaseDomainModel):
     """
     Detected project conventions and patterns.
@@ -211,33 +204,14 @@ class ProjectConventions(BaseDomainModel):
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return {
-            "naming": {
-                "files": self.file_naming,
-                "classes": self.class_naming,
-                "functions": self.function_naming,
-                "variables": self.variable_naming,
-            },
-            "organization": {
-                "testLocation": self.test_location,
-                "sourceLocation": self.source_location,
-                "docsLocation": self.docs_location,
-            },
-            "codeStyle": {
-                "indentStyle": self.indent_style,
-                "indentSize": self.indent_size,
-                "maxLineLength": self.max_line_length,
-            },
-            "features": {
-                "usesTypeHints": self.uses_type_hints,
-                "usesDocstrings": self.uses_docstrings,
-                "usesLinter": self.uses_linter,
-                "usesFormatter": self.uses_formatter,
-            }
-        }
+        return self.model_dump(by_alias=True, mode='json')
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> 'ProjectConventions':
+        """Create from JSON dict."""
+        return cls.model_validate(data)
 
 
-@dataclass
 class ProjectContext(BaseDomainModel):
     """
     Complete project context for PRE-ANALYSIS phase.
@@ -257,19 +231,19 @@ class ProjectContext(BaseDomainModel):
 
     # Development tools
     test_framework: TestFramework = TestFramework.NONE
-    build_tools: List[BuildTool] = field(default_factory=list)
+    build_tools: List[BuildTool] = Field(default_factory=list)
 
     # Detected conventions
-    conventions: ProjectConventions = field(default_factory=ProjectConventions)
+    conventions: ProjectConventions = Field(default_factory=ProjectConventions)
 
     # Statistics
-    statistics: ProjectStatistics = field(default_factory=ProjectStatistics)
+    statistics: ProjectStatistics = Field(default_factory=ProjectStatistics)
 
     # Configuration files detected
-    config_files: Dict[str, str] = field(default_factory=dict)  # filename -> type
+    config_files: Dict[str, str] = Field(default_factory=dict)  # filename -> type
 
     # Special directories
-    special_dirs: Dict[str, List[str]] = field(default_factory=dict)
+    special_dirs: Dict[str, List[str]] = Field(default_factory=dict)
     # e.g., {"vendor": ["node_modules/", "vendor/"], "generated": ["gen/", "build/"]}
 
     # Context confidence (0.0 to 1.0)
@@ -277,51 +251,20 @@ class ProjectContext(BaseDomainModel):
 
     # Detection metadata
     detection_time: float = 0.0  # Time taken for detection in seconds
-    detection_warnings: List[str] = field(default_factory=list)
+    detection_warnings: List[str] = Field(default_factory=list)
     
     # Service abstractions detected in the project
     # Maps class name to abstraction info (e.g., {"SecretManager": ServiceAbstraction})
-    service_abstractions: Dict[str, Any] = field(default_factory=dict)
+    service_abstractions: Dict[str, Any] = Field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return {
-            "projectRoot": self.project_root,
-            "projectName": self.project_name,
-            "projectType": self.project_type.value,
-            "framework": self.framework.value,
-            "architecture": self.architecture.value,
-            "testFramework": self.test_framework.value,
-            "buildTools": [tool.value for tool in self.build_tools],
-            "conventions": self.conventions.to_json(),
-            "statistics": self.statistics.to_json(),
-            "configFiles": self.config_files,
-            "specialDirs": self.special_dirs,
-            "confidence": round(self.confidence, 2),
-            "detectionTime": round(self.detection_time, 3),
-            "detectionWarnings": self.detection_warnings,
-            "serviceAbstractions": self.service_abstractions,
-        }
+        return self.model_dump(by_alias=True, mode='json')
 
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> 'ProjectContext':
         """Create from JSON dict."""
-        return cls(
-            project_root=data.get("projectRoot", ""),
-            project_name=data.get("projectName", ""),
-            project_type=ProjectType(data.get("projectType", ProjectType.UNKNOWN.value)),
-            framework=Framework(data.get("framework", Framework.NONE.value)),
-            architecture=Architecture(data.get("architecture", Architecture.UNKNOWN.value)),
-            test_framework=TestFramework(data.get("testFramework", TestFramework.NONE.value)),
-            build_tools=[BuildTool(t) for t in data.get("buildTools", [])],
-            # Note: conventions/statistics deserialization simplified for now
-            config_files=data.get("configFiles", {}),
-            special_dirs=data.get("specialDirs", {}),
-            confidence=data.get("confidence", 0.0),
-            detection_time=data.get("detectionTime", 0.0),
-            detection_warnings=data.get("detectionWarnings", []),
-            service_abstractions=data.get("serviceAbstractions", {}),
-        )
+        return cls.model_validate(data)
 
     def get_context_summary(self) -> str:
         """

@@ -12,7 +12,14 @@ from uuid import uuid4
 from warden.shared.domain.base_model import BaseDomainModel
 
 
-@dataclass
+from datetime import datetime
+from pydantic import Field
+from typing import Dict, List, Optional, Any
+from uuid import uuid4
+
+from warden.shared.domain.base_model import BaseDomainModel
+
+
 class Fact(BaseDomainModel):
     """
     An atomic unit of knowledge in the system.
@@ -26,58 +33,35 @@ class Fact(BaseDomainModel):
     object: str    # e.g., "secret_management", "src/warden/secrets", "os.getenv"
     
     # Unique identifier
-    id: str = field(default_factory=lambda: str(uuid4()))
+    id: str = Field(default_factory=lambda: str(uuid4()))
     
     # Metadata (provenance, confidence, etc.)
     source: str = "analysis"   # e.g., "analysis", "user", "llm"
     confidence: float = 1.0    # 0.0 to 1.0
-    created_at: float = field(default_factory=time.time)
-    updated_at: float = field(default_factory=time.time)
+    created_at: float = Field(default_factory=time.time)
+    updated_at: float = Field(default_factory=time.time)
     
     # Additional structured data
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to JSON-compatible dict."""
-        return {
-            "id": self.id,
-            "category": self.category,
-            "subject": self.subject,
-            "predicate": self.predicate,
-            "object": self.object,
-            "source": self.source,
-            "confidence": self.confidence,
-            "createdAt": self.created_at,
-            "updatedAt": self.updated_at,
-            "metadata": self.metadata,
-        }
+        return self.model_dump(by_alias=True, mode='json')
     
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> 'Fact':
         """Create from JSON dict."""
-        return cls(
-            id=data.get("id", str(uuid4())),
-            category=data["category"],
-            subject=data["subject"],
-            predicate=data["predicate"],
-            object=data["object"],
-            source=data.get("source", "analysis"),
-            confidence=data.get("confidence", 1.0),
-            created_at=data.get("createdAt", time.time()),
-            updated_at=data.get("updatedAt", time.time()),
-            metadata=data.get("metadata", {}),
-        )
+        return cls.model_validate(data)
 
 
-@dataclass
 class KnowledgeGraph(BaseDomainModel):
     """
     Collection of facts representing the system's knowledge.
     """
     
-    facts: Dict[str, Fact] = field(default_factory=dict)  # id -> Fact
+    facts: Dict[str, Fact] = Field(default_factory=dict)  # id -> Fact
     version: str = "1.0.0"
-    last_updated: float = field(default_factory=time.time)
+    last_updated: float = Field(default_factory=time.time)
     
     def add_fact(self, fact: Fact) -> None:
         """Add or update a fact."""
@@ -95,6 +79,7 @@ class KnowledgeGraph(BaseDomainModel):
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to JSON-compatible dict."""
+        # Custom to_json to match the manual implementation's "facts" as a list
         return {
             "version": self.version,
             "lastUpdated": self.last_updated,
@@ -104,13 +89,15 @@ class KnowledgeGraph(BaseDomainModel):
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> 'KnowledgeGraph':
         """Create from JSON dict."""
-        graph = cls(
+        # Handle the fact that "facts" in JSON is a list but in model it's a dict
+        facts_list = data.get("facts", [])
+        facts_dict = {}
+        for f_data in facts_list:
+            f = Fact.model_validate(f_data)
+            facts_dict[f.id] = f
+            
+        return cls(
             version=data.get("version", "1.0.0"),
             last_updated=data.get("lastUpdated", time.time()),
+            facts=facts_dict
         )
-        
-        for fact_data in data.get("facts", []):
-            fact = Fact.from_json(fact_data)
-            graph.facts[fact.id] = fact
-            
-        return graph
