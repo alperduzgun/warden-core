@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Warden.Panel</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- gRPC Client packages -->
+    <PackageReference Include="Grpc.Net.Client" Version="2.60.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.25.2" />
+    <PackageReference Include="Grpc.Tools" Version="2.60.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Proto file - generates C# code at build time -->
+    <Protobuf Include="../../src/warden/grpc/protos/warden.proto" GrpcServices="Client">
+      <Link>Protos/warden.proto</Link>
+    </Protobuf>
+  </ItemGroup>
+
+</Project>
