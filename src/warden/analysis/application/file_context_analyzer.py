@@ -111,7 +111,7 @@ class FileContextAnalyzer:
                 )
 
         # Get appropriate weights for context
-        weights = ContextWeights(context)
+        weights = ContextWeights(context=context)
 
         # Determine suppression rules
         suppressed_issues = self._get_suppressed_issues(context)

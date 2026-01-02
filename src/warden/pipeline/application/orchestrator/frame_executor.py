@@ -263,6 +263,15 @@ class FrameExecutor:
             
             # Helper to execute single file
             async def execute_single_file(c_file: CodeFile) -> Optional[FrameResult]:
+                # Check for caching
+                file_context = context.file_contexts.get(c_file.path)
+                if file_context and getattr(file_context, 'is_unchanged', False):
+                    # Smart Caching: Skip execution for unchanged files
+                    # In a full implementation, we would re-hydrate previous findings here.
+                    # For now, we skip and log.
+                    logger.debug("skipping_unchanged_file", file=c_file.path, frame=frame.frame_id)
+                    return None
+                    
                 try:
                     # frames usually return FrameResult
                     return await frame.execute(c_file)
@@ -282,33 +291,54 @@ class FrameExecutor:
 
                 # Use batch execution if available (default impl iterates anyway)
                 # But optimized frames (like OrphanFrame) will use smart batching
-                try:
-                    f_results = await asyncio.wait_for(
-                        frame.execute_batch(code_files),
-                        timeout=self.config.frame_timeout or 300.0  # Increased timeout for batch
-                    )
-                    
-                    if f_results:
-                        files_scanned = len(f_results)
-                        total_findings_from_batch = sum(len(res.findings) if res and res.findings else 0 for res in f_results)
-
-                        logger.info(
-                            "frame_batch_execution_complete",
-                            frame_id=frame.frame_id,
-                            results_count=files_scanned,
-                            total_findings=total_findings_from_batch
+                
+                # Filter out unchanged files for batch execution
+                files_to_scan = []
+                cached_files = 0
+                
+                for cf in code_files:
+                    ctx = context.file_contexts.get(cf.path)
+                    if ctx and getattr(ctx, 'is_unchanged', False):
+                        cached_files += 1
+                        logger.debug("skipping_unchanged_file_batch", file=cf.path, frame=frame.frame_id)
+                    else:
+                        files_to_scan.append(cf)
+                
+                if cached_files > 0:
+                     logger.info("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
+                
+                if not files_to_scan:
+                     logger.info("all_files_cached_skipping_batch", frame=frame.frame_id)
+                     # Return empty list or simulation of results
+                     f_results = []
+                else:
+                    try:
+                        f_results = await asyncio.wait_for(
+                            frame.execute_batch(files_to_scan),
+                            timeout=self.config.frame_timeout or 300.0  # Increased timeout for batch
                         )
+                        
+                        if f_results:
+                            files_scanned = len(f_results)
+                            total_findings_from_batch = sum(len(res.findings) if res and res.findings else 0 for res in f_results)
 
-                        for res in f_results:
-                            if res and res.findings:
-                                frame_findings.extend(res.findings)
-                                
-                except asyncio.TimeoutError:
-                    logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
-                    execution_errors += 1
-                except Exception as ex:
-                    logger.error("frame_batch_execution_error", frame=frame.frame_id, error=str(ex))
-                    execution_errors += 1
+                            logger.info(
+                                "frame_batch_execution_complete",
+                                frame_id=frame.frame_id,
+                                results_count=files_scanned,
+                                total_findings=total_findings_from_batch
+                            )
+
+                            for res in f_results:
+                                if res and res.findings:
+                                    frame_findings.extend(res.findings)
+                                    
+                    except asyncio.TimeoutError:
+                        logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
+                        execution_errors += 1
+                    except Exception as ex:
+                        logger.error("frame_batch_execution_error", frame=frame.frame_id, error=str(ex))
+                        execution_errors += 1
 
             
             # Determine overall status based on aggregated findings

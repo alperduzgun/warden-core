@@ -16,6 +16,10 @@ The fortification step will analyze code and suggest defensive improvements.
 
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional, Dict, Any
+
+from pydantic import Field
+from warden.shared.domain.base_model import BaseDomainModel
 
 class FortificationActionType(Enum):
     """Types of fortification actions."""
@@ -32,7 +36,6 @@ class FortifierPriority(Enum):
     MEDIUM = 2
     LOW = 3
 
-@dataclass
 class Fortification(BaseDomainModel):
     """
     A single fortification suggestion.
@@ -42,7 +45,6 @@ class Fortification(BaseDomainModel):
     title: str
     detail: str  # Can contain HTML for Panel rendering
 
-@dataclass
 class FortificationAction(BaseDomainModel):
     """Represents a single fortification action applied to code."""
     type: FortificationActionType
@@ -50,7 +52,6 @@ class FortificationAction(BaseDomainModel):
     line_number: int
     severity: str = "High"
 
-@dataclass
 class FortificationSuggestion(BaseDomainModel):
     """Internal representation of a fortification suggestion."""
     issue_line: int
@@ -61,19 +62,18 @@ class FortificationSuggestion(BaseDomainModel):
     code_snippet: Optional[str] = None
 
 
-@dataclass
 class FortificationResult(BaseDomainModel):
     """
     Result of fortification step execution.
     """
     success: bool = True
-    fortifications: List[Fortification] = field(default_factory=list)
-    suggestions: List[Fortification] = field(default_factory=list)
-    actions: List[FortificationAction] = field(default_factory=list)
-    files_modified: List[str] = field(default_factory=list)
+    fortifications: List[Fortification] = Field(default_factory=list)
+    suggestions: List[Fortification] = Field(default_factory=list)
+    actions: List[FortificationAction] = Field(default_factory=list)
+    files_modified: List[str] = Field(default_factory=list)
     summary: str = ""
     duration: float = 0.0
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = Field(default_factory=datetime.now)
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel-compatible JSON."""

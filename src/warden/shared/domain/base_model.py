@@ -26,7 +26,6 @@ class BaseDomainModel(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
-        use_enum_values=True,
         json_encoders={
             datetime: lambda v: v.isoformat()
         }

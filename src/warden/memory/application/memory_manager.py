@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 import structlog
 
 from warden.memory.domain.models import KnowledgeGraph, Fact
+from datetime import datetime
 
 logger = structlog.get_logger(__name__)
 
@@ -121,4 +122,59 @@ class MemoryManager:
             metadata=abstraction  # Store full abstraction data in metadata
         )
         
+        self.add_fact(fact)
+
+    def get_file_state(self, file_path: str) -> Optional[Dict[str, Any]]:
+        """
+        Get stored state for a file (hash, findings, etc).
+        
+        Args:
+            file_path: Absolute path to the file
+            
+        Returns:
+            Dictionary with stored file state or None if not found
+        """
+        fact_id = f"filestate:{file_path}"
+        fact = self.knowledge_graph.facts.get(fact_id)
+        if fact:
+            return fact.metadata
+                
+        return None
+
+    def update_file_state(
+        self, 
+        file_path: str, 
+        content_hash: str,
+        findings_count: int = 0
+    ) -> None:
+        """
+        Update stored state for a file.
+        
+        Args:
+            file_path: Absolute path to the file
+            content_hash: SHA-256 hash of file content
+            findings_count: Number of findings found in last scan
+        """
+        fact_id = f"filestate:{file_path}"
+        
+        # In a dictionary-based system, assignment is update/overwrite
+        metadata = {
+            "file_path": file_path,
+            "content_hash": content_hash,
+            "findings_count": findings_count,
+            "last_scan": datetime.now().isoformat()
+        }
+        
+        fact = Fact(
+            id=fact_id,
+            category="file_state",
+            subject=file_path,
+            predicate="has_state",
+            object=content_hash,
+            source="MemoryManager",
+            confidence=1.0,
+            metadata=metadata
+        )
+        
+        logger.debug("adding_file_state_fact", fact_id=fact_id)
         self.add_fact(fact)
