@@ -223,11 +223,17 @@ class ProjectContext(BaseDomainModel):
     # Basic information
     project_root: str = ""
     project_name: str = ""
+    primary_language: str = ""  # e.g., "python", "typescript"
+    sdk_versions: Dict[str, str] = Field(default_factory=dict)  # e.g., {"python": "3.11", "node": "18.0"}
 
     # Project characteristics
     project_type: ProjectType = ProjectType.UNKNOWN
     framework: Framework = Framework.NONE
     architecture: Architecture = Architecture.UNKNOWN
+    
+    # High-level semantic discovery
+    purpose: str = ""  # General purpose of the project
+    architecture_description: str = ""  # High-level architectural summary
 
     # Development tools
     test_framework: TestFramework = TestFramework.NONE

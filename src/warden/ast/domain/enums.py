@@ -32,6 +32,7 @@ class ASTNodeType(str, Enum):
     # Program Structure
     MODULE = "module"
     CLASS = "class"
+    INTERFACE = "interface"
     FUNCTION = "function"
     METHOD = "method"
     PROPERTY = "property"
@@ -96,4 +97,5 @@ class CodeLanguage(str, Enum):
     RUBY = "ruby"
     CPP = "cpp"
     C = "c"
+    TSX = "tsx"
     UNKNOWN = "unknown"

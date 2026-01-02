@@ -178,3 +178,45 @@ class MemoryManager:
         
         logger.debug("adding_file_state_fact", fact_id=fact_id)
         self.add_fact(fact)
+
+    def get_project_purpose(self) -> Optional[Dict[str, str]]:
+        """
+        Get stored project purpose and architecture description.
+        """
+        fact_id = "project_purpose:global"
+        fact = self.knowledge_graph.facts.get(fact_id)
+        if fact:
+            return {
+                "purpose": fact.metadata.get("purpose", ""),
+                "architecture_description": fact.metadata.get("architecture_description", "")
+            }
+        return None
+
+    def update_project_purpose(
+        self, 
+        purpose: str, 
+        architecture_description: str = ""
+    ) -> None:
+        """
+        Update stored project purpose.
+        """
+        fact_id = "project_purpose:global"
+        
+        metadata = {
+            "purpose": purpose,
+            "architecture_description": architecture_description,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        fact = Fact(
+            id=fact_id,
+            category="project_purpose",
+            subject=self.project_root.name,
+            predicate="has_purpose",
+            object=purpose[:100],  # Short summary as object
+            source="ProjectPurposeDetector",
+            confidence=1.0,
+            metadata=metadata
+        )
+        
+        self.add_fact(fact)

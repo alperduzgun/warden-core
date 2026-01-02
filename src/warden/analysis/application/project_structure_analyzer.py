@@ -26,6 +26,7 @@ from warden.analysis.domain.project_context import (
     ProjectStatistics,
     ProjectConventions,
 )
+from warden.llm.config import LlmConfiguration
 
 logger = structlog.get_logger()
 
@@ -37,23 +38,28 @@ class ProjectStructureAnalyzer:
     Part of the PRE-ANALYSIS phase for context detection.
     """
 
-    def __init__(self, project_root: Path) -> None:
+    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None) -> None:
         """
         Initialize analyzer with project root.
-
+        
         Args:
             project_root: Root directory of the project to analyze
+            llm_config: Optional LLM configuration
         """
         self.project_root = Path(project_root)
+        self.llm_config = llm_config
         self.config_files: Dict[str, str] = {}
         self.special_dirs: Dict[str, List[str]] = {}
         self.file_extensions: Set[str] = set()
         self.directory_structure: Dict[str, int] = {}  # dir -> file count
         self.framework = None  # Will be set during analysis
 
-    async def analyze_async(self) -> ProjectContext:
+    async def analyze_async(self, initial_context: Optional[ProjectContext] = None) -> ProjectContext:
         """
         Analyze project structure and detect characteristics.
+
+        Args:
+            initial_context: Optional pre-initialized context (e.g. from memory)
 
         Returns:
             ProjectContext with detected information
@@ -66,7 +72,7 @@ class ProjectStructureAnalyzer:
         )
 
         # Initialize context
-        context = ProjectContext(
+        context = initial_context or ProjectContext(
             project_root=str(self.project_root),
             project_name=self.project_root.name,
         )
@@ -97,14 +103,23 @@ class ProjectStructureAnalyzer:
             context.test_framework = self._detect_test_framework()
             context.build_tools = self._detect_build_tools()
             context.conventions = self._detect_conventions()
+            
+            # Detect language and SDKs
+            context.primary_language = self._detect_primary_language()
+            context.sdk_versions = self._detect_sdk_versions()
 
             # Set collected data
             context.config_files = self.config_files
             context.special_dirs = self.special_dirs
-            context.statistics = await self._collect_statistics_async()
+            # Update statistics (already collected in gather, but we ensure it's set)
+            if results and len(results) > 2 and not isinstance(results[2], Exception):
+                context.statistics = results[2]
+            else:
+                context.statistics = await self._collect_statistics_async()
             
             # Detect service abstractions (context-aware pattern detection)
-            context.service_abstractions = await self._detect_service_abstractions_async()
+            # Pass context for language-aware parsing
+            context.service_abstractions = await self._detect_service_abstractions_async(context)
 
             # Calculate confidence
             context.confidence = self._calculate_confidence(context)
@@ -250,6 +265,103 @@ class ProjectStructureAnalyzer:
 
         collector = StatisticsCollector(self.project_root, self.special_dirs)
         return await collector.collect_async()
+
+    def _detect_primary_language(self) -> str:
+        """Detect the primary programming language of the project."""
+        # Use file statistics if available
+        if hasattr(self, "file_extensions") and self.file_extensions:
+            # Map extensions to languages
+            ext_map = {
+                ".py": "python",
+                ".js": "javascript",
+                ".ts": "typescript",
+                ".tsx": "typescript",
+                ".jsx": "javascript",
+                ".go": "go",
+                ".java": "java",
+                ".rs": "rust",
+                ".cs": "csharp",
+                ".dart": "dart",
+                ".kt": "kotlin",
+                ".swift": "swift",
+                ".php": "php",
+                ".rb": "ruby",
+                ".cpp": "cpp",
+                ".c": "c",
+            }
+            
+            counts = {}
+            for ext in self.file_extensions:
+                lang = ext_map.get(ext.lower())
+                if lang:
+                    # We need actual file counts to be accurate
+                    # For now, we'll use a simple heuristic if counts aren't available
+                    counts[lang] = counts.get(lang, 0) + 1
+            
+            if counts:
+                return max(counts, key=counts.get)
+
+        # Check config files
+        if "package.json" in self.config_files:
+            if "tsconfig.json" in self.config_files:
+                return "typescript"
+            return "javascript"
+        
+        if "pyproject.toml" in self.config_files or "requirements.txt" in self.config_files:
+            return "python"
+        
+        if "pom.xml" in self.config_files or "build.gradle" in self.config_files:
+            return "java"
+            
+        if "go.mod" in self.config_files:
+            return "go"
+
+        return "unknown"
+
+    def _detect_sdk_versions(self) -> Dict[str, str]:
+        """Detect SDK versions from configuration files."""
+        versions = {}
+
+        # Python version
+        if "pyproject.toml" in self.config_files:
+            try:
+                with open(self.project_root / "pyproject.toml", "rb") as f:
+                    data = tomllib.load(f)
+                    # Support both [tool.poetry] and [project] (PEP 621)
+                    python_req = (data.get("tool", {}).get("poetry", {}).get("dependencies", {}).get("python") or 
+                                 data.get("project", {}).get("requires-python"))
+                    if python_req:
+                        versions["python"] = python_req
+            except:
+                pass
+        
+        if ".python-version" in self.config_files:
+            try:
+                with open(self.project_root / ".python-version") as f:
+                    versions["python"] = f.read().strip()
+            except:
+                pass
+
+        # Node.js version
+        if "package.json" in self.config_files:
+            try:
+                with open(self.project_root / "package.json") as f:
+                    data = json.load(f)
+                    if "engines" in data and "node" in data["engines"]:
+                        versions["node"] = data["engines"]["node"]
+            except:
+                pass
+
+        if ".nvmrc" in self.config_files:
+            try:
+                with open(self.project_root / ".nvmrc") as f:
+                    versions["node"] = f.read().strip()
+            except:
+                pass
+                
+        # TODO: Add more SDKs (Java, Go, etc.) as needed
+
+        return versions
 
     def _detect_project_type(self) -> ProjectType:
         """Detect the type of project."""
@@ -500,17 +612,24 @@ class ProjectStructureAnalyzer:
         # Normalize confidence
         return min(1.0, confidence) if factors > 0 else 0.0
 
-    async def _detect_service_abstractions_async(self) -> Dict[str, Any]:
+    async def _detect_service_abstractions_async(self, context: ProjectContext) -> Dict[str, Any]:
         """
         Detect service abstractions in the project.
         
+        Args:
+            context: Current project context
+            
         Returns:
             Dictionary mapping class name to ServiceAbstraction data
         """
         from warden.analysis.application.service_abstraction_detector import ServiceAbstractionDetector
         
         try:
-            detector = ServiceAbstractionDetector(self.project_root)
+            detector = ServiceAbstractionDetector(
+                self.project_root, 
+                project_context=context,
+                llm_config=self.llm_config
+            )
             abstractions = await detector.detect_async()
             
             # Convert to serializable dict
