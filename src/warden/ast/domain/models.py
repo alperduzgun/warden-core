@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from warden.shared.domain.base_model import BaseDomainModel
+from pydantic import Field
 from warden.ast.domain.enums import (
     ASTNodeType,
     ParseStatus,
@@ -166,7 +167,6 @@ class ParseError:
         }
 
 
-@dataclass
 class ParseResult(BaseDomainModel):
     """
     Result of AST parsing operation.
@@ -178,11 +178,11 @@ class ParseResult(BaseDomainModel):
     language: CodeLanguage
     provider_name: str
     ast_root: Optional[ASTNode] = None
-    errors: List[ParseError] = field(default_factory=list)
-    warnings: List[ParseError] = field(default_factory=list)
+    errors: List[ParseError] = Field(default_factory=list)
+    warnings: List[ParseError] = Field(default_factory=list)
     parse_time_ms: float = 0.0
     file_path: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = Field(default_factory=datetime.now)
 
     def is_success(self) -> bool:
         """Check if parsing was successful."""

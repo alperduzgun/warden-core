@@ -21,6 +21,7 @@ from warden.analysis.domain.project_context import ProjectContext
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 from warden.analysis.application.file_context_analyzer import FileContextAnalyzer
 from warden.memory.application.memory_manager import MemoryManager
+from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -91,11 +92,15 @@ class PreAnalysisPhase:
             await self.memory_manager.initialize_async()
 
             # Step 2: Analyze project structure
-            # Attempt to load relevant facts from memory first
-            project_context = await self._analyze_project_structure()
-            
-            # Enrich with memory facts
+            # Initialize empty context and enrich from memory first
+            project_context = ProjectContext(
+                project_root=str(self.project_root),
+                project_name=self.project_root.name,
+            )
             self._enrich_context_from_memory(project_context)
+
+            # Analyze structure (will only discover purpose if missing after enrichment)
+            project_context = await self._analyze_project_structure(project_context)
 
             # Step 3: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
@@ -208,7 +213,7 @@ class PreAnalysisPhase:
             )
             self.llm_analyzer = None
 
-    async def _analyze_project_structure(self) -> ProjectContext:
+    async def _analyze_project_structure(self, initial_context: Optional[ProjectContext] = None) -> ProjectContext:
         """
         Analyze project structure and characteristics.
 
@@ -218,15 +223,29 @@ class PreAnalysisPhase:
         logger.info("analyzing_project_structure")
 
         # Run project structure analysis
-        project_context = await self.project_analyzer.analyze_async()
+        project_context = await self.project_analyzer.analyze_async(initial_context)
+
+        # Step 2.1: Semantic Discovery (Purpose and Architecture)
+        # Check if we already have it in memory via enrichment (called in execute)
+        if not project_context.purpose and self.llm_analyzer:
+            detector = ProjectPurposeDetector(self.project_root, self.config.get("llm_config"))
+            # We need the file list for discovery canvas
+            # Convert Path objects to list
+            all_files = list(self.project_root.rglob("*"))
+            purpose, arch = await detector.detect_async(
+                all_files, 
+                project_context.config_files
+            )
+            project_context.purpose = purpose
+            project_context.architecture_description = arch
+            logger.info("semantic_discovery_completed", purpose=purpose[:50] + "...")
 
         logger.info(
             "project_structure_analyzed",
             project_type=project_context.project_type.value,
             framework=project_context.framework.value,
             architecture=project_context.architecture.value,
-            test_framework=project_context.test_framework.value,
-            build_tools=[t.value for t in project_context.build_tools],
+            purpose=project_context.purpose[:50] + "..." if project_context.purpose else "None",
             confidence=project_context.confidence,
         )
 
@@ -497,6 +516,13 @@ class PreAnalysisPhase:
 
     def _enrich_context_from_memory(self, context: ProjectContext) -> None:
         """Enrich project context with facts from memory."""
+        # Restore project purpose and architecture
+        purpose_data = self.memory_manager.get_project_purpose()
+        if purpose_data:
+            context.purpose = purpose_data.get("purpose", "")
+            context.architecture_description = purpose_data.get("architecture_description", "")
+            logger.info("project_purpose_restored_from_memory")
+
         # Load service abstractions from memory if not detected in current run
         # (or merge with detected ones)
         memory_abstractions = self.memory_manager.get_service_abstractions()
@@ -509,6 +535,13 @@ class PreAnalysisPhase:
 
     async def _save_context_to_memory(self, context: ProjectContext) -> None:
         """Save project context facts to memory."""
+        # Save project purpose
+        if context.purpose:
+            self.memory_manager.update_project_purpose(
+                context.purpose, 
+                context.architecture_description
+            )
+
         # Save service abstractions
         if hasattr(context, 'service_abstractions'):
             for abstraction in context.service_abstractions.values():
