@@ -8,7 +8,7 @@ and other characteristics for the PRE-ANALYSIS phase.
 import asyncio
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 import json
 import structlog
 try:
@@ -102,6 +102,9 @@ class ProjectStructureAnalyzer:
             context.config_files = self.config_files
             context.special_dirs = self.special_dirs
             context.statistics = await self._collect_statistics_async()
+            
+            # Detect service abstractions (context-aware pattern detection)
+            context.service_abstractions = await self._detect_service_abstractions_async()
 
             # Calculate confidence
             context.confidence = self._calculate_confidence(context)
@@ -496,3 +499,37 @@ class ProjectStructureAnalyzer:
 
         # Normalize confidence
         return min(1.0, confidence) if factors > 0 else 0.0
+
+    async def _detect_service_abstractions_async(self) -> Dict[str, Any]:
+        """
+        Detect service abstractions in the project.
+        
+        Returns:
+            Dictionary mapping class name to ServiceAbstraction data
+        """
+        from warden.analysis.application.service_abstraction_detector import ServiceAbstractionDetector
+        
+        try:
+            detector = ServiceAbstractionDetector(self.project_root)
+            abstractions = await detector.detect_async()
+            
+            # Convert to serializable dict
+            result = {}
+            for name, abstraction in abstractions.items():
+                result[name] = abstraction.to_dict()
+            
+            if result:
+                logger.info(
+                    "service_abstractions_detected",
+                    count=len(result),
+                    services=list(result.keys()),
+                )
+            
+            return result
+            
+        except Exception as e:
+            logger.warning(
+                "service_abstraction_detection_failed",
+                error=str(e),
+            )
+            return {}

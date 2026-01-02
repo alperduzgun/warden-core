@@ -60,11 +60,12 @@ async function startHTTPBackend(): Promise<void> {
 
   // Start new HTTP server
   const httpProcess = spawn('python3', [
-    'src/warden/cli_bridge/http_server.py'
+    '-m',
+    'warden.cli_bridge.http_server'
   ], {
     cwd: projectRoot,
     detached: false,
-    stdio: 'ignore',
+    stdio: 'inherit', // Changed from 'ignore' to 'inherit' for debugging
     env: {
       ...process.env,
       PYTHONPATH: projectRoot,
@@ -128,8 +129,9 @@ export async function runPreFlightChecks(
   };
 
   // Determine which checks to run based on command
+  // For scan command, we need both backends (HTTP for health checks, Socket for IPC)
   const checksToRun = command === 'scan'
-    ? preFlightChecks.filter(c => c.name === 'HTTP Backend')
+    ? preFlightChecks // Run all checks for scan
     : preFlightChecks.filter(c => c.name === 'Socket Backend');
 
   for (const check of checksToRun) {

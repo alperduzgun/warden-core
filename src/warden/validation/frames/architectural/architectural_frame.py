@@ -94,15 +94,18 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         """
         super().__init__(config)
 
+        # Ensure config is a dict
+        config_dict = self.config if isinstance(self.config, dict) else {}
+
         # Size limits
-        self.max_file_lines = self.config.get("max_file_lines", 500)
-        self.max_function_lines = self.config.get("max_function_lines", 50)
-        self.max_classes_per_file = self.config.get("max_classes_per_file", 5)
+        self.max_file_lines = config_dict.get("max_file_lines", 500)
+        self.max_function_lines = config_dict.get("max_function_lines", 50)
+        self.max_classes_per_file = config_dict.get("max_classes_per_file", 5)
 
         # Organization checks
-        self.check_organization = self.config.get("check_organization", True)
-        self.check_test_mirror = self.config.get("check_test_mirror", True)
-        self.check_naming = self.config.get("check_naming", True)
+        self.check_organization = config_dict.get("check_organization", True)
+        self.check_test_mirror = config_dict.get("check_test_mirror", True)
+        self.check_naming = config_dict.get("check_naming", True)
 
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
@@ -164,6 +167,12 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 scenarios_executed.append("Naming convention check")
                 naming_violations = self._check_naming_conventions(code_file.path)
                 violations.extend(naming_violations)
+
+            # 7. Service abstraction consistency check (context-aware)
+            if hasattr(self, 'project_context') and self.project_context:
+                scenarios_executed.append("Service abstraction consistency check")
+                abstraction_violations = self._check_service_abstraction_consistency(code_file)
+                violations.extend(abstraction_violations)
 
             # Convert violations to findings
             findings = self._violations_to_findings(violations, code_file)
@@ -448,7 +457,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 violations.append(OrganizationViolation(
                     rule="filename_no_hyphens",
                     severity="warning",
-                    message=f"File name should use underscores, not hyphens",
+                    message="File name should use underscores, not hyphens",
                     file_path=file_path,
                     expected=filename.replace("-", "_") + ".py",
                     actual=path.name,
@@ -485,3 +494,68 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             findings.append(finding)
 
         return findings
+
+    def _check_service_abstraction_consistency(
+        self, 
+        code_file: CodeFile
+    ) -> List[OrganizationViolation]:
+        """
+        Check if code bypasses detected service abstractions.
+        
+        Uses context-aware detection: if the project has a SecretManager,
+        flag direct os.getenv usage for secrets.
+        
+        Example:
+            Project has: SecretManager (handles secrets)
+            File uses: os.getenv("API_KEY")
+            → Violation: Use SecretManager instead
+        """
+        violations = []
+        
+        # Get service abstractions from project context
+        service_abstractions = getattr(self.project_context, 'service_abstractions', {})
+        
+        if not service_abstractions:
+            return violations
+        
+        # Check each line for bypass patterns
+        lines = code_file.content.split('\n')
+        
+        for line_num, line in enumerate(lines, 1):
+            for service_name, abstraction in service_abstractions.items():
+                # Get bypass patterns for this service
+                bypass_patterns = abstraction.get('bypass_patterns', [])
+                keywords = abstraction.get('responsibility_keywords', [])
+                category = abstraction.get('category', 'custom')
+                
+                # Check if line contains any bypass pattern
+                for pattern in bypass_patterns:
+                    if pattern in line:
+                        # Check if the bypass is for a relevant keyword
+                        # e.g., os.getenv("API_KEY") where API_KEY is relevant
+                        line_upper = line.upper()
+                        relevant = any(kw in line_upper for kw in keywords)
+                        
+                        if relevant:
+                            violations.append(OrganizationViolation(
+                                rule="service_abstraction_bypass",
+                                severity="warning",
+                                message=f"Use {service_name} instead of direct '{pattern}'",
+                                file_path=f"{code_file.path}:{line_num}",
+                                expected=f"Use {service_name} (project has {category} abstraction)",
+                                actual=line.strip()[:80],
+                            ))
+                            break  # One violation per line per service
+        
+        return violations
+
+    def set_project_context(self, context: Any) -> None:
+        """
+        Set the project context for context-aware checks.
+        
+        Called by FrameExecutor to inject project context.
+        
+        Args:
+            context: ProjectContext with service_abstractions
+        """
+        self.project_context = context

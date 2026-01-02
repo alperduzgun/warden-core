@@ -131,7 +131,7 @@ CURRENT QUALITY SCORE: {quality_score}/10
 
 CODE:
 ```{language}
-{code[:4000]}  # Truncate for token limit
+{code[:1200]}  # Truncate for token limit
 ```
 
 KNOWN ISSUES:

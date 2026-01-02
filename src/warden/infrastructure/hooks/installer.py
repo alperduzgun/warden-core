@@ -11,6 +11,7 @@ import subprocess
 
 from warden.infrastructure.hooks.pre_commit import PreCommitHook
 from warden.infrastructure.hooks.pre_push import PrePushHook
+from warden.infrastructure.hooks.commit_message_hook import CommitMessageHook
 
 
 @dataclass
@@ -29,6 +30,7 @@ class HookInstaller:
     SUPPORTED_HOOKS = {
         "pre-commit": PreCommitHook,
         "pre-push": PrePushHook,
+        "commit-msg": CommitMessageHook,
     }
 
     @staticmethod

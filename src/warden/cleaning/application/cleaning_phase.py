@@ -107,13 +107,22 @@ class CleaningPhase:
         for code_file in code_files:
             # Skip non-production files based on context
             file_context = self.context.get("file_contexts", {}).get(code_file.path)
-            if file_context and file_context.get("context") in ["TEST", "EXAMPLE", "DOCUMENTATION"]:
-                logger.info(
-                    "skipping_non_production_file",
-                    file=code_file.path,
-                    context=file_context.get("context"),
-                )
-                continue
+            if file_context:
+                # Check if it's a FileContextInfo object or dict
+                if hasattr(file_context, 'context'):
+                    context_type = file_context.context.value if hasattr(file_context.context, 'value') else str(file_context.context)
+                elif isinstance(file_context, dict):
+                    context_type = file_context.get("context", "PRODUCTION")
+                else:
+                    context_type = "PRODUCTION"
+
+                if context_type in ["TEST", "EXAMPLE", "DOCUMENTATION"]:
+                    logger.info(
+                        "skipping_non_production_file",
+                        file=code_file.path,
+                        context=context_type,
+                    )
+                    continue
 
             # Generate cleaning suggestions
             if self.use_llm:

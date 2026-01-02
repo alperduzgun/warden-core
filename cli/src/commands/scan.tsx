@@ -3,12 +3,13 @@
  * Shows 6-phase pipeline execution with live updates
  */
 
-import React, {useEffect, useState, useRef} from 'react';
-import {Box, Text, useApp} from 'ink';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { Box, Text, useApp } from 'ink';
 import ansiEscapes from 'ansi-escapes';
 import Spinner from 'ink-spinner';
-import {IssueList} from '../components/IssueList.js';
-import {useIPC} from '../hooks/useIPC.js';
+import { IssueList } from '../components/IssueList.js';
+import { useIPC } from '../hooks/useIPC.js';
+import { ipcClient } from '../lib/ipc-client.js';
 import {
   PipelineDisplay,
   PipelinePhase,
@@ -17,19 +18,19 @@ import {
   updatePhaseStatus,
   updateSubStepStatus
 } from '../components/PipelineDisplay.js';
-import {backendManager} from '../lib/backend-manager.js';
-import {resolvePath, validatePath} from '../lib/path-utils.js';
-import {LoadingIndicator, ConnectionStatus} from '../components/LoadingIndicator.js';
-import {ErrorDisplay} from '../utils/errors.js';
-import {runPreFlightChecks} from '../lib/pre-flight.js';
-import type {PipelineEvent, PipelineResult, Finding, ConfigResult} from '../lib/types.js';
+import { backendManager } from '../lib/backend-manager.js';
+import { resolvePath, validatePath } from '../lib/path-utils.js';
+import { LoadingIndicator, ConnectionStatus } from '../components/LoadingIndicator.js';
+import { ErrorDisplay } from '../utils/errors.js';
+import { runPreFlightChecks } from '../lib/pre-flight.js';
+import type { PipelineEvent, PipelineResult, Finding, ConfigResult } from '../lib/types.js';
 
 interface ScanProps {
   path: string;
   frames?: string[] | undefined;
 }
 
-export function Scan({path, frames}: ScanProps) {
+export function Scan({ path, frames }: ScanProps) {
   const [backendReady, setBackendReady] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
   const [startupError, setStartupError] = useState<string | null>(null);
@@ -50,13 +51,98 @@ export function Scan({path, frames}: ScanProps) {
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [totalDuration, setTotalDuration] = useState<string | undefined>();
   const [activeFrames, setActiveFrames] = useState<string[]>([]);
+  const [classificationFrames, setClassificationFrames] = useState<string[]>([]);
   const [isWaitingForResults, setIsWaitingForResults] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   // Track start time for duration calculation
   const startTimeRef = useRef<number>(0);
 
+  // Store LLM analysis from phases
+  const [llmAnalysisData, setLlmAnalysisData] = useState<Record<string, string>>({});
+
+  // Track which phases actually executed
+  const [executedPhases, setExecutedPhases] = useState<Record<string, {
+    executed: boolean;
+    duration?: string;
+    llmUsed?: boolean;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'waiting';
+    reason?: string;
+  }>>({});
+
+  // Ref to track executedPhases without triggering re-renders during pipeline execution
+  const executedPhasesRef = useRef<typeof executedPhases>({});
+  const pendingUpdatesRef = useRef<typeof executedPhases>({});
+  const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pipelineCompletedRef = useRef<boolean>(false);
+  const phaseStartTimesRef = useRef<Record<string, number>>({});
+
+  // Batch state updates to reduce re-renders during pipeline execution
+  const schedulePhaseUpdate = useCallback((phaseId: string, update: typeof executedPhases[string]) => {
+    // If pipeline already completed, don't accept stale updates
+    if (pipelineCompletedRef.current) {
+      return;
+    }
+
+    // Smart merge: Don't let 'running' override 'completed'
+    const existingPhase = executedPhasesRef.current[phaseId];
+    if (existingPhase?.status === 'completed' && update.status === 'running') {
+      // Ignore stale running update for already completed phase
+      return;
+    }
+
+    // Don't accept 'completed' status for phases that never started
+    // This handles backend sending phase_completed without phase_started
+    if (update.status === 'completed' && !phaseStartTimesRef.current[phaseId]) {
+      // Force to 'waiting' - phase never actually ran
+      update = { ...update, status: 'waiting' };
+    }
+
+    // Update ref immediately for internal use
+    executedPhasesRef.current = {
+      ...executedPhasesRef.current,
+      [phaseId]: update
+    };
+
+    // Accumulate pending updates
+    pendingUpdatesRef.current = {
+      ...pendingUpdatesRef.current,
+      [phaseId]: update
+    };
+
+    // Debounce state updates (only update UI every 100ms during pipeline execution)
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current);
+    }
+
+    updateTimerRef.current = setTimeout(() => {
+      setExecutedPhases(prev => ({
+        ...prev,
+        ...pendingUpdatesRef.current
+      }));
+      pendingUpdatesRef.current = {};
+    }, 100);
+  }, []);
+
+  // Force immediate update (for pipeline completion)
+  const flushPhaseUpdates = useCallback(() => {
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current);
+      updateTimerRef.current = null;
+    }
+    if (Object.keys(pendingUpdatesRef.current).length > 0) {
+      setExecutedPhases(prev => ({
+        ...prev,
+        ...pendingUpdatesRef.current
+      }));
+      pendingUpdatesRef.current = {};
+    }
+    // Mark pipeline as completed - no more updates will be accepted
+    pipelineCompletedRef.current = true;
+  }, []);
+
   // Get config to determine active frames
-  const {data: configData, error: configError} = useIPC<ConfigResult>({
+  const { data: configData, error: configError } = useIPC<ConfigResult>({
     command: 'get_config',
     autoExecute: backendReady,
   });
@@ -99,8 +185,30 @@ export function Scan({path, frames}: ScanProps) {
     runChecks();
   }, [path]);
 
-  // Update active frames when config is loaded
+  // Update active frames when config is loaded or frames prop changes
   useEffect(() => {
+    // If frames are provided via CLI, use them
+    if (frames && frames.length > 0) {
+      setActiveFrames(frames);
+
+      // Update phases immediately
+      const updatedPhases = phases.map(phase => {
+        if (phase.id === 'validation') {
+          return {
+            ...phase,
+            subSteps: frames.map((frameId: string) => ({
+              id: frameId,
+              name: frameId.charAt(0).toUpperCase() + frameId.slice(1).replace(/-/g, ' '),
+              status: 'pending' as PhaseStatus
+            }))
+          };
+        }
+        return phase;
+      });
+      setPhases(updatedPhases);
+      return;
+    }
+
     // Default frames if config fails
     const defaultFrames = ['security', 'chaos', 'orphan', 'architectural', 'stress', 'env-security', 'demo-security'];
 
@@ -115,7 +223,7 @@ export function Scan({path, frames}: ScanProps) {
     }
 
     // Update initial phases with actual frames
-    const framesToUse = activeFrames.length > 0 ? activeFrames : defaultFrames;
+    const framesToUse = configData?.frames_available || defaultFrames;
     const updatedPhases = phases.map(phase => {
       if (phase.id === 'validation' && framesToUse.length > 0) {
         return {
@@ -130,24 +238,47 @@ export function Scan({path, frames}: ScanProps) {
       return phase;
     });
     setPhases(updatedPhases);
-  }, [configData, configError]);
+  }, [configData, configError, frames]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!backendReady || !resolvedPath) return;
 
-    // Use regular scan endpoint instead of streaming for now
+    // Use streaming endpoint for real-time progress
     const executePipeline = async () => {
       try {
         startTimeRef.current = Date.now();
 
+        // Reset pipeline completion flag for new run
+        pipelineCompletedRef.current = false;
+        executedPhasesRef.current = {};
+        pendingUpdatesRef.current = {};
+        phaseStartTimesRef.current = {};
+
+        // Clear classification frames and summary for fresh scan
+        setClassificationFrames([]);
+        setShowSummary(false);
+
         // Reset phases to show pipeline start
         setPhases(prev => {
           return prev.map(phase => {
-            if (phase.id === 'validation' && activeFrames.length > 0) {
+            if (phase.id === 'validation') {
+              const framesToShow = classificationFrames.length > 0
+                ? classificationFrames
+                : (activeFrames.length > 0 ? activeFrames : ['security', 'chaos', 'orphan']);
+
               return {
                 ...phase,
                 status: 'pending' as PhaseStatus,
-                subSteps: activeFrames.map(frameId => ({
+                subSteps: framesToShow.map(frameId => ({
                   id: frameId,
                   name: frameId.charAt(0).toUpperCase() + frameId.slice(1).replace(/-/g, ' '),
                   status: 'pending' as PhaseStatus
@@ -158,111 +289,247 @@ export function Scan({path, frames}: ScanProps) {
           });
         });
 
-        // Simulate pipeline phases for better UX
-        const simulatePhases = async () => {
-          const phaseOrder = ['pre-analysis', 'analysis', 'classification', 'validation', 'fortification', 'cleaning'];
+        // Ensure connected to IPC
+        if (!ipcClient.isConnected()) {
+          await ipcClient.connect();
+        }
 
-          for (const phaseId of phaseOrder) {
-            setCurrentPhase(phaseId);
-            setPhases(prev => updatePhaseStatus(prev, phaseId, 'running'));
+        // Use IPC client for streaming
+        await ipcClient.sendStream('execute_pipeline_stream', {
+          file_path: resolvedPath,
+          // Only send frames if user explicitly specified them via CLI
+          // This allows Classification phase to run and intelligently select frames
+          frames: (frames && frames.length > 0) ? frames : undefined
+        }, (event: any) => {
+          // Handle different event types
+          if (event.type === 'progress') {
+            const { event: progressEvent, data } = event;
 
-            if (phaseId === 'validation' && activeFrames.length > 0) {
-              // Simulate frame execution
-              for (const frameId of activeFrames) {
-                setCurrentSubStep(frameId);
-                setPhases(prev => updateSubStepStatus(prev, 'validation', frameId, 'running'));
-                await new Promise(resolve => setTimeout(resolve, 500)); // Simulate frame execution time
-                setPhases(prev => updateSubStepStatus(prev, 'validation', frameId, 'completed', '0.5s'));
+            // Map backend phase names to frontend phase IDs
+            const phaseMapping: Record<string, string> = {
+              'PRE_ANALYSIS': 'pre-analysis',
+              'ANALYSIS': 'analysis',
+              'CLASSIFICATION': 'classification',
+              'VALIDATION': 'validation',
+              'FORTIFICATION': 'fortification',
+              'CLEANING': 'cleaning'
+            };
+
+            if (progressEvent === 'phase_started') {
+              const phaseName = data.phase || data.phase_name;
+              const phaseId = phaseMapping[phaseName] || phaseName?.toLowerCase();
+              if (phaseId) {
+                phaseStartTimesRef.current[phaseId] = Date.now();
+                setCurrentPhase(phaseId);
+                setPhases(prev => updatePhaseStatus(prev, phaseId, 'running'));
+                // Track that this phase has executed
+                schedulePhaseUpdate(phaseId, {
+                  executed: true,
+                  status: 'running' as const,
+                  llmUsed: false
+                });
               }
-            } else {
-              await new Promise(resolve => setTimeout(resolve, 800)); // Simulate phase execution time
+            } else if (progressEvent === 'phase_skipped') {
+              const phaseName = data.phase || data.phase_name;
+              const phaseId = phaseMapping[phaseName] || phaseName?.toLowerCase();
+              if (phaseId) {
+                setPhases(prev => updatePhaseStatus(prev, phaseId, 'skipped'));
+                schedulePhaseUpdate(phaseId, {
+                  executed: false,
+                  status: 'skipped' as const,
+                  reason: data.reason || 'disabled'
+                });
+              }
+            } else if (progressEvent === 'phase_completed') {
+              const phaseName = data.phase || data.phase_name;
+              const phaseId = phaseMapping[phaseName] || phaseName?.toLowerCase();
+              if (phaseId) {
+                // Check if phase actually started (has a start time)
+                const phaseActuallyStarted = phaseStartTimesRef.current[phaseId] !== undefined;
+
+                // Use backend-reported duration if available (more accurate), otherwise fallback to client-side timer
+                let phaseDuration = '0.0s';
+                if (data.duration !== undefined && data.duration !== null) {
+                  const durationVal = typeof data.duration === 'string' ? parseFloat(data.duration) : data.duration;
+                  phaseDuration = `${Number(durationVal).toFixed(2)}s`;
+                } else if (phaseStartTimesRef.current[phaseId]) {
+                  phaseDuration = `${((Date.now() - phaseStartTimesRef.current[phaseId]) / 1000).toFixed(2)}s`;
+                }
+
+                // If phase never started (no phase_started event), mark as waiting
+                // This happens when backend skips phases but sends phase_completed anyway
+                // The backend should send phase_skipped instead, but it doesn't
+                if (!phaseActuallyStarted) {
+                  // Mark as waiting - phase didn't actually run
+                  schedulePhaseUpdate(phaseId, {
+                    executed: true,
+                    status: 'waiting' as const,
+                    llmUsed: false
+                    // No duration for waiting phases
+                  });
+                  return;
+                }
+
+                // Capture selected frames from Classification phase
+                if (phaseId === 'classification' && data.selected_frames) {
+                  setClassificationFrames(data.selected_frames);
+
+                  // Immediately update Validation phase's subSteps with Classification results
+                  setPhases(prev => prev.map(phase => {
+                    if (phase.id === 'validation') {
+                      return {
+                        ...phase,
+                        subSteps: data.selected_frames.map((frameId: string) => ({
+                          id: frameId,
+                          name: frameId.charAt(0).toUpperCase() + frameId.slice(1).replace(/-/g, ' '),
+                          status: 'pending' as PhaseStatus
+                        }))
+                      };
+                    }
+                    return phase;
+                  }));
+                }
+
+                // Check if LLM was used and show it
+                let statusMessage = phaseDuration;
+                if (data.llm_used) {
+                  statusMessage = `${phaseDuration} (🤖 AI)`;
+
+                  if (data.llm_reasoning) {
+                    setLlmAnalysisData(prev => ({
+                      ...prev,
+                      [phaseId]: data.llm_reasoning
+                    }));
+                  }
+                }
+
+                schedulePhaseUpdate(phaseId, {
+                  executed: true,
+                  status: 'completed',
+                  duration: phaseDuration,
+                  llmUsed: data.llm_used || false
+                });
+
+                setPhases(prev => updatePhaseStatus(prev, phaseId, 'completed', statusMessage));
+                if (currentPhase === phaseId) {
+                  setCurrentPhase(undefined);
+                }
+              }
+            } else if (progressEvent === 'frame_started') {
+              const frameId = data.frame_id;
+              setCurrentSubStep(frameId);
+              setPhases(prev => updateSubStepStatus(prev, 'validation', frameId, 'running'));
+
+              schedulePhaseUpdate(`validation_${frameId}`, {
+                executed: true,
+                status: 'running'
+              });
+            } else if (progressEvent === 'frame_completed') {
+              const frameId = data.frame_id;
+              const frameDuration = data.duration ? `${Number(data.duration).toFixed(2)}s` : '0.0s';
+              setPhases(prev => updateSubStepStatus(prev, 'validation', frameId, 'completed', frameDuration));
+
+              schedulePhaseUpdate(`validation_${frameId}`, {
+                executed: true,
+                status: 'completed',
+                duration: frameDuration
+              });
+
+              if (currentSubStep === frameId) {
+                setCurrentSubStep(undefined);
+              }
             }
-
+          } else if (event.type === 'result') {
+            // Process final result
+            const result = event.data;
             const elapsed = Date.now() - startTimeRef.current;
-            const duration = `${(elapsed / 1000).toFixed(1)}s`;
-            setPhases(prev => updatePhaseStatus(prev, phaseId, 'completed', duration));
+
+            // Flush any pending phase updates before showing results
+            flushPhaseUpdates();
+
+            // Wait 800ms for any late phase updates to arrive
+            // Backend sometimes sends result before final phase_completed events
+            setTimeout(() => {
+              // Force all phases to final completed state for pipeline display
+              setPhases(prev => prev.map(phase => {
+                const executedPhase = executedPhasesRef.current[phase.id];
+
+                // If we have execution data, sync it
+                if (executedPhase) {
+                  // If phase ran and finished (completed, skipped, failed) or never ran (waiting)
+                  if (['completed', 'skipped', 'failed', 'waiting'].includes(executedPhase.status)) {
+                    return {
+                      ...phase,
+                      status: executedPhase.status as PhaseStatus,
+                      duration: executedPhase.duration
+                    };
+                  }
+                }
+
+                // Final safety net: If we have a result, nothing should be pending/running
+                if (phase.status === 'pending' || phase.status === 'running') {
+                  // If we are here, backend likely didn't send an event for this phase
+                  // Force to 'completed' so the UI shows done
+                  return { ...phase, status: 'completed' as PhaseStatus };
+                }
+
+                return phase;
+              }));
+
+              // Check if all phases that actually ran are completed
+              // Don't count 'waiting' as final - those phases never ran
+              const allPhasesComplete = ['pre-analysis', 'analysis', 'classification', 'validation', 'fortification', 'cleaning']
+                .every(phaseId => {
+                  const phase = executedPhasesRef.current[phaseId];
+                  // Phase never tracked OR not executed OR completed/skipped (not waiting!)
+                  return !phase || !phase.executed || ['completed', 'skipped'].includes(phase.status);
+                });
+
+              setIsWaitingForResults(false);
+              setCurrentPhase(undefined);
+              setCurrentSubStep(undefined);
+              setShowSummary(allPhasesComplete);
+
+              const llmInfo = result.llm_analysis || {
+                llm_enabled: result.context_summary?.llm_used || false,
+                llm_provider: result.context_summary?.llm_provider || 'none',
+                phases_with_llm: result.context_summary?.phases_with_llm || [],
+                llm_quality_score: result.context_summary?.quality_score,
+                llm_confidence: result.context_summary?.confidence,
+                llm_reasoning: result.context_summary?.reasoning
+              };
+
+              setPipelineResult({
+                pipeline_id: result.pipeline_id,
+                pipeline_name: result.pipeline_name,
+                status: result.status,
+                duration: result.duration || elapsed,
+                total_frames: result.total_frames,
+                frames_passed: result.frames_passed,
+                frames_failed: result.frames_failed,
+                frames_skipped: result.frames_skipped,
+                total_findings: result.total_findings,
+                critical_findings: result.critical_findings,
+                high_findings: result.high_findings,
+                medium_findings: result.medium_findings,
+                low_findings: result.low_findings,
+                llm_analysis: llmInfo,
+                frame_results: result.frame_results
+              });
+
+              setTotalDuration(`${(elapsed / 1000).toFixed(1)}s`);
+            }, 800);
+
+            // Show waiting state immediately
+            setIsWaitingForResults(true);
           }
-
-          setCurrentPhase(undefined);
-          setCurrentSubStep(undefined);
-
-          // Set waiting for results state
-          setIsWaitingForResults(true);
-        };
-
-        // Start phase simulation
-        simulatePhases();
-
-        // Call actual scan endpoint
-        const response = await fetch('http://localhost:6173/rpc', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'scan',
-            params: {
-              path: resolvedPath,
-              frames: frames || activeFrames
-            },
-            id: Date.now()
-          })
         });
-
-        if (!response.ok) {
-          throw new Error(`Backend error: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        if (data.error) {
-          setPipelineError(data.error.message);
-          setIsWaitingForResults(false);
-        } else if (data.result) {
-          // Convert scan result to pipeline result format
-          const scanResult = data.result;
-          const elapsed = Date.now() - startTimeRef.current;
-
-          setIsWaitingForResults(false);
-          setPipelineResult({
-            pipeline_id: `scan_${Date.now()}`,
-            pipeline_name: 'Code Analysis Pipeline',
-            status: 'completed',
-            duration: elapsed,
-            total_frames: activeFrames.length,
-            frames_passed: activeFrames.length,
-            frames_failed: 0,
-            frames_skipped: 0,
-            total_findings: scanResult.issues?.length || 0,
-            critical_findings: scanResult.summary?.critical || 0,
-            high_findings: scanResult.summary?.high || 0,
-            medium_findings: scanResult.summary?.medium || 0,
-            low_findings: scanResult.summary?.low || 0,
-            frame_results: activeFrames.map(frameId => ({
-              frame_id: frameId,
-              frame_name: frameId.charAt(0).toUpperCase() + frameId.slice(1).replace('-', ' '),
-              status: 'completed',
-              duration: 0.5,
-              issues_found: scanResult.issues?.filter((i: any) => i.frame === frameId).length || 0,
-              is_blocker: false,
-              findings: scanResult.issues?.filter((i: any) => i.frame === frameId).map((issue: any) => ({
-                severity: issue.severity,
-                message: issue.message,
-                line: issue.line,
-                column: issue.column,
-                code: issue.rule,
-                file: issue.filePath
-              })) || []
-            }))
-          });
-
-          setTotalDuration(`${(elapsed / 1000).toFixed(1)}s`);
-        }
 
       } catch (error) {
         setPipelineError(error instanceof Error ? error.message : 'Pipeline execution failed');
         setIsWaitingForResults(false);
+        setCurrentPhase(undefined);
+        setCurrentSubStep(undefined);
       }
     };
 
@@ -320,7 +587,8 @@ export function Scan({path, frames}: ScanProps) {
             <PipelineDisplay
               phases={phases}
               totalDuration={totalDuration}
-              compact={true}
+              compact={false}
+              showDetails={true}
             />
           </Box>
           <Box>
@@ -347,58 +615,165 @@ export function Scan({path, frames}: ScanProps) {
               phases={phases}
               totalDuration={totalDuration}
               compact={true}
+              forceState={
+                // Check multiple success indicators: 'success', 'completed', or enum value 2
+                (pipelineResult.status === 'success' || pipelineResult.status === 'completed' || pipelineResult.status === '2' || pipelineResult.status === 2 as unknown)
+                  ? 'completed'
+                  : 'failed'
+              }
             />
           </Box>
 
-          <Box marginBottom={1}>
-            <Text bold color="green">✓ Analysis Complete</Text>
-          </Box>
-
-          <Box flexDirection="column" marginBottom={1}>
-            <Text>Frames: <Text bold color="green">{pipelineResult.frames_passed} passed</Text>
-              {pipelineResult.frames_failed > 0 && <Text bold color="red">, {pipelineResult.frames_failed} failed</Text>}
-              {pipelineResult.frames_skipped > 0 && <Text bold color="gray">, {pipelineResult.frames_skipped} skipped</Text>}
-              <Text dimColor> ({activeFrames.length} total)</Text>
-            </Text>
-          </Box>
-
-          <Box flexDirection="column" marginBottom={1}>
-            <Text bold>Findings Summary:</Text>
-            <Text>  🔴 Critical: <Text bold color="red">{pipelineResult.critical_findings || 0}</Text></Text>
-            <Text>  🟠 High: <Text bold color="redBright">{pipelineResult.high_findings || 0}</Text></Text>
-            <Text>  🟡 Medium: <Text bold color="yellow">{pipelineResult.medium_findings || 0}</Text></Text>
-            <Text>  ⚪ Low: <Text bold color="gray">{pipelineResult.low_findings || 0}</Text></Text>
-          </Box>
-
-          {/* Convert findings to issues for IssueList compatibility */}
-          {pipelineResult.total_findings > 0 && (
-            <Box flexDirection="column">
+          {showSummary && (
+            <>
               <Box marginBottom={1}>
-                <Text bold>Issues Found:</Text>
+                <Text bold color="green">✓ Analysis Complete</Text>
+                {pipelineResult.llm_analysis?.llm_enabled && (
+                  <Text color="cyan"> 🤖 Enhanced with AI Analysis ({pipelineResult.llm_analysis.llm_provider})</Text>
+                )}
               </Box>
-              <IssueList
-                issues={
-                  pipelineResult.frame_results.flatMap(frame =>
-                    frame.findings.map((finding: Finding, idx: number) => ({
-                      id: `${frame.frame_id}_${idx}`,
-                      filePath: finding.file || resolvedPath,
-                      line: finding.line || 0,
-                      column: finding.column || 0,
-                      severity: finding.severity as 'critical' | 'high' | 'medium' | 'low',
-                      message: finding.message,
-                      rule: finding.code || 'unknown',
-                      frame: frame.frame_id
-                    }))
-                  )
-                }
-              />
-            </Box>
-          )}
 
-          {pipelineResult.total_findings === 0 && (
-            <Box marginTop={1}>
-              <Text color="green">✨ No issues found! Your code is clean.</Text>
-            </Box>
+              {/* Show comprehensive phase execution summary */}
+              <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor="green" padding={1}>
+                <Text bold color="green">📊 Phase Execution Summary:</Text>
+                <Box flexDirection="column" marginLeft={2}>
+                  {['pre-analysis', 'analysis', 'classification', 'validation', 'fortification', 'cleaning'].map(phaseId => {
+                    const executedPhase = executedPhases[phaseId];
+                    const phaseInfo = phases.find(p => p.id === phaseId);
+                    const phaseName = phaseInfo?.name || phaseId;
+
+                    // Don't show if never executed
+                    if (!executedPhase || !executedPhase.executed) {
+                      return null;
+                    }
+
+                    // Use executedPhase.status as source of truth (not phases.status)
+                    const displayStatus = executedPhase.status;
+
+                    // Icon mapping for different statuses
+                    const statusIcon =
+                      displayStatus === 'completed' ? '✅' :
+                        displayStatus === 'failed' ? '❌' :
+                          displayStatus === 'skipped' ? '⊘' :
+                            displayStatus === 'waiting' ? '⏳' :
+                              '⏸️';
+
+                    // Color mapping for different statuses
+                    const statusColor =
+                      displayStatus === 'completed' ? 'green' :
+                        displayStatus === 'failed' ? 'red' :
+                          displayStatus === 'skipped' ? 'gray' :
+                            displayStatus === 'waiting' ? 'gray' :
+                              'yellow';
+
+                    return (
+                      <Text key={phaseId}>
+                        {statusIcon} {phaseName}:
+                        <Text color={statusColor}>
+                          {' '}{displayStatus.toUpperCase()}
+                        </Text>
+                        {executedPhase.duration && displayStatus === 'completed' && <Text dimColor> ({executedPhase.duration})</Text>}
+                        {executedPhase.llmUsed && <Text color="cyan"> 🤖</Text>}
+                        {phaseId === 'classification' && classificationFrames.length > 0 && (
+                          <Text dimColor> → Selected frames: {classificationFrames.join(', ')}</Text>
+                        )}
+                        {phaseId === 'validation' && (
+                          <Text dimColor> → Executed frames: {
+                            Object.keys(executedPhases)
+                              .filter(key => key.startsWith('validation_'))
+                              .map(key => key.replace('validation_', ''))
+                              .join(', ') || 'none'
+                          }</Text>
+                        )}
+                      </Text>
+                    );
+                  })}
+                </Box>
+              </Box>
+
+              {/* Show LLM Analysis Details if available */}
+              {pipelineResult.llm_analysis?.llm_enabled && (
+                <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor="cyan" padding={1}>
+                  <Text bold color="cyan">🤖 AI-Powered Analysis:</Text>
+                  {pipelineResult.llm_analysis.llm_quality_score && (
+                    <Text>  📊 Code Quality Score: <Text bold color={
+                      pipelineResult.llm_analysis.llm_quality_score >= 7 ? "green" :
+                        pipelineResult.llm_analysis.llm_quality_score >= 5 ? "yellow" : "red"
+                    }>{pipelineResult.llm_analysis.llm_quality_score.toFixed(1)}/10</Text></Text>
+                  )}
+                  {pipelineResult.llm_analysis.llm_confidence && (
+                    <Text>  🎯 AI Confidence: <Text bold color="cyan">{(pipelineResult.llm_analysis.llm_confidence * 100).toFixed(0)}%</Text></Text>
+                  )}
+                  {pipelineResult.llm_analysis.phases_with_llm && pipelineResult.llm_analysis.phases_with_llm.length > 0 && (
+                    <Text>  ✨ AI-Enhanced Phases: <Text color="cyan">{pipelineResult.llm_analysis.phases_with_llm.join(', ')}</Text></Text>
+                  )}
+                  {pipelineResult.llm_analysis.llm_reasoning && (
+                    <Box marginTop={1}>
+                      <Text dimColor>  💭 AI Reasoning: {pipelineResult.llm_analysis.llm_reasoning}</Text>
+                    </Box>
+                  )}
+                  {/* Show collected LLM analysis from phases */}
+                  {Object.keys(llmAnalysisData).length > 0 && (
+                    <Box marginTop={1} flexDirection="column">
+                      <Text bold color="cyan">  📝 AI Phase Insights:</Text>
+                      {Object.entries(llmAnalysisData).map(([phase, reasoning]) => (
+                        <Box key={phase} marginLeft={2}>
+                          <Text color="yellow">• {phase}: </Text>
+                          <Text dimColor>{String(reasoning).slice(0, 100)}...</Text>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              <Box flexDirection="column" marginBottom={1}>
+                <Text>Frames: <Text bold color="green">{pipelineResult.frames_passed} passed</Text>
+                  {pipelineResult.frames_failed > 0 && <Text bold color="red">, {pipelineResult.frames_failed} failed</Text>}
+                  {pipelineResult.frames_skipped > 0 && <Text bold color="gray">, {pipelineResult.frames_skipped} skipped</Text>}
+                  <Text dimColor> ({activeFrames.length} total)</Text>
+                </Text>
+              </Box>
+
+              <Box flexDirection="column" marginBottom={1}>
+                <Text bold>Findings Summary:</Text>
+                <Text>  🔴 Critical: <Text bold color="red">{pipelineResult.critical_findings || 0}</Text></Text>
+                <Text>  🟠 High: <Text bold color="redBright">{pipelineResult.high_findings || 0}</Text></Text>
+                <Text>  🟡 Medium: <Text bold color="yellow">{pipelineResult.medium_findings || 0}</Text></Text>
+                <Text>  ⚪ Low: <Text bold color="gray">{pipelineResult.low_findings || 0}</Text></Text>
+              </Box>
+
+              {/* Convert findings to issues for IssueList compatibility */}
+              {pipelineResult.total_findings > 0 && (
+                <Box flexDirection="column">
+                  <Box marginBottom={1}>
+                    <Text bold>Issues Found:</Text>
+                  </Box>
+                  <IssueList
+                    issues={
+                      pipelineResult.frame_results.flatMap(frame =>
+                        frame.findings.map((finding: Finding, idx: number) => ({
+                          id: `${frame.frame_id}_${idx}`,
+                          filePath: finding.file || resolvedPath,
+                          line: finding.line || 0,
+                          column: finding.column || 0,
+                          severity: finding.severity as 'critical' | 'high' | 'medium' | 'low',
+                          message: finding.message,
+                          rule: finding.code || 'unknown',
+                          frame: frame.frame_id
+                        }))
+                      )
+                    }
+                  />
+                </Box>
+              )}
+
+              {pipelineResult.total_findings === 0 && (
+                <Box marginTop={1}>
+                  <Text color="green">✨ No issues found! Your code is clean.</Text>
+                </Box>
+              )}
+            </>
           )}
         </Box>
       )}

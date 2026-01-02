@@ -135,6 +135,15 @@ export interface PipelineStreamResponse {
   events: AsyncIterableIterator<PipelineEvent>;
 }
 
+export interface LLMAnalysis {
+  llm_enabled: boolean;
+  llm_provider: string;
+  phases_with_llm: string[];
+  llm_quality_score?: number;
+  llm_confidence?: number;
+  llm_reasoning?: string;
+}
+
 export interface PipelineResult {
   pipeline_id: string;
   pipeline_name: string;
@@ -156,6 +165,7 @@ export interface PipelineResult {
     [key: string]: unknown;
   };
   metadata?: Record<string, unknown>;
+  llm_analysis?: LLMAnalysis;
 }
 
 export interface FrameResult {

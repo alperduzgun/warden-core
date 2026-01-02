@@ -36,7 +36,7 @@ class LLMPhaseConfig:
     timeout: int = 30
     fallback_to_rules: bool = True
     temperature: float = 0.3  # Lower for more deterministic outputs
-    max_tokens: int = 2000
+    max_tokens: int = 800  # Reduced to stay within context limits
 
 
 @dataclass
@@ -84,38 +84,36 @@ class LLMPhaseBase(ABC):
 
     def __init__(
         self,
-        config: LLMPhaseConfig,
-        llm_config: Optional[Dict[str, Any]] = None,
+        config: Optional[LLMPhaseConfig] = None,
+        llm_service: Optional[Any] = None,
     ) -> None:
         """
         Initialize LLM phase base.
 
         Args:
             config: Phase-specific LLM configuration
-            llm_config: LLM client configuration
+            llm_service: Pre-configured LLM service/client
         """
-        self.config = config
-        self.llm = None
-        self.cache = LLMCache() if config.cache_enabled else None
+        self.config = config or LLMPhaseConfig(enabled=False)
+        self.llm = llm_service
+        self.cache = LLMCache() if self.config.cache_enabled else None
 
-        if config.enabled:
-            try:
-                self.llm = create_client(llm_config)
-                logger.info(
-                    "llm_phase_initialized",
-                    phase=self.phase_name,
-                    model=config.model,
-                    cache=config.cache_enabled,
-                )
-            except Exception as e:
-                logger.warning(
-                    "llm_initialization_failed",
-                    phase=self.phase_name,
-                    error=str(e),
-                    fallback="rule-based",
-                )
-                if not config.fallback_to_rules:
-                    raise
+        # Enable LLM if service is provided
+        if llm_service:
+            self.config.enabled = True
+            logger.info(
+                "llm_phase_initialized",
+                phase=self.phase_name,
+                model=self.config.model,
+                cache=self.config.cache_enabled,
+                has_llm=True,
+            )
+        elif self.config.enabled:
+            logger.warning(
+                "llm_enabled_but_no_service",
+                phase=self.phase_name,
+                fallback="rule-based",
+            )
 
     @property
     @abstractmethod
@@ -290,18 +288,11 @@ class LLMPhaseBase(ABC):
         """
         for attempt in range(self.config.max_retries):
             try:
-                # Prepare messages
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ]
-
                 # Call LLM with timeout
                 response = await asyncio.wait_for(
                     self.llm.complete(
-                        messages=messages,
-                        temperature=self.config.temperature,
-                        max_tokens=self.config.max_tokens,
+                        prompt=user_prompt,
+                        system_prompt=system_prompt
                     ),
                     timeout=self.config.timeout,
                 )

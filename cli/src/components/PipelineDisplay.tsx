@@ -4,8 +4,8 @@
  * Inspired by warden-panel dashboard sidebar
  */
 
-import React, {useState, useEffect} from 'react';
-import {Box, Text} from 'ink';
+import React, { useState, useEffect } from 'react';
+import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 
 // Pipeline phase definitions matching backend
@@ -34,6 +34,7 @@ export interface PipelineDisplayProps {
   totalDuration?: string | undefined;
   showDetails?: boolean | undefined;
   compact?: boolean | undefined;
+  forceState?: 'completed' | 'failed' | undefined;
 }
 
 // Phase configuration with icons
@@ -94,7 +95,8 @@ export function PipelineDisplay({
   currentSubStep,
   totalDuration,
   showDetails = true,
-  compact = false
+  compact = false,
+  forceState
 }: PipelineDisplayProps) {
   const [animationDots, setAnimationDots] = useState('');
 
@@ -106,21 +108,24 @@ export function PipelineDisplay({
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate progress
+  // Calculate progress - only count actually running/completed phases, not pending
+  const executedPhases = phases.filter(p => p.status !== 'pending');
   const completedCount = phases.filter(p => p.status === 'completed').length;
-  const totalPhases = phases.length;
-  const progressPercentage = Math.round((completedCount / totalPhases) * 100);
+  const totalPhases = executedPhases.length > 0 ? executedPhases.length : phases.length;
+  const progressPercentage = totalPhases > 0 ? Math.round((completedCount / totalPhases) * 100) : 0;
 
   // Compact mode: show just a summary line
   if (compact) {
     const failedCount = phases.filter(p => p.status === 'failed').length;
-    const isComplete = phases.every(p => p.status !== 'pending' && p.status !== 'running');
+    // Trust forceState if provided, otherwise check phases
+    const isComplete = forceState ? true : phases.every(p => p.status !== 'pending' && p.status !== 'running');
+    const displayFailed = forceState === 'failed' || failedCount > 0;
 
     return (
       <Box>
         <Text>
           Pipeline {isComplete ? (
-            failedCount > 0 ? (
+            displayFailed ? (
               <Text color="red" bold>FAILED</Text>
             ) : (
               <Text color="green" bold>COMPLETED</Text>
@@ -154,8 +159,8 @@ export function PipelineDisplay({
       <Box marginBottom={1}>
         <Text>
           {'['}
-          {Array.from({length: 20}).map((_, i) => {
-            const filled = i < Math.floor((completedCount / totalPhases) * 20);
+          {Array.from({ length: 20 }).map((_, i) => {
+            const filled = totalPhases > 0 ? i < Math.floor((completedCount / totalPhases) * 20) : false;
             return filled ? '█' : '░';
           }).join('')}
           {']'}
@@ -272,8 +277,8 @@ export function PipelineDisplay({
                           {subStep.status === 'running'
                             ? `running${animationDots}`
                             : subStep.status === 'skipped'
-                            ? 'skip'
-                            : ''
+                              ? 'skip'
+                              : ''
                           }
                         </Text>
                       </Box>

@@ -3,11 +3,11 @@
  * Automatically manages Python backend lifecycle
  */
 
-import {spawn, ChildProcess} from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import {fileURLToPath} from 'url';
-import {logger} from '../utils/logger.js';
+import { fileURLToPath } from 'url';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +80,7 @@ export class BackendManager {
         }, 1000);
       });
     } catch (error) {
-      logger.debug('backend_check_error', {error: String(error)});
+      logger.debug('backend_check_error', { error: String(error) });
       return false;
     }
   }
@@ -94,7 +94,7 @@ export class BackendManager {
     }
 
     this.isStarting = true;
-    logger.info('starting_backend', {script: BACKEND_SCRIPT, cwd: PROJECT_ROOT});
+    logger.info('starting_backend', { script: BACKEND_SCRIPT, cwd: PROJECT_ROOT });
 
     try {
       // Clean up old socket if exists
@@ -116,7 +116,7 @@ export class BackendManager {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
-          PYTHONPATH: PROJECT_ROOT,
+          PYTHONPATH: `${PROJECT_ROOT}:${path.join(PROJECT_ROOT, 'src')}`,
           PYTHONUNBUFFERED: '1',
         },
       });
@@ -127,25 +127,25 @@ export class BackendManager {
           const output = data.toString();
           // Only log important messages
           if (output.includes('error') || output.includes('warning')) {
-            logger.debug('backend_output', {message: output.trim()});
+            logger.debug('backend_output', { message: output.trim() });
           }
         });
       }
 
       if (this.process.stderr) {
         this.process.stderr.on('data', (data) => {
-          logger.error('backend_error', {message: data.toString().trim()});
+          logger.error('backend_error', { message: data.toString().trim() });
         });
       }
 
       // Handle process exit
       this.process.on('exit', (code) => {
-        logger.info('backend_exited', {code});
+        logger.info('backend_exited', { code });
         this.process = null;
       });
 
       this.process.on('error', (error) => {
-        logger.error('backend_process_error', {error: String(error)});
+        logger.error('backend_process_error', { error: String(error) });
         this.process = null;
       });
 
@@ -200,8 +200,8 @@ export class BackendManager {
 
     for (const cmd of candidates) {
       try {
-        const {execSync} = await import('child_process');
-        execSync(`${cmd} --version`, {stdio: 'ignore'});
+        const { execSync } = await import('child_process');
+        execSync(`${cmd} --version`, { stdio: 'ignore' });
         return cmd;
       } catch {
         // Try next
