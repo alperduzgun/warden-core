@@ -16,6 +16,10 @@ The cleaning step will analyze code and suggest cleanup/refactoring improvements
 
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional, Dict, Any
+
+from pydantic import Field
+from warden.shared.domain.base_model import BaseDomainModel
 
 class CleaningIssueType(Enum):
     """Types of cleaning opportunities."""
@@ -42,7 +46,6 @@ class CleaningIssueSeverity(Enum):
     LOW = 3
     INFO = 4
 
-@dataclass
 class Cleaning(BaseDomainModel):
     """
     A single cleaning suggestion.
@@ -52,7 +55,6 @@ class Cleaning(BaseDomainModel):
     title: str
     detail: str  # Can contain HTML for Panel rendering
 
-@dataclass
 class CleaningIssue(BaseDomainModel):
     """Represents a single cleanup opportunity."""
     issue_type: CleaningIssueType
@@ -63,7 +65,6 @@ class CleaningIssue(BaseDomainModel):
     column_start: Optional[int] = None
     column_end: Optional[int] = None
 
-@dataclass
 class CleaningSuggestion(BaseDomainModel):
     """A suggestion for code cleanup."""
     issue: CleaningIssue
@@ -71,21 +72,20 @@ class CleaningSuggestion(BaseDomainModel):
     example_code: Optional[str] = None
     rationale: Optional[str] = None
 
-@dataclass
 class CleaningResult(BaseDomainModel):
     """
     Result of cleaning step execution.
     """
     success: bool = True
-    cleanings: List[Cleaning] = field(default_factory=list)
+    cleanings: List[Cleaning] = Field(default_factory=list)
     issues_found: int = 0
-    suggestions: List[CleaningSuggestion] = field(default_factory=list)
+    suggestions: List[CleaningSuggestion] = Field(default_factory=list)
     cleanup_score: float = 0.0
-    files_modified: List[str] = field(default_factory=list)
+    files_modified: List[str] = Field(default_factory=list)
     summary: str = ""
     duration: float = 0.0
-    timestamp: datetime = field(default_factory=datetime.now)
-    metrics: dict = field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=datetime.now)
+    metrics: dict = Field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel-compatible JSON."""

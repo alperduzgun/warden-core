@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
 import structlog
+import hashlib
+from datetime import datetime
 
 from warden.analysis.domain.file_context import (
     FileContext,
@@ -68,7 +70,6 @@ class PreAnalysisPhase:
             PreAnalysisResult with project and file contexts
         """
         start_time = time.perf_counter()
-
         logger.info(
             "pre_analysis_phase_started",
             project_root=str(self.project_root),
@@ -99,6 +100,7 @@ class PreAnalysisPhase:
             # Step 3: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
 
+            # Step 4: Analyze file contexts in parallel
             # Step 4: Analyze file contexts in parallel
             file_contexts = await self._analyze_file_contexts(code_files)
 
@@ -134,9 +136,16 @@ class PreAnalysisPhase:
                     "contexts": result.get_context_summary(),
                     "duration": f"{result.analysis_duration:.2f}s",
                 })
+            
 
             # Step 6: Save learning to memory
             await self._save_context_to_memory(project_context)
+            
+            # Step 7: Save file states (hashes)
+            # We save this now so next run knows about these hashes
+            await self.save_file_states(file_contexts)
+
+            return result
 
             return result
 
@@ -278,11 +287,43 @@ class PreAnalysisPhase:
         """
         # Run analysis in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
+        
+        # Calculate content hash (PRE-ANALYSIS step)
+        content_hash = self._calculate_file_hash(code_file.content)
+        
+        # Check memory for existing state
+        if self.memory_manager and self.memory_manager._is_loaded:
+            stored_state = self.memory_manager.get_file_state(code_file.path)
+            
+            # If hash matches, mark as unchanged
+            if stored_state and stored_state.get('content_hash') == content_hash:
+                # Create context info directly for unchanged file to potentially skip full analysis
+                # But we still want FileContext analysis.
+                # Ideally we want full context info.
+                pass
+
+        context_info = await loop.run_in_executor(
             None,
             self.file_analyzer.analyze_file,
             Path(code_file.path)
         )
+        
+        # Enrich context info with hash
+        context_info.content_hash = content_hash
+        context_info.last_scan_timestamp = datetime.now()
+        
+        # Determine if unchanged
+        if self.memory_manager and self.memory_manager._is_loaded:
+             stored_state = self.memory_manager.get_file_state(code_file.path)
+             if stored_state and stored_state.get('content_hash') == content_hash:
+                 context_info.is_unchanged = True
+                 logger.debug("file_unchanged", file=code_file.path)
+
+        return context_info
+
+    def _calculate_file_hash(self, content: str) -> str:
+        """Calculate SHA-256 hash of file content."""
+        return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
     def _get_default_context(self, file_path: str) -> Any:
         """
@@ -301,7 +342,7 @@ class PreAnalysisPhase:
             context=FileContext.PRODUCTION,
             confidence=0.0,
             detection_method="default",
-            weights=ContextWeights(FileContext.PRODUCTION),
+            weights=ContextWeights(context=FileContext.PRODUCTION),
             suppressed_issues=[],
             suppression_reason="Analysis failed - using default production rules",
         )
@@ -475,3 +516,17 @@ class PreAnalysisPhase:
                 
             # Persist to disk
             await self.memory_manager.save_async()
+    async def save_file_states(self, file_contexts: Dict[str, Any]) -> None:
+        """
+        Save current file states to memory.
+        """
+        for path, info in file_contexts.items():
+            if info.content_hash:
+                logger.debug("saving_file_state", file=path, hash=info.content_hash)
+                self.memory_manager.update_file_state(
+                    file_path=path,
+                    content_hash=info.content_hash,
+                    findings_count=0 
+                )
+        
+        await self.memory_manager.save_async()

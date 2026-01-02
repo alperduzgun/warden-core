@@ -8,7 +8,9 @@ and context-aware weight adjustment.
 from pydantic import Field
 from enum import Enum
 from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
+from datetime import datetime
 
 from warden.shared.domain.base_model import BaseDomainModel
 
@@ -161,6 +163,11 @@ class FileContextInfo(BaseDomainModel):
     is_generated: bool = False  # Auto-generated file
     is_vendor: bool = False  # Third-party code
     has_ignore_marker: bool = False  # Has "warden-ignore" comment
+    
+    # Caching / Incremental Scan Support
+    content_hash: Optional[str] = None
+    last_scan_timestamp: Optional[datetime] = None
+    is_unchanged: bool = False  # If True, analysis can be skipped (cached)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
