@@ -1,0 +1,1141 @@
+// ============================================================================
+// Warden gRPC Service Definition
+//
+// Protocol Buffers definition for C# Panel <-> Python Backend communication.
+// Port: 50051
+// Total Endpoints: 51
+// ============================================================================
+
+syntax = "proto3";
+
+package warden;
+
+option csharp_namespace = "Warden.Grpc";
+
+// ============================================================================
+// EMPTY MESSAGE
+// ============================================================================
+
+message Empty {}
+
+// ============================================================================
+// COMMON TYPES
+// ============================================================================
+
+enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    CRITICAL = 1;
+    HIGH = 2;
+    MEDIUM = 3;
+    LOW = 4;
+    INFO = 5;
+}
+
+enum IssueState {
+    ISSUE_STATE_UNSPECIFIED = 0;
+    OPEN = 1;
+    RESOLVED = 2;
+    SUPPRESSED = 3;
+    REOPENED = 4;
+}
+
+enum TrendDirection {
+    TREND_UNSPECIFIED = 0;
+    IMPROVING = 1;
+    STABLE = 2;
+    DEGRADING = 3;
+}
+
+enum FileType {
+    FILE_TYPE_UNSPECIFIED = 0;
+    PYTHON = 1;
+    JAVASCRIPT = 2;
+    TYPESCRIPT = 3;
+    JAVA = 4;
+    CSHARP = 5;
+    GO = 6;
+    RUST = 7;
+    CPP = 8;
+    RUBY = 9;
+    PHP = 10;
+    KOTLIN = 11;
+    SWIFT = 12;
+    SCALA = 13;
+    OTHER = 99;
+}
+
+message Finding {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+    Severity severity = 4;
+    string file_path = 5;
+    int32 line_number = 6;
+    int32 column_number = 7;
+    string code_snippet = 8;
+    string suggestion = 9;
+    string frame_id = 10;
+    string cwe_id = 11;
+    string owasp_category = 12;
+    map<string, string> metadata = 13;
+}
+
+message Fortification {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+    string file_path = 4;
+    int32 line_number = 5;
+    string original_code = 6;
+    string suggested_code = 7;
+    string rationale = 8;
+    Severity priority = 9;
+}
+
+message Cleaning {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+    string file_path = 4;
+    int32 line_number = 5;
+    string detail = 6;
+}
+
+// ============================================================================
+// ISSUE MANAGEMENT MESSAGES
+// ============================================================================
+
+message Issue {
+    string id = 1;
+    string hash = 2;                      // Unique content hash
+    string title = 3;
+    string description = 4;
+    Severity severity = 5;
+    IssueState state = 6;
+    string file_path = 7;
+    int32 line_number = 8;
+    string code_snippet = 9;
+    string frame_id = 10;
+    string first_detected = 11;           // ISO 8601 timestamp
+    string last_seen = 12;                // ISO 8601 timestamp
+    string resolved_at = 13;              // ISO 8601 timestamp (if resolved)
+    string resolved_by = 14;
+    string suppressed_at = 15;            // ISO 8601 timestamp (if suppressed)
+    string suppressed_by = 16;
+    string suppression_reason = 17;
+    int32 occurrence_count = 18;
+    map<string, string> metadata = 19;
+}
+
+message IssueFilter {
+    repeated IssueState states = 1;       // Filter by states
+    repeated Severity severities = 2;     // Filter by severities
+    repeated string frame_ids = 3;        // Filter by frames
+    string file_path_pattern = 4;         // Glob pattern for files
+    int32 limit = 5;                      // Max results (0 = no limit)
+    int32 offset = 6;                     // Pagination offset
+}
+
+message IssueList {
+    repeated Issue issues = 1;
+    int32 total_count = 2;
+    int32 filtered_count = 3;
+}
+
+message IssueRequest {
+    string issue_id = 1;
+}
+
+message IssueHashRequest {
+    string hash = 1;
+}
+
+message IssueActionRequest {
+    string issue_id = 1;
+    string actor = 2;                     // Who performed the action
+    string comment = 3;                   // Optional comment
+}
+
+message IssueActionResponse {
+    bool success = 1;
+    Issue issue = 2;
+    string error_message = 3;
+}
+
+message IssueStats {
+    int32 total = 1;
+    int32 open = 2;
+    int32 resolved = 3;
+    int32 suppressed = 4;
+    int32 critical = 5;
+    int32 high = 6;
+    int32 medium = 7;
+    int32 low = 8;
+    int32 info = 9;
+    map<string, int32> by_frame = 10;     // Count per frame
+    map<string, int32> by_file = 11;      // Count per file (top 10)
+}
+
+message IssueHistory {
+    repeated IssueSnapshot snapshots = 1;
+}
+
+message IssueSnapshot {
+    string snapshot_id = 1;
+    string timestamp = 2;                 // ISO 8601
+    string run_id = 3;
+    int32 total_issues = 4;
+    int32 new_issues = 5;
+    int32 resolved_issues = 6;
+    int32 reopened_issues = 7;
+    repeated Issue issues = 8;
+}
+
+// ============================================================================
+// RESULT ANALYSIS MESSAGES
+// ============================================================================
+
+message AnalyzeResultsRequest {
+    PipelineResult result = 1;
+    string project_id = 2;
+    string branch = 3;
+    string commit_hash = 4;
+}
+
+message AnalysisResult {
+    bool success = 1;
+    TrendDirection trend = 2;
+    float quality_score = 3;              // 0-100
+    int32 new_issues = 4;
+    int32 resolved_issues = 5;
+    int32 reopened_issues = 6;
+    int32 persistent_issues = 7;
+    repeated TrendingIssue trending_issues = 8;
+    FrameStats frame_stats = 9;
+    SeverityStats severity_stats = 10;
+    string analysis_timestamp = 11;
+}
+
+message TrendingIssue {
+    string issue_hash = 1;
+    string title = 2;
+    int32 occurrence_count = 3;
+    TrendDirection trend = 4;
+}
+
+message FrameStats {
+    map<string, FrameStat> stats = 1;
+}
+
+message FrameStat {
+    string frame_id = 1;
+    string frame_name = 2;
+    int32 total_findings = 3;
+    int32 critical = 4;
+    int32 high = 5;
+    int32 medium = 6;
+    int32 low = 7;
+    float avg_severity = 8;
+    int64 execution_time_ms = 9;
+}
+
+message SeverityStats {
+    int32 critical = 1;
+    int32 high = 2;
+    int32 medium = 3;
+    int32 low = 4;
+    int32 info = 5;
+    float weighted_score = 6;
+}
+
+message TrendRequest {
+    int32 limit = 1;                      // Number of snapshots to compare
+}
+
+message TrendResponse {
+    TrendDirection overall_trend = 1;
+    repeated TrendPoint points = 2;
+}
+
+message TrendPoint {
+    string timestamp = 1;
+    int32 total_issues = 2;
+    float quality_score = 3;
+}
+
+message QualityScoreResponse {
+    float score = 1;                      // 0-100
+    string grade = 2;                     // A, B, C, D, F
+    map<string, float> breakdown = 3;     // Per-category scores
+}
+
+// ============================================================================
+// REPORT GENERATION MESSAGES
+// ============================================================================
+
+message ReportRequest {
+    string run_id = 1;                    // Pipeline run ID
+    string output_path = 2;               // Optional: output path
+    string project_name = 3;
+    string branch = 4;
+    string commit_hash = 5;
+    map<string, string> metadata = 6;
+}
+
+message ReportResponse {
+    bool success = 1;
+    string report_id = 2;
+    string file_path = 3;
+    string content = 4;                   // For JSON/inline reports
+    int64 size_bytes = 5;
+    string error_message = 6;
+}
+
+message ReportStatusRequest {
+    string report_id = 1;
+}
+
+message ReportStatusResponse {
+    string report_id = 1;
+    string status = 2;                    // pending, generating, completed, failed
+    float progress = 3;                   // 0.0 - 1.0
+    string file_path = 4;
+    string error_message = 5;
+}
+
+// ============================================================================
+// SEMANTIC SEARCH MESSAGES
+// ============================================================================
+
+message SearchRequest {
+    string query = 1;
+    string language = 2;                  // Optional: filter by language
+    int32 limit = 3;                      // Max results (default: 10)
+    float min_score = 4;                  // Minimum similarity score (0-1)
+    repeated string chunk_types = 5;      // function, class, method, etc.
+}
+
+message SearchResult {
+    repeated CodeChunk results = 1;
+    int32 total_matches = 2;
+    int64 search_time_ms = 3;
+}
+
+message CodeChunk {
+    string id = 1;
+    string file_path = 2;
+    string chunk_type = 3;                // function, class, method
+    string name = 4;                      // Function/class name
+    string content = 5;                   // Code content
+    int32 start_line = 6;
+    int32 end_line = 7;
+    string language = 8;
+    float similarity_score = 9;
+    map<string, string> metadata = 10;
+}
+
+message SimilarCodeRequest {
+    string code = 1;
+    string language = 2;
+    int32 limit = 3;
+    float min_score = 4;
+}
+
+message IndexRequest {
+    string path = 1;                      // Project path to index
+    bool force_reindex = 2;               // Force full reindex
+    repeated string languages = 3;        // Languages to index (empty = all)
+}
+
+message IndexResponse {
+    bool success = 1;
+    int32 files_indexed = 2;
+    int32 chunks_created = 3;
+    int64 duration_ms = 4;
+    string error_message = 5;
+}
+
+message IndexStats {
+    int32 total_files = 1;
+    int32 total_chunks = 2;
+    map<string, int32> chunks_by_language = 3;
+    map<string, int32> chunks_by_type = 4;
+    string last_indexed = 5;              // ISO 8601
+    int64 index_size_bytes = 6;
+}
+
+// ============================================================================
+// FILE DISCOVERY MESSAGES
+// ============================================================================
+
+message DiscoverRequest {
+    string path = 1;
+    int32 max_depth = 2;                  // 0 = unlimited
+    bool use_gitignore = 3;
+    repeated string include_patterns = 4; // Glob patterns to include
+    repeated string exclude_patterns = 5; // Glob patterns to exclude
+}
+
+message DiscoverResponse {
+    bool success = 1;
+    int32 total_files = 2;
+    int32 analyzable_files = 3;
+    repeated DiscoveredFile files = 4;
+    repeated DetectedFramework frameworks = 5;
+    ProjectStats stats = 6;
+    string error_message = 7;
+}
+
+message DiscoveredFile {
+    string path = 1;
+    FileType file_type = 2;
+    int64 size_bytes = 3;
+    int32 line_count = 4;
+    bool is_analyzable = 5;
+    string language = 6;
+}
+
+message FileTypeFilter {
+    repeated FileType types = 1;
+}
+
+message DetectedFramework {
+    string name = 1;
+    string version = 2;
+    string language = 3;
+    float confidence = 4;
+    string detected_from = 5;             // File that indicated this framework
+}
+
+message ProjectStats {
+    int32 total_files = 1;
+    int32 total_lines = 2;
+    int64 total_size_bytes = 3;
+    map<string, int32> files_by_language = 4;
+    map<string, int32> lines_by_language = 5;
+}
+
+// ============================================================================
+// LLM PROVIDER MESSAGES
+// ============================================================================
+
+message LlmAnalyzeRequest {
+    string code = 1;
+    string prompt = 2;
+    string provider = 3;
+    string model = 4;
+    float temperature = 5;
+    int32 max_tokens = 6;
+}
+
+message LlmAnalyzeResult {
+    bool success = 1;
+    string response = 2;
+    string provider_used = 3;
+    string model_used = 4;
+    int32 tokens_used = 5;
+    int64 duration_ms = 6;
+    LlmError error = 7;
+}
+
+message LlmError {
+    string code = 1;
+    string message = 2;
+    string provider = 3;
+}
+
+message TestProviderRequest {
+    string provider = 1;
+    string prompt = 2;                    // Optional test prompt
+}
+
+message TestProviderResponse {
+    bool success = 1;
+    string provider = 2;
+    string model = 3;
+    int64 latency_ms = 4;
+    string error_message = 5;
+}
+
+message AvailableModelsRequest {
+    string provider = 1;
+}
+
+message AvailableModelsResponse {
+    repeated LlmModel models = 1;
+}
+
+message LlmModel {
+    string id = 1;
+    string name = 2;
+    string provider = 3;
+    int32 max_tokens = 4;
+    bool available = 5;
+}
+
+message ValidateLlmConfigRequest {
+    string provider = 1;
+    map<string, string> config = 2;
+}
+
+message ValidateLlmConfigResponse {
+    bool valid = 1;
+    repeated string errors = 2;
+    repeated string warnings = 3;
+}
+
+// ============================================================================
+// CLEANUP ANALYSIS MESSAGES
+// ============================================================================
+
+message CleanupRequest {
+    string path = 1;
+    repeated string analyzers = 2;        // Empty = all analyzers
+}
+
+message CleanupResult {
+    bool success = 1;
+    repeated CleanupSuggestion suggestions = 2;
+    float cleanup_score = 3;              // 0-100
+    int64 duration_ms = 4;
+    string error_message = 5;
+}
+
+message CleanupSuggestion {
+    string id = 1;
+    string analyzer = 2;                  // naming, complexity, duplication, magic_number
+    string title = 3;
+    string description = 4;
+    string file_path = 5;
+    int32 line_number = 6;
+    string code_snippet = 7;
+    string suggested_fix = 8;
+    Severity priority = 9;
+}
+
+message CleanupScoreResponse {
+    float overall_score = 1;              // 0-100
+    map<string, float> analyzer_scores = 2;
+    string grade = 3;                     // A, B, C, D, F
+}
+
+// ============================================================================
+// FORTIFICATION MESSAGES
+// ============================================================================
+
+message FortificationRequest {
+    string path = 1;
+    repeated string fortifiers = 2;       // Empty = all fortifiers
+}
+
+message FortificationResult {
+    bool success = 1;
+    repeated FortificationSuggestion suggestions = 2;
+    float security_score = 3;             // 0-100
+    int64 duration_ms = 4;
+    string error_message = 5;
+}
+
+message FortificationSuggestion {
+    string id = 1;
+    string fortifier = 2;                 // input_validation, error_handling, etc.
+    string title = 3;
+    string description = 4;
+    string file_path = 5;
+    int32 line_number = 6;
+    string original_code = 7;
+    string suggested_code = 8;
+    string rationale = 9;
+    Severity priority = 10;
+}
+
+message ApplyFortificationRequest {
+    string suggestion_id = 1;
+    bool dry_run = 2;                     // Preview only
+}
+
+message ApplyFortificationResponse {
+    bool success = 1;
+    string file_path = 2;
+    string diff = 3;                      // Unified diff
+    string error_message = 4;
+}
+
+message SecurityScoreResponse {
+    float overall_score = 1;              // 0-100
+    map<string, float> category_scores = 2;
+    repeated string vulnerabilities = 3;
+    string grade = 4;                     // A, B, C, D, F
+}
+
+// ============================================================================
+// SUPPRESSION MESSAGES
+// ============================================================================
+
+message Suppression {
+    string id = 1;
+    string rule_id = 2;                   // Issue rule/type to suppress
+    string file_path = 3;                 // Optional: specific file
+    int32 line_number = 4;                // Optional: specific line
+    string justification = 5;
+    string created_by = 6;
+    string created_at = 7;                // ISO 8601
+    string expires_at = 8;                // ISO 8601 (optional)
+    bool is_global = 9;
+}
+
+message AddSuppressionRequest {
+    string rule_id = 1;
+    string file_path = 2;
+    int32 line_number = 3;
+    string justification = 4;
+    string created_by = 5;
+    string expires_at = 6;                // Optional
+    bool is_global = 7;
+}
+
+message AddSuppressionResponse {
+    bool success = 1;
+    Suppression suppression = 2;
+    string error_message = 3;
+}
+
+message RemoveSuppressionRequest {
+    string suppression_id = 1;
+}
+
+message RemoveSuppressionResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+message SuppressionList {
+    repeated Suppression suppressions = 1;
+    int32 total_count = 2;
+}
+
+message CheckSuppressionRequest {
+    string rule_id = 1;
+    string file_path = 2;
+    int32 line_number = 3;
+}
+
+message CheckSuppressionResponse {
+    bool is_suppressed = 1;
+    Suppression suppression = 2;          // If suppressed, the matching rule
+    string reason = 3;
+}
+
+// ============================================================================
+// CONFIGURATION UPDATE MESSAGES
+// ============================================================================
+
+message UpdateConfigRequest {
+    map<string, string> settings = 1;
+}
+
+message UpdateConfigResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+message UpdateFrameStatusRequest {
+    string frame_id = 1;
+    bool enabled = 2;
+}
+
+message UpdateFrameStatusResponse {
+    bool success = 1;
+    Frame frame = 2;
+    string error_message = 3;
+}
+
+// ============================================================================
+// CONFIGURATION MESSAGES
+// ============================================================================
+
+message ClassifyRequest {
+    string code = 1;
+    string file_path = 2;
+}
+
+message ClassifyResult {
+    bool has_async_operations = 1;
+    bool has_user_input = 2;
+    bool has_database_operations = 3;
+    bool has_network_calls = 4;
+    bool has_file_operations = 5;
+    bool has_authentication = 6;
+    bool has_cryptography = 7;
+    repeated string detected_frameworks = 8;
+    repeated string recommended_frames = 9;
+    float confidence = 10;
+}
+
+message Frame {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    int32 priority = 4;
+    bool is_blocker = 5;
+    bool enabled = 6;
+    repeated string tags = 7;
+}
+
+message FrameList {
+    repeated Frame frames = 1;
+}
+
+message Provider {
+    string id = 1;
+    string name = 2;
+    bool available = 3;
+    bool is_default = 4;
+    string status = 5;
+}
+
+message ProviderList {
+    repeated Provider providers = 1;
+    string default_provider = 2;
+}
+
+message ConfigurationResponse {
+    string project_root = 1;
+    string config_file = 2;
+    string active_profile = 3;
+    FrameList available_frames = 4;
+    ProviderList available_providers = 5;
+    map<string, string> settings = 6;
+}
+
+// ============================================================================
+// HEALTH & STATUS MESSAGES
+// ============================================================================
+
+message HealthResponse {
+    bool healthy = 1;
+    string version = 2;
+    int64 uptime_seconds = 3;
+    map<string, bool> components = 4;
+}
+
+message StatusResponse {
+    bool running = 1;
+    int32 active_pipelines = 2;
+    int64 total_scans = 3;
+    int64 total_findings = 4;
+    int64 memory_mb = 5;
+    float cpu_percent = 6;
+}
+
+// ============================================================================
+// PIPELINE MESSAGES
+// ============================================================================
+
+message PipelineRequest {
+    string path = 1;
+    repeated string frames = 2;
+    bool parallel = 3;
+    int32 timeout_seconds = 4;
+    map<string, string> options = 5;
+}
+
+message PipelineResult {
+    bool success = 1;
+    string run_id = 2;
+    int32 total_findings = 3;
+    int32 critical_count = 4;
+    int32 high_count = 5;
+    int32 medium_count = 6;
+    int32 low_count = 7;
+    repeated Finding findings = 8;
+    repeated Fortification fortifications = 9;
+    repeated Cleaning cleanings = 10;
+    int64 duration_ms = 11;
+    repeated string frames_executed = 12;
+    string error_message = 13;
+}
+
+message PipelineEvent {
+    string event_type = 1;
+    string stage = 2;
+    float progress = 3;
+    string message = 4;
+    Finding finding = 5;
+    Fortification fortification = 6;
+    Cleaning cleaning = 7;
+    int64 timestamp_ms = 8;
+}
+
+// ============================================================================
+// SERVICE DEFINITION (51 ENDPOINTS)
+// ============================================================================
+
+// Warden Security Analysis Service
+// Provides comprehensive code security analysis, issue tracking, and reporting.
+// Port: 50051 | Protocol: gRPC | Total Endpoints: 51
+service WardenService {
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PIPELINE OPERATIONS (2 endpoints)
+    // Execute security validation pipelines on code
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Execute full security validation pipeline on specified path.
+    // Runs all enabled validation frames and returns findings, fortifications, and cleanings.
+    // Use 'frames' field to run specific frames only.
+    // Returns: PipelineResult with all findings and execution metrics.
+    rpc ExecutePipeline(PipelineRequest) returns (PipelineResult);
+
+    // Execute pipeline with real-time streaming progress events.
+    // Ideal for long-running scans - receive findings as they're discovered.
+    // Events: pipeline_start, frame_start, finding, frame_complete, pipeline_complete, error.
+    // Returns: Stream of PipelineEvent messages.
+    rpc ExecutePipelineStream(PipelineRequest) returns (stream PipelineEvent);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ISSUE MANAGEMENT (8 endpoints)
+    // Track, manage, and resolve security issues
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Get all tracked issues with optional filtering.
+    // Supports filtering by: state (OPEN, RESOLVED, SUPPRESSED), severity, frame_id, file_path.
+    // Supports pagination via limit/offset.
+    // Returns: IssueList with total_count and filtered_count.
+    rpc GetAllIssues(IssueFilter) returns (IssueList);
+
+    // Get only OPEN issues (convenience method).
+    // Same filtering capabilities as GetAllIssues, but pre-filtered to OPEN state.
+    // Returns: IssueList containing only open issues.
+    rpc GetOpenIssues(IssueFilter) returns (IssueList);
+
+    // Get a specific issue by its content hash.
+    // Hash is SHA256(title + file_path + line_number)[:16].
+    // Use for deduplication and tracking recurring issues.
+    // Returns: Issue if found, NOT_FOUND error otherwise.
+    rpc GetIssueByHash(IssueHashRequest) returns (Issue);
+
+    // Mark an issue as resolved.
+    // Requires issue_id and actor (who resolved it).
+    // Sets state to RESOLVED and records resolved_at timestamp.
+    // Returns: IssueActionResponse with updated issue.
+    rpc ResolveIssue(IssueActionRequest) returns (IssueActionResponse);
+
+    // Mark an issue as suppressed (false positive).
+    // Requires issue_id, actor, and comment (justification).
+    // Suppressed issues won't appear in open issues list.
+    // Returns: IssueActionResponse with updated issue.
+    rpc SuppressIssue(IssueActionRequest) returns (IssueActionResponse);
+
+    // Reopen a resolved or suppressed issue.
+    // Sets state to REOPENED and clears resolved_at/suppressed_at.
+    // Use when an issue resurfaces or suppression was incorrect.
+    // Returns: IssueActionResponse with updated issue.
+    rpc ReopenIssue(IssueActionRequest) returns (IssueActionResponse);
+
+    // Get historical issue snapshots.
+    // Returns last 50 snapshots showing issue counts over time.
+    // Useful for trend analysis and reporting.
+    // Returns: IssueHistory with list of IssueSnapshot.
+    rpc GetIssueHistory(Empty) returns (IssueHistory);
+
+    // Get aggregated issue statistics.
+    // Includes: totals by state, severity counts, issues by frame, top 10 files.
+    // Returns: IssueStats with comprehensive breakdown.
+    rpc GetIssueStats(Empty) returns (IssueStats);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // RESULT ANALYSIS (5 endpoints)
+    // Analyze trends and quality metrics
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Analyze pipeline results for trends and quality.
+    // Compares with previous runs to identify new/resolved issues.
+    // Calculates quality_score (0-100) and trend direction.
+    // Returns: AnalysisResult with metrics and trend analysis.
+    rpc AnalyzeResults(AnalyzeResultsRequest) returns (AnalysisResult);
+
+    // Get trend data over time.
+    // Shows issue count and quality score progression.
+    // Use 'limit' to specify number of data points (default: 10).
+    // Returns: TrendResponse with overall_trend and data points.
+    rpc GetTrends(TrendRequest) returns (TrendResponse);
+
+    // Get statistics grouped by validation frame.
+    // Shows findings count and severity breakdown per frame.
+    // Useful for identifying problematic areas.
+    // Returns: FrameStats with per-frame metrics.
+    rpc GetFrameStats(Empty) returns (FrameStats);
+
+    // Get severity distribution statistics.
+    // Shows count of issues by severity level.
+    // Includes weighted_score for prioritization.
+    // Returns: SeverityStats with counts and weighted score.
+    rpc GetSeverityStats(Empty) returns (SeverityStats);
+
+    // Get overall code quality score.
+    // Score: 0-100 based on weighted severity of open issues.
+    // Grade: A (90+), B (80+), C (70+), D (60+), F (<60).
+    // Returns: QualityScoreResponse with score, grade, and category breakdown.
+    rpc GetQualityScore(Empty) returns (QualityScoreResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // REPORT GENERATION (4 endpoints)
+    // Generate security reports in various formats
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Generate HTML security report.
+    // Creates a styled, interactive HTML report with all issues.
+    // Specify output_path or let server generate temp file.
+    // Returns: ReportResponse with file_path and size_bytes.
+    rpc GenerateHtmlReport(ReportRequest) returns (ReportResponse);
+
+    // Generate PDF security report.
+    // Requires wkhtmltopdf installed on server.
+    // Creates professional PDF suitable for stakeholders.
+    // Returns: ReportResponse with file_path (or error if unavailable).
+    rpc GeneratePdfReport(ReportRequest) returns (ReportResponse);
+
+    // Generate JSON report for integration.
+    // Machine-readable format with all issues and metadata.
+    // Can be used for CI/CD integration or data export.
+    // Returns: ReportResponse with content (JSON string) or file_path.
+    rpc GenerateJsonReport(ReportRequest) returns (ReportResponse);
+
+    // Check status of async report generation.
+    // For long-running reports, poll this endpoint.
+    // Status: pending, generating, completed, failed.
+    // Returns: ReportStatusResponse with progress (0.0-1.0).
+    rpc GetReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SEMANTIC SEARCH (6 endpoints)
+    // AI-powered code search using embeddings
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Search code using semantic similarity.
+    // Query can be natural language or code snippet.
+    // Filter by language, limit results, set min_score threshold.
+    // Returns: SearchResult with matching CodeChunks and similarity scores.
+    rpc SearchCode(SearchRequest) returns (SearchResult);
+
+    // Find code similar to given snippet.
+    // Uses code embeddings to find structurally similar code.
+    // Useful for finding duplicate or related code patterns.
+    // Returns: SearchResult with similar CodeChunks ranked by similarity.
+    rpc SearchSimilarCode(SimilarCodeRequest) returns (SearchResult);
+
+    // Search code using natural language description.
+    // Example: "function that validates email addresses"
+    // Optimized for descriptive queries vs code queries.
+    // Returns: SearchResult with matching CodeChunks.
+    rpc SearchByDescription(SearchRequest) returns (SearchResult);
+
+    // Index project for semantic search.
+    // Creates embeddings for all code chunks (functions, classes, methods).
+    // Set force_reindex=true to rebuild entire index.
+    // Returns: IndexResponse with files_indexed and chunks_created.
+    rpc IndexProject(IndexRequest) returns (IndexResponse);
+
+    // Get semantic search index statistics.
+    // Shows total files, chunks, breakdown by language/type.
+    // Includes last_indexed timestamp and index_size_bytes.
+    // Returns: IndexStats with comprehensive index metrics.
+    rpc GetIndexStats(Empty) returns (IndexStats);
+
+    // Clear semantic search index.
+    // Removes all indexed data. Use before full reindex.
+    // Caution: SearchCode will return no results until reindexed.
+    // Returns: IndexResponse indicating success.
+    rpc ClearIndex(Empty) returns (IndexResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FILE DISCOVERY (4 endpoints)
+    // Discover and analyze project files
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Discover all project files.
+    // Recursively scans directory, respects .gitignore if use_gitignore=true.
+    // Returns file list with type detection and analyzability flag.
+    // Returns: DiscoverResponse with files, frameworks, and stats.
+    rpc DiscoverFiles(DiscoverRequest) returns (DiscoverResponse);
+
+    // Get files filtered by programming language type.
+    // Specify types: PYTHON, JAVASCRIPT, TYPESCRIPT, JAVA, CSHARP, etc.
+    // More efficient than DiscoverFiles when you know target languages.
+    // Returns: DiscoverResponse with filtered file list.
+    rpc GetFilesByType(FileTypeFilter) returns (DiscoverResponse);
+
+    // Detect frameworks and libraries used in project.
+    // Analyzes package.json, requirements.txt, Cargo.toml, etc.
+    // Returns framework names, versions, and detection confidence.
+    // Returns: DiscoverResponse with frameworks list.
+    rpc DetectFrameworks(DiscoverRequest) returns (DiscoverResponse);
+
+    // Get project-wide statistics.
+    // Total files, total lines, size breakdown by language.
+    // Useful for project overview and capacity planning.
+    // Returns: ProjectStats with comprehensive metrics.
+    rpc GetProjectStats(Empty) returns (ProjectStats);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LLM OPERATIONS (5 endpoints)
+    // AI-powered code analysis using language models
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Analyze code with LLM (AI assistant).
+    // Send code and custom prompt for analysis.
+    // Supports multiple providers: anthropic, openai, ollama.
+    // Returns: LlmAnalyzeResult with AI response and metrics.
+    rpc AnalyzeWithLlm(LlmAnalyzeRequest) returns (LlmAnalyzeResult);
+
+    // Classify code to recommend validation frames.
+    // Detects: async ops, user input, database, network, file ops, auth, crypto.
+    // Returns recommended frames based on code characteristics.
+    // Returns: ClassifyResult with flags and recommendations.
+    rpc ClassifyCode(ClassifyRequest) returns (ClassifyResult);
+
+    // Test LLM provider connectivity.
+    // Sends test prompt and measures response latency.
+    // Use to verify API keys and network connectivity.
+    // Returns: TestProviderResponse with success, model, and latency_ms.
+    rpc TestLlmProvider(TestProviderRequest) returns (TestProviderResponse);
+
+    // Get available models for a provider.
+    // Lists models with max_tokens and availability status.
+    // Provider: "anthropic", "openai", "ollama".
+    // Returns: AvailableModelsResponse with model list.
+    rpc GetAvailableModels(AvailableModelsRequest) returns (AvailableModelsResponse);
+
+    // Validate LLM configuration.
+    // Checks API keys, model availability, and settings.
+    // Returns errors (blocking) and warnings (informational).
+    // Returns: ValidateLlmConfigResponse with valid flag and messages.
+    rpc ValidateLlmConfig(ValidateLlmConfigRequest) returns (ValidateLlmConfigResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CLEANUP ANALYSIS (3 endpoints)
+    // Code quality and cleanup suggestions
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Analyze code for cleanup opportunities.
+    // Checks: naming conventions, complexity, duplication, magic numbers.
+    // Specify analyzers or leave empty for all.
+    // Returns: CleanupResult with suggestions and cleanup_score.
+    rpc AnalyzeCleanup(CleanupRequest) returns (CleanupResult);
+
+    // Get cleanup suggestions (alias for AnalyzeCleanup).
+    // Convenience method with same functionality.
+    // Returns: CleanupResult with prioritized suggestions.
+    rpc GetCleanupSuggestions(CleanupRequest) returns (CleanupResult);
+
+    // Get overall code cleanup score.
+    // Score: 0-100 based on code cleanliness.
+    // Includes per-analyzer scores and letter grade.
+    // Returns: CleanupScoreResponse with score breakdown.
+    rpc GetCleanupScore(Empty) returns (CleanupScoreResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FORTIFICATION (3 endpoints)
+    // Security hardening suggestions
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Get security fortification suggestions.
+    // Identifies: missing input validation, weak error handling, etc.
+    // Provides original_code and suggested_code with rationale.
+    // Returns: FortificationResult with suggestions and security_score.
+    rpc GetFortificationSuggestions(FortificationRequest) returns (FortificationResult);
+
+    // Apply a fortification suggestion.
+    // Set dry_run=true to preview changes without modifying files.
+    // Returns unified diff showing proposed changes.
+    // Returns: ApplyFortificationResponse with diff and file_path.
+    rpc ApplyFortification(ApplyFortificationRequest) returns (ApplyFortificationResponse);
+
+    // Get overall security score.
+    // Score: 0-100 based on security vulnerabilities.
+    // Includes category scores: authentication, authorization, injection, crypto.
+    // Returns: SecurityScoreResponse with score and vulnerability list.
+    rpc GetSecurityScore(Empty) returns (SecurityScoreResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SUPPRESSION (4 endpoints)
+    // Manage false positive suppressions
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Add a suppression rule for false positives.
+    // Can be global (is_global=true) or file/line specific.
+    // Requires justification for audit trail.
+    // Returns: AddSuppressionResponse with created suppression.
+    rpc AddSuppression(AddSuppressionRequest) returns (AddSuppressionResponse);
+
+    // Remove a suppression rule.
+    // Use suppression_id from AddSuppression or GetSuppressions.
+    // Removed rules no longer apply to future scans.
+    // Returns: RemoveSuppressionResponse indicating success.
+    rpc RemoveSuppression(RemoveSuppressionRequest) returns (RemoveSuppressionResponse);
+
+    // Get all active suppression rules.
+    // Lists all suppressions with their justifications.
+    // Use for auditing and management.
+    // Returns: SuppressionList with all rules.
+    rpc GetSuppressions(Empty) returns (SuppressionList);
+
+    // Check if an issue matches a suppression rule.
+    // Checks global rules first, then file-specific.
+    // Returns matching suppression if found.
+    // Returns: CheckSuppressionResponse with is_suppressed flag.
+    rpc CheckSuppression(CheckSuppressionRequest) returns (CheckSuppressionResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONFIGURATION (5 endpoints)
+    // Server and frame configuration
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Get list of available validation frames.
+    // Each frame validates specific security aspects.
+    // Shows: id, name, description, priority, enabled status.
+    // Returns: FrameList with all registered frames.
+    rpc GetAvailableFrames(Empty) returns (FrameList);
+
+    // Get list of available LLM providers.
+    // Shows configured providers and their availability.
+    // Includes default_provider selection.
+    // Returns: ProviderList with provider details.
+    rpc GetAvailableProviders(Empty) returns (ProviderList);
+
+    // Get complete server configuration.
+    // Includes: project_root, config_file, active_profile.
+    // Also includes available_frames and available_providers.
+    // Returns: ConfigurationResponse with full config.
+    rpc GetConfiguration(Empty) returns (ConfigurationResponse);
+
+    // Update server configuration settings.
+    // Pass key-value pairs in settings map.
+    // Changes take effect immediately.
+    // Returns: UpdateConfigResponse indicating success.
+    rpc UpdateConfiguration(UpdateConfigRequest) returns (UpdateConfigResponse);
+
+    // Enable or disable a validation frame.
+    // Use frame_id from GetAvailableFrames.
+    // Disabled frames won't run in pipeline execution.
+    // Returns: UpdateFrameStatusResponse with updated frame.
+    rpc UpdateFrameStatus(UpdateFrameStatusRequest) returns (UpdateFrameStatusResponse);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // HEALTH & STATUS (2 endpoints)
+    // Server health monitoring
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Health check endpoint.
+    // Returns healthy=true if all components are operational.
+    // Components checked: bridge, orchestrator, llm.
+    // Returns: HealthResponse with health status and uptime.
+    rpc HealthCheck(Empty) returns (HealthResponse);
+
+    // Get detailed server status.
+    // Shows: running state, active pipelines, scan counts.
+    // Includes resource usage: memory_mb, cpu_percent.
+    // Returns: StatusResponse with runtime metrics.
+    rpc GetStatus(Empty) returns (StatusResponse);
+}
