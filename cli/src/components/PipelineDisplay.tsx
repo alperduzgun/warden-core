@@ -89,6 +89,72 @@ const getStatusColor = (status: PhaseStatus): string => {
   }
 };
 
+const ProgressItem = ({
+  name,
+  status,
+  duration,
+  icon,
+  isSubStep = false,
+  children
+}: {
+  name: string;
+  status: PhaseStatus;
+  duration?: string | undefined;
+  icon?: string | undefined;
+  isSubStep?: boolean;
+  children?: React.ReactNode;
+}) => {
+  const statusColor = getStatusColor(status);
+  const statusIcon = getStatusIcon(status);
+
+  // Visual bar for running/completed states (to match Frame Statistics look)
+  // For phases without numeric progress, we show a full or empty bar based on status
+  const barWidth = 20;
+  const isComplete = status === 'completed';
+  const isRunning = status === 'running';
+  const filledCount = isComplete ? barWidth : (isRunning ? Math.floor(Date.now() / 500) % barWidth : 0);
+
+  // Simplified bar logic:
+  // Completed: Full Green
+  // Running: Animated Cyan (handled by simple static for now or just text)
+  // Pending: Empty
+
+  // Actually, let's just use the textual status aligned like the Frame Stats "Coverage" line for consistency
+  // Frame Stats: "Coverage: [|||||] 50%"
+  // Here:        "Status:   [|||||] RUNNING"
+
+  let barDisplay = '░'.repeat(barWidth);
+  if (isComplete) {
+    barDisplay = '█'.repeat(barWidth);
+  } else if (status === 'failed') {
+    barDisplay = '█'.repeat(barWidth); // Full red bar? or partial? match status
+  } else if (isRunning) {
+    // Indeterminate animation handled by parent or just show partial
+    barDisplay = '▒'.repeat(barWidth);
+  }
+
+  return (
+    <Box flexDirection="column" marginLeft={isSubStep ? 1 : 0}>
+      <Box>
+        <Box width={2}>
+          <Text color={statusColor}>{statusIcon} </Text>
+        </Box>
+        <Box width={30}>
+          <Text bold>{icon} {name}</Text>
+        </Box>
+        {duration && <Text dimColor> [{duration}]</Text>}
+      </Box>
+      {(status === 'running' || status === 'completed' || status === 'failed') && (
+        <Box marginLeft={2}>
+          <Text dimColor>{isSubStep ? 'Progress: ' : 'Status:   '}</Text>
+          <Text color={statusColor}>{barDisplay} {status.toUpperCase()}</Text>
+        </Box>
+      )}
+      {children}
+    </Box>
+  );
+};
+
 export function PipelineDisplay({
   phases,
   currentPhase,
@@ -141,12 +207,12 @@ export function PipelineDisplay({
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" padding={0} paddingX={1} marginBottom={0}>
       {/* Header */}
-      <Box marginBottom={1} flexDirection="column">
+      <Box marginBottom={0} flexDirection="column">
         <Box>
           <Text bold color="cyan">
-            🚀 Warden Pipeline Execution
+            🚀 Pipeline Execution
           </Text>
           <Text color="gray"> ({progressPercentage}%)</Text>
         </Box>
@@ -155,12 +221,12 @@ export function PipelineDisplay({
         )}
       </Box>
 
-      {/* Progress Bar */}
+      {/* Global Progress Bar */}
       <Box marginBottom={1}>
         <Text>
           {'['}
-          {Array.from({ length: 20 }).map((_, i) => {
-            const filled = totalPhases > 0 ? i < Math.floor((completedCount / totalPhases) * 20) : false;
+          {Array.from({ length: 40 }).map((_, i) => {
+            const filled = totalPhases > 0 ? i < Math.floor((completedCount / totalPhases) * 40) : false;
             return filled ? '█' : '░';
           }).join('')}
           {']'}
@@ -168,149 +234,43 @@ export function PipelineDisplay({
       </Box>
 
       {/* Pipeline Phases */}
-      <Box flexDirection="column">
-        {phases.map((phase, index) => {
-          const isLast = index === phases.length - 1;
-          const isActive = phase.id === currentPhase;
+      <Box flexDirection="column" marginTop={1}>
+        {phases.map((phase) => {
+          // If phase is pending, don't show it unless it's the very next one? 
+          // User said "tüm fazlar çalışırken" (while all phases are running).
+          // Showing all provides context.
+
           const config = PHASE_CONFIG[phase.id as keyof typeof PHASE_CONFIG];
 
+          // Special handling for Validation to show sub-steps
+          const showSubSteps = showDetails && phase.id === 'validation' && phase.subSteps && phase.subSteps.length > 0;
+
           return (
-            <Box key={phase.id} flexDirection="column">
-              {/* Phase Line */}
-              <Box>
-                {/* Connection Line */}
-                <Box width={2}>
-                  <Text color="gray">
-                    {index === 0 ? '┌' : isLast ? '└' : '├'}
-                  </Text>
-                </Box>
-
-                {/* Status Icon or Spinner */}
-                <Box width={3} marginRight={1}>
-                  {phase.status === 'running' ? (
-                    <Text color="cyan">
-                      <Spinner type="dots" />
-                    </Text>
-                  ) : (
-                    <Text color={getStatusColor(phase.status)}>
-                      {getStatusIcon(phase.status)}
-                    </Text>
-                  )}
-                </Box>
-
-                {/* Phase Name with Icon */}
-                <Box width={20}>
-                  <Text color={isActive ? 'cyan' : getStatusColor(phase.status)}>
-                    {config?.icon} {phase.name}
-                  </Text>
-                </Box>
-
-                {/* Duration */}
-                {phase.duration && (
-                  <Box width={8}>
-                    <Text dimColor>[{phase.duration}]</Text>
-                  </Box>
-                )}
-
-                {/* Status Text */}
-                <Box flexGrow={1}>
-                  <Text color={getStatusColor(phase.status)}>
-                    {phase.status === 'running'
-                      ? `running${animationDots}`
-                      : phase.status
-                    }
-                  </Text>
-                </Box>
-              </Box>
-
-              {/* Validation SubSteps (if phase is validation and has substeps) */}
-              {showDetails && phase.id === 'validation' && phase.subSteps && phase.subSteps.length > 0 && (
-                <Box flexDirection="column" marginLeft={3}>
-                  {phase.subSteps.map((subStep, subIndex) => {
-                    const isSubActive = subStep.id === currentSubStep;
-                    const isLastSub = subIndex === phase.subSteps!.length - 1;
-
-                    return (
-                      <Box key={subStep.id}>
-                        {/* SubStep Connection */}
-                        <Box width={2}>
-                          <Text color="gray" dimColor>
-                            {isLastSub ? '└' : '├'}
-                          </Text>
-                        </Box>
-
-                        {/* SubStep Status */}
-                        <Box width={2} marginRight={1}>
-                          {subStep.status === 'running' ? (
-                            <Text color="cyan">
-                              <Spinner type="dots" />
-                            </Text>
-                          ) : (
-                            <Text color={getStatusColor(subStep.status)} dimColor>
-                              {getStatusIcon(subStep.status)}
-                            </Text>
-                          )}
-                        </Box>
-
-                        {/* SubStep Name */}
-                        <Box width={15}>
-                          <Text
-                            color={isSubActive ? 'cyan' : getStatusColor(subStep.status)}
-                            dimColor={!isSubActive}
-                          >
-                            {subStep.name}
-                          </Text>
-                        </Box>
-
-                        {/* SubStep Duration */}
-                        {subStep.duration && (
-                          <Box width={8}>
-                            <Text dimColor>[{subStep.duration}]</Text>
-                          </Box>
-                        )}
-
-                        {/* SubStep Status */}
-                        <Text
-                          color={getStatusColor(subStep.status)}
-                          dimColor
-                        >
-                          {subStep.status === 'running'
-                            ? `running${animationDots}`
-                            : subStep.status === 'skipped'
-                              ? 'skip'
-                              : ''
-                          }
-                        </Text>
-                      </Box>
-                    );
-                  })}
+            <ProgressItem
+              key={phase.id}
+              name={config?.displayName || phase.name}
+              status={phase.status}
+              duration={phase.duration}
+              icon={config?.icon}
+            >
+              {showSubSteps && (
+                <Box flexDirection="column" marginTop={1}>
+                  {phase.subSteps!.map(subStep => (
+                    <ProgressItem
+                      key={subStep.id}
+                      name={subStep.name}
+                      status={subStep.status}
+                      duration={subStep.duration}
+                      icon="▪"
+                      isSubStep={true}
+                    />
+                  ))}
                 </Box>
               )}
-
-              {/* Vertical connection line (except for last) */}
-              {!isLast && (
-                <Box>
-                  <Text color="gray">│</Text>
-                </Box>
-              )}
-            </Box>
+            </ProgressItem>
           );
         })}
       </Box>
-
-      {/* Summary Footer */}
-      {phases.every(p => p.status !== 'pending' && p.status !== 'running') && (
-        <Box marginTop={1}>
-          <Text>
-            Pipeline {phases.some(p => p.status === 'failed') ? (
-              <Text color="red" bold>FAILED</Text>
-            ) : (
-              <Text color="green" bold>COMPLETED</Text>
-            )}
-            {totalDuration && <Text dimColor> in {totalDuration}</Text>}
-          </Text>
-        </Box>
-      )}
     </Box>
   );
 }

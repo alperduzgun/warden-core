@@ -319,9 +319,15 @@ class FrameExecutor:
             frame_duration = time.perf_counter() - frame_start_time
 
             # Build metadata - include batch_summary if frame has it
+            coverage = self._calculate_coverage(code_files, frame_findings)
+            
             result_metadata = {
                 "files_scanned": files_scanned,
-                "execution_errors": execution_errors
+                "execution_errors": execution_errors,
+                "coverage": coverage,
+                "findings_found": len(frame_findings),
+                "findings_fixed": 0,
+                "trend": 0,
             }
 
             # Check for batch_summary (OrphanFrame provides LLM filter reasoning)
@@ -460,4 +466,29 @@ class FrameExecutor:
     ) -> bool:
         """Check if any violations are blockers."""
         return any(v.is_blocker for v in violations)
+
+    def _calculate_coverage(self, code_files: List[CodeFile], findings: List[Any]) -> float:
+        """
+        Calculate frame coverage percentage based on quality.
+        Coverage = (Files without critical/high issues / Total files) * 100
+        """
+        if not code_files:
+            return 0.0
+
+        total_files = len(code_files)
+        affected_files = set()
+
+        for f in findings:
+            severity = getattr(f, 'severity', '').lower()
+            if severity in ['critical', 'high']:
+                # Try to get file path from finding
+                if hasattr(f, 'file_path') and f.file_path:
+                    affected_files.add(f.file_path)
+                elif hasattr(f, 'location') and f.location:
+                    path = f.location.split(':')[0]
+                    affected_files.add(path)
+
+        clean_files = total_files - len(affected_files)
+        return (clean_files / total_files) * 100
+
 

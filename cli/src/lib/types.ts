@@ -166,6 +166,13 @@ export interface PipelineResult {
   };
   metadata?: Record<string, unknown>;
   llm_analysis?: LLMAnalysis;
+  artifacts?: Array<{
+    name: string;
+    type: string;
+    size: string;
+    url: string;
+  }>;
+  quality_score?: number;
 }
 
 export interface FrameResult {

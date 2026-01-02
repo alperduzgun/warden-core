@@ -549,7 +549,9 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
                 medium_findings: result.medium_findings,
                 low_findings: result.low_findings,
                 llm_analysis: llmInfo,
-                frame_results: result.frame_results
+                frame_results: result.frame_results,
+                quality_score: result.quality_score,
+                artifacts: result.artifacts
               });
 
               setTotalDuration(`${(elapsed / 1000).toFixed(1)}s`);
@@ -599,6 +601,69 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
       />
     );
   }
+
+  // Dashboard-style Components
+  const FindingsCards = ({ result }: { result: PipelineResult }) => (
+    <Box flexDirection="row" gap={1} marginBottom={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor="red" paddingX={1} width={15}>
+        <Text color="gray">CRITICAL</Text>
+        <Text bold color="red">{result.critical_findings}</Text>
+      </Box>
+      <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1} width={15}>
+        <Text color="gray">HIGH</Text>
+        <Text bold color="yellow">{result.high_findings}</Text>
+      </Box>
+      <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={15}>
+        <Text color="gray">MEDIUM</Text>
+        <Text bold color="cyan">{result.medium_findings}</Text>
+      </Box>
+      <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1} width={15}>
+        <Text color="gray">LOW</Text>
+        <Text bold color="blue">{result.low_findings}</Text>
+      </Box>
+    </Box>
+  );
+
+  const MetadataDisplay = ({ result }: { result: PipelineResult }) => (
+    <Box flexDirection="row" borderStyle="round" padding={1} marginBottom={1} gap={3}>
+      <Box flexDirection="column">
+        <Text dimColor>Duration</Text>
+        <Text bold>{(result.duration).toFixed(1)}s</Text>
+      </Box>
+      <Box flexDirection="column">
+        <Text dimColor>Quality Score</Text>
+        <Text bold>{result.quality_score ? result.quality_score.toFixed(1) : '0.0'}/10</Text>
+      </Box>
+      <Box flexDirection="column">
+        <Text dimColor>Total Findings</Text>
+        <Text bold>{result.total_findings}</Text>
+      </Box>
+      <Box flexDirection="column">
+        <Text dimColor>Status</Text>
+        <Text bold color={result.status === 'success' || result.status === 'completed' || result.status == '2' ? 'green' : 'red'}>
+          {String(result.status) === '2' ? 'COMPLETED' : String(result.status).toUpperCase()}
+        </Text>
+      </Box>
+    </Box>
+  );
+
+  const ArtifactsList = ({ artifacts }: { artifacts: NonNullable<PipelineResult['artifacts']> }) => {
+    if (!artifacts || artifacts.length === 0) return null;
+    return (
+      <Box flexDirection="column" borderStyle="round" borderColor="gray" padding={1} marginBottom={1}>
+        <Text bold>📦 ARTIFACTS</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {artifacts.map((artifact, i) => (
+            <Box key={i} flexDirection="row" justifyContent="space-between">
+              <Text>📄 {artifact.name}</Text>
+              <Text dimColor>{artifact.size}</Text>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    );
+  };
+
 
 
   // Show pipeline visualization
@@ -667,6 +732,13 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
                   <Text color="cyan"> 🤖 Enhanced with AI Analysis ({pipelineResult.llm_analysis.llm_provider})</Text>
                 )}
               </Box>
+
+              {/* Dashboard-aligned Metadata */}
+              <MetadataDisplay result={pipelineResult} />
+
+              {/* Findings Breakdown Cards */}
+              <FindingsCards result={pipelineResult} />
+
 
               {/* Show comprehensive phase execution summary */}
               <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor="green" padding={1}>
@@ -770,6 +842,45 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
                 </Text>
               </Box>
 
+              {/* Summary Stats Plan Phase 3 */}
+              <Box flexDirection="column" borderStyle="round" borderColor="green" padding={1} marginBottom={1}>
+                <Text bold color="green">📈 SUMMARY</Text>
+                <Box marginTop={1}>
+                  <Text>Total Found: <Text bold>{pipelineResult.total_findings}</Text>  •  </Text>
+                  <Text>Total Fixed: <Text bold color="green">0</Text>  •  </Text>
+                  <Text>Avg Coverage: <Text bold>{
+                    (pipelineResult.frame_results.reduce((acc: number, fr: any) => acc + (fr.metadata?.coverage || 0), 0) / (pipelineResult.frame_results.length || 1)).toFixed(1)
+                  }%</Text></Text>
+                </Box>
+                <Box>
+                  <Text>Passing: <Text bold color="green">{pipelineResult.frames_passed}/{pipelineResult.total_frames}</Text>  •  </Text>
+                  <Text>Warnings: <Text bold color="yellow">{pipelineResult.frames_skipped}</Text>  •  </Text>
+                  <Text>Failed: <Text bold color="red">{pipelineResult.frames_failed}</Text></Text>
+                </Box>
+              </Box>
+
+              {/* Frame Stats Display Phase 2 */}
+              <FrameStatsDisplay frames={pipelineResult.frame_results.map((fr: any) => {
+                const metadata = fr.metadata || {};
+
+                // specific check for status 
+                let status: 'pass' | 'warning' | 'fail' = 'pass';
+                if (fr.status === 'failed') status = 'fail';
+                else if (fr.status === 'warning') status = 'warning';
+                else if (fr.issues_found > 0) status = 'warning';
+
+                return {
+                  frameId: fr.frame_id,
+                  name: fr.frame_name,
+                  status: status,
+                  duration: `${Number(fr.duration || 0).toFixed(1)}s`,
+                  coverage: metadata.coverage || 0,
+                  found: metadata.findings_found || fr.issues_found || 0,
+                  fixed: metadata.findings_fixed || 0,
+                  trend: metadata.trend || 0
+                };
+              })} />
+
               <Box flexDirection="column" marginBottom={1}>
                 <Text bold>Findings Summary:</Text>
                 <Text>  🔴 Critical: <Text bold color="red">{pipelineResult.critical_findings || 0}</Text></Text>
@@ -830,6 +941,12 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
                 </Box>
               )}
 
+              {/* Artifacts Section */}
+              {pipelineResult.artifacts && pipelineResult.artifacts.length > 0 && (
+                <ArtifactsList artifacts={pipelineResult.artifacts} />
+              )}
+
+
               {pipelineResult.total_findings === 0 && (
                 <Box marginTop={1}>
                   <Text color="green">✨ No issues found! Your code is clean.</Text>
@@ -839,6 +956,72 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
           )}
         </Box>
       )}
+    </Box>
+  );
+
+}
+
+// -----------------------------------------------------------------------------
+// Helper Components for Frame Statistics
+// -----------------------------------------------------------------------------
+
+interface FrameDisplayStats {
+  frameId: string;
+  name: string;
+  status: 'pass' | 'warning' | 'fail';
+  duration: string;
+  coverage: number;
+  found: number;
+  fixed: number;
+  trend: number;
+}
+
+function FrameStatsDisplay({ frames }: { frames: FrameDisplayStats[] }) {
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" padding={1} marginBottom={1}>
+      <Text bold color="cyan">🎯 FRAME STATISTICS</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {frames.map(frame => (
+          <FrameStatItem key={frame.frameId} frame={frame} />
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+function FrameStatItem({ frame }: { frame: FrameDisplayStats }) {
+  const statusIcon = frame.status === 'pass' ? '✓' :
+    frame.status === 'warning' ? '⚠' : '✗';
+  const statusColor = frame.status === 'pass' ? 'green' :
+    frame.status === 'warning' ? 'yellow' : 'red';
+
+  // Coverage bar (20 chars width)
+  const barWidth = 20;
+  const filledCount = Math.min(barWidth, Math.max(0, Math.round((frame.coverage / 100) * barWidth)));
+  const emptyCount = Math.max(0, barWidth - filledCount);
+  const coverageBar = '█'.repeat(filledCount) + '░'.repeat(emptyCount);
+
+  const trendIcon = frame.trend > 0 ? '↗' : frame.trend < 0 ? '↘' : '→';
+
+  return (
+    <Box flexDirection="column" marginY={0}>
+      <Box>
+        <Text color={statusColor}>{statusIcon} </Text>
+        <Text bold>{frame.name}</Text>
+        <Text dimColor> [{frame.duration}]</Text>
+      </Box>
+      <Box marginLeft={2}>
+        <Text dimColor>Coverage: </Text>
+        <Text>{coverageBar} {frame.coverage.toFixed(0)}%</Text>
+      </Box>
+      <Box marginLeft={2}>
+        <Text dimColor>Found: </Text>
+        <Text>{frame.found}  •  </Text>
+        <Text dimColor>Fixed: </Text>
+        <Text color="green">{frame.fixed}  •  </Text>
+        <Text dimColor>Trend: </Text>
+        <Text>{frame.trend > 0 ? '+' : ''}{frame.trend}% {trendIcon}</Text>
+      </Box>
     </Box>
   );
 }

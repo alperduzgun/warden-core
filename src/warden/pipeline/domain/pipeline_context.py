@@ -96,6 +96,9 @@ class PipelineContext:
     # LLM Context (accumulated prompts and responses)
     llm_history: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Artifacts
+    artifacts: List[Dict[str, Any]] = field(default_factory=list)
+
     # Metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
