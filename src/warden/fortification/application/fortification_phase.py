@@ -70,15 +70,10 @@ class FortificationPhase:
     async def execute_async(
         self,
         validated_issues: List[Dict[str, Any]],
+        code_files: Optional[List[CodeFile]] = None,
     ) -> FortificationResult:
         """
-        Execute fortification phase on validated issues.
-
-        Args:
-            validated_issues: List of validated security issues
-
-        Returns:
-            FortificationResult with generated fixes
+        Execute fortification phase.
         """
         logger.info(
             "fortification_phase_started",
@@ -86,53 +81,49 @@ class FortificationPhase:
             use_llm=self.use_llm,
         )
 
-        fortifications = []
-        applied_fixes = []
+        from warden.fortification.application.orchestrator import FortificationOrchestrator
+        orchestrator = FortificationOrchestrator()
 
-        # Group issues by type for batch processing
+        all_fortifications = []
+        all_actions = []
+
+        if code_files:
+            for code_file in code_files:
+                res = await orchestrator.fortify_async(code_file)
+                all_actions.extend(res.actions)
+                # Map actions to fortifications for Panel
+                for action in res.actions:
+                    all_fortifications.append(Fortification(
+                        id=f"fort-{len(all_fortifications)}",
+                        title=action.type.value.replace("_", " ").title(),
+                        detail=action.description
+                    ))
+
+        # Legacy rule-based/llm fixes for validated issues
         issues_by_type = self._group_issues_by_type(validated_issues)
-
         for issue_type, issues in issues_by_type.items():
-            logger.info(
-                "processing_issue_type",
-                issue_type=issue_type,
-                count=len(issues),
-            )
-
-            # Generate fixes for this issue type
             if self.use_llm:
                 fixes = await self._generate_llm_fixes_async(issue_type, issues)
             else:
                 fixes = await self._generate_rule_based_fixes_async(issue_type, issues)
-
-            fortifications.extend(fixes)
-
-        # Calculate security improvements
-        security_improvements = self._calculate_improvements(
-            validated_issues,
-            fortifications,
-        )
-
-        # Determine which fixes can be auto-applied
-        for fortification in fortifications:
-            if fortification.get("auto_fixable", False):
-                applied_fixes.append(fortification)
+            
+            for fix in fixes:
+                all_fortifications.append(Fortification(
+                    id=f"fix-{len(all_fortifications)}",
+                    title=fix.get("title", "Security Fix"),
+                    detail=fix.get("detail", "")
+                ))
 
         result = FortificationResult(
-            fortifications=fortifications,
-            applied_fixes=applied_fixes,
-            security_improvements=security_improvements,
-            confidence=0.85 if self.use_llm else 0.7,
-        )
-
-        logger.info(
-            "fortification_phase_completed",
-            fortifications_count=len(fortifications),
-            auto_fixable_count=len(applied_fixes),
-            improvements=security_improvements,
+            success=True,
+            fortifications=all_fortifications,
+            actions=all_actions,
+            summary=f"Generated {len(all_fortifications)} fortifications",
+            duration=1.0 # Placeholder
         )
 
         return result
+
 
     async def _generate_llm_fixes_async(
         self,

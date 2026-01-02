@@ -430,8 +430,14 @@ Return JSON:
     def _parse_llm_response(self, response: str) -> LlmContextDecision:
         """Parse LLM JSON response."""
         try:
+            if not response or not response.strip():
+                raise ValueError("Empty response from LLM")
+
             # Extract JSON from response
             json_str = self._extract_json(response)
+            if not json_str:
+                raise ValueError("No JSON found in response")
+
             data = json.loads(json_str)
 
             return LlmContextDecision(
@@ -441,10 +447,11 @@ Return JSON:
                 secondary_contexts=data.get("secondary_contexts", []),
             )
         except Exception as e:
-            logger.error(
-                "llm_response_parse_error",
+            # Downgrade to warning for resilience
+            logger.warning(
+                "llm_response_parse_failed_using_fallback",
                 error=str(e),
-                response_preview=response[:200],
+                response_preview=response[:200] if response else "empty",
             )
             return LlmContextDecision(
                 context="unknown",
@@ -467,7 +474,7 @@ Return JSON:
         if start != -1 and end > start:
             return text[start:end]
 
-        return text
+        return ""  # Return empty string if no JSON found
 
     def _create_project_summary(
         self,
@@ -533,7 +540,13 @@ Total files: {len(file_list)}
     ) -> List[LlmContextDecision]:
         """Parse batch LLM response."""
         try:
+            if not response.content or not response.content.strip():
+                raise ValueError("Empty response from LLM batch")
+
             json_str = self._extract_json(response.content)
+            if not json_str:
+                raise ValueError("No JSON found in batch response")
+
             data = json.loads(json_str)
 
             if isinstance(data, list):
@@ -556,9 +569,10 @@ Total files: {len(file_list)}
                 return decisions
 
         except Exception as e:
-            logger.error(
-                "batch_parse_error",
+            logger.warning(
+                "batch_llm_parse_failed_using_fallback",
                 error=str(e),
+                response_preview=response.content[:200] if response.content else "empty",
             )
 
         # Return defaults on error

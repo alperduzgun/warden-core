@@ -534,6 +534,8 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
                 llm_reasoning: result.context_summary?.reasoning
               };
 
+
+
               setPipelineResult({
                 pipeline_id: result.pipeline_id,
                 pipeline_name: result.pipeline_name,
@@ -623,6 +625,8 @@ export function Scan({ path, frames, verbose = false }: ScanProps) {
       </Box>
     </Box>
   );
+
+
 
   const MetadataDisplay = ({ result }: { result: PipelineResult }) => (
     <Box flexDirection="row" borderStyle="round" padding={1} marginBottom={1} gap={3}>

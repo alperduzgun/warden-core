@@ -83,20 +83,10 @@ class OrphanFrame(ValidationFrame):
 
         # LLM filter (lazy initialization)
         self.llm_filter: Optional[LLMOrphanFilter] = None
+        
+        # Log if enabled but defer creation until execution (when llm_service is injected)
         if self.use_llm_filter:
-            try:
-                self.llm_filter = LLMOrphanFilter()
-                logger.info(
-                    "llm_orphan_filter_enabled",
-                    mode="intelligent_filtering",
-                )
-            except Exception as e:
-                logger.warning(
-                    "llm_orphan_filter_initialization_failed",
-                    error=str(e),
-                    fallback="basic filtering",
-                )
-                self.use_llm_filter = False  # Fallback to basic filtering
+            logger.info("llm_orphan_filter_enabled", mode="intelligent_filtering")
 
     async def execute_batch(self, code_files: List[CodeFile]) -> List[FrameResult]:
         """
@@ -166,10 +156,14 @@ class OrphanFrame(ValidationFrame):
         # 2. Filtering Phase (LLM or Basic)
         final_findings_map = {}
         
-        if self.use_llm_filter and self.llm_filter and findings_map:
+        # 2. Filtering Phase (LLM or Basic)
+        final_findings_map = {}
+        
+        llm_filter = self._get_or_create_filter()
+        if self.use_llm_filter and llm_filter and findings_map:
             # Smart Batch LLM Filtering
             logger.info("starting_smart_batch_filter", total_candidates=sum(len(l) for l in findings_map.values()))
-            final_findings_map = await self.llm_filter.filter_findings_batch(
+            final_findings_map = await llm_filter.filter_findings_batch(
                 findings_map, 
                 valid_files_map,
                 self.project_context
@@ -212,12 +206,13 @@ class OrphanFrame(ValidationFrame):
         filtered_count = total_candidates - final_count
         
         # Build LLM filter summary for CLI display
+        llm_filter = self._get_or_create_filter()
         llm_filter_summary = {
             "total_files_analyzed": len(valid_files_map),
             "ast_candidates_found": total_candidates,
             "llm_filtered_out": filtered_count,
             "final_findings": final_count,
-            "used_llm_filter": self.use_llm_filter and self.llm_filter is not None,
+            "used_llm_filter": self.use_llm_filter and llm_filter is not None,
             "reasoning": self._generate_filter_summary(
                 total_candidates, 
                 final_count,
@@ -323,7 +318,8 @@ class OrphanFrame(ValidationFrame):
             )
 
             # STAGE 2: Filter findings (basic OR intelligent)
-            if self.llm_filter and orphan_findings:
+            llm_filter = self._get_or_create_filter()
+            if self.use_llm_filter and llm_filter and orphan_findings:
                 # Intelligent filtering using LLM (recommended)
                 logger.info(
                     "llm_filtering_started",
@@ -332,7 +328,7 @@ class OrphanFrame(ValidationFrame):
                 )
 
                 llm_start = time.perf_counter()
-                filtered_findings = await self.llm_filter.filter_findings(
+                filtered_findings = await llm_filter.filter_findings(
                     findings=orphan_findings,
                     code_file=code_file,
                     language=code_file.language,
@@ -647,3 +643,28 @@ class OrphanFrame(ValidationFrame):
                 "reason": "Not applicable to this file type",
             },
         )
+
+    def _get_or_create_filter(self) -> Optional[LLMOrphanFilter]:
+        """
+        Get or lazy-create LLM filter using injected service.
+        """
+        if not self.use_llm_filter:
+            return None
+            
+        if self.llm_filter:
+            return self.llm_filter
+            
+        try:
+            # Check for injected service from FrameExecutor
+            llm_service = getattr(self, 'llm_service', None)
+            
+            self.llm_filter = LLMOrphanFilter(llm_service=llm_service)
+            return self.llm_filter
+        except Exception as e:
+            logger.warning(
+                "llm_orphan_filter_initialization_failed",
+                error=str(e),
+                fallback="basic filtering",
+            )
+            self.use_llm_filter = False
+            return None

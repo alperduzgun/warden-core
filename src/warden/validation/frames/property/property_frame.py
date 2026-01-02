@@ -362,8 +362,8 @@ Output must be a valid JSON object with the following structure:
                     content = content.split("```")[0].strip()
                 
                 try:
-                    data = json.loads(content)
-                    result = AnalysisResult.from_dict(data)
+                     # Parse result with Pydantic
+                    result = AnalysisResult.from_json(data)
                     
                     for issue in result.issues:
                         findings.append(Finding(

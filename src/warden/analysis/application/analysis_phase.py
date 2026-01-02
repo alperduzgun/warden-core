@@ -17,13 +17,13 @@ from warden.analysis.domain.quality_metrics import (
     QuickWin,
     MetricBreakdown,
 )
-from warden.analyzers.cleanup.analyzers.complexity_analyzer import ComplexityAnalyzer
-from warden.analyzers.cleanup.analyzers.duplication_analyzer import DuplicationAnalyzer
-from warden.analyzers.cleanup.analyzers.naming_analyzer import NamingAnalyzer
-from warden.analyzers.cleanup.analyzers.magic_number_analyzer import MagicNumberAnalyzer
-from warden.analyzers.cleanup.analyzers.maintainability_analyzer import MaintainabilityAnalyzer
-from warden.analyzers.cleanup.analyzers.documentation_analyzer import DocumentationAnalyzer
-from warden.analyzers.cleanup.analyzers.testability_analyzer import TestabilityAnalyzer
+from warden.cleaning.application.analyzers.complexity_analyzer import ComplexityAnalyzer
+from warden.cleaning.application.analyzers.duplication_analyzer import DuplicationAnalyzer
+from warden.cleaning.application.analyzers.naming_analyzer import NamingAnalyzer
+from warden.cleaning.application.analyzers.magic_number_analyzer import MagicNumberAnalyzer
+from warden.cleaning.application.analyzers.maintainability_analyzer import MaintainabilityAnalyzer
+from warden.cleaning.application.analyzers.documentation_analyzer import DocumentationAnalyzer
+from warden.cleaning.application.analyzers.testability_analyzer import TestabilityAnalyzer
 from warden.validation.domain.frame import CodeFile
 from warden.shared.infrastructure.exceptions import ValidationError
 

@@ -11,13 +11,13 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-from warden.pipeline.application.orchestrator import PipelineOrchestrator
+from warden.pipeline.application.orchestrator import PhaseOrchestrator
 from warden.pipeline.domain.models import (
     PipelineConfig,
     PipelineResult,
 )
 from warden.validation.domain.frame import ValidationFrame, CodeFile
-from warden.analyzers.discovery import FileDiscoverer, DiscoveredFile
+from warden.analysis.application.discovery import FileDiscoverer, DiscoveredFile
 from warden.build_context import BuildContextProvider, BuildContext
 from warden.suppression import SuppressionMatcher, load_suppression_config
 from warden.shared.infrastructure.logging import get_logger
@@ -25,7 +25,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 
-class EnhancedPipelineOrchestrator(PipelineOrchestrator):
+class EnhancedPipelineOrchestrator(PhaseOrchestrator):
     """
     Enhanced pipeline orchestrator with optional discovery, build context, and suppression.
 

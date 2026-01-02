@@ -119,6 +119,10 @@ class FrameExecutor:
                     })
                 return
 
+            # Initialize results container safery for concurrency
+            if not hasattr(context, 'frame_results') or context.frame_results is None:
+                context.frame_results = {}
+
             # Execute frames based on strategy
             if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
                 await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
@@ -390,9 +394,6 @@ class FrameExecutor:
                     logger.error("post_rules_failed_stopping", frame_id=frame.frame_id)
 
         # Store frame result with violations
-        if not hasattr(context, 'frame_results'):
-            context.frame_results = {}
-
         context.frame_results[frame.frame_id] = {
             'result': frame_result,
             'pre_violations': pre_violations,
@@ -402,6 +403,8 @@ class FrameExecutor:
         if self.progress_callback:
             self.progress_callback("frame_completed", {
                 "frame_id": frame.frame_id,
+                "frame_name": frame.name,
+                "status": frame_result.status,
                 "findings": len(frame_result.findings) if hasattr(frame_result, 'findings') else 0,
                 "duration": getattr(frame_result, 'duration', 0.0)
             })

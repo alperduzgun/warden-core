@@ -1,12 +1,11 @@
 """
 LLM Client Factory
 
-Based on C# LlmClientFactory.cs
-Creates LLM clients with automatic fallback support
+Functional factory for creating LLM clients with fallback support.
 """
 
-from typing import Optional
-from .config import LlmConfiguration
+from typing import Optional, Union
+from .config import LlmConfiguration, load_llm_config, ProviderConfig
 from .types import LlmProvider
 from .providers.base import ILlmClient
 from .providers.anthropic import AnthropicClient
@@ -16,155 +15,81 @@ from .providers.openai import OpenAIClient
 from .providers.groq import GroqClient
 
 
-class LlmClientFactory:
+def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILlmClient:
+    """Create a client for a specific provider configuration."""
+    if not config.enabled or not config.api_key:
+        raise ValueError(f"Provider {provider.value} is not configured or enabled")
+
+    if provider == LlmProvider.ANTHROPIC:
+        return AnthropicClient(config)
+    elif provider == LlmProvider.DEEPSEEK:
+        return DeepSeekClient(config)
+    elif provider == LlmProvider.QWENCODE:
+        return QwenCodeClient(config)
+    elif provider == LlmProvider.OPENAI:
+        return OpenAIClient(config, LlmProvider.OPENAI)
+    elif provider == LlmProvider.AZURE_OPENAI:
+        return OpenAIClient(config, LlmProvider.AZURE_OPENAI)
+    elif provider == LlmProvider.GROQ:
+        return GroqClient(config)
+    else:
+        raise NotImplementedError(f"Provider {provider.value} not implemented")
+
+
+def create_client(
+    provider_or_config: Optional[Union[LlmProvider, LlmConfiguration, str]] = None
+) -> ILlmClient:
     """
-    Factory for creating LLM clients
-
-    Matches C# LlmClientFactory with fallback chain support
-    """
-
-    def __init__(self, configuration: LlmConfiguration):
-        """
-        Initialize factory with configuration
-
-        Args:
-            configuration: LLM configuration with provider settings
-        """
-        self._config = configuration
-
-    def create_client(self, provider: LlmProvider) -> ILlmClient:
-        """
-        Create client for specific provider
-
-        Args:
-            provider: LLM provider to create
-
-        Returns:
-            Configured LLM client
-
-        Raises:
-            ValueError: If provider not configured or enabled
-            NotImplementedError: If provider not supported
-        """
-        config = self._config.get_provider_config(provider)
-
-        if not config or not config.enabled or not config.api_key:
-            raise ValueError(f"Provider {provider.value} is not configured or enabled")
-
-        # Map providers to client classes
-        if provider == LlmProvider.ANTHROPIC:
-            return AnthropicClient(config)
-        elif provider == LlmProvider.DEEPSEEK:
-            return DeepSeekClient(config)
-        elif provider == LlmProvider.QWENCODE:
-            return QwenCodeClient(config)
-        elif provider == LlmProvider.OPENAI:
-            return OpenAIClient(config, LlmProvider.OPENAI)
-        elif provider == LlmProvider.AZURE_OPENAI:
-            return OpenAIClient(config, LlmProvider.AZURE_OPENAI)
-        elif provider == LlmProvider.GROQ:
-            return GroqClient(config)
-        else:
-            raise NotImplementedError(f"Provider {provider.value} not implemented")
-
-    def create_default_client(self) -> ILlmClient:
-        """
-        Create default client from configuration
-
-        Returns:
-            Default LLM client
-        """
-        return self.create_client(self._config.default_provider)
-
-    async def get_provider(self, provider: Optional[LlmProvider] = None) -> Optional[ILlmClient]:
-        """
-        Get LLM client for specific provider (async version)
-
-        This is an alias for backward compatibility with bridge.py usage.
-        If provider is None, returns default client. Returns None if provider
-        is not available or not configured.
-
-        Args:
-            provider: Optional provider to get (uses default if None)
-
-        Returns:
-            LLM client instance or None if not available
-        """
-        try:
-            if provider is None:
-                return self.create_default_client()
-            else:
-                client = self.create_client(provider)
-                # Check if actually available
-                if await client.is_available_async():
-                    return client
-                return None
-        except Exception:
-            return None
-
-    async def create_client_with_fallback(self) -> ILlmClient:
-        """
-        Create client with automatic fallback
-
-        Tries default provider first, then fallback providers in order
-        until one is available
-
-        Returns:
-            First available LLM client
-
-        Raises:
-            RuntimeError: If no providers are available
-        """
-        providers = self._config.get_all_providers_chain()
-
-        for provider in providers:
-            try:
-                client = self.create_client(provider)
-
-                # Check if provider is actually available
-                if await client.is_available_async():
-                    return client
-
-            except Exception:
-                # Continue to next provider
-                continue
-
-        raise RuntimeError("No available LLM providers found. Check your configuration.")
-
-
-# Convenience function for direct import
-def create_client(provider_or_config: Optional[any] = None) -> ILlmClient:
-    """
-    Convenience function to create LLM client.
+    Create an LLM client based on input or default configuration.
 
     Args:
-        provider_or_config: Optional LlmProvider, LlmConfiguration, or None
-
-    Returns:
-        Configured LLM client
-
-    Raises:
-        RuntimeError: If no configuration found
+        provider_or_config: 
+            - None: Use default configuration
+            - LlmProvider/str: Use default config for specific provider
+            - LlmConfiguration: Use specific configuration
     """
-    from .config import load_llm_config
-
-    # Handle different argument types
-    if provider_or_config is None:
-        # Load default config
-        config = load_llm_config()
-        factory = LlmClientFactory(config)
-        return factory.create_default_client()
-    elif isinstance(provider_or_config, LlmConfiguration):
-        # Use provided config
-        factory = LlmClientFactory(provider_or_config)
-        return factory.create_default_client()
-    elif isinstance(provider_or_config, LlmProvider):
-        # Use default config with specific provider
-        config = load_llm_config()
-        factory = LlmClientFactory(config)
-        return factory.create_client(provider_or_config)
+    # Load default config if needed
+    if isinstance(provider_or_config, LlmConfiguration):
+        config = provider_or_config
+        provider = config.default_provider
     else:
-        # Try to interpret as provider
         config = load_llm_config()
-        factory = LlmClientFactory(config)
-        return factory.create_default_client()
+        if isinstance(provider_or_config, LlmProvider):
+            provider = provider_or_config
+        elif isinstance(provider_or_config, str):
+            provider = LlmProvider(provider_or_config)
+        else:
+            provider = config.default_provider
+
+    provider_config = config.get_provider_config(provider)
+    if not provider_config:
+        raise ValueError(f"No configuration found for provider: {provider}")
+
+    return create_provider_client(provider, provider_config)
+
+
+async def create_client_with_fallback(config: Optional[LlmConfiguration] = None) -> ILlmClient:
+    """
+    Create client with automatic fallback chain.
+    """
+    if config is None:
+        config = load_llm_config()
+
+    providers = config.get_all_providers_chain()
+    
+    for provider in providers:
+        try:
+            provider_config = config.get_provider_config(provider)
+            if not provider_config:
+                continue
+                
+            client = create_provider_client(provider, provider_config)
+            
+            # Check if actually available
+            if await client.is_available_async():
+                return client
+        except Exception:
+            continue
+
+    raise RuntimeError("No available LLM providers found.")
+

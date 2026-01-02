@@ -28,13 +28,11 @@ from .types import (
 
 from .config import (
     ProviderConfig,
-    LlmConfiguration,
-    create_default_config,
-    DEFAULT_MODELS
+    load_llm_config
 )
 
 from .providers.base import ILlmClient
-from .factory import LlmClientFactory
+from .factory import create_client, create_provider_client, create_client_with_fallback
 
 from .prompts import (
     ANALYSIS_SYSTEM_PROMPT,
@@ -44,26 +42,31 @@ from .prompts import (
 )
 
 __all__ = [
+    # Core factory functions
+    "create_client",
+    "create_provider_client",
+    "create_client_with_fallback",
+
     # Types
     "LlmProvider",
+    "LlmConfig",
     "LlmRequest",
     "LlmResponse",
+    "ContextWindow",
+    "TokenUsage",
     "AnalysisIssue",
     "AnalysisResult",
     "ClassificationCharacteristics",
     "ClassificationResult",
 
     # Config
-    "ProviderConfig",
-    "LlmConfiguration",
-    "create_default_config",
-    "DEFAULT_MODELS",
+    "load_llm_config",
 
     # Providers
     "ILlmClient",
 
     # Factory
-    "LlmClientFactory",
+    # "LlmClientFactory",  # Removed in favor of functional factory
 
     # Prompts
     "ANALYSIS_SYSTEM_PROMPT",
