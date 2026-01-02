@@ -14,64 +14,91 @@ NOTE: This is a placeholder implementation for future cleaning features.
 The cleaning step will analyze code and suggest cleanup/refactoring improvements.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from datetime import datetime
+from enum import Enum
 
-from warden.shared.domain.base_model import BaseDomainModel
+class CleaningIssueType(Enum):
+    """Types of cleaning opportunities."""
+    POOR_NAMING = "poor_naming"
+    CODE_DUPLICATION = "code_duplication"
+    SOLID_VIOLATION = "solid_violation"
+    MAGIC_NUMBER = "magic_number"
+    LONG_METHOD = "long_method"
+    COMPLEX_METHOD = "complex_method"
+    MISSING_DOCSTRING = "missing_docstring"
+    UNUSED_CODE = "unused_code"
+    COMMENTED_CODE = "commented_code"
+    DEAD_CODE = "dead_code"
+    DESIGN_SMELL = "design_smell"
+    MISSING_DOC = "missing_doc"
+    TESTABILITY_ISSUE = "testability_issue"
+    POOR_DOC = "poor_doc"
 
+class CleaningIssueSeverity(Enum):
+    """Severity levels for cleaning issues."""
+    CRITICAL = 0
+    HIGH = 1
+    MEDIUM = 2
+    LOW = 3
+    INFO = 4
 
 @dataclass
 class Cleaning(BaseDomainModel):
     """
     A single cleaning suggestion.
-
     Represents a code cleanup or refactoring improvement.
-    Panel displays this with HTML support in detail field (e.g., <code> tags).
-
-    Attributes:
-        id: Unique identifier for this cleaning
-        title: Short summary of the cleaning
-        detail: Detailed explanation, may contain HTML (e.g., <code> tags)
     """
-
     id: str
     title: str
     detail: str  # Can contain HTML for Panel rendering
 
+@dataclass
+class CleaningIssue(BaseDomainModel):
+    """Represents a single cleanup opportunity."""
+    issue_type: CleaningIssueType
+    description: str
+    line_number: int
+    severity: CleaningIssueSeverity = CleaningIssueSeverity.MEDIUM
+    code_snippet: Optional[str] = None
+    column_start: Optional[int] = None
+    column_end: Optional[int] = None
+
+@dataclass
+class CleaningSuggestion(BaseDomainModel):
+    """A suggestion for code cleanup."""
+    issue: CleaningIssue
+    suggestion: str
+    example_code: Optional[str] = None
+    rationale: Optional[str] = None
 
 @dataclass
 class CleaningResult(BaseDomainModel):
     """
     Result of cleaning step execution.
-
-    Aggregates all cleaning suggestions found and metadata about the cleaning process.
-
-    Attributes:
-        cleanings: List of cleaning suggestions
-        files_modified: List of file paths that would be modified (placeholder)
-        duration: Duration of cleaning analysis in seconds
     """
-
+    success: bool = True
     cleanings: List[Cleaning] = field(default_factory=list)
+    issues_found: int = 0
+    suggestions: List[CleaningSuggestion] = field(default_factory=list)
+    cleanup_score: float = 0.0
     files_modified: List[str] = field(default_factory=list)
+    summary: str = ""
     duration: float = 0.0
+    timestamp: datetime = field(default_factory=datetime.now)
+    metrics: dict = field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
-        """
-        Serialize to Panel-compatible JSON.
-
-        Panel expects:
-        {
-            "cleanings": [{id, title, detail}],
-            "filesModified": ["path/to/file.py"],
-            "duration": "0.8s"
-        }
-
-        Returns:
-            Dictionary with camelCase keys for Panel
-        """
+        """Serialize to Panel-compatible JSON."""
         return {
+            "success": self.success,
             "cleanings": [c.to_json() for c in self.cleanings],
+            "issuesFound": self.issues_found,
+            "suggestions": [s.to_json() for s in self.suggestions],
+            "cleanupScore": self.cleanup_score,
             "filesModified": self.files_modified,
-            "duration": f"{self.duration:.1f}s"  # Format as string with unit
+            "summary": self.summary,
+            "duration": f"{self.duration:.1f}s",
+            "timestamp": self.timestamp.isoformat(),
+            "metrics": self.metrics
         }
+

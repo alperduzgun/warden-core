@@ -86,13 +86,7 @@ class CleaningPhase:
         code_files: List[CodeFile],
     ) -> CleaningResult:
         """
-        Execute cleaning phase on code files.
-
-        Args:
-            code_files: List of code files to analyze
-
-        Returns:
-            CleaningResult with improvement suggestions
+        Execute cleaning phase.
         """
         logger.info(
             "cleaning_phase_started",
@@ -100,15 +94,18 @@ class CleaningPhase:
             use_llm=self.use_llm,
         )
 
-        cleaning_suggestions = []
-        refactorings = []
+        from warden.cleaning.application.orchestrator import CleaningOrchestrator
+        orchestrator = CleaningOrchestrator()
+
+        all_cleanings = []
+        all_refactorings = []
+        all_suggestions = []
 
         # Analyze each file for improvements
         for code_file in code_files:
             # Skip non-production files based on context
             file_context = self.context.get("file_contexts", {}).get(code_file.path)
             if file_context:
-                # Check if it's a FileContextInfo object or dict
                 if hasattr(file_context, 'context'):
                     context_type = file_context.context.value if hasattr(file_context.context, 'value') else str(file_context.context)
                 elif isinstance(file_context, dict):
@@ -117,51 +114,64 @@ class CleaningPhase:
                     context_type = "PRODUCTION"
 
                 if context_type in ["TEST", "EXAMPLE", "DOCUMENTATION"]:
-                    logger.info(
-                        "skipping_non_production_file",
-                        file=code_file.path,
-                        context=context_type,
-                    )
                     continue
 
-            # Generate cleaning suggestions
+            # Run specialized cleaning orchestrator
+            res = await orchestrator.analyze_async(code_file)
+            all_suggestions.extend(res.suggestions)
+            
+            # Map suggestions to cleanings for Panel
+            for sug in res.suggestions:
+                all_cleanings.append(Cleaning(
+                    id=f"clean-{len(all_cleanings)}",
+                    title=sug.issue.issue_type.value.replace("_", " ").title(),
+                    detail=sug.suggestion
+                ))
+
+            # Legacy rule-based/llm suggestions
             if self.use_llm:
                 suggestions = await self._generate_llm_suggestions_async(code_file)
             else:
                 suggestions = await self._generate_rule_based_suggestions_async(code_file)
 
-            cleaning_suggestions.extend(suggestions.get("cleanings", []))
-            refactorings.extend(suggestions.get("refactorings", []))
+            for sug in suggestions.get("cleanings", []):
+                all_cleanings.append(Cleaning(
+                    id=f"leg-clean-{len(all_cleanings)}",
+                    title=sug.get("title", "Cleaning Suggestion"),
+                    detail=sug.get("detail", "")
+                ))
+            
+            for ref in suggestions.get("refactorings", []):
+                all_refactorings.append(Cleaning(
+                    id=f"ref-{len(all_refactorings)}",
+                    title=ref.get("title", "Refactoring"),
+                    detail=ref.get("detail", "")
+                ))
 
-        # Calculate quality improvements
+        # Calculate results
         quality_score_before = self.context.get("quality_score_before", 0.0)
         quality_score_after = self._calculate_improved_score(
             quality_score_before,
-            cleaning_suggestions,
-            refactorings,
+            all_cleanings,
+            all_refactorings,
         )
 
         code_improvements = self._summarize_improvements(
-            cleaning_suggestions,
-            refactorings,
+            all_cleanings,
+            all_refactorings,
         )
 
         result = CleaningResult(
-            cleaning_suggestions=cleaning_suggestions,
-            refactorings=refactorings,
+            success=True,
+            cleanings=all_cleanings,
+            suggestions=all_suggestions,
             quality_score_after=quality_score_after,
             code_improvements=code_improvements,
-            confidence=0.85 if self.use_llm else 0.7,
-        )
-
-        logger.info(
-            "cleaning_phase_completed",
-            suggestions_count=len(cleaning_suggestions),
-            refactorings_count=len(refactorings),
-            quality_improvement=quality_score_after - quality_score_before,
+            summary=f"Generated {len(all_cleanings)} cleaning suggestions"
         )
 
         return result
+
 
     async def _generate_llm_suggestions_async(
         self,

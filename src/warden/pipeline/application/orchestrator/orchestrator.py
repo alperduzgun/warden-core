@@ -279,8 +279,21 @@ class PhaseOrchestrator:
                         "reason": "disabled_in_config"
                     })
 
-            self.pipeline.status = PipelineStatus.COMPLETED
-            self.pipeline.ended_at = datetime.now()
+            # Update pipeline status based on results
+            if self.pipeline.frames_failed > 0:
+                # If fail_fast is on, any frame failure makes it a failure
+                # If fail_fast is off, we only fail if a blocker failed
+                if self.config.fail_fast or any(
+                    fr.get('result').is_blocker for fr in getattr(context, 'frame_results', {}).values() 
+                    if fr.get('result')
+                ):
+                    self.pipeline.status = PipelineStatus.FAILED
+                else:
+                    self.pipeline.status = PipelineStatus.COMPLETED
+            else:
+                self.pipeline.status = PipelineStatus.COMPLETED
+                
+            self.pipeline.completed_at = datetime.now()
 
             logger.info(
                 "pipeline_execution_completed",
@@ -291,7 +304,7 @@ class PhaseOrchestrator:
         except Exception as e:
             import traceback
             self.pipeline.status = PipelineStatus.FAILED
-            self.pipeline.ended_at = datetime.now()
+            self.pipeline.completed_at = datetime.now()
             logger.error(
                 "pipeline_execution_failed",
                 pipeline_id=context.pipeline_id,
@@ -338,22 +351,19 @@ class PhaseOrchestrator:
         # Calculate quality score if not present or default
         quality_score = getattr(context, 'quality_score_before', None)
         
-        # DEBUG: Log score calc
-        try:
-             with open('/tmp/debug_score.log', 'w') as f:
-                 f.write(f"Initial score: {quality_score}\n")
-                 f.write(f"Counts: C={critical_findings}, H={high_findings}, M={medium_findings}, L={low_findings}\n")
-        except: pass
+
 
         if quality_score is None or quality_score == 0.0:
-            # Formula: 10 - penalty
-            # Penalties: Critical=2, High=1, Medium=0.5, Low=0.1
-            penalty = (critical_findings * 2.0) + (high_findings * 1.0) + (medium_findings * 0.5) + (low_findings * 0.1)
-            quality_score = max(0.0, 10.0 - penalty)
-            try:
-                with open('/tmp/debug_score.log', 'a') as f:
-                    f.write(f"Calculated score: {quality_score} (Penalty: {penalty})\n")
-            except: pass
+            # Formula: Asymptotic decay
+            # Base Score: 10
+            # Penalties: Critical=3, High=1.5, Medium=0.5, Low=0.1
+            # Formula: 10 * (20 / (penalty + 20))
+            # This ensures score never hits absolute 0 and scales well with finding count
+            penalty = (critical_findings * 3.0) + (high_findings * 1.5) + (medium_findings * 0.5) + (low_findings * 0.1)
+            quality_score = 10.0 * (20.0 / (penalty + 20.0))
+            
+            # Cap at 10.0 just in case
+            quality_score = min(10.0, max(0.1, quality_score))
 
         return PipelineResult(
             pipeline_id=context.pipeline_id,
@@ -371,6 +381,18 @@ class PhaseOrchestrator:
             low_findings=low_findings,
 
             frame_results=frame_results,
+            # Populate metadata
+            metadata={
+                "strategy": self.config.strategy.value,
+                "fail_fast": self.config.fail_fast,
+                "frame_executions": [
+                    {
+                        "frame_id": fe.frame_id,
+                        "status": fe.status,
+                        "duration": fe.duration
+                    } for fe in getattr(self.pipeline, 'frame_executions', [])
+                ]
+            },
             # Populate new fields
             artifacts=getattr(context, 'artifacts', []),
             quality_score=quality_score,

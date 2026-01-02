@@ -17,8 +17,8 @@ Validation checks:
 from typing import List, Dict, Set, Optional
 from collections import deque
 
-from warden.models.pipeline_config import PipelineConfig, PipelineNode
-from warden.models.frame import get_frame_by_id
+from warden.config.domain.models import PipelineConfig, PipelineNode
+from warden.validation.domain.frame import get_frame_by_id
 
 
 class ValidationError(Exception):

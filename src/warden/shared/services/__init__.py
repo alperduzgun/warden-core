@@ -26,10 +26,10 @@ class LLMService:
         # Try to import LLM client
         try:
             from warden.llm.config import load_llm_config
-            from warden.llm.factory import LlmClientFactory
-
+            from warden.llm.factory import create_client
+            
             llm_config = load_llm_config()
-            self.llm_factory = LlmClientFactory(llm_config)
+            self.llm_service = create_client(llm_config.default_provider)
             self.llm_available = True
             logger.info("llm_service_initialized", enabled=self.enabled)
         except Exception as e:

@@ -117,7 +117,8 @@ class LLMOrphanFilter:
     def __init__(
         self,
         llm_config: Optional[LlmConfiguration] = None,
-        batch_size: int = 50,
+        llm_service: Optional[Any] = None,
+        batch_size: int = 10,  # Lowered default for safety
         max_retries: int = 2,
     ):
         """
@@ -125,10 +126,15 @@ class LLMOrphanFilter:
 
         Args:
             llm_config: LLM configuration (uses default if None)
-            batch_size: Number of findings to process per LLM call (default: 50)
+            llm_service: Pre-configured LLM service (preferred over creating new)
+            batch_size: Number of findings to process per LLM call (default: 10)
             max_retries: Max retries on LLM failure (default: 2)
         """
-        self.llm = create_client(llm_config)
+        if llm_service:
+            self.llm = llm_service
+        else:
+            self.llm = create_client(llm_config)
+            
         self.batch_size = batch_size
         self.max_retries = max_retries
 
@@ -136,6 +142,7 @@ class LLMOrphanFilter:
             "llm_orphan_filter_initialized",
             batch_size=batch_size,
             max_retries=max_retries,
+            injected_service=llm_service is not None
         )
 
     async def filter_findings_batch(
@@ -172,7 +179,7 @@ class LLMOrphanFilter:
         
         # 2. Create batches (simple count-based for now, can be token-based later)
         # We use a larger batch size for bulk processing if possible, or keep conservative
-        batch_size = 20  # Process 20 findings per request across files
+        batch_size = self.batch_size  # Use configured safe size
         
         batches = []
         for i in range(0, len(all_flattened), batch_size):
@@ -687,8 +694,13 @@ Now analyze the findings and return the JSON.
             ValueError: If parsing fails or count mismatch
         """
         try:
+            if not llm_response or not llm_response.strip():
+                raise ValueError("Empty response from LLM")
+
             # Extract JSON from response (LLM may wrap in markdown code blocks)
             json_str = self._extract_json(llm_response)
+            if not json_str:
+                raise ValueError("No JSON found in response")
 
             # Parse JSON
             data = json.loads(json_str)
@@ -716,11 +728,11 @@ Now analyze the findings and return the JSON.
             return decisions
 
         except Exception as e:
-            logger.error(
-                "llm_response_parse_error",
+            logger.warning(
+                "llm_response_parse_failed_using_fallback",
                 error=str(e),
                 error_type=type(e).__name__,
-                response_preview=llm_response[:200] if llm_response else None,
+                response_preview=llm_response[:200] if llm_response else "empty",
             )
 
             # Conservative fallback: mark all as false (not orphans)
@@ -769,8 +781,8 @@ Now analyze the findings and return the JSON.
         if json_start != -1 and json_end > json_start:
             return text[json_start:json_end]
 
-        # Return as-is and let JSON parser fail with clear error
-        return text
+        # Return empty string if no JSON found
+        return ""
 
     def _batch_findings(
         self,

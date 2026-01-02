@@ -39,7 +39,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import yaml
 
-from warden.models.pipeline_config import (
+from warden.config.domain.models import (
     PipelineConfig,
     PipelineNode,
     PipelineEdge,
@@ -48,7 +48,7 @@ from warden.models.pipeline_config import (
     Position,
     CustomRule,
 )
-from warden.models.frame import get_frame_by_id
+from warden.validation.domain.frame import get_frame_by_id, get_frames_by_priority
 
 
 class YAMLParseError(Exception):

@@ -17,7 +17,7 @@ try:
     from warden.pipeline.domain.models import PipelineConfig, PipelineResult
     from warden.validation.domain.frame import CodeFile
     from warden.llm.config import load_llm_config
-    from warden.llm.factory import LlmClientFactory
+    from warden.llm.factory import create_client
     from warden.llm.types import LlmProvider
     from warden.shared.infrastructure.logging import get_logger
 
@@ -68,11 +68,9 @@ class WardenBridge:
 
         try:
             self.llm_config = load_llm_config()
-            self.llm_factory = LlmClientFactory(self.llm_config)
         except Exception as e:
             logger.warning("LLM config loading failed, continuing without LLM", error=str(e))
             self.llm_config = None
-            self.llm_factory = None
 
         # Initialize pipeline orchestrator (like TUI does)
         self._load_pipeline_config(config_path)
@@ -106,8 +104,8 @@ class WardenBridge:
                 # Use default frames when no config
                 frames = self._get_default_frames()
                 # Create LLM service if factory is available
-                if self.llm_factory and self.llm_config:
-                    llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
+                if self.llm_config:
+                    llm_service = create_client(self.llm_config.default_provider)
                 else:
                     llm_service = None
 
@@ -237,8 +235,8 @@ class WardenBridge:
             )
 
             # Create orchestrator with frames, config, and LLM service
-            if self.llm_factory and self.llm_config:
-                llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
+            if self.llm_config:
+                llm_service = create_client(self.llm_config.default_provider)
             else:
                 llm_service = None
             
@@ -261,8 +259,8 @@ class WardenBridge:
             # Fallback to default frames
             try:
                 frames = self._get_default_frames()
-                if self.llm_factory and self.llm_config:
-                    llm_service = self.llm_factory.create_client(self.llm_config.default_provider)
+                if self.llm_config:
+                    llm_service = create_client(self.llm_config.default_provider)
                 else:
                     llm_service = None
 
@@ -1218,15 +1216,12 @@ class WardenBridge:
         return extension_map.get(path.suffix.lower(), "unknown")
 
     def _serialize_pipeline_result(self, result: PipelineResult) -> Dict[str, Any]:
-        """
-        Convert PipelineResult to serializable dictionary
+        """Serialize pipeline result to JSON-RPC compatible dict."""
+        # Use Pydantic's model_dump if available (new Pydantic approach)
+        if hasattr(result, "model_dump"):
+            return result.model_dump(mode="json")
 
-        Args:
-            result: Pipeline result
-
-        Returns:
-            Serializable dictionary
-        """
+        # Fallback to manual serialization (if PipelineResult hasn't been migrated yet)
         return {
             "pipeline_id": result.pipeline_id,
             "pipeline_name": result.pipeline_name,
@@ -1245,7 +1240,7 @@ class WardenBridge:
                 {
                     "frame_id": fr.frame_id,
                     "frame_name": fr.frame_name,
-                    "status": fr.status,
+                    "status": fr.status.value if hasattr(fr.status, 'value') else str(fr.status),
                     "duration": fr.duration,
                     "issues_found": fr.issues_found,
                     "is_blocker": fr.is_blocker,
@@ -1253,17 +1248,19 @@ class WardenBridge:
                         {
                             "severity": getattr(f, "severity", "unknown"),
                             "message": getattr(f, "message", str(f)),
-                            "line": getattr(f, "line_number", getattr(f, "line", None)),  # Support both line_number and line
-                            "column": getattr(f, "column", None),
-                            "code": getattr(f, "code", None),
-                            "file": getattr(f, "file_path", getattr(f, "file", None)),  # Map file_path to file for CLI
+                            "line": getattr(f, "line_number", getattr(f, "line", 0)),
+                            "column": getattr(f, "column", 0),
+                            "code": getattr(f, "code_snippet", getattr(f, "code", "")),
+                            "file": getattr(f, "file_path", getattr(f, "file", "")),
                         }
                         for f in fr.findings
-                    ],
+                    ]
                 }
                 for fr in result.frame_results
             ],
             "metadata": result.metadata,
+            "quality_score": result.quality_score,
+            "artifacts": result.artifacts,
         }
 
     async def update_frame_status(self, frame_id: str, enabled: bool) -> Dict[str, Any]:

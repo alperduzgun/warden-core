@@ -9,7 +9,7 @@ from typing import Dict, Any
 from pathlib import Path
 import yaml
 
-from warden.models.pipeline_config import PipelineConfig
+from warden.config.domain.models import PipelineConfig
 
 
 class YAMLExportError(Exception):

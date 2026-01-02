@@ -9,7 +9,7 @@ Hierarchy:
 from pathlib import Path
 from typing import Optional
 
-from warden.models.pipeline_config import PipelineConfig
+from warden.config.domain.models import PipelineConfig
 from warden.config.yaml_parser import parse_yaml
 
 

@@ -16,8 +16,8 @@ else:
     except ImportError:
         raise ImportError("tomli is required for Python < 3.11")
 
-from warden.analyzers.discovery.framework_detector import FrameworkDetector
-from warden.analyzers.discovery.models import FileType
+from warden.analysis.application.discovery.framework_detector import FrameworkDetector
+from warden.analysis.application.discovery.models import FileType
 
 
 class ProjectDetector:

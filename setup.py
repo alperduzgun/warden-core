@@ -46,6 +46,7 @@ setup(
         "tree-sitter-javascript>=0.21.0",
         "tree-sitter-typescript>=0.21.0",
         "tree-sitter-go>=0.21.0",
+        "pydantic>=2.5.0",
     ],
     extras_require={
         "dev": [
@@ -57,9 +58,7 @@ setup(
         ],
     },
     entry_points={
-        "console_scripts": [
-            "warden=warden.cli.main:main",
-        ],
+        "console_scripts": [],
     },
     include_package_data=True,
     zip_safe=False,

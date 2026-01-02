@@ -4,42 +4,18 @@ Pipeline domain models.
 Core entities for validation pipeline orchestration.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
+from datetime import datetime
 from uuid import uuid4
 
+from pydantic import Field
 from warden.shared.domain.base_model import BaseDomainModel
 from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
 from warden.validation.domain.frame import ValidationFrame, FrameResult
-
-# Forward reference to avoid circular import
-if TYPE_CHECKING:
-    from warden.rules.domain.models import CustomRule
+from warden.rules.domain.models import CustomRule, FrameRules
 
 
-@dataclass
-class FrameRules(BaseDomainModel):
-    """
-    Pre/Post rules for a specific frame.
 
-    Defines custom rules that should execute before/after a frame.
-    """
-
-    pre_rules: List["CustomRule"] = field(default_factory=list)
-    post_rules: List["CustomRule"] = field(default_factory=list)
-    on_fail: str = "continue"  # 'stop' | 'continue' - what to do if blocker violations found
-
-    def to_json(self) -> Dict[str, Any]:
-        """Convert to Panel-compatible JSON."""
-        return {
-            "preRules": [rule.to_json() for rule in self.pre_rules],
-            "postRules": [rule.to_json() for rule in self.post_rules],
-            "onFail": self.on_fail,
-        }
-
-
-@dataclass
 class FrameExecution(BaseDomainModel):
     """
     Individual frame execution record.
@@ -67,7 +43,6 @@ class FrameExecution(BaseDomainModel):
         return data
 
 
-@dataclass
 class PipelineConfig(BaseDomainModel):
     """
     Pipeline configuration.
@@ -107,8 +82,8 @@ class PipelineConfig(BaseDomainModel):
     pre_analysis_config: Optional[Dict[str, Any]] = None  # PRE-ANALYSIS phase config (use_llm, llm_threshold, etc.)
 
     # Custom Rules (NEW)
-    global_rules: List["CustomRule"] = field(default_factory=list)  # Rules applied to all frames
-    frame_rules: Dict[str, FrameRules] = field(default_factory=dict)  # Frame-specific rules (key: frame_id)
+    global_rules: List[CustomRule] = Field(default_factory=list)  # Rules applied to all frames
+    frame_rules: Dict[str, FrameRules] = Field(default_factory=dict)  # Frame-specific rules (key: frame_id)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -129,7 +104,6 @@ class PipelineConfig(BaseDomainModel):
 PipelineOrchestratorConfig = PipelineConfig
 
 
-@dataclass
 class ValidationPipeline(BaseDomainModel):
     """
     Validation pipeline entity.
@@ -137,20 +111,20 @@ class ValidationPipeline(BaseDomainModel):
     Orchestrates execution of multiple validation frames.
     """
 
-    id: str = field(default_factory=lambda: str(uuid4()))
+    id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = "Validation Pipeline"
     description: str = ""
     status: PipelineStatus = PipelineStatus.PENDING
-    config: PipelineConfig = field(default_factory=PipelineConfig)
+    config: PipelineConfig = Field(default_factory=PipelineConfig)
 
     # Execution tracking
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     duration: float = 0.0
 
     # Frame executions
-    frame_executions: List[FrameExecution] = field(default_factory=list)
+    frame_executions: List[FrameExecution] = Field(default_factory=list)
 
     # Summary
     total_frames: int = 0
@@ -203,7 +177,6 @@ class ValidationPipeline(BaseDomainModel):
             self.duration = (self.completed_at - self.started_at).total_seconds()
 
 
-@dataclass
 class PipelineResult(BaseDomainModel):
     """
     Aggregated pipeline execution result.
@@ -229,14 +202,14 @@ class PipelineResult(BaseDomainModel):
     low_findings: int
 
     # Frame results
-    frame_results: List[FrameResult] = field(default_factory=list)
+    frame_results: List[FrameResult] = Field(default_factory=list)
 
     # Metadata
-    executed_at: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     
     # New fields for Dashboard alignment
-    artifacts: List[Dict[str, Any]] = field(default_factory=list)
+    artifacts: List[Dict[str, Any]] = Field(default_factory=list)
     quality_score: float = 0.0
 
     def to_json(self) -> Dict[str, Any]:
@@ -280,7 +253,6 @@ class PipelineResult(BaseDomainModel):
         return any(fr.is_blocker and not fr.passed for fr in self.frame_results)
 
 
-@dataclass
 class SubStep(BaseDomainModel):
     """
     Pipeline substep (validation frame within validation step).
@@ -341,7 +313,6 @@ class SubStep(BaseDomainModel):
         )
 
 
-@dataclass
 class PipelineStep(BaseDomainModel):
     """
     Pipeline step (one of 5 stages).
@@ -356,7 +327,7 @@ class PipelineStep(BaseDomainModel):
     status: str  # StepStatus value: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
     duration: Optional[str] = None  # Format: "0.8s", "1m 43s"
     score: Optional[str] = None  # Format: "4/10", "8/12"
-    sub_steps: List[SubStep] = field(default_factory=list)  # Only for validation step
+    sub_steps: List[SubStep] = Field(default_factory=list)  # Only for validation step
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON with subSteps (camelCase)."""
@@ -365,7 +336,6 @@ class PipelineStep(BaseDomainModel):
         return data
 
 
-@dataclass
 class PipelineSummary(BaseDomainModel):
     """
     Pipeline execution summary.
@@ -425,7 +395,6 @@ class PipelineSummary(BaseDomainModel):
         }
 
 
-@dataclass
 class PipelineRun(BaseDomainModel):
     """
     Complete pipeline run (Panel's 5-stage pipeline).
@@ -459,3 +428,5 @@ class PipelineRun(BaseDomainModel):
         # Status is already a string, no conversion needed
         # summary.to_json() is called automatically by BaseDomainModel
         return data
+
+

@@ -13,15 +13,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Any, List
 
+from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.validation.domain.enums import (
     FramePriority,
     FrameScope,
     FrameCategory,
     FrameApplicability,
 )
-
-if TYPE_CHECKING:
-    from warden.rules.domain.models import CustomRule, CustomRuleViolation
 
 
 @dataclass
@@ -46,6 +44,8 @@ class Finding:
     location: str  # e.g., "user_service.py:45"
     detail: str | None = None
     code: str | None = None  # Code snippet
+    line: int = 0  # Line number (1-based)
+    column: int = 0  # Column number (1-based)
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel JSON."""
@@ -56,6 +56,8 @@ class Finding:
             "location": self.location,
             "detail": self.detail,
             "code": self.code,
+            "line": self.line,
+            "column": self.column,
         }
 
     def to_dict(self) -> Dict[str, Any]:
