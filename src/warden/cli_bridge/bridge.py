@@ -500,7 +500,7 @@ class WardenBridge:
                 data={"file_path": file_path, "error_type": type(e).__name__},
             )
 
-    async def execute_pipeline_stream(self, file_path: str, config: Optional[Dict[str, Any]] = None, frames: Optional[List[str]] = None) -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream(self, file_path: str, config: Optional[Dict[str, Any]] = None, frames: Optional[List[str]] = None, verbose: bool = False) -> AsyncIterator[Dict[str, Any]]:
         """
         Execute validation pipeline on a file with streaming progress updates.
 
@@ -510,6 +510,7 @@ class WardenBridge:
             file_path: Path to file to validate
             config: Optional pipeline configuration override
             frames: Optional list of specific frames to run (overrides classification)
+            verbose: Enable verbose logging throughout the pipeline
 
         Yields:
             Progress updates and final result as JSON events:
@@ -536,7 +537,10 @@ class WardenBridge:
             )
 
         try:
-            logger.info("execute_pipeline_stream_called", file_path=file_path, frames=frames)
+            if verbose:
+                logger.info("execute_pipeline_stream_called_verbose", file_path=file_path, frames=frames, verbose=True)
+            else:
+                logger.info("execute_pipeline_stream_called", file_path=file_path, frames=frames)
 
             # Validate file exists and is a file (not directory)
             path = Path(file_path)

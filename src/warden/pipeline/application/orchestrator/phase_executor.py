@@ -72,7 +72,8 @@ class PhaseExecutor:
             project_root=self.project_root,
             llm_service=self.llm_service,
             # Pass all available frames to classification for dynamic selection
-            frames=self.frames
+            frames=self.frames,
+            available_frames=self.frames
         )
         self.fortification_executor = FortificationExecutor(
             config=self.config,

@@ -28,9 +28,10 @@ import type { PipelineEvent, PipelineResult, Finding, ConfigResult } from '../li
 interface ScanProps {
   path: string;
   frames?: string[] | undefined;
+  verbose?: boolean;
 }
 
-export function Scan({ path, frames }: ScanProps) {
+export function Scan({ path, frames, verbose = false }: ScanProps) {
   const [backendReady, setBackendReady] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
   const [startupError, setStartupError] = useState<string | null>(null);
@@ -76,6 +77,7 @@ export function Scan({ path, frames }: ScanProps) {
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pipelineCompletedRef = useRef<boolean>(false);
   const phaseStartTimesRef = useRef<Record<string, number>>({});
+  const frameStartTimesRef = useRef<Record<string, number>>({});
 
   // Batch state updates to reduce re-renders during pipeline execution
   const schedulePhaseUpdate = useCallback((phaseId: string, update: typeof executedPhases[string]) => {
@@ -262,6 +264,7 @@ export function Scan({ path, frames }: ScanProps) {
         executedPhasesRef.current = {};
         pendingUpdatesRef.current = {};
         phaseStartTimesRef.current = {};
+        frameStartTimesRef.current = {};
 
         // Clear classification frames and summary for fresh scan
         setClassificationFrames([]);
@@ -299,11 +302,21 @@ export function Scan({ path, frames }: ScanProps) {
           file_path: resolvedPath,
           // Only send frames if user explicitly specified them via CLI
           // This allows Classification phase to run and intelligently select frames
-          frames: (frames && frames.length > 0) ? frames : undefined
+          frames: (frames && frames.length > 0) ? frames : undefined,
+          verbose: verbose
         }, (event: any) => {
+          // Verbose logging - write directly to stderr to not interfere with Ink UI
+          if (verbose) {
+            console.error(`[VERBOSE] Event received: ${JSON.stringify(event, null, 2)}`);
+          }
+
           // Handle different event types
           if (event.type === 'progress') {
             const { event: progressEvent, data } = event;
+
+            if (verbose) {
+              console.error(`[VERBOSE] Progress event: ${progressEvent}, data:`, JSON.stringify(data, null, 2));
+            }
 
             // Map backend phase names to frontend phase IDs
             const phaseMapping: Record<string, string> = {
@@ -374,15 +387,24 @@ export function Scan({ path, frames }: ScanProps) {
                 if (phaseId === 'classification' && data.selected_frames) {
                   setClassificationFrames(data.selected_frames);
 
-                  // Immediately update Validation phase's subSteps with Classification results
+                  // Update Validation phase's subSteps: Show ALL frames that will execute
+                  // Backend now merges AI-selected + User-enforced frames automatically
+                  // Note: Backend returns final merged list in validation phase
+                  // For now, show classification selected frames here
+                  // When frame_started events arrive, they will show the full list
                   setPhases(prev => prev.map(phase => {
                     if (phase.id === 'validation') {
+                      // Show frames from classification
+                      // Backend will execute AI selection + User-enabled frames
+                      // Frame source metadata (🤖 AI vs 👤 User) is in backend logs
                       return {
                         ...phase,
                         subSteps: data.selected_frames.map((frameId: string) => ({
                           id: frameId,
                           name: frameId.charAt(0).toUpperCase() + frameId.slice(1).replace(/-/g, ' '),
-                          status: 'pending' as PhaseStatus
+                          status: 'pending' as PhaseStatus,
+                          // Future: Add metadata.source when backend provides it
+                          // metadata: { source: 'ai' | 'user', reason: string }
                         }))
                       };
                     }
@@ -417,6 +439,9 @@ export function Scan({ path, frames }: ScanProps) {
               }
             } else if (progressEvent === 'frame_started') {
               const frameId = data.frame_id;
+              // Track frame start time for duration calculation
+              frameStartTimesRef.current[frameId] = Date.now();
+
               setCurrentSubStep(frameId);
               setPhases(prev => updateSubStepStatus(prev, 'validation', frameId, 'running'));
 
@@ -426,7 +451,17 @@ export function Scan({ path, frames }: ScanProps) {
               });
             } else if (progressEvent === 'frame_completed') {
               const frameId = data.frame_id;
-              const frameDuration = data.duration ? `${Number(data.duration).toFixed(2)}s` : '0.0s';
+
+              // Calculate frame duration - prefer backend duration, fallback to client timer
+              let frameDuration = '0.0s';
+              if (data.duration !== undefined && data.duration !== null) {
+                const durationVal = typeof data.duration === 'string' ? parseFloat(data.duration) : data.duration;
+                frameDuration = `${Number(durationVal).toFixed(2)}s`;
+              } else if (frameStartTimesRef.current[frameId]) {
+                // Use client-side timer if backend didn't send duration
+                frameDuration = `${((Date.now() - frameStartTimesRef.current[frameId]) / 1000).toFixed(2)}s`;
+              }
+
               setPhases(prev => updateSubStepStatus(prev, 'validation', frameId, 'completed', frameDuration));
 
               schedulePhaseUpdate(`validation_${frameId}`, {
@@ -743,7 +778,34 @@ export function Scan({ path, frames }: ScanProps) {
                 <Text>  ⚪ Low: <Text bold color="gray">{pipelineResult.low_findings || 0}</Text></Text>
               </Box>
 
-              {/* Convert findings to issues for IssueList compatibility */}
+              {/* Frame-level LLM Analysis Summary (e.g., Orphan Detection) */}
+              {pipelineResult.frame_results.some((fr: any) => fr.metadata?.llm_filter_summary) && (
+                <Box flexDirection="column" marginTop={1} marginBottom={1}>
+                  <Text bold color="cyan">🔬 Frame Analysis Insights:</Text>
+                  {pipelineResult.frame_results
+                    .filter((fr: any) => fr.metadata?.llm_filter_summary)
+                    .map((fr: any) => {
+                      const summary = fr.metadata.llm_filter_summary;
+                      return (
+                        <Box key={fr.frame_id} flexDirection="column" marginLeft={2}>
+                          <Text color="yellow">• {fr.frame_id.toUpperCase()}: </Text>
+                          <Box flexDirection="column" marginLeft={2}>
+                            <Text dimColor>
+                              Candidates: {summary.ast_candidates_found || 0} →
+                              Filtered: {summary.llm_filtered_out || 0} →
+                              Final: {summary.final_findings || 0}
+                            </Text>
+                            {summary.reasoning && (
+                              <Text dimColor wrap="wrap">💭 {summary.reasoning}</Text>
+                            )}
+                          </Box>
+                        </Box>
+                      );
+                    })
+                  }
+                </Box>
+              )}
+
               {pipelineResult.total_findings > 0 && (
                 <Box flexDirection="column">
                   <Box marginBottom={1}>

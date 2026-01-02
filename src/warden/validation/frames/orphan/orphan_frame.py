@@ -125,7 +125,9 @@ class OrphanFrame(ValidationFrame):
                         frame_id=self.frame_id, 
                         frame_name=self.name, 
                         status="skipped", 
-                        duration=0.0, 
+                        duration=0.0,
+                        issues_found=0,
+                        is_blocker=False,
                         findings=[],
                         metadata={"reason": "unsupported_language"}
                     ))
@@ -204,8 +206,66 @@ class OrphanFrame(ValidationFrame):
                 metadata=metadata
             ))
 
-        logger.info("orphan_batch_completed", processed=len(results), duration=time.perf_counter() - start_time)
+        # Calculate aggregate stats for CLI summary
+        total_candidates = sum(len(l) for l in findings_map.values())
+        final_count = sum(len(l) for l in final_findings_map.values())
+        filtered_count = total_candidates - final_count
+        
+        # Build LLM filter summary for CLI display
+        llm_filter_summary = {
+            "total_files_analyzed": len(valid_files_map),
+            "ast_candidates_found": total_candidates,
+            "llm_filtered_out": filtered_count,
+            "final_findings": final_count,
+            "used_llm_filter": self.use_llm_filter and self.llm_filter is not None,
+            "reasoning": self._generate_filter_summary(
+                total_candidates, 
+                final_count,
+                len(valid_files_map),
+                list(findings_map.keys())[:5]  # Sample files
+            )
+        }
+        
+        # Store for pipeline context access
+        self.batch_summary = llm_filter_summary
+        
+        logger.info(
+            "orphan_batch_completed", 
+            processed=len(results), 
+            duration=time.perf_counter() - start_time,
+            ast_candidates=total_candidates,
+            final_findings=final_count,
+            llm_filtered=filtered_count
+        )
         return results
+    
+    def _generate_filter_summary(
+        self,
+        candidates: int,
+        final: int,
+        file_count: int,
+        sample_files: List[str]
+    ) -> str:
+        """Generate human-readable summary of LLM filtering decision."""
+        if candidates == 0:
+            return "No orphan candidates detected in codebase."
+        
+        filtered = candidates - final
+        if final == 0 and candidates > 0:
+            samples = ", ".join([f.split("/")[-1] for f in sample_files[:3]])
+            return (
+                f"{candidates} potential orphans from {file_count} files were analyzed. "
+                f"All {filtered} were determined to be false positives (exported utilities, "
+                f"type guards, or externally-consumed functions). "
+                f"Sample files: {samples}"
+            )
+        elif final > 0:
+            return (
+                f"{candidates} candidates analyzed, {final} confirmed as true orphans. "
+                f"{filtered} filtered as false positives."
+            )
+        else:
+            return f"Analyzed {candidates} candidates from {file_count} files."
 
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
@@ -402,13 +462,22 @@ class OrphanFrame(ValidationFrame):
         Returns:
             True if frame should run
         """
-        # Check language
-        if code_file.language.lower() != "python":
+        # Check if we have a detector for this language (delegate to factory)
+        from warden.validation.frames.orphan.orphan_detector import OrphanDetectorFactory, TreeSitterOrphanDetector
+        
+        # Get file extension
+        import os
+        _, ext = os.path.splitext(code_file.path)
+        ext = ext.lower()
+        
+        # Check if supported: Python (native) or any TreeSitter language
+        supported_extensions = {".py"} | set(TreeSitterOrphanDetector.LANGUAGE_MAP.keys())
+        if ext not in supported_extensions:
             return False
 
         # Check if test file should be ignored
         if self.ignore_test_files:
-            if "test_" in code_file.path or "_test.py" in code_file.path:
+            if "test_" in code_file.path or "_test." in code_file.path or ".test." in code_file.path:
                 return False
 
         return True

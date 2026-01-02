@@ -83,6 +83,13 @@ class FrameExecutor:
             file_contexts = context.file_contexts or {}
             filtered_files = self._filter_files_by_context(code_files, file_contexts)
 
+            logger.info(
+                "validation_file_filtering",
+                total_files=len(code_files),
+                filtered_files=len(filtered_files),
+                filtered_out=len(code_files) - len(filtered_files)
+            )
+
             # Get frames to execute (with fallback logic)
             selected_frames = getattr(context, 'selected_frames', None)
             frames_to_execute = self.frame_matcher.get_frames_to_execute(selected_frames)
@@ -208,6 +215,9 @@ class FrameExecutor:
         pipeline: ValidationPipeline,
     ) -> Optional[FrameResult]:
         """Execute a frame with PRE/POST rules."""
+        # Start timing frame execution
+        frame_start_time = time.perf_counter()
+
         frame_rules = self.config.frame_rules.get(frame.frame_id) if self.config.frame_rules else None
 
         # Inject LLM service if available
@@ -260,6 +270,12 @@ class FrameExecutor:
                     return None
 
             if code_files:
+                logger.info(
+                    "frame_batch_execution_start",
+                    frame_id=frame.frame_id,
+                    files_to_scan=len(code_files)
+                )
+
                 # Use batch execution if available (default impl iterates anyway)
                 # But optimized frames (like OrphanFrame) will use smart batching
                 try:
@@ -270,6 +286,15 @@ class FrameExecutor:
                     
                     if f_results:
                         files_scanned = len(f_results)
+                        total_findings_from_batch = sum(len(res.findings) if res and res.findings else 0 for res in f_results)
+
+                        logger.info(
+                            "frame_batch_execution_complete",
+                            frame_id=frame.frame_id,
+                            results_count=files_scanned,
+                            total_findings=total_findings_from_batch
+                        )
+
                         for res in f_results:
                             if res and res.findings:
                                 frame_findings.extend(res.findings)
@@ -289,23 +314,29 @@ class FrameExecutor:
                 status = "failed"
             elif any(f.severity == 'high' for f in frame_findings):
                 status = "warning"
-                
+
+            # Calculate frame execution duration
+            frame_duration = time.perf_counter() - frame_start_time
+
+            # Build metadata - include batch_summary if frame has it
+            result_metadata = {
+                "files_scanned": files_scanned,
+                "execution_errors": execution_errors
+            }
+
+            # Check for batch_summary (OrphanFrame provides LLM filter reasoning)
+            if hasattr(frame, 'batch_summary') and frame.batch_summary:
+                result_metadata["llm_filter_summary"] = frame.batch_summary
+
             frame_result = FrameResult(
                 frame_id=frame.frame_id,
                 frame_name=frame.name,
                 status=status,
-                # We don't have total duration for all files easily here without measuring, 
-                # but this block is inside a function that doesn't measure total.
-                # Actually _execute_frame_with_rules doesn't set duration on result usually?
-                # The frame.execute does. We can sum them or just use 0 here and let caller measure wall time.
-                duration=0.0, 
+                duration=frame_duration,  # Use measured duration
                 issues_found=len(frame_findings),
                 is_blocker=frame.is_blocker and status == "failed",
                 findings=frame_findings,
-                metadata={
-                    "files_scanned": files_scanned,
-                    "execution_errors": execution_errors
-                }
+                metadata=result_metadata
             )
 
             pipeline.frames_executed += 1

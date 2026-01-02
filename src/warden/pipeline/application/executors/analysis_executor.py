@@ -22,13 +22,17 @@ class AnalysisExecutor(BasePhaseExecutor):
         code_files: List[CodeFile],
     ) -> None:
         """Execute ANALYSIS phase."""
-        logger.info("executing_phase", phase="ANALYSIS")
+        # Check if verbose mode is enabled via context
+        verbose = getattr(context, 'verbose_mode', False)
+
+        logger.info("executing_phase", phase="ANALYSIS", verbose=verbose)
 
         if self.progress_callback:
             start_time = time.perf_counter()
             self.progress_callback("phase_started", {
                 "phase": "ANALYSIS",
-                "phase_name": "ANALYSIS"
+                "phase_name": "ANALYSIS",
+                "verbose": verbose
             })
 
         try:
@@ -39,6 +43,15 @@ class AnalysisExecutor(BasePhaseExecutor):
             if hasattr(self.config, 'pre_analysis_config') and isinstance(self.config.pre_analysis_config, dict):
                 config_use_llm = self.config.pre_analysis_config.get('use_llm', True)
                 use_llm = self.llm_service and config_use_llm
+
+            if verbose:
+                logger.info(
+                    "analysis_phase_config_verbose",
+                    has_llm_service=self.llm_service is not None,
+                    pre_analysis_config=self.config.pre_analysis_config if hasattr(self.config, 'pre_analysis_config') else None,
+                    use_llm_final=use_llm,
+                    file_count=len(code_files)
+                )
 
             logger.info(
                 "analysis_phase_config",
@@ -58,14 +71,26 @@ class AnalysisExecutor(BasePhaseExecutor):
                     config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
                     llm_service=self.llm_service
                 )
+                if verbose:
+                    logger.info("using_llm_analysis_phase_verbose", llm_provider=self.llm_service.__class__.__name__ if self.llm_service else "None")
                 logger.info("using_llm_analysis_phase")
             else:
                 from warden.analysis.application.analysis_phase import AnalysisPhase
                 phase = AnalysisPhase(
                     config=getattr(self.config, 'analysis_config', {}),
                 )
+                if verbose:
+                    logger.info("using_rule_based_analysis_phase_verbose")
 
+            if verbose:
+                logger.info("analysis_phase_execute_starting", file_count=len(code_files))
+
+            llm_start_time = time.perf_counter()
             result = await phase.execute(code_files)
+            llm_duration = time.perf_counter() - llm_start_time
+
+            if verbose:
+                logger.info("analysis_phase_execute_completed", duration=llm_duration, overall_score=result.overall_score if hasattr(result, 'overall_score') else None)
 
             # Store results in context
             context.quality_metrics = result

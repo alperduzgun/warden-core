@@ -41,6 +41,11 @@ setup(
         "httpx>=0.24.0",
         "textual>=0.60.0",  # Modern TUI framework
         "textual-dev>=1.0.0",  # Textual development tools
+        # Tree-sitter for multi-language AST parsing
+        "tree-sitter>=0.21.0",
+        "tree-sitter-javascript>=0.21.0",
+        "tree-sitter-typescript>=0.21.0",
+        "tree-sitter-go>=0.21.0",
     ],
     extras_require={
         "dev": [

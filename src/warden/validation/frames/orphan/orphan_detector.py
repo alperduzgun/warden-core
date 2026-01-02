@@ -373,23 +373,383 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 class TreeSitterOrphanDetector(AbstractOrphanDetector):
     """
     Generic Tree Sitter based orphan detector for multiple languages.
+    
+    Supports: JavaScript, TypeScript, Go, Rust, Java, etc.
+    Uses py-tree-sitter library for parsing.
     """
+    
+    # Language to tree-sitter module mapping
+    LANGUAGE_MAP = {
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".go": "go",
+        ".rs": "rust",
+        ".java": "java",
+        ".rb": "ruby",
+        ".c": "c",
+        ".cpp": "cpp",
+        ".cs": "c_sharp",
+        ".svelte": "svelte",
+    }
     
     def __init__(self, code: str, file_path: str) -> None:
         super().__init__(code, file_path)
-        # TODO: Initialize tree-sitter parser here
-        # self.parser = ...
+        self.tree = None
+        self.parser = None
+        self.language_name = None
+        
+        # Determine language from extension
+        _, ext = os.path.splitext(file_path)
+        self.language_name = self.LANGUAGE_MAP.get(ext.lower())
+        
+        if not self.language_name:
+            logger.warning("tree_sitter_unsupported_extension", ext=ext)
+            return
+            
+        # Try to load tree-sitter (with auto-install)
+        try:
+            import tree_sitter
+        except ImportError:
+            # Auto-install core tree-sitter
+            logger.info("auto_installing_tree_sitter_core")
+            try:
+                import subprocess
+                import sys
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "tree-sitter", "-q"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if result.returncode == 0:
+                    logger.info("tree_sitter_core_installed")
+                    import tree_sitter
+                else:
+                    logger.warning("tree_sitter_core_install_failed", error=result.stderr)
+                    return
+            except Exception as e:
+                logger.warning("tree_sitter_auto_install_error", error=str(e))
+                return
+            
+        try:
+            # Try to load language-specific binding
+            lang_capsule = self._load_language_module(self.language_name)
+            
+            if lang_capsule:
+                # tree-sitter 0.21+ API: Parser() then set_language(Language(capsule))
+                lang = tree_sitter.Language(lang_capsule)
+                self.parser = tree_sitter.Parser()
+                self.parser.language = lang
+                self.tree = self.parser.parse(bytes(code, "utf8"))
+                logger.debug(
+                    "tree_sitter_parser_initialized",
+                    language=self.language_name,
+                    file=file_path
+                )
+            else:
+                logger.warning(
+                    "tree_sitter_language_not_installed",
+                    language=self.language_name
+                )
+        except Exception as e:
+            logger.warning(
+                "tree_sitter_initialization_failed",
+                language=self.language_name,
+                error=str(e)
+            )
+    
+    def _load_language_module(self, language_name: str) -> Optional[Any]:
+        """
+        Load tree-sitter language module dynamically.
+        Auto-installs missing bindings if not found.
+        """
+        # Package name mapping
+        package_map = {
+            "javascript": "tree-sitter-javascript",
+            "typescript": "tree-sitter-typescript",
+            "go": "tree-sitter-go",
+            "rust": "tree-sitter-rust",
+            "java": "tree-sitter-java",
+            "ruby": "tree-sitter-ruby",
+            "c": "tree-sitter-c",
+            "cpp": "tree-sitter-cpp",
+            "c_sharp": "tree-sitter-c-sharp",
+            "svelte": "tree-sitter-svelte",
+        }
+        
+        def try_import():
+            if language_name == "javascript":
+                import tree_sitter_javascript as ts_js
+                return ts_js.language()
+            elif language_name == "typescript":
+                import tree_sitter_typescript as ts_ts
+                return ts_ts.language_typescript()
+            elif language_name == "go":
+                import tree_sitter_go as ts_go
+                return ts_go.language()
+            elif language_name == "rust":
+                import tree_sitter_rust as ts_rust
+                return ts_rust.language()
+            elif language_name == "java":
+                import tree_sitter_java as ts_java
+                return ts_java.language()
+            elif language_name == "ruby":
+                import tree_sitter_ruby as ts_ruby
+                return ts_ruby.language()
+            elif language_name == "c":
+                import tree_sitter_c as ts_c
+                return ts_c.language()
+            elif language_name == "cpp":
+                import tree_sitter_cpp as ts_cpp
+                return ts_cpp.language()
+            elif language_name == "c_sharp":
+                import tree_sitter_c_sharp as ts_cs
+                return ts_cs.language()
+            elif language_name == "svelte":
+                import tree_sitter_svelte as ts_svelte
+                return ts_svelte.language()
+            return None
+        
+        try:
+            return try_import()
+        except ImportError:
+            # Auto-install missing package
+            package = package_map.get(language_name)
+            if package:
+                logger.info(
+                    "auto_installing_tree_sitter_binding",
+                    language=language_name,
+                    package=package
+                )
+                try:
+                    import subprocess
+                    import sys
+                    
+                    # Install package
+                    result = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", package, "-q"],
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                    
+                    if result.returncode == 0:
+                        logger.info(
+                            "tree_sitter_binding_installed",
+                            package=package
+                        )
+                        # Try import again after installation
+                        return try_import()
+                    else:
+                        logger.warning(
+                            "tree_sitter_install_failed",
+                            package=package,
+                            error=result.stderr
+                        )
+                except Exception as install_error:
+                    logger.warning(
+                        "tree_sitter_auto_install_error",
+                        package=package,
+                        error=str(install_error)
+                    )
+            return None
     
     def detect_all(self) -> List[OrphanFinding]:
         """
         Detect orphan code using Tree Sitter.
         """
-        # Placeholder implementation
-        logger.warning(
-            "tree_sitter_orphan_detection_not_implemented", 
-            file=str(self.file_path)
+        if not self.tree:
+            return []
+            
+        findings: List[OrphanFinding] = []
+        
+        # Collect function/class definitions  
+        definitions = self._collect_definitions(self.tree.root_node)
+        
+        # Collect all identifier references (excluding the definition names themselves)
+        references = self._collect_references(self.tree.root_node, exclude_nodes=set(
+            node for _, (_, _, node) in definitions.items()
+        ))
+        
+        # Debug logging
+        logger.debug(
+            "tree_sitter_detection_stats",
+            file=self.file_path,
+            definitions_count=len(definitions),
+            references_count=len(references),
+            definition_names=list(definitions.keys())[:10]  # First 10
         )
-        return []
+        
+        # Find unreferenced definitions
+        skipped_count = 0
+        for name, (line_num, def_type, node) in definitions.items():
+            if name not in references:
+                # Skip common patterns that are often exported/used externally
+                if self._should_skip(name, node):
+                    skipped_count += 1
+                    continue
+                    
+                code_snippet = self._get_node_snippet(node)
+                findings.append(
+                    OrphanFinding(
+                        orphan_type=f"unreferenced_{def_type}",
+                        name=name,
+                        line_number=line_num,
+                        code_snippet=code_snippet,
+                        reason=f"{def_type.capitalize()} '{name}' appears unused",
+                    )
+                )
+        
+        if skipped_count > 0:
+            logger.debug(
+                "tree_sitter_skipped_exports",
+                file=self.file_path,
+                skipped_count=skipped_count
+            )
+        
+        return findings
+    
+    def _collect_definitions(self, node: Any) -> Dict[str, tuple]:
+        """
+        Collect function and class definitions from AST.
+        """
+        definitions: Dict[str, tuple] = {}
+        
+        # Node types for function/class definitions across languages
+        def_types = {
+            # JavaScript/TypeScript - traditional functions
+            "function_declaration": "function",
+            "method_definition": "method",
+            "class_declaration": "class",
+            # Go
+            "function_declaration": "function",
+            "method_declaration": "method",
+            "type_declaration": "type",
+            # Rust
+            "function_item": "function",
+            "impl_item": "impl",
+            "struct_item": "struct",
+            # Java
+            "method_declaration": "method",
+            "class_declaration": "class",
+        }
+        
+        def walk(n):
+            # Standard function/class declarations
+            if n.type in def_types:
+                name = self._extract_name(n)
+                if name and not name.startswith("_"):
+                    definitions[name] = (
+                        n.start_point[0] + 1,
+                        def_types[n.type],
+                        n
+                    )
+            
+            # TypeScript/JS: const myFunc = () => {} or const myFunc = function() {}
+            elif n.type == "lexical_declaration" or n.type == "variable_declaration":
+                for declarator in n.children:
+                    if declarator.type == "variable_declarator":
+                        # Check if value is a function
+                        name_node = None
+                        value_node = None
+                        for child in declarator.children:
+                            if child.type == "identifier":
+                                name_node = child
+                            elif child.type in ["arrow_function", "function_expression", "function"]:
+                                value_node = child
+                        
+                        if name_node and value_node:
+                            name = name_node.text.decode("utf8")
+                            if not name.startswith("_"):
+                                definitions[name] = (
+                                    n.start_point[0] + 1,
+                                    "function",
+                                    n
+                                )
+            
+            for child in n.children:
+                walk(child)
+        
+        walk(node)
+        return definitions
+    
+    def _collect_references(self, node: Any, exclude_nodes: set = None) -> set:
+        """
+        Collect all identifier references from AST.
+        Excludes identifiers within nodes in exclude_nodes (definition sites).
+        """
+        references = set()
+        exclude_nodes = exclude_nodes or set()
+        
+        def is_excluded(n):
+            """Check if this node or any of its ancestors is in exclude set."""
+            current = n
+            while current:
+                if current in exclude_nodes:
+                    return True
+                current = current.parent
+            return False
+        
+        def walk(n):
+            # Skip if this is a definition node (or child of one)
+            if is_excluded(n):
+                return
+                
+            # Identifier nodes represent name references
+            if n.type == "identifier":
+                references.add(n.text.decode("utf8"))
+            elif n.type == "property_identifier":
+                references.add(n.text.decode("utf8"))
+            
+            for child in n.children:
+                walk(child)
+        
+        walk(node)
+        return references
+    
+    def _extract_name(self, node: Any) -> Optional[str]:
+        """
+        Extract the name from a definition node.
+        """
+        # Look for identifier child
+        for child in node.children:
+            if child.type == "identifier":
+                return child.text.decode("utf8")
+            if child.type == "property_identifier":
+                return child.text.decode("utf8")
+            if child.type == "name":  # Go
+                return child.text.decode("utf8")
+        return None
+    
+    def _should_skip(self, name: str, node: Any) -> bool:
+        """
+        Check if definition should be skipped (exported, main, etc).
+        """
+        # Skip common exported/main patterns
+        skip_names = {"main", "init", "setup", "teardown", "constructor"}
+        if name.lower() in skip_names:
+            return True
+            
+        # Skip if exported (has export keyword parent)
+        parent = node.parent
+        while parent:
+            if parent.type in ["export_statement", "export_declaration"]:
+                return True
+            parent = parent.parent
+            
+        return False
+    
+    def _get_node_snippet(self, node: Any) -> str:
+        """
+        Get code snippet for a node.
+        """
+        start_line = node.start_point[0]
+        end_line = min(node.end_point[0], start_line + 5)  # Max 5 lines
+        
+        lines = self.lines[start_line:end_line + 1]
+        return "\n".join(lines).strip()
 
 
 class OrphanDetectorFactory:
@@ -398,8 +758,8 @@ class OrphanDetectorFactory:
     
     Selection Logic:
     1. Native Parser (if available for language)
-    2. Tree Sitter (if available and configured)
-    3. None (Not supported)
+    2. Tree Sitter (for other supported languages)
+    3. None (Unsupported language)
     """
     
     @staticmethod
@@ -410,15 +770,20 @@ class OrphanDetectorFactory:
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
         
-        # Priority 1: Native Parsers
+        # Priority 1: Native Parsers (faster, more accurate)
         if ext == ".py":
             return PythonOrphanDetector(code, file_path)
             
-        # Priority 2: Tree Sitter (For JS/TS/Go etc.)
-        supported_ts_extensions = [".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java"]
-        if ext in supported_ts_extensions:
-            # Check if tree-sitter is actually installed/available
-            # For now, return the class, it will log warning
-            return TreeSitterOrphanDetector(code, file_path)
+        # Priority 2: Tree Sitter (universal parser)
+        if ext in TreeSitterOrphanDetector.LANGUAGE_MAP:
+            detector = TreeSitterOrphanDetector(code, file_path)
+            if detector.tree:  # Only return if parsing succeeded
+                return detector
+            # If tree-sitter failed, return None (graceful degradation)
+            logger.info(
+                "tree_sitter_fallback_failed",
+                file=file_path,
+                hint="Install tree-sitter bindings for this language"
+            )
             
         return None
