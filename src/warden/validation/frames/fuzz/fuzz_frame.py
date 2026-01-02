@@ -124,6 +124,13 @@ Output must be a valid JSON object with the following structure:
         """
         super().__init__(config)
 
+    async def execute_batch(self, code_files: List[CodeFile]) -> List[FrameResult]:
+        """
+        Execute fuzz testing on multiple files.
+        """
+        # Serial execution for now to ensure reliability, bug fixes first.
+        return await super().execute_batch(code_files)
+
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
         Execute fuzz testing checks on code file.
@@ -273,7 +280,7 @@ Output must be a valid JSON object with the following structure:
                 
                 try:
                     # Parse result with Pydantic
-                    result = AnalysisResult.from_json(data)
+                    result = AnalysisResult.from_json(content)
                     
                     for issue in result.issues:
                         findings.append(Finding(

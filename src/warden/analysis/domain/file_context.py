@@ -5,7 +5,7 @@ Provides file-level context detection for false positive prevention
 and context-aware weight adjustment.
 """
 
-from dataclasses import dataclass, field
+from pydantic import Field
 from enum import Enum
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
@@ -34,7 +34,6 @@ class FileContext(Enum):
     UNKNOWN = "unknown"  # Cannot determine context
 
 
-@dataclass
 class ContextWeight(BaseDomainModel):
     """
     Weight configuration for a specific metric in a context.
@@ -48,14 +47,9 @@ class ContextWeight(BaseDomainModel):
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return {
-            "metricName": self.metric_name,
-            "weight": self.weight,
-            "reason": self.reason,
-        }
+        return self.model_dump(by_alias=True, mode='json')
 
 
-@dataclass
 class ContextWeights(BaseDomainModel):
     """
     Complete weight configuration for a file context.
@@ -64,10 +58,10 @@ class ContextWeights(BaseDomainModel):
     """
 
     context: FileContext
-    weights: Dict[str, float] = field(default_factory=dict)
+    weights: Dict[str, float] = Field(default_factory=dict)
     # Default weights: complexity, duplication, maintainability, naming, documentation, testability
 
-    def __post_init__(self) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Initialize with default weights if not provided."""
         if not self.weights:
             self.weights = self._get_default_weights()
@@ -142,13 +136,9 @@ class ContextWeights(BaseDomainModel):
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return {
-            "context": self.context.value,
-            "weights": self.weights,
-        }
+        return self.model_dump(by_alias=True, mode='json')
 
 
-@dataclass
 class FileContextInfo(BaseDomainModel):
     """
     Complete context information for a file.
@@ -160,10 +150,10 @@ class FileContextInfo(BaseDomainModel):
     context: FileContext
     confidence: float  # 0.0 to 1.0
     detection_method: str  # How context was detected
-    weights: ContextWeights = field(default_factory=lambda: ContextWeights(FileContext.PRODUCTION))
+    weights: ContextWeights = Field(default_factory=lambda: ContextWeights(context=FileContext.PRODUCTION))
 
     # Suppression configuration
-    suppressed_issues: List[str] = field(default_factory=list)  # Issue types to suppress
+    suppressed_issues: List[str] = Field(default_factory=list)  # Issue types to suppress
     suppression_reason: Optional[str] = None
 
     # Additional metadata
@@ -174,21 +164,7 @@ class FileContextInfo(BaseDomainModel):
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return {
-            "filePath": self.file_path,
-            "context": self.context.value,
-            "confidence": round(self.confidence, 2),
-            "detectionMethod": self.detection_method,
-            "weights": self.weights.to_json(),
-            "suppressedIssues": self.suppressed_issues,
-            "suppressionReason": self.suppression_reason,
-            "metadata": {
-                "isEntryPoint": self.is_entry_point,
-                "isGenerated": self.is_generated,
-                "isVendor": self.is_vendor,
-                "hasIgnoreMarker": self.has_ignore_marker,
-            }
-        }
+        return self.model_dump(by_alias=True, mode='json')
 
     def should_suppress_issue(self, issue_type: str) -> bool:
         """
@@ -284,7 +260,6 @@ class FileContextInfo(BaseDomainModel):
         return original_severity
 
 
-@dataclass
 class PreAnalysisResult(BaseDomainModel):
     """
     Result of the PRE-ANALYSIS phase.
@@ -296,35 +271,22 @@ class PreAnalysisResult(BaseDomainModel):
     project_context: Any  # ProjectContext (avoiding circular import)
 
     # File-level contexts
-    file_contexts: Dict[str, FileContextInfo] = field(default_factory=dict)  # path -> context
+    file_contexts: Dict[str, FileContextInfo] = Field(default_factory=dict)  # path -> context
 
     # Analysis statistics
     total_files_analyzed: int = 0
-    files_by_context: Dict[str, int] = field(default_factory=dict)  # context -> count
+    files_by_context: Dict[str, int] = Field(default_factory=dict)  # context -> count
 
     # Suppression statistics
     total_suppressions_configured: int = 0
-    suppression_by_context: Dict[str, int] = field(default_factory=dict)
+    suppression_by_context: Dict[str, int] = Field(default_factory=dict)
 
     # Performance metrics
     analysis_duration: float = 0.0  # seconds
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return {
-            "projectContext": self.project_context.to_json() if hasattr(self.project_context, 'to_json') else {},
-            "fileContexts": {
-                path: info.to_json()
-                for path, info in self.file_contexts.items()
-            },
-            "statistics": {
-                "totalFilesAnalyzed": self.total_files_analyzed,
-                "filesByContext": self.files_by_context,
-                "totalSuppressions": self.total_suppressions_configured,
-                "suppressionByContext": self.suppression_by_context,
-            },
-            "analysisDuration": round(self.analysis_duration, 3),
-        }
+        return self.model_dump(by_alias=True, mode='json')
 
     def get_context_summary(self) -> str:
         """
