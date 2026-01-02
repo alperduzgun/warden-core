@@ -208,6 +208,12 @@ class ValidationCheck(ABC):
 
         # Check if explicitly enabled/disabled in config
         check_config = frame_config.get("checks", {})
+        
+        # Handle list format (list of enabled check IDs)
+        if isinstance(check_config, list):
+            return self.id in check_config
+
+        # Handle dict format (map of check ID to config)
         if self.id in check_config:
             return check_config[self.id].get("enabled", self.enabled_by_default)
 

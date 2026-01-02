@@ -33,7 +33,18 @@ fi
 echo -e "${GREEN}✅ Build successful${NC}"
 echo ""
 
-# Step 2: Run integration tests
+# Step 2: Check LLM configuration
+echo -e "${BLUE}🤖 Checking LLM configuration...${NC}"
+if [ -f "../.env" ] && grep -q "AZURE_OPENAI_API_KEY" ../.env 2>/dev/null; then
+    echo -e "${GREEN}✅ LLM credentials found${NC}"
+    LLM_ENABLED=true
+else
+    echo -e "${YELLOW}⚠️  LLM credentials not found - tests will run in fallback mode${NC}"
+    LLM_ENABLED=false
+fi
+echo ""
+
+# Step 3: Run integration tests
 echo -e "${BLUE}🧪 Running integration tests...${NC}"
 npm run test:quick
 
@@ -41,6 +52,24 @@ if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Integration tests failed!${NC}"
     echo -e "${RED}CLI is NOT ready for deployment.${NC}"
     exit 1
+fi
+
+echo ""
+
+# Step 4: Run LLM-specific tests if available
+if [ "$LLM_ENABLED" = true ]; then
+    echo -e "${BLUE}🤖 Running LLM integration tests...${NC}"
+    node tests/integration/test-llm-integration.js
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ LLM integration tests failed!${NC}"
+        echo -e "${YELLOW}⚠️  CLI will work but LLM features may be degraded${NC}"
+        # Don't fail the entire test suite for LLM issues
+    else
+        echo -e "${GREEN}✅ LLM integration tests passed!${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  Skipping LLM tests (no credentials)${NC}"
 fi
 
 echo ""

@@ -322,7 +322,7 @@ class FrameRegistry:
                 # Expected frame file: <frame_name>/<frame_name>_frame.py
                 frame_file = frame_path / f"{frame_path.name}_frame.py"
 
-                if not frame_file.exists():
+                if not frame_file.exists() or not frame_file.is_file():
                     logger.debug(
                         "frame_file_not_found",
                         frame_name=frame_path.name,
@@ -332,6 +332,7 @@ class FrameRegistry:
 
                 try:
                     # Dynamically import the frame module
+                    logger.debug(f"Attempting to import frame: {frame_path.name}")
                     module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
                     module = importlib.import_module(module_path)
 
@@ -351,12 +352,14 @@ class FrameRegistry:
 
                     if frame_class:
                         frames.append(frame_class)
+                        logger.debug(f"Discovered built-in frame: {frame_path.name}")
                         logger.debug(
                             "builtin_frame_discovered",
                             frame_name=frame_path.name,
                             frame_class=frame_class.__name__,
                         )
                     else:
+                        logger.debug(f"No class found in frame: {frame_path.name}")
                         logger.warning(
                             "no_frame_class_found_in_module",
                             frame_name=frame_path.name,
@@ -364,12 +367,14 @@ class FrameRegistry:
                         )
 
                 except ImportError as e:
+                    logger.debug(f"Import failed for {frame_path.name}: {e}")
                     logger.warning(
                         "builtin_frame_import_failed",
                         frame_name=frame_path.name,
                         error=str(e),
                     )
                 except Exception as e:
+                    logger.debug(f"Exception discovering {frame_path.name}: {e}")
                     logger.error(
                         "builtin_frame_discovery_error",
                         frame_name=frame_path.name,
@@ -504,7 +509,13 @@ class FrameRegistry:
 
             # Scan for frame directories
             for frame_path in frames_dir.iterdir():
+                # Skip if not a directory
                 if not frame_path.is_dir():
+                    continue
+
+                # Skip hidden directories, __pycache__, and system directories
+                if frame_path.name.startswith('.') or frame_path.name == '__pycache__':
+                    logger.debug("skipping_system_directory", path=str(frame_path))
                     continue
 
                 try:
@@ -551,7 +562,13 @@ class FrameRegistry:
 
             # Scan for frame directories
             for frame_path in path.iterdir():
+                # Skip if not a directory
                 if not frame_path.is_dir():
+                    continue
+
+                # Skip hidden directories, __pycache__, and system directories
+                if frame_path.name.startswith('.') or frame_path.name == '__pycache__':
+                    logger.debug("skipping_system_directory_env", path=str(frame_path))
                     continue
 
                 try:
@@ -584,14 +601,14 @@ class FrameRegistry:
         """
         # Check for frame.py
         frame_file = frame_dir / "frame.py"
-        if not frame_file.exists():
+        if not frame_file.exists() or not frame_file.is_file():
             logger.debug("frame_py_not_found", path=str(frame_dir))
             return None
 
         # Load metadata (optional but recommended)
         metadata_file = frame_dir / "frame.yaml"
         frame_metadata = None
-        if metadata_file.exists():
+        if metadata_file.exists() and metadata_file.is_file():
             try:
                 frame_metadata = FrameMetadata.from_yaml(metadata_file)
                 logger.debug(

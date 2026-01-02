@@ -22,7 +22,10 @@ Usage:
 
 from warden.validation.frames.orphan.orphan_frame import OrphanFrame
 from warden.validation.frames.orphan.orphan_detector import (
-    OrphanDetector,
+    AbstractOrphanDetector,
+    PythonOrphanDetector,
+    TreeSitterOrphanDetector,
+    OrphanDetectorFactory,
     OrphanFinding,
 )
 from warden.validation.frames.orphan.llm_orphan_filter import (
@@ -32,7 +35,10 @@ from warden.validation.frames.orphan.llm_orphan_filter import (
 
 __all__ = [
     "OrphanFrame",
-    "OrphanDetector",
+    "AbstractOrphanDetector",
+    "PythonOrphanDetector",
+    "TreeSitterOrphanDetector",
+    "OrphanDetectorFactory",
     "OrphanFinding",
     "LLMOrphanFilter",
     "FilterDecision",

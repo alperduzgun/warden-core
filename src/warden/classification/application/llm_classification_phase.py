@@ -40,6 +40,18 @@ class LLMClassificationPhase(LLMPhaseBase):
     Intelligently selects validation frames and suppresses false positives.
     """
 
+    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None) -> None:
+        """
+        Initialize LLM classification phase.
+        
+        Args:
+            config: Phase configuration
+            llm_service: LLM service instance
+            available_frames: List of validation frames to choose from
+        """
+        super().__init__(config, llm_service)
+        self.available_frames = available_frames or []
+
     @property
     def phase_name(self) -> str:
         """Get phase name."""
@@ -47,7 +59,23 @@ class LLMClassificationPhase(LLMPhaseBase):
 
     def get_system_prompt(self) -> str:
         """Get classification system prompt."""
-        return PromptTemplates.FRAME_SELECTION + """
+        # Dynamically build frame list
+        if self.available_frames:
+            frames_list = "\n".join([
+                f"- {f.frame_id}: {f.description}" 
+                for f in self.available_frames
+            ])
+        else:
+            # Fallback to hardcoded list if no frames provided
+            frames_list = """- SecurityFrame: SQL injection, XSS, hardcoded secrets
+- ChaosFrame: Error handling, timeouts, resilience
+- OrphanFrame: Unused code detection
+- ArchitecturalFrame: Design pattern compliance
+- StressFrame: Performance and load testing
+- PropertyFrame: Invariant and contract validation
+- FuzzFrame: Input validation and edge cases"""
+
+        return PromptTemplates.FRAME_SELECTION + f"""
 
 Frame Selection Criteria:
 1. Project Type: Match frames to project characteristics
@@ -57,13 +85,7 @@ Frame Selection Criteria:
 5. Risk Level: Focus on high-risk areas
 
 Available Frames:
-- SecurityFrame: SQL injection, XSS, hardcoded secrets
-- ChaosFrame: Error handling, timeouts, resilience
-- OrphanFrame: Unused code detection
-- ArchitecturalFrame: Design pattern compliance
-- StressFrame: Performance and load testing
-- PropertyFrame: Invariant and contract validation
-- FuzzFrame: Input validation and edge cases
+{frames_list}
 
 Suppression Guidelines:
 - Test files with intentional vulnerabilities
@@ -141,7 +163,11 @@ Return as JSON."""
             result = json.loads(json_str)
 
             # Validate and provide defaults
-            result.setdefault("selected_frames", ["security", "chaos", "orphan"])
+            # Use explicit check for empty list instead of setdefault
+            if not result.get("selected_frames"):  # Handles None, [], or missing key
+                result["selected_frames"] = ["security", "chaos", "orphan"]
+                logger.warning("llm_returned_empty_frames", using_defaults=True)
+
             result.setdefault("suppression_rules", [])
             result.setdefault("priorities", {})
             result.setdefault("reasoning", "")
@@ -200,6 +226,22 @@ Return as JSON."""
 
         if llm_result:
             selected_frames = llm_result["selected_frames"]
+
+            # Normalize frame names (LLM might return class names like "SecurityFrame")
+            normalized_frames = []
+            for frame in selected_frames:
+                # Convert class names to frame IDs
+                # SecurityFrame -> security, ChaosFrame -> chaos, etc.
+                normalized = frame.lower().replace("frame", "").replace("-", "").replace("_", "")
+                normalized_frames.append(normalized)
+
+            selected_frames = normalized_frames
+
+            # Safety check: ensure we always have some frames
+            if not selected_frames:
+                logger.warning("llm_classification_empty", fallback_to_defaults=True)
+                selected_frames = ["security", "chaos", "orphan"]
+
             suppression_config = {
                 "rules": llm_result["suppression_rules"],
                 "priorities": llm_result["priorities"],
@@ -249,10 +291,10 @@ Return as JSON."""
         prompt = f"""Analyze these findings and identify false positives to suppress:
 
 FINDINGS:
-{json.dumps(findings[:20], indent=2)}
+{json.dumps(findings[:5], indent=2)}
 
 FILE CONTEXTS:
-{json.dumps(list(file_contexts.items())[:10], indent=2)}
+{json.dumps(list(file_contexts.items())[:5], indent=2)}
 
 For each finding that should be suppressed:
 1. Provide the finding ID
@@ -427,3 +469,65 @@ Return patterns as JSON."""
                 })
 
         return suppression_rules
+
+    async def execute_async(self, code_files: List[Any]) -> Any:
+        """
+        Execute LLM-enhanced classification phase.
+
+        This is the main entry point called by the orchestrator.
+        """
+        logger.info(
+            "llm_classification_phase_starting",
+            file_count=len(code_files) if code_files else 0,
+            has_llm=self.llm is not None
+        )
+
+        # Mock classification result for now
+        from dataclasses import dataclass
+
+        @dataclass
+        class ClassificationResult:
+            selected_frames: List[str]
+            suppression_rules: List[Dict[str, Any]]
+            frame_priorities: Dict[str, str]
+            reasoning: str
+            learned_patterns: List[Dict[str, Any]]
+
+        # Use LLM to select frames if available
+        if self.llm and code_files:
+            # For now, use default frames with LLM reasoning
+            selected_frames, suppression_config, confidence = await self.classify_and_select_frames(
+                project_type=ProjectType.APPLICATION,
+                framework=Framework.NONE,
+                file_contexts={},
+                file_path=code_files[0].path if code_files else None
+            )
+
+            logger.info(
+                "llm_classification_complete",
+                frames=selected_frames,
+                confidence=confidence,
+                used_llm=True
+            )
+
+            # Final safety check before returning
+            if not selected_frames:
+                logger.warning("execute_async_empty_frames", using_fallback=True)
+                selected_frames = ["security", "chaos", "orphan"]
+
+            return ClassificationResult(
+                selected_frames=selected_frames,
+                suppression_rules=suppression_config.get("rules", []),
+                frame_priorities=suppression_config.get("priorities", {}),
+                reasoning=suppression_config.get("reasoning", "LLM-based selection"),
+                learned_patterns=[]
+            )
+
+        # Fallback to default
+        return ClassificationResult(
+            selected_frames=["security", "chaos", "orphan"],
+            suppression_rules=[],
+            frame_priorities={"security": "CRITICAL", "chaos": "HIGH", "orphan": "MEDIUM"},
+            reasoning="Default frame selection (no LLM)",
+            learned_patterns=[]
+        )

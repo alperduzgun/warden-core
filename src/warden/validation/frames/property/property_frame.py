@@ -27,6 +27,8 @@ from warden.validation.domain.enums import (
     FrameApplicability,
 )
 from warden.shared.infrastructure.logging import get_logger
+from warden.llm.types import LlmRequest, AnalysisResult
+from warden.llm.providers.base import ILlmClient
 
 logger = get_logger(__name__)
 
@@ -91,6 +93,34 @@ class PropertyFrame(ValidationFrame):
         },
     }
 
+    SYSTEM_PROMPT = """You are an expert Formal Verification and Property Testing analyst. Analyze the provided code for logical errors, invariant violations, and precondition failures.
+
+Focus on:
+1. Invariant maintenance (class state consistency).
+2. Precondition/Postcondition validation (contract violations).
+3. Logical fallacies (always true/false conditions, dead code).
+4. State machine transitions (illegal states, race conditions).
+5. Mathematical properties (division by zero, overflow, precision loss).
+
+Output must be a valid JSON object with the following structure:
+{
+    "score": <0-10 integer, 10 is verified>,
+    "confidence": <0.0-1.0 float>,
+    "summary": "<brief summary of findings>",
+    "issues": [
+        {
+            "severity": "critical|high|medium|low",
+            "category": "logic",
+            "title": "<short title>",
+            "description": "<detailed description>",
+            "line": <line number>,
+            "confidence": <0.0-1.0>,
+            "evidenceQuote": "<exact code triggering issue>",
+            "codeSnippet": "<surrounding code>"
+        }
+    ]
+}"""
+
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         """
         Initialize PropertyFrame.
@@ -130,7 +160,14 @@ class PropertyFrame(ValidationFrame):
                 message=check_config["message"],
                 suggestion=check_config.get("suggestion"),
             )
+
             findings.extend(pattern_findings)
+
+        # Run LLM analysis if available
+        if hasattr(self, 'llm_service') and self.llm_service:
+            llm_findings = await self._analyze_with_llm(code_file)
+            findings.extend(llm_findings)
+
 
         # Check for assertion usage (good practice)
         assertion_findings = self._check_assertions(code_file)
@@ -294,3 +331,60 @@ class PropertyFrame(ValidationFrame):
             return "warning"  # Some high severity
         else:
             return "passed"  # Only medium/low
+
+    async def _analyze_with_llm(self, code_file: CodeFile) -> List[Finding]:
+        """
+        Analyze code using LLM for deeper property verification.
+        """
+        findings: List[Finding] = []
+        try:
+            logger.info("property_llm_analysis_started", file=code_file.path)
+            
+            client: ILlmClient = self.llm_service
+            
+            request = LlmRequest(
+                system_prompt=self.SYSTEM_PROMPT,
+                user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
+                temperature=0.1
+            )
+            
+            response = await client.send_async(request)
+            
+            if response.success and response.content:
+                # Parse JSON response
+                import json
+                
+                # Handle markdown code blocks if present
+                content = response.content
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                elif "```" in content:
+                    content = content.split("```")[0].strip()
+                
+                try:
+                    data = json.loads(content)
+                    result = AnalysisResult.from_dict(data)
+                    
+                    for issue in result.issues:
+                        findings.append(Finding(
+                            id=f"{self.frame_id}-llm-{issue.line}",
+                            severity=issue.severity,
+                            message=issue.title,
+                            location=f"{code_file.path}:{issue.line}",
+                            detail=issue.description,
+                            code=issue.evidence_quote
+                        ))
+                    
+                    logger.info("property_llm_analysis_completed", 
+                              findings=len(findings), 
+                              confidence=result.confidence)
+                              
+                except Exception as e:
+                    logger.warning("property_llm_parsing_failed", error=str(e), content_preview=content[:100])
+            else:
+                 logger.warning("property_llm_request_failed", error=response.error_message)
+
+        except Exception as e:
+            logger.error("property_llm_error", error=str(e))
+            
+        return findings

@@ -61,6 +61,9 @@ class FrameMetadata:
         if not yaml_path.exists():
             raise FileNotFoundError(f"Frame metadata not found: {yaml_path}")
 
+        if not yaml_path.is_file():
+            raise ValueError(f"Path is not a file: {yaml_path}")
+
         try:
             with open(yaml_path) as f:
                 data = yaml.safe_load(f)

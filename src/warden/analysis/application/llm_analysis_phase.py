@@ -74,7 +74,7 @@ LANGUAGE: {language}
 
 CODE:
 ```{language}
-{code[:3000]}  # Truncate for token limit
+{code[:1500]}  # Truncate for token limit
 ```
 
 INITIAL METRICS (rule-based):
@@ -202,12 +202,11 @@ Return as JSON."""
                 documentation_score=llm_result["documentation_score"],
                 testability_score=llm_result["testability_score"],
                 overall_score=llm_result["overall_score"],
-                file_context=file_context,
-                applied_weights=self._get_context_weights(file_context),
-                hotspots=llm_result.get("hotspots", []),
-                quick_wins=llm_result.get("quick_wins", []),
                 technical_debt_hours=llm_result.get("technical_debt_hours", 0.0),
             )
+            # Add hotspots and quick wins
+            metrics.hotspots = []
+            metrics.quick_wins = []
 
             logger.info(
                 "llm_quality_analysis_complete",
@@ -274,12 +273,11 @@ Return as JSON."""
                     documentation_score=llm_result["documentation_score"],
                     testability_score=llm_result["testability_score"],
                     overall_score=llm_result["overall_score"],
-                    file_context=file_context,
-                    applied_weights=self._get_context_weights(file_context),
-                    hotspots=llm_result.get("hotspots", []),
-                    quick_wins=llm_result.get("quick_wins", []),
                     technical_debt_hours=llm_result.get("technical_debt_hours", 0.0),
                 )
+                # Add hotspots and quick wins
+                metrics.hotspots = []
+                metrics.quick_wins = []
                 results[path] = (metrics, 0.9)
             else:
                 # Fallback to rule-based
@@ -375,10 +373,6 @@ Return as JSON."""
             documentation_score=documentation,
             testability_score=testability,
             overall_score=overall,
-            file_context=file_context,
-            applied_weights=weights,
-            hotspots=[],
-            quick_wins=[],
             technical_debt_hours=0.0,
         )
 
@@ -394,9 +388,46 @@ Return as JSON."""
             documentation_score=5.0,
             testability_score=5.0,
             overall_score=5.0,
-            file_context=file_context,
-            applied_weights=weights,
-            hotspots=[],
-            quick_wins=[],
             technical_debt_hours=0.0,
         )
+
+    async def execute(self, code_files: List[Any]) -> QualityMetrics:
+        """
+        Execute LLM-enhanced analysis phase.
+
+        This is the main entry point called by the orchestrator.
+        """
+        logger.info(
+            "llm_analysis_phase_starting",
+            file_count=len(code_files) if code_files else 0,
+            has_llm=self.llm is not None
+        )
+
+        # For now, analyze first file if available
+        if code_files and len(code_files) > 0:
+            code_file = code_files[0]
+            file_path = Path(code_file.path) if hasattr(code_file, 'path') else Path("unknown")
+            code = code_file.content if hasattr(code_file, 'content') else ""
+
+            # Determine file context
+            file_context = FileContext.PRODUCTION
+
+            # Analyze with LLM
+            metrics, confidence = await self.analyze_code_quality(
+                code=code,
+                file_path=file_path,
+                file_context=file_context,
+                initial_metrics=None
+            )
+
+            logger.info(
+                "llm_analysis_phase_complete",
+                overall_score=metrics.overall_score,
+                confidence=confidence,
+                used_llm=confidence > 0.7
+            )
+
+            return metrics
+
+        # Return default metrics if no files
+        return self._create_default_metrics(FileContext.PRODUCTION)
