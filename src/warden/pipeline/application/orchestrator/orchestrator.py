@@ -315,6 +315,46 @@ class PhaseOrchestrator:
                 if result:
                     frame_results.append(result)
 
+        # Helper to get severity from finding (object or dict)
+        def get_severity(f: Any) -> str:
+            val = None
+            if isinstance(f, dict):
+                val = f.get('severity')
+            else:
+                val = getattr(f, 'severity', None)
+            
+            
+            
+            return str(val).lower() if val else ''
+
+        # Calculate finding counts
+        findings = context.findings if hasattr(context, 'findings') else []
+        critical_findings = len([f for f in findings if get_severity(f) == 'critical'])
+        high_findings = len([f for f in findings if get_severity(f) == 'high'])
+        medium_findings = len([f for f in findings if get_severity(f) == 'medium'])
+        low_findings = len([f for f in findings if get_severity(f) == 'low'])
+        total_findings = len(findings)
+
+        # Calculate quality score if not present or default
+        quality_score = getattr(context, 'quality_score_before', None)
+        
+        # DEBUG: Log score calc
+        try:
+             with open('/tmp/debug_score.log', 'w') as f:
+                 f.write(f"Initial score: {quality_score}\n")
+                 f.write(f"Counts: C={critical_findings}, H={high_findings}, M={medium_findings}, L={low_findings}\n")
+        except: pass
+
+        if quality_score is None or quality_score == 0.0:
+            # Formula: 10 - penalty
+            # Penalties: Critical=2, High=1, Medium=0.5, Low=0.1
+            penalty = (critical_findings * 2.0) + (high_findings * 1.0) + (medium_findings * 0.5) + (low_findings * 0.1)
+            quality_score = max(0.0, 10.0 - penalty)
+            try:
+                with open('/tmp/debug_score.log', 'a') as f:
+                    f.write(f"Calculated score: {quality_score} (Penalty: {penalty})\n")
+            except: pass
+
         return PipelineResult(
             pipeline_id=context.pipeline_id,
             pipeline_name="Validation Pipeline",
@@ -324,14 +364,14 @@ class PhaseOrchestrator:
             frames_passed=getattr(self.pipeline, 'frames_passed', 0) if hasattr(self, 'pipeline') else 0,
             frames_failed=getattr(self.pipeline, 'frames_failed', 0) if hasattr(self, 'pipeline') else 0,
             frames_skipped=0,
-            total_findings=len(context.findings) if hasattr(context, 'findings') else 0,
-            critical_findings=len([f for f in context.findings if isinstance(f, dict) and f.get('severity') == 'critical'])
-                             if hasattr(context, 'findings') else 0,
-            high_findings=len([f for f in context.findings if isinstance(f, dict) and f.get('severity') == 'high'])
-                         if hasattr(context, 'findings') else 0,
-            medium_findings=len([f for f in context.findings if isinstance(f, dict) and f.get('severity') == 'medium'])
-                           if hasattr(context, 'findings') else 0,
-            low_findings=len([f for f in context.findings if isinstance(f, dict) and f.get('severity') == 'low'])
-                        if hasattr(context, 'findings') else 0,
+            total_findings=total_findings,
+            critical_findings=critical_findings,
+            high_findings=high_findings,
+            medium_findings=medium_findings,
+            low_findings=low_findings,
+
             frame_results=frame_results,
+            # Populate new fields
+            artifacts=getattr(context, 'artifacts', []),
+            quality_score=quality_score,
         )

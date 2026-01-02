@@ -234,6 +234,10 @@ class PipelineResult(BaseDomainModel):
     # Metadata
     executed_at: datetime = field(default_factory=datetime.utcnow)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    # New fields for Dashboard alignment
+    artifacts: List[Dict[str, Any]] = field(default_factory=list)
+    quality_score: float = 0.0
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -244,6 +248,24 @@ class PipelineResult(BaseDomainModel):
 
         # Convert frame results
         data["frameResults"] = [fr.to_json() for fr in self.frame_results]
+        
+        # Explicitly map fields to ensure camelCase (Panel expectation)
+        data["totalFindings"] = self.total_findings
+        data["criticalFindings"] = self.critical_findings
+        data["highFindings"] = self.high_findings
+        data["mediumFindings"] = self.medium_findings
+        data["lowFindings"] = self.low_findings
+        
+        data["qualityScore"] = self.quality_score
+        data["artifacts"] = self.artifacts
+
+        # IMPORTANT: Add snake_case keys for CLI compatibility (types.ts expects snake_case)
+        data["total_findings"] = self.total_findings
+        data["critical_findings"] = self.critical_findings
+        data["high_findings"] = self.high_findings
+        data["medium_findings"] = self.medium_findings
+        data["low_findings"] = self.low_findings
+        data["quality_score"] = self.quality_score
 
         return data
 
