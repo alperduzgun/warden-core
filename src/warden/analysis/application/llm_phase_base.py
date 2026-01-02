@@ -33,7 +33,7 @@ class LLMPhaseConfig:
     batch_size: int = 10
     cache_enabled: bool = True
     max_retries: int = 3
-    timeout: int = 30
+    timeout: int = 120  # Increased from 30s to 120s for LLM API calls
     fallback_to_rules: bool = True
     temperature: float = 0.3  # Lower for more deterministic outputs
     max_tokens: int = 800  # Reduced to stay within context limits
@@ -187,10 +187,21 @@ class LLMPhaseBase(ABC):
                 phase=self.phase_name,
                 context_size=len(str(context)),
                 has_pipeline_context=pipeline_context is not None,
+                timeout=self.config.timeout,
+                max_retries=self.config.max_retries,
             )
 
             # Call LLM with retry logic
+            llm_start_time = time.time()
             response = await self._call_llm_with_retry(system_prompt, user_prompt)
+            llm_duration = time.time() - llm_start_time
+
+            logger.info(
+                "llm_call_completed",
+                phase=self.phase_name,
+                duration=llm_duration,
+                success=response is not None,
+            )
 
             # Record interaction in pipeline context
             if response and pipeline_context:

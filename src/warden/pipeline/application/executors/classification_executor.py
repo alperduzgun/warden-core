@@ -24,9 +24,11 @@ class ClassificationExecutor(BasePhaseExecutor):
         project_root: Path = None,
         llm_service: Any = None,
         frames: List[ValidationFrame] = None,
+        available_frames: List[ValidationFrame] = None,
     ):
         super().__init__(config, progress_callback, project_root, llm_service)
         self.frames = frames or []
+        self.available_frames = available_frames or self.frames
 
     async def execute_async(
         self,
@@ -57,15 +59,15 @@ class ClassificationExecutor(BasePhaseExecutor):
                 phase = ClassificationPhase(
                     config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
                     llm_service=self.llm_service,
-                    available_frames=self.frames
+                    available_frames=self.available_frames
                 )
-                logger.info("using_llm_classification_phase", available_frames=len(self.frames))
+                logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:
                 from warden.classification.application.classification_phase import ClassificationPhase
                 phase = ClassificationPhase(
                     config=getattr(self.config, 'classification_config', {}),
                     context=phase_context,
-                    available_frames=self.frames
+                    available_frames=self.available_frames
                 )
 
             result = await phase.execute_async(code_files)

@@ -238,11 +238,11 @@ export class IPCClient {
           logger.error('ipc_stream_timeout', {
             command,
             request_id: requestId,
-            timeout_ms: 60000,
+            timeout_ms: 180000,
           });
-          reject(new Error(`Stream timeout after 60s for command: ${command}`));
+          reject(new Error(`Stream timeout after 180s for command: ${command}`));
         }
-      }, 60000); // 60s for stream
+      }, 180000); // 180s for stream (3 minutes for LLM calls)
 
       const onStreamData = (data: Buffer) => {
         buffer += data.toString();

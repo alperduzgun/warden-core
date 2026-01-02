@@ -28,12 +28,14 @@ const cli = meow(
 
   Options
     --frames, -f        Specific validation frames to run (comma-separated)
+    --verbose           Enable verbose logging for debugging
     --version, -v       Show version number
     --help, -h          Show this help message
 
   Examples
     $ warden scan src/
     $ warden scan file.py
+    $ warden scan file.py --verbose
     $ warden analyze src/app.py
     $ warden analyze main.py --frames security,orphan
     $ warden status
@@ -45,6 +47,10 @@ const cli = meow(
       frames: {
         type: 'string',
         shortFlag: 'f',
+      },
+      verbose: {
+        type: 'boolean',
+        default: false,
       },
     },
   },
@@ -75,7 +81,8 @@ async function main() {
         process.exit(1);
       }
       const frames = cli.flags.frames?.split(',');
-      render(<Scan path={path} frames={frames} />);
+      const verbose = cli.flags.verbose;
+      render(<Scan path={path} frames={frames} verbose={verbose} />);
       break;
     }
 

@@ -25,13 +25,13 @@ frames:
 - orphan
 - architectural
 - stress
-- env-security      # Custom frame (auto-discovered from ~/.warden/frames/)
-- demo-security     # Demo custom frame
+- env-security
+- demo-security
 - property
 - fuzz
 frames_config:
   orphan:
-    enabled: true    # Enabled olarak değiştirdim
+    enabled: true
     use_llm_filter: true
     ignore_test_files: true
     ignore_private: false
@@ -41,7 +41,7 @@ frames_config:
   security:
     enabled: true
     priority: critical
-    is_blocker: false  # Blocker'ı false yaptım ki diğer frame'ler de çalışsın
+    is_blocker: false
     checks:
     - sql_injection
     - xss
@@ -57,7 +57,7 @@ frames_config:
     - circuit_breaker
     - error_recovery
   architectural:
-    enabled: true    # Enabled olarak değiştirdim
+    enabled: true
     priority: low
   stress:
     enabled: true
@@ -66,13 +66,8 @@ frames_config:
     - async_performance
   env-security:
     enabled: true
-    # Config auto-generated from frame.yaml!
-    # Override only what you need:
-    # check_hardcoded_credentials: false
-    # severity_level: high
   demo-security:
     enabled: true
-    # Demo frame with auto-config
     check_hardcoded_passwords: true
     severity_level: high
 ci:
@@ -84,20 +79,20 @@ ci:
   - format: json
     path: ./warden-report.json
 settings:
-  fail_fast: false  # Tüm frame'lerin çalışması için false yaptım
+  fail_fast: false
   timeout: 300
   frame_timeout: 120
-  enable_pre_analysis: true  # Enable PRE-ANALYSIS phase for context detection
-  enable_analysis: true  # Enable ANALYSIS phase for quality metrics
-  enable_classification: true  # ALWAYS ENABLED - Classification phase for intelligent frame selection
-  enable_validation: true  # Enable VALIDATION phase (frames)
-  enable_fortification: true  # Enable FORTIFICATION phase for security fixes
-  enable_cleaning: true  # Enable CLEANING phase for code improvements
+  enable_pre_analysis: true
+  enable_analysis: true
+  enable_classification: true
+  enable_validation: true
+  enable_fortification: true
+  enable_cleaning: true
   pre_analysis_config:
-    use_llm: true  # ✅ Enable LLM for better analysis
-    llm_threshold: 0.7  # Use LLM when confidence < threshold
-    batch_size: 10  # Files to analyze per LLM call
-    cache_enabled: true  # Cache LLM responses for similar patterns
+    use_llm: true
+    llm_threshold: 0.7
+    batch_size: 10
+    cache_enabled: true
 advanced:
   max_workers: 4
   frame_timeout: 300

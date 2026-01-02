@@ -47,3 +47,12 @@ mem
 
 # Reference repositories
 temp/
+
+# Warden runtime files
+.warden/backend.pid
+.warden/memory/
+
+# Python build artifacts
+*.egg-info/
+build/
+dist/
