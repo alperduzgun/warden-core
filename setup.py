@@ -48,6 +48,11 @@ setup(
         "tree-sitter-go>=0.21.0",
         "pydantic>=2.5.0",
         "psutil>=5.9.0",
+        "structlog>=24.1.0",
+        "grpcio>=1.59.0",
+        "grpcio-tools>=1.59.0", 
+        "pydantic-settings>=2.0.0",
+        "aiofiles>=23.0.0",
     ],
     extras_require={
         "dev": [
