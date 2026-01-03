@@ -58,7 +58,7 @@ def _check_node_cli_installed() -> bool:
 @app.command()
 def version():
     """Show Warden version info."""
-    from warden.config.config_manager import ConfigManager
+    # from warden.config.config_manager import ConfigManager
     # Try to get version from package metadata if possible, else hardcode for now
     version = "0.1.0" 
     

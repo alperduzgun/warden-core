@@ -1,0 +1,28 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.venv
+venv
+env
+build
+dist
+*.egg-info
+.coverage
+.pytest_cache
+
+# Node
+node_modules
+npm-debug.log
+
+# Warden
+.warden
+.mem0
+temp
+examples
+tests
