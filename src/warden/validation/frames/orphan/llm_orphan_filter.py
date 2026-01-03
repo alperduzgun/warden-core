@@ -32,6 +32,7 @@ import json
 import time
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from pathlib import Path
 
 from warden.llm.factory import create_client
 from warden.llm.config import LlmConfiguration
@@ -137,13 +138,69 @@ class LLMOrphanFilter:
             
         self.batch_size = batch_size
         self.max_retries = max_retries
+        
+        # Pattern decision cache: stores LLM decisions by pattern key
+        # Key: (orphan_type, reason_pattern) -> Value: (is_true_orphan, reasoning)
+        # When LLM decides a pattern is false positive, we cache it to avoid redundant calls
+        self._pattern_cache: Dict[str, tuple[bool, str]] = {}
+        
+        # Persistence
+        self._cache_file = Path(".warden/memory/orphan_patterns.json")
+        self._load_cache()
 
         logger.info(
             "llm_orphan_filter_initialized",
             batch_size=batch_size,
             max_retries=max_retries,
-            injected_service=llm_service is not None
+            injected_service=llm_service is not None,
+            cached_patterns=len(self._pattern_cache)
         )
+
+    def _load_cache(self):
+        """Load pattern cache from disk."""
+        try:
+            if self._cache_file.exists():
+                data = json.loads(self._cache_file.read_text())
+                self._pattern_cache = data
+        except Exception as e:
+            logger.warning("failed_to_load_orphan_cache", error=str(e))
+
+    def _save_cache(self):
+        """Save pattern cache to disk."""
+        try:
+            self._cache_file.parent.mkdir(parents=True, exist_ok=True)
+            self._cache_file.write_text(json.dumps(self._pattern_cache, indent=2))
+        except Exception as e:
+            logger.warning("failed_to_save_orphan_cache", error=str(e))
+
+    def _get_pattern_key(self, finding: OrphanFinding, file_path: str) -> str:
+        """Generate a cache key for a finding pattern (project-specific)."""
+        # Pattern key includes type, name, and relative file path to be safe
+        # (caching per-instance rather than per-generic-pattern)
+        return f"{finding.orphan_type}:{finding.name}:{file_path}"
+
+    def _check_pattern_cache(self, finding: OrphanFinding, file_path: str) -> Optional[tuple[bool, str]]:
+        """Check if we have a cached decision for this finding pattern."""
+        key = self._get_pattern_key(finding, file_path)
+        if key in self._pattern_cache:
+            # Handle list vs tuple (json loads as list)
+            val = self._pattern_cache[key]
+            return (val[0], val[1])
+        return None
+
+    def _cache_pattern_decision(self, finding: OrphanFinding, file_path: str, is_true_orphan: bool, reasoning: str):
+        """Cache an LLM decision for a finding pattern."""
+        key = self._get_pattern_key(finding, file_path)
+        # Only cache false positives (they're the patterns we want to skip)
+        if not is_true_orphan:
+            self._pattern_cache[key] = (is_true_orphan, reasoning)
+            self._save_cache()  # Persist immediately
+            logger.debug(
+                "pattern_cached",
+                key=key,
+                is_true_orphan=is_true_orphan,
+                cache_size=len(self._pattern_cache)
+            )
 
     async def filter_findings_batch(
         self,
@@ -177,42 +234,91 @@ class LLMOrphanFilter:
             total_findings=total_findings
         )
         
-        # 2. Create batches (simple count-based for now, can be token-based later)
-        # We use a larger batch size for bulk processing if possible, or keep conservative
-        batch_size = self.batch_size  # Use configured safe size
-        
+        # 2. Check cache & Create batches
+        batch_size = self.batch_size
         batches = []
-        for i in range(0, len(all_flattened), batch_size):
-            batches.append(all_flattened[i:i + batch_size])
+        current_batch = []
+        
+        # Track pre-decided findings (from cache)
+        # f_path -> list of findings that are CONFIRMED true orphans by cache
+        cached_results: Dict[str, List[OrphanFinding]] = {path: [] for path in findings_map.keys()}
+        
+        skipped_count = 0
+        cached_count = 0
+
+        for item in all_flattened:
+            f_path, finding = item
             
-        logger.info("created_smart_batches", count=len(batches), approx_size=batch_size)
+            # Check pattern cache first
+            cached_decision = self._check_pattern_cache(finding, f_path)
+            if cached_decision:
+                cached_count += 1
+                is_true_orphan, reasoning = cached_decision
+                if is_true_orphan:
+                    # It's a true orphan according to cache, keep it
+                    # (But usually we only cache false positives to skip them. 
+                    # If we cache true orphans too, we add them here.)
+                    cached_results[f_path].append(finding)
+                else:
+                    # It's a false positive (skipped), don't add to results
+                    skipped_count += 1
+                    logger.debug("skipping_known_false_positive", pattern=self._get_pattern_key(finding, f_path))
+                continue
+
+            # Not in cache, needs LLM verification
+            current_batch.append(item)
+            if len(current_batch) >= batch_size:
+                batches.append(current_batch)
+                current_batch = []
+        
+        # Add remaining items
+        if current_batch:
+            batches.append(current_batch)
+            
+        logger.info(
+            "smart_filter_optimization", 
+            total_items=len(all_flattened),
+            cached_hits=cached_count,
+            skipped_false_positives=skipped_count,
+            items_to_process=sum(len(b) for b in batches)
+        )
         
         # 3. Process batches
-        results_map: Dict[str, List[OrphanFinding]] = {path: [] for path in findings_map.keys()}
+        results_map: Dict[str, List[OrphanFinding]] = cached_results
         
         for i, batch in enumerate(batches):
             logger.info("processing_smart_batch", index=i+1, total=len(batches), items=len(batch))
             
-            # Group by file execution context for the prompt
-            # We need to provide code snippets. Since we can't provide 20 full files,
-            # we rely on the snippet in finding + maybe small context if needed.
-            # But wait, logic in _filter_batch uses 'code_file.content'.
-            # For multi-file batch, we can't send ALL filed contents.
-            # We must rely on 'code' field in OrphanFinding or snippet.
-            # Let's adjust _filter_batch to be context-aware or use snippets.
-            
             try:
-                # We need a new internal method that handles multi-file prompt
+                # Process via LLM
                 batch_results = await self._filter_multi_file_batch(
                     batch, 
                     code_files,
                     project_context
                 )
                 
-                # Redistribute successful results
+                # Redistribute results & update cache
+                # Note: filter_multi_file_batch returns only TRUE orphans
+                # We need to know which ones were dropped to cache them as false positives.
+                
+                # Create a set of kept finding IDs (or objects)
+                kept_findings = set()
                 for f_path, finding in batch_results:
                     results_map[f_path].append(finding)
-                    
+                    kept_findings.add(id(finding))
+
+                # Identify false positives (items in batch but not in results)
+                for f_path, finding in batch:
+                    if id(finding) not in kept_findings:
+                        # This finding was filtered out -> FALSE POSITIVE
+                        # Cache this pattern so we skip it next time
+                        self._cache_pattern_decision(
+                            finding, 
+                            f_path,
+                            is_true_orphan=False, 
+                            reasoning="Marked as false positive by LLM batch filter"
+                        )
+
             except Exception as e:
                 logger.error("smart_batch_failed", batch=i, error=str(e))
                 # Fallback: keep all as potential orphans (conservative)
@@ -259,39 +365,62 @@ class LLMOrphanFilter:
         project_context: Optional[Any] = None,
     ) -> str:
         # Build project context string
-        context_str = "Type: Generic Project\n"
+        context_str = "Type: Unknown Generic Project"
+        project_rules = "- Interface/Abstractions are NOT orphans\n- Framework hooks/decorators are NOT orphans"
+        
         if project_context:
-            # Extract useful details from ProjectContext object
-            # Note: We rely on standard attributes of ProjectContext
             try:
-                root_name = getattr(project_context, 'root_path', 'unknown')
-                if hasattr(root_name, 'name'): root_name = root_name.name
+                # Robust extraction from Pydantic model or similar object
+                name = getattr(project_context, 'project_name', 'Unknown')
+                p_type = getattr(project_context, 'project_type', None)
+                framework = getattr(project_context, 'framework', None)
+                arch = getattr(project_context, 'architecture', None)
+                purpose = getattr(project_context, 'purpose', 'No specific purpose defined')
                 
-                # Metadata might hold useful keys
-                meta = getattr(project_context, 'metadata', {})
-                framework = "Unknown"
-                
-                # If it's a Clean Architecture?
-                is_clean = getattr(project_context, 'has_clean_architecture_pattern', lambda: False)()
-                is_cli = getattr(project_context, 'is_cli_tool', lambda: False)()
-                
-                arch_type = "Standard"
-                if is_clean: arch_type = "Clean Architecture (Layers: api, application, domain, infrastructure)"
-                if is_cli: arch_type = "CLI Tool"
+                # Convert Enums to string if needed
+                p_type_str = p_type.value if hasattr(p_type, 'value') else str(p_type)
+                fw_str = framework.value if hasattr(framework, 'value') else str(framework)
+                arch_str = arch.value if hasattr(arch, 'value') else str(arch)
                 
                 context_str = (
-                    f"Project: {root_name}\n"
-                    f"Architecture: {arch_type}\n"
-                    f"Stats: {len(getattr(project_context, 'modules', []))} modules detected\n"
-                    f"Framework Pattern: {meta.get('framework', 'Auto-detect')}\n"
+                    f"Project: {name}\n"
+                    f"Type: {p_type_str.upper()}\n"
+                    f"Framework: {fw_str}\n"
+                    f"Architecture: {arch_str}\n"
+                    f"Purpose: {purpose}\n"
                 )
-            except Exception:
-                context_str = "Context: Partial project information available"
+                
+                # Dynamic Rule Generation Phase
+                rules = []
+                
+                # 1. Project Type Rules
+                if "library" in p_type_str.lower() or "monorepo" in p_type_str.lower():
+                    rules.append("LIBRARY/SDK DETECTED: Assume public classes/functions are EXTERNAL APIs (Not orphans).")
+                elif "cli" in p_type_str.lower():
+                    rules.append("CLI TOOL STRICT MODE: The ONLY public entry points are functions decorated as commands (e.g. @click.command).")
+                    rules.append("ANY other public function that is unused by commands is DEAD CODE (TRUE ORPHAN). Do not assume external usage.")
+                elif "microservice" in p_type_str.lower() or "api" in p_type_str.lower():
+                    rules.append("WEB SERVICE DETECTED: Controller endpoints / Route handlers are entry points.")
+                    rules.append("Service layer methods not called by controllers or other services ARE orphans.")
+                else:
+                    rules.append("APPLICATION DETECTED: explicit entry points (main) required.")
+
+                # 2. Framework Rules
+                if "django" in fw_str.lower() or "flask" in fw_str.lower() or "fastapi" in fw_str.lower():
+                    rules.append(f"{fw_str.upper()} DETECTED: Views/Models/Serializers are often implicitly used.")
+                
+                # 3. Architecture Rules
+                if "clean" in arch_str.lower():
+                    rules.append("CLEAN ARCHITECTURE: Domain entities and use-cases might be defined but awaiting implementation.")
+                    
+                project_rules = "\n".join([f"- {r}" for r in rules])
+                
+            except Exception as e:
+                logger.warning("context_extraction_failed", error=str(e))
+                context_str = f"Context Error: {str(e)}"
 
         findings_text = ""
         for idx, (f_path, finding) in enumerate(batch):
-            # We use snippet from finding, plus maybe we can peek at file if needed
-            # For high efficiency, rely on snippet.
             findings_text += (
                 f"**Finding {idx}:**\n"
                 f"  - File: {f_path}\n"
@@ -306,17 +435,21 @@ class LLMOrphanFilter:
         # PROJECT CONTEXT
         {context_str}
         
-        TIMEFRAME: Analyze these {len(batch)} potential orphan code findings across multiple files.
+        # ANALYSIS RULES (Based on Project Type)
+        {project_rules}
+        
+        TIMEFRAME: Analyze these {len(batch)} potential orphan code findings.
         
         # FINDINGS
         {findings_text}
         
         # INSTRUCTIONS
         For each finding, determine if it is a TRUE ORPHAN or FALSE POSITIVE.
-        Consider common false positives:
-        - Interfaces/Abstractions
-        - Framework entries (decorators, lifecycle hooks)
-        - Public API exports
+        
+        Reflexion:
+        1. Review the PROJECT CONTEXT and ANALYSIS RULES above.
+        2. Check if the finding matches the "False Positive" criteria for this specific project type.
+        3. If it violates the strict rules (e.g. unused public function in a CLI), mark as TRUE ORPHAN (is_true_orphan=true).
         
         Return JSON with exactly {len(batch)} decisions decision objects.
         

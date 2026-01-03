@@ -51,6 +51,7 @@ from warden.validation.frames.orphan import OrphanFrame
 from warden.validation.frames.fuzz import FuzzFrame
 from warden.validation.frames.property import PropertyFrame
 from warden.validation.frames.stress import StressFrame
+from warden.validation.frames.config import ConfigValidationFrame
 
 __all__ = [
     "SecurityFrame",
@@ -62,4 +63,5 @@ __all__ = [
     "FuzzFrame",
     "PropertyFrame",
     "StressFrame",
+    "ConfigValidationFrame",
 ]

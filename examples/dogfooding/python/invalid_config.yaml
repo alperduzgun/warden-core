@@ -1,0 +1,23 @@
+# Invalid Config Example for Testing ConfigValidationFrame
+#
+# This file simulates a config.yaml with INVALID frame IDs
+# to demonstrate that Warden can detect configuration mistakes.
+
+project:
+  name: test-project
+
+frames:
+- security          # ✓ Valid
+- chaos             # ✓ Valid 
+- orphan            # ✓ Valid
+- architectural     # ❌ INVALID - should be 'architecturalconsistency'
+- env-security      # ❌ INVALID - should be 'environmentsecurity'
+- demo-security     # ❌ INVALID - should be 'demosecurity'
+- typo-frame        # ❌ INVALID - does not exist
+- fuz               # ❌ INVALID - typo, should be 'fuzz'
+
+frames_config:
+  securityy:        # ❌ INVALID - typo
+    enabled: true
+  architectural:    # ❌ INVALID - should be 'architecturalconsistency'
+    enabled: true
