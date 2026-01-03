@@ -3,23 +3,23 @@
  * Qwen Code / Claude Code style terminal interface
  */
 
-import React, {useState, useEffect} from 'react';
-import {Box, Text} from 'ink';
+import React, { useState, useEffect } from 'react';
+import { Box, Text } from 'ink';
 import Gradient from 'ink-gradient';
 import path from 'path';
-import {ChatInterfaceEnhanced} from '../components/ChatInterfaceEnhanced.js';
-import {FileBrowser} from '../components/FileBrowser.js';
-import {Frames} from './frames.js';
-import {Rules} from './rules.js';
-import {Scan} from './scan.js';
-import {ipcClient} from '../lib/ipc-client.js';
-import {backendManager} from '../utils/backendManager.js';
-import {sessionManager, type Session} from '../utils/sessionManager.js';
-import {llmClient} from '../lib/llm-client.js';
-import {configLoader, type WardenConfig} from '../utils/configLoader.js';
-import {runPreFlightChecks} from '../lib/pre-flight.js';
-import type {CommandResult} from '../lib/types.js';
-import {logger} from '../utils/logger.js';
+import { ChatInterfaceEnhanced } from '../components/ChatInterfaceEnhanced.js';
+import { FileBrowser } from '../components/FileBrowser.js';
+import { Frames } from './frames.js';
+import { Rules } from './rules.js';
+import { Scan } from './scan.js';
+import { ipcClient } from '../lib/ipc-client.js';
+import { backendManager } from '../utils/backendManager.js';
+import { sessionManager, type Session } from '../utils/sessionManager.js';
+import { llmClient } from '../lib/llm-client.js';
+import { configLoader, type WardenConfig } from '../utils/configLoader.js';
+import { runPreFlightChecks } from '../lib/pre-flight.js';
+import type { CommandResult } from '../lib/types.js';
+import { logger } from '../utils/logger.js';
 
 export function Chat() {
   const [backendConnected, setBackendConnected] = useState(false);
@@ -145,7 +145,7 @@ export function Chat() {
         const validatedScanPath = validatePath(args[0] || '.');
         setScanPath(validatedScanPath);
         setShowScan(true);
-        return {success: true} as CommandResult;
+        return { success: true } as CommandResult;
 
       case 'start':
       case 'analyze':
@@ -157,20 +157,20 @@ export function Chat() {
         }
         // Validate path to prevent path traversal
         const validatedAnalyzePath = validatePath(args[0] || '');
-        const analyzeResult = await ipcClient.send('analyze', {filePath: validatedAnalyzePath});
+        const analyzeResult = await ipcClient.send('analyze', { filePath: validatedAnalyzePath });
         return analyzeResult as CommandResult;
 
       case 'frames':
         setShowFrames(!showFrames);
-        return {success: true};
+        return { success: true };
 
       case 'rules':
         setShowRules(!showRules);
-        return {success: true};
+        return { success: true };
 
       case 'browse':
         setShowFileBrowser(!showFileBrowser);
-        return {success: true};
+        return { success: true };
 
       default:
         throw new Error(`Unknown command: ${cmd}`);
@@ -215,10 +215,10 @@ export function Chat() {
           <Text color="red">❌ Startup Failed</Text>
           <Text>{startupError}</Text>
           <Text dimColor>
-            Make sure Python backend is installed and start_ipc_server.py exists.
+            Make sure Python backend is installed and warden.services.ipc_entry is running.
           </Text>
         </Box>
-      </Box>
+      </Box >
     );
   }
 
