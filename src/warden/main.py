@@ -658,7 +658,7 @@ jobs:
           warden scan . --format sarif --output warden-report.sarif
 
       - name: Upload SARIF to GitHub
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: warden-report.sarif
