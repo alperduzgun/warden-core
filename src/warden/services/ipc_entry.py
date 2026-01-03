@@ -1,5 +1,9 @@
-#!/usr/bin/env python3
-"""Start Warden IPC server for CLI bridge communication."""
+"""
+Warden IPC Server Entry Point
+============================
+
+Launched via: python -m warden.services.ipc_entry
+"""
 
 import asyncio
 import logging
@@ -8,11 +12,13 @@ import os
 import signal
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+# Absolute imports from within the package
+from warden.cli_bridge.server import IPCServer
+from warden.cli_bridge.bridge import WardenBridge
 
-from src.warden.cli_bridge.server import IPCServer
+# Project root calculation:
+# src/warden/services/ipc_entry.py -> src/warden/services -> src/warden -> src -> ROOT
+project_root = Path(__file__).parents[3]
 
 # Configure logging
 logging.basicConfig(
@@ -35,7 +41,7 @@ def check_single_instance():
             # Check if process is still running
             os.kill(pid, 0)  # Signal 0 just checks if process exists
             logger.warning(f"⚠️  Backend already running (PID: {pid})")
-            logger.warning("   Use 'pkill -f start_ipc_server.py' to kill it first")
+            logger.warning("   Use 'pkill -f warden.services.ipc_entry' to kill it first")
             sys.exit(1)
         except (ProcessLookupError, ValueError):
             # Process doesn't exist, remove stale PID file
@@ -70,7 +76,7 @@ def signal_handler(signum, frame):
 
 async def main():
     """Start the IPC server."""
-    logger.info("Starting Warden IPC Server...")
+    logger.info("Starting Warden IPC Server (Service Mode)...")
 
     # Check single instance
     check_single_instance()
@@ -78,9 +84,6 @@ async def main():
     # Register signal handlers
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-
-    # Create bridge with project root (so it can find .warden/config.yaml)
-    from src.warden.cli_bridge.bridge import WardenBridge
 
     logger.info(f"Project root: {project_root}")
     bridge = WardenBridge(project_root=project_root)

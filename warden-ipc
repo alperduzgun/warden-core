@@ -26,7 +26,9 @@ case "$1" in
 
     # Start server
     echo "🚀 Starting Warden IPC Server..."
-    python3 start_ipc_server.py &
+    # Ensure src is in PYTHONPATH if running from source
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+    python3 -m warden.services.ipc_entry &
     SERVER_PID=$!
     echo $SERVER_PID > "$PID_FILE"
 
@@ -59,8 +61,8 @@ case "$1" in
         rm -f "$SOCKET_PATH"
       fi
     else
-      # Try pkill as fallback
-      if pkill -f "start_ipc_server.py"; then
+      # Try pkill as fallback (updated for module name)
+      if pkill -f "warden.services.ipc_entry"; then
         echo "✅ Killed orphaned server processes"
         rm -f "$SOCKET_PATH"
       else

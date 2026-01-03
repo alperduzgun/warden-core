@@ -1,12 +1,8 @@
-#!/usr/bin/env python3
 """
-Start Warden gRPC Server
+Warden gRPC Server Service
+=========================
 
-Usage:
-    python start_grpc_server.py [--port 50051]
-
-This server enables C# Panel and other clients to communicate
-with the Warden Python backend via gRPC.
+Launched via: python -m warden.services.grpc_entry
 """
 
 import asyncio
@@ -15,9 +11,7 @@ import signal
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
+# Absolute imports
 from warden.grpc.server import GrpcServer
 
 
@@ -25,7 +19,7 @@ async def main(port: int = 50051):
     """Main entry point."""
     print(f"""
 ================================================================================
-                         Warden gRPC Server
+                         Warden gRPC Server (Service Mode)
 ================================================================================
 
    Port:      {port}
@@ -35,7 +29,10 @@ async def main(port: int = 50051):
 ================================================================================
     """)
 
-    server = GrpcServer(port=port, project_root=Path.cwd())
+    # Project root calculation (up 3 levels from services/grpc_entry.py)
+    project_root = Path(__file__).parents[3]
+    
+    server = GrpcServer(port=port, project_root=project_root)
 
     # Handle shutdown signals
     loop = asyncio.get_running_loop()

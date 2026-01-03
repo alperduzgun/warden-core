@@ -39,15 +39,11 @@ fi
 echo "🚀 Starting backend IPC server..."
 cd "$SCRIPT_DIR"
 
-# Try to start backend
-if [ -f "start_ipc_server.py" ]; then
-    python3 start_ipc_server.py > "$BACKEND_LOG" 2>&1 &
-    BACKEND_PID=$!
-else
-    # Fallback to module
-    python3 -m warden.cli_bridge.server --transport socket --socket-path "$SOCKET_PATH" > "$BACKEND_LOG" 2>&1 &
-    BACKEND_PID=$!
-fi
+# Ensure src is in PYTHONPATH if running from source
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+
+python3 -m warden.services.ipc_entry > "$BACKEND_LOG" 2>&1 &
+BACKEND_PID=$!
 
 # Wait for socket to be created (max 5 seconds)
 echo "⏳ Waiting for backend to start..."

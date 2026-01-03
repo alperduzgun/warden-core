@@ -62,4 +62,5 @@ if [[ -f ".venv/bin/activate" ]]; then
 fi
 
 # Start server
-exec python start_grpc_server.py --port "$PORT"
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+exec python -m warden.services.grpc_entry --port "$PORT"
