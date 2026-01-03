@@ -1,5 +1,6 @@
 # Claude Code & Memory files
 .claude/
+.mem0/
 *.db
 *.sqlite
 
