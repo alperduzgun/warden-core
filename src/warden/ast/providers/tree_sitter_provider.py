@@ -25,17 +25,22 @@ from warden.ast.domain.enums import (
     ParseStatus,
 )
 
+import structlog
+logger = structlog.get_logger(__name__)
+
 # Try to import tree-sitter (optional dependency)
 try:
     import tree_sitter
-    import tree_sitter_javascript
-    import tree_sitter_typescript
-    import tree_sitter_go
-    # import tree_sitter_python # We use native ast for python usually
-
     TREE_SITTER_AVAILABLE = True
 except ImportError:
     TREE_SITTER_AVAILABLE = False
+
+# Language grammars are loaded lazily in _initialize_languages
+tree_sitter_javascript = None
+tree_sitter_typescript = None
+tree_sitter_go = None
+tree_sitter_java = None
+tree_sitter_c_sharp = None
 
 
 class TreeSitterProvider(IASTProvider):
@@ -96,23 +101,51 @@ class TreeSitterProvider(IASTProvider):
         if not self._available:
             return
 
-        print("DEBUG: Initializing tree-sitter languages...")
+        logger.debug("initializing_tree_sitter_languages")
         
-        # Mapping of language to its initialization function
+        # Dynamic import functions for each language
+        def load_javascript():
+            import tree_sitter_javascript
+            return tree_sitter.Language(tree_sitter_javascript.language())
+        
+        def load_typescript():
+            import tree_sitter_typescript
+            return tree_sitter.Language(tree_sitter_typescript.language_typescript())
+        
+        def load_tsx():
+            import tree_sitter_typescript
+            return tree_sitter.Language(tree_sitter_typescript.language_tsx())
+        
+        def load_go():
+            import tree_sitter_go
+            return tree_sitter.Language(tree_sitter_go.language())
+        
+        def load_java():
+            import tree_sitter_java
+            return tree_sitter.Language(tree_sitter_java.language())
+        
+        def load_csharp():
+            import tree_sitter_c_sharp
+            return tree_sitter.Language(tree_sitter_c_sharp.language())
+        
         lang_init = {
-            CodeLanguage.JAVASCRIPT: lambda: tree_sitter.Language(tree_sitter_javascript.language()),
-            CodeLanguage.TYPESCRIPT: lambda: tree_sitter.Language(tree_sitter_typescript.language_typescript()),
-            CodeLanguage.TSX: lambda: tree_sitter.Language(tree_sitter_typescript.language_tsx()),
-            CodeLanguage.GO: lambda: tree_sitter.Language(tree_sitter_go.language()),
+            CodeLanguage.JAVASCRIPT: load_javascript,
+            CodeLanguage.TYPESCRIPT: load_typescript,
+            CodeLanguage.TSX: load_tsx,
+            CodeLanguage.GO: load_go,
+            CodeLanguage.JAVA: load_java,
+            CodeLanguage.CSHARP: load_csharp,
         }
 
         for lang, init_fn in lang_init.items():
             try:
                 self._language_objs[lang] = init_fn()
+            except ImportError as e:
+                logger.debug("grammar_not_installed", language=lang.value)
             except Exception as e:
-                print(f"DEBUG: Failed to load tree-sitter grammar for {lang.value}: {e}")
+                logger.warning("failed_to_load_grammar", language=lang.value, error=str(e))
 
-        print(f"DEBUG: Successfully loaded languages: {list(self._language_objs.keys())}")
+        logger.info("tree_sitter_languages_loaded", languages=[l.value for l in self._language_objs.keys()])
 
     @property
     def metadata(self) -> ASTProviderMetadata:
@@ -177,7 +210,7 @@ class TreeSitterProvider(IASTProvider):
         try:
             language_obj = self._language_objs.get(language)
             if not language_obj:
-                 print(f"DEBUG: No grammar loaded for {language}")
+                 logger.debug("no_grammar_loaded", language=language.value)
                  return ParseResult(
                     status=ParseStatus.FAILED,
                     language=language,
@@ -213,9 +246,7 @@ class TreeSitterProvider(IASTProvider):
             )
 
         except Exception as e:
-            print(f"DEBUG: Tree-sitter parse failed for {file_path}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("tree_sitter_parse_failed", file=file_path, error=str(e))
             parse_time_ms = (time.time() - start_time) * 1000
 
             return ParseResult(
@@ -337,6 +368,17 @@ class TreeSitterProvider(IASTProvider):
             "call_expression": ASTNodeType.CALL_EXPRESSION,
             "member_expression": ASTNodeType.MEMBER_ACCESS,
             "identifier": ASTNodeType.IDENTIFIER,
+            
+            # C# Specifics
+            "using_directive": ASTNodeType.IMPORT,
+            "namespace_declaration": ASTNodeType.MODULE,
+            "class_declaration": ASTNodeType.CLASS,
+            "method_declaration": ASTNodeType.METHOD,
+            "property_declaration": ASTNodeType.PROPERTY,
+            
+            # Java Specifics
+            "import_declaration": ASTNodeType.IMPORT,
+            "package_declaration": ASTNodeType.MODULE,
         }
         
         if t in mappings:

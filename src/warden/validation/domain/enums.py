@@ -118,6 +118,7 @@ class FrameApplicability(str, Enum):
     CSHARP = "csharp"
     DART = "dart"
     TYPESCRIPT = "typescript"
+    JAVASCRIPT = "javascript"
     PYTHON = "python"
     JAVA = "java"
     GO = "go"

@@ -60,7 +60,14 @@ class OrphanFrame(ValidationFrame):
     is_blocker = False  # Dead code is warning, not blocker
     version = "2.0.0"  # Upgraded: LLM filtering support
     author = "Warden Team"
-    applicability = [FrameApplicability.PYTHON]  # Python-specific (AST-based)
+    applicability = [
+        FrameApplicability.PYTHON,
+        FrameApplicability.TYPESCRIPT,
+        FrameApplicability.JAVASCRIPT,
+        FrameApplicability.GO,
+        FrameApplicability.JAVA,
+        FrameApplicability.CSHARP,
+    ]
 
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         """
@@ -108,7 +115,7 @@ class OrphanFrame(ValidationFrame):
                 continue
                 
             try:
-                detector = OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
+                detector = await OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
                 if not detector:
                     # Language not supported
                     results.append(FrameResult(
@@ -292,7 +299,7 @@ class OrphanFrame(ValidationFrame):
         # Run orphan detection
         try:
             # STAGE 1: AST-based detection (fast, language-specific)
-            detector = OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
+            detector = await OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
             
             if not detector:
                 logger.info(
@@ -459,15 +466,15 @@ class OrphanFrame(ValidationFrame):
             True if frame should run
         """
         # Check if we have a detector for this language (delegate to factory)
-        from warden.validation.frames.orphan.orphan_detector import OrphanDetectorFactory, TreeSitterOrphanDetector
+        from warden.validation.frames.orphan.orphan_detector import OrphanDetectorFactory
         
         # Get file extension
         import os
         _, ext = os.path.splitext(code_file.path)
         ext = ext.lower()
         
-        # Check if supported: Python (native) or any TreeSitter language
-        supported_extensions = {".py"} | set(TreeSitterOrphanDetector.LANGUAGE_MAP.keys())
+        # Supported extensions: Python (native) + Universal AST languages
+        supported_extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".cs"}
         if ext not in supported_extensions:
             return False
 
