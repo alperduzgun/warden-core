@@ -65,7 +65,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "warden=warden.cli:main",
+            "warden=warden.main:main",
         ],
     },
     include_package_data=True,
