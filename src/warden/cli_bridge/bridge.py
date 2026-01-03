@@ -235,10 +235,15 @@ class WardenBridge:
             )
 
             # Create orchestrator with frames, config, and LLM service
+            llm_service = None
             if self.llm_config:
-                llm_service = create_client(self.llm_config.default_provider)
-            else:
-                llm_service = None
+                try:
+                    llm_service = create_client(self.llm_config.default_provider)
+                except Exception as e:
+                    logger.warning("llm_service_initialization_failed", 
+                                 provider=self.llm_config.default_provider, 
+                                 error=str(e))
+                    llm_service = None
             
             self.orchestrator = PhaseOrchestrator(
                 frames=frames,
@@ -259,10 +264,12 @@ class WardenBridge:
             # Fallback to default frames
             try:
                 frames = self._get_default_frames()
+                llm_service = None
                 if self.llm_config:
-                    llm_service = create_client(self.llm_config.default_provider)
-                else:
-                    llm_service = None
+                    try:
+                        llm_service = create_client(self.llm_config.default_provider)
+                    except Exception:
+                        llm_service = None
 
                 # Create default config with all phases enabled
                 default_config = PipelineOrchestratorConfig(
