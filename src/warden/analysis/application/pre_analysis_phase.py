@@ -58,7 +58,9 @@ class PreAnalysisPhase:
         self.project_analyzer = ProjectStructureAnalyzer(self.project_root)
         self.file_analyzer: Optional[FileContextAnalyzer] = None  # Created after project analysis
         self.llm_analyzer = None  # Will be initialized if enabled
+        
         self.memory_manager = MemoryManager(self.project_root)
+        self.env_hash = self._calculate_environment_hash()
 
     async def execute(self, code_files: List[CodeFile]) -> PreAnalysisResult:
         """
@@ -98,6 +100,36 @@ class PreAnalysisPhase:
                 project_name=self.project_root.name,
             )
             self._enrich_context_from_memory(project_context)
+
+            # Validate Environment Hash
+            # If config/version changed, we should NOT trust file contexts from memory
+            is_env_valid = self._validate_environment_hash()
+            if not is_env_valid:
+                logger.warning("environment_changed", reason="config_or_version_mismatch", action="invalidating_context_cache")
+                # We don't clear memory, but we will ignore context_data in _analyze_single_file
+            
+            # Allow skipping analysis if environment is valid
+            self.trust_memory_context = is_env_valid
+
+            # Validate Environment Hash
+            # If config/version changed, we should NOT trust file contexts from memory
+            is_env_valid = self._validate_environment_hash()
+            if not is_env_valid:
+                logger.warning("environment_changed", reason="config_or_version_mismatch", action="invalidating_context_cache")
+                # We don't clear memory, but we will ignore context_data in _analyze_single_file
+            
+            # Allow skipping analysis if environment is valid
+            self.trust_memory_context = is_env_valid
+
+            # Validate Environment Hash
+            # If config/version changed, we should NOT trust file contexts from memory
+            is_env_valid = self._validate_environment_hash()
+            if not is_env_valid:
+                logger.warning("environment_changed", reason="config_or_version_mismatch", action="invalidating_context_cache")
+                # We don't clear memory, but we will ignore context_data in _analyze_single_file
+            
+            # Allow skipping analysis if environment is valid
+            self.trust_memory_context = is_env_valid
 
             # Analyze structure (will only discover purpose if missing after enrichment)
             project_context = await self._analyze_project_structure(project_context)
@@ -149,6 +181,11 @@ class PreAnalysisPhase:
             # Step 7: Save file states (hashes)
             # We save this now so next run knows about these hashes
             await self.save_file_states(file_contexts)
+            
+            # Step 8: Save current environment hash
+            if self.memory_manager and self.memory_manager._is_loaded:
+                self.memory_manager.update_environment_hash(self.env_hash)
+                await self.memory_manager.save_async()
 
             return result
 
@@ -318,15 +355,34 @@ class PreAnalysisPhase:
             rel_path = code_file.path
 
         # Check memory for existing state
-        if self.memory_manager and self.memory_manager._is_loaded:
+        if self.trust_memory_context and self.memory_manager and self.memory_manager._is_loaded:
             stored_state = self.memory_manager.get_file_state(rel_path)
             
             # If hash matches, mark as unchanged
             if stored_state and stored_state.get('content_hash') == content_hash:
-                # Create context info directly for unchanged file to potentially skip full analysis
-                # But we still want FileContext analysis.
-                # Ideally we want full context info.
-                pass
+                # OPTIMIZATION: If we have stored context data, USE IT!
+                # This skips the expensive FileContextAnalyzer step.
+                context_data = stored_state.get('context_data')
+                
+                if context_data:
+                    from warden.analysis.domain.file_context import FileContextInfo
+                    try:
+                        # Reconstruct FileContextInfo from stored dictionary
+                        context_info = FileContextInfo.model_validate(context_data)
+                        
+                        # Verify we have valid data (basic check)
+                        if context_info.context:
+                            context_info.is_unchanged = True
+                            context_info.last_scan_timestamp = datetime.now()
+                            # Ensure hash is set on the object
+                            context_info.content_hash = content_hash
+                            
+                            logger.debug("file_context_restored_from_memory", file=rel_path)
+                            return context_info
+                    except Exception as e:
+                        logger.warning("context_restoration_failed", file=rel_path, error=str(e))
+                        # Fallback to analysis on error matches
+                        pass
 
         context_info = await loop.run_in_executor(
             None,
@@ -338,7 +394,7 @@ class PreAnalysisPhase:
         context_info.content_hash = content_hash
         context_info.last_scan_timestamp = datetime.now()
         
-        # Determine if unchanged
+        # Determine if unchanged (legacy check, usually redundant now with above opt)
         if self.memory_manager and self.memory_manager._is_loaded:
              stored_state = self.memory_manager.get_file_state(rel_path)
              if stored_state and stored_state.get('content_hash') == content_hash:
@@ -569,10 +625,54 @@ class PreAnalysisPhase:
                     rel_path = path
 
                 logger.debug("saving_file_state", file=rel_path, hash=info.content_hash)
+                
+                # OPTIMIZATION: Save the full context info so we can restore it later
+                context_data = info.to_json()
+                
                 self.memory_manager.update_file_state(
                     file_path=rel_path,
                     content_hash=info.content_hash,
-                    findings_count=0 
+                    findings_count=0,
+                    context_data=context_data
                 )
         
         await self.memory_manager.save_async()
+
+    def _calculate_environment_hash(self) -> str:
+        """
+        Calculate a hash representing the current environment state.
+        Includes: Warden Version, Config Content, Rules Content.
+        """
+        from warden import __version__
+        components = [__version__]
+        
+        # Add config content
+        config_files = [".warden/config.yaml", ".warden/rules.yaml", ".warden/warden.yaml"]
+        for cf in config_files:
+            p = self.project_root / cf
+            if p.exists():
+                try:
+                    with open(p, "rb") as f:
+                        components.append(hashlib.md5(f.read()).hexdigest())
+                except Exception:
+                    pass
+        
+        # Add internal config dict hash (if passed via CLI args etc)
+        if self.config:
+            import json
+            try:
+                # Deterministic JSON representation
+                components.append(json.dumps(self.config, sort_keys=True, default=str))
+            except Exception:
+                # Fallback to str if not json serializable
+                components.append(str(self.config))
+            
+        return hashlib.sha256("-".join(components).encode()).hexdigest()
+
+    def _validate_environment_hash(self) -> bool:
+        """Check if current environment matches stored memory."""
+        if not self.memory_manager or not self.memory_manager._is_loaded:
+            return False
+            
+        stored_hash = self.memory_manager.get_environment_hash()
+        return stored_hash == self.env_hash
