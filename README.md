@@ -217,6 +217,12 @@ Group 4: [Stress] (low)
 - camelCase ↔ snake_case conversion
 - Exact TypeScript type matching
 
+### 5. Smart Caching & Incremental Scanning
+- **Composite Cache Key**: Combines file content + config hash + Warden version.
+- **Environment Aware**: Automatic invalidation if rules or configuration change.
+- **Blazing Fast**: Skips expensive analysis for unchanged files (0 LLM tokens).
+- **Deterministic**: Ensures consistent hashing across environments.
+
 ---
 
 ## 📋 Validation Frames
