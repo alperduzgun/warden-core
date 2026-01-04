@@ -27,8 +27,52 @@ class ReportGenerator:
             scan_results: Dictionary containing scan results
             output_path: Path to save the JSON report
         """
+        # Create a deep copy to sanitization doesn't affect the running pipeline
+        import copy
+        sanitized_results = copy.deepcopy(scan_results)
+        self._sanitize_paths(sanitized_results)
+        
         with open(output_path, 'w') as f:
-            json.dump(scan_results, f, indent=4)
+            json.dump(sanitized_results, f, indent=4)
+
+    def _sanitize_paths(self, data: Any) -> None:
+        """
+        Recursively convert absolute paths to relative paths in dictionary/list.
+        """
+        cwd = str(Path.cwd())
+        
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, (dict, list)):
+                    self._sanitize_paths(value)
+                elif isinstance(value, str):
+                    if cwd in value and Path(value).is_absolute():
+                        try:
+                            # Replace absolute path prefix with relative path or nothing
+                            # We use direct string replacement for simpler strings, 
+                            # and Path calculation for pure paths
+                            if value.startswith(cwd):
+                                relative = str(Path(value).relative_to(Path.cwd()))
+                                data[key] = relative
+                            else:
+                                # For strings containing the path (like messages)
+                                data[key] = value.replace(cwd, "")
+                        except Exception:
+                            pass
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                if isinstance(item, (dict, list)):
+                    self._sanitize_paths(item)
+                elif isinstance(item, str):
+                     if cwd in item and Path(item).is_absolute():
+                        try:
+                            if item.startswith(cwd):
+                                relative = str(Path(item).relative_to(Path.cwd()))
+                                data[i] = relative
+                            else:
+                                data[i] = item.replace(cwd, "")
+                        except Exception:
+                            pass
 
     def generate_sarif_report(
         self,
@@ -113,7 +157,7 @@ class ReportGenerator:
                             "physicalLocation": {
                                 # Convert file path to URI compatible
                                 "artifactLocation": {
-                                    "uri": file_path
+                                    "uri": str(Path(file_path).relative_to(Path.cwd())) if Path(file_path).is_absolute() and str(file_path).startswith(str(Path.cwd())) else file_path
                                 },
                                 "region": {
                                     "startLine": finding.get('line', 1),

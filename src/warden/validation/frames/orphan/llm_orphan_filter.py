@@ -175,9 +175,18 @@ class LLMOrphanFilter:
 
     def _get_pattern_key(self, finding: OrphanFinding, file_path: str) -> str:
         """Generate a cache key for a finding pattern (project-specific)."""
-        # Pattern key includes type, name, and relative file path to be safe
-        # (caching per-instance rather than per-generic-pattern)
-        return f"{finding.orphan_type}:{finding.name}:{file_path}"
+        # Normalize to relative path for portability
+        try:
+            cwd = Path.cwd()
+            if Path(file_path).is_absolute() and str(cwd) in file_path:
+                rel_path = str(Path(file_path).relative_to(cwd))
+            else:
+                rel_path = file_path
+        except Exception:
+            rel_path = file_path
+
+        # Pattern key includes type, name, and relative file path
+        return f"{finding.orphan_type}:{finding.name}:{rel_path}"
 
     def _check_pattern_cache(self, finding: OrphanFinding, file_path: str) -> Optional[tuple[bool, str]]:
         """Check if we have a cached decision for this finding pattern."""
