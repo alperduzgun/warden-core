@@ -115,7 +115,13 @@ class LLMSuggestionGenerator:
 
         # Include relevant findings from validation
         findings = self.context.get("findings", [])
-        file_findings = [f for f in findings if f.get("file_path") == code_file.path]
+        
+        def get_file_path(f):
+            if isinstance(f, dict):
+                return f.get("file_path")
+            return getattr(f, "path", getattr(f, "file_path", None))
+            
+        file_findings = [f for f in findings if get_file_path(f) == code_file.path]
 
         # Truncate code for prompt (first 3000 chars)
         code_snippet = code_file.content[:3000]

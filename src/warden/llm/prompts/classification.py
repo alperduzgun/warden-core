@@ -23,7 +23,7 @@ Your task is to analyze code and detect the following characteristics:
 
 Based on detected characteristics, recommend validation strategies:
 - Security Analysis: ALWAYS recommended (mandatory for all code)
-- Chaos Engineering: For code with async, network, or external API calls
+- Chaos Engineering: For code with dependencies (DB/API), file I/O, state management, or high complexity
 - Fuzz Testing: For code with user input
 - Property Verification: For code with financial calculations or business logic
 - Stress Testing: For code with collection processing or high-volume operations

@@ -1,0 +1,15 @@
+"""
+Resilience Architecture Analysis Frame
+
+Tests code resilience, fault tolerance, and graceful degradation using LLM-based FMEA.
+
+Usage:
+    from warden.validation.frames.resilience import ResilienceFrame
+
+    frame = ResilienceFrame()
+    result = await frame.execute(code_file)
+"""
+
+from warden.validation.frames.resilience.resilience_frame import ResilienceFrame
+
+__all__ = ["ResilienceFrame"]
