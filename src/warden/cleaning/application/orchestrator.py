@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer
 from warden.cleaning.domain.models import CleaningResult, CleaningSuggestion
-from warden.cleaning.analyzers import (
+from warden.cleaning.application.analyzers import (
     NamingAnalyzer,
     DuplicationAnalyzer,
     MagicNumberAnalyzer,
@@ -35,7 +35,7 @@ class CleaningOrchestrator:
     This analyzer ONLY detects and reports issues, NEVER modifies code.
     """
 
-    def __init__(self, analyzers: Optional[List[BaseCleaningOrchestrator]] = None):
+    def __init__(self, analyzers: Optional[List[BaseCleaningAnalyzer]] = None):
         """
         Initialize Cleanup Analyzer.
 
@@ -80,8 +80,20 @@ class CleaningOrchestrator:
         Raises:
             ValueError: If code_file is None or empty
         """
-        if not code_file or not code_file.content:
-            raise ValueError("Code file cannot be None or empty")
+        if code_file is None:
+            raise ValueError("Code file cannot be None")
+        
+        if not code_file.content:
+            logger.info("skipping_empty_file", file_path=code_file.path)
+            return CleaningResult(
+                success=True,
+                file_path=code_file.path,
+                issues_found=0,
+                suggestions=[],
+                cleanup_score=100.0,
+                summary="Skipped empty file",
+                analyzer_name="CleaningOrchestrator"
+            )
 
         logger.info(
             "cleanup_analysis_started",
@@ -237,11 +249,11 @@ class CleaningOrchestrator:
 
         return "\n".join(lines)
 
-    def get_analyzers(self) -> List[BaseCleaningOrchestrator]:
+    def get_analyzers(self) -> List[BaseCleaningAnalyzer]:
         """Get list of registered analyzers."""
         return self._analyzers.copy()
 
-    def add_analyzer(self, analyzer: BaseCleaningOrchestrator) -> None:
+    def add_analyzer(self, analyzer: BaseCleaningAnalyzer) -> None:
         """
         Add a new analyzer.
 
