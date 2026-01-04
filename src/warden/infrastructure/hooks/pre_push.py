@@ -34,6 +34,7 @@ def main() -> int:
     cmd = [
         "warden",
         "analyze",
+        ".",
         "--frame", "security",
         "--frame", "fuzz",
         "--frame", "property",
@@ -149,6 +150,7 @@ if __name__ == "__main__":
         cmd = [
             "warden",
             "analyze",
+            ".",
             "--frame",
             "security",
             "--frame",
