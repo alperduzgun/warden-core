@@ -1,0 +1,107 @@
+# Warden Ignore Configuration
+# This file defines what files and directories should be excluded from scanning.
+# Similar to .gitignore but for Warden security analysis.
+
+# ═══════════════════════════════════════════════════════════════════
+# DIRECTORIES - Completely excluded from scanning
+# ═══════════════════════════════════════════════════════════════════
+directories:
+  # Build outputs
+  - build
+  - dist
+  - out
+  - target           # Rust/Java
+  - bin
+  - obj              # .NET
+  
+  # Dependencies (external code, not our responsibility)
+  - node_modules
+  - vendor
+  - packages         # Pub/Flutter
+  - Pods             # iOS CocoaPods
+  
+  # Python environments
+  - venv
+  - .venv
+  - env
+  - __pycache__
+  - .pytest_cache
+  - "*.egg-info"
+  
+  # IDE and tools
+  - .git
+  - .warden
+  - .idea
+  - .vscode
+  
+  # Documentation and Examples
+  - examples
+  - docs
+  - generated
+  - .gen
+
+# ═══════════════════════════════════════════════════════════════════
+# FILE PATTERNS - Specific file types to skip (glob syntax)
+# ═══════════════════════════════════════════════════════════════════
+file_patterns:
+  # Auto-generated code
+  - "*.generated.*"
+  - "*_pb2.py"           # gRPC Python
+  - "*_pb2_grpc.py"      # gRPC Python
+  - "*.pb.go"            # gRPC Go
+  - "*.g.dart"           # Flutter/Dart generated
+  - "*.freezed.dart"     # Freezed generated
+  
+  # Minified/bundled assets
+  - "*.min.js"
+  - "*.min.css"
+  - "*.bundle.js"
+  - "*.chunk.js"
+  
+  # Lock files (no security value)
+  - "package-lock.json"
+  - "yarn.lock"
+  - "poetry.lock"
+  - "Cargo.lock"
+  - "Gemfile.lock"
+
+# ═══════════════════════════════════════════════════════════════════
+# PATH PATTERNS - Deep matching with ** (glob syntax)
+# ═══════════════════════════════════════════════════════════════════
+path_patterns:
+  # Intentional vulnerable examples (for training/demo)
+  - "**/examples/vulnerable_*"
+  - "**/examples/**/vulnerable_*"
+  
+  # Test fixtures and mock data
+  - "**/test_fixtures/**"
+  - "**/testdata/**"
+  - "**/__mocks__/**"
+  - "**/fixtures/**"
+  
+  # Database migrations (auto-generated, different rules apply)
+  - "**/migrations/**"
+  - "**/alembic/versions/**"
+
+# ═══════════════════════════════════════════════════════════════════
+# FRAME-SPECIFIC IGNORES
+# Each frame can have additional paths to skip
+# ═══════════════════════════════════════════════════════════════════
+frames:
+  security:
+    # Intentional security examples for demo/training
+    - "examples/**"
+    - "test_fixtures/**"
+    - "docs/**"
+  
+  orphan:
+    # Entry points that look orphan but are intentional
+    - "scripts/**"
+    - "**/__main__.py"
+    - "**/cli.py"
+    - "**/main.py"
+  
+  architecturalconsistency:
+    # Test files have different structure expectations
+    - "tests/**"
+    - "test_*.py"

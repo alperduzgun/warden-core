@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
+from warden.fortification.domain.models import Fortification
+from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 
 # Try to import LLMService, use None if not available
 try:
@@ -61,6 +64,16 @@ class FortificationPhase:
         self.llm_service = llm_service
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
 
+        # Initialize IgnoreMatcher
+        project_root = getattr(self.context, 'project_root', None) or Path.cwd()
+        if isinstance(self.context, dict):
+            project_root = self.context.get('project_root') or project_root
+            use_gitignore = self.context.get('use_gitignore', True)
+        else:
+            use_gitignore = getattr(self.context, 'use_gitignore', True)
+        
+        self.ignore_matcher = IgnoreMatcher(Path(project_root), use_gitignore=use_gitignore)
+
         logger.info(
             "fortification_phase_initialized",
             use_llm=self.use_llm,
@@ -81,6 +94,20 @@ class FortificationPhase:
             use_llm=self.use_llm,
         )
 
+        # Filter validated issues based on ignore matcher
+        original_issue_count = len(validated_issues)
+        validated_issues = [
+            issue for issue in validated_issues
+            if not self.ignore_matcher.should_ignore_for_frame(Path(issue.get("file_path", "")), "fortification")
+        ]
+        
+        if len(validated_issues) < original_issue_count:
+             logger.info(
+                "fortification_phase_issues_ignored",
+                ignored=original_issue_count - len(validated_issues),
+                remaining=len(validated_issues)
+            )
+
         from warden.fortification.application.orchestrator import FortificationOrchestrator
         orchestrator = FortificationOrchestrator()
 
@@ -88,6 +115,20 @@ class FortificationPhase:
         all_actions = []
 
         if code_files:
+            # Filter files based on ignore matcher
+            original_count = len(code_files)
+            code_files = [
+                cf for cf in code_files 
+                if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "fortification")
+            ]
+            
+            if len(code_files) < original_count:
+                logger.info(
+                    "fortification_phase_files_ignored",
+                    ignored=original_count - len(code_files),
+                    remaining=len(code_files)
+                )
+
             for code_file in code_files:
                 res = await orchestrator.fortify_async(code_file)
                 all_actions.extend(res.actions)
@@ -115,11 +156,9 @@ class FortificationPhase:
                 ))
 
         result = FortificationResult(
-            success=True,
-            fortifications=all_fortifications,
-            actions=all_actions,
-            summary=f"Generated {len(all_fortifications)} fortifications",
-            duration=1.0 # Placeholder
+            fortifications=[f.to_json() if hasattr(f, 'to_json') else f for f in all_fortifications],
+            applied_fixes=[],
+            security_improvements=self._calculate_improvements(validated_issues, all_fortifications) if validated_issues else {},
         )
 
         return result
@@ -147,7 +186,7 @@ class FortificationPhase:
 
         try:
             # Get LLM suggestions
-            response = await self.llm_service.generate_async(
+            response = await self.llm_service.complete_async(
                 prompt=prompt,
                 temperature=0.3,  # Lower temperature for consistent fixes
                 max_tokens=2000,

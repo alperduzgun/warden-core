@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortificationAction
-from warden.fortification.fortifiers import (
+from warden.fortification.application.fortifiers import (
     ErrorHandlingFortifier,
     LoggingFortifier,
     InputValidationFortifier,

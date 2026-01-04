@@ -24,10 +24,21 @@ from warden.validation.domain.frame import CodeFile
 logger = structlog.get_logger()
 
 # Numbers that are NOT magic (common, self-documenting)
-ACCEPTABLE_NUMBERS = {0, 1, -1, 2, 10, 100, 1000}
+ACCEPTABLE_NUMBERS = {
+    0, 1, -1, 2, 3, 4, 5, 8, 10, 12, 16, 24, 32, 60, 64, 100, 128, 180, 
+    255, 256, 360, 365, 500, 512, 1000, 1024, 2048, 4096, 8080, 8192,
+    # Common fractions/percentages
+    0.0, 0.1, 0.25, 0.5, 0.75, 1.0, 2.0,
+}
 
 # Acceptable string literals (common patterns)
-ACCEPTABLE_STRINGS = {'', ' ', '\n', '\t', ',', '.', '/', '-', '_'}
+ACCEPTABLE_STRINGS = {
+    '', ' ', '\n', '\t', '\r', ',', '.', '/', '-', '_', ':', ';',
+    'utf-8', 'utf8', 'ascii', 'latin-1',
+    'True', 'False', 'None', 'null', 'true', 'false',
+    'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS',
+    'id', 'name', 'type', 'value', 'key', 'error', 'message', 'status',
+}
 
 
 class MagicNumberAnalyzer(BaseCleaningAnalyzer):
@@ -196,18 +207,24 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
                         )
                     )
 
-            # Check for magic strings
+            # Check for magic strings - only flag long, specific strings
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
                 value = node.value
-                if (len(value) > 2 and
+                # Only flag strings that are:
+                # - Longer than 10 chars (short strings are often acceptable)
+                # - Not in acceptable list
+                # - Not in acceptable context
+                # - Look like config values (paths, URLs, etc.)
+                if (len(value) > 10 and
                     value not in ACCEPTABLE_STRINGS and
-                    not self._is_acceptable_string_context(node)):
+                    not self._is_acceptable_string_context(node) and
+                    self._looks_like_config_value(value)):
                     issues.append(
                         CleaningIssue(
                             issue_type=CleaningIssueType.MAGIC_NUMBER,
-                            description=f"Magic string '{value[:20]}...' should be a named constant",
+                            description=f"Magic string '{value[:30]}...' should be a named constant",
                             line_number=node.lineno,
-                            severity=CleaningIssueSeverity.LOW,
+                            severity=CleaningIssueSeverity.INFO,  # Lower severity
                         )
                     )
 
@@ -263,6 +280,30 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
         if isinstance(parent, ast.Expr) and isinstance(node, ast.Constant):
             return True
 
+        return False
+
+    def _looks_like_config_value(self, value: str) -> bool:
+        """
+        Check if a string looks like it should be a config constant.
+        
+        Args:
+            value: String value to check
+            
+        Returns:
+            True if it looks like a hardcoded config value
+        """
+        # File paths
+        if '/' in value and len(value) > 15:
+            return True
+        # URLs
+        if value.startswith(('http://', 'https://', 'ftp://')):
+            return True
+        # Connection strings
+        if any(x in value.lower() for x in ['host=', 'port=', 'user=', 'password=']):
+            return True
+        # Email patterns
+        if '@' in value and '.' in value:
+            return True
         return False
 
     def _create_suggestion(self, issue: CleaningIssue, code: str) -> CleaningSuggestion:

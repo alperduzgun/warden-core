@@ -86,6 +86,9 @@ class LLMPhaseBase(ABC):
         self,
         config: Optional[LLMPhaseConfig] = None,
         llm_service: Optional[Any] = None,
+        project_root: Optional[Path] = None,
+        use_gitignore: bool = True,
+        **kwargs: Any,
     ) -> None:
         """
         Initialize LLM phase base.
@@ -93,9 +96,13 @@ class LLMPhaseBase(ABC):
         Args:
             config: Phase-specific LLM configuration
             llm_service: Pre-configured LLM service/client
+            project_root: Root directory of the project
+            use_gitignore: Whether to use .gitignore patterns
         """
         self.config = config or LLMPhaseConfig(enabled=False)
         self.llm = llm_service
+        self.project_root = project_root
+        self.use_gitignore = use_gitignore
         self.cache = LLMCache() if self.config.cache_enabled else None
 
         # Enable LLM if service is provided
@@ -208,22 +215,28 @@ class LLMPhaseBase(ABC):
                 pipeline_context.add_llm_interaction(
                     phase=self.phase_name,
                     prompt=user_prompt,
-                    response=response,
-                    confidence=0.85,
+                    response=response.content,
+                    confidence=0.85,  # Todo: use response confidence if available
+                    usage={
+                        "prompt_tokens": response.prompt_tokens,
+                        "completion_tokens": response.completion_tokens,
+                        "total_tokens": response.total_tokens
+                    }
                 )
 
-            if response:
-                # Parse response
-                result = self.parse_llm_response(response)
+            if response and response.success:
+                # Parse response content
+                result = self.parse_llm_response(response.content)
 
-                # Cache result
+                # Cache result (cache the parsed result, not the raw response)
                 if cache_key and self.cache:
                     self.cache.set(cache_key, result)
 
                 logger.info(
                     "llm_analysis_complete",
                     phase=self.phase_name,
-                    response_length=len(response),
+                    response_length=len(response.content),
+                    tokens=response.total_tokens
                 )
 
                 return result
@@ -286,7 +299,7 @@ class LLMPhaseBase(ABC):
         self,
         system_prompt: str,
         user_prompt: str,
-    ) -> Optional[str]:
+    ) -> Optional[Any]:  # Returns LlmResponse
         """
         Call LLM with retry logic.
 
@@ -301,7 +314,7 @@ class LLMPhaseBase(ABC):
             try:
                 # Call LLM with timeout
                 response = await asyncio.wait_for(
-                    self.llm.complete(
+                    self.llm.complete_async(
                         prompt=user_prompt,
                         system_prompt=system_prompt
                     ),

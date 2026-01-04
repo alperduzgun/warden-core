@@ -176,6 +176,8 @@ class PhaseOrchestrator:
             pipeline_id=str(uuid4()),
             started_at=datetime.now(),
             file_path=Path(code_files[0].path) if code_files else Path.cwd(),
+            project_root=self.project_root, # Pass from orchestrator
+            use_gitignore=getattr(self.config, 'use_gitignore', True),
             source_code=code_files[0].content if code_files else "",
             language="python",  # TODO: Detect from files
         )
@@ -208,6 +210,8 @@ class PhaseOrchestrator:
             # Phase 1: ANALYSIS
             if getattr(self.config, 'enable_analysis', True):
                 await self.phase_executor.execute_analysis_async(context, code_files)
+                # Initialize after score to before score
+                context.quality_score_after = context.quality_score_before
 
             # Phase 2: CLASSIFICATION
             # If frames override is provided, use it and skip AI classification
@@ -280,12 +284,15 @@ class PhaseOrchestrator:
                     })
 
             # Update pipeline status based on results
-            if self.pipeline.frames_failed > 0:
-                # If fail_fast is on, any frame failure makes it a failure
-                # If fail_fast is off, we only fail if a blocker failed
-                if self.config.fail_fast or any(
+            has_errors = len(context.errors) > 0
+            if has_errors:
+                logger.warning("pipeline_has_errors", count=len(context.errors), errors=context.errors[:5])
+            
+            if self.pipeline.frames_failed > 0 or has_errors:
+                # Only fail if there are actual failures or blocker violations
+                if (has_errors) or (self.pipeline.frames_failed > 0) or any(
                     fr.get('result').is_blocker for fr in getattr(context, 'frame_results', {}).values() 
-                    if fr.get('result')
+                    if fr.get('result') and fr.get('result').status == "failed"
                 ):
                     self.pipeline.status = PipelineStatus.FAILED
                 else:
@@ -365,6 +372,9 @@ class PhaseOrchestrator:
             # Cap at 10.0 just in case
             quality_score = min(10.0, max(0.1, quality_score))
 
+        # Sync back to context for summary reporting
+        context.quality_score_after = quality_score
+
         return PipelineResult(
             pipeline_id=context.pipeline_id,
             pipeline_name="Validation Pipeline",
@@ -396,4 +406,8 @@ class PhaseOrchestrator:
             # Populate new fields
             artifacts=getattr(context, 'artifacts', []),
             quality_score=quality_score,
+            # LLM Usage
+            total_tokens=getattr(context, 'total_tokens', 0),
+            prompt_tokens=getattr(context, 'prompt_tokens', 0),
+            completion_tokens=getattr(context, 'completion_tokens', 0),
         )

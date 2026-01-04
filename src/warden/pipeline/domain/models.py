@@ -56,6 +56,7 @@ class PipelineConfig(BaseDomainModel):
     frame_timeout: int = 120  # Per-frame timeout in seconds
     parallel_limit: int = 4  # Max concurrent frames in parallel mode
     skip_non_blockers: bool = False  # Skip non-blocker frames if blocker fails
+    use_gitignore: bool = True  # NEW: Respect .gitignore patterns (global)
 
     # Optional pre-processing phases
     enable_discovery: bool = True  # Run file discovery before validation
@@ -212,6 +213,11 @@ class PipelineResult(BaseDomainModel):
     artifacts: List[Dict[str, Any]] = Field(default_factory=list)
     quality_score: float = 0.0
 
+    # LLM Usage
+    total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
@@ -228,11 +234,23 @@ class PipelineResult(BaseDomainModel):
         data["highFindings"] = self.high_findings
         data["mediumFindings"] = self.medium_findings
         data["lowFindings"] = self.low_findings
+
+        # Add token usage
+        data["llmUsage"] = {
+            "totalTokens": self.total_tokens,
+            "promptTokens": self.prompt_tokens,
+            "completionTokens": self.completion_tokens,
+        }
         
         data["qualityScore"] = self.quality_score
         data["artifacts"] = self.artifacts
 
         # IMPORTANT: Add snake_case keys for CLI compatibility (types.ts expects snake_case)
+        data["status"] = self.status.value
+        data["total_frames"] = self.total_frames
+        data["frames_passed"] = self.frames_passed
+        data["frames_failed"] = self.frames_failed
+        data["frames_skipped"] = self.frames_skipped
         data["total_findings"] = self.total_findings
         data["critical_findings"] = self.critical_findings
         data["high_findings"] = self.high_findings

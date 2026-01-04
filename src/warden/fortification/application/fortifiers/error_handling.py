@@ -48,7 +48,7 @@ class ErrorHandlingFortifier(BaseFortifier):
     def __init__(self):
         """Initialize Error Handling Fortifier."""
         try:
-            self._llm_provider = LLMProviderFactory().create_client()
+            self._llm_provider = create_client()
         except Exception:
             self._llm_provider = None  # LLM optional
 
@@ -329,7 +329,7 @@ For each issue, provide:
 Format: JSON array of objects with keys: issueLine (int), suggestion (string)"""
 
         try:
-            response = await self._llm_provider.generate_async(
+            response = await self._llm_provider.complete_async(
                 system_prompt="You are a code safety expert. Provide suggestions for fixing code issues. Never write code, only suggest what to do.",
                 user_prompt=prompt,
                 temperature=0.3,

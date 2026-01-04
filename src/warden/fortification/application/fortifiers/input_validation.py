@@ -41,7 +41,10 @@ class InputValidationFortifier(BaseFortifier):
 
     def __init__(self):
         """Initialize Input Validation Fortifier."""
-        self._llm_provider = LLMProviderFactory.create_default()
+        try:
+            self._llm_provider = create_client()
+        except Exception:
+            self._llm_provider = None  # LLM optional
 
     @property
     def name(self) -> str:
@@ -97,7 +100,7 @@ class InputValidationFortifier(BaseFortifier):
         prompt = self._build_validation_prompt(code_file, suggestions)
 
         try:
-            response = await self._llm_provider.generate_async(
+            response = await self._llm_provider.complete_async(
                 system_prompt="You are a security expert. Add input validation to Python functions. Return ONLY the modified code.",
                 user_prompt=prompt,
                 temperature=0.2,

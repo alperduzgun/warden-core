@@ -41,7 +41,10 @@ class ResourceDisposalFortifier(BaseFortifier):
 
     def __init__(self):
         """Initialize Resource Disposal Fortifier."""
-        self._llm_provider = LLMProviderFactory.create_default()
+        try:
+            self._llm_provider = create_client()
+        except Exception:
+            self._llm_provider = None  # LLM optional
 
     @property
     def name(self) -> str:
@@ -97,7 +100,7 @@ class ResourceDisposalFortifier(BaseFortifier):
         prompt = self._build_disposal_prompt(code_file, suggestions)
 
         try:
-            response = await self._llm_provider.generate_async(
+            response = await self._llm_provider.complete_async(
                 system_prompt="You are a resource management expert. Add context managers (with statements) to Python code for proper resource cleanup. Return ONLY the modified code.",
                 user_prompt=prompt,
                 temperature=0.2,
