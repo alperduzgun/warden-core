@@ -1,7 +1,9 @@
 name: Test Shadow Branch Logic
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - dev
 
 permissions:
   contents: write
