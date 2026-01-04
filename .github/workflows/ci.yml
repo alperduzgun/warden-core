@@ -37,6 +37,14 @@ jobs:
           # Verify installation
           warden --help
 
+      - name: Cache Warden Memory
+        uses: actions/cache@v3
+        with:
+          path: .warden/memory
+          key: warden-memory-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            warden-memory-${{ runner.os }}-
+
       - name: Run Warden Scan
         continue-on-error: true # Allow upload of SARIF even if scan "fails" with findings
         run: |
@@ -56,32 +64,4 @@ jobs:
         with:
           name: warden-scan-results
           path: warden.sarif
-
-      - name: Publish Report to Shadow Branch
-        if: always()
-        run: |
-          # 1. Setup Git Identity
-          git config --global user.name 'Warden CI'
-          git config --global user.email 'warden-ci@users.noreply.github.com'
-          
-          # 2. Prepare Report Files
-          cp warden.sarif /tmp/warden.sarif
-          if [ -f .warden/ai_status.md ]; then cp .warden/ai_status.md /tmp/ai_status.md; fi
-          
-          # 3. Switch to Shadow Branch (Orphan = No history)
-          if git fetch origin warden-reports:warden-reports; then
-            git checkout warden-reports
-          else
-            git checkout --orphan warden-reports
-            git rm -rf .
-          fi
-          
-          # 4. Update Reports
-          cp /tmp/warden.sarif .
-          if [ -f /tmp/ai_status.md ]; then cp /tmp/ai_status.md .; fi
-          
-          # 5. Commit and Push
-          git add warden.sarif ai_status.md
-          git commit -m "Update Security Report [skip ci]" || echo "No changes to report"
-          git push origin warden-reports
 

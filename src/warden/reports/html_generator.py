@@ -27,7 +27,12 @@ class HtmlReportGenerator:
     def _create_html_content(self, scan_results: Dict[str, Any]) -> str:
         """Create HTML content from scan results."""
         timestamp = scan_results.get('timestamp', datetime.now().isoformat())
-        project = scan_results.get('project', 'Unknown Project')
+        project_path = scan_results.get('project', 'Unknown Project')
+        # Use only the directory name if it looks like a path
+        try:
+            project = Path(project_path).name
+        except Exception:
+            project = project_path
         total_files = scan_results.get('total_files', 0)
         analyzed_files = scan_results.get('analyzed_files', 0)
         total_issues = scan_results.get('total_issues', 0)

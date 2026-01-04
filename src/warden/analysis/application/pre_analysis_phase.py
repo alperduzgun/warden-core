@@ -310,9 +310,16 @@ class PreAnalysisPhase:
         # Calculate content hash (PRE-ANALYSIS step)
         content_hash = self._calculate_file_hash(code_file.content)
         
+        # Normalize path to relative for memory portability (CI vs Local)
+        try:
+            rel_path = str(Path(code_file.path).relative_to(self.project_root))
+        except ValueError:
+            # Fallback if path is not relative (e.g. symlinks outside root)
+            rel_path = code_file.path
+
         # Check memory for existing state
         if self.memory_manager and self.memory_manager._is_loaded:
-            stored_state = self.memory_manager.get_file_state(code_file.path)
+            stored_state = self.memory_manager.get_file_state(rel_path)
             
             # If hash matches, mark as unchanged
             if stored_state and stored_state.get('content_hash') == content_hash:
@@ -333,10 +340,10 @@ class PreAnalysisPhase:
         
         # Determine if unchanged
         if self.memory_manager and self.memory_manager._is_loaded:
-             stored_state = self.memory_manager.get_file_state(code_file.path)
+             stored_state = self.memory_manager.get_file_state(rel_path)
              if stored_state and stored_state.get('content_hash') == content_hash:
                  context_info.is_unchanged = True
-                 logger.debug("file_unchanged", file=code_file.path)
+                 logger.debug("file_unchanged", file=rel_path)
 
         return context_info
 
@@ -555,9 +562,15 @@ class PreAnalysisPhase:
         """
         for path, info in file_contexts.items():
             if info.content_hash:
-                logger.debug("saving_file_state", file=path, hash=info.content_hash)
+                # Normalize path for saving
+                try:
+                    rel_path = str(Path(path).relative_to(self.project_root))
+                except ValueError:
+                    rel_path = path
+
+                logger.debug("saving_file_state", file=rel_path, hash=info.content_hash)
                 self.memory_manager.update_file_state(
-                    file_path=path,
+                    file_path=rel_path,
                     content_hash=info.content_hash,
                     findings_count=0 
                 )
