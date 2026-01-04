@@ -52,12 +52,7 @@ jobs:
           # Scanning the source code of Warden itself
           warden scan src/warden --format sarif --output warden.sarif --verbose
 
-      - name: Upload SARIF to GitHub App
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() # Always upload even if findings exist
-        with:
-          sarif_file: warden.sarif
-          category: warden-scan
+
 
       - name: Archive SARIF Artifact
         uses: actions/upload-artifact@v4
