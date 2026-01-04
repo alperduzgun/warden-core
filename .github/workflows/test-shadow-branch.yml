@@ -1,0 +1,52 @@
+name: Test Shadow Branch Logic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Dummy Reports
+        run: |
+          echo "Dummy SARIF content $(date)" > warden.sarif
+          mkdir -p .warden
+          echo "Dummy AI Status $(date)" > .warden/ai_status.md
+
+      - name: Publish Report to Shadow Branch (Test)
+        run: |
+          # 1. Setup Git Identity
+          git config --global user.name 'Warden CI Test'
+          git config --global user.email 'warden-ci-test@users.noreply.github.com'
+          
+          # 2. Prepare Report Files
+          cp warden.sarif /tmp/warden.sarif
+          if [ -f .warden/ai_status.md ]; then cp .warden/ai_status.md /tmp/ai_status.md; fi
+          
+          # 3. Switch to Shadow Branch (Orphan = No history)
+          # Logic extracted from the fix in ci.yml
+          if git fetch origin warden-reports:warden-reports; then
+            echo "Branch exists, switching..."
+            git checkout warden-reports
+          else
+            echo "Branch does not exist, creating orphan..."
+            git checkout --orphan warden-reports
+            git rm -rf .
+          fi
+          
+          # 4. Update Reports
+          cp /tmp/warden.sarif .
+          if [ -f /tmp/ai_status.md ]; then cp /tmp/ai_status.md .; fi
+          
+          # 5. Commit and Push
+          git add warden.sarif ai_status.md
+          git commit -m "Update Security Report (Test Run) [skip ci]" || echo "No changes to report"
+          git push origin warden-reports
