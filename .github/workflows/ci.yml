@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -38,7 +38,7 @@ jobs:
           warden --help
 
       - name: Cache Warden Memory
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .warden/memory
           key: warden-memory-${{ runner.os }}-${{ github.sha }}
@@ -52,7 +52,7 @@ jobs:
           warden scan src/warden --format sarif --output warden.sarif --verbose
 
       - name: Upload SARIF to GitHub App
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() # Always upload even if findings exist
         with:
           sarif_file: warden.sarif

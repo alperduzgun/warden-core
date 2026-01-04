@@ -40,7 +40,7 @@ class LLMClassificationPhase(LLMPhaseBase):
     Intelligently selects validation frames and suppresses false positives.
     """
 
-    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None) -> None:
+    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None, context: Dict[str, Any] = None) -> None:
         """
         Initialize LLM classification phase.
         
@@ -48,9 +48,11 @@ class LLMClassificationPhase(LLMPhaseBase):
             config: Phase configuration
             llm_service: LLM service instance
             available_frames: List of validation frames to choose from
+            context: Pipeline context dictionary
         """
         super().__init__(config, llm_service)
         self.available_frames = available_frames or []
+        self.context = context or {}
 
     @property
     def phase_name(self) -> str:
@@ -495,12 +497,50 @@ Return patterns as JSON."""
 
         # Use LLM to select frames if available
         if self.llm and code_files:
-            # For now, use default frames with LLM reasoning
+            # Use actual context values
+            project_type_str = self.context.get("project_type", ProjectType.APPLICATION.value)
+            framework_str = self.context.get("framework", Framework.NONE.value)
+            
+            # Helper to safely convert string to Enum
+            def get_enum_safe(enum_cls, value, default):
+                try:
+                    return enum_cls(value)
+                except ValueError:
+                    return default
+
+            project_type = get_enum_safe(ProjectType, project_type_str, ProjectType.APPLICATION)
+            framework = get_enum_safe(Framework, framework_str, Framework.NONE)
+            # Serialize file contexts if they are objects
+            raw_file_contexts = self.context.get("file_contexts", {})
+            file_contexts = {}
+            for path, ctx in raw_file_contexts.items():
+                # Handle Pydantic models (FileContextInfo)
+                if hasattr(ctx, "model_dump"):
+                    file_contexts[path] = ctx.model_dump(mode='json')
+                elif hasattr(ctx, "to_json"):
+                    file_contexts[path] = ctx.to_json()
+                elif hasattr(ctx, "dict"):
+                    file_contexts[path] = ctx.dict()
+                else:
+                    file_contexts[path] = ctx
+
+            previous_issues = self.context.get("previous_issues", [])
+
+            # Log context usage for traceability
+            logger.info(
+                "llm_classification_using_context",
+                project_type=project_type.value,
+                framework=framework.value,
+                file_contexts_count=len(file_contexts),
+                previous_issues_count=len(previous_issues)
+            )
+
             selected_frames, suppression_config, confidence = await self.classify_and_select_frames(
-                project_type=ProjectType.APPLICATION,
-                framework=Framework.NONE,
-                file_contexts={},
-                file_path=code_files[0].path if code_files else None
+                project_type=project_type,
+                framework=framework,
+                file_contexts=file_contexts,
+                file_path=code_files[0].path if code_files else None,
+                previous_issues=previous_issues
             )
 
             logger.info(
