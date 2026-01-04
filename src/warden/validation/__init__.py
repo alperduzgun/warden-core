@@ -20,9 +20,12 @@ from warden.validation.domain.check import (
     CheckSeverity,
 )
 from warden.validation.frames.security import SecurityFrame
-from warden.validation.frames.chaos import ChaosFrame
+from warden.validation.frames.resilience import ResilienceFrame
 from warden.validation.frames.gitchanges import GitChangesFrame
 from warden.validation.frames.orphan import OrphanFrame
+
+# Alias
+ChaosFrame = ResilienceFrame
 
 __all__ = [
     # Enums
@@ -43,6 +46,7 @@ __all__ = [
     "CheckSeverity",
     # Built-in frames
     "SecurityFrame",
+    "ResilienceFrame",
     "ChaosFrame",
     "GitChangesFrame",
     "OrphanFrame",

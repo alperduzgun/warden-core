@@ -10,7 +10,7 @@ Each frame is in its own directory with:
 
 Available Frames:
 - security: Security Analysis (vulnerability detection)
-- chaos: Chaos Engineering (resilience testing)
+- resilience: Resilience Architecture Analysis (Chaos 2.0)
 - architectural: Architectural Consistency (file-level)
 - project_architecture: Project Architecture (project-level)
 - gitchanges: Git Changes Analysis (diff-based validation)
@@ -22,7 +22,7 @@ Available Frames:
 Usage:
     from warden.validation.frames.orphan import OrphanFrame
     from warden.validation.frames.security import SecurityFrame
-    from warden.validation.frames.chaos import ChaosFrame
+    from warden.validation.frames.resilience import ResilienceFrame
     from warden.validation.frames.gitchanges import GitChangesFrame
     from warden.validation.frames.fuzz import FuzzFrame
     from warden.validation.frames.property import PropertyFrame
@@ -31,7 +31,7 @@ Usage:
     # Or import all
     from warden.validation.frames import (
         SecurityFrame,
-        ChaosFrame,
+        ResilienceFrame,
         ArchitecturalConsistencyFrame,
         ProjectArchitectureFrame,
         GitChangesFrame,
@@ -43,7 +43,7 @@ Usage:
 """
 
 from warden.validation.frames.security import SecurityFrame
-from warden.validation.frames.chaos import ChaosFrame
+from warden.validation.frames.resilience import ResilienceFrame
 from warden.validation.frames.architectural import ArchitecturalConsistencyFrame
 from warden.validation.frames.project_architecture import ProjectArchitectureFrame
 from warden.validation.frames.gitchanges import GitChangesFrame
@@ -53,9 +53,13 @@ from warden.validation.frames.property import PropertyFrame
 from warden.validation.frames.stress import StressFrame
 from warden.validation.frames.config import ConfigValidationFrame
 
+# Alias for backward compatibility (optional, but requested to rename)
+ChaosFrame = ResilienceFrame
+
 __all__ = [
     "SecurityFrame",
-    "ChaosFrame",
+    "ResilienceFrame",
+    "ChaosFrame", # Keeping alias for now
     "ArchitecturalConsistencyFrame",
     "ProjectArchitectureFrame",
     "GitChangesFrame",

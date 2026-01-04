@@ -380,9 +380,9 @@ Return patterns as JSON."""
         if project_type in [ProjectType.APPLICATION, ProjectType.MICROSERVICE]:
             selected.append("security")
 
-        # Add chaos for services
+        # Add resilience for services
         if project_type in [ProjectType.MICROSERVICE, ProjectType.APPLICATION]:
-            selected.append("chaos")
+            selected.append("resilience")
 
         # Add orphan for all projects
         selected.append("orphan")
@@ -430,7 +430,7 @@ Return patterns as JSON."""
             "rules": rules,
             "priorities": {
                 "security": "CRITICAL",
-                "chaos": "HIGH",
+                "resilience": "HIGH",
                 "orphan": "MEDIUM",
             },
             "reasoning": "Default suppression based on file contexts",

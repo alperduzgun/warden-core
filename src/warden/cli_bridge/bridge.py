@@ -317,14 +317,14 @@ class WardenBridge:
         """Get default validation frames when no config is found (TUI pattern)."""
         from warden.validation.frames import (
             SecurityFrame,
-            ChaosFrame,
+            ResilienceFrame,
             ArchitecturalConsistencyFrame,
             OrphanFrame,
         )
         # Try to import new frames if available
         frames = [
             SecurityFrame(),
-            ChaosFrame(),
+            ResilienceFrame(),
             ArchitecturalConsistencyFrame(),
             OrphanFrame(),
         ]

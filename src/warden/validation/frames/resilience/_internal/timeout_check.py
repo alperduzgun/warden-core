@@ -18,6 +18,9 @@ from warden.validation.domain.check import (
     CheckSeverity,
 )
 from warden.validation.domain.frame import CodeFile
+from warden.shared.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class TimeoutCheck(ValidationCheck):
@@ -46,44 +49,44 @@ class TimeoutCheck(ValidationCheck):
 
     # Patterns for network calls without timeout
     RISKY_PATTERNS = [
-        # Python requests
+        # Python requests - looks for requests.method(...) where 'timeout' is NOT in args
         (
-            r"requests\.(?:get|post|put|delete|patch)\([^)]*?\)(?!.*timeout)",
+            r"requests\.(?:get|post|put|delete|patch)\((?:(?!timeout).)*?\)",
             "requests HTTP call without timeout parameter",
             "requests.get(url, timeout=30)",
         ),
         # Python httpx
         (
-            r"httpx\.(?:get|post|put|delete|patch)\([^)]*?\)(?!.*timeout)",
+            r"httpx\.(?:get|post|put|delete|patch)\((?:(?!timeout).)*?\)",
             "httpx HTTP call without timeout parameter",
             "httpx.get(url, timeout=30.0)",
         ),
         # Python aiohttp
         (
-            r"aiohttp\.ClientSession\(\)(?!.*timeout)",
+            r"aiohttp\.ClientSession\((?:(?!timeout).)*?\)",
             "aiohttp session without timeout",
             "aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))",
         ),
         # JavaScript/TypeScript fetch
         (
-            r"fetch\([^)]+\)(?!.*signal)",
+            r"fetch\((?:(?!signal).)*?\)",
             "fetch() without AbortSignal timeout",
             "fetch(url, { signal: AbortSignal.timeout(30000) })",
         ),
         # JavaScript axios
         (
-            r"axios\.(?:get|post|put|delete|patch)\([^)]*?\)(?!.*timeout)",
+            r"axios\.(?:get|post|put|delete|patch)\((?:(?!timeout).)*?\)",
             "axios HTTP call without timeout",
             "axios.get(url, { timeout: 30000 })",
         ),
         # Database connections
         (
-            r"psycopg2\.connect\([^)]*?\)(?!.*connect_timeout)",
+            r"psycopg2\.connect\((?:(?!connect_timeout).)*?\)",
             "PostgreSQL connection without timeout",
             "psycopg2.connect(..., connect_timeout=10)",
         ),
         (
-            r"pymongo\.MongoClient\([^)]*?\)(?!.*serverSelectionTimeoutMS)",
+            r"pymongo\.MongoClient\((?:(?!serverSelectionTimeoutMS).)*?\)",
             "MongoDB connection without timeout",
             "pymongo.MongoClient(..., serverSelectionTimeoutMS=5000)",
         ),
@@ -101,7 +104,10 @@ class TimeoutCheck(ValidationCheck):
                 if line.strip().startswith("#") or line.strip().startswith("//"):
                     continue
 
-                match = pattern.search(line)
+                if "requests" in line:
+                    match = pattern.search(line)
+                else:
+                    match = pattern.search(line)
                 if match:
                     findings.append(
                         CheckFinding(
