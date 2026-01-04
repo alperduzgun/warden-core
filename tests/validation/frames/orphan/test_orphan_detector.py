@@ -2,7 +2,7 @@
 
 import pytest
 from warden.validation.frames.orphan.orphan_detector import (
-    OrphanDetector,
+    PythonOrphanDetector as OrphanDetector,
     OrphanFinding,
 )
 

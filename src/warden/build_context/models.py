@@ -10,10 +10,10 @@ Panel JSON format: camelCase
 Python internal format: snake_case
 """
 
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any, List, Optional
 
+from pydantic import Field
 from warden.shared.domain.base_model import BaseDomainModel
 
 
@@ -79,7 +79,6 @@ class DependencyType(Enum):
     PEER = 3
 
 
-@dataclass
 class Dependency(BaseDomainModel):
     """
     Individual dependency with version info.
@@ -105,7 +104,7 @@ class Dependency(BaseDomainModel):
     version: str
     type: DependencyType = DependencyType.PRODUCTION
     is_direct: bool = True
-    extras: List[str] = field(default_factory=list)
+    extras: List[str] = Field(default_factory=list)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
@@ -116,7 +115,6 @@ class Dependency(BaseDomainModel):
         return data
 
 
-@dataclass
 class BuildScript(BaseDomainModel):
     """
     Build script definition.
@@ -140,7 +138,6 @@ class BuildScript(BaseDomainModel):
     description: Optional[str] = None
 
 
-@dataclass
 class BuildContext(BaseDomainModel):
     """
     Complete build configuration and dependencies.
@@ -174,13 +171,13 @@ class BuildContext(BaseDomainModel):
     project_version: Optional[str] = None
     project_description: Optional[str] = None
     config_file_path: Optional[str] = None
-    dependencies: List[Dependency] = field(default_factory=list)
-    dev_dependencies: List[Dependency] = field(default_factory=list)
-    scripts: List[BuildScript] = field(default_factory=list)
+    dependencies: List[Dependency] = Field(default_factory=list)
+    dev_dependencies: List[Dependency] = Field(default_factory=list)
+    scripts: List[BuildScript] = Field(default_factory=list)
     python_version: Optional[str] = None
     node_version: Optional[str] = None
-    engines: Dict[str, str] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    engines: Dict[str, str] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""

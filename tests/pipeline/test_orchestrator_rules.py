@@ -9,13 +9,13 @@ from pathlib import Path
 from warden.pipeline import (
     PipelineOrchestrator,
     PipelineConfig,
-    FrameRules,
     ExecutionStrategy,
     PipelineStatus,
 )
 from warden.validation.frames import SecurityFrame, ChaosFrame
 from warden.validation.domain.frame import CodeFile
-from warden.rules.domain.models import CustomRule, RuleSeverity, RuleType
+from warden.rules.domain.models import CustomRule, FrameRules
+from warden.rules.domain.enums import RuleSeverity, RuleType
 
 
 @pytest.mark.asyncio

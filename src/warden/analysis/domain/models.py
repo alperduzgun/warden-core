@@ -4,18 +4,17 @@ Analysis domain models.
 Core entities for code analysis and issue tracking.
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Any
 from uuid import uuid4
 
+from pydantic import Field
 from warden.shared.domain.base_model import BaseDomainModel
 from warden.analysis.domain.enums import TrendDirection, AnalysisStatus
 from warden.issues.domain.models import WardenIssue
 from warden.issues.domain.enums import IssueSeverity
 
 
-@dataclass
 class IssueTrend(BaseDomainModel):
     """
     Trend analysis for a specific issue.
@@ -39,7 +38,6 @@ class IssueTrend(BaseDomainModel):
         return data
 
 
-@dataclass
 class SeverityStats(BaseDomainModel):
     """
     Statistics by severity level.
@@ -63,7 +61,6 @@ class SeverityStats(BaseDomainModel):
         return self.critical + self.high
 
 
-@dataclass
 class FrameStats(BaseDomainModel):
     """
     Statistics for a specific frame.
@@ -87,7 +84,6 @@ class FrameStats(BaseDomainModel):
         return (self.passes / self.executions) * 100
 
 
-@dataclass
 class AnalysisResult(BaseDomainModel):
     """
     Complete analysis result.
@@ -95,9 +91,9 @@ class AnalysisResult(BaseDomainModel):
     Aggregates findings, trends, and statistics.
     """
 
-    id: str = field(default_factory=lambda: str(uuid4()))
+    id: str = Field(default_factory=lambda: str(uuid4()))
     status: AnalysisStatus = AnalysisStatus.PENDING
-    executed_at: datetime = field(default_factory=datetime.utcnow)
+    executed_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Issue tracking
     total_issues: int = 0
@@ -107,21 +103,21 @@ class AnalysisResult(BaseDomainModel):
     persistent_issues: int = 0  # Still present from last run
 
     # Severity breakdown
-    severity_stats: SeverityStats = field(default_factory=SeverityStats)
+    severity_stats: SeverityStats = Field(default_factory=SeverityStats)
 
     # Frame statistics
-    frame_stats: List[FrameStats] = field(default_factory=list)
+    frame_stats: List[FrameStats] = Field(default_factory=list)
 
     # Trend analysis
     overall_trend: TrendDirection = TrendDirection.UNKNOWN
-    issue_trends: List[IssueTrend] = field(default_factory=list)
+    issue_trends: List[IssueTrend] = Field(default_factory=list)
 
     # Comparison with baseline
-    baseline_comparison: Dict[str, Any] = field(default_factory=dict)
+    baseline_comparison: Dict[str, Any] = Field(default_factory=dict)
 
     # Metadata
     duration: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -170,7 +166,6 @@ class AnalysisResult(BaseDomainModel):
         return max(0.0, min(100.0, score))
 
 
-@dataclass
 class IssueSnapshot(BaseDomainModel):
     """
     Snapshot of issues at a specific point in time.
@@ -178,21 +173,21 @@ class IssueSnapshot(BaseDomainModel):
     Used for historical comparison and trend analysis.
     """
 
-    id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
     project_id: str = ""
     branch: str = "main"
     commit_hash: str = ""
 
     # Issues in this snapshot
-    issues: List[WardenIssue] = field(default_factory=list)
+    issues: List[WardenIssue] = Field(default_factory=list)
 
     # Summary statistics
     total_issues: int = 0
-    severity_stats: SeverityStats = field(default_factory=SeverityStats)
+    severity_stats: SeverityStats = Field(default_factory=SeverityStats)
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""

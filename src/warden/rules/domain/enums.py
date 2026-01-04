@@ -29,3 +29,15 @@ class RuleSeverity(Enum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+
+
+class RuleType(Enum):
+    """Type of custom rule execution logic.
+    
+    Determines how the rule is evaluated.
+    """
+    
+    SECURITY = "security"
+    CONVENTION = "convention" 
+    PATTERN = "pattern"
+    SCRIPT = "script"

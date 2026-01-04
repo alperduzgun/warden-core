@@ -683,8 +683,12 @@ jobs:
           git config --global user.email 'warden-ci@users.noreply.github.com'
           cp warden-report.sarif /tmp/report.sarif
           if [ -f .warden/ai_status.md ]; then cp .warden/ai_status.md /tmp/ai_status.md; fi
-          git fetch origin warden-reports:warden-reports || git checkout --orphan warden-reports
-          git checkout warden-reports
+          if git fetch origin warden-reports:warden-reports; then
+            git checkout warden-reports
+          else
+            git checkout --orphan warden-reports
+            git rm -rf .
+          fi
           cp /tmp/report.sarif ./warden-report.sarif
           if [ -f /tmp/ai_status.md ]; then cp /tmp/ai_status.md ./ai_status.md; fi
           git add warden-report.sarif ai_status.md

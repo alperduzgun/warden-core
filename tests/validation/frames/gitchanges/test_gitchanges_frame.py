@@ -13,8 +13,8 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
-from warden.validation.frames.gitchanges_frame import GitChangesFrame
-from warden.validation.frames.git_diff_parser import GitDiffParser, FileDiff, DiffHunk
+from warden.validation.frames.gitchanges.gitchanges_frame import GitChangesFrame
+from warden.validation.frames.gitchanges.git_diff_parser import GitDiffParser, FileDiff, DiffHunk
 from warden.validation.domain.frame import CodeFile, FrameResult
 
 

@@ -69,8 +69,12 @@ jobs:
           if [ -f .warden/ai_status.md ]; then cp .warden/ai_status.md /tmp/ai_status.md; fi
           
           # 3. Switch to Shadow Branch (Orphan = No history)
-          git fetch origin warden-reports:warden-reports || git checkout --orphan warden-reports
-          git checkout warden-reports
+          if git fetch origin warden-reports:warden-reports; then
+            git checkout warden-reports
+          else
+            git checkout --orphan warden-reports
+            git rm -rf .
+          fi
           
           # 4. Update Reports
           cp /tmp/warden.sarif .

@@ -15,11 +15,11 @@ import json
 from typing import List
 from unittest.mock import Mock, AsyncMock, patch
 
-from warden.validation.frames.llm_orphan_filter import (
+from warden.validation.frames.orphan.llm_orphan_filter import (
     LLMOrphanFilter,
     FilterDecision,
 )
-from warden.validation.frames.orphan_detector import OrphanFinding
+from warden.validation.frames.orphan.orphan_detector import OrphanFinding
 from warden.validation.domain.frame import CodeFile
 from warden.llm.types import LlmResponse
 

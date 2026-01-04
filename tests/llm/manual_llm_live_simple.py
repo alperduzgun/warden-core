@@ -17,13 +17,10 @@ from warden.llm import (
     LlmRequest,
     LlmConfiguration,
     ProviderConfig,
-    LlmClientFactory,
+    create_client,
     ANALYSIS_SYSTEM_PROMPT,
     generate_analysis_request
 )
-from warden.core.analysis.analyzer import CodeAnalyzer
-from warden.core.analysis.classifier import CodeClassifier
-
 
 async def test_azure_simple():
     """Test 1: Simple Azure OpenAI request"""
@@ -41,8 +38,7 @@ async def test_azure_simple():
         )
     )
 
-    factory = LlmClientFactory(config)
-    client = factory.create_default_client()
+    client = create_client(config)
 
     request = LlmRequest(
         system_prompt="You are a helpful assistant.",
@@ -81,8 +77,7 @@ async def test_code_analysis():
         )
     )
 
-    factory = LlmClientFactory(config)
-    client = factory.create_default_client()
+    client = create_client(config)
 
     # Vulnerable code
     code = '''
@@ -149,91 +144,6 @@ def get_user(user_id):
         return False
 
 
-async def test_analyzer_integration():
-    """Test 3: CodeAnalyzer with LLM"""
-    print("\n🧪 Test 3: CodeAnalyzer with LLM Integration")
-    print("=" * 60)
-
-    config = LlmConfiguration(
-        default_provider=LlmProvider.AZURE_OPENAI,
-        azure_openai=ProviderConfig(
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            default_model="gpt-4o",
-            api_version="2024-02-01",
-            enabled=True
-        )
-    )
-
-    factory = LlmClientFactory(config)
-    analyzer = CodeAnalyzer(llm_factory=factory)
-
-    code = '''
-import os
-
-def unsafe_exec(user_cmd):
-    os.system(user_cmd)  # Command injection!
-'''
-
-    result = await analyzer.analyze_with_llm("unsafe.py", code, "python")
-
-    if result.get("score") is not None:
-        print(f"✅ SUCCESS")
-        print(f"   Score: {result['score']}/10")
-        print(f"   Confidence: {result.get('confidence', 'N/A')}")
-        print(f"   Issues: {len(result.get('issues', []))}")
-        print(f"   Provider: {result.get('provider', 'N/A')}")
-        print(f"   Tokens: {result.get('tokensUsed', 0)}")
-        return True
-    else:
-        print(f"❌ FAILED: No score in result")
-        return False
-
-
-async def test_classifier_integration():
-    """Test 4: CodeClassifier with LLM"""
-    print("\n🧪 Test 4: CodeClassifier with LLM Integration")
-    print("=" * 60)
-
-    config = LlmConfiguration(
-        default_provider=LlmProvider.AZURE_OPENAI,
-        azure_openai=ProviderConfig(
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            default_model="gpt-4o",
-            api_version="2024-02-01",
-            enabled=True
-        )
-    )
-
-    factory = LlmClientFactory(config)
-    classifier = CodeClassifier(llm_factory=factory)
-
-    code = '''
-import asyncio
-import httpx
-
-async def fetch_api(url: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        return response.json()
-'''
-
-    result = await classifier.classify_with_llm("api.py", code, "python")
-
-    if "characteristics" in result:
-        chars = result["characteristics"]
-        print(f"✅ SUCCESS")
-        print(f"   Has Async: {chars.get('hasAsyncOperations', False)}")
-        print(f"   Has API Calls: {chars.get('hasExternalApiCalls', False)}")
-        print(f"   Recommended Frames: {result.get('recommendedFrames', [])}")
-        print(f"   Provider: {result.get('provider', 'N/A')}")
-        return True
-    else:
-        print(f"❌ FAILED: No characteristics in result")
-        return False
-
-
 async def main():
     """Run all tests"""
     print("\n" + "=" * 60)
@@ -262,8 +172,6 @@ async def main():
 
     results.append(await test_azure_simple())
     results.append(await test_code_analysis())
-    results.append(await test_analyzer_integration())
-    results.append(await test_classifier_integration())
 
     # Summary
     print("\n" + "=" * 60)

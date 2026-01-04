@@ -30,7 +30,6 @@ TypeScript:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any, Type
 
@@ -38,7 +37,6 @@ from warden.shared.domain.base_model import BaseDomainModel
 from warden.issues.domain.enums import IssueSeverity, IssueState
 
 
-@dataclass
 class StateTransition(BaseDomainModel):
     """
     State transition record for issue history.
@@ -64,7 +62,6 @@ class StateTransition(BaseDomainModel):
         )
 
 
-@dataclass
 class WardenIssue(BaseDomainModel):
     """
     Core issue model (matches Panel TypeScript interface).
