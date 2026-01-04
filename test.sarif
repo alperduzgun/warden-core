@@ -1,0 +1,46 @@
+{
+    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+    "version": "2.1.0",
+    "runs": [
+        {
+            "tool": {
+                "driver": {
+                    "name": "Warden",
+                    "semanticVersion": "0.1.0",
+                    "informationUri": "https://github.com/alperduzgun/warden-core",
+                    "rules": [
+                        {
+                            "id": "architecturalconsistency-test_mirror_structure-0",
+                            "shortDescription": {
+                                "text": "Architectural Consistency"
+                            },
+                            "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules"
+                        }
+                    ]
+                }
+            },
+            "results": [
+                {
+                    "ruleId": "architecturalconsistency-test_mirror_structure-0",
+                    "level": "warning",
+                    "message": {
+                        "text": "No corresponding test file found\n\nDetails: **Rule:** test_mirror_structure\n\n**Expected:** /Users/alper/Documents/Development/Personal/warden-core/tests/cleaning/application/test_cleaning_phase.py\n\n**Actual:** Test file missing\n\n"
+                    },
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/cleaning/application/cleaning_phase.py"
+                                },
+                                "region": {
+                                    "startLine": 0,
+                                    "startColumn": 0
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -12,6 +12,7 @@ from warden.validation.domain.frame import CodeFile
 from warden.shared.infrastructure.logging import get_logger
 from warden.cleaning.application.pattern_analyzer import PatternAnalyzer
 from warden.cleaning.application.llm_suggestion_generator import LLMSuggestionGenerator
+from warden.cleaning.domain.models import Cleaning
 
 # Try to import LLMService, use None if not available
 try:

@@ -11,8 +11,8 @@ import ast
 import structlog
 from typing import List, Optional, Set
 
-from warden.cleaning.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
-from warden.cleaning.models import (
+from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
+from warden.cleaning.domain.models import (
     CleaningResult,
     CleaningSuggestion,
     CleaningIssue,
