@@ -116,7 +116,7 @@ class OpenAIClient(ILlmClient):
         except:
             return False
 
-    async def complete(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> str:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
@@ -125,7 +125,7 @@ class OpenAIClient(ILlmClient):
             system_prompt: System prompt (optional)
 
         Returns:
-            Completion text
+            LlmResponse object with content and token usage
 
         Raises:
             Exception: If request fails
@@ -144,7 +144,7 @@ class OpenAIClient(ILlmClient):
         if not response.success:
             raise Exception(f"LLM request failed: {response.error_message}")
 
-        return response.content
+        return response
 
     async def stream_completion(self, prompt: str, system_prompt: str = "You are a helpful coding assistant."):
         """
@@ -163,7 +163,8 @@ class OpenAIClient(ILlmClient):
         """
         # For now, use non-streaming and simulate chunks
         # TODO: Implement true streaming with SSE
-        full_response = await self.complete(prompt, system_prompt)
+        response = await self.complete_async(prompt, system_prompt)
+        full_response = response.content
 
         # Simulate streaming by yielding in chunks
         chunk_size = 20

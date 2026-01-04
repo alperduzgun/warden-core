@@ -58,3 +58,34 @@ class ILlmClient(ABC):
             Should NOT raise exceptions - return False on any error
         """
         pass
+
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> LlmResponse:
+        """
+        Simple completion method for non-streaming requests.
+
+        Args:
+            prompt: User prompt
+            system_prompt: System prompt (optional)
+
+        Returns:
+            LlmResponse with content and token usage
+
+        Raises:
+            Exception: If request fails
+        """
+        # Default implementation using send_async
+        request = LlmRequest(
+            user_message=prompt,
+            system_prompt=system_prompt,
+            model=None,  # Use provider default
+            temperature=0.7,
+            max_tokens=2000,
+            timeout_seconds=30.0
+        )
+
+        response = await self.send_async(request)
+
+        if not response.success:
+            raise Exception(f"LLM request failed: {response.error_message}")
+
+        return response

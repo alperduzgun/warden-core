@@ -26,6 +26,7 @@ from warden.cleaning.application.analyzers.documentation_analyzer import Documen
 from warden.cleaning.application.analyzers.testability_analyzer import TestabilityAnalyzer
 from warden.validation.domain.frame import CodeFile
 from warden.shared.infrastructure.exceptions import ValidationError
+from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 
 logger = structlog.get_logger()
 
@@ -42,6 +43,8 @@ class AnalysisPhase:
         self,
         config: Optional[Dict[str, Any]] = None,
         progress_callback: Optional[callable] = None,
+        project_root: Optional[Path] = None,
+        use_gitignore: bool = True,
     ) -> None:
         """
         Initialize Analysis Phase.
@@ -63,6 +66,10 @@ class AnalysisPhase:
             "documentation": DocumentationAnalyzer(),
             "testability": TestabilityAnalyzer(),
         }
+        
+        # Initialize IgnoreMatcher
+        self.project_root = Path(project_root) if project_root else Path.cwd()
+        self.ignore_matcher = IgnoreMatcher(self.project_root, use_gitignore=use_gitignore)
 
         # Get metric weights from config
         self.weights = self.config.get("weights", self._get_default_weights())
@@ -107,6 +114,23 @@ class AnalysisPhase:
         Raises:
             ValidationError: If analysis fails
         """
+        # Filter files based on ignore matcher
+        original_count = len(code_files)
+        code_files = [
+            cf for cf in code_files 
+            if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "analysis")
+        ]
+        
+        if len(code_files) < original_count:
+            logger.info(
+                "analysis_phase_files_ignored",
+                ignored=original_count - len(code_files),
+                remaining=len(code_files)
+            )
+
+        if not code_files:
+            return QualityMetrics()
+
         start_time = time.perf_counter()
 
         logger.info(

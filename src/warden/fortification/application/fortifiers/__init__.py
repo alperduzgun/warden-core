@@ -1,9 +1,9 @@
 """Fortifier implementations."""
 
-from warden.fortification.fortifiers.error_handling import ErrorHandlingFortifier
-from warden.fortification.fortifiers.logging import LoggingFortifier
-from warden.fortification.fortifiers.input_validation import InputValidationFortifier
-from warden.fortification.fortifiers.resource_disposal import ResourceDisposalFortifier
+from .error_handling import ErrorHandlingFortifier
+from .logging import LoggingFortifier
+from .input_validation import InputValidationFortifier
+from .resource_disposal import ResourceDisposalFortifier
 
 __all__ = [
     "ErrorHandlingFortifier",

@@ -13,6 +13,8 @@ from warden.shared.infrastructure.logging import get_logger
 from warden.cleaning.application.pattern_analyzer import PatternAnalyzer
 from warden.cleaning.application.llm_suggestion_generator import LLMSuggestionGenerator
 from warden.cleaning.domain.models import Cleaning
+from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
+from pathlib import Path
 
 # Try to import LLMService, use None if not available
 try:
@@ -24,8 +26,8 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class CleaningResult:
-    """Result from cleaning phase."""
+class CleaningPhaseResult:
+    """Result from cleaning phase execution."""
 
     cleaning_suggestions: List[Dict[str, Any]]
     refactorings: List[Dict[str, Any]]
@@ -64,6 +66,16 @@ class CleaningPhase:
         self.context = context or {}
         self.llm_service = llm_service
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
+        
+        # Initialize IgnoreMatcher
+        project_root = getattr(self.context, 'project_root', None) or Path.cwd()
+        if isinstance(self.context, dict):
+            project_root = self.context.get('project_root') or project_root
+            use_gitignore = self.context.get('use_gitignore', True)
+        else:
+            use_gitignore = getattr(self.context, 'use_gitignore', True)
+        
+        self.ignore_matcher = IgnoreMatcher(Path(project_root), use_gitignore=use_gitignore)
 
         # Initialize analyzers
         self.pattern_analyzer = PatternAnalyzer()
@@ -85,7 +97,7 @@ class CleaningPhase:
     async def execute_async(
         self,
         code_files: List[CodeFile],
-    ) -> CleaningResult:
+    ) -> CleaningPhaseResult:
         """
         Execute cleaning phase.
         """
@@ -94,6 +106,20 @@ class CleaningPhase:
             file_count=len(code_files),
             use_llm=self.use_llm,
         )
+
+        # Filter files based on ignore matcher
+        original_count = len(code_files)
+        code_files = [
+            cf for cf in code_files 
+            if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "cleaning")
+        ]
+        
+        if len(code_files) < original_count:
+             logger.info(
+                "cleaning_phase_files_ignored",
+                ignored=original_count - len(code_files),
+                remaining=len(code_files)
+            )
 
         from warden.cleaning.application.orchestrator import CleaningOrchestrator
         orchestrator = CleaningOrchestrator()
@@ -162,13 +188,11 @@ class CleaningPhase:
             all_refactorings,
         )
 
-        result = CleaningResult(
-            success=True,
-            cleanings=all_cleanings,
-            suggestions=all_suggestions,
+        result = CleaningPhaseResult(
+            cleaning_suggestions=[c.to_json() if hasattr(c, 'to_json') else c for c in all_cleanings],
+            refactorings=[r.to_json() if hasattr(r, 'to_json') else r for r in all_refactorings],
             quality_score_after=quality_score_after,
             code_improvements=code_improvements,
-            summary=f"Generated {len(all_cleanings)} cleaning suggestions"
         )
 
         return result
@@ -254,6 +278,11 @@ class CleaningPhase:
             "refactorings": refactorings,
         }
 
+    def _safe_get(self, obj: Any, key: str, default: Any = None) -> Any:
+        """Safely get attribute from dict or object."""
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
 
     def _calculate_improved_score(
         self,
@@ -277,7 +306,7 @@ class CleaningPhase:
 
         # Each cleaning suggestion adds small improvement
         for cleaning in cleaning_suggestions:
-            impact = cleaning.get("impact", "medium")
+            impact = self._safe_get(cleaning, "impact", "medium")
             if impact == "high":
                 improvement += 0.3
             elif impact == "medium":
@@ -287,7 +316,7 @@ class CleaningPhase:
 
         # Each refactoring adds larger improvement
         for refactoring in refactorings:
-            impact = refactoring.get("impact", "high")
+            impact = self._safe_get(refactoring, "impact", "high")
             if impact == "high":
                 improvement += 0.5
             elif impact == "medium":
@@ -321,19 +350,19 @@ class CleaningPhase:
         # Count by type
         type_counts = {}
         for suggestion in cleaning_suggestions + refactorings:
-            sug_type = suggestion.get("type", "other")
+            sug_type = self._safe_get(suggestion, "type", "other")
             type_counts[sug_type] = type_counts.get(sug_type, 0) + 1
 
         # Count by impact
         impact_counts = {"high": 0, "medium": 0, "low": 0}
         for suggestion in cleaning_suggestions + refactorings:
-            impact = suggestion.get("impact", "medium")
+            impact = self._safe_get(suggestion, "impact", "medium")
             impact_counts[impact] = impact_counts.get(impact, 0) + 1
 
         # Count by effort
         effort_counts = {"high": 0, "medium": 0, "low": 0}
         for suggestion in cleaning_suggestions + refactorings:
-            effort = suggestion.get("effort", "medium")
+            effort = self._safe_get(suggestion, "effort", "medium")
             effort_counts[effort] = effort_counts.get(effort, 0) + 1
 
         return {
@@ -345,7 +374,7 @@ class CleaningPhase:
             "by_effort": effort_counts,
             "quick_wins": [
                 s for s in cleaning_suggestions + refactorings
-                if s.get("impact") in ["high", "medium"] and s.get("effort") == "low"
+                if self._safe_get(s, "impact") in ["high", "medium"] and self._safe_get(s, "effort") == "low"
             ][:5],  # Top 5 quick wins
         }
 

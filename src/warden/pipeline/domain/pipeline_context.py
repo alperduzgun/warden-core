@@ -43,6 +43,8 @@ class PipelineContext:
     started_at: datetime
     file_path: Path
     source_code: str
+    project_root: Optional[Path] = None  # NEW: Root directory of the project
+    use_gitignore: bool = True  # NEW: Respect .gitignore patterns
     language: str = "python"
 
     # Memory limits (class variables)
@@ -99,6 +101,11 @@ class PipelineContext:
     # Artifacts
     artifacts: List[Dict[str, Any]] = field(default_factory=list)
 
+    # LLM Usage Statistics
+    total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
     # Metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
@@ -123,6 +130,7 @@ class PipelineContext:
         prompt: str,
         response: str,
         confidence: float = 0.0,
+        usage: Optional[Dict[str, int]] = None,
     ) -> None:
         """
         Record LLM interaction for audit trail (thread-safe, memory-bounded).
@@ -132,11 +140,18 @@ class PipelineContext:
             prompt: Prompt sent to LLM
             response: LLM response
             confidence: Confidence in response
+            usage: Token usage statistics
         """
         with self._lock:
             # Memory-bounded: Remove oldest if at limit
             if len(self.llm_history) >= self.MAX_LLM_HISTORY:
                 self.llm_history.pop(0)  # FIFO eviction
+
+            # Aggregate token usage if provided
+            if usage:
+                self.total_tokens += usage.get("total_tokens", 0)
+                self.prompt_tokens += usage.get("prompt_tokens", 0)
+                self.completion_tokens += usage.get("completion_tokens", 0)
 
             self.llm_history.append({
                 "phase": phase,
@@ -144,6 +159,7 @@ class PipelineContext:
                 "prompt": prompt[:500],  # Truncate for storage
                 "response": response[:500],  # Truncate for storage
                 "confidence": confidence,
+                "usage": usage or {},
             })
 
     def _add_to_bounded_list(self, target_list: List, item: Any, max_size: int = None) -> None:
@@ -176,6 +192,8 @@ class PipelineContext:
         context = {
             "pipeline_id": self.pipeline_id,
             "file_path": str(self.file_path),
+            "project_root": str(self.project_root) if self.project_root else None,
+            "use_gitignore": self.use_gitignore,
             "source_code": self.source_code,
             "language": self.language,
         }
@@ -209,6 +227,7 @@ class PipelineContext:
             context.update({
                 "quality_metrics": self.quality_metrics.to_json() if self.quality_metrics else None,
                 "quality_score": self.quality_score_before,
+                "quality_score_before": self.quality_score_before,
                 "quality_confidence": self.quality_confidence,
                 "hotspots": self.hotspots,
                 "quick_wins": self.quick_wins,

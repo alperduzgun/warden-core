@@ -40,6 +40,7 @@ class CleaningExecutor(BasePhaseExecutor):
             phase = CleaningPhase(
                 config=getattr(self.config, 'cleaning_config', {}),
                 context=phase_context,
+                llm_service=self.llm_service,
             )
 
             result = await phase.execute_async(code_files)

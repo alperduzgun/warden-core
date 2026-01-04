@@ -567,20 +567,45 @@ class WardenBridge:
                 
                 logger.info("scanning_directory", directory=str(path))
                 
+                # Initialize ignore matcher for pattern-based exclusions
+                from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
+                use_gitignore = True
+                if self.orchestrator and hasattr(self.orchestrator, 'config'):
+                    use_gitignore = getattr(self.orchestrator.config, 'use_gitignore', True)
+                
+                ignore_matcher = IgnoreMatcher(self.project_root, use_gitignore=use_gitignore)
+                
                 files_to_scan = []
+                ignored_count = 0
+                
                 # Recursively find all files
                 for item in path.rglob("*"):
                     if item.is_file() and item.suffix in code_extensions:
-                        # Skip files in .warden, .git, node_modules, __pycache__, .venv
-                        parts = item.parts
-                        if any(p.startswith('.') and p != '.' for p in parts) or \
-                           'node_modules' in parts or \
-                           '__pycache__' in parts or \
-                           'venv' in parts or \
-                           'env' in parts:
+                        # Check if directory should be ignored
+                        should_skip = False
+                        for part in item.parts:
+                            if ignore_matcher.should_ignore_directory(part):
+                                should_skip = True
+                                break
+                        
+                        if should_skip:
+                            ignored_count += 1
+                            continue
+                        
+                        # Check if file path should be ignored (e.g. globs)
+                        if ignore_matcher.should_ignore_path(item):
+                            ignored_count += 1
+                            continue
+                        
+                        # Check if file pattern should be ignored (e.g. *.txt)
+                        if ignore_matcher.should_ignore_file(item):
+                            ignored_count += 1
                             continue
                             
                         files_to_scan.append(item)
+                
+                if ignored_count > 0:
+                    logger.info("files_ignored", count=ignored_count)
                         
                 if not files_to_scan:
                      raise IPCError(
@@ -1224,6 +1249,10 @@ class WardenBridge:
 
     def _serialize_pipeline_result(self, result: "PipelineResult") -> Dict[str, Any]:
         """Serialize pipeline result to JSON-RPC compatible dict."""
+        # Use custom to_json if available (best for Panel/CLI consistency)
+        if hasattr(result, "to_json"):
+            return result.to_json()
+
         # Use Pydantic's model_dump if available (new Pydantic approach)
         if hasattr(result, "model_dump"):
             return result.model_dump(mode="json")

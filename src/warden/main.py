@@ -236,8 +236,15 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, o
                     table.add_row("Critical Issues", f"[{'red' if critical > 0 else 'green'}]{critical}[/]")
                     
                     console.print("\n", table)
+                    # Status check (COMPLETED=2)
+                    status_raw = res.get('status')
+                    # Handle both integer and string statuses (Enums are often serialized to name or value)
+                    is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
                     
-                    if res.get('status') == 'success':
+                    if verbose:
+                        console.print(f"[dim]Debug: status={status_raw} ({type(status_raw).__name__}), is_success={is_success}[/dim]")
+                    
+                    if is_success:
                         console.print(f"\n[bold green]✨ Scan Succeeded![/bold green]")
                     else:
                         console.print(f"\n[bold red]💥 Scan Failed![/bold red]")
@@ -269,7 +276,10 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, o
             if warden_dir.exists():
                 status_file = warden_dir / "ai_status.md"
                 
-                status_icon = "✅ PASS" if final_result_data.get('status') == 'success' else "❌ FAIL"
+                # Status check (COMPLETED=2)
+                status_raw = final_result_data.get('status')
+                is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED"]
+                status_icon = "✅ PASS" if is_success else "❌ FAIL"
                 critical_count = final_result_data.get('critical_findings', 0)
                 total_count = final_result_data.get('total_findings', 0)
                 scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -290,7 +300,9 @@ Updated: {scan_time}
         except Exception:
             pass # Silent fail for aux file
 
-        if final_result_data and final_result_data.get('status') == 'success':
+        # Final exit code
+        status_val = final_result_data.get('status')
+        if final_result_data and str(status_val).upper() in ["2", "SUCCESS", "COMPLETED"]:
             return 0
         else:
             return 1

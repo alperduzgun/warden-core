@@ -5,14 +5,13 @@ Provides comprehensive code quality scoring on a 0-10 scale.
 Panel UI compatible with before/after comparison support.
 """
 
-from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from pydantic import Field
 
 from warden.shared.domain.base_model import BaseDomainModel
 
 
-@dataclass
 class MetricBreakdown(BaseDomainModel):
     """
     Individual metric score with details.
@@ -23,7 +22,7 @@ class MetricBreakdown(BaseDomainModel):
     name: str  # e.g., "complexity", "duplication"
     score: float  # 0.0 to 10.0
     weight: float  # Weight in overall score calculation (0.0 to 1.0)
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: Dict[str, Any] = Field(default_factory=dict)
 
     @property
     def weighted_score(self) -> float:
@@ -41,7 +40,6 @@ class MetricBreakdown(BaseDomainModel):
         }
 
 
-@dataclass
 class CodeHotspot(BaseDomainModel):
     """
     Problematic area in code that needs attention.
@@ -68,7 +66,6 @@ class CodeHotspot(BaseDomainModel):
         }
 
 
-@dataclass
 class QuickWin(BaseDomainModel):
     """
     Easy improvement that can boost quality score.
@@ -100,7 +97,6 @@ class QuickWin(BaseDomainModel):
         return data
 
 
-@dataclass
 class QualityMetrics(BaseDomainModel):
     """
     Comprehensive code quality metrics for Analysis phase.
@@ -133,24 +129,24 @@ class QualityMetrics(BaseDomainModel):
     technical_debt_hours: float = 0.0  # Estimated hours to fix all issues
 
     # Problem areas
-    hotspots: List[CodeHotspot] = field(default_factory=list)
+    hotspots: List[CodeHotspot] = Field(default_factory=list)
 
     # Quick improvements
-    quick_wins: List[QuickWin] = field(default_factory=list)
+    quick_wins: List[QuickWin] = Field(default_factory=list)
 
     # Metric breakdowns with weights
-    metric_breakdowns: List[MetricBreakdown] = field(default_factory=list)
+    metric_breakdowns: List[MetricBreakdown] = Field(default_factory=list)
 
     # Trend information (if historical data available)
     trend: Optional[str] = None  # "improving", "degrading", "stable"
     previous_score: Optional[float] = None
 
     # Analysis metadata
-    analyzed_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    analyzed_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     analysis_duration: float = 0.0  # Seconds
     file_count: int = 0
 
-    def __post_init__(self) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Initialize metric breakdowns if not provided."""
         if not self.metric_breakdowns:
             self.metric_breakdowns = self._create_default_breakdowns()

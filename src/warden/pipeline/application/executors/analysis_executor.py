@@ -69,7 +69,9 @@ class AnalysisExecutor(BasePhaseExecutor):
 
                 phase = AnalysisPhase(
                     config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
-                    llm_service=self.llm_service
+                    llm_service=self.llm_service,
+                    project_root=self.project_root,
+                    use_gitignore=getattr(self.config, 'use_gitignore', True),
                 )
                 if verbose:
                     logger.info("using_llm_analysis_phase_verbose", llm_provider=self.llm_service.__class__.__name__ if self.llm_service else "None")
@@ -78,6 +80,8 @@ class AnalysisExecutor(BasePhaseExecutor):
                 from warden.analysis.application.analysis_phase import AnalysisPhase
                 phase = AnalysisPhase(
                     config=getattr(self.config, 'analysis_config', {}),
+                    project_root=self.project_root,
+                    use_gitignore=getattr(self.config, 'use_gitignore', True),
                 )
                 if verbose:
                     logger.info("using_rule_based_analysis_phase_verbose")

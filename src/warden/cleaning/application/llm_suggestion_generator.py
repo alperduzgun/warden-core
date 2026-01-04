@@ -68,14 +68,14 @@ class LLMSuggestionGenerator:
 
         try:
             # Get LLM suggestions
-            response = await self.llm_service.generate_async(
+            response = await self.llm_service.complete_async(
                 prompt=prompt,
-                temperature=0.4,  # Moderate temperature for creative suggestions
-                max_tokens=2000,
+                system_prompt="You are a senior software engineer specialized in code quality and refactoring. Respond only with valid JSON.",
             )
 
-            # Parse LLM response
-            suggestions = self.parse_response(response, code_file)
+            # Parse LLM response - response is an LlmResponse object
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            suggestions = self.parse_response(response_text, code_file)
 
             logger.info(
                 "llm_suggestions_generated",
@@ -382,11 +382,17 @@ class LLMSuggestionGenerator:
 
         formatted = []
         for finding in findings:
-            formatted.append(
-                f"- {finding.get('type', 'issue')}: "
-                f"{finding.get('message', 'Security issue')} "
-                f"(line {finding.get('line_number', 'unknown')})"
-            )
+            # Handle both dict and object access
+            if isinstance(finding, dict):
+                finding_type = finding.get('type', 'issue')
+                message = finding.get('message', 'Security issue')
+                line = finding.get('line_number', 'unknown')
+            else:
+                finding_type = getattr(finding, 'type', 'issue')
+                message = getattr(finding, 'message', 'Security issue')
+                line = getattr(finding, 'line_number', 'unknown')
+            
+            formatted.append(f"- {finding_type}: {message} (line {line})")
 
         return "\n".join(formatted)
 

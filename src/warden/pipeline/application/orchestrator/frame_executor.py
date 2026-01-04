@@ -6,6 +6,7 @@ Handles frame execution strategies and validation orchestration.
 
 import time
 import asyncio
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -24,6 +25,7 @@ from warden.shared.infrastructure.logging import get_logger
 # Import helper modules
 from .frame_matcher import FrameMatcher
 from .result_aggregator import ResultAggregator
+from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 
 logger = get_logger(__name__)
 
@@ -61,6 +63,7 @@ class FrameExecutor:
         # Initialize helper components
         self.frame_matcher = FrameMatcher(frames, available_frames=self.available_frames)
         self.result_aggregator = ResultAggregator()
+        self.ignore_matcher: Optional[IgnoreMatcher] = None
 
     async def execute_validation_with_strategy_async(
         self,
@@ -221,6 +224,32 @@ class FrameExecutor:
         """Execute a frame with PRE/POST rules."""
         # Start timing frame execution
         frame_start_time = time.perf_counter()
+
+        # Initialize IgnoreMatcher if not already done
+        if self.ignore_matcher is None:
+            # Use project_root from context if available, otherwise fallback to cwd
+            project_root = getattr(context, 'project_root', None) or Path.cwd()
+            use_gitignore = getattr(self.config, 'use_gitignore', True)
+            self.ignore_matcher = IgnoreMatcher(project_root, use_gitignore=use_gitignore)
+
+        # Filter files for this specific frame
+        frame_id = frame.frame_id
+        original_count = len(code_files)
+        files_for_frame = [
+            cf for cf in code_files 
+            if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), frame_id)
+        ]
+        
+        if len(files_for_frame) < original_count:
+            logger.info(
+                "frame_specific_ignore",
+                frame=frame_id,
+                ignored=original_count - len(files_for_frame),
+                remaining=len(files_for_frame)
+            )
+        
+        # Use filtered files for execution
+        code_files = files_for_frame
 
         frame_rules = self.config.frame_rules.get(frame.frame_id) if self.config.frame_rules else None
 
