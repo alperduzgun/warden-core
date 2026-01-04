@@ -225,3 +225,33 @@ class MemoryManager:
         )
         
         self.add_fact(fact)
+
+    def get_environment_hash(self) -> Optional[str]:
+        """Get stored environment hash."""
+        fact_id = "environment:global"
+        fact = self.knowledge_graph.facts.get(fact_id)
+        if fact:
+            return fact.metadata.get("hash")
+        return None
+
+    def update_environment_hash(self, env_hash: str) -> None:
+        """Update stored environment hash."""
+        fact_id = "environment:global"
+        
+        metadata = {
+            "hash": env_hash,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        fact = Fact(
+            id=fact_id,
+            category="environment_state",
+            subject="warden_environment",
+            predicate="has_hash",
+            object=env_hash,
+            source="PreAnalysisPhase",
+            confidence=1.0,
+            metadata=metadata
+        )
+        
+        self.add_fact(fact)
