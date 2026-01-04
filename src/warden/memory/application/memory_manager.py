@@ -145,7 +145,8 @@ class MemoryManager:
         self, 
         file_path: str, 
         content_hash: str,
-        findings_count: int = 0
+        findings_count: int = 0,
+        context_data: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Update stored state for a file.
@@ -154,6 +155,7 @@ class MemoryManager:
             file_path: Absolute path to the file
             content_hash: SHA-256 hash of file content
             findings_count: Number of findings found in last scan
+            context_data: Full context info (type, is_generated, weights, etc.)
         """
         fact_id = f"filestate:{file_path}"
         
@@ -164,6 +166,9 @@ class MemoryManager:
             "findings_count": findings_count,
             "last_scan": datetime.now().isoformat()
         }
+
+        if context_data:
+            metadata["context_data"] = context_data
         
         fact = Fact(
             id=fact_id,
