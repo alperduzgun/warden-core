@@ -59,7 +59,8 @@ class ClassificationExecutor(BasePhaseExecutor):
                 phase = ClassificationPhase(
                     config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
                     llm_service=self.llm_service,
-                    available_frames=self.available_frames
+                    available_frames=self.available_frames,
+                    context=phase_context  # Pass context for awareness
                 )
                 logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:

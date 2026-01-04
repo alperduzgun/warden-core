@@ -155,13 +155,12 @@ class ReportGenerator:
                     "locations": [
                         {
                             "physicalLocation": {
-                                # Convert file path to URI compatible
                                 "artifactLocation": {
-                                    "uri": str(Path(file_path).relative_to(Path.cwd())) if Path(file_path).is_absolute() and str(file_path).startswith(str(Path.cwd())) else file_path
+                                    "uri": self._to_relative_uri(file_path)
                                 },
                                 "region": {
-                                    "startLine": finding.get('line', 1),
-                                    "startColumn": finding.get('column', 1)
+                                    "startLine": max(1, finding.get('line', 1)),
+                                    "startColumn": max(1, finding.get('column', 1))
                                 }
                             }
                         }
@@ -176,6 +175,32 @@ class ReportGenerator:
 
         with open(output_path, 'w') as f:
             json.dump(sarif, f, indent=4)
+
+    def _to_relative_uri(self, file_path: str) -> str:
+        """
+        Convert file path to a relative URI compatible with SARIF / GitHub.
+        Falls back to filename if relativization fails.
+        """
+        path_obj = Path(file_path)
+        try:
+            # Try standard relative_to
+            if path_obj.is_absolute():
+                return str(path_obj.relative_to(Path.cwd()))
+            return str(path_obj)
+        except ValueError:
+            # If path is not under CWD (e.g. /tmp or external)
+            try:
+                # Naive fallback: if src/ is in path, take it from there
+                parts = path_obj.parts
+                if "src" in parts:
+                    idx = parts.index("src")
+                    # Reconstruct path from 'src' onwards
+                    return str(Path(*parts[idx:]))
+                
+                # Last resort: just the filename to avoid "uri must be relative" error
+                return path_obj.name
+            except Exception:
+                return "unknown_file"
 
     def generate_junit_report(
         self,

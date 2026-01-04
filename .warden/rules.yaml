@@ -30,6 +30,7 @@ frame_rules:
     pre_rules:
       - no-secrets
       - cli-pipeline-status-check
+      - llm-context-propagation-check
     on_fail: continue
   stress:
     pre_rules:
@@ -794,10 +795,64 @@ rules:
     examples:
       invalid:
         - "if (result.status === 'success') { ... }"
+      invalid:
+        - "if (result.status === 'success') { ... }"
       valid:
         - "if (['success', 'completed', '2'].includes(String(result.status))) { ... }"
     message: |
       Fragile pipeline status check detected!
+
+      Problem: Relying on exact string matching for status
+      Solution: Use robust set inclusion checks
+
+      Backend might return different status strings ('completed', 'success', '2').
+      Don't block the UI because of a minor status string mismatch.
+    language:
+      - typescript
+      - javascript
+  - id: llm-context-propagation-check
+    name: LLM Phases Must Receive Context
+    category: architecture
+    severity: critical
+    isBlocker: true
+    description: Classification and other LLM phases must be instantiated with propagated context to avoid 'blind' decision making.
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        must_have_nearby:
+          - pattern: 'Phase\('
+            requires_within_lines: 10
+            any_of:
+              - 'context='
+              - 'context\s*='
+    examples:
+      invalid:
+        - |
+          phase = ClassificationPhase(
+              config=config,
+              llm_service=llm_service
+          )
+      valid:
+        - |
+          phase = ClassificationPhase(
+              config=config,
+              llm_service=llm_service,
+              context=phase_context
+          )
+    message: |
+      LLM Phase instantiation missing Context!
+
+      Problem: Instantiating an LLM Phase (like ClassificationPhase) without passing 'context'.
+      Impact: The LLM will use hardcoded defaults instead of real project data (Architecture Tree).
+      
+      Fix:
+      Ensure you pass `context=phase_context` or similar when creating the phase.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
       
       Problem: Checking only for 'success' string.
       Risk: Backend status codes vary (completed, 2, success).
