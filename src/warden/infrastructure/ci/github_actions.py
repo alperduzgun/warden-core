@@ -127,9 +127,9 @@ jobs:
     def _generate_triggers(events: List[str]) -> str:
         """Generate trigger section for workflow."""
         if len(events) == 1:
-            return f"on: [{events[0]}]"
+            return f"'on': [{events[0]}]"
 
-        trigger_lines = ["on:"]
+        trigger_lines = ["'on':"]
         for event in events:
             if event == "push":
                 trigger_lines.extend(

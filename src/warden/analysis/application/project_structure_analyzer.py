@@ -163,6 +163,7 @@ class ProjectStructureAnalyzer:
             ".flake8": "python-flake8",
             "ruff.toml": "python-ruff",
             ".ruff.toml": "python-ruff",
+            "pytest.ini": "python-pytest",
 
             # JavaScript/TypeScript
             "package.json": "javascript-npm",

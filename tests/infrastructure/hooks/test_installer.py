@@ -53,10 +53,11 @@ class TestHookInstaller:
         results = HookInstaller.install_hooks(git_dir=git_dir)
 
         # Should install all supported hooks
-        assert len(results) == 2
+        assert len(results) == 3
         assert all(r.installed for r in results)
         assert any(r.hook_name == "pre-commit" for r in results)
         assert any(r.hook_name == "pre-push" for r in results)
+        assert any(r.hook_name == "commit-msg" for r in results)
 
     def test_install_hooks_specific(self, tmp_path):
         """Test installing specific hooks."""
@@ -124,7 +125,11 @@ class TestHookInstaller:
 
     def test_install_hooks_not_git_repo(self, tmp_path):
         """Test installing hooks outside Git repository."""
-        results = HookInstaller.install_hooks()
+        # Use find_git_dir explicitly to start search from empty tmp_path
+        # so it doesn't find repo's .git
+        from unittest.mock import patch
+        with patch.object(HookInstaller, 'find_git_dir', return_value=None):
+            results = HookInstaller.install_hooks()
 
         # Should return error result
         assert len(results) == 1
@@ -142,7 +147,7 @@ class TestHookInstaller:
         # Uninstall
         results = HookInstaller.uninstall_hooks(git_dir=git_dir)
 
-        assert len(results) == 2
+        assert len(results) == 3
         assert all(not r.installed for r in results)
 
     def test_uninstall_hooks_specific(self, tmp_path):
@@ -181,7 +186,7 @@ class TestHookInstaller:
         status = HookInstaller.list_hooks(git_dir)
 
         assert isinstance(status, dict)
-        assert len(status) == 2
+        assert len(status) == 3
         assert all(not is_installed for is_installed in status.values())
 
     def test_list_hooks_some_installed(self, tmp_path):
@@ -196,10 +201,13 @@ class TestHookInstaller:
 
         assert status["pre-commit"] is True
         assert status["pre-push"] is False
+        assert status["commit-msg"] is False
 
     def test_list_hooks_not_git_repo(self, tmp_path):
         """Test listing hooks outside Git repository."""
-        status = HookInstaller.list_hooks()
+        from unittest.mock import patch
+        with patch.object(HookInstaller, 'find_git_dir', return_value=None):
+            status = HookInstaller.list_hooks()
 
         assert status == {}
 
@@ -214,7 +222,10 @@ class TestHookInstaller:
 
     def test_validate_git_repository_invalid(self, tmp_path):
         """Test validating an invalid Git repository."""
-        is_valid = HookInstaller.validate_git_repository(tmp_path)
+        # Ensure it doesn't fall back to parent git dir
+        from unittest.mock import patch
+        with patch.object(HookInstaller, 'find_git_dir', return_value=None):
+             is_valid = HookInstaller.validate_git_repository(tmp_path)
 
         assert is_valid is False
 
@@ -228,7 +239,8 @@ class TestPreCommitHook:
 
         assert "#!/usr/bin/env python3" in script
         assert "Warden pre-commit hook" in script
-        assert "warden analyze" in script
+        assert '"warden",' in script
+        assert '"analyze",' in script
 
     def test_install(self, tmp_path):
         """Test installing pre-commit hook."""
@@ -302,7 +314,8 @@ class TestPrePushHook:
 
         assert "#!/usr/bin/env python3" in script
         assert "Warden pre-push hook" in script
-        assert "warden analyze" in script
+        assert '"warden",' in script
+        assert '"analyze",' in script
 
     def test_install(self, tmp_path):
         """Test installing pre-push hook."""

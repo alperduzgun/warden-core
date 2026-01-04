@@ -93,14 +93,14 @@ class TestGitHubActionsTemplate:
         config = GitHubActionsConfig(trigger_events=["pull_request"])
         template = GitHubActionsTemplate.generate(config)
 
-        assert "on: [pull_request]" in template
+        assert "'on': [pull_request]" in template
 
     def test_generate_triggers_multiple(self):
         """Test trigger generation with multiple events."""
         config = GitHubActionsConfig(trigger_events=["pull_request", "push"])
         template = GitHubActionsTemplate.generate(config)
 
-        assert "on:" in template
+        assert "'on':" in template
         assert "pull_request:" in template
         assert "push:" in template
 

@@ -5,7 +5,7 @@ Provides comprehensive code quality scoring on a 0-10 scale.
 Panel UI compatible with before/after comparison support.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 from pydantic import Field
 
@@ -50,7 +50,7 @@ class CodeHotspot(BaseDomainModel):
     file_path: str
     line_number: int
     issue_type: str  # e.g., "high_complexity", "duplication"
-    severity: str  # "critical", "high", "medium", "low"
+    severity: Union[str, int]  # "critical", "high", "medium", "low" or 0-3
     message: str
     impact_score: float  # How much it affects overall quality (0.0 to 10.0)
 

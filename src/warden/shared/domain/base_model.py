@@ -39,6 +39,10 @@ class BaseDomainModel(BaseModel):
         """
         return self.model_dump(by_alias=True, mode='json')
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Alias for to_json."""
+        return self.to_json()
+
     @classmethod
     def from_json(cls: Type[T], data: Dict[str, Any]) -> T:
         """
@@ -47,3 +51,8 @@ class BaseDomainModel(BaseModel):
         Backward compatibility wrapper for model_validate().
         """
         return cls.model_validate(data)
+
+    @classmethod
+    def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
+        """Alias for from_json."""
+        return cls.from_json(data)

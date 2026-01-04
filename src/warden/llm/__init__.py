@@ -28,7 +28,8 @@ from .types import (
 
 from .config import (
     ProviderConfig,
-    load_llm_config
+    load_llm_config,
+    LlmConfiguration
 )
 
 from .providers.base import ILlmClient
@@ -58,6 +59,7 @@ __all__ = [
     "AnalysisResult",
     "ClassificationCharacteristics",
     "ClassificationResult",
+    "LlmConfiguration",
 
     # Config
     "load_llm_config",

@@ -1,1 +1,0 @@
-"""Fortification module tests."""
