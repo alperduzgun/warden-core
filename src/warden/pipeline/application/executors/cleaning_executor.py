@@ -43,7 +43,30 @@ class CleaningExecutor(BasePhaseExecutor):
                 llm_service=self.llm_service,
             )
 
-            result = await phase.execute_async(code_files)
+            # Optimization: Filter out unchanged files
+            files_to_clean = []
+            file_contexts = getattr(context, 'file_contexts', {})
+            
+            for cf in code_files:
+                f_info = file_contexts.get(cf.path)
+                # If no context info or not marked unchanged, we clean it
+                # Note: is_unchanged is only True if content hash matches AND file is not impacted
+                if not f_info or not getattr(f_info, 'is_unchanged', False):
+                    files_to_clean.append(cf)
+            
+            if not files_to_clean:
+                 logger.info("cleaning_phase_skipped_optimization", reason="all_files_unchanged")
+                 from warden.cleaning.application.cleaning_phase import CleaningPhaseResult
+                 result = CleaningPhaseResult(
+                     cleaning_suggestions=[],
+                     refactorings=[],
+                     quality_score_after=getattr(context, 'quality_score_before', 0.0),
+                     code_improvements={"message": "Cleaning skipped (No changes detected)"}
+                 )
+            else:
+                 if len(files_to_clean) < len(code_files):
+                     logger.info("cleaning_phase_optimizing", total=len(code_files), cleaning=len(files_to_clean))
+                 result = await phase.execute_async(files_to_clean)
 
             # Store results in context
             context.cleaning_suggestions = result.cleaning_suggestions
