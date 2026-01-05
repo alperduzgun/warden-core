@@ -1,0 +1,29 @@
+rules:
+  - id: file-size-limit
+    name: File Size Must Not Exceed 10MB
+    category: performance
+    severity: medium
+    isBlocker: false
+    description: Prevents processing excessively large files that could cause
+      performance issues
+    enabled: true
+    type: script
+    scriptPath: .warden/scripts/check_file_size.sh
+    timeout: 10
+    message: File exceeds maximum size limit of 500KB
+    conditions: {}
+    examples:
+      invalid:
+        - 15MB log file
+        - 20MB dataset
+      valid:
+        - 5MB source file
+        - 2KB configuration file
+    exceptions:
+      - '**/node_modules/**'
+      - '**/venv/**'
+      - '**/.venv/**'
+      - '**/dist/**'
+      - '**/build/**'
+      - '**/*.min.js'
+      - '**/*.bundle.js'

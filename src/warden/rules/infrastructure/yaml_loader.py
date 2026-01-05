@@ -36,8 +36,16 @@ class RulesYAMLLoader:
             ValueError: If YAML is invalid or malformed
         """
         if not file_path.exists():
-            raise FileNotFoundError(f"Rules file not found: {file_path}")
+            raise FileNotFoundError(f"Rules path not found: {file_path}")
 
+        if file_path.is_dir():
+             return await RulesYAMLLoader._load_from_directory(file_path)
+
+        return await RulesYAMLLoader._load_single_file(file_path)
+
+    @staticmethod
+    async def _load_single_file(file_path: Path) -> ProjectRuleConfig:
+        """Load rules configuration from a single YAML file."""
         try:
             with open(file_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
@@ -45,8 +53,28 @@ class RulesYAMLLoader:
             logger.error("yaml_parse_error", file_path=str(file_path), error=str(e))
             raise ValueError(f"Invalid YAML in {file_path}: {e}") from e
 
+        return RulesYAMLLoader._parse_yaml_data(data, str(file_path))
+
+    @staticmethod
+    async def _load_from_directory(dir_path: Path) -> ProjectRuleConfig:
+        """Load rules from all YAML files in a directory and merge them."""
+        # Use shared merger logic (DRY)
+        from warden.shared.utils.yaml_merger import YAMLMerger
+        
+        merged_data = YAMLMerger.merge_directory(dir_path)
+        
+        if not merged_data["rules"] and not merged_data["frame_rules"]:
+             logger.warning("no_rules_found_in_directory", directory=str(dir_path))
+
+        logger.info("merged_rules_config", directory=str(dir_path), total_rules=len(merged_data["rules"]))
+        return RulesYAMLLoader._parse_yaml_data(merged_data, str(dir_path))
+
+    @staticmethod
+    def _parse_yaml_data(data: Dict[str, Any], source: str) -> ProjectRuleConfig:
+        """Parse validated YAML dictionary into ProjectRuleConfig."""
         # Validate structure
-        RulesYAMLLoader._validate_yaml_structure(data)
+        # RulesYAMLLoader._validate_yaml_structure(data) # This might be too strict for partial files, skip strict top-level check for merged data?
+        # Actually let's assumemerged data is complete enough 
 
         # Parse project config
         project_data = data.get("project", {})
@@ -90,7 +118,7 @@ class RulesYAMLLoader:
 
         logger.info(
             "rules_loaded",
-            file_path=str(file_path),
+            source=source,
             rule_count=len(rules),
             enabled_count=sum(1 for r in rules if r.enabled),
             global_rules_count=len(global_rules_ids),

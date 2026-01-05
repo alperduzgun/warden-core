@@ -1,0 +1,55 @@
+project:
+  name: warden-core
+  language: python
+  framework: cli
+
+global_rules:
+  - no-secrets
+  - file-size-limit
+  - orchestrator-total-frames-check
+
+frame_rules:
+  security:
+    pre_rules:
+      - env-var-api-keys
+      - no-secrets
+      - backend-manager-use-project-root
+      - llm-no-hardcoded-deployment-names
+      - llm-azure-deployment-name-usage
+      - llm-azure-url-pattern-valid
+      - llm-azure-deployment-env-required
+    post_rules:
+      - security-audit
+    on_fail: stop
+  chaos:
+    pre_rules:
+      - async-method-naming
+    on_fail: continue
+  orphan:
+    pre_rules:
+      - no-secrets
+    on_fail: continue
+  architectural:
+    pre_rules:
+      - no-secrets
+      - cli-pipeline-status-check
+      - llm-context-propagation-check
+      - orchestrator-total-frames-check
+    on_fail: continue
+  stress:
+    pre_rules:
+      - file-size-limit
+    on_fail: continue
+  env-security:
+    pre_rules:
+      - env-var-api-keys
+      - no-secrets
+    on_fail: stop
+  demo-security:
+    pre_rules:
+      - no-secrets
+    on_fail: continue
+  fuzz:
+    on_fail: continue
+  property:
+    on_fail: continue

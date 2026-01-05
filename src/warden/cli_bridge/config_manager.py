@@ -131,7 +131,7 @@ class ConfigManager:
 
     def read_rules(self) -> Dict[str, Any]:
         """
-        Read rules from .warden/rules.yaml
+        Read rules from .warden/rules.yaml OR .warden/rules/ directory
 
         Returns:
             Rules dictionary
@@ -139,8 +139,19 @@ class ConfigManager:
         Raises:
             FileNotFoundError: If rules file doesn't exist
         """
+        # If default rules.yaml doesn't exist, check for rules directory
         if not self.rules_path.exists():
-            raise FileNotFoundError(f"Rules file not found: {self.rules_path}")
+            rules_dir = self.project_root / ".warden" / "rules"
+            if rules_dir.exists() and rules_dir.is_dir():
+                self.rules_path = rules_dir
+
+        if not self.rules_path.exists():
+            raise FileNotFoundError(f"Rules path not found: {self.rules_path}")
+
+        if self.rules_path.is_dir():
+            # Use shared merger logic (DRY)
+            from warden.shared.utils.yaml_merger import YAMLMerger
+            return YAMLMerger.merge_directory(self.rules_path)
 
         with open(self.rules_path, 'r') as f:
             rules = yaml.safe_load(f)
