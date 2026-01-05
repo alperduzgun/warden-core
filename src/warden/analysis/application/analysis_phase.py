@@ -13,10 +13,8 @@ import structlog
 
 from warden.analysis.domain.quality_metrics import (
     QualityMetrics,
-    CodeHotspot,
-    QuickWin,
-    MetricBreakdown,
 )
+from warden.analysis.application.metrics_aggregator import MetricsAggregator
 from warden.cleaning.application.analyzers.complexity_analyzer import ComplexityAnalyzer
 from warden.cleaning.application.analyzers.duplication_analyzer import DuplicationAnalyzer
 from warden.cleaning.application.analyzers.naming_analyzer import NamingAnalyzer
@@ -25,7 +23,7 @@ from warden.cleaning.application.analyzers.maintainability_analyzer import Maint
 from warden.cleaning.application.analyzers.documentation_analyzer import DocumentationAnalyzer
 from warden.cleaning.application.analyzers.testability_analyzer import TestabilityAnalyzer
 from warden.validation.domain.frame import CodeFile
-from warden.shared.infrastructure.exceptions import ValidationError
+
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 
 logger = structlog.get_logger()
@@ -73,6 +71,9 @@ class AnalysisPhase:
 
         # Get metric weights from config
         self.weights = self.config.get("weights", self._get_default_weights())
+        
+        # Initialize Metrics Aggregator
+        self.metrics_aggregator = MetricsAggregator(self.weights)
 
         logger.info(
             "analysis_phase_initialized",
@@ -104,6 +105,7 @@ class AnalysisPhase:
     async def execute(
         self,
         code_files: List[CodeFile],
+        pipeline_context: Optional[Any] = None,
         impacted_files: Optional[List[str]] = None,
     ) -> QualityMetrics:
         """
@@ -111,6 +113,8 @@ class AnalysisPhase:
 
         Args:
             code_files: List of code files to analyze
+            pipeline_context: Optional pipeline context with cached ASTs
+            impacted_files: Optional list of impacted files
 
         Returns:
             QualityMetrics with comprehensive scoring
@@ -153,11 +157,11 @@ class AnalysisPhase:
             # Run all analyzers in parallel for each file
             all_results = {}
             for code_file in code_files:
-                file_results = await self._analyze_file(code_file)
+                file_results = await self._analyze_file(code_file, pipeline_context)
                 all_results[code_file.path] = file_results
 
-            # Aggregate results
-            metrics = self._aggregate_results(all_results)
+            # Aggregate results using MetricsAggregator
+            metrics = self.metrics_aggregator.aggregate(all_results)
 
             # Calculate analysis duration
             metrics.analysis_duration = time.perf_counter() - start_time
@@ -193,12 +197,13 @@ class AnalysisPhase:
                 file_count=len(code_files),
             )
 
-    async def _analyze_file(self, code_file: CodeFile) -> Dict[str, Any]:
+    async def _analyze_file(self, code_file: CodeFile, pipeline_context: Optional[Any] = None) -> Dict[str, Any]:
         """
         Run all analyzers on a single file.
 
         Args:
             code_file: Code file to analyze
+            pipeline_context: Optional pipeline context with cached ASTs
 
         Returns:
             Dictionary with analyzer results
@@ -206,29 +211,34 @@ class AnalysisPhase:
         # Create tasks for parallel execution
         tasks = {}
 
+        # Get cached AST if available
+        ast_tree = None
+        if pipeline_context and hasattr(pipeline_context, 'ast_cache'):
+            ast_tree = pipeline_context.ast_cache.get(code_file.path)
+
         # Core analyzers for scoring
         tasks["complexity"] = asyncio.create_task(
-            self.analyzers["complexity"].analyze_async(code_file)
+            self.analyzers["complexity"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["duplication"] = asyncio.create_task(
-            self.analyzers["duplication"].analyze_async(code_file)
+            self.analyzers["duplication"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["maintainability"] = asyncio.create_task(
-            self.analyzers["maintainability"].analyze_async(code_file)
+            self.analyzers["maintainability"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["naming"] = asyncio.create_task(
-            self.analyzers["naming"].analyze_async(code_file)
+            self.analyzers["naming"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["documentation"] = asyncio.create_task(
-            self.analyzers["documentation"].analyze_async(code_file)
+            self.analyzers["documentation"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["testability"] = asyncio.create_task(
-            self.analyzers["testability"].analyze_async(code_file)
+            self.analyzers["testability"].analyze_async(code_file, ast_tree=ast_tree)
         )
 
         # Additional analyzer for hotspots
         tasks["magic_numbers"] = asyncio.create_task(
-            self.analyzers["magic_numbers"].analyze_async(code_file)
+            self.analyzers["magic_numbers"].analyze_async(code_file, ast_tree=ast_tree)
         )
 
         # Wait for all analyzers with timeout
@@ -262,230 +272,6 @@ class AnalysisPhase:
                 timeout=timeout,
             )
             return {}
-
-    def _aggregate_results(self, all_results: Dict[str, Dict[str, Any]]) -> QualityMetrics:
-        """
-        Aggregate results from all analyzers into QualityMetrics.
-
-        Args:
-            all_results: Results from all files and analyzers
-
-        Returns:
-            Aggregated QualityMetrics
-        """
-        # Initialize scores
-        total_complexity_score = 0
-        total_duplication_score = 0
-        total_maintainability_score = 0
-        total_naming_score = 0
-        total_documentation_score = 0
-        total_testability_score = 0
-
-        # Aggregate metrics
-        total_cyclomatic = 0
-        total_cognitive = 0
-        total_loc = 0
-        total_duplicate_blocks = 0
-        total_duplicate_lines = 0
-        documentation_coverage = 0
-        test_coverage = 0
-
-        # Collect hotspots and quick wins
-        all_hotspots = []
-        all_quick_wins = []
-
-        file_count = 0
-
-        for file_path, file_results in all_results.items():
-            if not file_results:
-                continue
-
-            file_count += 1
-
-            # Extract scores from each analyzer result
-            if file_results.get("complexity"):
-                result = file_results["complexity"]
-                if result.success and result.metrics:
-                    # Calculate complexity score (inverse of issues)
-                    issues = result.issues_found
-                    complexity_score = max(0, 10 - (issues * 0.5))
-                    total_complexity_score += complexity_score
-
-                    # Extract metrics
-                    if "long_methods" in result.metrics:
-                        total_cyclomatic += result.metrics.get("long_methods", 0) * 10
-
-                    # Add hotspots for complex methods
-                    for suggestion in result.suggestions[:3]:  # Top 3 issues
-                        if suggestion.issue:
-                            all_hotspots.append(
-                                CodeHotspot(
-                                    file_path=file_path,
-                                    line_number=suggestion.issue.line_number,
-                                    issue_type="high_complexity",
-                                    severity=suggestion.issue.severity.value,
-                                    message=suggestion.issue.description,
-                                    impact_score=2.0,
-                                )
-                            )
-
-            if file_results.get("duplication"):
-                result = file_results["duplication"]
-                if result.success:
-                    # Calculate duplication score
-                    issues = result.issues_found
-                    duplication_score = max(0, 10 - (issues * 0.8))
-                    total_duplication_score += duplication_score
-
-                    # Extract metrics
-                    if result.metrics:
-                        total_duplicate_blocks += result.metrics.get("duplicate_blocks", 0)
-                        total_duplicate_lines += result.metrics.get("total_duplicated_lines", 0)
-
-                    # Add quick win for duplication
-                    if issues > 0:
-                        all_quick_wins.append(
-                            QuickWin(
-                                type="remove_duplication",
-                                description=f"Extract {issues} duplicate code blocks",
-                                estimated_effort="30min",
-                                score_improvement=0.5,
-                                file_path=file_path,
-                            )
-                        )
-
-            if file_results.get("maintainability"):
-                result = file_results["maintainability"]
-                if result.success and result.metrics:
-                    # Use the quality score from maintainability analyzer
-                    maintainability_score = result.metrics.get("quality_score", 5.0)
-                    total_maintainability_score += maintainability_score
-
-                    # Add LOC
-                    if "halstead_volume" in result.metrics:
-                        total_loc += 100  # Approximate from Halstead
-
-            if file_results.get("naming"):
-                result = file_results["naming"]
-                if result.success:
-                    # Calculate naming score
-                    issues = result.issues_found
-                    naming_score = max(0, 10 - (issues * 0.3))
-                    total_naming_score += naming_score
-
-            if file_results.get("documentation"):
-                result = file_results["documentation"]
-                if result.success and result.metrics:
-                    # Use the quality score from documentation analyzer
-                    doc_score = result.metrics.get("quality_score", 5.0)
-                    total_documentation_score += doc_score
-                    documentation_coverage += result.metrics.get("documentation_coverage", 0)
-
-                    # Add quick win for missing docs
-                    if doc_score < 5:
-                        all_quick_wins.append(
-                            QuickWin(
-                                type="add_documentation",
-                                description="Add missing docstrings",
-                                estimated_effort="15min",
-                                score_improvement=0.3,
-                                file_path=file_path,
-                            )
-                        )
-
-            if file_results.get("testability"):
-                result = file_results["testability"]
-                if result.success and result.metrics:
-                    # Use the testability score
-                    test_score = result.metrics.get("testability_score", 5.0)
-                    total_testability_score += test_score
-
-            # Check magic numbers for hotspots
-            if file_results.get("magic_numbers"):
-                result = file_results["magic_numbers"]
-                if result.success and result.issues_found > 5:
-                    all_hotspots.append(
-                        CodeHotspot(
-                            file_path=file_path,
-                            line_number=1,
-                            issue_type="magic_numbers",
-                            severity="medium",
-                            message=f"{result.issues_found} magic numbers found",
-                            impact_score=1.0,
-                        )
-                    )
-
-        # Calculate average scores
-        if file_count > 0:
-            complexity_score = total_complexity_score / file_count
-            duplication_score = total_duplication_score / file_count
-            maintainability_score = total_maintainability_score / file_count
-            naming_score = total_naming_score / file_count
-            documentation_score = total_documentation_score / file_count
-            testability_score = total_testability_score / file_count
-            avg_doc_coverage = documentation_coverage / file_count
-        else:
-            # Default scores if no files
-            complexity_score = 5.0
-            duplication_score = 5.0
-            maintainability_score = 5.0
-            naming_score = 5.0
-            documentation_score = 5.0
-            testability_score = 5.0
-            avg_doc_coverage = 0.0
-
-        # Calculate technical debt (rough estimation)
-        technical_debt_hours = 0
-        technical_debt_hours += (10 - complexity_score) * 2  # 2 hours per complexity point
-        technical_debt_hours += (10 - duplication_score) * 1  # 1 hour per duplication point
-        technical_debt_hours += (10 - maintainability_score) * 1.5
-        technical_debt_hours += (10 - documentation_score) * 0.5
-        technical_debt_hours = max(0, technical_debt_hours)
-
-        # Sort and limit hotspots/quick wins
-        all_hotspots.sort(key=lambda h: h.impact_score, reverse=True)
-        all_quick_wins.sort(key=lambda q: q.score_improvement, reverse=True)
-
-        # Create QualityMetrics
-        metrics = QualityMetrics(
-            complexity_score=complexity_score,
-            duplication_score=duplication_score,
-            maintainability_score=maintainability_score,
-            naming_score=naming_score,
-            documentation_score=documentation_score,
-            testability_score=testability_score,
-
-            # Detailed metrics
-            cyclomatic_complexity=total_cyclomatic,
-            cognitive_complexity=total_cognitive,
-            lines_of_code=total_loc,
-            duplicate_blocks=total_duplicate_blocks,
-            duplicate_lines=total_duplicate_lines,
-            documentation_coverage=avg_doc_coverage,
-            test_coverage=test_coverage,
-
-            # Technical debt
-            technical_debt_hours=technical_debt_hours,
-
-            # Top hotspots and quick wins
-            hotspots=all_hotspots[:10],  # Top 10 hotspots
-            quick_wins=all_quick_wins[:5],  # Top 5 quick wins
-        )
-
-        # Create metric breakdowns with configured weights
-        metrics.metric_breakdowns = [
-            MetricBreakdown("complexity", complexity_score, self.weights["complexity"]),
-            MetricBreakdown("duplication", duplication_score, self.weights["duplication"]),
-            MetricBreakdown("maintainability", maintainability_score, self.weights["maintainability"]),
-            MetricBreakdown("naming", naming_score, self.weights["naming"]),
-            MetricBreakdown("documentation", documentation_score, self.weights["documentation"]),
-            MetricBreakdown("testability", testability_score, self.weights["testability"]),
-        ]
-
-        # Calculate overall score
-        metrics.overall_score = metrics.calculate_overall_score()
-
-        return metrics
 
     async def execute_with_llm(self, code_files: List[CodeFile]) -> QualityMetrics:
         """

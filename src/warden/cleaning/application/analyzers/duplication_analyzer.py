@@ -9,7 +9,7 @@ Detects code duplication:
 
 import ast
 import structlog
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from difflib import SequenceMatcher
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
@@ -54,6 +54,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
         self,
         code_file: CodeFile,
         cancellation_token: Optional[str] = None,
+        ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
         Analyze code for duplication.
@@ -75,7 +76,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
             )
 
         try:
-            issues = self._analyze_duplication(code_file.content)
+            issues = self._analyze_duplication(code_file.content, ast_tree)
 
             if not issues:
                 logger.info(
@@ -137,12 +138,13 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_duplication(self, code: str) -> List[CleaningIssue]:
+    def _analyze_duplication(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
         """
         Analyze code for duplication.
 
         Args:
             code: Source code to analyze
+            ast_tree: Optional pre-parsed AST
 
         Returns:
             List of duplication issues
@@ -164,7 +166,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
 
         # Check for similar functions using AST
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
             similar_functions = self._find_similar_functions(tree, code)
             for func1_name, func2_name, line_number, similarity in similar_functions:
                 issues.append(

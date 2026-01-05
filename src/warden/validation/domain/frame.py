@@ -186,9 +186,9 @@ class ValidationFrame(ABC):
                     or programmatic setup
         """
         self.config = config or {}
-        self.config = config or {}
         self._validate_metadata()
         self.project_context: Any | None = None  # Generic to avoid circular imports
+        self.semantic_search_service: Any | None = None  # Injectable semantic search service
 
     def set_project_context(self, context: Any) -> None:
         """

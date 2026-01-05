@@ -85,6 +85,9 @@ class PipelineConfig(BaseDomainModel):
     # Custom Rules (NEW)
     global_rules: List[CustomRule] = Field(default_factory=list)  # Rules applied to all frames
     frame_rules: Dict[str, FrameRules] = Field(default_factory=dict)  # Frame-specific rules (key: frame_id)
+    
+    # Semantic Search configuration (NEW!)
+    semantic_search_config: Optional[Dict[str, Any]] = None  # Configuration for semantic search service
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""

@@ -9,7 +9,7 @@ Detects magic numbers that should be constants:
 
 import ast
 import structlog
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Any
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
@@ -65,6 +65,7 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
         self,
         code_file: CodeFile,
         cancellation_token: Optional[str] = None,
+        ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
         Analyze code for magic numbers.
@@ -86,7 +87,7 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
             )
 
         try:
-            issues = self._analyze_magic_numbers(code_file.content)
+            issues = self._analyze_magic_numbers(code_file.content, ast_tree)
 
             if not issues:
                 logger.info(
@@ -145,12 +146,13 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_magic_numbers(self, code: str) -> List[CleaningIssue]:
+    def _analyze_magic_numbers(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
         """
         Analyze code for magic numbers using AST.
 
         Args:
             code: Source code to analyze
+            ast_tree: Optional pre-parsed AST
 
         Returns:
             List of magic number issues
@@ -158,7 +160,7 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
         issues = []
 
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError as e:
             logger.warning("syntax_error_in_code", error=str(e))
             return issues

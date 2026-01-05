@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any, Callable, Set
 import structlog
 import hashlib
 from datetime import datetime
+from warden.analysis.application.integrity_scanner import IntegrityScanner, IntegrityIssue
 
 from warden.analysis.domain.file_context import (
     FileContext,
@@ -70,13 +71,19 @@ class PreAnalysisPhase:
         self.ast_registry = ASTProviderRegistry()
         self.ast_loader = ASTProviderLoader(self.ast_registry)
         self.dependency_graph: Optional[DependencyGraph] = None  # Initialized in execute
+        self.integrity_scanner = IntegrityScanner(self.project_root, self.ast_registry, self.config.get("integrity_config"))
 
-    async def execute(self, code_files: List[CodeFile]) -> PreAnalysisResult:
+    async def execute(
+        self, 
+        code_files: List[CodeFile], 
+        pipeline_context: Optional[Any] = None
+    ) -> PreAnalysisResult:
         """
         Execute PRE-ANALYSIS phase.
 
         Args:
             code_files: List of code files to analyze
+            pipeline_context: Optional pipeline context for shared state (AST cache)
 
         Returns:
             PreAnalysisResult with project and file contexts
@@ -119,6 +126,25 @@ class PreAnalysisPhase:
 
             # Analyze structure (will only discover purpose if missing after enrichment)
             project_context = await self._analyze_project_structure(project_context)
+
+            # Ensure AST providers are loaded for integrity check
+            await self.ast_loader.load_all()
+
+            # Step 2.5: Integrity Check (Fail-Fast)
+            # Scan files for syntax validity and optional build verification
+            # Pass pipeline_context to enable AST caching for DRY principle
+            integrity_issues = await self.integrity_scanner.scan(code_files, project_context, pipeline_context)
+            if integrity_issues:
+                # Log issues
+                for issue in integrity_issues:
+                    logger.error("integrity_check_failure", file=issue.file_path, error=issue.message)
+                
+                # Check for critical failures (syntax errors or build failures)
+                # We consider any integrity issue as critical for now if fail_fast is enabled or by default
+                fail_fast = self.config.get("integrity_config", {}).get("fail_fast", True)
+                if fail_fast:
+                    logger.error("integrity_check_failed_aborting", issue_count=len(integrity_issues))
+                    raise RuntimeError(f"Integrity check failed with {len(integrity_issues)} issues. Fix syntax/build errors before running Warden.")
 
             # Step 3: Dependency Awareness (Impact Analysis)
             impacted_files = await self._identify_impacted_files(code_files, project_context)
@@ -175,10 +201,36 @@ class PreAnalysisPhase:
                 self.memory_manager.update_environment_hash(self.env_hash)
                 await self.memory_manager.save_async()
 
-            return result
+            # Step 9: Trigger Semantic Indexing (Smart Incremental)
+            try:
+                # Import here to avoid circular dependencies
+                from warden.shared.services.semantic_search_service import SemanticSearchService
+                ss_config = self.config.get("semantic_search", {})
+                ss_service = SemanticSearchService(ss_config)
+                
+                if ss_service.is_available():
+                    logger.info("triggering_semantic_indexing")
+                    if self.progress_callback:
+                        self.progress_callback("semantic_indexing_started", {
+                            "phase": "pre_analysis",
+                            "action": "indexing_codebase"
+                        })
+                    
+                    await ss_service.index_project(self.project_root, [Path(cf.path) for cf in code_files])
+                    
+                    if self.progress_callback:
+                        self.progress_callback("semantic_indexing_completed", {
+                            "phase": "pre_analysis",
+                            "action": "indexing_codebase_done"
+                        })
+            except Exception as e:
+                logger.error("semantic_indexing_failed", error=str(e))
 
             return result
 
+        except RuntimeError as e:
+            # Propagate critical errors immediately (like integrity check violations)
+            raise e
         except Exception as e:
             logger.error(
                 "pre_analysis_phase_failed",
@@ -691,8 +743,7 @@ class PreAnalysisPhase:
         # 1. Initialize DependencyGraph
         self.dependency_graph = DependencyGraph(self.project_root, project_context, self.ast_registry)
         
-        # Ensure AST providers are loaded
-        await self.ast_loader.load_all()
+        # AST providers are already loaded in step 2.5
         
         # 2. Build Graph (Scan all files for dependencies)
         # This is relatively fast with AST providers

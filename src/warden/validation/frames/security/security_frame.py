@@ -183,20 +183,29 @@ class SecurityFrame(ValidationFrame):
             try:
                 logger.info("executing_llm_security_check", file=code_file.path)
                 
-                # Context-Aware Request
-                prompt = f"""
-                Analyze the following {code_file.language} code for security vulnerabilities.
-                Focus on: SSRF, CSRF, XXE, Insecure Deserialization, and Path Traversal.
-                
-                Code:
-                {code_file.content[:3000]}  # Limit context for now
-                
-                Return a JSON object with a list of 'findings' (severity, message, line_number).
-                """
+                # Get Cross-File Context via Semantic Search
+                semantic_context = ""
+                if hasattr(self, 'semantic_search_service') and self.semantic_search_service and self.semantic_search_service.is_available():
+                    try:
+                        search_results = await self.semantic_search_service.search(
+                            query=f"Security sensitive logic related to {code_file.path}",
+                            limit=3
+                        )
+                        if search_results:
+                            semantic_context = "\n[Semantic Context from other files]:\n"
+                            for res in search_results:
+                                if res.file_path != code_file.path:
+                                    semantic_context += f"- File: {res.file_path}\n  Code: {res.content[:200]}...\n"
+                    except Exception as e:
+                        logger.warning("security_semantic_search_failed", error=str(e))
+
                 
                 # Use the shared JSON parsing utility (which we will create next) or a robust method
                 # for now using a direct call pattern assuming service has structured output or we parse it
-                response = await self.llm_service.analyze_security_async(code_file.content, code_file.language)
+                response = await self.llm_service.analyze_security_async(
+                    code_file.content + semantic_context, 
+                    code_file.language
+                )
                 logger.info("llm_security_response_received", response_count=len(response.get('findings', [])) if response else 0)
                 
                 if response and isinstance(response, dict) and 'findings' in response:

@@ -16,6 +16,7 @@ from warden.cli.commands.status import status_command
 from warden.cli.commands.scan import scan_command
 from warden.cli.commands.init import init_command
 from warden.cli.commands.serve import serve_app
+from warden.cli.commands.search import search_command, index_command
 
 # Initialize Typer app
 app = typer.Typer(
@@ -34,6 +35,8 @@ app.command(name="chat")(chat_command)
 app.command(name="status")(status_command)
 app.command(name="scan")(scan_command)
 app.command(name="init")(init_command)
+app.command(name="search")(search_command)
+app.command(name="index")(index_command)
 
 def main():
     """Entry point for setuptools."""

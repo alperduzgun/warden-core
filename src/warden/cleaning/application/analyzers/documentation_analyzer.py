@@ -54,6 +54,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
         self,
         code_file: CodeFile,
         cancellation_token: Optional[str] = None,
+        ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
         Analyze documentation quality and coverage.
@@ -76,8 +77,8 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
 
         try:
             # Analyze documentation
-            coverage_stats = self._calculate_documentation_coverage(code_file.content)
-            issues = self._analyze_documentation_quality(code_file.content)
+            coverage_stats = self._calculate_documentation_coverage(code_file.content, ast_tree)
+            issues = self._analyze_documentation_quality(code_file.content, ast_tree)
 
             # Calculate quality score (0-10)
             coverage_percent = coverage_stats.get("overall_coverage", 0)
@@ -129,18 +130,19 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _calculate_documentation_coverage(self, code: str) -> Dict[str, Any]:
+    def _calculate_documentation_coverage(self, code: str, ast_tree: Optional[Any] = None) -> Dict[str, Any]:
         """
         Calculate documentation coverage metrics.
 
         Args:
             code: Source code
+            ast_tree: Optional pre-parsed AST
 
         Returns:
             Dictionary with coverage statistics
         """
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError:
             return {"overall_coverage": 0}
 
@@ -193,12 +195,13 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
             "comment_density": comment_density,
         }
 
-    def _analyze_documentation_quality(self, code: str) -> List[CleaningIssue]:
+    def _analyze_documentation_quality(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
         """
         Analyze documentation quality issues.
 
         Args:
             code: Source code
+            ast_tree: Optional pre-parsed AST
 
         Returns:
             List of documentation issues
@@ -206,7 +209,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
         issues = []
 
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError:
             return issues
 

@@ -23,6 +23,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 from .phase_executor import PhaseExecutor
 from .frame_executor import FrameExecutor
+from warden.shared.services.semantic_search_service import SemanticSearchService
 
 logger = get_logger(__name__)
 
@@ -83,6 +84,12 @@ class PhaseOrchestrator:
         if self.config.global_rules:
             self.rule_validator = CustomRuleValidator(self.config.global_rules)
 
+        # Initialize Semantic Search Service if enabled in config
+        self.semantic_search_service = None
+        ss_config = getattr(self.config, 'semantic_search_config', None)
+        if ss_config and ss_config.get("enabled", False):
+            self.semantic_search_service = SemanticSearchService(ss_config)
+
         # Initialize phase executor
         self.phase_executor = PhaseExecutor(
             config=self.config,
@@ -90,7 +97,8 @@ class PhaseOrchestrator:
             project_root=self.project_root,
             llm_service=self.llm_service,
             # Validation logic needs all available frames for AI selection
-            frames=self.available_frames
+            frames=self.available_frames,
+            semantic_search_service=self.semantic_search_service
         )
 
         # Initialize frame executor
@@ -100,7 +108,8 @@ class PhaseOrchestrator:
             progress_callback=self.progress_callback,
             rule_validator=self.rule_validator,
             llm_service=self.llm_service,
-            available_frames=self.available_frames # All available frames for lookup
+            available_frames=self.available_frames, # All available frames for lookup
+            semantic_search_service=self.semantic_search_service
         )
 
         # Sort frames by priority
@@ -321,6 +330,15 @@ class PhaseOrchestrator:
                 summary=context.get_summary(),
             )
 
+        except RuntimeError as e:
+            if "Integrity check failed" in str(e):
+                logger.error("integrity_check_failed", error=str(e))
+                self.pipeline.status = PipelineStatus.FAILED
+                context.errors.append(str(e))
+                # Add a dummy result so CLI can show it
+                return context
+            raise e
+            
         except Exception as e:
             # Global pipeline failure handler - ensures status is updated and error is traced.
             # While generic, this is necessary at the top orchestration level to catch any phase failure.

@@ -41,6 +41,7 @@ class FrameExecutor:
         rule_validator: Optional[CustomRuleValidator] = None,
         llm_service: Optional[Any] = None,
         available_frames: Optional[List[ValidationFrame]] = None,
+        semantic_search_service: Optional[Any] = None,
     ):
         """
         Initialize frame executor.
@@ -52,6 +53,7 @@ class FrameExecutor:
             rule_validator: Optional rule validator for PRE/POST rules
             llm_service: Optional LLM service for AI-powered validation
             available_frames: List of all available frames (for discovery)
+            semantic_search_service: Optional semantic search service
         """
         self.frames = frames or []
         self.config = config or PipelineConfig()
@@ -59,6 +61,7 @@ class FrameExecutor:
         self.rule_validator = rule_validator
         self.llm_service = llm_service
         self.available_frames = available_frames or self.frames
+        self.semantic_search_service = semantic_search_service
 
         # Initialize helper components
         self.frame_matcher = FrameMatcher(frames, available_frames=self.available_frames)
@@ -256,6 +259,10 @@ class FrameExecutor:
         # Inject LLM service if available
         if self.llm_service:
             frame.llm_service = self.llm_service
+        
+        # Inject semantic search service if available
+        if self.semantic_search_service:
+            frame.semantic_search_service = self.semantic_search_service
         
         # Inject project context for context-aware checks (e.g., service abstraction detection)
         if hasattr(frame, 'set_project_context'):

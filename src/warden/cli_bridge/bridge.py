@@ -232,6 +232,7 @@ class WardenBridge:
                 enable_fortification=settings.get('enable_fortification', True),
                 enable_cleaning=settings.get('enable_cleaning', True),
                 pre_analysis_config=settings.get('pre_analysis_config', None),
+                semantic_search_config=config_data.get('semantic_search', None),
             )
 
             # Create orchestrator with frames, config, and LLM service

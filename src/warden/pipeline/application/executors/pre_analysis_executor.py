@@ -34,12 +34,19 @@ class PreAnalysisExecutor(BasePhaseExecutor):
         try:
             from warden.analysis.application.pre_analysis_phase import PreAnalysisPhase
 
+            # Prepare config for Phase
+            phase_config = {
+                "pre_analysis": getattr(self.config, 'pre_analysis_config', {}),
+                "semantic_search": getattr(self.config, 'semantic_search_config', {}),
+                "integrity_config": getattr(self.config, 'integrity_config', {}) if hasattr(self.config, 'integrity_config') else {}
+            }
+
             phase = PreAnalysisPhase(
                 project_root=self.project_root,
-                config=getattr(self.config, 'pre_analysis_config', {}),
+                config=phase_config,
             )
 
-            result = await phase.execute(code_files)
+            result = await phase.execute(code_files, pipeline_context=context)
 
             # Store results in context
             context.project_type = result.project_context
@@ -61,8 +68,11 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 project_type=result.project_context.project_type.value if result.project_context else None,
             )
 
+        except RuntimeError as e:
+            # Re-raise integrity check failures or other critical errors to stop pipeline
+            raise e
         except Exception as e:
-            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e))
+            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__)
             context.errors.append(f"PRE_ANALYSIS failed: {str(e)}")
 
         if self.progress_callback:

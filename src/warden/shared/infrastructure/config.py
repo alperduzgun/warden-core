@@ -37,17 +37,15 @@ class Settings(BaseSettings):
         description="Allowed CORS origins",
     )
 
-    # Qdrant Vector Database
-    qdrant_url: str = Field(
-        default="http://localhost:6333",
-        description="Qdrant server URL",
+    # ChromaDB Vector Database
+    chroma_path: str = Field(
+        default=".warden/embeddings",
+        description="ChromaDB persistent storage path",
     )
-    qdrant_api_key: str | None = Field(default=None, description="Qdrant API key")
-    qdrant_collection: str = Field(
-        default="warden_memory",
-        description="Qdrant collection name",
+    chroma_collection: str = Field(
+        default="warden_codebase",
+        description="ChromaDB collection name",
     )
-    qdrant_timeout: int = Field(default=30, description="Qdrant request timeout")
 
     # OpenAI (for embeddings)
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")

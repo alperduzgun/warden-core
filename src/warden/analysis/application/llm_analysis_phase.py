@@ -399,7 +399,7 @@ Return as JSON."""
             technical_debt_hours=0.0,
         )
 
-    async def execute(self, code_files: List[Any], impacted_files: List[str] = None) -> QualityMetrics:
+    async def execute(self, code_files: List[Any], pipeline_context: Optional[Any] = None, impacted_files: List[str] = None) -> QualityMetrics:
         """
         Execute LLM-enhanced analysis phase.
 
