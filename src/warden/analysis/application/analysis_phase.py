@@ -101,7 +101,11 @@ class AnalysisPhase:
             "testability": 0.10,
         }
 
-    async def execute(self, code_files: List[CodeFile]) -> QualityMetrics:
+    async def execute(
+        self,
+        code_files: List[CodeFile],
+        impacted_files: Optional[List[str]] = None,
+    ) -> QualityMetrics:
         """
         Execute analysis phase on code files.
 
