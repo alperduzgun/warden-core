@@ -52,6 +52,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
         self,
         code_file: CodeFile,
         cancellation_token: Optional[str] = None,
+        ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
         Analyze code maintainability.
@@ -74,8 +75,8 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         try:
             # Calculate maintainability metrics
-            mi_score, halstead_metrics = self._calculate_maintainability_index(code_file.content)
-            issues = self._detect_maintainability_issues(code_file.content)
+            mi_score, halstead_metrics = self._calculate_maintainability_index(code_file.content, ast_tree)
+            issues = self._detect_maintainability_issues(code_file.content, ast_tree)
 
             # Calculate quality score (0-10 scale from MI 0-100)
             quality_score = mi_score / 10.0
@@ -126,7 +127,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _calculate_maintainability_index(self, code: str) -> tuple[float, Dict[str, Any]]:
+    def _calculate_maintainability_index(self, code: str, ast_tree: Optional[Any] = None) -> tuple[float, Dict[str, Any]]:
         """
         Calculate Maintainability Index based on Halstead metrics.
 
@@ -139,12 +140,13 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         Args:
             code: Source code
+            ast_tree: Optional pre-parsed AST
 
         Returns:
             (MI score 0-100, Halstead metrics dict)
         """
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError:
             return 50.0, {}  # Default middle score on parse error
 
@@ -242,12 +244,13 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return complexity
 
-    def _detect_maintainability_issues(self, code: str) -> List[CleaningIssue]:
+    def _detect_maintainability_issues(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
         """
         Detect maintainability issues and code smells.
 
         Args:
             code: Source code
+            ast_tree: Optional pre-parsed AST
 
         Returns:
             List of maintainability issues
@@ -255,7 +258,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
         issues = []
 
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError:
             return issues
 

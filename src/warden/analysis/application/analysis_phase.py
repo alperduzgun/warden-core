@@ -104,6 +104,7 @@ class AnalysisPhase:
     async def execute(
         self,
         code_files: List[CodeFile],
+        pipeline_context: Optional[Any] = None,
         impacted_files: Optional[List[str]] = None,
     ) -> QualityMetrics:
         """
@@ -111,6 +112,8 @@ class AnalysisPhase:
 
         Args:
             code_files: List of code files to analyze
+            pipeline_context: Optional pipeline context with cached ASTs
+            impacted_files: Optional list of impacted files
 
         Returns:
             QualityMetrics with comprehensive scoring
@@ -153,7 +156,7 @@ class AnalysisPhase:
             # Run all analyzers in parallel for each file
             all_results = {}
             for code_file in code_files:
-                file_results = await self._analyze_file(code_file)
+                file_results = await self._analyze_file(code_file, pipeline_context)
                 all_results[code_file.path] = file_results
 
             # Aggregate results
@@ -193,12 +196,13 @@ class AnalysisPhase:
                 file_count=len(code_files),
             )
 
-    async def _analyze_file(self, code_file: CodeFile) -> Dict[str, Any]:
+    async def _analyze_file(self, code_file: CodeFile, pipeline_context: Optional[Any] = None) -> Dict[str, Any]:
         """
         Run all analyzers on a single file.
 
         Args:
             code_file: Code file to analyze
+            pipeline_context: Optional pipeline context with cached ASTs
 
         Returns:
             Dictionary with analyzer results
@@ -206,29 +210,34 @@ class AnalysisPhase:
         # Create tasks for parallel execution
         tasks = {}
 
+        # Get cached AST if available
+        ast_tree = None
+        if pipeline_context and hasattr(pipeline_context, 'ast_cache'):
+            ast_tree = pipeline_context.ast_cache.get(code_file.path)
+
         # Core analyzers for scoring
         tasks["complexity"] = asyncio.create_task(
-            self.analyzers["complexity"].analyze_async(code_file)
+            self.analyzers["complexity"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["duplication"] = asyncio.create_task(
-            self.analyzers["duplication"].analyze_async(code_file)
+            self.analyzers["duplication"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["maintainability"] = asyncio.create_task(
-            self.analyzers["maintainability"].analyze_async(code_file)
+            self.analyzers["maintainability"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["naming"] = asyncio.create_task(
-            self.analyzers["naming"].analyze_async(code_file)
+            self.analyzers["naming"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["documentation"] = asyncio.create_task(
-            self.analyzers["documentation"].analyze_async(code_file)
+            self.analyzers["documentation"].analyze_async(code_file, ast_tree=ast_tree)
         )
         tasks["testability"] = asyncio.create_task(
-            self.analyzers["testability"].analyze_async(code_file)
+            self.analyzers["testability"].analyze_async(code_file, ast_tree=ast_tree)
         )
 
         # Additional analyzer for hotspots
         tasks["magic_numbers"] = asyncio.create_task(
-            self.analyzers["magic_numbers"].analyze_async(code_file)
+            self.analyzers["magic_numbers"].analyze_async(code_file, ast_tree=ast_tree)
         )
 
         # Wait for all analyzers with timeout
@@ -474,12 +483,12 @@ class AnalysisPhase:
 
         # Create metric breakdowns with configured weights
         metrics.metric_breakdowns = [
-            MetricBreakdown("complexity", complexity_score, self.weights["complexity"]),
-            MetricBreakdown("duplication", duplication_score, self.weights["duplication"]),
-            MetricBreakdown("maintainability", maintainability_score, self.weights["maintainability"]),
-            MetricBreakdown("naming", naming_score, self.weights["naming"]),
-            MetricBreakdown("documentation", documentation_score, self.weights["documentation"]),
-            MetricBreakdown("testability", testability_score, self.weights["testability"]),
+            MetricBreakdown(name="complexity", score=complexity_score, weight=self.weights["complexity"]),
+            MetricBreakdown(name="duplication", score=duplication_score, weight=self.weights["duplication"]),
+            MetricBreakdown(name="maintainability", score=maintainability_score, weight=self.weights["maintainability"]),
+            MetricBreakdown(name="naming", score=naming_score, weight=self.weights["naming"]),
+            MetricBreakdown(name="documentation", score=documentation_score, weight=self.weights["documentation"]),
+            MetricBreakdown(name="testability", score=testability_score, weight=self.weights["testability"]),
         ]
 
         # Calculate overall score

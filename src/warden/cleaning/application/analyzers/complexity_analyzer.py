@@ -10,7 +10,7 @@ Detects complex and long methods:
 
 import ast
 import structlog
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
@@ -56,6 +56,7 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
         self,
         code_file: CodeFile,
         cancellation_token: Optional[str] = None,
+        ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
         Analyze code for complexity issues.
@@ -77,7 +78,7 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
             )
 
         try:
-            issues = self._analyze_complexity(code_file.content)
+            issues = self._analyze_complexity(code_file.content, ast_tree)
 
             if not issues:
                 logger.info(
@@ -136,12 +137,13 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_complexity(self, code: str) -> List[CleaningIssue]:
+    def _analyze_complexity(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
         """
         Analyze code for complexity issues using AST.
 
         Args:
             code: Source code to analyze
+            ast_tree: Optional pre-parsed AST
 
         Returns:
             List of complexity issues
@@ -149,7 +151,7 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
         issues = []
 
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError as e:
             logger.warning("syntax_error_in_code", error=str(e))
             return issues

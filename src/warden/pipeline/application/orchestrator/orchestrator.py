@@ -321,6 +321,15 @@ class PhaseOrchestrator:
                 summary=context.get_summary(),
             )
 
+        except RuntimeError as e:
+            if "Integrity check failed" in str(e):
+                logger.error("integrity_check_failed", error=str(e))
+                self.pipeline.status = PipelineStatus.FAILED
+                context.errors.append(str(e))
+                # Add a dummy result so CLI can show it
+                return context
+            raise e
+            
         except Exception as e:
             # Global pipeline failure handler - ensures status is updated and error is traced.
             # While generic, this is necessary at the top orchestration level to catch any phase failure.

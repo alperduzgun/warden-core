@@ -54,6 +54,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         self,
         code_file: CodeFile,
         cancellation_token: Optional[str] = None,
+        ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
         Analyze code testability.
@@ -61,6 +62,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         Args:
             code_file: The code file to analyze
             cancellation_token: Optional cancellation token
+            ast_tree: Optional pre-parsed AST tree of the code file
 
         Returns:
             CleaningResult with testability metrics
@@ -80,12 +82,12 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
             if is_test_file:
                 # Analyze test quality instead of testability
-                test_quality = self._analyze_test_quality(code_file.content)
+                test_quality = self._analyze_test_quality(code_file.content, ast_tree)
                 quality_score = test_quality.get("quality_score", 5.0)
                 issues = test_quality.get("issues", [])
             else:
                 # Analyze testability
-                testability_metrics = self._analyze_testability(code_file.content)
+                testability_metrics = self._analyze_testability(code_file.content, ast_tree)
                 issues = testability_metrics.get("issues", [])
                 quality_score = testability_metrics.get("testability_score", 5.0)
 
@@ -163,7 +165,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         return False
 
-    def _analyze_testability(self, code: str) -> Dict[str, Any]:
+    def _analyze_testability(self, code: str, ast_tree: Optional[Any] = None) -> Dict[str, Any]:
         """
         Analyze code testability factors.
 
@@ -171,7 +173,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
             Dictionary with testability metrics and issues
         """
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError:
             return {"testability_score": 0, "issues": []}
 
@@ -320,7 +322,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _analyze_test_quality(self, code: str) -> Dict[str, Any]:
+    def _analyze_test_quality(self, code: str, ast_tree: Optional[Any] = None) -> Dict[str, Any]:
         """
         Analyze test file quality.
 
@@ -328,7 +330,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
             Dictionary with test quality metrics
         """
         try:
-            tree = ast.parse(code)
+            tree = ast_tree if ast_tree else ast.parse(code)
         except SyntaxError:
             return {"quality_score": 0, "issues": []}
 

@@ -126,7 +126,7 @@ class AnalysisExecutor(BasePhaseExecutor):
                 ]
                 
                 llm_start_time = time.perf_counter()
-                result = await phase.execute(files_to_analyze, impacted_files=impacted_paths)
+                result = await phase.execute(files_to_analyze, pipeline_context=context, impacted_files=impacted_paths)
                 llm_duration = time.perf_counter() - llm_start_time
 
             if verbose:
