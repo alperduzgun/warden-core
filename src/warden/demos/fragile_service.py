@@ -35,17 +35,3 @@ class PaymentProcessor:
             
         for item in data:
             self.process_payment(item['id'], item['amount'])
-
-    def backup_database(self, filename):
-        # CRITICAL: Command Injection
-        import os
-        os.system(f"cp payments.db backups/{filename}")
-
-    def get_aws_client(self):
-        # CRITICAL: Hardcoded Secret
-        import boto3
-        return boto3.client(
-            's3',
-            aws_access_key_id='AKIAIKID7RQQS2EXAMPLE',
-            aws_secret_access_key='wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
-        )
