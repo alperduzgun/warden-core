@@ -79,6 +79,8 @@ ci:
     path: .warden/reports/WARDEN_REPORT.md
   - format: json
     path: .warden/reports/warden-report.json
+  - format: sarif
+    path: .warden/reports/warden-report.sarif
 settings:
   fail_fast: false
   timeout: 300

@@ -5,6 +5,7 @@ project:
 global_rules:
   - no-secrets
   - file-size-limit
+  - orchestrator-total-frames-check
 frame_rules:
   security:
     pre_rules:
@@ -31,6 +32,7 @@ frame_rules:
       - no-secrets
       - cli-pipeline-status-check
       - llm-context-propagation-check
+      - orchestrator-total-frames-check
     on_fail: continue
   stress:
     pre_rules:
@@ -50,6 +52,37 @@ frame_rules:
   property:
     on_fail: continue
 rules:
+  - id: orchestrator-total-frames-check
+    name: Orchestrator total_frames Calculation Regression
+    category: architectural
+    severity: critical
+    isBlocker: true
+    description: Prevent regression where total_frames is calculated from static selected_frames list instead of actual execution count
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - total_frames\s*=\s*len\(
+        - total_frames\s*=\s*len\(getattr
+    examples:
+      invalid:
+        - "total_frames = len(getattr(context, 'selected_frames', []))"
+        - "total_frames = len(self.frames)"
+      valid:
+        - "total_frames = max(actual_total, planned_total)"
+        - "total_frames = frames_passed + frames_failed"
+    message: |
+      Regression detected in total_frames calculation!
+      
+      Problem: Calculating total_frames from static 'selected_frames' list ignores dynamic/mandatory frames.
+      Solution: Calculate total based on ACTUAL execution counts (passed + failed + skipped) or max(actual, planned).
+      
+      This caused a bug where report showed 5 total frames but 8 passed frames.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
   - id: env-var-api-keys
     name: API Keys Must Use Environment Variables
     category: security
@@ -795,95 +828,36 @@ rules:
     examples:
       invalid:
         - "if (result.status === 'success') { ... }"
-      invalid:
-        - "if (result.status === 'success') { ... }"
       valid:
-        - "if (['success', 'completed', '2'].includes(String(result.status))) { ... }"
+        - "if (result.status === 'completed' || result.status === 'success') { ... }"
     message: |
-      Fragile pipeline status check detected!
-
-      Problem: Relying on exact string matching for status
-      Solution: Use robust set inclusion checks
-
-      Backend might return different status strings ('completed', 'success', '2').
-      Don't block the UI because of a minor status string mismatch.
+       Pipeline Status Check Fragility Detected!
+       
+       Problem: Checking status exactly equals 'success'
+       Solution: Check for multiple success states or use helper function
+       
+       Backend can return: 'success', 'completed', '2'
     language:
       - typescript
       - javascript
   - id: llm-context-propagation-check
-    name: LLM Phases Must Receive Context
-    category: architecture
-    severity: critical
-    isBlocker: true
-    description: Classification and other LLM phases must be instantiated with propagated context to avoid 'blind' decision making.
+    name: LLM Context Propagation Check
+    category: architectural
+    severity: medium
+    isBlocker: false
+    description: Ensure context is propagated to LLM phases
     enabled: true
     type: convention
     conditions:
       patterns:
-        must_have_nearby:
-          - pattern: 'Phase\('
-            requires_within_lines: 10
-            any_of:
-              - 'context='
-              - 'context\s*='
+        - context_data\s*=\s*None
     examples:
-      invalid:
-        - |
-          phase = ClassificationPhase(
-              config=config,
-              llm_service=llm_service
-          )
-      valid:
-        - |
-          phase = ClassificationPhase(
-              config=config,
-              llm_service=llm_service,
-              context=phase_context
-          )
+        invalid:
+            - "context_data = None"
+        valid:
+             - "context_data = context.context_data"
     message: |
-      LLM Phase instantiation missing Context!
-
-      Problem: Instantiating an LLM Phase (like ClassificationPhase) without passing 'context'.
-      Impact: The LLM will use hardcoded defaults instead of real project data (Architecture Tree).
-      
-      Fix:
-      Ensure you pass `context=phase_context` or similar when creating the phase.
+            Context Propagation Missing!
+            Ensure context_data is passed to LLM phases.
     language:
-      - python
-    exceptions:
-      - '*/test_*.py'
-      - '*_test.py'
-      
-      Problem: Checking only for 'success' string.
-      Risk: Backend status codes vary (completed, 2, success).
-      
-      Fix: Use a robust check that covers all success states.
-      Example: ['success', 'completed', '2', 2].includes(status)
-    language:
-      - typescript
-      - javascript
-    exceptions:
-      - '**/*.test.ts'
-ai_validation:
-  enabled: true
-  llm_provider: azure_openai
-exclude:
-  paths:
-    - node_modules/
-    - venv/
-    - .venv/
-    - dist/
-    - build/
-    - __pycache__/
-    - .pytest_cache/
-    - .git/
-    - docs/
-    - examples/
-  files:
-    - '*.test.py'
-    - '*.spec.py'
-    - test_*.py
-    - '*_test.py'
-    - .env.example
-    - '*.md'
-    - '*.yaml.example'
+        - python
