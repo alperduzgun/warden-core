@@ -52,6 +52,7 @@ temp/
 # Warden runtime files
 .warden/backend.pid
 .warden/memory/
+.warden/reports/
 
 # Python build artifacts
 *.egg-info/

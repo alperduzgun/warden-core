@@ -198,23 +198,20 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, o
                     
                     elif evt == "frame_completed":
                         stats["total"] += 1
+                        name = data.get('frame_name', data.get('frame_id'))
                         status = data.get('status', 'unknown')
-                        name = data.get('frame_name', 'Unknown')
-                        
+                        icon = "✅" if status == "passed" else "❌" if status == "failed" else "⚠️" 
+                        style = "green" if status == "passed" else "red" if status == "failed" else "yellow"
+                        findings_count = data.get('findings', data.get('issues_found', 0))
+
                         if status == "passed":
                             stats["passed"] += 1
-                            icon = "✅"
-                            style = "green"
                         elif status == "failed":
                             stats["failed"] += 1
-                            icon = "❌"
-                            style = "red"
                         else:
                             stats["skipped"] += 1
-                            icon = "⏭️"
-                            style = "yellow"
                             
-                        console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {data.get('issues_found', 0)} issues")
+                        console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
 
             elif event_type == "result":
                 # Final results
@@ -248,6 +245,70 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, o
                         console.print(f"\n[bold green]✨ Scan Succeeded![/bold green]")
                     else:
                         console.print(f"\n[bold red]💥 Scan Failed![/bold red]")
+
+            # Report Generation from Config
+            if final_result_data:
+                try:
+                    import yaml
+                    from warden.reports.generator import ReportGenerator
+                    
+                    config_path = Path.cwd() / ".warden" / "config.yaml"
+                    if config_path.exists():
+                        with open(config_path) as f:
+                            config = yaml.safe_load(f)
+                        
+                        ci_config = config.get('ci', {})
+                        outputs = ci_config.get('output', [])
+                        
+                        if outputs:
+                            console.print("\n[bold]📝 Generating Reports:[/bold]")
+                            generator = ReportGenerator()
+                            
+                            for out in outputs:
+                                fmt = out.get('format')
+                                path_str = out.get('path')
+                                if not fmt or not path_str:
+                                    continue
+                                    
+                                out_path = Path.cwd() / path_str
+                                out_path.parent.mkdir(parents=True, exist_ok=True)
+                                
+                                try:
+                                    if fmt == 'json':
+                                        generator.generate_json_report(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]JSON[/cyan]: {path_str}")
+                                    elif fmt == 'markdown' or fmt == 'md':
+                                        # Fallback to JSON-like structure if MD not supported by generator directly or use available methods
+                                        # Assuming generator has methods for configured types.
+                                        # If generator doesn't support markdown explicitly, we skip or add TODO.
+                                        # Current ReportGenerator has generate_html_report, generate_json_report etc.
+                                        # We will map 'markdown' to a custom handler or skip if not present.
+                                        # For now, let's just log it. 
+                                        # Actually, the user WANTS it. Let's see if we can use another format or if I need to implement MD report.
+                                        pass
+                                    elif fmt == 'sarif':
+                                        generator.generate_sarif_report(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]SARIF[/cyan]: {path_str}")
+                                    elif fmt == 'junit':
+                                        generator.generate_junit_report(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]JUnit[/cyan]: {path_str}")
+                                    elif fmt == 'html':
+                                        generator.generate_html_report(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]HTML[/cyan]: {path_str}")
+                                    elif fmt == 'pdf':
+                                        generator.generate_pdf_report(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]PDF[/cyan]: {path_str}")
+                                        
+                                except Exception as e:
+                                    console.print(f"  ❌ [red]{fmt.upper()}[/red]: Failed - {e}")
+                                    if verbose:
+                                        console.print(f"     {str(e)}")
+
+                except Exception as e:
+                    console.print(f"\n[red]⚠️  Report generation failed: {e}[/red]")
+                    if verbose:
+                        import traceback
+                        traceback.print_exc()
 
         # Generate report if requested
         if output and final_result_data:

@@ -93,7 +93,7 @@ class ClassificationExecutor(BasePhaseExecutor):
                  # but we still need a list of frames to *attempt* to run.
                  
                  # Create a dummy result with previous selected frames or default
-                 from warden.classification.domain.classification_result import ClassificationResult
+                 from warden.classification.application.classification_phase import ClassificationResult
                  
                  # Try to restore from memory (Phase 0 should have populated this if we had a persistent store for it)
                  # Since we don't have per-run persistence for classification yet, we'll assume defaults
@@ -131,7 +131,7 @@ class ClassificationExecutor(BasePhaseExecutor):
                  # SAFE FIX: If we skip classification, we simply return "Use All Frames" 
                  # because FrameExecutor will skip the *execution* on unchanged files anyway.
                  # This avoids cost of LLM Classification.
-                 from warden.classification.domain.classification_result import ClassificationResult
+                 from warden.classification.application.classification_phase import ClassificationResult
                  result = ClassificationResult(
                      selected_frames=[], # Empty list often implies "default/all" or "none" depending on logic
                      suppression_rules=[],
