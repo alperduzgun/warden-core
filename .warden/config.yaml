@@ -44,11 +44,11 @@ frames_config:
     priority: critical
     is_blocker: false
     checks:
-    - sql_injection
+    - sql-injection
     - xss
-    - hardcoded_secrets
-    - command_injection
-    - path_traversal
+    - secrets
+    - command-injection
+    - path-traversal
   resilience:
     enabled: true
     priority: high

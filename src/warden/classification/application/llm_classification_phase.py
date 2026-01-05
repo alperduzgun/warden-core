@@ -12,7 +12,10 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
     LLMPhaseConfig,
-    PromptTemplates,
+)
+from warden.classification.application.classification_prompts import (
+    get_classification_system_prompt,
+    format_classification_user_prompt,
 )
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import Framework, ProjectType
@@ -61,108 +64,23 @@ class LLMClassificationPhase(LLMPhaseBase):
 
     def get_system_prompt(self) -> str:
         """Get classification system prompt."""
-        # Dynamically build frame list
-        if self.available_frames:
-            frames_list = "\n".join([
-                f"- {f.frame_id}: {f.description}" 
-                for f in self.available_frames
-            ])
-        else:
-            # Fallback to hardcoded list if no frames provided
-            frames_list = """- SecurityFrame: SQL injection, XSS, hardcoded secrets
-- ChaosFrame: Error handling, timeouts, resilience
-- OrphanFrame: Unused code detection
-- ArchitecturalFrame: Design pattern compliance
-- StressFrame: Performance and load testing
-- PropertyFrame: Invariant and contract validation
-- FuzzFrame: Input validation and edge cases"""
-
-        return PromptTemplates.FRAME_SELECTION + f"""
-
-Frame Selection Criteria:
-1. Project Type: Match frames to project characteristics
-2. Framework: Use framework-specific validation
-3. File Context: Skip irrelevant frames for test/example code
-4. Previous Issues: Prioritize frames that found issues before
-5. Risk Level: Focus on high-risk areas
-
-Available Frames:
-{frames_list}
-
-Suppression Guidelines:
-- Test files with intentional vulnerabilities
-- Example code demonstrating bad practices
-- Generated code from trusted sources
-- Framework-specific patterns
-- Documentation code snippets
-
-Return a JSON object with:
-1. selected_frames: List of frame IDs to run
-2. suppression_rules: Rules for false positive filtering
-3. priorities: Priority order for frames
-4. reasoning: Brief explanation of choices"""
+        return get_classification_system_prompt(self.available_frames)
 
     def format_user_prompt(self, context: Dict[str, Any]) -> str:
         """Format user prompt for classification."""
-        project_type = context.get("project_type", ProjectType.APPLICATION.value)
-        framework = context.get("framework", Framework.NONE.value)
-        file_contexts = context.get("file_contexts", {})
-        previous_issues = context.get("previous_issues", [])
-        file_path = context.get("file_path", "")
-
-        # Analyze file context distribution
-        context_counts = {}
-        for fc in file_contexts.values():
-            context_type = fc.get("context", "UNKNOWN")
-            context_counts[context_type] = context_counts.get(context_type, 0) + 1
-
-        prompt = f"""Analyze the project and select appropriate validation frames:
-
-PROJECT TYPE: {project_type}
-FRAMEWORK: {framework}
-FILE: {file_path}
-
-FILE CONTEXT DISTRIBUTION:
-{json.dumps(context_counts, indent=2)}
-
-PREVIOUS ISSUES FOUND:
-{json.dumps(previous_issues[:10], indent=2) if previous_issues else "None"}
-
-PROJECT CHARACTERISTICS:
-- Total files: {len(file_contexts)}
-- Test files: {context_counts.get('TEST', 0)}
-- Example files: {context_counts.get('EXAMPLE', 0)}
-- Production files: {context_counts.get('PRODUCTION', 0)}
-
-Based on this context:
-1. Which validation frames should run?
-2. What suppression rules should apply?
-3. What priority order for frames?
-
-Consider:
-- Don't run SecurityFrame on test files with intentional vulnerabilities
-- Skip ArchitecturalFrame for small scripts
-- Prioritize frames that found issues previously
-- Apply framework-specific suppressions
-
-Return as JSON."""
-
-        return prompt
+        return format_classification_user_prompt(context)
 
     def parse_llm_response(self, response: str) -> Dict[str, Any]:
         """Parse LLM classification response."""
         try:
-            # Extract JSON from response
-            if "```json" in response:
-                json_str = response.split("```json")[1].split("```")[0]
-            elif "{" in response and "}" in response:
-                start = response.index("{")
-                end = response.rindex("}") + 1
-                json_str = response[start:end]
-            else:
-                raise ValueError("No JSON found in response")
-
-            result = json.loads(json_str)
+            from warden.shared.utils.json_parser import parse_json_from_llm
+            result = parse_json_from_llm(response)
+            if not result:
+                raise ValueError("No valid JSON found in response")
+            
+            # Ensure it's a dict
+            if not isinstance(result, dict):
+                 raise ValueError(f"Expected dict, got {type(result)}")
 
             # Validate and provide defaults
             # Use explicit check for empty list instead of setdefault
