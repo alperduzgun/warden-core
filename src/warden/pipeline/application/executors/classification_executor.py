@@ -64,6 +64,7 @@ class ClassificationExecutor(BasePhaseExecutor):
                 )
                 logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:
+                from warden.classification.application.classification_phase import ClassificationPhase
                 phase = ClassificationPhase(
                     config=getattr(self.config, 'classification_config', {}),
                     context=phase_context,
