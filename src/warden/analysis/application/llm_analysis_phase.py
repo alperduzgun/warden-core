@@ -65,12 +65,14 @@ Return a JSON object with scores for each metric."""
         file_context = context.get("file_context", FileContext.PRODUCTION.value)
         language = context.get("language", "python")
         metrics = context.get("initial_metrics", {})
+        is_impacted = context.get("is_impacted", False)
 
         prompt = f"""Analyze the following {language} code for quality:
 
 FILE: {file_path}
 CONTEXT: {file_context}
 LANGUAGE: {language}
+IMPACTED_BY_DEPENDENCY: {is_impacted}
 
 CODE:
 ```{language}
@@ -95,6 +97,9 @@ Also identify:
 - Estimated technical debt hours
 
 Return as JSON."""
+
+        if is_impacted:
+            prompt += "\n\nCRITICAL HINT: This file is being re-analyzed because its dependencies have changed. Focus heavily on integration consistency, interface alignment, and potential breaking changes from upstream services."
 
         return prompt
 
@@ -168,6 +173,7 @@ Return as JSON."""
         file_path: Path,
         file_context: FileContext,
         initial_metrics: Optional[Dict[str, float]] = None,
+        is_impacted: bool = False,
     ) -> Tuple[QualityMetrics, float]:
         """
         Analyze code quality with LLM enhancement.
@@ -187,6 +193,7 @@ Return as JSON."""
             "file_context": file_context.value,
             "language": self._detect_language(file_path),
             "initial_metrics": initial_metrics or {},
+            "is_impacted": is_impacted,
         }
 
         # Try LLM analysis
@@ -227,7 +234,7 @@ Return as JSON."""
 
     async def analyze_batch(
         self,
-        files: List[Tuple[str, Path, FileContext]],
+        files: List[Tuple[str, Path, FileContext, bool]],
         initial_metrics: Optional[Dict[Path, Dict[str, float]]] = None,
     ) -> Dict[Path, Tuple[QualityMetrics, float]]:
         """
@@ -244,7 +251,7 @@ Return as JSON."""
 
         # Prepare batch contexts
         contexts = []
-        for code, path, file_context in files:
+        for code, path, file_context, is_impacted in files:
             context = {
                 "code": code,
                 "file_path": str(path),
@@ -253,6 +260,7 @@ Return as JSON."""
                 "initial_metrics": (
                     initial_metrics.get(path, {}) if initial_metrics else {}
                 ),
+                "is_impacted": is_impacted,
             }
             contexts.append(context)
 
@@ -260,7 +268,7 @@ Return as JSON."""
         llm_results = await self.analyze_batch_with_llm(contexts)
 
         # Process results
-        for i, (code, path, file_context) in enumerate(files):
+        for i, (code, path, file_context, is_impacted) in enumerate(files):
             llm_result = llm_results[i]
 
             if llm_result:
@@ -391,7 +399,7 @@ Return as JSON."""
             technical_debt_hours=0.0,
         )
 
-    async def execute(self, code_files: List[Any]) -> QualityMetrics:
+    async def execute(self, code_files: List[Any], impacted_files: List[str] = None) -> QualityMetrics:
         """
         Execute LLM-enhanced analysis phase.
 
@@ -412,12 +420,16 @@ Return as JSON."""
             # Determine file context
             file_context = FileContext.PRODUCTION
 
+            # Check for impact
+            is_impacted = impacted_files and str(file_path) in impacted_files
+
             # Analyze with LLM
             metrics, confidence = await self.analyze_code_quality(
                 code=code,
                 file_path=file_path,
                 file_context=file_context,
-                initial_metrics=None
+                initial_metrics=None,
+                is_impacted=is_impacted
             )
 
             logger.info(

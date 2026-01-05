@@ -281,6 +281,64 @@ class TreeSitterProvider(IASTProvider):
         # Parse will fail gracefully with informative error
         return True
 
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> List[str]:
+        """
+        Extract dependencies using tree-sitter queries.
+        
+        Args:
+            source_code: Source code to analyze
+            language: Programming language of the code
+            
+        Returns:
+            List of unique dependency strings
+        """
+        if not self._available:
+            return []
+            
+        query_str = self._get_dependency_query_str(language)
+        if not query_str:
+            return []
+            
+        try:
+            # Get tree-sitter language and parser
+            ts_language = self._get_ts_language(language)
+            if not ts_language:
+                return []
+                
+            parser = self.Parser()
+            parser.set_language(ts_language)
+            
+            tree = parser.parse(bytes(source_code, "utf8"))
+            query = ts_language.query(query_str)
+            captures = query.captures(tree.root_node)
+            
+            dependencies = set()
+            for node, tag in captures:
+                if tag == "dep":
+                    dep_str = source_code[node.start_byte : node.end_byte].strip("\"'")
+                    if dep_str:
+                        dependencies.add(dep_str)
+                        
+            return sorted(list(dependencies))
+        except Exception as e:
+            logger.warning(
+                "tree_sitter_dependency_extraction_failed",
+                language=language.value,
+                error=str(e)
+            )
+            return []
+
+    def _get_dependency_query_str(self, language: CodeLanguage) -> str:
+        """Get tree-sitter query string for dependencies based on language."""
+        queries = {
+            CodeLanguage.JAVASCRIPT: "(import_declaration source: (string) @dep) (call_expression function: (identifier) @func (#eq? @func \"require\") arguments: (arguments (string) @dep))",
+            CodeLanguage.TYPESCRIPT: "(import_declaration source: (string) @dep) (import_alias_declaration source: (string) @dep)",
+            CodeLanguage.GO: "(import_spec path: (string) @dep)",
+            CodeLanguage.JAVA: "(import_declaration name: (scoped_identifier) @dep)",
+            CodeLanguage.PYTHON: "(import_from_statement module: (dotted_name) @dep) (import_statement name: (dotted_name) @dep)"
+        }
+        return queries.get(language, "")
+
     def _convert_node(self, ts_node: "tree_sitter.Node", source: str, language: CodeLanguage, file_path: Optional[str] = None) -> ASTNode:
         """Recursively convert a tree-sitter node to Warden ASTNode."""
         node_type, is_generic = self._map_node_type(ts_node, language)

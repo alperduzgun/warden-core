@@ -6,7 +6,7 @@ This enables pluggable, language-specific parsers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from warden.ast.domain.models import (
     ASTProviderMetadata,
@@ -61,6 +61,20 @@ class IASTProvider(ABC):
         Raises:
             NotImplementedError: If language is not supported
             ValueError: If source_code is invalid
+        """
+        pass
+
+    @abstractmethod
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> List[str]:
+        """
+        Extract raw dependency strings (imports, requires, includes).
+        
+        Args:
+            source_code: Source code to analyze
+            language: Programming language of the code
+            
+        Returns:
+            List of raw import/dependency strings
         """
         pass
 

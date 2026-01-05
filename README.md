@@ -220,8 +220,9 @@ Group 4: [Stress] (low)
 ### 5. Smart Caching & Incremental Scanning
 - **Composite Cache Key**: Combines file content + config hash + Warden version.
 - **Environment Aware**: Automatic invalidation if rules or configuration change.
+- **Dependency Tracking**: Language-agnostic extraction (Python, JS, TS, Go, Java) to identify transitive impact.
 - **Blazing Fast**: Skips expensive analysis for unchanged files (0 LLM tokens).
-- **Deterministic**: Ensures consistent hashing across environments.
+- **Semantic Risk Analysis**: Re-analyzes impacted files even if content is unchanged, focusing on integration consistency.
 
 ---
 
@@ -308,6 +309,7 @@ python3 tests/integration/test_full_pipeline_with_frames.py
 - ✅ Validate command (single file)
 - ✅ Scan command (directory)
 - ✅ Progress bars and spinners
+- ✅ Dependency-Aware Scanning (Phase 16)
 - [ ] Report generation (JSON, Markdown, HTML)
 - [ ] LLM integration (analyzer + classifier enhancement)
 - [ ] Resilience patterns (tenacity - retry, timeout)
