@@ -30,8 +30,16 @@ from warden.validation.domain.enums import (
     FrameScope,
     FrameApplicability,
 )
-from warden.validation.frames.orphan.orphan_detector import OrphanDetectorFactory, OrphanFinding
-from warden.validation.frames.orphan.llm_orphan_filter import LLMOrphanFilter
+import sys
+from pathlib import Path
+
+# Add current directory to path to allow importing sibling modules
+current_dir = str(Path(__file__).parent)
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from orphan_detector import OrphanDetectorFactory, OrphanFinding
+from llm_orphan_filter import LLMOrphanFilter
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -466,7 +474,7 @@ class OrphanFrame(ValidationFrame):
             True if frame should run
         """
         # Check if we have a detector for this language (delegate to factory)
-        from warden.validation.frames.orphan.orphan_detector import OrphanDetectorFactory
+        from ..orphan_detector import OrphanDetectorFactory
         
         # Get file extension
         import os

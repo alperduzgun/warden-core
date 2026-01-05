@@ -37,7 +37,7 @@ from pathlib import Path
 from warden.llm.factory import create_client
 from warden.llm.config import LlmConfiguration
 from warden.llm.types import LlmRequest, LlmResponse
-from warden.validation.frames.orphan.orphan_detector import OrphanFinding
+from orphan_detector import OrphanFinding
 from warden.validation.domain.frame import CodeFile
 from warden.shared.infrastructure.logging import get_logger
 

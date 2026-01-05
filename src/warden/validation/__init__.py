@@ -19,14 +19,6 @@ from warden.validation.domain.check import (
     CheckFinding,
     CheckSeverity,
 )
-from warden.validation.frames.security import SecurityFrame
-from warden.validation.frames.resilience import ResilienceFrame
-from warden.validation.frames.gitchanges import GitChangesFrame
-from warden.validation.frames.orphan import OrphanFrame
-
-# Alias
-ChaosFrame = ResilienceFrame
-
 __all__ = [
     # Enums
     "FramePriority",
@@ -44,10 +36,4 @@ __all__ = [
     "CheckResult",
     "CheckFinding",
     "CheckSeverity",
-    # Built-in frames
-    "SecurityFrame",
-    "ResilienceFrame",
-    "ChaosFrame",
-    "GitChangesFrame",
-    "OrphanFrame",
 ]

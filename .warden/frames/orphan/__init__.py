@@ -14,21 +14,21 @@ Components:
 - LLMOrphanFilter: LLM-based filtering (smart, context-aware)
 
 Usage:
-    from warden.validation.frames.orphan import OrphanFrame
+    from . import OrphanFrame
 
     frame = OrphanFrame(config={"use_llm_filter": True})
     result = await frame.execute(code_file)
 """
 
-from warden.validation.frames.orphan.orphan_frame import OrphanFrame
-from warden.validation.frames.orphan.orphan_detector import (
+from ..orphan_frame import OrphanFrame
+from ..orphan_detector import (
     AbstractOrphanDetector,
     PythonOrphanDetector,
     TreeSitterOrphanDetector,
     OrphanDetectorFactory,
     OrphanFinding,
 )
-from warden.validation.frames.orphan.llm_orphan_filter import (
+from ..llm_orphan_filter import (
     LLMOrphanFilter,
     FilterDecision,
 )

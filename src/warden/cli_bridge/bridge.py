@@ -131,14 +131,41 @@ class WardenBridge:
                 )
                 return
 
-            # Parse YAML
-            with open(config_file) as f:
-                config_data = yaml.safe_load(f)
+            # Use ConfigManager to load config and rules appropriately
+            from warden.cli_bridge.config_manager import ConfigManager
+            config_mgr = ConfigManager(self.project_root)
+            
+            try:
+                config_data = config_mgr.read_config()
+            except Exception as e:
+                logger.warning(f"Failed to read config via ConfigManager: {e}")
+                with open(config_file) as f:
+                    config_data = yaml.safe_load(f)
+
+            # Load rules to merge into frame config
+            rules_data = {}
+            try:
+                rules_data = config_mgr.read_rules()
+                logger.info("rules_loaded_for_config_merge", count=len(rules_data))
+            except Exception as e:
+                logger.warning(f"Failed to read rules for config merge: {e}")
 
             # Extract frame list and frame-specific configs
             frame_names = config_data.get('frames', [])
             # Fix: config.yaml uses "frames_config" (plural), handle both for backward compatibility
             frame_config = config_data.get('frames_config', config_data.get('frame_config', {}))
+            
+            # Merge logic: rules.yaml definitions are defaults/base configuration
+            frame_rules = rules_data.get('frame_rules', {})
+            for rule_fid, rule_cfg in frame_rules.items():
+                if rule_fid not in frame_config:
+                    frame_config[rule_fid] = rule_cfg
+                else:
+                    # Shallow merge: config.yaml overrides rules.yaml
+                    # Ideally this should be a deep merge for lists/dicts
+                    merged = rule_cfg.copy()
+                    merged.update(frame_config[rule_fid])
+                    frame_config[rule_fid] = merged
             
             # Use FrameRegistry to discover ALL frames (built-in + custom)
             from warden.validation.infrastructure.frame_registry import FrameRegistry
@@ -316,32 +343,38 @@ class WardenBridge:
 
     def _get_default_frames(self) -> list:
         """Get default validation frames when no config is found (TUI pattern)."""
-        from warden.validation.frames import (
-            SecurityFrame,
-            ResilienceFrame,
-            ArchitecturalConsistencyFrame,
-            OrphanFrame,
-        )
-        # Try to import new frames if available
-        frames = [
-            SecurityFrame(),
-            ResilienceFrame(),
-            ArchitecturalConsistencyFrame(),
-            OrphanFrame(),
+        from warden.validation.infrastructure.frame_registry import FrameRegistry
+        
+        registry = FrameRegistry()
+        registry.discover_all()
+        
+        default_frame_ids = [
+            "security",
+            "resilience",
+            "architecturalconsistency",
+            "orphan",
+            "fuzz",
+            "property"
         ]
         
-        try:
-            from warden.validation.frames.fuzz.fuzz_frame import FuzzFrame
-            frames.append(FuzzFrame())
-        except ImportError:
-            pass
+        frames = []
+        for fid in default_frame_ids:
+            # Try to find by ID or normalized name
+            frame_class = registry.registered_frames.get(fid)
             
-        try:
-            from warden.validation.frames.property.property_frame import PropertyFrame
-            frames.append(PropertyFrame())
-        except ImportError:
-            pass
+            # Additional lookup logic if needed (e.g. security-analysis -> security)
+            if not frame_class:
+                for reg_fid, cls in registry.registered_frames.items():
+                    if fid in reg_fid or reg_fid in fid:
+                         frame_class = cls
+                         break
             
+            if frame_class:
+                try:
+                    frames.append(frame_class())
+                except Exception as e:
+                    logger.warning(f"Failed to initialize default frame {fid}: {e}")
+                    
         return frames
 
     def _load_frames_from_list(self, frame_names: list, frame_config: dict = None) -> list:

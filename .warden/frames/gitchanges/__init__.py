@@ -9,14 +9,14 @@ Components:
 - GitDiffParser: Parses git diff output
 
 Usage:
-    from warden.validation.frames.gitchanges import GitChangesFrame
+    from . import GitChangesFrame
 
     frame = GitChangesFrame(config={"compare_mode": "staged"})
     result = await frame.execute(code_file)
 """
 
-from warden.validation.frames.gitchanges.gitchanges_frame import GitChangesFrame
-from warden.validation.frames.gitchanges.git_diff_parser import (
+from ..gitchanges_frame import GitChangesFrame
+from ..git_diff_parser import (
     GitDiffParser,
     DiffHunk,
     FileDiff,

@@ -13,12 +13,12 @@ Components:
 - Internal checks: hardcoded_password, secrets, sql_injection, xss
 
 Usage:
-    from warden.validation.frames.security import SecurityFrame
+    from . import SecurityFrame
 
     frame = SecurityFrame()
     result = await frame.execute(code_file)
 """
 
-from warden.validation.frames.security.security_frame import SecurityFrame
+from ..security_frame import SecurityFrame
 
 __all__ = ["SecurityFrame"]

@@ -77,12 +77,24 @@ class SecurityFrame(ValidationFrame):
 
     def _register_builtin_checks(self) -> None:
         """Register built-in security checks."""
-        from warden.validation.frames.security._internal.sql_injection_check import SQLInjectionCheck
-        from warden.validation.frames.security._internal.xss_check import XSSCheck
-        from warden.validation.frames.security._internal.secrets_check import SecretsCheck
-        from warden.validation.frames.security._internal.hardcoded_password_check import (
-            HardcodedPasswordCheck,
-        )
+        import sys
+        from pathlib import Path
+        
+        # Add current directory to path to allow imports from _internal
+        current_dir = str(Path(__file__).parent)
+        if current_dir not in sys.path:
+            sys.path.append(current_dir)
+            
+        try:
+            from _internal.sql_injection_check import SQLInjectionCheck
+            from _internal.xss_check import XSSCheck
+            from _internal.secrets_check import SecretsCheck
+            from _internal.hardcoded_password_check import (
+                HardcodedPasswordCheck,
+            )
+        except ImportError:
+            logger.error("Failed to import internal checks")
+            return
 
         # Register all built-in checks
         self.checks.register(SQLInjectionCheck(self.config.get("sql_injection", {})))

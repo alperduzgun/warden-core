@@ -31,7 +31,7 @@ from warden.validation.domain.enums import (
     FrameScope,
     FrameApplicability,
 )
-from warden.validation.frames.gitchanges.git_diff_parser import GitDiffParser, FileDiff
+from ..git_diff_parser import GitDiffParser, FileDiff
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
