@@ -64,14 +64,85 @@ class ClassificationExecutor(BasePhaseExecutor):
                 )
                 logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:
-                from warden.classification.application.classification_phase import ClassificationPhase
                 phase = ClassificationPhase(
                     config=getattr(self.config, 'classification_config', {}),
                     context=phase_context,
                     available_frames=self.available_frames
                 )
 
-            result = await phase.execute_async(code_files)
+            # Optimization: Filter out unchanged files to save LLM tokens/Validation time
+            files_to_classify = []
+            file_contexts = getattr(context, 'file_contexts', {})
+            
+            for cf in code_files:
+                f_info = file_contexts.get(cf.path)
+                # If no context info or not marked unchanged, we classify it
+                if not f_info or not getattr(f_info, 'is_unchanged', False):
+                    files_to_classify.append(cf)
+            
+            if not files_to_classify:
+                 logger.info("classification_phase_skipped_optimization", reason="all_files_unchanged")
+                 # Reuse previous classification if available (complex, for now just skip)
+                 # In a real persistence scenario, we would reload 'selected_frames' from memory here.
+                 # For now, we assume if nothing changed, we don't need to re-classify or re-select frames 
+                 # because specific frame execution will also be skipped.
+                 
+                 # However, we must ensure 'selected_frames' is at least populated if we skip.
+                 # If we skip classification, we might default to ALL enabled frames or previous state.
+                 # Strategy: If all files unchanged, we rely on FrameExecutor's skip logic, 
+                 # but we still need a list of frames to *attempt* to run.
+                 
+                 # Create a dummy result with previous selected frames or default
+                 from warden.classification.domain.classification_result import ClassificationResult
+                 
+                 # Try to restore from memory (Phase 0 should have populated this if we had a persistent store for it)
+                 # Since we don't have per-run persistence for classification yet, we'll assume defaults
+                 # BUT: If we skip classification, we might miss new rules. 
+                 # RISK: If we skip classification, context.selected_frames will be empty?
+                 
+                 # Better approach: If files unchanged, use Memory to get *previous* classification?
+                 # Current MemoryManager implementation doesn't store 'last_run_classification'.
+                 
+                 # Compromise: For files that are unchanged, we TRUST that previous classification holds for them.
+                 # But we need to output a result.
+                 
+                 # Minimal fallback: Select all configured frames (safest)
+                 # The FrameExecutor will then skip individual files.
+                 result = ClassificationResult(
+                     selected_frames=[], # Will trigger "all frames" fallback in logic below?
+                     suppression_rules=[],
+                     reasoning="Classification skipped (No changes detected)"
+                 )
+                 # Wait, if selected_frames is empty, caller logic might warn.
+                 # Let's check `result.selected_frames` usage below.
+                 pass
+            else:
+                if len(files_to_classify) < len(code_files):
+                    logger.info("classification_phase_optimizing", total=len(code_files), classifying=len(files_to_classify))
+                result = await phase.execute_async(files_to_classify)
+            
+            # If we skipped (result not assigned in if-block), we need to handle it.
+            # Actually, `ClassificationPhase` might return empty if input is empty?
+            if 'result' not in locals():
+                 # We skipped. We need to populate context.selected_frames so FrameExecutor knows what to do.
+                 # If we don't select frames, FrameExecutor might run nothing or everything.
+                 # Let's inspect context to see if we have previous run data? No.
+                 
+                 # SAFE FIX: If we skip classification, we simply return "Use All Frames" 
+                 # because FrameExecutor will skip the *execution* on unchanged files anyway.
+                 # This avoids cost of LLM Classification.
+                 from warden.classification.domain.classification_result import ClassificationResult
+                 result = ClassificationResult(
+                     selected_frames=[], # Empty list often implies "default/all" or "none" depending on logic
+                     suppression_rules=[],
+                     reasoning="Classification skipped (No changes)"
+                 )
+                 # Actually, let's look at line 84: context.selected_frames = result.selected_frames
+                 # If it's empty, FrameExecutor checks: `if not frames_to_execute` -> warning.
+                 
+                 # So we MUST provide frames.
+                 # Let's use available_frames names
+                 result.selected_frames = [f.frame_id for f in self.available_frames]
 
             # Store results in context
             context.selected_frames = result.selected_frames

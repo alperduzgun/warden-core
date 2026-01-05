@@ -89,9 +89,39 @@ class AnalysisExecutor(BasePhaseExecutor):
             if verbose:
                 logger.info("analysis_phase_execute_starting", file_count=len(code_files))
 
-            llm_start_time = time.perf_counter()
-            result = await phase.execute(code_files)
-            llm_duration = time.perf_counter() - llm_start_time
+            # Filter out unchanged files to save LLM tokens
+            files_to_analyze = []
+            file_contexts = getattr(context, 'file_contexts', {})
+            
+            for cf in code_files:
+                f_info = file_contexts.get(cf.path)
+                # If no context info or not marked unchanged, we analyze it
+                if not f_info or not getattr(f_info, 'is_unchanged', False):
+                    files_to_analyze.append(cf)
+            
+            if not files_to_analyze:
+                 logger.info("analysis_phase_skipped_optimization", reason="all_files_unchanged")
+                 # Create a dummy result to satisfy pipeline expectations
+                 from warden.analysis.domain.quality_metrics import QualityMetrics
+                 result = QualityMetrics(
+                     complexity_score=5.0,
+                     duplication_score=5.0,
+                     maintainability_score=5.0,
+                     naming_score=5.0,
+                     documentation_score=5.0,
+                     testability_score=5.0,
+                     overall_score=5.0,
+                     technical_debt_hours=0.0,
+                     summary="Analysis skipped (No changes detected)"
+                 )
+                 llm_duration = 0.0
+            else:
+                if verbose:
+                    logger.info("analysis_phase_analyzing_subset", total=len(code_files), changed=len(files_to_analyze))
+                
+                llm_start_time = time.perf_counter()
+                result = await phase.execute(files_to_analyze)
+                llm_duration = time.perf_counter() - llm_start_time
 
             if verbose:
                 logger.info("analysis_phase_execute_completed", duration=llm_duration, overall_score=result.overall_score if hasattr(result, 'overall_score') else None)
