@@ -184,15 +184,8 @@ class SecurityFrame(ValidationFrame):
                 logger.info("executing_llm_security_check", file=code_file.path)
                 
                 # Context-Aware Request
-                prompt = f"""
-                Analyze the following {code_file.language} code for security vulnerabilities.
-                Focus on: SSRF, CSRF, XXE, Insecure Deserialization, and Path Traversal.
-                
-                Code:
-                {code_file.content[:3000]}  # Limit context for now
-                
-                Return a JSON object with a list of 'findings' (severity, message, line_number).
-                """
+                # Context-Aware Request
+
                 
                 # Use the shared JSON parsing utility (which we will create next) or a robust method
                 # for now using a direct call pattern assuming service has structured output or we parse it
