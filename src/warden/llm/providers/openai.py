@@ -6,6 +6,9 @@ Based on C# OpenAIClient.cs
 
 import httpx
 import time
+import json
+from typing import Dict, Any, AsyncGenerator
+
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
@@ -90,12 +93,31 @@ class OpenAIClient(ILlmClient):
                 duration_ms=duration_ms
             )
 
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError) as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return LlmResponse(
                 content="",
                 success=False,
-                error_message=str(e),
+                error_message=f"HTTP error: {str(e)}",
+                provider=self.provider,
+                duration_ms=duration_ms
+            )
+        except (json.JSONDecodeError, KeyError) as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"JSON/Data error: {str(e)}",
+                provider=self.provider,
+                duration_ms=duration_ms
+            )
+        except Exception as e:
+            # Last resort for truly unexpected errors
+            duration_ms = int((time.time() - start_time) * 1000)
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"Unexpected error: {str(e)}",
                 provider=self.provider,
                 duration_ms=duration_ms
             )
@@ -113,7 +135,7 @@ class OpenAIClient(ILlmClient):
                 return bool(self._api_key and self._base_url)
             else:
                 return bool(self._api_key)
-        except:
+        except (ValueError, AttributeError):
             return False
 
     async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> LlmResponse:
@@ -171,3 +193,56 @@ class OpenAIClient(ILlmClient):
         for i in range(0, len(full_response), chunk_size):
             chunk = full_response[i:i + chunk_size]
             yield chunk
+
+    async def analyze_security_async(self, code_content: str, language: str) -> Dict[str, Any]:
+        """
+        Analyze code for security vulnerabilities using LLM.
+        
+        Args:
+            code_content: Source code to analyze
+            language: Language of the code
+            
+        Returns:
+            Dict containing findings list
+        """
+        from warden.shared.utils.json_parser import parse_json_from_llm
+        
+        prompt = f"""
+        You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
+        Target vulnerabilities: SQL Injection, XSS, Hardcoded Secrets/Credentials, SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, and Command Injection.
+        
+        Ignore stylistic issues. Focus only on exploitable security flaws.
+        
+        Return a JSON object in this exact format:
+        {{
+            "findings": [
+                {{
+                    "severity": "critical|high|medium",
+                    "message": "Short description",
+                    "line_number": 1,
+                    "detail": "Detailed explanation of the exploit vector"
+                }}
+            ]
+        }}
+        
+        If no issues found, return {{ "findings": [] }}.
+        
+        Code:
+        ```{language}
+        {code_content[:4000]}
+        ```
+        """
+        
+        try:
+            response = await self.complete_async(prompt, system_prompt="You are a strict security auditor. Output valid JSON only.")
+            if not response.success:
+                return {"findings": []}
+                
+            parsed = parse_json_from_llm(response.content)
+            return parsed or {"findings": []}
+        except (RuntimeError, ValueError, json.JSONDecodeError) as e:
+            # Fallback to empty findings on failure to prevent crash
+            from warden.shared.infrastructure.logging import get_logger
+            logger = get_logger(__name__)
+            logger.error("llm_security_analysis_failed", error=str(e))
+            return {"findings": []}

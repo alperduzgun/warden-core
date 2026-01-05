@@ -136,41 +136,38 @@ class ResilienceFrame(ValidationFrame):
             response = await client.send_async(request)
             
             if response.success and response.content:
-                # Parse JSON response
-                content = response.content
-                if "```json" in content:
-                    content = content.split("```json")[1].split("```")[0].strip()
-                elif "```" in content:
-                    content = content.split("```")[0].strip()
+                # Use robust shared JSON parser
+                from warden.shared.utils.json_parser import parse_json_from_llm
+                json_data = parse_json_from_llm(response.content)
                 
-                try:
-                    # Parse result with Pydantic
-                    import json
-                    json_data = json.loads(content)
-                    result = AnalysisResult.from_json(json_data)
-                    
-                    for issue in result.issues:
-                        findings.append(Finding(
-                            id=f"{self.frame_id}-resilience-{issue.line}",
-                            severity=issue.severity,
-                            message=issue.title,
-                            location=f"{code_file.path}:{issue.line}",
-                            detail=f"{issue.description}\n\nSuggestion: {issue.suggestion}",
-                            code=issue.evidence_quote
-                        ))
-                    
-                    logger.info("resilience_llm_analysis_completed", 
-                              findings=len(findings), 
-                              confidence=result.confidence,
-                              resilience_score=result.score)
-                              
-                except Exception as e:
-                    logger.warning("resilience_llm_parsing_failed", error=str(e), content_preview=content[:100])
-                    # Fallback regex? No, we retired that.
+                if json_data:
+                    try:
+                        # Parse result with Pydantic
+                        result = AnalysisResult.from_json(json_data)
+                        
+                        for issue in result.issues:
+                            findings.append(Finding(
+                                id=f"{self.frame_id}-resilience-{issue.line}",
+                                severity=issue.severity,
+                                message=issue.title,
+                                location=f"{code_file.path}:{issue.line}",
+                                detail=f"{issue.description}\n\nSuggestion: {issue.suggestion}",
+                                code=issue.evidence_quote
+                            ))
+                        
+                        logger.info("resilience_llm_analysis_completed", 
+                                  findings=len(findings), 
+                                  confidence=result.confidence,
+                                  resilience_score=result.score)
+                                  
+                    except (ValueError, TypeError, KeyError) as e:
+                        logger.warning("resilience_llm_parsing_failed", error=str(e), content_preview=response.content[:100])
+                else:
+                    logger.warning("resilience_llm_response_not_json", content_preview=response.content[:100])
             else:
                  logger.warning("resilience_llm_request_failed", error=response.error_message)
 
-        except Exception as e:
+        except (RuntimeError, AttributeError, ValueError) as e:
             logger.error("resilience_llm_error", error=str(e))
             
         return findings

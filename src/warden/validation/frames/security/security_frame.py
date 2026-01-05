@@ -117,11 +117,11 @@ class SecurityFrame(ValidationFrame):
                     frame=self.name,
                     check=check_instance.name,
                 )
-            except Exception as e:
+            except (ImportError, AttributeError, TypeError, ValueError) as e:
                 logger.error(
                     "community_check_registration_failed",
                     frame=self.name,
-                    check=check_class.__name__,
+                    check=check_class.__name__ if hasattr(check_class, '__name__') else "unknown",
                     error=str(e),
                 )
 
@@ -169,7 +169,7 @@ class SecurityFrame(ValidationFrame):
                     findings_count=len(result.findings),
                 )
 
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError) as e:
                 logger.error(
                     "check_execution_failed",
                     frame=self.name,
@@ -178,34 +178,61 @@ class SecurityFrame(ValidationFrame):
                 )
                 # Continue with other checks even if one fails
 
-        # AI-Powered Security Verification
+        # AI-Powered Security Verification (Real Implementation)
         if hasattr(self, 'llm_service') and self.llm_service:
             try:
-                # In a real implementation, this would call self.llm_service.analyze_security(code_file)
-                # For now, we simulate an AI finding to prove integration
                 logger.info("executing_llm_security_check", file=code_file.path)
                 
-                # Simple heuristic to pretend we found something "smart" if not found by regex
-                if "password" in code_file.content.lower() and not any(f.message.lower().find("hardcoded") != -1 for f in self._aggregate_findings(check_results)):
-                    ai_finding = Finding(
-                        id=f"{self.frame_id}-llm-1",
-                        severity="medium",
-                        message="[AI Analysis] Potential sensitive data context detected around 'password' keyword.",
-                        location=f"{code_file.path}:1",
-                        detail="The AI model identified contextual risk. Please review manually.",
-                        code=None
-                    )
-                    # Create a dummy result for the AI finding
-                    llm_result = CheckResult(
-                        check_id="llm-security-check",
-                        check_name="LLM Enhanced Security Analysis",
-                        passed=False,
-                        findings=[ai_finding]
-                    )
-                    check_results.append(llm_result)
+                # Context-Aware Request
+                prompt = f"""
+                Analyze the following {code_file.language} code for security vulnerabilities.
+                Focus on: SSRF, CSRF, XXE, Insecure Deserialization, and Path Traversal.
+                
+                Code:
+                {code_file.content[:3000]}  # Limit context for now
+                
+                Return a JSON object with a list of 'findings' (severity, message, line_number).
+                """
+                
+                # Use the shared JSON parsing utility (which we will create next) or a robust method
+                # for now using a direct call pattern assuming service has structured output or we parse it
+                response = await self.llm_service.analyze_security_async(code_file.content, code_file.language)
+                logger.info("llm_security_response_received", response_count=len(response.get('findings', [])) if response else 0)
+                
+                if response and isinstance(response, dict) and 'findings' in response:
+                    from warden.validation.domain.check import CheckFinding, CheckSeverity
+                    llm_findings = []
+                    for f in response['findings']:
+                        severity_map = {
+                            'critical': CheckSeverity.CRITICAL,
+                            'high': CheckSeverity.HIGH,
+                            'medium': CheckSeverity.MEDIUM,
+                            'low': CheckSeverity.LOW
+                        }
+                        sev = f.get('severity', 'medium').lower()
+                        ai_finding = CheckFinding(
+                            check_id="llm-security",
+                            check_name="AI Security Analysis",
+                            severity=severity_map.get(sev, CheckSeverity.MEDIUM),
+                            message=f.get('message', 'Potential issue detected'),
+                            location=f"{code_file.path}:{f.get('line_number', 1)}",
+                            suggestion=f.get('detail', 'AI identified a potential vulnerability.'),
+                            code_snippet=None
+                        )
+                        llm_findings.append(ai_finding)
                     
-            except Exception as e:
+                    if llm_findings:
+                        llm_result = CheckResult(
+                            check_id="llm-security-check",
+                            check_name="LLM Enhanced Security Analysis",
+                            passed=False,
+                            findings=llm_findings
+                        )
+                        check_results.append(llm_result)
+
+            except (AttributeError, RuntimeError) as e:
                 logger.error("llm_security_check_failed", error=str(e))
+        
         all_findings = self._aggregate_findings(check_results)
 
         # Determine frame status

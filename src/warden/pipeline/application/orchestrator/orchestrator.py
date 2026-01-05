@@ -171,6 +171,19 @@ class PhaseOrchestrator:
         Returns:
             PipelineContext with results from results of all phases
         """
+        language = "unknown"
+        if code_files and len(code_files) > 0:
+            language = code_files[0].language or "unknown"
+            if language == "unknown" and code_files[0].path:
+                # Simple fallback detection
+                ext = Path(code_files[0].path).suffix.lower()
+                if ext == ".py": language = "python"
+                elif ext in [".ts", ".tsx"]: language = "typescript"
+                elif ext in [".js", ".jsx"]: language = "javascript"
+                elif ext == ".go": language = "go"
+                elif ext == ".java": language = "java"
+                elif ext == ".cs": language = "csharp"
+
         # Initialize shared context
         context = PipelineContext(
             pipeline_id=str(uuid4()),
@@ -179,7 +192,7 @@ class PhaseOrchestrator:
             project_root=self.project_root, # Pass from orchestrator
             use_gitignore=getattr(self.config, 'use_gitignore', True),
             source_code=code_files[0].content if code_files else "",
-            language="python",  # TODO: Detect from files
+            language=language,
         )
 
         # Create pipeline entity
@@ -309,6 +322,8 @@ class PhaseOrchestrator:
             )
 
         except Exception as e:
+            # Global pipeline failure handler - ensures status is updated and error is traced.
+            # While generic, this is necessary at the top orchestration level to catch any phase failure.
             import traceback
             self.pipeline.status = PipelineStatus.FAILED
             self.pipeline.completed_at = datetime.now()
@@ -361,16 +376,9 @@ class PhaseOrchestrator:
 
 
         if quality_score is None or quality_score == 0.0:
-            # Formula: Asymptotic decay
-            # Base Score: 10
-            # Penalties: Critical=3, High=1.5, Medium=0.5, Low=0.1
-            # Formula: 10 * (20 / (penalty + 20))
-            # This ensures score never hits absolute 0 and scales well with finding count
-            penalty = (critical_findings * 3.0) + (high_findings * 1.5) + (medium_findings * 0.5) + (low_findings * 0.1)
-            quality_score = 10.0 * (20.0 / (penalty + 20.0))
-            
-            # Cap at 10.0 just in case
-            quality_score = min(10.0, max(0.1, quality_score))
+            # Formula: Asymptotic decay using shared utility
+            from warden.shared.utils.quality_calculator import calculate_quality_score
+            quality_score = calculate_quality_score(findings)
 
         # Sync back to context for summary reporting
         context.quality_score_after = quality_score
