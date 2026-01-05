@@ -31,9 +31,8 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install System Dependencies
-        # We need these for some tree-sitter builds or other libs if wheel is missing
-        run: sudo apt-get update && sudo apt-get install -y build-essential
+      # Removed apt-get install as build-essential is pre-installed on ubuntu-latest
+      # and it saves ~1-2 minutes of setup time.
 
       - name: Install Warden
         run: |

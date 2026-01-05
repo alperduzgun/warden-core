@@ -632,13 +632,17 @@ class PreAnalysisPhase:
         
         await self.memory_manager.save_async()
 
+    # Stable version for analysis logic (bump this when logic changes)
+    ANALYSIS_LOGIC_VERSION = "1.0.0"
+
     def _calculate_environment_hash(self) -> str:
         """
         Calculate a hash representing the current environment state.
-        Includes: Warden Version, Config Content, Rules Content.
+        Includes: Analysis Logic Version, Config Content, Rules Content.
         """
-        from warden import __version__
-        components = [__version__]
+        # Use stable logic version instead of package __version__ to avoid
+        # invalidating cache on every commit/tag bump.
+        components = [self.ANALYSIS_LOGIC_VERSION]
         
         # Add config content
         config_files = [".warden/config.yaml", ".warden/rules.yaml", ".warden/warden.yaml"]
