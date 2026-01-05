@@ -375,15 +375,26 @@ class PhaseOrchestrator:
         # Sync back to context for summary reporting
         context.quality_score_after = quality_score
 
+        # Calculate actual frames processed based on execution results
+        frames_passed = getattr(self.pipeline, 'frames_passed', 0) if hasattr(self, 'pipeline') else 0
+        frames_failed = getattr(self.pipeline, 'frames_failed', 0) if hasattr(self, 'pipeline') else 0
+        frames_skipped = 0 
+        
+        actual_total = frames_passed + frames_failed + frames_skipped
+        planned_total = len(getattr(context, 'selected_frames', [])) or len(self.frames)
+        
+        # Ensure total never shows less than what was actually processed/passed
+        total_frames = max(actual_total, planned_total)
+
         return PipelineResult(
             pipeline_id=context.pipeline_id,
             pipeline_name="Validation Pipeline",
             status=self.pipeline.status if hasattr(self, 'pipeline') else PipelineStatus.COMPLETED,
             duration=(datetime.now() - context.started_at).total_seconds() if context.started_at else 0.0,
-            total_frames=len(getattr(context, 'selected_frames', [])) or len(self.frames),
-            frames_passed=getattr(self.pipeline, 'frames_passed', 0) if hasattr(self, 'pipeline') else 0,
-            frames_failed=getattr(self.pipeline, 'frames_failed', 0) if hasattr(self, 'pipeline') else 0,
-            frames_skipped=0,
+            total_frames=total_frames,
+            frames_passed=frames_passed,
+            frames_failed=frames_failed,
+            frames_skipped=frames_skipped,
             total_findings=total_findings,
             critical_findings=critical_findings,
             high_findings=high_findings,
