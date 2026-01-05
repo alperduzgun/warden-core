@@ -119,8 +119,14 @@ class AnalysisExecutor(BasePhaseExecutor):
                 if verbose:
                     logger.info("analysis_phase_analyzing_subset", total=len(code_files), changed=len(files_to_analyze))
                 
+                # Identify impacted files for hints
+                impacted_paths = [
+                    cf.path for cf in files_to_analyze 
+                    if getattr(file_contexts.get(cf.path), 'is_impacted', False)
+                ]
+                
                 llm_start_time = time.perf_counter()
-                result = await phase.execute(files_to_analyze)
+                result = await phase.execute(files_to_analyze, impacted_files=impacted_paths)
                 llm_duration = time.perf_counter() - llm_start_time
 
             if verbose:

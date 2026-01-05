@@ -171,6 +171,38 @@ class PythonASTProvider(IASTProvider):
         """
         return True
 
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> List[str]:
+        """
+        Extract Python dependencies (imports).
+        
+        Args:
+            source_code: Python source code
+            language: Must be CodeLanguage.PYTHON
+            
+        Returns:
+            List of unique import strings
+        """
+        if language != CodeLanguage.PYTHON:
+            return []
+            
+        try:
+            tree = ast.parse(source_code)
+            dependencies = set()
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        dependencies.add(alias.name)
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        dependencies.add(node.module)
+                    # Handle relative imports if needed, but for now we just want the module name
+                        
+            return sorted(list(dependencies))
+        except Exception:
+            # Fallback for syntax errors in earlier Python versions or invalid code
+            return []
+
     def _convert_to_universal_ast(self, py_node: ast.AST, file_path: str) -> ASTNode:
         """
         Convert Python AST to universal AST format.

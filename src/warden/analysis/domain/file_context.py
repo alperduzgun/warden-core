@@ -168,6 +168,7 @@ class FileContextInfo(BaseDomainModel):
     content_hash: Optional[str] = None
     last_scan_timestamp: Optional[datetime] = None
     is_unchanged: bool = False  # If True, analysis can be skipped (cached)
+    is_impacted: bool = False  # If True, re-analysis is triggered by a dependency change
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""

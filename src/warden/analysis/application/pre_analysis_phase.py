@@ -8,7 +8,7 @@ to enable context-aware analysis and false positive prevention.
 import asyncio
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, Set
 import structlog
 import hashlib
 from datetime import datetime
@@ -22,6 +22,10 @@ from warden.analysis.application.project_structure_analyzer import ProjectStruct
 from warden.analysis.application.file_context_analyzer import FileContextAnalyzer
 from warden.memory.application.memory_manager import MemoryManager
 from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
+from warden.ast.application.provider_registry import ASTProviderRegistry
+from warden.ast.application.provider_loader import ASTProviderLoader
+from warden.analysis.application.dependency_graph import DependencyGraph
+from warden.ast.domain.enums import CodeLanguage
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -55,12 +59,17 @@ class PreAnalysisPhase:
         self.config = config or {}
 
         # Initialize analyzers
-        self.project_analyzer = ProjectStructureAnalyzer(self.project_root)
+        self.project_analyzer = ProjectStructureAnalyzer(self.project_root, self.config.get("llm_config"))
         self.file_analyzer: Optional[FileContextAnalyzer] = None  # Created after project analysis
         self.llm_analyzer = None  # Will be initialized if enabled
         
         self.memory_manager = MemoryManager(self.project_root)
         self.env_hash = self._calculate_environment_hash()
+
+        # AST and Dependency Infrastructure
+        self.ast_registry = ASTProviderRegistry()
+        self.ast_loader = ASTProviderLoader(self.ast_registry)
+        self.dependency_graph: Optional[DependencyGraph] = None  # Initialized in execute
 
     async def execute(self, code_files: List[CodeFile]) -> PreAnalysisResult:
         """
@@ -102,44 +111,23 @@ class PreAnalysisPhase:
             self._enrich_context_from_memory(project_context)
 
             # Validate Environment Hash
-            # If config/version changed, we should NOT trust file contexts from memory
             is_env_valid = self._validate_environment_hash()
             if not is_env_valid:
                 logger.warning("environment_changed", reason="config_or_version_mismatch", action="invalidating_context_cache")
-                # We don't clear memory, but we will ignore context_data in _analyze_single_file
             
-            # Allow skipping analysis if environment is valid
-            self.trust_memory_context = is_env_valid
-
-            # Validate Environment Hash
-            # If config/version changed, we should NOT trust file contexts from memory
-            is_env_valid = self._validate_environment_hash()
-            if not is_env_valid:
-                logger.warning("environment_changed", reason="config_or_version_mismatch", action="invalidating_context_cache")
-                # We don't clear memory, but we will ignore context_data in _analyze_single_file
-            
-            # Allow skipping analysis if environment is valid
-            self.trust_memory_context = is_env_valid
-
-            # Validate Environment Hash
-            # If config/version changed, we should NOT trust file contexts from memory
-            is_env_valid = self._validate_environment_hash()
-            if not is_env_valid:
-                logger.warning("environment_changed", reason="config_or_version_mismatch", action="invalidating_context_cache")
-                # We don't clear memory, but we will ignore context_data in _analyze_single_file
-            
-            # Allow skipping analysis if environment is valid
             self.trust_memory_context = is_env_valid
 
             # Analyze structure (will only discover purpose if missing after enrichment)
             project_context = await self._analyze_project_structure(project_context)
 
-            # Step 3: Initialize file analyzer with project context and LLM
+            # Step 3: Dependency Awareness (Impact Analysis)
+            impacted_files = await self._identify_impacted_files(code_files, project_context)
+
+            # Step 4: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
 
-            # Step 4: Analyze file contexts in parallel
-            # Step 4: Analyze file contexts in parallel
-            file_contexts = await self._analyze_file_contexts(code_files)
+            # Step 5: Analyze file contexts in parallel
+            file_contexts = await self._analyze_file_contexts(code_files, impacted_files)
 
             # Step 5: Calculate statistics
             statistics = self._calculate_statistics(file_contexts)
@@ -290,7 +278,8 @@ class PreAnalysisPhase:
 
     async def _analyze_file_contexts(
         self,
-        code_files: List[CodeFile]
+        code_files: List[CodeFile],
+        impacted_files: Set[str] = None
     ) -> Dict[str, Any]:
         """
         Analyze context for each file.
@@ -309,8 +298,9 @@ class PreAnalysisPhase:
         # Create tasks for parallel analysis
         tasks = []
         for code_file in code_files:
+            is_impacted = bool(impacted_files and code_file.path in impacted_files)
             task = asyncio.create_task(
-                self._analyze_single_file(code_file)
+                self._analyze_single_file(code_file, is_impacted)
             )
             tasks.append((code_file.path, task))
 
@@ -331,7 +321,7 @@ class PreAnalysisPhase:
 
         return file_contexts
 
-    async def _analyze_single_file(self, code_file: CodeFile) -> Any:
+    async def _analyze_single_file(self, code_file: CodeFile, is_impacted: bool = False) -> Any:
         """
         Analyze a single file's context.
 
@@ -358,8 +348,8 @@ class PreAnalysisPhase:
         if self.trust_memory_context and self.memory_manager and self.memory_manager._is_loaded:
             stored_state = self.memory_manager.get_file_state(rel_path)
             
-            # If hash matches, mark as unchanged
-            if stored_state and stored_state.get('content_hash') == content_hash:
+            # If hash matches AND not impacted, mark as unchanged
+            if stored_state and stored_state.get('content_hash') == content_hash and not is_impacted:
                 # OPTIMIZATION: If we have stored context data, USE IT!
                 # This skips the expensive FileContextAnalyzer step.
                 context_data = stored_state.get('context_data')
@@ -390,16 +380,20 @@ class PreAnalysisPhase:
             Path(code_file.path)
         )
         
-        # Enrich context info with hash
+        # Enrich context info with hash and impact status
         context_info.content_hash = content_hash
         context_info.last_scan_timestamp = datetime.now()
+        context_info.is_impacted = is_impacted
         
-        # Determine if unchanged (legacy check, usually redundant now with above opt)
+        # Determine if unchanged
         if self.memory_manager and self.memory_manager._is_loaded:
              stored_state = self.memory_manager.get_file_state(rel_path)
-             if stored_state and stored_state.get('content_hash') == content_hash:
+             if stored_state and stored_state.get('content_hash') == content_hash and not is_impacted:
                  context_info.is_unchanged = True
                  logger.debug("file_unchanged", file=rel_path)
+             elif is_impacted:
+                 context_info.is_unchanged = False
+                 logger.info("dependency_impact_detected", file=rel_path)
 
         return context_info
 
@@ -676,3 +670,77 @@ class PreAnalysisPhase:
             
         stored_hash = self.memory_manager.get_environment_hash()
         return stored_hash == self.env_hash
+
+    async def _identify_impacted_files(self, code_files: List[CodeFile], project_context: ProjectContext) -> Set[str]:
+        """
+        Identify files impacted by changes in their dependencies.
+        
+        Args:
+            code_files: All code files in the project
+            project_context: Metadata for dependency resolution
+            
+        Returns:
+            Set of absolute paths of impacted files
+        """
+        logger.info("dependency_impact_analysis_started")
+        
+        # 1. Initialize DependencyGraph
+        self.dependency_graph = DependencyGraph(self.project_root, project_context, self.ast_registry)
+        
+        # Ensure AST providers are loaded
+        await self.ast_loader.load_all()
+        
+        # 2. Build Graph (Scan all files for dependencies)
+        # This is relatively fast with AST providers
+        scan_tasks = []
+        for cf in code_files:
+            lang = self._guess_language_by_extension(cf.path)
+            scan_tasks.append(self.dependency_graph.scan_file_async(Path(cf.path), lang))
+            
+        await asyncio.gather(*scan_tasks)
+        
+        # 3. Identify physically changed files
+        changed_physically = []
+        for cf in code_files:
+            content_hash = self._calculate_file_hash(cf.content)
+            rel_path = str(Path(cf.path).relative_to(self.project_root))
+            
+            # Check memory for existing state
+            if self.memory_manager and self.memory_manager._is_loaded:
+                stored_state = self.memory_manager.get_file_state(rel_path)
+                if not stored_state or stored_state.get('content_hash') != content_hash:
+                    changed_physically.append(Path(cf.path))
+            else:
+                # If no memory, we assume all files are "changed" for graph purposes
+                changed_physically.append(Path(cf.path))
+
+        if not changed_physically:
+            return set()
+
+        # 4. Traversal: Calculate transitive impact
+        impacted = self.dependency_graph.get_transitive_impact(changed_physically)
+        
+        impacted_paths = {str(p) for p in impacted}
+        
+        if impacted_paths:
+            logger.info(
+                "transitive_impact_calculated",
+                changed_files_count=len(changed_physically),
+                impacted_files_count=len(impacted_paths)
+            )
+            
+        return impacted_paths
+
+    def _guess_language_by_extension(self, file_path: str) -> CodeLanguage:
+        """Simple heuristic to guess language by file extension."""
+        ext = Path(file_path).suffix.lower()
+        mapping = {
+            ".py": CodeLanguage.PYTHON,
+            ".ts": CodeLanguage.TYPESCRIPT,
+            ".tsx": CodeLanguage.TYPESCRIPT,
+            ".js": CodeLanguage.JAVASCRIPT,
+            ".jsx": CodeLanguage.JAVASCRIPT,
+            ".go": CodeLanguage.GO,
+            ".java": CodeLanguage.JAVA,
+        }
+        return mapping.get(ext, CodeLanguage.UNKNOWN)
