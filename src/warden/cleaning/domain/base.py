@@ -6,7 +6,7 @@ Follows Python ABC pattern (not C# interfaces).
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Any
 
 from warden.cleaning.domain.models import CleaningResult, CleaningIssueSeverity
 from warden.validation.domain.frame import CodeFile
@@ -62,6 +62,7 @@ class BaseCleaningAnalyzer(ABC):
         self,
         code_file: CodeFile,
         cancellation_token: Optional[str] = None,
+        ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
         Analyze code for cleanup opportunities.

@@ -111,6 +111,10 @@ class PipelineContext:
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
+    # Cross-Phases Cache (New)
+    # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)
+    ast_cache: Dict[str, Any] = field(default_factory=dict)
+
     def add_phase_result(self, phase: str, result: Dict[str, Any]) -> None:
         """
         Add results from a phase execution (thread-safe).
