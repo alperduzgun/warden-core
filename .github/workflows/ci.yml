@@ -56,6 +56,7 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
           DEFAULT_LLM_MODEL: ${{ secrets.DEFAULT_LLM_MODEL }}
