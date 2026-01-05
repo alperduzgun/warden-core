@@ -18,7 +18,8 @@ class ReportGenerator:
     def generate_json_report(
         self,
         scan_results: Dict[str, Any],
-        output_path: Path
+        output_path: Path,
+        base_path: Optional[Path] = None
     ) -> None:
         """
         Generate JSON report from scan results.
@@ -26,58 +27,65 @@ class ReportGenerator:
         Args:
             scan_results: Dictionary containing scan results
             output_path: Path to save the JSON report
+            base_path: Optional base path for relativizing paths (defaults to CWD)
         """
         # Create a deep copy to sanitization doesn't affect the running pipeline
         import copy
         sanitized_results = copy.deepcopy(scan_results)
-        self._sanitize_paths(sanitized_results)
+        self._sanitize_paths(sanitized_results, base_path)
         
         with open(output_path, 'w') as f:
             json.dump(sanitized_results, f, indent=4)
 
-    def _sanitize_paths(self, data: Any) -> None:
+    def _sanitize_paths(self, data: Any, base_path: Optional[Path] = None) -> None:
         """
         Recursively convert absolute paths to relative paths in dictionary/list.
+        
+        Args:
+            data: Data to sanitize
+            base_path: Base path to relativize against (default: Path.cwd())
         """
-        cwd = str(Path.cwd())
+        # Resolving allow generic usage
+        root = str(base_path.resolve()) if base_path else str(Path.cwd().resolve())
+        root_path_obj = base_path.resolve() if base_path else Path.cwd().resolve()
         
         if isinstance(data, dict):
             for key, value in data.items():
                 if isinstance(value, (dict, list)):
-                    self._sanitize_paths(value)
+                    self._sanitize_paths(value, base_path)
                 elif isinstance(value, str):
-                    if cwd in value and Path(value).is_absolute():
+                    if root in value:
                         try:
-                            # Replace absolute path prefix with relative path or nothing
-                            # We use direct string replacement for simpler strings, 
-                            # and Path calculation for pure paths
-                            if value.startswith(cwd):
-                                relative = str(Path(value).relative_to(Path.cwd()))
-                                data[key] = relative
+                            # Try to treat as pure path first
+                            path_val = Path(value)
+                            if path_val.is_absolute() and str(path_val.resolve()).startswith(root):
+                                data[key] = str(path_val.resolve().relative_to(root_path_obj))
                             else:
-                                # For strings containing the path (like messages)
-                                data[key] = value.replace(cwd, "")
+                                # Fallback for sentences containing the path
+                                data[key] = value.replace(root, ".")
                         except Exception:
-                            pass
+                             # If Path() fails or other error, just replace string
+                             data[key] = value.replace(root, ".")
         elif isinstance(data, list):
             for i, item in enumerate(data):
                 if isinstance(item, (dict, list)):
-                    self._sanitize_paths(item)
+                    self._sanitize_paths(item, base_path)
                 elif isinstance(item, str):
-                     if cwd in item and Path(item).is_absolute():
+                     if root in item:
                         try:
-                            if item.startswith(cwd):
-                                relative = str(Path(item).relative_to(Path.cwd()))
-                                data[i] = relative
+                            path_item = Path(item)
+                            if path_item.is_absolute() and str(path_item.resolve()).startswith(root):
+                                data[i] = str(path_item.resolve().relative_to(root_path_obj))
                             else:
-                                data[i] = item.replace(cwd, "")
+                                data[i] = item.replace(root, ".")
                         except Exception:
-                            pass
+                            data[i] = item.replace(root, ".")
 
     def generate_sarif_report(
         self,
         scan_results: Dict[str, Any],
-        output_path: Path
+        output_path: Path,
+        base_path: Optional[Path] = None
     ) -> None:
         """
         Generate SARIF report from scan results for GitHub integration.
@@ -85,6 +93,7 @@ class ReportGenerator:
         Args:
             scan_results: Dictionary containing scan results
             output_path: Path to save the SARIF report
+            base_path: Optional base path for relativizing paths
         """
         # Basic SARIF v2.1.0 structure
         sarif = {
@@ -172,6 +181,9 @@ class ReportGenerator:
                     result["message"]["text"] += f"\\n\\nDetails: {finding['detail']}"
                     
                 run["results"].append(result)
+        
+        # Sanitize final SARIF output
+        self._sanitize_paths(sarif, base_path)
 
         with open(output_path, 'w') as f:
             json.dump(sarif, f, indent=4)
@@ -205,26 +217,32 @@ class ReportGenerator:
     def generate_junit_report(
         self,
         scan_results: Dict[str, Any],
-        output_path: Path
+        output_path: Path,
+        base_path: Optional[Path] = None
     ) -> None:
         """
         Generate JUnit XML report for general CI/CD compatibility.
         """
         import xml.etree.ElementTree as ET
         
+        # Clone and sanitize first to ensure all content in XML is safe
+        import copy
+        sanitized_results = copy.deepcopy(scan_results)
+        self._sanitize_paths(sanitized_results, base_path)
+        
         testsuites = ET.Element("testsuites", name="Warden Scan")
         
-        frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
+        frame_results = sanitized_results.get('frame_results', sanitized_results.get('frameResults', []))
         
         testsuite = ET.SubElement(
             testsuites, 
             "testsuite", 
             name="security_validation",
             tests=str(len(frame_results)),
-            failures=str(scan_results.get('frames_failed', scan_results.get('framesFailed', 0))),
+            failures=str(sanitized_results.get('frames_failed', sanitized_results.get('framesFailed', 0))),
             errors="0",
-            skipped=str(scan_results.get('frames_skipped', scan_results.get('framesSkipped', 0))),
-            time=str(scan_results.get('duration', 0))
+            skipped=str(sanitized_results.get('frames_skipped', sanitized_results.get('framesSkipped', 0))),
+            time=str(sanitized_results.get('duration', 0))
         )
         
         for frame in frame_results:
@@ -266,7 +284,8 @@ class ReportGenerator:
     def generate_html_report(
         self,
         scan_results: Dict[str, Any],
-        output_path: Path
+        output_path: Path,
+        base_path: Optional[Path] = None
     ) -> None:
         """
         Generate HTML report from scan results.
@@ -274,13 +293,20 @@ class ReportGenerator:
         Args:
             scan_results: Dictionary containing scan results
             output_path: Path to save the HTML report
+            base_path: Optional base path for relativizing paths
         """
-        self.html_generator.generate(scan_results, output_path)
+        # Create sanitized copy for HTML generation too
+        import copy
+        sanitized_results = copy.deepcopy(scan_results)
+        self._sanitize_paths(sanitized_results, base_path)
+        
+        self.html_generator.generate(sanitized_results, output_path)
 
     def generate_pdf_report(
         self,
         scan_results: Dict[str, Any],
-        output_path: Path
+        output_path: Path,
+        base_path: Optional[Path] = None
     ) -> None:
         """
         Generate PDF report from HTML.
@@ -288,9 +314,15 @@ class ReportGenerator:
         Args:
             scan_results: Dictionary containing scan results
             output_path: Path to save the PDF report
+            base_path: Optional base path for relativizing paths
         """
+        # Create sanitized copy
+        import copy
+        sanitized_results = copy.deepcopy(scan_results)
+        self._sanitize_paths(sanitized_results, base_path)
+        
         # First generate HTML content using the helper
-        html_content = self.html_generator._create_html_content(scan_results)
+        html_content = self.html_generator._create_html_content(sanitized_results)
 
         try:
             # Try to use WeasyPrint if available

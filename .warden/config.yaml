@@ -76,9 +76,9 @@ ci:
   fail_on_blocker: true
   output:
   - format: markdown
-    path: ./WARDEN_REPORT.md
+    path: .warden/reports/WARDEN_REPORT.md
   - format: json
-    path: ./warden-report.json
+    path: .warden/reports/warden-report.json
 settings:
   fail_fast: false
   timeout: 300

@@ -380,7 +380,7 @@ class PhaseOrchestrator:
             pipeline_name="Validation Pipeline",
             status=self.pipeline.status if hasattr(self, 'pipeline') else PipelineStatus.COMPLETED,
             duration=(datetime.now() - context.started_at).total_seconds() if context.started_at else 0.0,
-            total_frames=len(self.frames),
+            total_frames=len(getattr(context, 'selected_frames', [])) or len(self.frames),
             frames_passed=getattr(self.pipeline, 'frames_passed', 0) if hasattr(self, 'pipeline') else 0,
             frames_failed=getattr(self.pipeline, 'frames_failed', 0) if hasattr(self, 'pipeline') else 0,
             frames_skipped=0,

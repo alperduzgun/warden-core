@@ -57,6 +57,7 @@ class AnalysisIssue(BaseDomainModel):
     confidence: float
     evidence_quote: str = Field(default="")
     code_snippet: str = Field(default="")
+    suggestion: str = Field(default="")
 
 
 class AnalysisResult(BaseDomainModel):
@@ -64,6 +65,7 @@ class AnalysisResult(BaseDomainModel):
     score: float
     confidence: float
     summary: str
+    scenarios_simulated: List[str] = Field(default_factory=list)
     issues: List[AnalysisIssue] = Field(default_factory=list)
 
 
