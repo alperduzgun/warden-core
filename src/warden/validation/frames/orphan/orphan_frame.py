@@ -662,10 +662,14 @@ class OrphanFrame(ValidationFrame):
             return self.llm_filter
             
         try:
-            # Check for injected service from FrameExecutor
+            # Check for injected services from FrameExecutor
             llm_service = getattr(self, 'llm_service', None)
+            semantic_search_service = getattr(self, 'semantic_search_service', None)
             
-            self.llm_filter = LLMOrphanFilter(llm_service=llm_service)
+            self.llm_filter = LLMOrphanFilter(
+                llm_service=llm_service,
+                semantic_search_service=semantic_search_service
+            )
             return self.llm_filter
         except Exception as e:
             logger.warning(

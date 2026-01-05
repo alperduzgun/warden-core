@@ -106,6 +106,15 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         self.check_organization = config_dict.get("check_organization", True)
         self.check_test_mirror = config_dict.get("check_test_mirror", True)
         self.check_naming = config_dict.get("check_naming", True)
+        self.check_placement = config_dict.get("check_placement", True)
+
+        # Standard project structure for placement checks
+        self.standard_structure = config_dict.get("standard_structure", {
+            "src/warden/semantic_search": "Top-level feature module",
+            "src/warden/analysis/application": "Core analysis orchestration",
+            "src/warden/validation/frames": "Validation frame definitions",
+            "src/warden/shared/services": "Cross-cutting shared services",
+        })
 
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
@@ -168,7 +177,13 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 naming_violations = self._check_naming_conventions(code_file.path)
                 violations.extend(naming_violations)
 
-            # 7. Service abstraction consistency check (context-aware)
+            # 7. Module placement check
+            if self.check_placement:
+                scenarios_executed.append("Module placement check")
+                placement_violations = self._check_module_placement(code_file.path)
+                violations.extend(placement_violations)
+
+            # 8. Service abstraction consistency check (context-aware)
             if hasattr(self, 'project_context') and self.project_context:
                 scenarios_executed.append("Service abstraction consistency check")
                 abstraction_violations = self._check_service_abstraction_consistency(code_file)
@@ -463,6 +478,31 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                     actual=path.name,
                 ))
 
+        return violations
+
+    def _check_module_placement(self, file_path: str) -> List[OrganizationViolation]:
+        """
+        Check if the file is placed in the correct architectural layer.
+        
+        Example: 
+        - semantic_search should be top-level feature, not under analysis/application
+        """
+        violations = []
+        path_str = file_path.replace("\\", "/") # Normalize paths
+        
+        # Rule: semantic_search should NOT be under analysis/application
+        if "src/warden/analysis/application/semantic_search" in path_str:
+            violations.append(OrganizationViolation(
+                rule="module_placement_misplaced_feature",
+                severity="error",
+                message="Feature 'semantic_search' found in 'analysis/application'. Features should be top-level modules in 'src/warden/'.",
+                file_path=file_path,
+                expected="src/warden/semantic_search/",
+                actual="src/warden/analysis/application/semantic_search/",
+            ))
+            
+        # Add more structure rules as needed or detect via project_context if available
+        
         return violations
 
     # ============================================

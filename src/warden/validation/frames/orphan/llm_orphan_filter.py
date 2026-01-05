@@ -117,8 +117,8 @@ class LLMOrphanFilter:
 
     def __init__(
         self,
-        llm_config: Optional[LlmConfiguration] = None,
         llm_service: Optional[Any] = None,
+        semantic_search_service: Optional[Any] = None,
         batch_size: int = 10,  # Lowered default for safety
         max_retries: int = 2,
     ):
@@ -128,6 +128,7 @@ class LLMOrphanFilter:
         Args:
             llm_config: LLM configuration (uses default if None)
             llm_service: Pre-configured LLM service (preferred over creating new)
+            semantic_search_service: Optional semantic search service
             batch_size: Number of findings to process per LLM call (default: 10)
             max_retries: Max retries on LLM failure (default: 2)
         """
@@ -136,6 +137,7 @@ class LLMOrphanFilter:
         else:
             self.llm = create_client(llm_config)
             
+        self.semantic_search_service = semantic_search_service
         self.batch_size = batch_size
         self.max_retries = max_retries
         
@@ -345,14 +347,27 @@ class LLMOrphanFilter:
         """
         Process a mixed batch of findings from different files.
         """
+        # Retrieve semantic context for all findings in batch
+        semantic_context = ""
+        if self.semantic_search_service and self.semantic_search_service.is_available():
+            try:
+                # Query for potential usages of all findings
+                query = " ".join([f"usages of {it[1].name}" for it in batch[:5]])
+                search_results = await self.semantic_search_service.search(query=query, limit=5)
+                if search_results:
+                    semantic_context = "\n[Global Semantic Usage Context]\n"
+                    for res in search_results:
+                        semantic_context += f"- Potential usage in {res.file_path}: {res.content[:150]}...\n"
+            except Exception as e:
+                logger.warning("batch_semantic_search_failed", error=str(e))
+
         # Construct prompt
         prompt = self._build_multi_file_prompt(batch, code_files, project_context)
         
-        # Send to LLM
-        # We use a generic 'multi-language' or 'mixed' context
+        # Send to LLM with semantic context
         response = await self._call_llm(
             code="", # No single code file
-            prompt=prompt,
+            prompt=prompt + (f"\n# SEMANTIC CONTEXT\n{semantic_context}" if semantic_context else ""),
             language="mixed"
         )
         

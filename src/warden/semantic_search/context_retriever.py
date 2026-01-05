@@ -10,12 +10,12 @@ from typing import List, Optional
 
 import structlog
 
-from warden.analysis.application.semantic_search.models import (
+from warden.semantic_search.models import (
     CodeChunk,
     RetrievalContext,
     SearchQuery,
 )
-from warden.analysis.application.semantic_search.searcher import SemanticSearcher
+from warden.semantic_search.searcher import SemanticSearcher
 
 logger = structlog.get_logger()
 

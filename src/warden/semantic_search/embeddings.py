@@ -13,7 +13,12 @@ from typing import List, Optional
 import structlog
 from openai import AsyncAzureOpenAI, AsyncOpenAI
 
-from warden.analysis.application.semantic_search.models import CodeChunk, EmbeddingMetadata
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
+
+from warden.semantic_search.models import CodeChunk, EmbeddingMetadata
 
 logger = structlog.get_logger()
 
@@ -33,6 +38,7 @@ class EmbeddingGenerator:
         azure_endpoint: Optional[str] = None,
         azure_deployment: Optional[str] = None,
         dimensions: Optional[int] = None,
+        trust_remote_code: bool = True,
     ):
         """
         Initialize embedding generator.
@@ -69,6 +75,20 @@ class EmbeddingGenerator:
             )
             self.azure_deployment = azure_deployment
 
+        elif provider == "local":
+            if not SentenceTransformer:
+                raise ValueError(
+                    "sentence-transformers not installed. Please install it with 'pip install sentence-transformers'"
+                )
+            
+            # Initialize local model
+            # For Jina embeddings v2, trust_remote_code=True is required
+            self.client = SentenceTransformer(
+                model_name, 
+                trust_remote_code=trust_remote_code
+            )
+            logger.info("local_embedding_model_loaded", model=model_name)
+
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
@@ -85,6 +105,7 @@ class EmbeddingGenerator:
             "text-embedding-3-small": 1536,
             "text-embedding-3-large": 3072,
             "text-embedding-ada-002": 1536,
+            "jinaai/jina-embeddings-v2-base-code": 768,
         }
         return dimension_map.get(model_name, 1536)
 
@@ -112,15 +133,22 @@ class EmbeddingGenerator:
                     model=self.azure_deployment,
                     dimensions=self.dimensions if self.dimensions != 1536 else None,
                 )
-            else:
+                embedding_vector = response.data[0].embedding
+                token_count = response.usage.total_tokens
+            elif self.provider == "openai":
                 response = await self.client.embeddings.create(
                     input=text,
                     model=self.model_name,
                     dimensions=self.dimensions if self.dimensions != 1536 else None,
                 )
-
-            embedding_vector = response.data[0].embedding
-            token_count = response.usage.total_tokens
+                embedding_vector = response.data[0].embedding
+                token_count = response.usage.total_tokens
+            elif self.provider == "local":
+                # SentenceTransformer encode is synchronous
+                embedding_vector = self.client.encode(text).tolist()
+                token_count = len(text.split()) # Rough estimate
+            else:
+                raise ValueError(f"Invalid provider: {self.provider}")
 
             # Create metadata
             embedding_metadata = EmbeddingMetadata(

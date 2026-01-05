@@ -34,6 +34,7 @@ class LLMSuggestionGenerator:
         self,
         llm_service: LLMService,
         context: Optional[Dict[str, Any]] = None,
+        semantic_search_service: Optional[Any] = None,
     ):
         """
         Initialize LLM suggestion generator.
@@ -41,9 +42,11 @@ class LLMSuggestionGenerator:
         Args:
             llm_service: LLM service for generating suggestions
             context: Pipeline context with project information
+            semantic_search_service: Optional semantic search service
         """
         self.llm_service = llm_service
         self.context = context or {}
+        self.semantic_search_service = semantic_search_service
 
         logger.info(
             "llm_suggestion_generator_initialized",
@@ -63,8 +66,26 @@ class LLMSuggestionGenerator:
         Returns:
             Dictionary with cleanings and refactorings
         """
+        # Get semantic context
+        semantic_context = ""
+        if self.semantic_search_service and self.semantic_search_service.is_available():
+            try:
+                search_results = await self.semantic_search_service.search(
+                    query=f"Code patterns and utilities used in {code_file.path}",
+                    limit=3
+                )
+                if search_results:
+                    semantic_context = "\n[Global Code Patterns]:\n"
+                    for res in search_results:
+                        if res.file_path != code_file.path:
+                            semantic_context += f"- In {res.file_path}: {res.content[:150]}...\n"
+            except Exception as e:
+                logger.warning("cleaning_semantic_search_failed", file=code_file.path, error=str(e))
+
         # Create context-aware prompt
         prompt = self.create_prompt(code_file)
+        if semantic_context:
+            prompt += f"\n# ADDITIONAL CONTEXT\n{semantic_context}"
 
         try:
             # Get LLM suggestions

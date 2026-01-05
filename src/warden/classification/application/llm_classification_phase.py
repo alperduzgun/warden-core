@@ -43,7 +43,7 @@ class LLMClassificationPhase(LLMPhaseBase):
     Intelligently selects validation frames and suppresses false positives.
     """
 
-    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None, context: Dict[str, Any] = None) -> None:
+    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None, context: Dict[str, Any] = None, semantic_search_service: Any = None) -> None:
         """
         Initialize LLM classification phase.
         
@@ -52,10 +52,12 @@ class LLMClassificationPhase(LLMPhaseBase):
             llm_service: LLM service instance
             available_frames: List of validation frames to choose from
             context: Pipeline context dictionary
+            semantic_search_service: Optional semantic search service
         """
         super().__init__(config, llm_service)
         self.available_frames = available_frames or []
         self.context = context or {}
+        self.semantic_search_service = semantic_search_service
 
     @property
     def phase_name(self) -> str:
@@ -140,6 +142,21 @@ class LLMClassificationPhase(LLMPhaseBase):
             "file_path": file_path or "",
             "previous_issues": previous_issues or [],
         }
+
+        # Retrieve semantic context if service is available
+        if self.semantic_search_service and self.semantic_search_service.is_available():
+            try:
+                semantic_context = await self.semantic_search_service.get_context(
+                    query=f"Architectural patterns and security sensitive code in {file_path}",
+                    language="python" # Should be dynamic based on code_files[0].language
+                )
+                if semantic_context:
+                    context["semantic_context"] = {
+                        "relevant_chunks": [c.content[:500] for c in semantic_context.relevant_chunks[:3]],
+                        "average_score": semantic_context.average_score
+                    }
+            except Exception as e:
+                logger.warning("semantic_context_retrieval_failed", error=str(e))
 
         # Try LLM classification
         llm_result = await self.analyze_with_llm(context)

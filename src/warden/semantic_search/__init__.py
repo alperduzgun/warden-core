@@ -6,13 +6,13 @@ Provides code indexing and semantic search capabilities using vector embeddings.
 Features:
 - Code chunking (function/class/module level)
 - Embedding generation (OpenAI/Azure OpenAI)
-- Vector indexing (Qdrant)
+- Vector indexing (ChromaDB)
 - Semantic similarity search
 - Context retrieval for LLM analysis
 
 Example:
     ```python
-    from warden.analysis.application.semantic_search import (
+    from warden.semantic_search import (
         EmbeddingGenerator,
         CodeIndexer,
         SemanticSearcher,
@@ -27,8 +27,7 @@ Example:
     )
 
     indexer = CodeIndexer(
-        qdrant_url="http://localhost:6333",
-        qdrant_api_key=None,
+        chroma_path=".warden/embeddings",
         collection_name="warden_code_index",
         embedding_generator=embedding_gen
     )
@@ -41,8 +40,7 @@ Example:
 
     # Search
     searcher = SemanticSearcher(
-        qdrant_url="http://localhost:6333",
-        qdrant_api_key=None,
+        chroma_path=".warden/embeddings",
         collection_name="warden_code_index",
         embedding_generator=embedding_gen
     )
@@ -54,16 +52,16 @@ Example:
     ```
 """
 
-from warden.analysis.application.semantic_search.context_retriever import (
+from warden.semantic_search.context_retriever import (
     ContextOptimizer,
     ContextRetriever,
 )
-from warden.analysis.application.semantic_search.embeddings import (
+from warden.semantic_search.embeddings import (
     EmbeddingCache,
     EmbeddingGenerator,
 )
-from warden.analysis.application.semantic_search.indexer import CodeChunker, CodeIndexer
-from warden.analysis.application.semantic_search.models import (
+from warden.semantic_search.indexer import CodeChunker, CodeIndexer
+from warden.semantic_search.models import (
     ChunkType,
     CodeChunk,
     EmbeddingMetadata,
@@ -73,7 +71,7 @@ from warden.analysis.application.semantic_search.models import (
     SearchResponse,
     SearchResult,
 )
-from warden.analysis.application.semantic_search.searcher import SemanticSearcher
+from warden.semantic_search.searcher import SemanticSearcher
 
 __all__ = [
     # Models

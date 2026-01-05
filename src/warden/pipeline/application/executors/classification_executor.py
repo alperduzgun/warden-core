@@ -25,10 +25,12 @@ class ClassificationExecutor(BasePhaseExecutor):
         llm_service: Any = None,
         frames: List[ValidationFrame] = None,
         available_frames: List[ValidationFrame] = None,
+        semantic_search_service: Any = None,
     ):
         super().__init__(config, progress_callback, project_root, llm_service)
         self.frames = frames or []
         self.available_frames = available_frames or self.frames
+        self.semantic_search_service = semantic_search_service
 
     async def execute_async(
         self,
@@ -60,7 +62,8 @@ class ClassificationExecutor(BasePhaseExecutor):
                     config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
                     llm_service=self.llm_service,
                     available_frames=self.available_frames,
-                    context=phase_context  # Pass context for awareness
+                    context=phase_context,
+                    semantic_search_service=self.semantic_search_service
                 )
                 logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:
@@ -68,7 +71,8 @@ class ClassificationExecutor(BasePhaseExecutor):
                 phase = ClassificationPhase(
                     config=getattr(self.config, 'classification_config', {}),
                     context=phase_context,
-                    available_frames=self.available_frames
+                    available_frames=self.available_frames,
+                    semantic_search_service=self.semantic_search_service
                 )
 
             # Optimization: Filter out unchanged files to save LLM tokens/Validation time

@@ -41,13 +41,23 @@ jobs:
           # Verify installation
           warden --help
 
-      - name: Cache Warden Memory
+      - name: Cache Warden Storage
         uses: actions/cache@v4
         with:
-          path: .warden/memory
-          key: warden-memory-${{ runner.os }}-${{ github.sha }}
+          path: |
+            .warden/memory
+            .warden/embeddings
+          key: warden-storage-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            warden-memory-${{ runner.os }}-
+            warden-storage-${{ runner.os }}-
+
+      - name: Cache Hugging Face Models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-${{ hashFiles('.warden/config.yaml') }}
+          restore-keys: |
+            hf-models-${{ runner.os }}-
 
       - name: Run Warden Scan
         continue-on-error: true # Allow upload of SARIF even if scan "fails" with findings
