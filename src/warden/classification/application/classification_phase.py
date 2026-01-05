@@ -37,7 +37,7 @@ class ClassificationPhase:
     Determines which frames to run and which issues to suppress.
     """
 
-    def __init__(self, config: Dict[str, Any] = None, context: Dict[str, Any] = None, available_frames: List[ValidationFrame] = None):
+    def __init__(self, config: Dict[str, Any] = None, context: Dict[str, Any] = None, available_frames: List[ValidationFrame] = None, semantic_search_service: Any = None):
         """
         Initialize classification phase.
 
@@ -45,10 +45,12 @@ class ClassificationPhase:
             config: Phase configuration
             context: Context from previous phases
             available_frames: List of validation frames to choose from
+            semantic_search_service: Optional semantic search service
         """
         self.config = config or {}
         self.context = context or {}
         self.available_frames = available_frames or []
+        self.semantic_search_service = semantic_search_service
 
         logger.info(
             "classification_phase_initialized",
@@ -83,7 +85,7 @@ class ClassificationPhase:
             hotspots = self.context.get("hotspots", [])
 
             # Default frame selection based on project type
-            result.selected_frames = self._select_frames_for_project(
+            result.selected_frames = await self._select_frames_for_project(
                 project_type, framework, quality_score
             )
 
@@ -121,13 +123,13 @@ class ClassificationPhase:
 
         return result
 
-    def _select_frames_for_project(
+    async def _select_frames_for_project(
         self,
         project_type: str,
         framework: str,
         quality_score: float
     ) -> List[str]:
-        """Select appropriate frames based on project context."""
+        """Select appropriate frames based on project context and semantic search."""
 
         frames = []
 
@@ -150,6 +152,31 @@ class ClassificationPhase:
         if framework in ["fastapi", "django", "flask"]:
             frames.append("stress")
 
+        # SEMANTIC SEARCH ENHANCEMENT
+        if self.semantic_search_service and self.semantic_search_service.is_available():
+            # Check for specific patterns that might trigger frames
+            try:
+                # 1. Check for distributed system patterns (Triggers chaos/resilience)
+                resilience_matches = await self.semantic_search_service.search(
+                    query="circuit breaker retry logic timeout handling distributed system",
+                    limit=3
+                )
+                if any(m.score > 0.7 for m in resilience_matches):
+                    if "resilience" not in frames:
+                        frames.append("resilience")
+                        logger.info("semantic_trigger_resilience", reason="Detected resilience patterns")
+
+                # 2. Check for security sensitive patterns
+                security_matches = await self.semantic_search_service.search(
+                    query="sql injection authentication authorization encryption jwt",
+                    limit=3
+                )
+                if any(m.score > 0.8 for m in security_matches):
+                    # Security is always there, but we might increase priority later
+                    pass
+            except Exception as e:
+                logger.warning("semantic_frame_selection_failed", error=str(e))
+
         logger.debug(
             "frames_selected",
             project_type=project_type,
@@ -157,7 +184,7 @@ class ClassificationPhase:
             selected_frames=frames
         )
 
-        return frames
+        return list(set(frames)) # Ensure uniqueness
 
     def _calculate_frame_priorities(
         self,

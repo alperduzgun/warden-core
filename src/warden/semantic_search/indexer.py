@@ -1,22 +1,25 @@
 """
 Code indexer for semantic search.
 
-Indexes code chunks into Qdrant vector database.
+Indexes code chunks into ChromaDB vector database.
 """
 
 from __future__ import annotations
 
 import ast
+import hashlib
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import structlog
-from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+try:
+    import chromadb
+except ImportError:
+    chromadb = None
 
-from warden.analysis.application.semantic_search.embeddings import EmbeddingGenerator
-from warden.analysis.application.semantic_search.models import (
+from warden.semantic_search.embeddings import EmbeddingGenerator
+from warden.semantic_search.models import (
     ChunkType,
     CodeChunk,
     IndexStats,
@@ -238,15 +241,14 @@ class CodeChunker:
 
 class CodeIndexer:
     """
-    Index code chunks into Qdrant vector database.
+    Index code chunks into ChromaDB vector database.
 
-    Manages Qdrant collection and index operations.
+    Manages ChromaDB collection and index operations.
     """
 
     def __init__(
         self,
-        qdrant_url: str,
-        qdrant_api_key: Optional[str],
+        chroma_path: str,
         collection_name: str,
         embedding_generator: EmbeddingGenerator,
         chunk_size: int = 500,
@@ -255,65 +257,76 @@ class CodeIndexer:
         Initialize code indexer.
 
         Args:
-            qdrant_url: Qdrant server URL
-            qdrant_api_key: Qdrant API key (optional for local)
-            collection_name: Qdrant collection name
+            chroma_path: Path to ChromaDB persistent storage
+            collection_name: ChromaDB collection name
             embedding_generator: Embedding generator instance
             chunk_size: Maximum chunk size in lines
         """
-        self.qdrant_url = qdrant_url
+        if not chromadb:
+            raise ImportError("chromadb is not installed. Please run 'pip install chromadb'")
+
+        self.chroma_path = chroma_path
         self.collection_name = collection_name
         self.embedding_generator = embedding_generator
         self.chunker = CodeChunker(max_chunk_size=chunk_size)
 
-        # Initialize Qdrant client
-        self.client = AsyncQdrantClient(
-            url=qdrant_url,
-            api_key=qdrant_api_key,
-        )
+        self.client = chromadb.PersistentClient(path=chroma_path)
+        self.collection = None
 
         logger.info(
             "code_indexer_initialized",
-            qdrant_url=qdrant_url,
+            chroma_path=chroma_path,
             collection=collection_name,
             chunk_size=chunk_size,
         )
 
-    async def ensure_collection(self) -> None:
+    def _calculate_file_hash(self, file_path: str) -> str:
+        """Calculate SHA256 hash of a file."""
+        sha256_hash = hashlib.sha256()
+        try:
+            with open(file_path, "rb") as f:
+                for byte_block in iter(lambda: f.read(4096), b""):
+                    sha256_hash.update(byte_block)
+            return sha256_hash.hexdigest()
+        except Exception as e:
+            logger.error("hash_calculation_failed", file_path=file_path, error=str(e))
+            return ""
+
+    def _get_existing_file_hash(self, file_path: str) -> Optional[str]:
+        """Get existing file hash from ChromaDB metadata."""
+        if not self.collection:
+            self.ensure_collection()
+            
+        try:
+            # Query by file_path in metadata
+            results = self.collection.get(
+                where={"file_path": file_path},
+                include=["metadatas"],
+                limit=1
+            )
+            
+            if results and results["metadatas"]:
+                return results["metadatas"][0].get("file_hash")
+        except Exception as e:
+            logger.debug("existing_hash_lookup_failed", file_path=file_path, error=str(e))
+            
+        return None
+
+    def ensure_collection(self) -> None:
         """
-        Ensure Qdrant collection exists.
+        Ensure ChromaDB collection exists.
 
         Creates collection if it doesn't exist.
         """
         try:
-            collections = await self.client.get_collections()
-            collection_names = [c.name for c in collections.collections]
-
-            if self.collection_name not in collection_names:
-                logger.info(
-                    "creating_qdrant_collection",
-                    collection=self.collection_name,
-                    dimensions=self.embedding_generator.dimensions,
-                )
-
-                await self.client.create_collection(
-                    collection_name=self.collection_name,
-                    vectors_config=VectorParams(
-                        size=self.embedding_generator.dimensions,
-                        distance=Distance.COSINE,
-                    ),
-                )
-
-                logger.info(
-                    "qdrant_collection_created",
-                    collection=self.collection_name,
-                )
-            else:
-                logger.debug(
-                    "qdrant_collection_exists",
-                    collection=self.collection_name,
-                )
-
+            self.collection = self.client.get_or_create_collection(
+                name=self.collection_name,
+                metadata={"hnsw:space": "cosine"}
+            )
+            logger.debug(
+                "chromadb_collection_ready",
+                collection=self.collection_name,
+            )
         except Exception as e:
             logger.error(
                 "collection_creation_failed",
@@ -322,17 +335,34 @@ class CodeIndexer:
             )
             raise
 
-    async def index_file(self, file_path: str, language: str) -> int:
+    async def index_file(self, file_path: str, language: str, force: bool = False) -> int:
         """
-        Index a single file.
+        Index a single file with change detection.
 
         Args:
             file_path: Path to file
             language: Programming language
+            force: Force re-indexing even if hash matches
 
         Returns:
             Number of chunks indexed
         """
+        self.ensure_collection()
+        
+        # 1. Calculate current hash
+        current_hash = self._calculate_file_hash(file_path)
+        
+        # 2. Check for changes
+        if not force and current_hash:
+            existing_hash = self._get_existing_file_hash(file_path)
+            if existing_hash == current_hash:
+                logger.debug(
+                    "file_unchanged_skipping_index",
+                    file_path=file_path,
+                    hash=current_hash
+                )
+                return 0
+
         # Chunk file
         chunks = self.chunker.chunk_file(file_path, language)
 
@@ -349,47 +379,62 @@ class CodeIndexer:
 
         # Generate embeddings and index
         indexed_count = 0
+        ids = []
+        embeddings = []
+        metadatas = []
+        documents = []
+
         for chunk in chunks:
             try:
                 # Generate embedding
-                embedding, metadata = await self.embedding_generator.generate_chunk_embedding(
+                embedding, _ = await self.embedding_generator.generate_chunk_embedding(
                     chunk
                 )
 
-                # Prepare payload
-                payload = {
+                # Prepare metadata (ChromaDB only supports simple types in metadata)
+                metadata = {
                     "chunk_id": chunk.id,
-                    "file_path": chunk.file_path,
-                    "relative_path": chunk.relative_path,
+                    "file_path": str(chunk.file_path),
+                    "relative_path": str(chunk.relative_path),
                     "chunk_type": chunk.chunk_type.value,
-                    "content": chunk.content,
                     "start_line": chunk.start_line,
                     "end_line": chunk.end_line,
                     "language": chunk.language,
-                    "metadata": chunk.metadata,
+                    "file_hash": current_hash,
                     "indexed_at": datetime.now().isoformat(),
                 }
+                
+                # Flatten extra metadata if any
+                if chunk.metadata:
+                    for k, v in chunk.metadata.items():
+                        if isinstance(v, (str, int, float, bool)):
+                            metadata[f"attr_{k}"] = v
 
-                # Upsert to Qdrant
-                point = PointStruct(
-                    id=hash(chunk.id) % (2**63),  # Convert to integer ID
-                    vector=embedding,
-                    payload=payload,
-                )
-
-                await self.client.upsert(
-                    collection_name=self.collection_name,
-                    points=[point],
-                )
-
+                ids.append(chunk.id)
+                embeddings.append(embedding)
+                metadatas.append(metadata)
+                documents.append(chunk.content)
+                
                 indexed_count += 1
 
             except Exception as e:
                 logger.error(
-                    "chunk_indexing_failed",
+                    "chunk_embedding_failed",
                     chunk_id=chunk.id,
                     error=str(e),
                 )
+
+        if ids:
+            try:
+                self.collection.upsert(
+                    ids=ids,
+                    embeddings=embeddings,
+                    metadatas=metadatas,
+                    documents=documents
+                )
+            except Exception as e:
+                logger.error("collection_upsert_failed", error=str(e))
+                return 0
 
         logger.info(
             "file_indexed",
@@ -413,7 +458,7 @@ class CodeIndexer:
         Returns:
             Index statistics
         """
-        await self.ensure_collection()
+        self.ensure_collection()
 
         total_chunks = 0
         chunks_by_language: dict[str, int] = {}
@@ -457,10 +502,10 @@ class CodeIndexer:
             last_indexed_at=datetime.now(),
         )
 
-    async def delete_collection(self) -> None:
-        """Delete the Qdrant collection."""
+    def delete_collection(self) -> None:
+        """Delete the ChromaDB collection."""
         try:
-            await self.client.delete_collection(collection_name=self.collection_name)
+            self.client.delete_collection(name=self.collection_name)
             logger.info("collection_deleted", collection=self.collection_name)
         except Exception as e:
             logger.error(
@@ -470,7 +515,7 @@ class CodeIndexer:
             )
             raise
 
-    async def get_stats(self) -> IndexStats:
+    def get_stats(self) -> IndexStats:
         """
         Get current index statistics.
 
@@ -478,10 +523,13 @@ class CodeIndexer:
             Index statistics
         """
         try:
-            collection_info = await self.client.get_collection(self.collection_name)
+            if not self.collection:
+                self.ensure_collection()
+            
+            count = self.collection.count()
 
             return IndexStats(
-                total_chunks=collection_info.points_count or 0,
+                total_chunks=count,
                 last_indexed_at=datetime.now(),
             )
 

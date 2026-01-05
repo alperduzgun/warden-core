@@ -201,7 +201,30 @@ class PreAnalysisPhase:
                 self.memory_manager.update_environment_hash(self.env_hash)
                 await self.memory_manager.save_async()
 
-            return result
+            # Step 9: Trigger Semantic Indexing (Smart Incremental)
+            try:
+                # Import here to avoid circular dependencies
+                from warden.shared.services.semantic_search_service import SemanticSearchService
+                ss_config = self.config.get("semantic_search", {})
+                ss_service = SemanticSearchService(ss_config)
+                
+                if ss_service.is_available():
+                    logger.info("triggering_semantic_indexing")
+                    if self.progress_callback:
+                        self.progress_callback("semantic_indexing_started", {
+                            "phase": "pre_analysis",
+                            "action": "indexing_codebase"
+                        })
+                    
+                    await ss_service.index_project(self.project_root, [Path(cf.path) for cf in code_files])
+                    
+                    if self.progress_callback:
+                        self.progress_callback("semantic_indexing_completed", {
+                            "phase": "pre_analysis",
+                            "action": "indexing_codebase_done"
+                        })
+            except Exception as e:
+                logger.error("semantic_indexing_failed", error=str(e))
 
             return result
 

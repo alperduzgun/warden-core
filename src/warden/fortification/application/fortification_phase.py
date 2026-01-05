@@ -50,6 +50,7 @@ class FortificationPhase:
         config: Optional[Dict[str, Any]] = None,
         context: Optional[Dict[str, Any]] = None,
         llm_service: Optional[LLMService] = None,
+        semantic_search_service: Optional[Any] = None,
     ):
         """
         Initialize fortification phase.
@@ -62,6 +63,7 @@ class FortificationPhase:
         self.config = config or {}
         self.context = context or {}
         self.llm_service = llm_service
+        self.semantic_search_service = semantic_search_service
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
 
         # Initialize IgnoreMatcher

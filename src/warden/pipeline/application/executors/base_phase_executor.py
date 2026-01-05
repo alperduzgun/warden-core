@@ -20,6 +20,7 @@ class BasePhaseExecutor:
         progress_callback: Optional[Callable] = None,
         project_root: Optional[Path] = None,
         llm_service: Optional[Any] = None,
+        semantic_search_service: Optional[Any] = None,
     ):
         """
         Initialize base phase executor.
@@ -34,3 +35,4 @@ class BasePhaseExecutor:
         self.progress_callback = progress_callback
         self.project_root = project_root or Path.cwd()
         self.llm_service = llm_service
+        self.semantic_search_service = semantic_search_service

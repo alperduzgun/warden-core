@@ -6,7 +6,6 @@ Core entities for code indexing and semantic search operations.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -38,7 +37,6 @@ class ChunkType(Enum):
         return size_map.get(self, 100)
 
 
-@dataclass
 class CodeChunk(BaseDomainModel):
     """
     A code chunk extracted from a file for semantic indexing.
@@ -54,7 +52,7 @@ class CodeChunk(BaseDomainModel):
     start_line: int  # Starting line number in file
     end_line: int  # Ending line number in file
     language: str  # Programming language (python, javascript, etc.)
-    metadata: Dict[str, Any] = field(default_factory=dict)  # Additional metadata
+    metadata: Dict[str, Any] = {}  # Additional metadata
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -88,7 +86,6 @@ class CodeChunk(BaseDomainModel):
         return len(self.content)
 
 
-@dataclass
 class EmbeddingMetadata(BaseDomainModel):
     """
     Metadata about generated embeddings.
@@ -100,8 +97,8 @@ class EmbeddingMetadata(BaseDomainModel):
     dimensions: int  # Vector dimensions
     token_count: int  # Tokens consumed
     generated_at: datetime
-    provider: str  # Provider (openai, azure_openai)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    provider: str  # Provider (openai, azure_openai, local)
+    metadata: Dict[str, Any] = {}
 
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> EmbeddingMetadata:
@@ -116,7 +113,6 @@ class EmbeddingMetadata(BaseDomainModel):
         )
 
 
-@dataclass
 class SearchResult(BaseDomainModel):
     """
     A single search result from semantic code search.
@@ -128,7 +124,7 @@ class SearchResult(BaseDomainModel):
     score: float  # Similarity score (0.0 to 1.0)
     rank: int  # Result rank in search results
     embedding_metadata: Optional[EmbeddingMetadata] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = {}
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -165,7 +161,6 @@ class SearchResult(BaseDomainModel):
         return self.score > 0.5
 
 
-@dataclass
 class SearchQuery(BaseDomainModel):
     """
     A semantic search query for code.
@@ -176,12 +171,10 @@ class SearchQuery(BaseDomainModel):
     query_text: str  # Natural language or code query
     limit: int = 10  # Maximum results to return
     min_score: float = 0.5  # Minimum similarity score threshold
-    file_filters: List[str] = field(default_factory=list)  # File path patterns to include
-    language_filters: List[str] = field(default_factory=list)  # Languages to search
-    chunk_type_filters: List[ChunkType] = field(
-        default_factory=list
-    )  # Chunk types to include
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    file_filters: List[str] = []  # File path patterns to include
+    language_filters: List[str] = []  # Languages to search
+    chunk_type_filters: List[ChunkType] = []  # Chunk types to include
+    metadata: Dict[str, Any] = {}
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -205,7 +198,6 @@ class SearchQuery(BaseDomainModel):
         )
 
 
-@dataclass
 class SearchResponse(BaseDomainModel):
     """
     Response from semantic search operation.
@@ -214,10 +206,10 @@ class SearchResponse(BaseDomainModel):
     """
 
     query: SearchQuery
-    results: List[SearchResult] = field(default_factory=list)
+    results: List[SearchResult] = []
     total_results: int = 0
     search_duration_seconds: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = {}
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -250,7 +242,6 @@ class SearchResponse(BaseDomainModel):
         return [r for r in self.results if r.is_high_confidence]
 
 
-@dataclass
 class IndexStats(BaseDomainModel):
     """
     Statistics about the code index.
@@ -259,12 +250,12 @@ class IndexStats(BaseDomainModel):
     """
 
     total_chunks: int = 0
-    chunks_by_language: Dict[str, int] = field(default_factory=dict)  # language -> count
-    chunks_by_type: Dict[str, int] = field(default_factory=dict)  # chunk_type -> count
+    chunks_by_language: Dict[str, int] = {}  # language -> count
+    chunks_by_type: Dict[str, int] = {}  # chunk_type -> count
     total_files_indexed: int = 0
     index_size_bytes: int = 0
     last_indexed_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = {}
 
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> IndexStats:
@@ -284,7 +275,6 @@ class IndexStats(BaseDomainModel):
         )
 
 
-@dataclass
 class RetrievalContext(BaseDomainModel):
     """
     Context retrieved for LLM analysis.
@@ -293,11 +283,11 @@ class RetrievalContext(BaseDomainModel):
     """
 
     query_text: str
-    relevant_chunks: List[CodeChunk] = field(default_factory=list)
+    relevant_chunks: List[CodeChunk] = []
     total_tokens: int = 0  # Estimated tokens in context
     total_characters: int = 0
-    search_scores: List[float] = field(default_factory=list)  # Corresponding scores
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    search_scores: List[float] = []  # Corresponding scores
+    metadata: Dict[str, Any] = {}
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""

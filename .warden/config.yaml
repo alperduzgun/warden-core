@@ -100,3 +100,12 @@ advanced:
   max_workers: 4
   frame_timeout: 300
   debug: false
+
+semantic_search:
+  enabled: true
+  provider: "local"
+  model: "jinaai/jina-embeddings-v2-base-code"
+  database: "chromadb"
+  chroma_path: ".warden/embeddings"
+  collection_name: "warden_codebase"
+  max_context_tokens: 4000
