@@ -58,3 +58,7 @@ temp/
 *.egg-info/
 build/
 dist/
+.agent/workflows/mem_context.md
+.gitignore
+.agent/workflows/mem_save.md
+.agent/workflows/mem_search.md
