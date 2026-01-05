@@ -45,6 +45,21 @@ class FortificationPhase:
     - Create auto-applicable patches
     """
 
+    # Search query mapping for semantic context retrieval
+    ISSUE_SEARCH_QUERIES = {
+        "sql_injection": ["parameterized query", "prepared statement", "ORM query filter"],
+        "xss": ["escape HTML", "sanitize output", "template autoescape"],
+        "hardcoded_secret": ["environment variable", "config secret", "vault integration"],
+        "path_traversal": ["safe path join", "basename validation", "secure file path"],
+        "command_injection": ["subprocess safe", "shlex quote", "shell escape"],
+        "ssrf": ["URL validation", "allowlist domain", "request validation"],
+        "weak_crypto": ["strong encryption AES", "cryptography library", "secure hash"],
+        "insecure_deserialization": ["safe deserialization", "JSON loads validation"],
+        "xxe": ["XML parser secure", "defuse XML", "disable external entities"],
+        "secrets": ["environment variable", "dotenv", "secrets manager"],
+    }
+
+
     def __init__(
         self,
         config: Optional[Dict[str, Any]] = None,
@@ -174,6 +189,9 @@ class FortificationPhase:
         """
         Generate fixes using LLM for context-aware solutions.
 
+        Uses semantic search to find similar secure patterns from the project,
+        then provides them as context to the LLM for project-style-matching fixes.
+
         Args:
             issue_type: Type of security issue
             issues: List of issues of this type
@@ -182,19 +200,53 @@ class FortificationPhase:
             List of fortification suggestions
         """
         fixes = []
+        semantic_context = []
 
-        # Create context-aware prompt
-        prompt = self._create_llm_prompt(issue_type, issues)
+        # Step 1: Retrieve semantic context from project
+        if self.semantic_search_service and hasattr(self.semantic_search_service, 'is_available'):
+            try:
+                if self.semantic_search_service.is_available():
+                    # Get search queries for this issue type
+                    queries = self.ISSUE_SEARCH_QUERIES.get(
+                        issue_type.lower(), 
+                        [f"secure {issue_type} handling", f"safe {issue_type} pattern"]
+                    )
+                    
+                    # Search for similar patterns
+                    for query in queries[:2]:  # Limit to 2 queries
+                        results = await self.semantic_search_service.search(
+                            query=query,
+                            language=self.context.get("language", "python"),
+                            limit=2,
+                        )
+                        if results:
+                            semantic_context.extend(results)
+                    
+                    if semantic_context:
+                        logger.info(
+                            "semantic_context_retrieved",
+                            issue_type=issue_type,
+                            examples_found=len(semantic_context),
+                        )
+            except Exception as e:
+                logger.warning(
+                    "semantic_search_failed_fallback",
+                    issue_type=issue_type,
+                    error=str(e),
+                )
+                # Continue without semantic context
+
+        # Step 2: Create context-aware prompt with semantic examples
+        prompt = self._create_llm_prompt(issue_type, issues, semantic_context)
 
         try:
-            # Get LLM suggestions
+            # Step 3: Get LLM suggestions
             response = await self.llm_service.complete_async(
                 prompt=prompt,
-                temperature=0.3,  # Lower temperature for consistent fixes
                 max_tokens=2000,
             )
 
-            # Parse LLM response into fortifications
+            # Step 4: Parse LLM response into fortifications
             parsed_fixes = self._parse_llm_response(response, issues)
             fixes.extend(parsed_fixes)
 
@@ -202,6 +254,7 @@ class FortificationPhase:
                 "llm_fixes_generated",
                 issue_type=issue_type,
                 fixes_count=len(parsed_fixes),
+                used_semantic_context=len(semantic_context) > 0,
             )
 
         except Exception as e:
@@ -214,6 +267,7 @@ class FortificationPhase:
             fixes = await self._generate_rule_based_fixes_async(issue_type, issues)
 
         return fixes
+
 
     async def _generate_rule_based_fixes_async(
         self,
@@ -243,6 +297,7 @@ class FortificationPhase:
         self,
         issue_type: str,
         issues: List[Dict[str, Any]],
+        semantic_context: Optional[List[Any]] = None,
     ) -> str:
         """
         Create LLM prompt for fix generation.
@@ -250,6 +305,7 @@ class FortificationPhase:
         Args:
             issue_type: Type of security issue
             issues: List of issues
+            semantic_context: Similar secure patterns from project (from semantic search)
 
         Returns:
             Formatted prompt for LLM
@@ -268,29 +324,72 @@ class FortificationPhase:
                 f"  Code: {issue.get('code_snippet', 'N/A')[:100]}"
             )
 
+        # Format semantic context if available
+        semantic_section = ""
+        if semantic_context:
+            examples = []
+            total_chars = 0
+            max_chars = 2000  # Max context characters
+            
+            for i, result in enumerate(semantic_context[:3]):  # Max 3 examples
+                # Handle different result types
+                if hasattr(result, 'file_path'):
+                    file_path = result.file_path
+                    content = getattr(result, 'content', str(result))[:500]
+                    line = getattr(result, 'line_number', 'N/A')
+                elif isinstance(result, dict):
+                    file_path = result.get('file_path', 'unknown')
+                    content = result.get('content', str(result))[:500]
+                    line = result.get('line_number', 'N/A')
+                else:
+                    continue
+                
+                example = f"### Example {i+1}: {file_path}:{line}\n```{language}\n{content}\n```\n"
+                
+                if total_chars + len(example) > max_chars:
+                    break
+                    
+                examples.append(example)
+                total_chars += len(example)
+            
+            if examples:
+                semantic_section = f"""
+## SIMILAR SECURE PATTERNS FROM THIS PROJECT
+
+The following code snippets show how similar security issues 
+have been handled elsewhere in this codebase. 
+Use these as reference for style and approach:
+
+{chr(10).join(examples)}
+
+IMPORTANT: Generate fixes that follow the patterns shown above.
+Match the coding style, library usage, and conventions of this project.
+"""
+
         prompt = f"""
-        You are a security expert fixing {issue_type} vulnerabilities.
+You are a security expert fixing {issue_type} vulnerabilities.
 
-        PROJECT CONTEXT:
-        - Type: {project_type}
-        - Framework: {framework}
-        - Language: {language}
+PROJECT CONTEXT:
+- Type: {project_type}
+- Framework: {framework}
+- Language: {language}
+{semantic_section}
+ISSUES FOUND ({len(issues)} total):
+{chr(10).join(issue_details)}
 
-        ISSUES FOUND ({len(issues)} total):
-        {chr(10).join(issue_details)}
+Generate secure fixes for these {issue_type} vulnerabilities.
+For each fix, provide:
+1. Title: Clear description of the fix
+2. Detail: Explanation of what the fix does
+3. Code: The actual fix code
+4. Auto-fixable: Whether this can be automatically applied (true/false)
 
-        Generate secure fixes for these {issue_type} vulnerabilities.
-        For each fix, provide:
-        1. Title: Clear description of the fix
-        2. Detail: Explanation of what the fix does
-        3. Code: The actual fix code
-        4. Auto-fixable: Whether this can be automatically applied (true/false)
-
-        Format your response as JSON array of fixes.
-        Focus on framework-specific best practices for {framework}.
-        """
+Format your response as JSON array of fixes.
+Focus on framework-specific best practices for {framework}.
+"""
 
         return prompt
+
 
     def _parse_llm_response(
         self,
