@@ -386,8 +386,8 @@ Output must be a valid JSON object with the following structure:
                 
                 try:
                     # Parse result with Pydantic
-                    # data = json.loads(content) # Not needed if from_json handles it
-                    result = AnalysisResult.from_json(content)
+                    data = json.loads(content)
+                    result = AnalysisResult.from_json(data)
                     
                     for issue in result.issues:
                         findings.append(Finding(
