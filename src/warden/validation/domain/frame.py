@@ -46,6 +46,7 @@ class Finding:
     code: str | None = None  # Code snippet
     line: int = 0  # Line number (1-based)
     column: int = 0  # Column number (1-based)
+    is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel JSON."""
@@ -58,6 +59,7 @@ class Finding:
             "code": self.code,
             "line": self.line,
             "column": self.column,
+            "isBlocker": self.is_blocker,  # Exposed to UI/Report
         }
 
     def to_dict(self) -> Dict[str, Any]:

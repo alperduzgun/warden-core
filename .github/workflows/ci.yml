@@ -60,7 +60,7 @@ jobs:
             hf-models-${{ runner.os }}-
 
       - name: Run Warden Scan
-        continue-on-error: true # Allow upload of SARIF even if scan "fails" with findings
+        # continue-on-error removed to enforce quality gate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}

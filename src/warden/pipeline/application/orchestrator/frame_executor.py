@@ -283,7 +283,31 @@ class FrameExecutor:
             if pre_violations and self._has_blocker_violations(pre_violations):
                 if frame_rules.on_fail == "stop":
                     logger.error("pre_rules_failed_stopping", frame_id=frame.frame_id)
-                    return None
+                    
+                    # Create blocking failure result
+                    failure_result = FrameResult(
+                        frame_id=frame.frame_id,
+                        frame_name=frame.name,
+                        status="failed",
+                        duration=time.perf_counter() - frame_start_time,
+                        issues_found=len(pre_violations),
+                        is_blocker=True,
+                        findings=[],
+                        metadata={"failure_reason": "pre_rules_blocker_violation"}
+                    )
+                    
+                    # Register failure
+                    pipeline.frames_executed += 1
+                    pipeline.frames_failed += 1
+                    
+                    # Store result context
+                    context.frame_results[frame.frame_id] = {
+                        'result': failure_result,
+                        'pre_violations': pre_violations,
+                        'post_violations': []
+                    }
+                    
+                    return failure_result
 
         # Execute frame
         if self.progress_callback:

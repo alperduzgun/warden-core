@@ -148,6 +148,8 @@ class SecurityFrame(ValidationFrame):
         enabled_checks = self.checks.get_enabled(self.config)
 
         # Execute all enabled checks
+
+        # Execute all enabled checks
         check_results: List[CheckResult] = []
         for check in enabled_checks:
             try:
@@ -296,6 +298,7 @@ class SecurityFrame(ValidationFrame):
                     location=check_finding.location,
                     detail=check_finding.suggestion,
                     code=check_finding.code_snippet,
+                    is_blocker=check_finding.is_blocker,
                 )
                 findings.append(finding)
 
@@ -313,6 +316,10 @@ class SecurityFrame(ValidationFrame):
         """
         if not findings:
             return "passed"
+
+        # Check for explicit blockers
+        if any(f.is_blocker for f in findings):
+            return "failed"
 
         # Count critical and high severity findings
         critical_count = sum(1 for f in findings if f.severity == "critical")

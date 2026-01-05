@@ -57,6 +57,7 @@ class CheckFinding:
     code_snippet: str | None = None
     suggestion: str | None = None  # How to fix
     documentation_url: str | None = None  # Link to docs
+    is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel JSON."""
@@ -69,6 +70,7 @@ class CheckFinding:
             "codeSnippet": self.code_snippet,
             "suggestion": self.suggestion,
             "documentationUrl": self.documentation_url,
+            "isBlocker": self.is_blocker,
         }
 
 

@@ -231,12 +231,27 @@ Updated: {scan_time}
         except Exception:
             pass # Silent fail for aux file
 
-        # Final exit code
+        # Final exit code decision
+        # 1. Check pipeline status (must be valid and completed)
         status_val = final_result_data.get('status')
-        if final_result_data and str(status_val).upper() in ["2", "SUCCESS", "COMPLETED"]:
-            return 0
-        else:
+        pipeline_ok = final_result_data and str(status_val).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
+        
+        # 2. Check for critical issues or frame failures
+        critical_count = final_result_data.get('critical_findings', 0)
+        frames_failed = final_result_data.get('frames_failed', 0)
+        
+        if not pipeline_ok:
+             console.print(f"[bold red]❌ Pipeline did not complete successfully.[/bold red]")
+             return 1
+             
+        if critical_count > 0:
+            console.print(f"[bold red]❌ Scan failed: {critical_count} critical issues found.[/bold red]")
             return 1
+            
+        if frames_failed > 0:
+            console.print(f"[bold red]❌ Scan failed: {frames_failed} frames failed.[/bold red]")
+            return 1
+
         return 0
         
     except Exception as e:
