@@ -51,6 +51,7 @@ file_patterns:
   - "*.pb.go"            # gRPC Go
   - "*.g.dart"           # Flutter/Dart generated
   - "*.freezed.dart"     # Freezed generated
+  - "_version.py"        # setuptools-scm generated
   
   # Minified/bundled assets
   - "*.min.js"
