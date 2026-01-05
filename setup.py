@@ -12,7 +12,7 @@ long_description = readme_path.read_text(encoding="utf-8") if readme_path.exists
 
 setup(
     name="warden-core",
-    version="0.1.0",
+    use_scm_version=True,
     author="Warden Team",
     author_email="warden@example.com",
     description="Warden - AI Code Guardian for comprehensive code validation",
