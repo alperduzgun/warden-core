@@ -61,6 +61,11 @@ Warden provides **automated validation** with:
 - ✅ **Deep Diagnostics** - Compiler-grade error detection (LSP Diagnostics)
 - ✅ **Symbol Graph** - Precise project structure mapping
 
+### Phase 5: Declarative Rules & Hygiene (New!)
+- ✅ **Custom Rule Engine** - Define your own rules in YAML (Regex-based).
+- ✅ **"Detect, Warn, Suggest" Workflow** - Warden finds the issue, explains why it's wrong, and suggests the correct path. It does not auto-fix, ensuring you remain in control.
+- ✅ **Project Hygiene** - Automatically detects misplaced files (Logs, artifacts, temp scripts) effectively cleaning your project root.
+
 ### 🧠 The Warden Advantage: LSP + Semantic Synergy
 Warden uses a unique **"Pipeline Synergy"** architecture:
 1.  **Precision (LSP)**: The `AnalysisPhase` and `OrphanFrame` use the Language Server to find issues with *compiler certainty* (e.g., "Method X is never called").

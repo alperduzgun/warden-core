@@ -29,3 +29,17 @@ rules:
       - test_*.py
       - '*.test.py'
       - '**/tests/**'
+
+custom_rules:
+  - id: no-print
+    pattern: 'print\('
+    message: "Use 'logger.info' instead of 'print()' for production logging"
+    severity: warning
+    files: ["*.py"]
+    exclude: ["tests/*", "*_test.py"]
+  
+  - id: no-pdb
+    pattern: 'import pdb; pdb.set_trace()'
+    message: "Remove debugger breakpoints before committing"
+    severity: error
+    files: ["*.py"]

@@ -23,6 +23,9 @@ import ast
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import yaml
+import re
+import fnmatch
 from dataclasses import dataclass
 
 from warden.validation.domain.frame import (
@@ -123,7 +126,29 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             ".dockerignore", "Dockerfile", "Makefile", "requirements.txt",
             ".env", ".env.example", ".warden", ".git", ".github", ".vscode",
             ".idea", "warden.yaml", "warden.yml"
+            ".idea", "warden.yaml", "warden.yml"
         }
+        
+        # Load custom rules from conventions.yaml
+        self.custom_rules = self._load_custom_rules()
+
+    def _load_custom_rules(self) -> List[Dict[str, Any]]:
+        """Load custom rules from .warden/rules/conventions.yaml"""
+        try:
+            # Try to find project root by looking for .warden
+            # Heuristic: go up until .warden is found, or use CWD
+            cwd = Path.cwd()
+            rules_path = cwd / ".warden" / "rules" / "conventions.yaml"
+            
+            if not rules_path.exists():
+                return []
+                
+            with open(rules_path, 'r') as f:
+                data = yaml.safe_load(f)
+                return data.get('custom_rules', [])
+        except Exception as e:
+            logger.error(f"Failed to load custom rules: {e}")
+            return []
 
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
@@ -189,20 +214,26 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 scenarios_executed.append("Async naming check")
                 async_violations = self._check_async_naming(code_file)
                 violations.extend(async_violations)
+            
+            # 7. Custom Rules (YAML)
+            if self.custom_rules:
+                scenarios_executed.append("Custom YAML rules check")
+                custom_violations = self._check_custom_rules(code_file)
+                violations.extend(custom_violations)
 
-            # 7. Module placement check
+            # 8. Module placement check
             if self.check_placement:
                 scenarios_executed.append("Module placement check")
                 placement_violations = self._check_module_placement(code_file.path)
                 violations.extend(placement_violations)
 
-            # 8. Service abstraction consistency check (context-aware)
+            # 9. Service abstraction consistency check (context-aware)
             if hasattr(self, 'project_context') and self.project_context:
                 scenarios_executed.append("Service abstraction consistency check")
                 abstraction_violations = self._check_service_abstraction_consistency(code_file)
                 violations.extend(abstraction_violations)
 
-            # 9. Root Hygiene check (AI-Driven)
+            # 10. Root Hygiene check (AI-Driven)
             if self.check_root_hygiene:
                 scenarios_executed.append("Root Hygiene check")
                 # Need project root to determine if file is in root
@@ -690,7 +721,6 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         if path.name in self.allowed_root_files:
             return violations
         
-        # Common false positives
         # Common false positives & Garbage Detection
         if path.suffix in ['.lock', '.log', '.xml']:
              # Logs
@@ -756,75 +786,72 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 
                 if search_results:
                     best_match = search_results[0]
-                    # Check if match is in src/ but different path
-                    if "src/" in best_match.file_path and best_match.file_path != code_file.path:
+                    # If match is in src/, then this root file is likely a duplicate or misplaced code
+                    if "src/" in best_match.metadata.get("path", ""):
                         violations.append(OrganizationViolation(
-                            rule="root_hygiene_duplicate",
+                            rule="root_hygiene_misplaced_code",
                             severity="warning",
-                            message=f"Root file appears to be a duplicate of '{best_match.file_path}' (Similarity: {best_match.score:.2f})",
+                            message=f"File content is {best_match.score:.2f} similar to {best_match.metadata.get('path')}. Move implementation to src/.",
                             file_path=code_file.path,
-                            expected="Remove duplicate from root",
-                            actual=f"Duplicate of {best_match.file_path}"
+                            expected=f"Consolidate with {best_match.metadata.get('path')}",
+                            actual="Duplicate in root",
                         ))
-                        # If we find a strong duplicate, we can skip LLM or keep it for double confirmation
-                        # For now, let's return early if we found a duplicate
                         return violations
-            except Exception:
-                # Semantic search failed or not ready, proceed to LLM
-                pass
-
-        # 4. AI Pass (The "Intelligent Judge")
-        # Ask LLM if this file specifically belongs in root for this project type
-        if hasattr(self, 'llm_service') and self.llm_service:
-            try:
-                # Prompt the LLM
-                prompt = f"""
-                Analyze this file found in the PROJECT ROOT directory.
-                
-                File: {path.name}
-                Project Type: Modular Monolith / Python
-                Content Preview:
-                ```
-                {code_file.content[:500]}
-                ```
-                
-                Question: Is this file a VALID root-level file for a clean architecture project?
-                Root files are usually: Configs, Documentation, Entry points (manage.py).
-                Scripts, logic, and tests should be in subdirectories.
-                
-                Reply in JSON:
-                {{
-                    "valid": boolean,
-                    "reason": "explanation"
-                }}
-                """
-                
-                response = await self.llm_service.ask_json(prompt)
-                
-                if not response.get("valid", True):
-                     violations.append(OrganizationViolation(
-                        rule="root_hygiene_ai",
-                        severity="warning",
-                        message=f"Root Hygiene Violation: {response.get('reason', 'File should not be in root')}",
-                        file_path=code_file.path,
-                        expected="File moved to appropriate subdirectory",
-                        actual=f"/{path.name}"
-                    ))
             except Exception as e:
-                # Fallback or log error
-                pass
-        
-        else:
-            # 5. Fallback Heuristic (No AI)
-            # If it's a python file/shell script and not allowlisted -> Warning
-            if path.suffix in ['.py', '.sh', '.js', '.ts', '.go']:
-                violations.append(OrganizationViolation(
-                    rule="root_hygiene_heuristic",
-                    severity="warning",
-                    message=f"Source file '{path.name}' found in root. Should likely be in src/ or scripts/.",
-                    file_path=code_file.path,
-                    expected="src/ or scripts/",
-                    actual=f"/{path.name}"
-                ))
+                logger.error(f"Semantic search failed during hygiene check: {e}")
 
+        # 4. LLM Judgment (Slow Pass) - Only if enabled and ambiguous
+        # (This section is computationally expensive, so it's the last resort)
+        # We'll skip implementation here as requested by user to focus on rules
+        
+        return violations
+
+    def _check_custom_rules(self, code_file: CodeFile) -> List[OrganizationViolation]:
+        """
+        Check custom regex rules defined in YAML.
+        """
+        violations = []
+        path = Path(code_file.path)
+        
+        for rule in self.custom_rules:
+            # Check applicability
+            matches_file = False
+            file_patterns = rule.get('files', ["*"])
+            for pattern in file_patterns:
+                if fnmatch.fnmatch(path.name, pattern):
+                    matches_file = True
+                    break
+            
+            if not matches_file:
+                continue
+                
+            # Check exclusion
+            excluded = False
+            for pattern in rule.get('exclude', []):
+                # Simple exclusion check on name or full path components
+                if fnmatch.fnmatch(path.name, pattern) or fnmatch.fnmatch(str(path), pattern):
+                    excluded = True
+                    break
+            
+            if excluded:
+                continue
+                
+            # Regex check
+            regex_pattern = rule.get('pattern')
+            if not regex_pattern:
+                continue
+                
+            try:
+                if re.search(regex_pattern, code_file.content, re.MULTILINE):
+                    violations.append(OrganizationViolation(
+                        rule=f"custom_{rule.get('id', 'unknown')}",
+                        severity=rule.get('severity', 'warning'),
+                        message=rule.get('message', f"Matches pattern '{regex_pattern}'"),
+                        file_path=code_file.path,
+                        expected=f"Not match '{regex_pattern}'",
+                        actual="Pattern found",
+                    ))
+            except re.error as e:
+                logger.error(f"Invalid regex pattern in rule {rule.get('id')}: {e}")
+                
         return violations
