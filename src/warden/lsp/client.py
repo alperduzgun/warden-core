@@ -150,6 +150,14 @@ class LanguageServerClient:
             self._notification_handlers[method] = []
         self._notification_handlers[method].append(handler)
 
+    def remove_notification_handler(self, method: str, handler: Callable):
+        """Remove a registered handler."""
+        if method in self._notification_handlers:
+            try:
+                self._notification_handlers[method].remove(handler)
+            except ValueError:
+                pass
+
     async def _write_message(self, msg: Dict[str, Any]):
         """Encode and write message to stdin."""
         body = json.dumps(msg)

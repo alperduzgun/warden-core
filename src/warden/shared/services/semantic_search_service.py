@@ -87,6 +87,7 @@ class SemanticSearchService:
             api_key=os.path.expandvars(ss_config.get("api_key", "")),
             azure_endpoint=os.path.expandvars(ss_config.get("azure_endpoint", "")),
             azure_deployment=os.path.expandvars(ss_config.get("azure_deployment", "")),
+            device=ss_config.get("device", "cpu"),
         )
         
         # 2. Vector Store Adapter

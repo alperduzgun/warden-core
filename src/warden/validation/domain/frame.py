@@ -10,6 +10,7 @@ Frame Docs: /docs/FRAME_SYSTEM.md
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Any, List
 
@@ -235,29 +236,35 @@ class ValidationFrame(ABC):
 
     async def execute_batch(self, code_files: List["CodeFile"]) -> List[FrameResult]:
         """
-        Execute validation on multiple files (Batch Mode).
+        Execute validation on multiple files in PARALLEL.
 
-        Default implementation iterates and calls execute().
-        Subclasses (like OrphanFrame) should override this for optimization.
-
-        Args:
-            code_files: List of code files to validate
-
-        Returns:
-            List of FrameResult objects (one per file, or aggregated)
+        Default implementation uses asyncio.gather with a semaphore to limit concurrency.
         """
-        results = []
-        for code_file in code_files:
-            try:
-                result = await self.execute(code_file)
-                if result:
-                    results.append(result)
-            except Exception as e:
-                # Log error but continue batch
-                # We need a logger here, but self.logger might not exist on base
-                # Just skip for default impl or maybe return error result
-                pass
-        return results
+        # Limit concurrency to 50 concurrent frame executions per batch
+        concurrency = self.config.get("concurrency_limit", 50) if isinstance(self.config, dict) else 50
+        semaphore = asyncio.Semaphore(concurrency)
+        
+        async def execute_safe(code_file: "CodeFile") -> Any:
+            async with semaphore:
+                try:
+                    return await self.execute(code_file)
+                except Exception as e:
+                    # Log error but don't crash batch
+                    return None
+
+        # Launch all tasks
+        tasks = [execute_safe(f) for f in code_files]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filter out None results and exceptions
+        valid_results = []
+        for r in results:
+            if isinstance(r, Exception):
+                continue
+            if r:
+                valid_results.append(r)
+                
+        return valid_results
 
     @property
     def frame_id(self) -> str:

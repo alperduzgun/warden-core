@@ -67,27 +67,31 @@ class LSPDiagnosticsAnalyzer:
             
             client.on_notification("textDocument/publishDiagnostics", handle_diagnostics)
             
-            # Wait a bit? Or trigger a change?
-            # Usually didOpen triggers diagnostics.
-            # We might need to wait a small amount of time.
-            # This is tricky in async 'one-shot' mode.
-            # For now, simplistic wait.
-            import asyncio
-            await asyncio.sleep(0.5) 
-            
-            # Calculate score based on errors
-            error_count = len([d for d in diagnostics if d.get('severity') == 1])
-            warning_count = len([d for d in diagnostics if d.get('severity') == 2])
-            
-            # Simple scoring: Start at 10, deduct for errors
-            score = max(0.0, 10.0 - (error_count * 2.0) - (warning_count * 0.5))
+            try:
+                # Wait a bit? Or trigger a change?
+                # Usually didOpen triggers diagnostics.
+                # We might need to wait a small amount of time.
+                # This is tricky in async 'one-shot' mode.
+                # For now, simplistic wait.
+                import asyncio
+                await asyncio.sleep(0.5) 
+                
+                # Calculate score based on errors
+                error_count = len([d for d in diagnostics if d.get('severity') == 1])
+                warning_count = len([d for d in diagnostics if d.get('severity') == 2])
+                
+                # Simple scoring: Start at 10, deduct for errors
+                score = max(0.0, 10.0 - (error_count * 2.0) - (warning_count * 0.5))
 
-            return {
-                "diagnostics": diagnostics,
-                "score": score,
-                "error_count": error_count,
-                "warning_count": warning_count
-            }
+                return {
+                    "diagnostics": diagnostics,
+                    "score": score,
+                    "error_count": error_count,
+                    "warning_count": warning_count
+                }
+            finally:
+                # Cleanup handler to prevent memory leak
+                client.remove_notification_handler("textDocument/publishDiagnostics", handle_diagnostics)
 
         except Exception as e:
             logger.error("lsp_analyzer_failed", error=str(e), file=code_file.path)

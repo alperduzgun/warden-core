@@ -70,8 +70,8 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
     """
 
     # Required metadata
-    name = "Architectural Consistency"
-    description = "Validates SOLID principles, file organization, and project structure"
+    name = "Architectural Consistency Local"
+    description = "Validates SOLID principles, file organization, and project structure (Local Enhanced)"
     category = FrameCategory.LANGUAGE_SPECIFIC
     priority = FramePriority.MEDIUM
     scope = FrameScope.FILE_LEVEL
@@ -115,6 +115,15 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             "src/warden/validation/frames": "Validation frame definitions",
             "src/warden/shared/services": "Cross-cutting shared services",
         })
+
+        # Root Hygiene
+        self.check_root_hygiene = config_dict.get("check_root_hygiene", True)
+        self.allowed_root_files = {
+            "README.md", "LICENSE", "pyproject.toml", "setup.py", ".gitignore",
+            ".dockerignore", "Dockerfile", "Makefile", "requirements.txt",
+            ".env", ".env.example", ".warden", ".git", ".github", ".vscode",
+            ".idea", "warden.yaml", "warden.yml"
+        }
 
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
@@ -177,6 +186,10 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 naming_violations = self._check_naming_conventions(code_file.path)
                 violations.extend(naming_violations)
 
+                scenarios_executed.append("Async naming check")
+                async_violations = self._check_async_naming(code_file)
+                violations.extend(async_violations)
+
             # 7. Module placement check
             if self.check_placement:
                 scenarios_executed.append("Module placement check")
@@ -188,6 +201,14 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 scenarios_executed.append("Service abstraction consistency check")
                 abstraction_violations = self._check_service_abstraction_consistency(code_file)
                 violations.extend(abstraction_violations)
+
+            # 9. Root Hygiene check (AI-Driven)
+            if self.check_root_hygiene:
+                scenarios_executed.append("Root Hygiene check")
+                # Need project root to determine if file is in root
+                # Assuming project_context has root_path or we derive from path
+                root_violations = await self._check_root_hygiene(code_file)
+                violations.extend(root_violations)
 
             # Convert violations to findings
             findings = self._violations_to_findings(violations, code_file)
@@ -480,6 +501,46 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
 
         return violations
 
+    def _check_async_naming(self, code_file: CodeFile) -> List[OrganizationViolation]:
+        """
+        Check if async methods end with '_async'.
+
+        Rule: convention.naming.asyncMethodSuffix = "_async"
+        Exceptions: test_*, __*, setup, teardown
+        """
+        violations = []
+        if code_file.language.lower() != "python":
+            return violations
+
+        try:
+            tree = ast.parse(code_file.content)
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.AsyncFunctionDef):
+                    name = node.name
+                    
+                    # Exceptions
+                    if (
+                        name.startswith("test_") or 
+                        name.startswith("__") or
+                        name in ["setup", "teardown", "setUp", "tearDown"]
+                    ):
+                        continue
+                        
+                    if not name.endswith("_async"):
+                        violations.append(OrganizationViolation(
+                            rule="async_naming_convention",
+                            severity="warning",
+                            message=f"Async method '{name}' should end with '_async' suffix",
+                            file_path=f"{code_file.path}:{node.lineno}",
+                            expected=f"{name}_async",
+                            actual=name,
+                        ))
+        except SyntaxError:
+            pass
+            
+        return violations
+
     def _check_module_placement(self, file_path: str) -> List[OrganizationViolation]:
         """
         Check if the file is placed in the correct architectural layer.
@@ -599,3 +660,171 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             context: ProjectContext with service_abstractions
         """
         self.project_context = context
+
+    async def _check_root_hygiene(self, code_file: CodeFile) -> List[OrganizationViolation]:
+        """
+        Check if file belongs in project root using AI context.
+        """
+        violations = []
+        path = Path(code_file.path)
+        
+        # 1. Determine Project Root
+        # If project_context is available, use it. Otherwise assume cwd or git root logic.
+        project_root = None
+        if hasattr(self, 'project_context') and self.project_context:
+            if hasattr(self.project_context, 'project_root'):
+                project_root = Path(self.project_context.project_root)
+        
+        if not project_root:
+            # Fallback: assume running from root
+            project_root = Path.cwd()
+
+        # Check if file is directly in root
+        if path.parent.resolve() != project_root.resolve():
+            logger.info("root_hygiene_skip_not_root", path=str(path), parent=str(path.parent.resolve()), root=str(project_root.resolve()))
+            return violations  # Not a root file, skip
+
+        logger.info("root_hygiene_checking", path=str(path))
+
+        # 2. Fast Pass (Allowlist)
+        if path.name in self.allowed_root_files:
+            return violations
+        
+        # Common false positives
+        # Common false positives & Garbage Detection
+        if path.suffix in ['.lock', '.log', '.xml']:
+             # Logs
+             if path.suffix == '.log':
+                 violations.append(OrganizationViolation(
+                    rule="root_hygiene_log",
+                    severity="warning",
+                    message=f"Log file '{path.name}' found in root. Move to logs/ directory.",
+                    file_path=code_file.path,
+                    expected="logs/*.log",
+                    actual=f"/{path.name}"
+                ))
+                 return violations
+             
+             # Coverage artifacts
+             if path.name in ['coverage.xml', '.coverage']:
+                 violations.append(OrganizationViolation(
+                    rule="root_hygiene_artifact",
+                    severity="warning",
+                    message=f"Build/Test artifact '{path.name}' found in root. Add to .gitignore or clean up.",
+                    file_path=code_file.path,
+                    expected="Artifacts in .gitignore",
+                    actual=f"/{path.name}"
+                 ))
+                 return violations
+
+        # Temporary Scripts match
+        if path.name.startswith("verify_") or path.name.startswith("tmp_") or path.name.startswith("temp_"):
+             violations.append(OrganizationViolation(
+                rule="root_hygiene_script",
+                severity="warning",
+                message=f"Temporary script '{path.name}' found in root. Move to scripts/ or delete.",
+                file_path=code_file.path,
+                expected="scripts/*.py",
+                actual=f"/{path.name}"
+            ))
+             return violations
+        
+        # Binary/Script detection (no extension)
+        if not path.suffix and path.name not in self.allowed_root_files:
+             # Likely a binary or shell script
+             violations.append(OrganizationViolation(
+                rule="root_hygiene_binary",
+                severity="warning",
+                message=f"Unknown executable/file '{path.name}' found in root. Move to bin/ or scripts/.",
+                file_path=code_file.path,
+                expected="bin/",
+                actual=f"/{path.name}"
+            ))
+             return violations
+
+        # 3. Semantic Similarity Pass (Find clones in src/)
+        # If this file is a copy-paste or refactor of something in src/, it's misplaced.
+        if hasattr(self, 'semantic_search_service') and self.semantic_search_service:
+            try:
+                # Search for similar code in project
+                # We assume semantic_search_service has a search method returning results with score
+                search_results = await self.semantic_search_service.search_async(
+                    query=code_file.content, 
+                    k=1,
+                    threshold=0.85 
+                )
+                
+                if search_results:
+                    best_match = search_results[0]
+                    # Check if match is in src/ but different path
+                    if "src/" in best_match.file_path and best_match.file_path != code_file.path:
+                        violations.append(OrganizationViolation(
+                            rule="root_hygiene_duplicate",
+                            severity="warning",
+                            message=f"Root file appears to be a duplicate of '{best_match.file_path}' (Similarity: {best_match.score:.2f})",
+                            file_path=code_file.path,
+                            expected="Remove duplicate from root",
+                            actual=f"Duplicate of {best_match.file_path}"
+                        ))
+                        # If we find a strong duplicate, we can skip LLM or keep it for double confirmation
+                        # For now, let's return early if we found a duplicate
+                        return violations
+            except Exception:
+                # Semantic search failed or not ready, proceed to LLM
+                pass
+
+        # 4. AI Pass (The "Intelligent Judge")
+        # Ask LLM if this file specifically belongs in root for this project type
+        if hasattr(self, 'llm_service') and self.llm_service:
+            try:
+                # Prompt the LLM
+                prompt = f"""
+                Analyze this file found in the PROJECT ROOT directory.
+                
+                File: {path.name}
+                Project Type: Modular Monolith / Python
+                Content Preview:
+                ```
+                {code_file.content[:500]}
+                ```
+                
+                Question: Is this file a VALID root-level file for a clean architecture project?
+                Root files are usually: Configs, Documentation, Entry points (manage.py).
+                Scripts, logic, and tests should be in subdirectories.
+                
+                Reply in JSON:
+                {{
+                    "valid": boolean,
+                    "reason": "explanation"
+                }}
+                """
+                
+                response = await self.llm_service.ask_json(prompt)
+                
+                if not response.get("valid", True):
+                     violations.append(OrganizationViolation(
+                        rule="root_hygiene_ai",
+                        severity="warning",
+                        message=f"Root Hygiene Violation: {response.get('reason', 'File should not be in root')}",
+                        file_path=code_file.path,
+                        expected="File moved to appropriate subdirectory",
+                        actual=f"/{path.name}"
+                    ))
+            except Exception as e:
+                # Fallback or log error
+                pass
+        
+        else:
+            # 5. Fallback Heuristic (No AI)
+            # If it's a python file/shell script and not allowlisted -> Warning
+            if path.suffix in ['.py', '.sh', '.js', '.ts', '.go']:
+                violations.append(OrganizationViolation(
+                    rule="root_hygiene_heuristic",
+                    severity="warning",
+                    message=f"Source file '{path.name}' found in root. Should likely be in src/ or scripts/.",
+                    file_path=code_file.path,
+                    expected="src/ or scripts/",
+                    actual=f"/{path.name}"
+                ))
+
+        return violations

@@ -35,10 +35,10 @@ class EmbeddingGenerator:
         provider: str = "openai",
         model_name: str = "text-embedding-3-small",
         api_key: Optional[str] = None,
-        azure_endpoint: Optional[str] = None,
         azure_deployment: Optional[str] = None,
         dimensions: Optional[int] = None,
         trust_remote_code: bool = True,
+        device: str = "cpu",
     ):
         """
         Initialize embedding generator.
@@ -50,6 +50,7 @@ class EmbeddingGenerator:
             azure_endpoint: Azure OpenAI endpoint (for azure_openai provider)
             azure_deployment: Azure deployment name (for azure_openai provider)
             dimensions: Embedding dimensions (optional, model-dependent)
+            device: Device to use for local models (default: "cpu" for stability)
 
         Raises:
             ValueError: If provider is invalid or required params missing
@@ -57,6 +58,7 @@ class EmbeddingGenerator:
         self.provider = provider
         self.model_name = model_name
         self.dimensions = dimensions or self._get_default_dimensions(model_name)
+        self.device = device
 
         if provider == "openai":
             if not api_key:
@@ -83,11 +85,13 @@ class EmbeddingGenerator:
             
             # Initialize local model
             # For Jina embeddings v2, trust_remote_code=True is required
+            # Force CPU by default to avoid UI freezes on Mac (MPS issues)
             self.client = SentenceTransformer(
                 model_name, 
-                trust_remote_code=trust_remote_code
+                trust_remote_code=trust_remote_code,
+                device=device
             )
-            logger.info("local_embedding_model_loaded", model=model_name)
+            logger.info("local_embedding_model_loaded", model=model_name, device=device)
 
         else:
             raise ValueError(f"Unsupported provider: {provider}")
@@ -150,8 +154,13 @@ class EmbeddingGenerator:
                 embedding_vector = response.data[0].embedding
                 token_count = response.usage.total_tokens
             elif self.provider == "local":
-                # SentenceTransformer encode is synchronous
-                embedding_vector = self.client.encode(text).tolist()
+                # SentenceTransformer encode is synchronous/blocking. Offload to thread.
+                import asyncio
+                loop = asyncio.get_running_loop()
+                embedding_vector = await loop.run_in_executor(
+                    None, 
+                    lambda: self.client.encode(text, device=self.device).tolist()
+                )
                 token_count = len(text.split()) # Rough estimate
             else:
                 raise ValueError(f"Invalid provider: {self.provider}")
