@@ -22,6 +22,7 @@ from warden.cleaning.application.analyzers.magic_number_analyzer import MagicNum
 from warden.cleaning.application.analyzers.maintainability_analyzer import MaintainabilityAnalyzer
 from warden.cleaning.application.analyzers.documentation_analyzer import DocumentationAnalyzer
 from warden.cleaning.application.analyzers.testability_analyzer import TestabilityAnalyzer
+from warden.cleaning.application.analyzers.lsp_diagnostics_analyzer import LSPDiagnosticsAnalyzer
 from warden.validation.domain.frame import CodeFile
 
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
@@ -63,6 +64,7 @@ class AnalysisPhase:
             "maintainability": MaintainabilityAnalyzer(),
             "documentation": DocumentationAnalyzer(),
             "testability": TestabilityAnalyzer(),
+            "lsp_diagnostics": LSPDiagnosticsAnalyzer(),
         }
         
         # Initialize IgnoreMatcher
@@ -234,6 +236,10 @@ class AnalysisPhase:
         )
         tasks["testability"] = asyncio.create_task(
             self.analyzers["testability"].analyze_async(code_file, ast_tree=ast_tree)
+        )
+        
+        tasks["lsp_diagnostics"] = asyncio.create_task(
+            self.analyzers["lsp_diagnostics"].analyze_async(code_file, ast_tree=ast_tree)
         )
 
         # Additional analyzer for hotspots

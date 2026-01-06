@@ -55,6 +55,18 @@ Warden provides **automated validation** with:
 - ✅ **Exit Codes** - CI/CD integration support
 - ✅ **Verbose Mode** - Detailed issue display
 
+### Phase 4: Precision & Repair (Phase 39 - LSP)
+- ✅ **LSP Client & Manager** - Async JSON-RPC architecture
+- ✅ **Orphan Detection 2.0** - 100% accurate unused code detection (LSP References)
+- ✅ **Deep Diagnostics** - Compiler-grade error detection (LSP Diagnostics)
+- ✅ **Symbol Graph** - Precise project structure mapping
+
+### 🧠 The Warden Advantage: LSP + Semantic Synergy
+Warden uses a unique **"Pipeline Synergy"** architecture:
+1.  **Precision (LSP)**: The `AnalysisPhase` and `OrphanFrame` use the Language Server to find issues with *compiler certainty* (e.g., "Method X is never called").
+2.  **Context (Semantic)**: The `FortificationPhase` takes these exact findings and uses **Vector Search** to find "Similar Secure Patterns" in your codebase.
+3.  **Result**: You get a fix that is not just syntactically correct, but matches your team's *coding style*.
+
 ### Infrastructure (Previously Complete)
 - ✅ Pipeline models (PipelineRun, Step, SubStep, Summary)
 - ✅ YAML configuration system (Parser, Exporter, Validator)
