@@ -65,32 +65,88 @@ class SemanticSearchService:
 
     def _initialize_components(self):
         """Initialize underlying semantic search components."""
+        import os
+        from warden.semantic_search.adapters import ChromaDBAdapter, QdrantAdapter
+        
         ss_config = self.config
         
         # 1. Embedding Generator
+        # Distinguish between Vector Store Provider and Embedding Provider
+        # Config 'provider' might refer to vector store (e.g., qdrant)
+        emb_provider = ss_config.get("embedding_provider")
+        if not emb_provider:
+            primary_provider = ss_config.get("provider", "openai")
+            if primary_provider in ["qdrant", "pinecone"]:
+                emb_provider = "openai" # Default to OpenAI for Cloud DBs unless specified
+            else:
+                emb_provider = primary_provider
+
         self.embedding_gen = EmbeddingGenerator(
-            provider=ss_config.get("provider", "openai"),
+            provider=emb_provider,
             model_name=ss_config.get("model", "text-embedding-3-small"),
-            api_key=ss_config.get("api_key"),
-            azure_endpoint=ss_config.get("azure_endpoint"),
-            azure_deployment=ss_config.get("azure_deployment"),
+            api_key=os.path.expandvars(ss_config.get("api_key", "")),
+            azure_endpoint=os.path.expandvars(ss_config.get("azure_endpoint", "")),
+            azure_deployment=os.path.expandvars(ss_config.get("azure_deployment", "")),
         )
         
-        # 2. Indexer
+        # 2. Vector Store Adapter
+        provider = ss_config.get("provider", "local")
+        database = ss_config.get("database", "chromadb")
+        collection_name = ss_config.get("collection_name", "warden_codebase")
+        
+        adapter = None
+        
+        if provider == "qdrant" or database == "qdrant":
+            url = os.path.expandvars(ss_config.get("url", ""))
+            
+            # Key priority:
+            # 1. qdrant_api_key (specific)
+            # 2. api_key (generic, potentially shared with provider but risky)
+            # 3. QDRANT_API_KEY env var
+            
+            config_qdrant_key = ss_config.get("qdrant_api_key")
+            if not config_qdrant_key:
+                # If specific key not set, try generic key IF provider is NOT the embedding provider 
+                # (to avoid using Azure key for Qdrant)
+                # But here we simply fallback to generic 'api_key' if provided.
+                config_qdrant_key = ss_config.get("api_key")
+
+            api_key = os.path.expandvars(config_qdrant_key or "")
+            
+            # Fallback to env vars if config expansion failed or was empty
+            if not url: url = os.environ.get("QDRANT_URL", "http://localhost:6333")
+            if not api_key: api_key = os.environ.get("QDRANT_API_KEY", "")
+            
+            # Determine vector size from embedding generator
+            vector_size = self.embedding_gen.dimensions if self.embedding_gen else 1536
+            
+            adapter = QdrantAdapter(
+                url=url,
+                api_key=api_key,
+                collection_name=collection_name,
+                vector_size=vector_size
+            )
+        else:
+            # Default to Chroma
+            chroma_path = ss_config.get("chroma_path", ".warden/embeddings")
+            adapter = ChromaDBAdapter(
+                chroma_path=chroma_path,
+                collection_name=collection_name
+            )
+        
+        # 3. Indexer
         self.indexer = CodeIndexer(
-            chroma_path=ss_config.get("chroma_path", ".warden/embeddings"),
-            collection_name=ss_config.get("collection_name", "warden_codebase"),
+            adapter=adapter,
             embedding_generator=self.embedding_gen,
         )
         
-        # 3. Searcher
+        # 4. Searcher
         self.searcher = SemanticSearcher(
-            chroma_path=ss_config.get("chroma_path", ".warden/embeddings"),
-            collection_name=ss_config.get("collection_name", "warden_codebase"),
+            adapter=adapter,
             embedding_generator=self.embedding_gen,
         )
         
-        # 4. Context Retriever
+        # 5. Context Retriever
         self.context_retriever = ContextRetriever(
             searcher=self.searcher,
             max_tokens=ss_config.get("max_context_tokens", 4000),

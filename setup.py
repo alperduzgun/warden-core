@@ -65,6 +65,9 @@ setup(
             "isort>=5.12.0",
             "mypy>=1.0.0",
         ],
+        "cloud": [
+            "qdrant-client>=1.7.0",
+        ],
     },
     entry_points={
         "console_scripts": [

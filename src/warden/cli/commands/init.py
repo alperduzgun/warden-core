@@ -12,6 +12,111 @@ from warden.cli.utils import get_installed_version
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 
 
+console = Console()
+
+def _configure_llm(existing_config: dict) -> tuple[dict, dict]:
+    """
+    Configure LLM settings.
+    Returns (llm_config, env_vars_to_update)
+    """
+    console.print("\n[bold cyan]🧠 AI & LLM Configuration[/bold cyan]")
+    llm_cfg = existing_config.get('llm', {})
+    existing_provider = llm_cfg.get('provider', 'openai')
+    existing_model = llm_cfg.get('model', 'gpt-4o')
+    env_vars = {}
+    
+    console.print("[dim]Warden relies on LLMs for semantic analysis, reasoning, and smart filtering.[/dim]")
+    
+    provider_choices = ["openai", "azure", "groq", "anthropic", "none (static only)"]
+    default_prov = existing_provider if existing_provider in provider_choices else "openai"
+    
+    provider_selection = Prompt.ask("Select LLM Provider", choices=provider_choices, default=default_prov)
+    
+    if provider_selection == "none (static only)":
+        console.print("[yellow]⚠️  Warning: Running without an LLM significantly limits capabilities.[/yellow]")
+        if not Confirm.ask("Proceed without AI?", default=False):
+            return _configure_llm(existing_config) # Retry recursion
+            
+        return {"provider": "none", "model": "none"}, {}
+
+    provider = provider_selection
+    model = Prompt.ask("Select Model", default=existing_model)
+    
+    # Credentials
+    key_var = f"{provider.upper()}_API_KEY"
+    
+    if provider == "azure":
+        if "azure" not in llm_cfg or not llm_cfg['azure'].get('api_key'):
+             env_vars["AZURE_OPENAI_API_KEY"] = Prompt.ask("Azure API Key", password=True)
+             env_vars["AZURE_OPENAI_ENDPOINT"] = Prompt.ask("Azure Endpoint")
+             env_vars["AZURE_OPENAI_DEPLOYMENT_NAME"] = Prompt.ask("Deployment Name")
+    else:
+        # Check if key exists in env or config keys
+        has_key = key_var in os.environ or any(k.endswith("_API_KEY") for k in existing_config.get('llm', {}))
+        if not has_key:
+             env_vars[key_var] = Prompt.ask(f"{provider} API Key", password=True)
+
+    llm_config = {
+        "provider": provider,
+        "model": model,
+        "timeout": 300
+    }
+    
+    if provider == "azure":
+        llm_config['azure'] = {
+            "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+            "api_key": "${AZURE_OPENAI_API_KEY}",
+            "deployment_name": "${AZURE_OPENAI_DEPLOYMENT_NAME}",
+            "api_version": "2024-02-15-preview"
+        }
+        
+    return llm_config, env_vars
+
+def _configure_vector_db() -> dict:
+    """
+    Configure Vector Database settings.
+    Satibitizes collection name and handles input validation.
+    """
+    console.print("\n[bold cyan]🗄️  Vector Database Configuration[/bold cyan]")
+    vector_db_choice = Prompt.ask("Select Vector Database Provider", choices=["local (chromadb)", "cloud (qdrant/pinecone)"], default="local (chromadb)")
+    
+    # Dynamic Collection Name (Sanitized)
+    safe_name = "".join(c if c.isalnum() else "_" for c in Path.cwd().name).lower()
+    collection_name = f"warden_{safe_name}"
+
+    if vector_db_choice == "local (chromadb)":
+        return {
+             "enabled": True,
+             "provider": "local",
+             "model": "jinaai/jina-embeddings-v2-base-code",
+             "database": "chromadb",
+             "chroma_path": ".warden/embeddings",
+             "collection_name": collection_name,
+             "max_context_tokens": 4000
+        }
+    else:
+        # Cloud Config
+        # Side-effect: Updates os.environ directly for immediate use, but clean return is better.
+        # We'll allow direct env var prompting here as it's interactive setup.
+        if "QDRANT_API_KEY" not in os.environ:
+             while True:
+                 url = Prompt.ask("Qdrant URL")
+                 if url.startswith("http") and "://" in url:
+                     os.environ["QDRANT_URL"] = url
+                     break
+                 console.print("[red]Invalid URL. Must start with http:// or https://[/red]")
+                 
+             os.environ["QDRANT_API_KEY"] = Prompt.ask("Qdrant API Key", password=True)
+             
+        return {
+             "enabled": True,
+             "provider": "qdrant",
+             "url": "${QDRANT_URL}",
+             "api_key": "${QDRANT_API_KEY}",
+             "collection_name": collection_name,
+             "model": "openai/text-embedding-3-small"
+        }
+
 def _generate_ignore_file(root: Path, meta):
     """Generate .wardenignore based on project type."""
     ignore_path = root / ".wardenignore"
@@ -60,6 +165,75 @@ def _generate_ignore_file(root: Path, meta):
     with open(ignore_path, "w") as f:
         f.write("\n".join(content))
     console.print("[green]Created .wardenignore (Smart Defaults)[/green]")
+
+def _setup_semantic_search(config_path: Path):
+    """
+    Initialize semantic search:
+    1. Check availability / Auto-install dependencies
+    2. Index codebase
+    Handles failures gracefully (Soft Failure).
+    """
+    console.print("\n[bold cyan]📚 Initializing Semantic Index...[/bold cyan]")
+    try:
+         # Load config
+         with open(config_path) as f:
+             final_config = yaml.safe_load(f)
+             
+         ss_config = final_config.get('semantic_search', {})
+         if not ss_config.get('enabled'):
+             return
+
+         from warden.shared.services.semantic_search_service import SemanticSearchService
+         
+         # Reset singleton
+         SemanticSearchService._instance = None
+         service = SemanticSearchService(ss_config)
+         
+         # Inner function to perform indexing to avoid DRY violation
+         async def run_indexing_if_files_exist():
+             code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
+             files = [f for f in Path.cwd().rglob("*") if f.is_file() and f.suffix in code_extensions and "node_modules" not in str(f) and ".venv" not in str(f) and ".git" not in str(f)]
+             
+             if not files:
+                 console.print("[yellow]No code files found to index.[/yellow]")
+                 return
+
+             try:
+                 with console.status(f"[bold green]Indexing {len(files)} files... (Ctrl+C to skip)[/bold green]") as spinner:
+                    await service.index_project(Path.cwd(), files)
+                 console.print(f"[green]✓ Semantic Index Ready ({len(files)} files)[/green]")
+             except KeyboardInterrupt:
+                 console.print("\n[yellow]⚠️  Indexing skipped by user.[/yellow]")
+                 console.print("[dim]Run 'warden index' later to complete setup.[/dim]")
+
+         if service.is_available():
+             asyncio.run(run_indexing_if_files_exist())
+         else:
+              console.print("[yellow]Semantic service dependencies missing.[/yellow]")
+              console.print("[dim]Auto-installing required dependencies (Mandatory for AI features)...[/dim]")
+              try:
+                  with console.status("[bold green]Installing dependencies...[/bold green]"):
+                      subprocess.check_call([sys.executable, "-m", "pip", "install", "chromadb", "sentence-transformers"])
+                  console.print("[green]Dependencies installed successfully. Retrying...[/green]")
+                  
+                  # Retry setup
+                  service = SemanticSearchService(ss_config)
+                  if service.is_available():
+                      asyncio.run(run_indexing_if_files_exist())
+                  else:
+                      console.print("[red]Service unavailable even after install.[/red]")
+                      
+              except subprocess.CalledProcessError as e:
+                   console.print(f"[red]Dependency installation failed.[/red]")
+                   console.print("[dim]Please run manually: pip install 'warden-core[semantic]'[/dim]")
+              except KeyboardInterrupt:
+                   console.print("\n[yellow]⚠️  Installation skipped by user.[/yellow]")
+              except Exception as e:
+                  console.print(f"[red]Installation error: {e}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Warning: Failed to initialize index (Soft Failure): {e}[/red]")
+        console.print("[dim]The project is initialized, but semantic features may be limited.[/dim]")
 
 async def _create_baseline(root: Path, config_path: Path):
     """Run initial scan and save as baseline."""
@@ -174,91 +348,25 @@ def init_command(
         except: pass
 
     # --- Step 3: LLM Config ---
-    console.print("\n[bold cyan]🧠 AI & LLM Configuration[/bold cyan]")
+    llm_config, new_env_vars = _configure_llm(existing_config)
     
-    # Check if LLM is already configured
-    llm_cfg = existing_config.get('llm', {})
-    existing_provider = llm_cfg.get('provider', 'openai')
-    existing_model = llm_cfg.get('model', 'gpt-4o')
-    env_vars = {}
-    
-    # "Warden is nothing without LLM" - Treat as essential
-    console.print("[dim]Warden relies on LLMs for semantic analysis, reasoning, and smart filtering.[/dim]")
-    
-    provider_choices = ["openai", "azure", "groq", "anthropic", "none (static only)"]
-    default_prov = existing_provider if existing_provider in provider_choices else "openai"
-    
-    provider_selection = Prompt.ask("Select LLM Provider", choices=provider_choices, default=default_prov)
-    
-    if provider_selection == "none (static only)":
-        console.print("[yellow]⚠️  Warning: Running without an LLM significantly limits Warden's capabilities.[/yellow]")
-        if not Confirm.ask("Are you sure you want to proceed without AI?", default=False):
-            # Retry selection
-            provider_selection = Prompt.ask("Select LLM Provider", choices=["openai", "azure", "groq", "anthropic"], default="openai")
-    
-    if provider_selection == "none (static only)":
-        provider = "none"
-        model = "none"
-        enable_llm = False
-    else:
-        provider = provider_selection
-        enable_llm = True
-        model = Prompt.ask("Select Model", default=existing_model)
-        
-        # Only ask for keys if not already set in env or config
-        key_var = f"{provider.upper()}_API_KEY"
-        # ... (Key prompting logic can remain simple or check os.environ)
-        
-        if provider == "azure":
-            # For Azure, we might want to prompt if config is missing
-            if "azure" not in llm_cfg or not llm_cfg['azure'].get('api_key'):
-                 env_vars["AZURE_OPENAI_API_KEY"] = Prompt.ask("Azure API Key", password=True)
-                 env_vars["AZURE_OPENAI_ENDPOINT"] = Prompt.ask("Azure Endpoint")
-                 env_vars["AZURE_OPENAI_DEPLOYMENT_NAME"] = Prompt.ask("Deployment Name")
-        else:
-            if key_var not in os.environ and not any(k.endswith("_API_KEY") for k in existing_config.get('llm', {})):
-                 env_vars[key_var] = Prompt.ask(f"{provider} API Key", password=True)
+    # Update .env
+    env_path = Path(".env")
+    if new_env_vars:
+        mode = "a" if env_path.exists() else "w"
+        current_env = env_path.read_text() if env_path.exists() else ""
+        with open(env_path, mode) as f:
+            if mode == "a": f.write("\n")
+            for k, v in new_env_vars.items():
+                if k not in current_env:
+                    f.write(f"{k}={v}\n")
+        console.print("[green]Updated .env[/green]")
 
-        # Update .env
-        env_path = Path(".env")
-        if env_vars:
-            mode = "a" if env_path.exists() else "w"
-            current_env = env_path.read_text() if env_path.exists() else ""
-            with open(env_path, mode) as f:
-                if mode == "a": f.write("\n")
-                for k, v in env_vars.items():
-                    if k not in current_env:
-                        f.write(f"{k}={v}\n")
-            console.print("[green]Updated .env[/green]")
+    provider = llm_config["provider"]
+    model = llm_config["model"]
 
     # --- Step 4: Vector Database ---
-    console.print("\n[bold cyan]🗄️  Vector Database Configuration[/bold cyan]")
-    vector_db_choice = Prompt.ask("Select Vector Database Provider", choices=["local (chromadb)", "cloud (qdrant/pinecone)"], default="local (chromadb)")
-    
-    vector_config = {}
-    if vector_db_choice == "local (chromadb)":
-        vector_config = {
-             "enabled": True,
-             "provider": "local",
-             "model": "jinaai/jina-embeddings-v2-base-code",
-             "database": "chromadb",
-             "chroma_path": ".warden/embeddings",
-             "collection_name": "warden_codebase",
-             "max_context_tokens": 4000
-        }
-    else:
-        # Placeholder for cloud config
-        vector_config = {
-             "enabled": True,
-             "provider": "qdrant", # Default cloud example
-             "url": "${QDRANT_URL}",
-             "api_key": "${QDRANT_API_KEY}",
-             "collection_name": "warden_codebase",
-             "model": "openai/text-embedding-3-small"
-        }
-        if "QDRANT_API_KEY" not in os.environ:
-             os.environ["QDRANT_URL"] = Prompt.ask("Qdrant URL")
-             os.environ["QDRANT_API_KEY"] = Prompt.ask("Qdrant API Key", password=True)
+    vector_config = _configure_vector_db()
 
 
     # --- Step 4: Generate Config ---
@@ -422,67 +530,16 @@ rules:
         console.print("[green]Added configuration examples (Rules, Semantic Search, CI)[/green]")
 
     # --- Step 8: Semantic Indexing ---
-    # Trigger auto-indexing
-    console.print("\n[bold cyan]📚 Initializing Semantic Index...[/bold cyan]")
-    try:
-         # Load config to get SS settings
-         import yaml
-         with open(config_path) as f:
-             final_config = yaml.safe_load(f)
-             
-         ss_config = final_config.get('semantic_search', {})
-         if ss_config.get('enabled'):
-             from warden.shared.services.semantic_search_service import SemanticSearchService
-             # We need to temporarily add src to path if imported dynamically, but it should be fine here.
-             
-             # Reset singleton
-             SemanticSearchService._instance = None
-             service = SemanticSearchService(ss_config)
-             
-             if service.is_available():
-                 # Find code files
-                 code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
-                 files = [f for f in Path.cwd().rglob("*") if f.is_file() and f.suffix in code_extensions and "node_modules" not in str(f) and ".venv" not in str(f) and ".git" not in str(f)]
-                 
-                 if files:
-                     with console.status(f"[bold green]Indexing {len(files)} files...[/bold green]") as spinner:
-                        asyncio.run(service.index_project(Path.cwd(), files))
-                        
-                     console.print(f"[green]✓ Semantic Index Ready ({len(files)} files)[/green]")
-                 else:
-                     console.print("[yellow]No code files found to index.[/yellow]")
-             else:
-                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
-                  console.print("[dim]Auto-installing required dependencies (Mandatory for AI features)...[/dim]")
-                  try:
-                      with console.status("[bold green]Installing dependencies...[/bold green]"):
-                          subprocess.check_call([sys.executable, "-m", "pip", "install", "chromadb", "sentence-transformers"])
-                      console.print("[green]Dependencies installed successfully. Retrying...[/green]")
-                      
-                      # Retry setup
-                      service = SemanticSearchService(ss_config)
-                      if service.is_available():
-                          # Code duplication for indexing - acceptable for this robust retry block
-                          code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
-                          files = [f for f in Path.cwd().rglob("*") if f.is_file() and f.suffix in code_extensions and "node_modules" not in str(f) and ".venv" not in str(f) and ".git" not in str(f)]
-                          
-                          if files:
-                              with console.status(f"[bold green]Indexing {len(files)} files...[/bold green]") as spinner:
-                                 asyncio.run(service.index_project(Path.cwd(), files))
-                              console.print(f"[green]✓ Semantic Index Ready ({len(files)} files)[/green]")
-                          else:
-                              console.print("[yellow]No code files found to index.[/yellow]")
-                  except Exception as e:
-                      console.print(f"[red]Installation failed: {e}[/red]")
-                      console.print("[dim]Please run: pip install 'warden-core[semantic]'[/dim]")
-
-             
-    except Exception as e:
-        console.print(f"[red]Warning: Failed to initialize index: {e}[/red]")
+    _setup_semantic_search(config_path)
 
     # --- Step 9: Baseline ---
     if Confirm.ask("\nCreate Baseline from current issues? (Recommended for existing projects)", default=True):
-        asyncio.run(_create_baseline(Path.cwd(), config_path))
+        try:
+             asyncio.run(_create_baseline(Path.cwd(), config_path))
+        except KeyboardInterrupt:
+             console.print("\n[yellow]⚠️  Baseline creation skipped by user.[/yellow]")
+        except Exception as e:
+             console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
     # --- Step 9: CI/CD (Simplified) ---
     if ci or Confirm.ask("\nGenerate CI/CD Workflow?", default=False):

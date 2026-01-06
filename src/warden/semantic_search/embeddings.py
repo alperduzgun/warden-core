@@ -127,20 +127,26 @@ class EmbeddingGenerator:
         """
         try:
             # Generate embedding
+            # Generate embedding
+            kwargs = {
+                "input": text,
+            }
+
             if self.provider == "azure_openai":
-                response = await self.client.embeddings.create(
-                    input=text,
-                    model=self.azure_deployment,
-                    dimensions=self.dimensions if self.dimensions != 1536 else None,
-                )
+                kwargs["model"] = self.azure_deployment
+                if self.dimensions and self.dimensions != 1536:
+                     kwargs["dimensions"] = self.dimensions
+                
+                response = await self.client.embeddings.create(**kwargs)
                 embedding_vector = response.data[0].embedding
                 token_count = response.usage.total_tokens
+
             elif self.provider == "openai":
-                response = await self.client.embeddings.create(
-                    input=text,
-                    model=self.model_name,
-                    dimensions=self.dimensions if self.dimensions != 1536 else None,
-                )
+                kwargs["model"] = self.model_name
+                if self.dimensions and self.dimensions != 1536:
+                     kwargs["dimensions"] = self.dimensions
+
+                response = await self.client.embeddings.create(**kwargs)
                 embedding_vector = response.data[0].embedding
                 token_count = response.usage.total_tokens
             elif self.provider == "local":
