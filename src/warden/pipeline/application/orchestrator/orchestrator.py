@@ -305,6 +305,9 @@ class PhaseOrchestrator:
                         "reason": "disabled_in_config"
                     })
 
+            # Post-Process: Apply Baseline (Smart Filter)
+            self._apply_baseline(context)
+
             # Update pipeline status based on results
             has_errors = len(context.errors) > 0
             if has_errors:
@@ -356,6 +359,113 @@ class PhaseOrchestrator:
             raise
 
         return context
+
+    def _apply_baseline(self, context: PipelineContext) -> None:
+        """Filter out existing issues present in baseline."""
+        import json
+        baseline_path = self.project_root / ".warden" / "baseline.json"
+        
+        # Only apply if baseline exists and NOT in 'strict' mode (unless configured otherwise)
+        if not baseline_path.exists():
+            return
+            
+        settings = getattr(self.config, 'settings', {})
+        if settings.get('mode') == 'strict' and not settings.get('use_baseline_in_strict', False):
+            # In strict mode, we might want to ignore baseline and show everything
+            # But usually baseline implies "Acceptance", so default should be to use it unless disabled.
+            pass
+
+        try:
+            with open(baseline_path) as f:
+                baseline_data = json.load(f)
+            
+            # Extract baseline fingerprints (rule_id + file_path)
+            known_issues = set()
+            for frame_res in baseline_data.get('frame_results', []):
+                for finding in frame_res.get('findings', []):
+                    # Robust identification: rule_id + file (relative to root)
+                    rid = finding.get('rule_id') if isinstance(finding, dict) else getattr(finding, 'rule_id', None)
+                    fpath = finding.get('file_path') if isinstance(finding, dict) else getattr(finding, 'path', finding.get('path'))
+                    
+                    if not fpath: continue
+                    
+                    # Normalize path relative to project root
+                    try:
+                        abs_path = Path(fpath)
+                        if not abs_path.is_absolute():
+                            abs_path = self.project_root / fpath
+                        rel_path = str(abs_path.resolve().relative_to(self.project_root.resolve()))
+                    except: 
+                        rel_path = str(fpath) # Fallback
+                    
+                    if rid:
+                        known_issues.add(f"{rid}:{rel_path}")
+
+            if not known_issues:
+                return
+            
+            logger.info("baseline_loaded", known_issues_count=len(known_issues))
+
+            # Filter current findings in Frame Results
+            total_suppressed = 0
+            
+            for fid, f_res in context.frame_results.items():
+                result_obj = f_res.get('result') # FrameResult object
+                if not result_obj: continue
+                
+                filtered_findings = []
+                # Keep track of suppressions
+                suppressed_in_frame = 0
+                
+                # Findings might be objects or dicts
+                current_findings = result_obj.findings
+                if not current_findings: continue
+                
+                for finding in current_findings:
+                    rid = getattr(finding, 'rule_id', getattr(finding, 'check_id', None))
+                    fpath = getattr(finding, 'file_path', getattr(finding, 'path', str(context.file_path)))
+                    
+                    # Normalize current finding path
+                    try:
+                        abs_path = Path(fpath)
+                        if not abs_path.is_absolute():
+                            abs_path = self.project_root / fpath
+                        rel_path = str(abs_path.resolve().relative_to(self.project_root.resolve()))
+                    except:
+                        rel_path = str(fpath)
+
+                    key = f"{rid}:{rel_path}"
+                    
+                    if key in known_issues:
+                        suppressed_in_frame += 1
+                        total_suppressed += 1
+                        # We suppress it from active findings
+                    else:
+                        filtered_findings.append(finding)
+                
+                # Update frame result
+                result_obj.findings = filtered_findings
+                
+                # Update status if all findings suppressed
+                if not filtered_findings and result_obj.status == "failed":
+                    result_obj.status = "passed"
+                    # Also unmark is_blocker?
+                    # result_obj.is_blocker = False 
+            
+            if total_suppressed > 0:
+                logger.info("baseline_applied", suppressed_issues=total_suppressed)
+                
+                # Sync context.findings to reflect suppression
+                # Re-aggregate from frames
+                all_findings = []
+                for f_res in context.frame_results.values():
+                    res = f_res.get('result')
+                    if res and res.findings:
+                        all_findings.extend(res.findings)
+                context.findings = all_findings
+
+        except Exception as e:
+            logger.warning("baseline_application_failed", error=str(e))
 
     def _build_pipeline_result(self, context: PipelineContext) -> PipelineResult:
         """Build PipelineResult from context for compatibility."""

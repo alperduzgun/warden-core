@@ -299,6 +299,14 @@ class ProjectStructureAnalyzer:
                     # For now, we'll use a simple heuristic if counts aren't available
                     counts[lang] = counts.get(lang, 0) + 1
             
+            # Prioritize Config Files if they exist
+            if "tsconfig.json" in self.config_files:
+                return "typescript"
+
+            if "pyproject.toml" in self.config_files or "setup.py" in self.config_files or "requirements.txt" in self.config_files:
+                if "package.json" not in self.config_files:
+                    return "python"
+
             if counts:
                 return max(counts, key=counts.get)
 

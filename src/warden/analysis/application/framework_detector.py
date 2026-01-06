@@ -86,60 +86,72 @@ class FrameworkDetector:
 
     def _detect_fastapi(self) -> bool:
         """Check if FastAPI framework is used."""
+        # Check requirements files
         req_files = list(self.project_root.glob("*requirements*.txt"))
-        for req_file in req_files[:3]:  # Check first 3 requirements files
+        for req_file in req_files[:3]:
             try:
-                with open(req_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                    if "fastapi" in content.lower():
-                        return True
-            except Exception as e:
-                logger.debug("fastapi_detection_error", error=str(e))
+                content = req_file.read_text(encoding='utf-8', errors='ignore').lower()
+                if "fastapi" in content: return True
+            except: pass
+            
+        # Check pyproject.toml
+        if "pyproject.toml" in self.config_files:
+            try:
+                content = (self.project_root / "pyproject.toml").read_text(encoding='utf-8', errors='ignore').lower()
+                if "fastapi" in content: return True
+            except: pass
+
+        # Check setup.py
+        if "setup.py" in self.config_files:
+            try:
+                content = (self.project_root / "setup.py").read_text(encoding='utf-8', errors='ignore').lower()
+                if "fastapi" in content: return True
+            except: pass
 
         return False
 
     def _detect_flask(self) -> bool:
         """Check if Flask framework is used."""
+        # Check requirements files
         req_files = list(self.project_root.glob("*requirements*.txt"))
-        for req_file in req_files[:3]:  # Check first 3 requirements files
+        for req_file in req_files[:3]:
             try:
-                with open(req_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                    if "flask" in content.lower():
-                        return True
-            except Exception as e:
-                logger.debug("flask_detection_error", error=str(e))
+                content = req_file.read_text(encoding='utf-8', errors='ignore').lower()
+                if "flask" in content: return True
+            except: pass
+            
+        # Check pyproject.toml/setup.py
+        for f in ["pyproject.toml", "setup.py"]:
+            if f in self.config_files:
+                try:
+                    content = (self.project_root / f).read_text(encoding='utf-8', errors='ignore').lower()
+                    if "flask" in content: return True
+                except: pass
 
         return False
 
     def _detect_js_framework(self) -> Framework:
         """Detect JavaScript/TypeScript frameworks from package.json."""
+        # ... logic remains similar but ensures package.json read is robust ...
         if "package.json" not in self.config_files:
             return Framework.NONE
 
         package_json_path = self.project_root / "package.json"
-        if not package_json_path.exists():
-            return Framework.NONE
-
+        
         try:
             with open(package_json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-
-                # Check frameworks in priority order
-                framework_map = {
-                    "react": Framework.REACT,
-                    "vue": Framework.VUE,
-                    "@angular/core": Framework.ANGULAR,
-                    "svelte": Framework.SVELTE,
-                    "next": Framework.NEXTJS,
-                    "express": Framework.EXPRESS,
-                }
-
-                for dep_name, framework in framework_map.items():
-                    if dep_name in deps:
-                        return framework
-
+                
+                # Check based on presence of key packages
+                if "react" in deps: return Framework.REACT
+                if "vue" in deps: return Framework.VUE
+                if "@angular/core" in deps: return Framework.ANGULAR
+                if "svelte" in deps: return Framework.SVELTE
+                if "next" in deps: return Framework.NEXTJS
+                if "express" in deps: return Framework.EXPRESS
+                if "@nestjs/core" in deps or "nest" in deps: return Framework.NESTJS # Added NestJS
+                
         except Exception as e:
             logger.debug("js_framework_detection_error", error=str(e))
 
