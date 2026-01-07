@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "warden": {
+      "command": "/Library/Frameworks/Python.framework/Versions/3.11/bin/warden",
+      "args": ["serve", "mcp"],
+      "cwd": "/Users/ibrahimcaglar/warden-core"
+    }
+  }
+}
