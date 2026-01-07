@@ -40,6 +40,15 @@ class FrameMetadata:
     config_schema: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
 
+    # Frame dependencies
+    requires: Dict[str, List[str]] = field(default_factory=dict)
+    # Example:
+    # {
+    #   "frames": ["architectural", "project-architecture"],
+    #   "config": ["spec.platforms"],
+    #   "context": ["project_context", "service_abstractions"]
+    # }
+
     # Metadata
     source_path: Optional[Path] = None  # Path to frame directory
 
@@ -98,6 +107,7 @@ class FrameMetadata:
             max_warden_version=data.get("max_warden_version"),
             config_schema=data.get("config_schema", {}),
             tags=data.get("tags", []),
+            requires=data.get("requires", {}),
             source_path=source_path,
         )
 
@@ -218,6 +228,7 @@ class FrameMetadata:
             "max_warden_version": self.max_warden_version,
             "config_schema": self.config_schema,
             "tags": self.tags,
+            "requires": self.requires,
             "source": "community" if self.source_path else "built-in",
         }
 

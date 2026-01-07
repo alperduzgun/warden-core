@@ -222,6 +222,31 @@ class FrameExecutor:
         pipeline: ValidationPipeline,
     ) -> Optional[FrameResult]:
         """Execute a frame with PRE/POST rules."""
+        # Check frame dependencies before execution
+        skip_result = self._check_frame_dependencies(context, frame)
+        if skip_result:
+            logger.info(
+                "frame_skipped_dependencies",
+                frame_id=frame.frame_id,
+                reason=skip_result.metadata.get("skip_reason") if skip_result.metadata else "unknown"
+            )
+            # Store skip result and emit callback
+            context.frame_results[frame.frame_id] = {
+                'result': skip_result,
+                'pre_violations': [],
+                'post_violations': [],
+            }
+            if self.progress_callback:
+                self.progress_callback("frame_completed", {
+                    "frame_id": frame.frame_id,
+                    "frame_name": frame.name,
+                    "status": "skipped",
+                    "findings": 0,
+                    "duration": 0.0,
+                    "skip_reason": skip_result.metadata.get("skip_reason") if skip_result.metadata else None
+                })
+            return skip_result
+
         # Start timing frame execution
         frame_start_time = time.perf_counter()
 
@@ -552,5 +577,144 @@ class FrameExecutor:
 
         clean_files = total_files - len(affected_files)
         return (clean_files / total_files) * 100
+
+    def _check_frame_dependencies(
+        self,
+        context: PipelineContext,
+        frame: ValidationFrame,
+    ) -> Optional[FrameResult]:
+        """
+        Check if frame dependencies are satisfied.
+
+        Returns FrameResult with status='skipped' if dependencies not met,
+        otherwise returns None to continue execution.
+
+        Checks:
+        1. requires_frames: Required frames must have executed
+        2. requires_config: Required config paths must be set
+        3. requires_context: Required context attributes must exist
+        """
+        # 1. Check required frames
+        required_frames = getattr(frame, 'requires_frames', [])
+        for req_frame_id in required_frames:
+            if req_frame_id not in context.frame_results:
+                return FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="skipped",
+                    duration=0.0,
+                    issues_found=0,
+                    is_blocker=False,
+                    findings=[],
+                    metadata={
+                        "skip_reason": f"Required frame '{req_frame_id}' has not been executed",
+                        "dependency_type": "frame",
+                        "missing_dependency": req_frame_id,
+                    }
+                )
+
+        # 2. Check required config paths
+        required_configs = getattr(frame, 'requires_config', [])
+        for config_path in required_configs:
+            if not self._config_path_exists(frame.config, config_path):
+                return FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="skipped",
+                    duration=0.0,
+                    issues_found=0,
+                    is_blocker=False,
+                    findings=[],
+                    metadata={
+                        "skip_reason": f"Required config '{config_path}' is not set",
+                        "dependency_type": "config",
+                        "missing_dependency": config_path,
+                        "help": f"Add '{config_path}' to .warden/config.yaml",
+                    }
+                )
+
+        # 3. Check required context attributes
+        required_context = getattr(frame, 'requires_context', [])
+        for ctx_attr in required_context:
+            if not self._context_attr_exists(context, ctx_attr):
+                return FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="skipped",
+                    duration=0.0,
+                    issues_found=0,
+                    is_blocker=False,
+                    findings=[],
+                    metadata={
+                        "skip_reason": f"Required context '{ctx_attr}' is not available",
+                        "dependency_type": "context",
+                        "missing_dependency": ctx_attr,
+                        "help": "Ensure prerequisite phases/frames have run",
+                    }
+                )
+
+        # All dependencies satisfied
+        return None
+
+    def _config_path_exists(self, config: Optional[Dict[str, Any]], path: str) -> bool:
+        """
+        Check if a config path exists and has a value.
+
+        Args:
+            config: Frame configuration dictionary
+            path: Dot-separated path (e.g., "spec.platforms")
+
+        Returns:
+            True if path exists and has a non-empty value
+        """
+        if not config:
+            return False
+
+        parts = path.split(".")
+        current = config
+
+        for part in parts:
+            if not isinstance(current, dict) or part not in current:
+                return False
+            current = current[part]
+
+        # Check if value is non-empty
+        if current is None:
+            return False
+        if isinstance(current, (list, dict, str)) and len(current) == 0:
+            return False
+
+        return True
+
+    def _context_attr_exists(self, context: PipelineContext, attr: str) -> bool:
+        """
+        Check if a context attribute exists and has a value.
+
+        Args:
+            context: Pipeline context
+            attr: Attribute name (e.g., "project_context", "service_abstractions")
+
+        Returns:
+            True if attribute exists and is not None/empty
+        """
+        # Handle nested attributes (e.g., "project_type.service_abstractions")
+        parts = attr.split(".")
+        current: Any = context
+
+        for part in parts:
+            if hasattr(current, part):
+                current = getattr(current, part)
+            elif isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return False
+
+        # Check if value is non-empty
+        if current is None:
+            return False
+        if isinstance(current, (list, dict)) and len(current) == 0:
+            return False
+
+        return True
 
 
