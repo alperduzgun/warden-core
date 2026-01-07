@@ -19,6 +19,9 @@ from warden.validation.frames.spec.extractors.springboot_extractor import Spring
 from warden.validation.frames.spec.extractors.angular_extractor import AngularExtractor
 from warden.validation.frames.spec.extractors.vue_extractor import VueExtractor
 from warden.validation.frames.spec.extractors.nestjs_extractor import NestJSExtractor
+from warden.validation.frames.spec.extractors.react_extractor import ReactExtractor
+from warden.validation.frames.spec.extractors.express_extractor import ExpressExtractor
+from warden.validation.frames.spec.extractors.go_extractor import GoExtractor
 
 __all__ = [
     "BaseContractExtractor",
@@ -31,4 +34,7 @@ __all__ = [
     "AngularExtractor",
     "VueExtractor",
     "NestJSExtractor",
+    "ReactExtractor",
+    "ExpressExtractor",
+    "GoExtractor",
 ]
