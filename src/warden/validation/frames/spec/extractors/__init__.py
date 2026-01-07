@@ -13,10 +13,14 @@ from warden.validation.frames.spec.extractors.base import (
 
 # Import extractors to trigger registration
 from warden.validation.frames.spec.extractors.flutter_extractor import FlutterExtractor
+from warden.validation.frames.spec.extractors.aspnetcore_extractor import AspNetCoreExtractor
+from warden.validation.frames.spec.extractors.fastapi_extractor import FastAPIExtractor
 
 __all__ = [
     "BaseContractExtractor",
     "ExtractorRegistry",
     "get_extractor",
     "FlutterExtractor",
+    "AspNetCoreExtractor",
+    "FastAPIExtractor",
 ]
