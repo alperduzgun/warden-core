@@ -287,7 +287,8 @@ def spec_analyze(
     config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to warden config file"),
     consumer: Optional[str] = typer.Option(None, "--consumer", help="Consumer platform name"),
     provider: Optional[str] = typer.Option(None, "--provider", help="Provider platform name"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (json/yaml)"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (json/yaml/sarif)"),
+    sarif: bool = typer.Option(False, "--sarif", help="Output in SARIF format"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ):
     """
@@ -297,9 +298,10 @@ def spec_analyze(
         warden spec analyze
         warden spec analyze --consumer mobile --provider backend
         warden spec analyze -o gaps.json
+        warden spec analyze --sarif -o report.sarif
     """
     try:
-        exit_code = asyncio.run(_run_spec_analyze(config, consumer, provider, output, verbose))
+        exit_code = asyncio.run(_run_spec_analyze(config, consumer, provider, output, sarif, verbose))
         if exit_code != 0:
             raise typer.Exit(exit_code)
     except KeyboardInterrupt:
@@ -312,6 +314,7 @@ async def _run_spec_analyze(
     consumer_name: Optional[str],
     provider_name: Optional[str],
     output_path: Optional[str],
+    sarif_format: bool,
     verbose: bool,
 ) -> int:
     """Async implementation of spec analyze."""
@@ -321,6 +324,7 @@ async def _run_spec_analyze(
         GapSeverity,
         PlatformConfig,
         PlatformRole,
+        generate_sarif_report,
     )
     from warden.validation.frames.spec.extractors.base import get_extractor
     import yaml
@@ -484,27 +488,53 @@ async def _run_spec_analyze(
 
     # Output to file
     if output_path:
-        output_data = {
-            "timestamp": datetime.now().isoformat(),
-            "summary": {
-                "total_gaps": len(all_gaps),
-                "critical": len([g for g in all_gaps if g.severity == GapSeverity.CRITICAL]),
-                "high": len([g for g in all_gaps if g.severity == GapSeverity.HIGH]),
-                "medium": len([g for g in all_gaps if g.severity == GapSeverity.MEDIUM]),
-                "low": len([g for g in all_gaps if g.severity == GapSeverity.LOW]),
-            },
-            "gaps": [g.to_finding_dict() for g in all_gaps],
-        }
-
         output_file = Path(output_path)
-        if output_file.suffix in [".yaml", ".yml"]:
+
+        # SARIF format
+        if sarif_format or output_file.suffix == ".sarif":
+            # Generate SARIF for each result
+            if all_results:
+                sarif_data = generate_sarif_report(
+                    all_results[0],  # Primary result
+                    project_root=Path.cwd(),
+                )
+                with open(output_file, "w") as f:
+                    json.dump(sarif_data, f, indent=2)
+                console.print(f"\n[green]📄 SARIF report saved to {output_path}[/green]")
+            else:
+                console.print("[yellow]⚠️  No results to generate SARIF report[/yellow]")
+        # YAML format
+        elif output_file.suffix in [".yaml", ".yml"]:
+            output_data = {
+                "timestamp": datetime.now().isoformat(),
+                "summary": {
+                    "total_gaps": len(all_gaps),
+                    "critical": len([g for g in all_gaps if g.severity == GapSeverity.CRITICAL]),
+                    "high": len([g for g in all_gaps if g.severity == GapSeverity.HIGH]),
+                    "medium": len([g for g in all_gaps if g.severity == GapSeverity.MEDIUM]),
+                    "low": len([g for g in all_gaps if g.severity == GapSeverity.LOW]),
+                },
+                "gaps": [g.to_finding_dict() for g in all_gaps],
+            }
             with open(output_file, "w") as f:
                 yaml.dump(output_data, f, default_flow_style=False)
+            console.print(f"\n[green]📄 Results saved to {output_path}[/green]")
+        # JSON format (default)
         else:
+            output_data = {
+                "timestamp": datetime.now().isoformat(),
+                "summary": {
+                    "total_gaps": len(all_gaps),
+                    "critical": len([g for g in all_gaps if g.severity == GapSeverity.CRITICAL]),
+                    "high": len([g for g in all_gaps if g.severity == GapSeverity.HIGH]),
+                    "medium": len([g for g in all_gaps if g.severity == GapSeverity.MEDIUM]),
+                    "low": len([g for g in all_gaps if g.severity == GapSeverity.LOW]),
+                },
+                "gaps": [g.to_finding_dict() for g in all_gaps],
+            }
             with open(output_file, "w") as f:
                 json.dump(output_data, f, indent=2)
-
-        console.print(f"\n[green]📄 Results saved to {output_path}[/green]")
+            console.print(f"\n[green]📄 Results saved to {output_path}[/green]")
 
     # Return exit code
     if any(g.severity == GapSeverity.CRITICAL for g in all_gaps):

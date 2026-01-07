@@ -40,6 +40,10 @@ from warden.validation.frames.spec.analyzer import (
     GapAnalyzerConfig,
     analyze_contracts,
 )
+from warden.validation.frames.spec.report import (
+    SarifReportGenerator,
+    generate_sarif_report,
+)
 
 __all__ = [
     "SpecFrame",
@@ -60,4 +64,7 @@ __all__ = [
     "GapAnalyzer",
     "GapAnalyzerConfig",
     "analyze_contracts",
+    # Report
+    "SarifReportGenerator",
+    "generate_sarif_report",
 ]
