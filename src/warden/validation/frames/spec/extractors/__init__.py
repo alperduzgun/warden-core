@@ -15,6 +15,7 @@ from warden.validation.frames.spec.extractors.base import (
 from warden.validation.frames.spec.extractors.flutter_extractor import FlutterExtractor
 from warden.validation.frames.spec.extractors.aspnetcore_extractor import AspNetCoreExtractor
 from warden.validation.frames.spec.extractors.fastapi_extractor import FastAPIExtractor
+from warden.validation.frames.spec.extractors.springboot_extractor import SpringBootExtractor
 
 __all__ = [
     "BaseContractExtractor",
@@ -23,4 +24,5 @@ __all__ = [
     "FlutterExtractor",
     "AspNetCoreExtractor",
     "FastAPIExtractor",
+    "SpringBootExtractor",
 ]
