@@ -218,6 +218,7 @@ class Contract:
     # Metadata
     description: Optional[str] = None
     extracted_from: Optional[str] = None  # Platform name
+    metadata: Dict[str, Any] = field(default_factory=dict)  # Additional metadata
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
