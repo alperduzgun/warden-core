@@ -3,16 +3,23 @@ Tool Executor Service
 
 Application service for tool execution.
 Routes tool calls to appropriate executors.
+
+Supports:
+- Multi-adapter routing (each adapter handles a set of tools)
+- Built-in tools (no bridge required)
+- Legacy WardenBridgeAdapter for backward compatibility
+- Dynamic adapter registration
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from warden.mcp.domain.models import MCPToolResult
 from warden.mcp.domain.errors import MCPToolNotFoundError, MCPToolExecutionError
 from warden.mcp.infrastructure.tool_registry import ToolRegistry
 from warden.mcp.infrastructure.warden_adapter import WardenBridgeAdapter
 from warden.mcp.infrastructure.file_resource_repo import FileResourceRepository
+from warden.mcp.ports.tool_executor import IToolExecutor
 
 # Optional logging
 try:
@@ -29,6 +36,7 @@ class ToolExecutorService:
     Application service for tool execution.
 
     Coordinates tool lookup, routing, and execution.
+    Routes tool calls to appropriate adapters based on tool support.
     """
 
     def __init__(self, project_root: Path) -> None:
@@ -40,13 +48,147 @@ class ToolExecutorService:
         """
         self.project_root = project_root
         self._registry = ToolRegistry()
-        self._bridge_adapter = WardenBridgeAdapter(project_root)
         self._resource_repo = FileResourceRepository(project_root)
+
+        # Adapter registry - stores all registered adapters
+        self._adapters: List[IToolExecutor] = []
+
+        # Legacy bridge adapter (for backward compatibility)
+        self._bridge_adapter = WardenBridgeAdapter(project_root)
+
+        # Initialize all available adapters
+        self._initialize_adapters()
+
+    def _initialize_adapters(self) -> None:
+        """
+        Initialize and register all available adapters.
+
+        Adapters are imported dynamically to avoid circular imports
+        and allow graceful degradation if dependencies are missing.
+        """
+        # Import adapters dynamically
+        try:
+            from warden.mcp.infrastructure.adapters.pipeline_adapter import PipelineAdapter
+            self.register_adapter(PipelineAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.config_adapter import ConfigAdapter
+            self.register_adapter(ConfigAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.health_adapter import HealthAdapter
+            self.register_adapter(HealthAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.issue_adapter import IssueAdapter
+            self.register_adapter(IssueAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.suppression_adapter import SuppressionAdapter
+            self.register_adapter(SuppressionAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.search_adapter import SearchAdapter
+            self.register_adapter(SearchAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.llm_adapter import LlmAdapter
+            self.register_adapter(LlmAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.discovery_adapter import DiscoveryAdapter
+            self.register_adapter(DiscoveryAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.analysis_adapter import AnalysisAdapter
+            self.register_adapter(AnalysisAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.report_adapter import ReportAdapter
+            self.register_adapter(ReportAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.cleanup_adapter import CleanupAdapter
+            self.register_adapter(CleanupAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        try:
+            from warden.mcp.infrastructure.adapters.fortification_adapter import FortificationAdapter
+            self.register_adapter(FortificationAdapter(self.project_root))
+        except ImportError:
+            pass
+
+        logger.info(
+            "tool_adapters_initialized",
+            adapter_count=len(self._adapters),
+            adapters=[a.__class__.__name__ for a in self._adapters],
+        )
+
+    def register_adapter(self, adapter: IToolExecutor) -> None:
+        """
+        Register an adapter and its tools.
+
+        Args:
+            adapter: Adapter instance to register
+        """
+        self._adapters.append(adapter)
+
+        # Register adapter's tools in the registry
+        if hasattr(adapter, "get_tool_definitions"):
+            self._registry.register_from_adapter(adapter)
+            logger.info(
+                "adapter_registered",
+                adapter=adapter.__class__.__name__,
+                tool_count=len(adapter.get_tool_definitions()),
+            )
+
+    def _find_adapter_for_tool(self, tool_name: str) -> Optional[IToolExecutor]:
+        """
+        Find the adapter that supports the given tool.
+
+        Args:
+            tool_name: Name of the tool
+
+        Returns:
+            Adapter instance or None if not found
+        """
+        for adapter in self._adapters:
+            if adapter.supports(tool_name):
+                return adapter
+        return None
 
     @property
     def bridge_available(self) -> bool:
-        """Check if bridge is available."""
-        return self._bridge_adapter.is_available
+        """Check if any bridge-based adapter is available."""
+        return self._bridge_adapter.is_available or any(
+            a.is_available for a in self._adapters
+        )
+
+    @property
+    def registry(self) -> ToolRegistry:
+        """Get the tool registry."""
+        return self._registry
 
     async def execute(
         self,
@@ -55,6 +197,11 @@ class ToolExecutorService:
     ) -> Dict[str, Any]:
         """
         Execute a tool by name.
+
+        Routing priority:
+        1. Check registered adapters first (new DDD adapters)
+        2. Fall back to built-in tools (warden_status, warden_list_reports)
+        3. Fall back to legacy bridge adapter
 
         Args:
             tool_name: Name of tool to execute
@@ -68,15 +215,33 @@ class ToolExecutorService:
             raise MCPToolNotFoundError(tool_name)
 
         try:
-            # Route to appropriate executor
-            if tool.requires_bridge:
+            # 1. Try to find a registered adapter that supports this tool
+            adapter = self._find_adapter_for_tool(tool_name)
+            if adapter:
+                if not adapter.is_available:
+                    return MCPToolResult.error(
+                        f"Adapter for {tool_name} not available"
+                    ).to_dict()
+                result = await adapter.execute(tool, arguments)
+                return result.to_dict()
+
+            # 2. Try built-in tools (no bridge required)
+            if not tool.requires_bridge:
+                result = await self._execute_builtin(tool_name, arguments)
+                return result.to_dict()
+
+            # 3. Fall back to legacy bridge adapter
+            if self._bridge_adapter.supports(tool_name):
                 if not self._bridge_adapter.is_available:
                     return MCPToolResult.error("Warden bridge not available").to_dict()
                 result = await self._bridge_adapter.execute(tool, arguments)
-            else:
-                result = await self._execute_builtin(tool_name, arguments)
+                return result.to_dict()
 
-            return result.to_dict()
+            # No executor found
+            raise MCPToolExecutionError(
+                tool_name,
+                f"No executor found for tool: {tool_name}",
+            )
 
         except MCPToolExecutionError as e:
             logger.error("tool_execution_failed", tool=tool_name, error=str(e))

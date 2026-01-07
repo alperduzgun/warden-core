@@ -72,8 +72,21 @@ class ToolCategory(str, Enum):
     Tool categorization for discovery and organization.
 
     Helps clients understand tool capabilities.
+    Maps to gRPC servicer mixin categories for full feature parity.
     """
+    # Core categories (existing)
     STATUS = "status"
     SCAN = "scan"
     CONFIG = "config"
     REPORT = "report"
+
+    # Extended categories (gRPC parity)
+    PIPELINE = "pipeline"          # Pipeline execution
+    SEARCH = "search"              # Semantic code search
+    LLM = "llm"                    # LLM operations
+    ISSUE = "issue"                # Issue management
+    DISCOVERY = "discovery"        # File discovery
+    ANALYSIS = "analysis"          # Result analysis
+    CLEANUP = "cleanup"            # Code cleanup
+    FORTIFICATION = "fortification"  # Security fortification
+    SUPPRESSION = "suppression"    # Suppression rules

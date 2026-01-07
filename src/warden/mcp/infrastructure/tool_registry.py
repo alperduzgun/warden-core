@@ -3,12 +3,20 @@ Tool Registry
 
 Infrastructure for tool discovery and registration.
 Following project's registry pattern (see FrameRegistry).
+
+Extended to support:
+- Batch registration from adapters
+- Multi-adapter tool discovery
+- Dynamic tool registration at runtime
 """
 
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from warden.mcp.domain.models import MCPToolDefinition
 from warden.mcp.domain.enums import ToolCategory
+
+if TYPE_CHECKING:
+    from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class ToolRegistry:
@@ -168,3 +176,60 @@ class ToolRegistry:
     def __len__(self) -> int:
         """Get number of registered tools."""
         return len(self._tools)
+
+    # =========================================================================
+    # Batch Registration Methods
+    # =========================================================================
+
+    def register_batch(self, tools: List[MCPToolDefinition]) -> int:
+        """
+        Register multiple tools at once.
+
+        Args:
+            tools: List of tool definitions to register
+
+        Returns:
+            Number of tools registered
+        """
+        count = 0
+        for tool in tools:
+            self.register(tool)
+            count += 1
+        return count
+
+    def register_from_adapter(self, adapter: "BaseWardenAdapter") -> int:
+        """
+        Register all tools from an adapter.
+
+        Args:
+            adapter: Adapter instance to get tools from
+
+        Returns:
+            Number of tools registered
+        """
+        tools = adapter.get_tool_definitions()
+        return self.register_batch(tools)
+
+    def register_from_adapters(self, adapters: List["BaseWardenAdapter"]) -> int:
+        """
+        Register tools from multiple adapters.
+
+        Args:
+            adapters: List of adapter instances
+
+        Returns:
+            Total number of tools registered
+        """
+        total = 0
+        for adapter in adapters:
+            total += self.register_from_adapter(adapter)
+        return total
+
+    def clear(self) -> None:
+        """Clear all registered tools."""
+        self._tools.clear()
+
+    def reset_to_builtin(self) -> None:
+        """Reset registry to only built-in tools."""
+        self.clear()
+        self._register_builtin_tools()
