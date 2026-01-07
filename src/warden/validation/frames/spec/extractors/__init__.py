@@ -18,6 +18,7 @@ from warden.validation.frames.spec.extractors.fastapi_extractor import FastAPIEx
 from warden.validation.frames.spec.extractors.springboot_extractor import SpringBootExtractor
 from warden.validation.frames.spec.extractors.angular_extractor import AngularExtractor
 from warden.validation.frames.spec.extractors.vue_extractor import VueExtractor
+from warden.validation.frames.spec.extractors.nestjs_extractor import NestJSExtractor
 
 __all__ = [
     "BaseContractExtractor",
@@ -29,4 +30,5 @@ __all__ = [
     "SpringBootExtractor",
     "AngularExtractor",
     "VueExtractor",
+    "NestJSExtractor",
 ]
