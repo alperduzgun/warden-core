@@ -16,6 +16,8 @@ from warden.validation.frames.spec.extractors.flutter_extractor import FlutterEx
 from warden.validation.frames.spec.extractors.aspnetcore_extractor import AspNetCoreExtractor
 from warden.validation.frames.spec.extractors.fastapi_extractor import FastAPIExtractor
 from warden.validation.frames.spec.extractors.springboot_extractor import SpringBootExtractor
+from warden.validation.frames.spec.extractors.angular_extractor import AngularExtractor
+from warden.validation.frames.spec.extractors.vue_extractor import VueExtractor
 
 __all__ = [
     "BaseContractExtractor",
@@ -25,4 +27,6 @@ __all__ = [
     "AspNetCoreExtractor",
     "FastAPIExtractor",
     "SpringBootExtractor",
+    "AngularExtractor",
+    "VueExtractor",
 ]
