@@ -180,6 +180,12 @@ class ValidationFrame(ABC):
     min_warden_version: str | None = None
     max_warden_version: str | None = None
 
+    # Frame dependencies (for conditional execution)
+    # Frame will be skipped if dependencies are not met
+    requires_frames: List[str] = []  # Frame IDs that must run before this frame
+    requires_config: List[str] = []  # Config paths that must be set (e.g., "spec.platforms")
+    requires_context: List[str] = []  # Context attributes that must exist (e.g., "project_context")
+
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         """
         Initialize frame with optional configuration.
