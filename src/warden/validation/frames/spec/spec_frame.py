@@ -54,9 +54,16 @@ from warden.validation.frames.spec.models import (
     GapSeverity,
     SpecAnalysisResult,
 )
-from warden.validation.frames.spec.extractors.base import get_extractor
+from warden.validation.frames.spec.extractors.base import (
+    get_extractor,
+    ExtractorResilienceConfig,
+)
 from warden.validation.frames.spec.analyzer import GapAnalyzer, GapAnalyzerConfig
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.resilience import (
+    with_timeout,
+    TimeoutError as ResilienceTimeoutError,
+)
 
 logger = get_logger(__name__)
 
@@ -310,24 +317,42 @@ class SpecFrame(ValidationFrame):
 
     async def _extract_contract(self, platform: PlatformConfig) -> Optional[Contract]:
         """
-        Extract contract from a platform.
+        Extract contract from a platform with resilience patterns.
+
+        Applies:
+        - Timeout: Prevents indefinite hangs on large codebases
+        - Graceful Degradation: Returns partial results if possible
 
         Args:
             platform: Platform configuration
 
         Returns:
-            Contract or None if extraction fails
+            Contract or None if extraction fails completely
         """
         # Resolve platform path
         platform_path = Path(platform.path)
         if not platform_path.is_absolute():
             platform_path = Path.cwd() / platform.path
 
-        # Get appropriate extractor
+        # Get resilience config from frame config if available
+        resilience_config = ExtractorResilienceConfig()
+        if self.config:
+            res_config = self.config.get("resilience", {})
+            if "parse_timeout" in res_config:
+                resilience_config.parse_timeout = res_config["parse_timeout"]
+            if "extraction_timeout" in res_config:
+                resilience_config.extraction_timeout = res_config["extraction_timeout"]
+            if "retry_max_attempts" in res_config:
+                resilience_config.retry_max_attempts = res_config["retry_max_attempts"]
+            if "max_concurrent_files" in res_config:
+                resilience_config.max_concurrent_files = res_config["max_concurrent_files"]
+
+        # Get appropriate extractor with resilience config
         extractor = get_extractor(
             platform.platform_type,
             platform_path,
             platform.role,
+            resilience_config,
         )
 
         if not extractor:
@@ -336,25 +361,94 @@ class SpecFrame(ValidationFrame):
                 platform=platform.name,
                 type=platform.platform_type.value,
             )
-            # Return empty contract for now (extractors to be implemented)
+            # Graceful degradation: Return empty contract instead of None
             return Contract(
                 name=platform.name,
                 extracted_from=platform.platform_type.value,
             )
 
         try:
-            contract = await extractor.extract()
+            # Apply timeout to entire extraction process
+            contract = await with_timeout(
+                extractor.extract(),
+                resilience_config.extraction_timeout,
+                f"extract_{platform.name}",
+            )
             contract.name = platform.name
             contract.extracted_from = platform.platform_type.value
+
+            # Log extraction stats for observability
+            stats = extractor.get_extraction_stats()
+            logger.info(
+                "contract_extraction_completed",
+                platform=platform.name,
+                operations=len(contract.operations),
+                models=len(contract.models),
+                **stats,
+            )
+
             return contract
+
+        except ResilienceTimeoutError:
+            logger.error(
+                "contract_extraction_timeout",
+                platform=platform.name,
+                timeout=resilience_config.extraction_timeout,
+            )
+            # Graceful degradation: Return empty contract with warning
+            return self._create_degraded_contract(
+                platform,
+                f"Extraction timed out after {resilience_config.extraction_timeout}s",
+            )
 
         except Exception as e:
             logger.error(
                 "contract_extraction_failed",
                 platform=platform.name,
                 error=str(e),
+                error_type=type(e).__name__,
             )
-            return None
+            # Graceful degradation: Return empty contract with warning
+            return self._create_degraded_contract(
+                platform,
+                f"Extraction failed: {str(e)}",
+            )
+
+    def _create_degraded_contract(
+        self,
+        platform: PlatformConfig,
+        warning: str,
+    ) -> Contract:
+        """
+        Create a degraded contract for graceful failure handling.
+
+        Instead of returning None (which would skip the platform entirely),
+        return an empty contract with metadata about the failure.
+        This allows partial analysis to continue.
+
+        Args:
+            platform: Platform configuration
+            warning: Warning message about degradation
+
+        Returns:
+            Empty contract with degradation metadata
+        """
+        logger.warning(
+            "contract_degraded",
+            platform=platform.name,
+            warning=warning,
+        )
+
+        return Contract(
+            name=platform.name,
+            extracted_from=platform.platform_type.value,
+            metadata={
+                "degraded": True,
+                "warning": warning,
+                "platform_type": platform.platform_type.value,
+                "platform_role": platform.role.value,
+            },
+        )
 
     def _analyze_gaps(
         self,
