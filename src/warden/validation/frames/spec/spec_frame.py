@@ -55,6 +55,7 @@ from warden.validation.frames.spec.models import (
     SpecAnalysisResult,
 )
 from warden.validation.frames.spec.extractors.base import get_extractor
+from warden.validation.frames.spec.analyzer import GapAnalyzer, GapAnalyzerConfig
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -365,6 +366,12 @@ class SpecFrame(ValidationFrame):
         """
         Analyze gaps between consumer and provider contracts.
 
+        Uses GapAnalyzer for comprehensive comparison including:
+        - Fuzzy operation name matching (getUsers ↔ fetchUsers)
+        - Type compatibility checks (int ↔ number)
+        - Model field comparison
+        - Enum value comparison
+
         Args:
             consumer: Consumer contract (what frontend expects)
             provider: Provider contract (what backend offers)
@@ -374,86 +381,25 @@ class SpecFrame(ValidationFrame):
         Returns:
             SpecAnalysisResult with gaps
         """
-        result = SpecAnalysisResult(
-            consumer_contract=consumer,
-            provider_contract=provider,
-            total_consumer_operations=len(consumer.operations),
-            total_provider_operations=len(provider.operations),
+        # Get analyzer config from frame config if available
+        analyzer_config = GapAnalyzerConfig()
+
+        if self.config:
+            gap_config = self.config.get("gap_analysis", {})
+            if "fuzzy_threshold" in gap_config:
+                analyzer_config.fuzzy_match_threshold = gap_config["fuzzy_threshold"]
+            if "enable_fuzzy" in gap_config:
+                analyzer_config.enable_fuzzy_matching = gap_config["enable_fuzzy"]
+
+        # Use GapAnalyzer for comprehensive analysis
+        analyzer = GapAnalyzer(analyzer_config)
+
+        return analyzer.analyze(
+            consumer=consumer,
+            provider=provider,
+            consumer_platform=consumer_name,
+            provider_platform=provider_name,
         )
-
-        # Get operation names
-        consumer_ops = {op.name for op in consumer.operations}
-        provider_ops = {op.name for op in provider.operations}
-
-        # Find missing operations (consumer expects, provider missing)
-        missing = consumer_ops - provider_ops
-        for op_name in missing:
-            consumer_op = consumer.get_operation(op_name)
-            result.gaps.append(ContractGap(
-                gap_type="missing_operation",
-                severity=GapSeverity.CRITICAL,
-                message=f"[GAP] {consumer_name} expects '{op_name}' but {provider_name} doesn't provide it",
-                detail=f"Operation type: {consumer_op.operation_type.value}" if consumer_op else None,
-                consumer_platform=consumer_name,
-                provider_platform=provider_name,
-                operation_name=op_name,
-                consumer_file=consumer_op.source_file if consumer_op else None,
-                consumer_line=consumer_op.source_line if consumer_op else None,
-            ))
-            result.missing_operations += 1
-
-        # Find unused operations (provider has, consumer doesn't use)
-        unused = provider_ops - consumer_ops
-        for op_name in unused:
-            provider_op = provider.get_operation(op_name)
-            result.gaps.append(ContractGap(
-                gap_type="unused_operation",
-                severity=GapSeverity.LOW,
-                message=f"[UNUSED] {provider_name} provides '{op_name}' but {consumer_name} doesn't use it",
-                consumer_platform=consumer_name,
-                provider_platform=provider_name,
-                operation_name=op_name,
-                provider_file=provider_op.source_file if provider_op else None,
-                provider_line=provider_op.source_line if provider_op else None,
-            ))
-            result.unused_operations += 1
-
-        # Find matched operations and check for type mismatches
-        matched = consumer_ops & provider_ops
-        result.matched_operations = len(matched)
-
-        for op_name in matched:
-            consumer_op = consumer.get_operation(op_name)
-            provider_op = provider.get_operation(op_name)
-
-            if consumer_op and provider_op:
-                # Check input type mismatch
-                if consumer_op.input_type != provider_op.input_type:
-                    result.gaps.append(ContractGap(
-                        gap_type="type_mismatch",
-                        severity=GapSeverity.HIGH,
-                        message=f"[TYPE] Input type mismatch for '{op_name}'",
-                        detail=f"Consumer expects '{consumer_op.input_type}', provider uses '{provider_op.input_type}'",
-                        consumer_platform=consumer_name,
-                        provider_platform=provider_name,
-                        operation_name=op_name,
-                    ))
-                    result.type_mismatches += 1
-
-                # Check output type mismatch
-                if consumer_op.output_type != provider_op.output_type:
-                    result.gaps.append(ContractGap(
-                        gap_type="type_mismatch",
-                        severity=GapSeverity.HIGH,
-                        message=f"[TYPE] Output type mismatch for '{op_name}'",
-                        detail=f"Consumer expects '{consumer_op.output_type}', provider returns '{provider_op.output_type}'",
-                        consumer_platform=consumer_name,
-                        provider_platform=provider_name,
-                        operation_name=op_name,
-                    ))
-                    result.type_mismatches += 1
-
-        return result
 
     def _gap_to_finding(self, gap: ContractGap) -> Finding:
         """

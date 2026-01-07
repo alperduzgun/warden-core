@@ -35,9 +35,15 @@ from warden.validation.frames.spec.models import (
     GapSeverity,
     SpecAnalysisResult,
 )
+from warden.validation.frames.spec.analyzer import (
+    GapAnalyzer,
+    GapAnalyzerConfig,
+    analyze_contracts,
+)
 
 __all__ = [
     "SpecFrame",
+    # Models
     "Contract",
     "OperationDefinition",
     "ModelDefinition",
@@ -50,4 +56,8 @@ __all__ = [
     "ContractGap",
     "GapSeverity",
     "SpecAnalysisResult",
+    # Analyzer
+    "GapAnalyzer",
+    "GapAnalyzerConfig",
+    "analyze_contracts",
 ]
