@@ -1,0 +1,65 @@
+name: Release Warden Core
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-n-publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # For creating release
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+        
+    - name: Build package
+      run: python -m build
+      
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: dist/*
+        
+    - name: Update Homebrew Formula
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        TARBALL_URL="https://github.com/alperduzgun/warden-core/archive/refs/tags/${TAG_NAME}.tar.gz"
+        
+        # Download tarball to calculate SHA256
+        curl -L -o release.tar.gz $TARBALL_URL
+        SHA256=$(sha256sum release.tar.gz | awk '{print $1}')
+        
+        # Update Formula file
+        sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/warden.rb
+        sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/warden.rb
+        
+        # Commit and Push changes
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add Formula/warden.rb
+        git commit -m "chore: update homebrew formula for ${TAG_NAME}"
+        git push origin HEAD:main

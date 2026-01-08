@@ -12,3 +12,8 @@ This project is protected by Warden (AI Code Guardian).
 - **Fail Protocol:** If status is FAIL, read `warden-report.sarif/json` for details. Do not proceed until fixed.
 - **Action:** Run `warden scan` to verify fixes.
 
+
+
+# Warden Agent Protocol
+# IMPORTANT: You MUST follow the rules in /Users/alper/Documents/Development/Personal/warden-core/.warden/AI_RULES.md
+# Run 'warden scan' to verify your work.

@@ -172,6 +172,7 @@ def init_command(
     force: bool = typer.Option(False, "--force", "-f", help="Force initialization even if config exists"),
     mode: str = typer.Option("normal", "--mode", "-m", help="Initialization mode (vibe, normal, strict)"),
     ci: bool = typer.Option(False, "--ci", help="Generate GitHub Actions CI workflow"),
+    agent: bool = typer.Option(False, "--agent", help="Configure for AI Agents (Cursor/Claude)"),
 ) -> None:
     """
     Initialize Warden in the current directory with Smart Detection.
@@ -443,6 +444,14 @@ rules:
 
     # --- Step 8: Semantic Indexing ---
     _setup_semantic_search(config_path)
+
+    # --- Step 9: Agent Configuration (New) ---
+    if agent or Confirm.ask("\nConfigure for AI Agents (Cursor/Claude)?", default=False):
+        try:
+            from warden.cli.commands.init_helpers import configure_agent_tools
+            configure_agent_tools(Path.cwd())
+        except Exception as e:
+            console.print(f"[red]Failed to configure agent tools: {e}[/red]")
 
     # --- Step 9: Baseline ---
     if Confirm.ask("\nCreate Baseline from current issues? (Recommended for existing projects)", default=True):

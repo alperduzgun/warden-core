@@ -18,7 +18,7 @@ setup(
     description="Warden - AI Code Guardian for comprehensive code validation",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/warden-core",
+    url="https://github.com/alperduzgun/warden-core",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     classifiers=[
@@ -26,7 +26,7 @@ setup(
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Quality Assurance",
         "Topic :: Software Development :: Testing",
-        "License :: OSI Approved :: MIT License",
+        "License :: Other/Proprietary License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",

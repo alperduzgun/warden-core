@@ -1,76 +1,7 @@
-project:
-  name: warden-core
-  description: Warden configuration for warden-core
-  language: python
-  sdk_version: '3.11'
-  framework: fastapi
-  project_type: monorepo
-  detected_at: '2025-12-24T16:35:53.922859'
-llm:
-  provider: azure_openai
-  model: gpt-4o
-  azure:
-    endpoint: ${AZURE_OPENAI_ENDPOINT}
-    api_key: ${AZURE_OPENAI_API_KEY}
-    deployment_name: ${AZURE_OPENAI_DEPLOYMENT_NAME}
-    api_version: ${AZURE_OPENAI_API_VERSION}
-  fallback:
-    provider: groq
-    api_key: ${GROQ_API_KEY}
-  timeout: 300
-  max_retries: 2
-frames:
-- config
-- security
-- resilience
-- orphan
-- architecturalconsistency
-- stress
-- environmentsecurity
-- demosecurity
-- property
-- fuzz
-frames_config:
-  orphan:
-    enabled: true
-    use_llm_filter: true
-    ignore_test_files: true
-    ignore_private: false
-    ignore_imports:
-    - annotations
-    - TYPE_CHECKING
-  security:
-    enabled: true
-    priority: critical
-    is_blocker: false
-    checks:
-    - sql-injection
-    - xss
-    - secrets
-    - command-injection
-    - path-traversal
-  resilience:
-    enabled: true
-    priority: high
-    checks:
-    - timeout_handling
-    - retry_logic
-    - circuit_breaker
-    - error_recovery
-  architecturalconsistency:
-    enabled: true
-    priority: low
-  stress:
-    enabled: true
-    checks:
-    - api_load_testing
-    - async_performance
-  environmentsecurity:
-    enabled: true
-  demosecurity:
-    enabled: true
-    check_hardcoded_passwords: true
-    severity_level: high
+advanced:
+  debug: false
+  frame_timeout: 300
+  max_workers: 4
 ci:
   enabled: true
   fail_on_blocker: true
@@ -81,31 +12,114 @@ ci:
     path: .warden/reports/warden-report.json
   - format: sarif
     path: .warden/reports/warden-report.sarif
-settings:
-  fail_fast: false
+frames:
+- config
+- security
+- environmentsecurity
+- resilience
+- fuzz
+- orphan
+- env-security
+- stress
+- demosecurity
+- architecturalconsistency
+- property
+frames_config:
+  architecturalconsistency:
+    enabled: true
+    priority: low
+  config:
+    enabled: true
+  demosecurity:
+    check_hardcoded_passwords: true
+    enabled: true
+    severity_level: high
+  env-security:
+    enabled: true
+  environmentsecurity:
+    enabled: true
+  orphan:
+    enabled: true
+    ignore_imports:
+    - annotations
+    - TYPE_CHECKING
+    ignore_private: false
+    ignore_test_files: true
+    use_llm_filter: true
+  resilience:
+    checks:
+    - timeout_handling
+    - retry_logic
+    - circuit_breaker
+    - error_recovery
+    enabled: true
+    priority: high
+  security:
+    checks:
+    - sql-injection
+    - xss
+    - secrets
+    - command-injection
+    - path-traversal
+    enabled: true
+    is_blocker: false
+    priority: critical
+  stress:
+    checks:
+    - api_load_testing
+    - async_performance
+    enabled: true
+llm:
+  azure:
+    api_key: ${AZURE_OPENAI_API_KEY}
+    api_version: ${AZURE_OPENAI_API_VERSION}
+    deployment_name: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+    endpoint: ${AZURE_OPENAI_ENDPOINT}
+  fallback:
+    api_key: ${GROQ_API_KEY}
+    provider: groq
+  max_retries: 2
+  model: gpt-4o
+  provider: azure_openai
   timeout: 300
-  frame_timeout: 120
-  enable_pre_analysis: true
+project:
+  description: Warden configuration for warden-core
+  detected_at: '2025-12-24T16:35:53.922859'
+  framework: fastapi
+  frameworks: []
+  language: python
+  name: warden-core
+  project_type: monorepo
+  sdk_version: '3.11'
+  type: microservice
+semantic_search:
+  chroma_path: .warden/embeddings
+  collection_name: warden_warden_core
+  database: chromadb
+  enabled: true
+  max_context_tokens: 4000
+  provider: local
+settings:
   enable_analysis: true
   enable_classification: true
-  enable_validation: true
-  enable_fortification: true
   enable_cleaning: true
+  enable_fortification: true
+  enable_pre_analysis: true
+  enable_validation: true
+  fail_fast: false
+  frame_timeout: 120
+  min_severity: high
+  mode: normal
   pre_analysis_config:
-    use_llm: true
-    llm_threshold: 0.7
     batch_size: 10
     cache_enabled: true
-advanced:
-  max_workers: 4
-  frame_timeout: 300
-  debug: false
+    llm_threshold: 0.7
+    use_llm: true
+  timeout: 300
 
-semantic_search:
-  enabled: true
-  provider: "local"
-  model: "jinaai/jina-embeddings-v2-base-code"
-  database: "chromadb"
-  chroma_path: ".warden/embeddings"
-  collection_name: "warden_codebase"
-  max_context_tokens: 4000
+# --- Custom Rules Configuration ---
+# To enable your custom rules, uncomment the following lines:
+#
+# custom_rules:
+#   - .warden/rules/my_custom_rules.yaml
+#

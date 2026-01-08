@@ -68,3 +68,118 @@ def configure_vector_db() -> dict:
              "enabled": True, "provider": "qdrant", "url": "${QDRANT_URL}",
              "api_key": "${QDRANT_API_KEY}", "collection_name": collection_name,
         }
+
+def configure_agent_tools(project_root: Path) -> None:
+    """
+    Configure project for AI Agents (Cursor, Claude Desktop).
+    1. Generate AI_RULES.md
+    2. Update .cursorrules or .windsurfrules
+    3. Update MCP configuration
+    """
+    console.print("\n[bold cyan]🤖 Configuring Agent Tools (Cursor / Claude)[/bold cyan]")
+    
+    # 1. AI_RULES.md
+    warden_dir = project_root / ".warden"
+    warden_dir.mkdir(exist_ok=True)
+    rules_path = warden_dir / "AI_RULES.md"
+    
+    # Built-in template
+    try:
+        # Attempt to read from package resources or relative path
+        import importlib.resources
+        template_content = importlib.resources.read_text("warden.templates", "AI_RULES.md")
+    except Exception:
+        # Fallback simplistic content if template is missing/moved
+        template_content = "# Warden Protocol\n\n1. Run `warden scan` after every edit.\n2. Fix all issues before completing tasks.\n"
+
+    with open(rules_path, "w") as f:
+        f.write(template_content)
+    console.print(f"[green]✓ Created Agent Protocol: {rules_path}[/green]")
+
+    # 2. Update .cursorrules / .windsurfrules
+    rule_files = [".cursorrules", ".windsurfrules"]
+    found_rule_file = False
+    
+    instruction = f"\n\n# Warden Agent Protocol\n# IMPORTANT: You MUST follow the rules in {rules_path}\n# Run 'warden scan' to verify your work.\n"
+    
+    for rf in rule_files:
+        rf_path = project_root / rf
+        if rf_path.exists():
+            content = rf_path.read_text()
+            if "Warden Agent Protocol" not in content:
+                with open(rf_path, "a") as f:
+                    f.write(instruction)
+                console.print(f"[green]✓ Injected rules into {rf}[/green]")
+            else:
+                console.print(f"[dim]Rules already present in {rf}[/dim]")
+            found_rule_file = True
+            
+    if not found_rule_file:
+        # Create .cursorrules by default if none exist
+        default_rules = project_root / ".cursorrules"
+        with open(default_rules, "w") as f:
+            f.write(instruction)
+        console.print(f"[green]✓ Created {default_rules}[/green]")
+
+    # 3. Configure MCP (Global Configs)
+    import json
+    
+    # Path to warden executable
+    import sys
+    import shutil
+    
+    # Priority 1: Current Python Environment's Warden (venv)
+    # This ensures we use the version installed in this environment (likely the Python Core version)
+    # rather than a global Node.js version causing conflicts.
+    venv_warden = Path(sys.prefix) / "bin" / "warden"
+    if venv_warden.exists():
+        warden_abs = str(venv_warden)
+    else:
+        # Priority 2: System Path
+        warden_abs = shutil.which("warden") or "warden"
+    
+    mcp_config_entry = {
+        "command": warden_abs,
+        "args": ["serve", "mcp"],
+        "env": {
+             "ProjectRoot": str(project_root.resolve())
+        }
+    }
+    
+    configs_to_update = [
+        Path.home() / ".cursor" / "mcp.json",
+        Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
+        Path.home() / ".gemini" / "antigravity" / "mcp_config.json", # Antigravity Support
+    ]
+    
+    for cfg_path in configs_to_update:
+        if cfg_path.exists():
+            try:
+                with open(cfg_path) as f:
+                    content = f.read().strip()
+                    if not content:
+                        data = {}
+                    else:
+                        data = json.loads(content)
+                
+                if "mcpServers" not in data:
+                    data["mcpServers"] = {}
+                
+                # Check if warden exists or needs update
+                current_config = data["mcpServers"].get("warden")
+                
+                # Update if missing or root is different (simple overwrite strategy for now)
+                # Ideally we want to support multiple projects. 
+                # Standard MCP doesn't support "context-aware" switching easily yet without specific extension support.
+                # So we update the 'warden' key to point to THIS project.
+                # Warning: This overwrites previous project binding.
+                
+                data["mcpServers"]["warden"] = mcp_config_entry
+                
+                with open(cfg_path, "w") as f:
+                    json.dump(data, f, indent=2)
+                console.print(f"[green]✓ Configured MCP in {cfg_path.name}[/green]")
+                
+            except Exception as e:
+                console.print(f"[red]Failed to update {cfg_path.name}: {e}[/red]")
+
