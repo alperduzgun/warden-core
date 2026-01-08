@@ -149,20 +149,22 @@ def search_command(
     table = Table(title="Warden Hub - Available Frames", show_lines=True)
     table.add_column("ID", style="cyan", no_wrap=True)
     table.add_column("Name", style="bold white")
+    table.add_column("Tier", justify="center")
     table.add_column("Category", style="green")
     table.add_column("Version", style="magenta")
-    table.add_column("Stats", justify="right")
     table.add_column("Description", style="dim")
 
     for f in results:
-        stats = f"⭐ {f['stars']} | ⬇️ {f['downloads']}"
+        tier = f.get("tier", "optional").upper()
+        tier_style = "bold green" if tier == "CORE" else "blue"
+        
         table.add_row(
             f["id"],
             f["name"],
-            f["category"],
-            f["version"],
-            stats,
-            f["description"]
+            f"[{tier_style}]{tier}[/{tier_style}]",
+            f.get("category", "N/A"),
+            f.get("version", "1.0.0"),
+            f.get("description", "")
         )
 
     console.print(table)

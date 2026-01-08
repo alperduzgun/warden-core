@@ -500,7 +500,16 @@ jobs:
     # --- Step 10: Install dependencies ---
     console.print("\n[bold blue]📦 Installing Frames & Rules...[/bold blue]")
     try:
-        run_install()
+        from warden.cli.commands.update import update_command
+        
+        # 1. Update Registry (to know what is Core)
+        try:
+             update_command()
+        except:
+             console.print("[yellow]Warning: Could not update registry. Core frames might be outdated.[/yellow]")
+
+        # 2. Install (will pick up Core frames automatically)
+        run_install(frame_id=None)
     except Exception as e:
         console.print(f"[red]Warning: Auto-install failed: {e}[/red]")
         console.print("[dim]Run 'warden install' manually to download frames.[/dim]")

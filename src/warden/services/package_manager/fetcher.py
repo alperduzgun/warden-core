@@ -187,11 +187,26 @@ class FrameFetcher:
     def fetch_all(self, dependencies: Dict[str, Any]) -> bool:
         """
         Fetch all dependencies with atomic lock update (transaction pattern).
+        Automatically includes 'Core' frames from the registry.
         Returns True if all succeed, False on any failure (fail-fast).
         """
+        from warden.services.package_manager.registry import RegistryClient
+        registry = RegistryClient()
+        
         logger.info("fetch_all_started", dependency_count=len(dependencies))
         
-        for name, source in dependencies.items():
+        # 1. Get all Core frames from registry
+        core_frames = registry.get_core_frames()
+        all_to_install = dependencies.copy()
+        
+        # 2. Add core frames if not already in dependencies (user can override version/source)
+        for core in core_frames:
+            if core["id"] not in all_to_install:
+                logger.info("auto_adding_core_frame", name=core["id"])
+                all_to_install[core["id"]] = "latest" # Registry will resolve this
+        
+        # 3. Process the merged list
+        for name, source in all_to_install.items():
             try:
                 if not self.fetch(name, source):
                     logger.error("fetch_all_aborted", failed_package=name)
@@ -202,7 +217,7 @@ class FrameFetcher:
         
         # All succeeded → commit atomically
         self._commit_lock_updates()
-        logger.info("fetch_all_completed", packages=len(dependencies))
+        logger.info("fetch_all_completed", total_packages=len(all_to_install))
         return True
 
     def fetch(self, name: str, source: Any) -> bool:
@@ -249,7 +264,7 @@ class FrameFetcher:
             logger.error("fetch_failed", name=name, error=str(e), error_type=type(e).__name__)
             return False
 
-    def _fetch_from_git(self, name: str, url: str, ref: Optional[str] = None) -> bool:
+    def _fetch_from_git(self, name: str, url: str, ref: Optional[str] = None, subpath: Optional[str] = None) -> bool:
         """Clone from git repo with precise ref resolution and retry logic."""
         pkg_staging = self.staging_dir / name
         
@@ -281,8 +296,10 @@ class FrameFetcher:
                 return False
         
         # Stage lock update (transaction pattern)
-        self._update_lock(name, {"git": url, "ref": exact_commit})
-        return self._install_from_staging(name, pkg_staging)
+        self._update_lock(name, {"git": url, "ref": exact_commit, "path": subpath} if subpath else {"git": url, "ref": exact_commit})
+        
+        source_path = pkg_staging / subpath if subpath else pkg_staging
+        return self._install_from_staging(name, source_path)
 
     def _update_lock(self, name: str, data: Dict[str, Any]):
         """Stage lock update for later commit (transaction pattern)."""
@@ -306,10 +323,24 @@ class FrameFetcher:
         return self._install_from_staging(name, pkg_staging)
 
     def _fetch_from_registry(self, name: str, version: str) -> bool:
-        """Fetch from Warden Hub (simulated for now with a central repo)."""
-        # TODO: Move to a real registry API or well-known repo structure
-        hub_url = f"https://github.com/warden-ai/frame-{name}.git"
-        return self._fetch_from_git(name, hub_url)
+        """Fetch from Warden Hub using RegistryClient resolution."""
+        from warden.services.package_manager.registry import RegistryClient
+        registry = RegistryClient()
+        
+        details = registry.get_details(name)
+        if not details:
+            logger.error("frame_not_found_in_registry", name=name)
+            return False
+            
+        git_url = details.get("git")
+        subpath = details.get("path")
+        
+        if not git_url:
+            logger.error("frame_missing_git_url_in_registry", name=name)
+            return False
+            
+        logger.info("resolved_registry_frame", name=name, url=git_url, subpath=subpath)
+        return self._fetch_from_git(name, git_url, subpath=subpath)
 
     def _install_from_staging(self, name: str, staging_path: Path) -> bool:
         """Move files from staging to final locations based on manifest."""

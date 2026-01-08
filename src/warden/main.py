@@ -19,6 +19,7 @@ from warden.cli.commands.serve import serve_app
 from warden.cli.commands.search import search_command, index_command
 from warden.cli.commands.install import install as install_command
 from warden.cli.commands.doctor import doctor as doctor_command
+from warden.cli.commands.update import update_command
 
 # Initialize Typer app
 app = typer.Typer(
@@ -41,6 +42,7 @@ app.command(name="search")(search_command)
 app.command(name="index")(index_command)
 app.command(name="install")(install_command)
 app.command(name="doctor")(doctor_command)
+app.command(name="update")(update_command)
 
 def main():
     """Entry point for setuptools."""
