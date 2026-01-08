@@ -84,7 +84,7 @@ frames_config:
 Custom frames now appear in Warden CLI:
 
 ```bash
-warden-cli
+warden
 
 # In CLI UI:
 Installed frames (7/7 enabled)
@@ -223,7 +223,7 @@ frames_config:
 EOF
 
 # 5. Test
-warden-cli  # See frame in UI
+warden  # See frame in UI
 ```
 
 ---
@@ -482,7 +482,7 @@ for fid in ["demosecurity", "envsecurity"]:
 EOF
 
 # 2. Test CLI integration
-warden-cli
+warden
 # → See custom frames in UI
 
 # 3. Test validation
@@ -532,7 +532,7 @@ config_schema:
 # Restart backend
 pkill -9 -f start_ipc_server.py
 rm -f .warden/backend.pid
-warden-cli  # Auto-restarts backend
+warden  # Auto-restarts backend
 ```
 
 ---

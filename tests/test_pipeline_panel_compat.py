@@ -179,7 +179,7 @@ class TestPipelineSummaryModel:
             findings_high=5,
             findings_medium=8,
             findings_low=12,
-            ai_source="warden-cli",
+            ai_source="warden",
         )
 
         json_data = summary.to_json()
@@ -203,7 +203,7 @@ class TestPipelineSummaryModel:
         assert json_data["findings"]["medium"] == 8
         assert json_data["findings"]["low"] == 12
 
-        assert json_data["aiSource"] == "warden-cli"
+        assert json_data["aiSource"] == "warden"
         assert json_data["duration"] == "5m 23s"
 
     def test_summary_default_values(self):
@@ -219,7 +219,7 @@ class TestPipelineSummaryModel:
         assert json_data["duration"] == "0s"
         assert json_data["progress"]["current"] == 0
         assert json_data["progress"]["total"] == 5
-        assert json_data["aiSource"] == "warden-cli"
+        assert json_data["aiSource"] == "warden"
 
 
 class TestPipelineRunModel:
@@ -281,7 +281,7 @@ class TestPipelineRunModel:
                 "duration": "0s",
                 "progress": {"current": 0, "total": 5},
                 "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0},
-                "aiSource": "warden-cli",
+                "aiSource": "warden",
             },
             "activeTabId": "issues",
         }

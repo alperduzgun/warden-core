@@ -1188,7 +1188,7 @@ Installed frames (7/7 enabled)
 
 ```bash
 # Start CLI
-warden-cli
+warden
 
 # Navigate to Frames section
 # → Press Tab to cycle through sections
@@ -1215,7 +1215,7 @@ tail -f .warden/backend.log | grep "frame_loaded"
 # 3. Restart backend
 pkill -9 -f start_ipc_server.py
 rm -f .warden/backend.pid
-warden-cli  # Auto-restarts backend
+warden  # Auto-restarts backend
 
 # 4. Check frame ID matches config
 python3 << 'EOF'

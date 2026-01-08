@@ -1,6 +1,6 @@
 # Warden Dogfooding Examples
 
-Test files for verifying warden-cli frame functionality.
+Test files for verifying warden frame functionality.
 
 ## Files
 
