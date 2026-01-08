@@ -53,7 +53,7 @@ jobs:
           restore-keys: |
             warden-storage-${{ runner.os }}-
 
-      - name: Cache Hugging Face Models
+      - name: Cache AI Models
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
