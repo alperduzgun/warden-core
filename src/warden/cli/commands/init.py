@@ -10,112 +10,12 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from warden.cli.utils import get_installed_version
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
+from warden.cli.commands.install import install as run_install
+from warden.cli.commands.init_helpers import configure_llm, configure_vector_db
 
 
 console = Console()
 
-def _configure_llm(existing_config: dict) -> tuple[dict, dict]:
-    """
-    Configure LLM settings.
-    Returns (llm_config, env_vars_to_update)
-    """
-    console.print("\n[bold cyan]🧠 AI & LLM Configuration[/bold cyan]")
-    llm_cfg = existing_config.get('llm', {})
-    existing_provider = llm_cfg.get('provider', 'openai')
-    existing_model = llm_cfg.get('model', 'gpt-4o')
-    env_vars = {}
-    
-    console.print("[dim]Warden relies on LLMs for semantic analysis, reasoning, and smart filtering.[/dim]")
-    
-    provider_choices = ["openai", "azure", "groq", "anthropic", "none (static only)"]
-    default_prov = existing_provider if existing_provider in provider_choices else "openai"
-    
-    provider_selection = Prompt.ask("Select LLM Provider", choices=provider_choices, default=default_prov)
-    
-    if provider_selection == "none (static only)":
-        console.print("[yellow]⚠️  Warning: Running without an LLM significantly limits capabilities.[/yellow]")
-        if not Confirm.ask("Proceed without AI?", default=False):
-            return _configure_llm(existing_config) # Retry recursion
-            
-        return {"provider": "none", "model": "none"}, {}
-
-    provider = provider_selection
-    model = Prompt.ask("Select Model", default=existing_model)
-    
-    # Credentials
-    key_var = f"{provider.upper()}_API_KEY"
-    
-    if provider == "azure":
-        if "azure" not in llm_cfg or not llm_cfg['azure'].get('api_key'):
-             env_vars["AZURE_OPENAI_API_KEY"] = Prompt.ask("Azure API Key", password=True)
-             env_vars["AZURE_OPENAI_ENDPOINT"] = Prompt.ask("Azure Endpoint")
-             env_vars["AZURE_OPENAI_DEPLOYMENT_NAME"] = Prompt.ask("Deployment Name")
-    else:
-        # Check if key exists in env or config keys
-        has_key = key_var in os.environ or any(k.endswith("_API_KEY") for k in existing_config.get('llm', {}))
-        if not has_key:
-             env_vars[key_var] = Prompt.ask(f"{provider} API Key", password=True)
-
-    llm_config = {
-        "provider": provider,
-        "model": model,
-        "timeout": 300
-    }
-    
-    if provider == "azure":
-        llm_config['azure'] = {
-            "endpoint": "${AZURE_OPENAI_ENDPOINT}",
-            "api_key": "${AZURE_OPENAI_API_KEY}",
-            "deployment_name": "${AZURE_OPENAI_DEPLOYMENT_NAME}",
-            "api_version": "2024-02-15-preview"
-        }
-        
-    return llm_config, env_vars
-
-def _configure_vector_db() -> dict:
-    """
-    Configure Vector Database settings.
-    Satibitizes collection name and handles input validation.
-    """
-    console.print("\n[bold cyan]🗄️  Vector Database Configuration[/bold cyan]")
-    vector_db_choice = Prompt.ask("Select Vector Database Provider", choices=["local (chromadb)", "cloud (qdrant/pinecone)"], default="local (chromadb)")
-    
-    # Dynamic Collection Name (Sanitized)
-    safe_name = "".join(c if c.isalnum() else "_" for c in Path.cwd().name).lower()
-    collection_name = f"warden_{safe_name}"
-
-    if vector_db_choice == "local (chromadb)":
-        return {
-             "enabled": True,
-             "provider": "local",
-             "model": "jinaai/jina-embeddings-v2-base-code",
-             "database": "chromadb",
-             "chroma_path": ".warden/embeddings",
-             "collection_name": collection_name,
-             "max_context_tokens": 4000
-        }
-    else:
-        # Cloud Config
-        # Side-effect: Updates os.environ directly for immediate use, but clean return is better.
-        # We'll allow direct env var prompting here as it's interactive setup.
-        if "QDRANT_API_KEY" not in os.environ:
-             while True:
-                 url = Prompt.ask("Qdrant URL")
-                 if url.startswith("http") and "://" in url:
-                     os.environ["QDRANT_URL"] = url
-                     break
-                 console.print("[red]Invalid URL. Must start with http:// or https://[/red]")
-                 
-             os.environ["QDRANT_API_KEY"] = Prompt.ask("Qdrant API Key", password=True)
-             
-        return {
-             "enabled": True,
-             "provider": "qdrant",
-             "url": "${QDRANT_URL}",
-             "api_key": "${QDRANT_API_KEY}",
-             "collection_name": collection_name,
-             "model": "openai/text-embedding-3-small"
-        }
 
 def _generate_ignore_file(root: Path, meta):
     """Generate .wardenignore based on project type."""
@@ -272,7 +172,7 @@ def init_command(
     force: bool = typer.Option(False, "--force", "-f", help="Force initialization even if config exists"),
     mode: str = typer.Option("normal", "--mode", "-m", help="Initialization mode (vibe, normal, strict)"),
     ci: bool = typer.Option(False, "--ci", help="Generate GitHub Actions CI workflow"),
-):
+) -> None:
     """
     Initialize Warden in the current directory with Smart Detection.
     """
@@ -348,7 +248,7 @@ def init_command(
         except: pass
 
     # --- Step 3: LLM Config ---
-    llm_config, new_env_vars = _configure_llm(existing_config)
+    llm_config, new_env_vars = configure_llm(existing_config)
     
     # Update .env
     env_path = Path(".env")
@@ -366,7 +266,7 @@ def init_command(
     model = llm_config["model"]
 
     # --- Step 4: Vector Database ---
-    vector_config = _configure_vector_db()
+    vector_config = configure_vector_db()
 
 
     # --- Step 4: Generate Config ---
@@ -384,11 +284,16 @@ def init_command(
                  frames_config[f]["severity_threshold"] = "critical"
         
         config_data = {
+            "version": "1.0.0",
             "project": {
                 "name": Path.cwd().name,
                 "language": meta.language,
                 "type": meta.project_type,
                 "frameworks": meta.frameworks
+            },
+            "dependencies": {
+                "architectural": "latest",
+                "security": "latest"
             },
             "llm": {
                 "provider": provider,
@@ -413,9 +318,16 @@ def init_command(
                 "api_version": "2024-02-15-preview"
             }
         
-        with open(config_path, "w") as f:
+        # New root manifest
+        root_config_path = Path.cwd() / "warden.yaml"
+        with open(root_config_path, "w") as f:
             yaml.dump(config_data, f, default_flow_style=False)
-        console.print(f"[green]Created optimized config: {config_path}[/green]")
+        console.print(f"[green]Created project manifest: [bold]{root_config_path.name}[/bold][/green]")
+        
+        # Also symlink or copy to .warden/config.yaml for internal consistency if needed
+        # But moving forward, let's use the root file as the main config
+        config_path = root_config_path 
+
     else:
         # Config exists - Offer Update/Merge
         console.print(f"[yellow]Config file exists: {config_path}[/yellow]")
@@ -575,6 +487,14 @@ jobs:
             with open(workflow_path, "w") as f:
                 f.write(content)
             console.print(f"[green]Created CI workflow: {workflow_path}[/green]")
+
+    # --- Step 10: Install dependencies ---
+    console.print("\n[bold blue]📦 Installing Frames & Rules...[/bold blue]")
+    try:
+        run_install()
+    except Exception as e:
+        console.print(f"[red]Warning: Auto-install failed: {e}[/red]")
+        console.print("[dim]Run 'warden install' manually to download frames.[/dim]")
 
     console.print("\n[bold green]✨ Warden Initialization Complete![/bold green]")
     console.print("Run [bold cyan]warden scan[/bold cyan] to start.")

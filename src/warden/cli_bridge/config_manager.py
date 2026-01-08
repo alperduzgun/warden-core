@@ -8,9 +8,9 @@ YAML comments and formatting.
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
-import logging
+from warden.shared.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConfigManager:
@@ -28,7 +28,11 @@ class ConfigManager:
             project_root: Project root directory
         """
         self.project_root = project_root
-        self.config_path = project_root / ".warden" / "config.yaml"
+        # Support both root warden.yaml and legacy .warden/config.yaml
+        root_manifest = project_root / "warden.yaml"
+        legacy_config = project_root / ".warden" / "config.yaml"
+        
+        self.config_path = root_manifest if root_manifest.exists() else legacy_config
         self.rules_path = project_root / ".warden" / "rules.yaml"
 
     def read_config(self) -> Dict[str, Any]:
@@ -42,7 +46,12 @@ class ConfigManager:
             FileNotFoundError: If config file doesn't exist
         """
         if not self.config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+            # Final check in case it was deleted
+            root_manifest = self.project_root / "warden.yaml"
+            if root_manifest.exists():
+                self.config_path = root_manifest
+            else:
+                raise FileNotFoundError(f"Config file not found in {self.project_root} (checked warden.yaml and .warden/config.yaml)")
 
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)

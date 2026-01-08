@@ -20,7 +20,7 @@ def scan_command(
     format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
-):
+) -> None:
     """
     Run the full Warden pipeline on a file or directory.
     """
@@ -129,7 +129,9 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, o
                     import yaml
                     from warden.reports.generator import ReportGenerator
                     
-                    config_path = Path.cwd() / ".warden" / "config.yaml"
+                    root_manifest = Path.cwd() / "warden.yaml"
+                    legacy_config = Path.cwd() / ".warden" / "config.yaml"
+                    config_path = root_manifest if root_manifest.exists() else legacy_config
                     if config_path.exists():
                         with open(config_path) as f:
                             config = yaml.safe_load(f)

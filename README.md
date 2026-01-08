@@ -61,10 +61,19 @@ Warden provides **automated validation** with:
 - ✅ **Deep Diagnostics** - Compiler-grade error detection (LSP Diagnostics)
 - ✅ **Symbol Graph** - Precise project structure mapping
 
-### Phase 5: Declarative Rules & Hygiene (New!)
+### Phase 5: Declarative Rules & Hygiene (Complete!)
 - ✅ **Custom Rule Engine** - Define your own rules in YAML (Regex-based).
 - ✅ **"Detect, Warn, Suggest" Workflow** - Warden finds the issue, explains why it's wrong, and suggests the correct path. It does not auto-fix, ensuring you remain in control.
 - ✅ **Project Hygiene** - Automatically detects misplaced files (Logs, artifacts, temp scripts) effectively cleaning your project root.
+
+### Phase 6: Package Manager & Chaos Engineering (NEW! ✨)
+- ✅ **Dependency Management** - `warden.yaml` for declarative frame dependencies
+- ✅ **Deterministic Locking** - `warden.lock` ensures reproducible builds across teams
+- ✅ **Chaos-Resilient Installation** - SHA-256 integrity checks with drift detection
+- ✅ **Self-Healing** - Automatic repair of tampered or corrupted frames
+- ✅ **Hub Discovery** - `warden search` to find validation frames from the marketplace
+- ✅ **Health Diagnostics** - `warden doctor` validates project readiness with severity levels (Error vs Warning)
+- ✅ **Retry Logic** - Resilient to transient network failures during installation
 
 ### 🧠 The Warden Advantage: LSP + Semantic Synergy
 Warden uses a unique **"Pipeline Synergy"** architecture:
@@ -136,6 +145,16 @@ python3 tests/integration/test_full_pipeline_with_frames.py
 warden --help
 warden version
 
+# Initialize a new project
+warden init
+
+# Package Management
+warden install                    # Install frames from warden.yaml
+warden install --force-update     # Force re-fetch and repair drift
+warden search "security"          # Search Warden Hub for frames
+warden search --local "pattern"   # Semantic search in local codebase
+warden doctor                     # Diagnose project health
+
 # Validate a single file
 warden validate run myfile.py
 warden validate run myfile.py --verbose
@@ -155,7 +174,147 @@ warden report stats
 
 ---
 
-## 📊 Architecture
+## 📦 Package Manager & Chaos Engineering
+
+### Why a Package Manager?
+Warden validation frames are like plugins - they extend Warden's capabilities. The package manager ensures:
+- **Reproducibility**: Same validation rules across all team members
+- **Security**: Integrity checks prevent supply chain attacks
+- **Reliability**: Self-healing when frames are corrupted or tampered with
+
+### `warden.yaml` - Dependency Declaration
+```yaml
+version: "1.0.0"
+project:
+  name: my-app
+  language: python
+
+dependencies:
+  architectural: "latest"           # From Warden Hub
+  security:
+    git: "https://github.com/org/custom-security.git"
+    ref: "main"                      # Or specific commit/tag
+  my-custom-frame:
+    path: "./local-frames/custom"   # Local development
+
+frames:
+  - architectural
+  - security
+```
+
+### `warden.lock` - Deterministic Installation
+Automatically generated lockfile with:
+- **Exact commit hashes** for Git dependencies
+- **SHA-256 content hashes** for installed frames
+- **Drift detection** - Compares local files against lockfile
+
+```yaml
+packages:
+  architectural:
+    git: "https://github.com/warden-ai/frame-architectural.git"
+    ref: "a3f12d9"                    # Exact commit
+    content_hash: "sha256:abc123..."  # Directory checksum
+  security:
+    git: "https://github.com/org/custom-security.git"
+    ref: "7b8c4e1"
+    content_hash: "sha256:def456..."
+```
+
+### Chaos Engineering Principles
+
+**Steady State**: Frames should always match their lockfile hash
+
+**Drift Detection**: 
+```bash
+$ warden install
+� Checking integrity...
+  ⚠️  Drift detected in architectural frame
+  ♻️  Auto-repairing from lockfile...
+  ✅ Restored to known good state
+```
+
+**Self-Healing**:
+- Detects unauthorized modifications
+- Automatically re-fetches corrupted frames
+- Prevents "works on my machine" scenarios
+
+**Retry Logic**:
+- 3 automatic retries for network failures
+- Exponential backoff (future enhancement)
+- Graceful degradation
+
+### `warden search` - Hub Discovery
+
+**Search the Marketplace**:
+```bash
+$ warden search "security"
+┌─────────────┬─────────────────────┬──────────┬───────┐
+│ ID          │ Description         │ Category │ Stats │
+├─────────────┼─────────────────────┼──────────┼───────┤
+│ security    │ SQL, XSS, Secrets   │ Security │ ⭐ 245│
+│ env-sec     │ .env Best Practices │ Security │ ⭐ 89 │
+└─────────────┴─────────────────────┴──────────┴───────┘
+```
+
+**Semantic Search** (Local Codebase):
+```bash
+$ warden search --local "error handling pattern"
+📍 Found 12 similar code blocks in your project
+```
+
+### `warden doctor` - Health Diagnostics
+
+Pre-flight check before scanning:
+
+```bash
+$ warden doctor
+
+🔍 Checking Python Version...
+  ✔ Python 3.11 (compatible)
+
+🔍 Checking Core Configuration...
+  ✔ warden.yaml found.
+
+🔍 Checking Warden Directory...
+  ✔ .warden directory exists.
+
+🔍 Checking Installed Frames...
+  ✔ All 2 dependent frames are installed and verified.
+
+🔍 Checking Custom Rules...
+  ✔ All 3 configured rules are present.
+
+🔍 Checking Environment & API Keys...
+  ⚠️  Missing: LLM API Key. AI features will be disabled. (Degraded Experience)
+
+🔍 Checking Tooling (LSP/Git)...
+  ✔ Core tools (git, LSP) are available.
+
+🔍 Checking Semantic Index...
+  ⚠️  Semantic index not found. Run 'warden index' for context-aware analysis. (Degraded Experience)
+
+✅ Your project is healthy and ready for a scan!
+(Warnings may limit some advanced features, but core scanning is operational)
+```
+
+**Severity Levels**:
+- 🔴 **ERROR** (Critical) - Blocks scanning: Missing config, frames, or Git
+- 🟡 **WARNING** (Degraded) - Limits features: Missing API keys, LSP, or index
+- 🟢 **SUCCESS** - Fully operational
+
+**What Doctor Checks**:
+1. **Python Version** - Ensures 3.9+ for compatibility
+2. **Core Configuration** - Validates `warden.yaml` presence
+3. **Warden Directory** - Ensures `.warden` exists
+4. **Installed Frames** - Detects missing or drifted frames
+5. **Custom Rules** - Validates rule file paths
+6. **Environment & API Keys** - Checks LLM provider keys (optional)
+7. **Tooling** - Verifies Git (critical) and LSP servers (optional)
+8. **Semantic Index** - Checks vector database (optional)
+
+---
+
+## �📊 Architecture
 
 ```
 src/warden/
@@ -361,6 +520,7 @@ TBD
 
 ---
 
-**Last Updated:** 2025-12-20
-**Status:** Production Ready - Core engine + 6 validation frames complete!
+**Last Updated:** 2026-01-08
+**Status:** Production Ready - Core engine + Package Manager + Chaos Engineering complete!
 **Test Coverage:** All integration tests passing ✅
+**New Features:** `warden install`, `warden search`, `warden doctor` - Deterministic dependency management with self-healing
