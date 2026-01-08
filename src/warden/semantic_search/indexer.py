@@ -11,6 +11,7 @@ import hashlib
 from datetime import datetime
 from typing import List, Optional
 
+from pathlib import Path
 import structlog
 
 from warden.semantic_search.embeddings import EmbeddingGenerator
@@ -30,10 +31,16 @@ class CodeIndexer:
     Uses a VectorStoreAdapter for storage operations.
     """
 
+    adapter: VectorStoreAdapter
+    embedding_generator: EmbeddingGenerator
+    project_root: Optional[Path]
+    chunker: CodeChunker
+
     def __init__(
         self,
         adapter: VectorStoreAdapter,
         embedding_generator: EmbeddingGenerator,
+        project_root: Optional[Path] = None,
         chunk_size: int = 500,
     ):
         """
@@ -42,11 +49,13 @@ class CodeIndexer:
         Args:
             adapter: Vector store adapter instance
             embedding_generator: Embedding generator instance
+            project_root: Root directory of the project
             chunk_size: Maximum chunk size in lines
         """
         self.adapter = adapter
         self.embedding_generator = embedding_generator
-        self.chunker = CodeChunker(max_chunk_size=chunk_size)
+        self.project_root = project_root
+        self.chunker = CodeChunker(project_root=project_root, max_chunk_size=chunk_size)
 
         logger.info(
             "code_indexer_initialized",
@@ -74,13 +83,25 @@ class CodeIndexer:
         # 1. Calculate current hash
         current_hash = self._calculate_file_hash(file_path)
         
-        # 2. Check for changes
+        # 2. Check for changes based on relative path if possible for portability
+        rel_path = file_path
+        if self.project_root:
+            try:
+                rel_path = str(Path(file_path).relative_to(self.project_root))
+            except ValueError:
+                pass
+
         if not force and current_hash:
-            existing_hash = self.adapter.get_existing_file_hash(file_path)
+            # Try relative path first (Portable across CI/Local)
+            existing_hash = self.adapter.get_existing_file_hash(rel_path)
+            # Fallback to absolute if not found (Legacy)
+            if not existing_hash and rel_path != file_path:
+                existing_hash = self.adapter.get_existing_file_hash(file_path)
+                
             if existing_hash == current_hash:
                 logger.debug(
                     "file_unchanged_skipping_index",
-                    file_path=file_path,
+                    file_path=rel_path,
                     hash=current_hash
                 )
                 return 0
@@ -92,6 +113,7 @@ class CodeIndexer:
             logger.warning("no_chunks_extracted", file_path=file_path)
             return 0
 
+        # Prepare for batch embedding
         logger.info(
             "indexing_file",
             file_path=file_path,
@@ -99,52 +121,41 @@ class CodeIndexer:
             language=language,
         )
 
-        # Generate embeddings and index
-        indexed_count = 0
+        # Generate embeddings in parallel
+        batch_results = await self.embedding_generator.generate_batch_embeddings(chunks)
+
+        # Prepare for upsert
         ids = []
         embeddings = []
         metadatas = []
         documents = []
+        indexed_count = 0
 
-        for chunk in chunks:
-            try:
-                # Generate embedding
-                embedding, _ = await self.embedding_generator.generate_chunk_embedding(
-                    chunk
-                )
+        for chunk, embedding, emb_metadata in batch_results:
+            # Prepare metadata (ChromaDB only supports simple types in metadata)
+            metadata = {
+                "chunk_id": chunk.id,
+                "file_path": str(chunk.file_path),
+                "relative_path": str(chunk.relative_path),
+                "chunk_type": chunk.chunk_type.value,
+                "start_line": chunk.start_line,
+                "end_line": chunk.end_line,
+                "language": chunk.language,
+                "file_hash": current_hash,
+                "indexed_at": datetime.now().isoformat(),
+            }
+            
+            # Flatten extra metadata if any
+            if chunk.metadata:
+                for k, v in chunk.metadata.items():
+                    if isinstance(v, (str, int, float, bool)):
+                        metadata[f"attr_{k}"] = v
 
-                # Prepare metadata (ChromaDB only supports simple types in metadata)
-                metadata = {
-                    "chunk_id": chunk.id,
-                    "file_path": str(chunk.file_path),
-                    "relative_path": str(chunk.relative_path),
-                    "chunk_type": chunk.chunk_type.value,
-                    "start_line": chunk.start_line,
-                    "end_line": chunk.end_line,
-                    "language": chunk.language,
-                    "file_hash": current_hash,
-                    "indexed_at": datetime.now().isoformat(),
-                }
-                
-                # Flatten extra metadata if any
-                if chunk.metadata:
-                    for k, v in chunk.metadata.items():
-                        if isinstance(v, (str, int, float, bool)):
-                            metadata[f"attr_{k}"] = v
-
-                ids.append(chunk.id)
-                embeddings.append(embedding)
-                metadatas.append(metadata)
-                documents.append(chunk.content)
-                
-                indexed_count += 1
-
-            except Exception as e:
-                logger.error(
-                    "chunk_embedding_failed",
-                    chunk_id=chunk.id,
-                    error=str(e),
-                )
+            ids.append(chunk.id)
+            embeddings.append(embedding)
+            metadatas.append(metadata)
+            documents.append(chunk.content)
+            indexed_count += 1
 
         if ids:
             success = await self.adapter.upsert(
@@ -167,32 +178,50 @@ class CodeIndexer:
         return indexed_count
 
     async def index_files(
-        self, file_paths: List[str], languages: dict[str, str]
+        self, file_paths: str | List[str], languages: dict[str, str], max_concurrency: int = 5
     ) -> IndexStats:
-        """Index multiple files."""
+        """
+        Index multiple files in parallel.
+        
+        Args:
+            file_paths: List of absolute file paths or single path
+            languages: Mapping of file path to language
+            max_concurrency: Maximum number of concurrent files being processed
+        """
+        import asyncio
+        if isinstance(file_paths, str):
+            file_paths = [file_paths]
+
         total_chunks = 0
         chunks_by_language: dict[str, int] = {}
         chunks_by_type: dict[str, int] = {}
         files_indexed = 0
+        
+        semaphore = asyncio.Semaphore(max_concurrency)
 
-        for file_path in file_paths:
-            language = languages.get(file_path, "unknown")
-
-            try:
-                chunk_count = await self.index_file(file_path, language)
-
-                if chunk_count > 0:
-                    total_chunks += chunk_count
-                    files_indexed += 1
-                    chunks_by_language[language] = (
-                        chunks_by_language.get(language, 0) + chunk_count
+        async def _index_with_semaphore(file_path: str):
+            async with semaphore:
+                language = languages.get(file_path, "unknown")
+                try:
+                    return await self.index_file(file_path, language), language
+                except Exception as e:
+                    logger.error(
+                        "file_indexing_failed",
+                        file_path=file_path,
+                        error=str(e),
                     )
+                    return 0, language
 
-            except Exception as e:
-                logger.error(
-                    "file_indexing_failed",
-                    file_path=file_path,
-                    error=str(e),
+        # Run in parallel
+        results = await asyncio.gather(*[_index_with_semaphore(fp) for fp in file_paths])
+
+        # Aggregate results
+        for chunk_count, language in results:
+            if chunk_count > 0:
+                total_chunks += chunk_count
+                files_indexed += 1
+                chunks_by_language[language] = (
+                    chunks_by_language.get(language, 0) + chunk_count
                 )
 
         logger.info(

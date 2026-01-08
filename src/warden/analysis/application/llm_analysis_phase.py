@@ -16,6 +16,7 @@ from warden.analysis.application.llm_phase_base import (
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.quality_metrics import QualityMetrics
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.utils.language_utils import get_language_from_path
 
 logger = get_logger(__name__)
 
@@ -300,19 +301,8 @@ Return as JSON."""
         return results
 
     def _detect_language(self, file_path: Path) -> str:
-        """Detect programming language from file extension."""
-        extension_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".java": "java",
-            ".cs": "csharp",
-            ".go": "go",
-            ".rs": "rust",
-            ".cpp": "cpp",
-            ".c": "c",
-        }
-        return extension_map.get(file_path.suffix.lower(), "unknown")
+        """Detect programming language from file path."""
+        return get_language_from_path(file_path).value
 
     def _get_context_weights(self, file_context: FileContext) -> Dict[str, float]:
         """Get weights based on file context."""

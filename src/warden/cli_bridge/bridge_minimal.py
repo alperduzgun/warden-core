@@ -203,27 +203,8 @@ class MinimalWardenBridge:
         Returns:
             Language identifier
         """
-        extension_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".jsx": "javascript",
-            ".tsx": "typescript",
-            ".java": "java",
-            ".cs": "csharp",
-            ".go": "go",
-            ".rs": "rust",
-            ".cpp": "cpp",
-            ".c": "c",
-            ".h": "c",
-            ".hpp": "cpp",
-            ".rb": "ruby",
-            ".php": "php",
-            ".swift": "swift",
-            ".kt": "kotlin",
-            ".scala": "scala",
-        }
-        return extension_map.get(path.suffix.lower(), "unknown")
+        from warden.shared.utils.language_utils import get_language_from_path
+        return get_language_from_path(path).value
 
 
 # Convenience function for quick testing

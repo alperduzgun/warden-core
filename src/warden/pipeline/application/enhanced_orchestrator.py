@@ -238,28 +238,10 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         Returns:
             Language name
         """
-        extension_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".jsx": "javascript",
-            ".tsx": "typescript",
-            ".java": "java",
-            ".go": "go",
-            ".rs": "rust",
-            ".c": "c",
-            ".cpp": "cpp",
-            ".h": "c",
-            ".hpp": "cpp",
-            ".rb": "ruby",
-            ".php": "php",
-            ".cs": "csharp",
-            ".swift": "swift",
-            ".kt": "kotlin",
-            ".scala": "scala",
-        }
-
-        return extension_map.get(extension.lower(), "unknown")
+        from warden.shared.utils.language_utils import get_language_from_path
+        # get_language_from_path expects a Path or string with extension
+        # If we only have extension, we can create a dummy path
+        return get_language_from_path(f"dummy{extension}").value
 
     async def _load_build_context_phase(self, project_path: str) -> None:
         """

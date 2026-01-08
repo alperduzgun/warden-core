@@ -98,6 +98,7 @@ semantic_search:
   database: chromadb
   enabled: true
   max_context_tokens: 4000
+  model: all-MiniLM-L6-v2
   provider: local
 settings:
   enable_analysis: true

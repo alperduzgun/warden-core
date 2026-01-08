@@ -17,73 +17,6 @@ class FileClassifier:
     Maps file extensions to FileType enum values.
     """
 
-    # Extension to FileType mapping
-    EXTENSION_MAP: Dict[str, FileType] = {
-        # Python
-        ".py": FileType.PYTHON,
-        ".pyw": FileType.PYTHON,
-        ".pyi": FileType.PYTHON,
-        # JavaScript
-        ".js": FileType.JAVASCRIPT,
-        ".mjs": FileType.JAVASCRIPT,
-        ".cjs": FileType.JAVASCRIPT,
-        # TypeScript
-        ".ts": FileType.TYPESCRIPT,
-        ".mts": FileType.TYPESCRIPT,
-        ".cts": FileType.TYPESCRIPT,
-        # JSX/TSX
-        ".jsx": FileType.JSX,
-        ".tsx": FileType.TSX,
-        # Web
-        ".html": FileType.HTML,
-        ".htm": FileType.HTML,
-        ".css": FileType.CSS,
-        ".scss": FileType.CSS,
-        ".sass": FileType.CSS,
-        ".less": FileType.CSS,
-        # Data
-        ".json": FileType.JSON,
-        ".yaml": FileType.YAML,
-        ".yml": FileType.YAML,
-        # Documentation
-        ".md": FileType.MARKDOWN,
-        ".markdown": FileType.MARKDOWN,
-        ".rst": FileType.MARKDOWN,
-        # Shell
-        ".sh": FileType.SHELL,
-        ".bash": FileType.SHELL,
-        ".zsh": FileType.SHELL,
-        ".fish": FileType.SHELL,
-        # SQL
-        ".sql": FileType.SQL,
-        # Go
-        ".go": FileType.GO,
-        # Rust
-        ".rs": FileType.RUST,
-        # Java
-        ".java": FileType.JAVA,
-        # Kotlin
-        ".kt": FileType.KOTLIN,
-        ".kts": FileType.KOTLIN,
-        # Swift
-        ".swift": FileType.SWIFT,
-        # Ruby
-        ".rb": FileType.RUBY,
-        ".rake": FileType.RUBY,
-        # PHP
-        ".php": FileType.PHP,
-        # C/C++
-        ".c": FileType.C,
-        ".h": FileType.C,
-        ".cpp": FileType.CPP,
-        ".cc": FileType.CPP,
-        ".cxx": FileType.CPP,
-        ".hpp": FileType.CPP,
-        ".hxx": FileType.CPP,
-        # C#
-        ".cs": FileType.CSHARP,
-    }
-
     # Common non-code files to skip
     SKIP_EXTENSIONS: Set[str] = {
         # Images
@@ -144,22 +77,13 @@ class FileClassifier:
 
         Returns:
             FileType enum value
-
-        Examples:
-            >>> classifier = FileClassifier()
-            >>> classifier.classify(Path("main.py"))
-            FileType.PYTHON
-            >>> classifier.classify(Path("app.tsx"))
-            FileType.TSX
         """
-        extension = file_path.suffix.lower()
-
-        # Check if extension is in our mapping
-        if extension in cls.EXTENSION_MAP:
-            return cls.EXTENSION_MAP[extension]
-
-        # Unknown file type
-        return FileType.UNKNOWN
+        from warden.shared.utils.language_utils import get_language_from_path
+        lang = get_language_from_path(file_path)
+        try:
+            return FileType(lang.value)
+        except ValueError:
+            return FileType.UNKNOWN
 
     @classmethod
     def should_skip(cls, file_path: Path) -> bool:
@@ -206,36 +130,12 @@ class FileClassifier:
 
     @classmethod
     def get_supported_extensions(cls) -> Set[str]:
-        """
-        Get all supported file extensions.
-
-        Returns:
-            Set of file extensions (including the dot)
-
-        Examples:
-            >>> extensions = FileClassifier.get_supported_extensions()
-            >>> ".py" in extensions
-            True
-        """
-        return set(cls.EXTENSION_MAP.keys())
+        """Get all supported file extensions."""
+        from warden.shared.utils.language_utils import get_supported_extensions
+        return set(get_supported_extensions())
 
     @classmethod
     def get_analyzable_extensions(cls) -> Set[str]:
-        """
-        Get file extensions that can be analyzed.
-
-        Returns:
-            Set of analyzable file extensions
-
-        Examples:
-            >>> extensions = FileClassifier.get_analyzable_extensions()
-            >>> ".py" in extensions
-            True
-            >>> ".md" in extensions
-            False
-        """
-        return {
-            ext
-            for ext, file_type in cls.EXTENSION_MAP.items()
-            if file_type.is_analyzable
-        }
+        """Get file extensions that can be analyzed."""
+        from warden.shared.utils.language_utils import get_code_extensions
+        return get_code_extensions()

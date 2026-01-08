@@ -16,13 +16,15 @@ class CodeChunker:
     Extracts functions, classes, and code blocks.
     """
 
-    def __init__(self, max_chunk_size: int = 500):
+    def __init__(self, project_root: Optional[Path] = None, max_chunk_size: int = 500):
         """
         Initialize code chunker.
 
         Args:
+            project_root: Root directory of the project for relative paths
             max_chunk_size: Maximum lines per chunk
         """
+        self.project_root = project_root
         self.max_chunk_size = max_chunk_size
 
     def chunk_python_file(self, file_path: str, content: str) -> List[CodeChunk]:
@@ -95,11 +97,21 @@ class CodeChunker:
         lines = content.split("\n")
         function_code = "\n".join(lines[start_line - 1 : end_line])
 
+        # Calculate proper relative path
+        rel_path = file_path
+        if self.project_root:
+            try:
+                rel_path = str(Path(file_path).relative_to(self.project_root))
+            except ValueError:
+                rel_path = str(Path(file_path).name)
+        else:
+            rel_path = str(Path(file_path).name)
+
         chunk_id = EmbeddingGenerator.generate_chunk_id(
             CodeChunk(
                 id="",
                 file_path=file_path,
-                relative_path=str(Path(file_path).name),
+                relative_path=rel_path,
                 chunk_type=ChunkType.FUNCTION,
                 content=function_code,
                 start_line=start_line,
@@ -111,7 +123,7 @@ class CodeChunker:
         return CodeChunk(
             id=chunk_id,
             file_path=file_path,
-            relative_path=str(Path(file_path).name),
+            relative_path=rel_path,
             chunk_type=ChunkType.FUNCTION,
             content=function_code,
             start_line=start_line,
@@ -140,11 +152,21 @@ class CodeChunker:
         lines = content.split("\n")
         class_code = "\n".join(lines[start_line - 1 : end_line])
 
+        # Calculate proper relative path
+        rel_path = file_path
+        if self.project_root:
+            try:
+                rel_path = str(Path(file_path).relative_to(self.project_root))
+            except ValueError:
+                rel_path = str(Path(file_path).name)
+        else:
+            rel_path = str(Path(file_path).name)
+
         chunk_id = EmbeddingGenerator.generate_chunk_id(
             CodeChunk(
                 id="",
                 file_path=file_path,
-                relative_path=str(Path(file_path).name),
+                relative_path=rel_path,
                 chunk_type=ChunkType.CLASS,
                 content=class_code,
                 start_line=start_line,
@@ -156,7 +178,7 @@ class CodeChunker:
         return CodeChunk(
             id=chunk_id,
             file_path=file_path,
-            relative_path=str(Path(file_path).name),
+            relative_path=rel_path,
             chunk_type=ChunkType.CLASS,
             content=class_code,
             start_line=start_line,
@@ -170,11 +192,21 @@ class CodeChunker:
     ) -> CodeChunk:
         """Create module-level chunk (entire file)."""
         lines = content.split("\n")
+        # Calculate proper relative path
+        rel_path = file_path
+        if self.project_root:
+            try:
+                rel_path = str(Path(file_path).relative_to(self.project_root))
+            except ValueError:
+                rel_path = str(Path(file_path).name)
+        else:
+            rel_path = str(Path(file_path).name)
+
         chunk_id = EmbeddingGenerator.generate_chunk_id(
             CodeChunk(
                 id="",
                 file_path=file_path,
-                relative_path=str(Path(file_path).name),
+                relative_path=rel_path,
                 chunk_type=ChunkType.MODULE,
                 content=content,
                 start_line=1,
@@ -186,7 +218,7 @@ class CodeChunker:
         return CodeChunk(
             id=chunk_id,
             file_path=file_path,
-            relative_path=str(Path(file_path).name),
+            relative_path=rel_path,
             chunk_type=ChunkType.MODULE,
             content=content,
             start_line=1,

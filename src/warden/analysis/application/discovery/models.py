@@ -47,32 +47,8 @@ class FileType(Enum):
     @property
     def extension(self) -> str:
         """Get primary file extension for this file type."""
-        extension_map = {
-            FileType.PYTHON: ".py",
-            FileType.JAVASCRIPT: ".js",
-            FileType.TYPESCRIPT: ".ts",
-            FileType.JSX: ".jsx",
-            FileType.TSX: ".tsx",
-            FileType.HTML: ".html",
-            FileType.CSS: ".css",
-            FileType.JSON: ".json",
-            FileType.YAML: ".yaml",
-            FileType.MARKDOWN: ".md",
-            FileType.SHELL: ".sh",
-            FileType.SQL: ".sql",
-            FileType.GO: ".go",
-            FileType.RUST: ".rs",
-            FileType.JAVA: ".java",
-            FileType.KOTLIN: ".kt",
-            FileType.SWIFT: ".swift",
-            FileType.RUBY: ".rb",
-            FileType.PHP: ".php",
-            FileType.C: ".c",
-            FileType.CPP: ".cpp",
-            FileType.CSHARP: ".cs",
-            FileType.UNKNOWN: "",
-        }
-        return extension_map.get(self, "")
+        from warden.shared.utils.language_utils import get_primary_extension
+        return get_primary_extension(self.value)
 
     @property
     def is_analyzable(self) -> bool:

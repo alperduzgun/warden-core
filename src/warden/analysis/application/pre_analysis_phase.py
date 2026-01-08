@@ -787,15 +787,6 @@ class PreAnalysisPhase:
         return impacted_paths
 
     def _guess_language_by_extension(self, file_path: str) -> CodeLanguage:
-        """Simple heuristic to guess language by file extension."""
-        ext = Path(file_path).suffix.lower()
-        mapping = {
-            ".py": CodeLanguage.PYTHON,
-            ".ts": CodeLanguage.TYPESCRIPT,
-            ".tsx": CodeLanguage.TYPESCRIPT,
-            ".js": CodeLanguage.JAVASCRIPT,
-            ".jsx": CodeLanguage.JAVASCRIPT,
-            ".go": CodeLanguage.GO,
-            ".java": CodeLanguage.JAVA,
-        }
-        return mapping.get(ext, CodeLanguage.UNKNOWN)
+        """Guess language by file extension using centralized utility."""
+        from warden.shared.utils.language_utils import get_language_from_path
+        return get_language_from_path(file_path)

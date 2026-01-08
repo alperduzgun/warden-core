@@ -88,6 +88,8 @@ class PhaseOrchestrator:
         self.semantic_search_service = None
         ss_config = getattr(self.config, 'semantic_search_config', None)
         if ss_config and ss_config.get("enabled", False):
+            # Pass project root for relative path calculations in indexing
+            ss_config["project_root"] = str(self.project_root)
             self.semantic_search_service = SemanticSearchService(ss_config)
 
         # Initialize phase executor

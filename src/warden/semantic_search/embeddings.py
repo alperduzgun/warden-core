@@ -11,7 +11,8 @@ from datetime import datetime
 from typing import List, Optional
 
 import structlog
-from openai import AsyncAzureOpenAI, AsyncOpenAI
+import tenacity
+from openai import AsyncAzureOpenAI, AsyncOpenAI, RateLimitError
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -29,6 +30,13 @@ class EmbeddingGenerator:
 
     Supports multiple embedding models and providers.
     """
+    
+    provider: str
+    model_name: str
+    dimensions: int
+    device: str
+    client: Any
+    azure_deployment: Optional[str] = None
 
     def __init__(
         self,
@@ -114,6 +122,12 @@ class EmbeddingGenerator:
         }
         return dimension_map.get(model_name, 1536)
 
+    @tenacity.retry(
+        retry=tenacity.retry_if_exception_type(RateLimitError),
+        wait=tenacity.wait_exponential(multiplier=2, min=4, max=60),
+        stop=tenacity.stop_after_attempt(5),
+        before_sleep=tenacity.before_sleep_log(logger, "info"),
+    )
     async def generate_embedding(
         self, text: str, metadata: Optional[dict] = None
     ) -> tuple[List[float], EmbeddingMetadata]:
@@ -132,8 +146,7 @@ class EmbeddingGenerator:
         """
         try:
             # Generate embedding
-            # Generate embedding
-            kwargs = {
+            kwargs: dict[str, Any] = {
                 "input": text,
             }
 
@@ -246,20 +259,37 @@ class EmbeddingGenerator:
         return "\n".join(context_parts)
 
     async def generate_batch_embeddings(
-        self, chunks: List[CodeChunk], batch_size: int = 100
+        self, chunks: List[CodeChunk], batch_size: int = 100, max_concurrency: int = 4
     ) -> List[tuple[CodeChunk, List[float], EmbeddingMetadata]]:
         """
-        Generate embeddings for multiple chunks in batches.
+        Generate embeddings for multiple chunks in parallel batches.
 
         Args:
             chunks: List of code chunks
             batch_size: Number of chunks per batch
+            max_concurrency: Maximum number of concurrent API calls
 
         Returns:
             List of (chunk, embedding_vector, metadata) tuples
         """
+        import asyncio
+        semaphore = asyncio.Semaphore(max_concurrency)
         results = []
 
+        async def _embed_with_semaphore(chunk: CodeChunk):
+            async with semaphore:
+                try:
+                    embedding, metadata = await self.generate_chunk_embedding(chunk)
+                    return (chunk, embedding, metadata)
+                except Exception as e:
+                    logger.error(
+                        "chunk_embedding_failed",
+                        chunk_id=chunk.id,
+                        error=str(e),
+                    )
+                    return None
+
+        # Process in batches to manage memory and logging
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i : i + batch_size]
 
@@ -268,19 +298,16 @@ class EmbeddingGenerator:
                 batch_number=i // batch_size + 1,
                 batch_size=len(batch),
                 total_chunks=len(chunks),
+                concurrency=max_concurrency
             )
 
-            for chunk in batch:
-                try:
-                    embedding, metadata = await self.generate_chunk_embedding(chunk)
-                    results.append((chunk, embedding, metadata))
-                except Exception as e:
-                    logger.error(
-                        "chunk_embedding_failed",
-                        chunk_id=chunk.id,
-                        error=str(e),
-                    )
-                    # Continue with other chunks
+            # Parallelize within batch
+            batch_results = await asyncio.gather(
+                *[_embed_with_semaphore(chunk) for chunk in batch]
+            )
+            
+            # Filter failed ones
+            results.extend([r for r in batch_results if r is not None])
 
         logger.info(
             "batch_embedding_completed",

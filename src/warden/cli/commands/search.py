@@ -6,9 +6,10 @@ from warden.services.package_manager.registry import RegistryClient
 from warden.shared.infrastructure.logging import get_logger
 
 # Fallback for semantic search (in case deps missing)
+# Semantic Search Imports
 try:
-    from warden.pipeline.pre_analysis.indexing import CodeIndexer
-    from warden.services.semantic_search.service import SemanticSearchService
+    from warden.semantic_search.indexer import CodeIndexer
+    from warden.shared.services.semantic_search_service import SemanticSearchService
     SEMANTIC_AVAILABLE = True
 except ImportError:
     SEMANTIC_AVAILABLE = False
@@ -25,8 +26,49 @@ def index_command():
         return
         
     console.print("[bold cyan]Warden Indexer[/bold cyan] - Building semantic index...")
-    indexer = CodeIndexer()
-    indexer.index_project() # Assumes default path is current dir
+    
+    # Use the high-level service for proper initialization
+    import os
+    from pathlib import Path
+    
+    # Load config manually for standalone command
+    import os
+    import yaml
+    from pathlib import Path
+    
+    project_root = Path.cwd()
+    legacy_config = project_root / ".warden" / "config.yaml"
+    config_data = {}
+    if legacy_config.exists():
+        with open(legacy_config) as f:
+            full_config = yaml.safe_load(f)
+            config_data = full_config.get("semantic_search", {})
+    
+    config_data["enabled"] = True
+    config_data["project_root"] = str(project_root)
+
+    service = SemanticSearchService(config_data)
+    
+    if not service.is_available():
+         console.print("[red]Error: Semantic Search service not available.[/red]")
+         return
+
+    async def _run_index():
+        from warden.shared.utils.language_utils import get_code_extensions
+        # Discover files to index
+        files = []
+        for ext in get_code_extensions():
+            files.extend(list(project_root.glob(f"**/*{ext}")))
+        
+        # Filter out venv, node_modules etc.
+        files = [f for f in files if not any(p in str(f) for p in ['.venv', 'node_modules', '__pycache__'])]
+        
+        console.print(f"Indexing {len(files)} files...")
+        await service.index_project(project_root, files)
+
+    import asyncio
+    asyncio.run(_run_index())
+    
     console.print("[bold green]✔[/bold green] Semantic index updated.")
 
 def semantic_search_command(query: str):
@@ -36,9 +78,34 @@ def semantic_search_command(query: str):
         return
         
     console.print(f"Searching for: [bold]{query}[/bold]...")
-    service = SemanticSearchService()
-    results = service.search(query)
+
+    async def _run_search():
+        from pathlib import Path
+        import yaml
+        project_root = Path.cwd()
+        legacy_config = project_root / ".warden" / "config.yaml"
+        config_data = {}
+        if legacy_config.exists():
+            with open(legacy_config) as f:
+                full_config = yaml.safe_load(f)
+                config_data = full_config.get("semantic_search", {})
+        
+        config_data.setdefault("enabled", True)
+        config_data["project_root"] = str(project_root)
+
+        service = SemanticSearchService(config_data)
+        if not service.is_available():
+            console.print("[red]Error: Semantic Search service not available.[/red]")
+            return None
+            
+        return await service.search(query)
+
+    import asyncio
+    results = asyncio.run(_run_search())
     
+    if results is None:
+        return
+
     if not results:
         console.print("[yellow]No semantic matches found.[/yellow]")
         return
@@ -50,9 +117,9 @@ def semantic_search_command(query: str):
     
     for r in results:
         table.add_row(
-            r.file_path,
+            r.chunk.relative_path,
             f"{r.score:.2f}",
-            r.content[:100].replace("\n", " ") + "..."
+            r.chunk.content[:100].replace("\n", " ") + "..."
         )
     console.print(table)
 

@@ -81,12 +81,18 @@ class SemanticSearchService:
             else:
                 emb_provider = primary_provider
 
+        # For now, we'll just check common env vars if missing
+        api_key = ss_config.get("api_key")
+        if not api_key:
+             # Try to get from global env if not explicitly provided in ss_config
+             api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY", "")
+
         self.embedding_gen = EmbeddingGenerator(
             provider=emb_provider,
             model_name=ss_config.get("model", "text-embedding-3-small"),
-            api_key=os.path.expandvars(ss_config.get("api_key", "")),
-            azure_endpoint=os.path.expandvars(ss_config.get("azure_endpoint", "")),
-            azure_deployment=os.path.expandvars(ss_config.get("azure_deployment", "")),
+            api_key=os.path.expandvars(str(api_key)),
+            azure_endpoint=os.path.expandvars(ss_config.get("azure_endpoint", os.environ.get("AZURE_OPENAI_ENDPOINT", ""))),
+            azure_deployment=os.path.expandvars(ss_config.get("azure_deployment", os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", ""))),
             device=ss_config.get("device", "cpu"),
         )
         
@@ -139,6 +145,7 @@ class SemanticSearchService:
         self.indexer = CodeIndexer(
             adapter=adapter,
             embedding_generator=self.embedding_gen,
+            project_root=Path(self.config.get("project_root", os.getcwd()))
         )
         
         # 4. Searcher
@@ -179,16 +186,22 @@ class SemanticSearchService:
         )
 
     async def index_project(self, project_path: Path, file_paths: List[Path]):
-        """Index project files."""
+        """Index project files in parallel."""
         if not self.is_available():
             return
             
-        # Map paths to their content languages (simplified)
+        from warden.shared.utils.language_utils import get_language_from_path
+        
         languages = {}
         str_paths = []
+
         for p in file_paths:
-            lang = "python" if p.suffix == ".py" else "unknown"
-            languages[str(p)] = lang
+            lang = get_language_from_path(p)
+            languages[str(p)] = lang.value
             str_paths.append(str(p))
             
-        return await self.indexer.index_files(str_paths, languages)
+        # Control concurrency at both file and chunk level
+        # Control concurrency at both file and chunk level
+        # Use configurable concurrency if provided
+        max_concurrency = self.config.get("max_indexing_concurrency", 2)
+        return await self.indexer.index_files(str_paths, languages, max_concurrency=max_concurrency)
