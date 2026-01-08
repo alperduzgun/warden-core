@@ -53,6 +53,7 @@ setup(
         "grpcio-tools>=1.59.0", 
         "pydantic-settings>=2.0.0",
         "aiofiles>=23.0.0",
+        "openai>=1.0.0",
         # Semantic Search & Local Embeddings
         "chromadb>=0.4.0",
         "sentence-transformers>=2.2.0",
