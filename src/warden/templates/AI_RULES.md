@@ -17,10 +17,13 @@ You must follow this cycle for every code change:
         *   Fix the specific issues found.
         *   **REPEAT VERIFY** until pass.
 
-## Commands
+## MCP Tools
 
-*   **Scan**: `warden scan`
-*   **Request Fix**: `warden request_fix --file <path> --line <num>`
+You have access to Warden via MCP. Use these tools:
+
+*   **Scan**: `warden_scan` (Run a full security/consistency scan)
+*   **Fix**: `warden_fix` (Request a semantic fix for a findings)
+*   **Status**: `warden_status` (Check project health)
 
 ## Rules
 1.  **Never Skip**: Do not "assume" your code is correct. Compilers lie; Warden does not.

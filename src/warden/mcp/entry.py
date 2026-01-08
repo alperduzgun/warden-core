@@ -19,7 +19,9 @@ from typing import Optional
 
 # Try to import logging
 try:
-    from warden.shared.infrastructure.logging import get_logger
+    from warden.shared.infrastructure.logging import get_logger, configure_logging
+    # Initial configuration for MCP to ensure logs go to stderr early
+    configure_logging(stream=sys.stderr)
     logger = get_logger(__name__)
 except ImportError:
     import logging

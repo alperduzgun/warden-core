@@ -35,6 +35,7 @@ class EmbeddingGenerator:
         provider: str = "openai",
         model_name: str = "text-embedding-3-small",
         api_key: Optional[str] = None,
+        azure_endpoint: Optional[str] = None,
         azure_deployment: Optional[str] = None,
         dimensions: Optional[int] = None,
         trust_remote_code: bool = True,

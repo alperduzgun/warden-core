@@ -13,7 +13,7 @@ import structlog
 from warden.shared.infrastructure.config import settings
 
 
-def configure_logging() -> None:
+def configure_logging(stream: Any = sys.stderr) -> None:
     """
     Configure structlog for the application.
 
@@ -59,8 +59,9 @@ def configure_logging() -> None:
     # Configure standard library logging
     logging.basicConfig(
         format="%(message)s",
-        stream=sys.stdout,
+        stream=stream,
         level=getattr(logging, settings.log_level.upper()),
+        force=True, # Force reconfiguration in case it was already set
     )
 
 
