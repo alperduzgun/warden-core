@@ -6,6 +6,8 @@ Coordinates transport, session management, and use case execution.
 """
 
 import json
+import asyncio
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -62,6 +64,9 @@ class MCPService:
         self.tool_executor = ToolExecutorService(self.project_root)
         self.resource_provider = ResourceProviderService(self.project_root)
         self._tool_registry = ToolRegistry()
+        
+        # Background tasks
+        self._watcher_task: Optional[asyncio.Task] = None
 
         # Handler dispatch table
         self._handlers: Dict[str, Any] = {
@@ -78,6 +83,9 @@ class MCPService:
         """Start the MCP service main loop."""
         session = self.session_manager.create_session()
         session.start()
+
+        # Start background tasks
+        self._watcher_task = asyncio.create_task(self._watch_report_file())
 
         logger.info("mcp_service_starting", project_root=str(self.project_root))
 
@@ -97,6 +105,14 @@ class MCPService:
             logger.error("mcp_service_error", error=str(e))
             session.set_error()
         finally:
+            # Cancel background tasks
+            if self._watcher_task:
+                self._watcher_task.cancel()
+                try:
+                    await self._watcher_task
+                except asyncio.CancelledError:
+                    pass
+            
             session.stop()
             await self.transport.close()
             logger.info("mcp_service_stopped")
@@ -200,6 +216,81 @@ class MCPService:
             params.get("arguments", {}),
         )
         return result
+
+    # =========================================================================
+    # Notification & Background Tasks
+    # =========================================================================
+
+    async def send_notification(self, method: str, params: Dict[str, Any]) -> None:
+        """
+        Send a JSON-RPC notification to the client.
+
+        Args:
+            method: Notification method name
+            params: Notification parameters
+        """
+        if not self.transport.is_open:
+            return
+
+        message = json.dumps({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        })
+        await self.transport.write_message(message)
+
+    async def _watch_report_file(self) -> None:
+        """
+        Background task to watch warden_report.json for changes.
+        Sends notifications/resources/updated when changed.
+        """
+        report_path = self.project_root / ".warden" / "reports" / "warden_report.json"
+        
+        # Check alternate location if default doesn't exist
+        if not report_path.exists():
+             alternate = self.project_root / "warden_report.json"
+             if alternate.exists():
+                 report_path = alternate
+
+        last_mtime = 0.0
+        
+        # Initial check
+        if report_path.exists():
+            try:
+                last_mtime = os.path.getmtime(report_path)
+            except OSError:
+                pass
+
+        logger.info("mcp_report_watcher_started", path=str(report_path))
+
+        while True:
+            try:
+                await asyncio.sleep(2.0)  # Polling interval
+                
+                if not report_path.exists():
+                    continue
+
+                try:
+                    current_mtime = os.path.getmtime(report_path)
+                    if current_mtime > last_mtime:
+                        last_mtime = current_mtime
+                        
+                        logger.info("mcp_report_updated", path=str(report_path))
+                        
+                        # Notify clients that reports resource has changed
+                        await self.send_notification(
+                            "notifications/resources/updated",
+                            {"uri": "warden://reports/latest"}
+                        )
+                except OSError as e:
+                    logger.warning("mcp_watcher_error", error=str(e))
+                    
+            except asyncio.CancelledError:
+                logger.info("mcp_report_watcher_stopped")
+                break
+            except Exception as e:
+                logger.error("mcp_watcher_crash", error=str(e))
+                await asyncio.sleep(5.0)  # Backoff on error
 
     # =========================================================================
     # Response Helpers

@@ -6,7 +6,7 @@ via the Model Context Protocol (MCP) over STDIO transport.
 
 Usage:
     warden serve mcp
-    python -m warden.services.mcp_entry
+    python -m warden.mcp.entry
 
 Resources exposed:
     - warden://reports/sarif    - SARIF format scan results

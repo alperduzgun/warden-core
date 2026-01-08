@@ -129,6 +129,22 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             ".idea", "warden.yaml", "warden.yml"
         }
         
+        # Module Placement Rules (Forbidden Path -> Correct Path)
+        self.placement_rules = {
+            "semantic_search": {
+                "forbidden": "src/warden/analysis/application/semantic_search",
+                "expected": "src/warden/semantic_search"
+            },
+            "mcp_cli_leak": {
+                "forbidden": "src/warden/cli/mcp",
+                "expected": "src/warden/mcp"
+            },
+            "mcp_service_leak": {
+                "forbidden": "src/warden/services/mcp",
+                "expected": "src/warden/mcp"
+            }
+        }
+        
         # Load custom rules from conventions.yaml
         self.custom_rules = self._load_custom_rules()
 
@@ -582,18 +598,22 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         violations = []
         path_str = file_path.replace("\\", "/") # Normalize paths
         
-        # Rule: semantic_search should NOT be under analysis/application
-        if "src/warden/analysis/application/semantic_search" in path_str:
-            violations.append(OrganizationViolation(
-                rule="module_placement_misplaced_feature",
-                severity="error",
-                message="Feature 'semantic_search' found in 'analysis/application'. Features should be top-level modules in 'src/warden/'.",
-                file_path=file_path,
-                expected="src/warden/semantic_search/",
-                actual="src/warden/analysis/application/semantic_search/",
-            ))
+        violations = []
+        path_str = file_path.replace("\\", "/") # Normalize paths
+        
+        for rule_name, rule in self.placement_rules.items():
+            forbidden = rule["forbidden"]
+            expected = rule["expected"]
             
-        # Add more structure rules as needed or detect via project_context if available
+            if forbidden in path_str:
+                violations.append(OrganizationViolation(
+                    rule=f"module_placement_{rule_name}",
+                    severity="error",
+                    message=f"Feature found in forbidden path '{forbidden}'. Should be in '{expected}'.",
+                    file_path=file_path,
+                    expected=f"{expected}/...",
+                    actual=path_str,
+                ))
         
         return violations
 

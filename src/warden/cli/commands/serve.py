@@ -50,7 +50,7 @@ def serve_mcp(
       - warden_status     - Get Warden status
       - warden_list_frames - List validation frames
     """
-    from warden.services.mcp_entry import run as mcp_run
+    from warden.mcp.entry import run as mcp_run
     try:
         mcp_run(project_root)
     except KeyboardInterrupt:

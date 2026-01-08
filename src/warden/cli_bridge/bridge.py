@@ -124,7 +124,7 @@ class WardenBridge:
         serialized["context_summary"] = context.get_summary()
         return serialized
 
-    async def execute_pipeline_stream(self, file_path: str, frames: Optional[List[str]] = None) -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream(self, file_path: str, frames: Optional[List[str]] = None, verbose: bool = False) -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         async for event in self.pipeline_handler.execute_pipeline_stream(file_path, frames):
             if event.get("type") == "result":

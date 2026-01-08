@@ -4,7 +4,7 @@ Warden MCP Server Entry Point
 Launches the MCP (Model Context Protocol) server for AI assistant integration.
 
 Usage:
-    python -m warden.services.mcp_entry
+    python -m warden.mcp.entry
     warden serve mcp
 
 The MCP server communicates over STDIO using JSON-RPC 2.0 protocol,
