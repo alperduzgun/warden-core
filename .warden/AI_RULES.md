@@ -5,13 +5,19 @@
 
 ## The "Verify-Loop" Protocol
 
-You must follow this cycle for every code change:
+You must follow this cycle for every task:
 
-1.  **PLAN**: Design your change.
-2.  **CODE**: Implement the change.
+1.  **PLAN**: Design your change. You *may* break complex tasks into phases, but it is not required.
+2.  **EXECUTE**: Implement changes.
 3.  **VERIFY (Critical)**:
-    *   Run `warden scan` in the project root.
-    *   **IF PASS**: Commit and mark task complete.
+    *   **WHEN**: Upon **task completion**.
+    *   **NOTE**: If you split the task into **phases**, you **MUST** verify at the end of **each phase**.
+    *   **ACTION**: Run `warden scan` in the project root.
+    *   **IF PASS**:
+        *   Commit and proceed.
+        *   **REPORT**: Read `.warden/reports/warden-report.json`.
+            *   Display **Quality Score** scaled to **10** (e.g., "Score: 8.5/10 🚀").
+            *   Summarize **Issues Found & Fixed** (e.g., "Fixed 2 Security issues, 1 Coding Style issue ✅").
     *   **IF FAIL**:
         *   Analyze the JSON/SARIF output.
         *   Fix the specific issues found.

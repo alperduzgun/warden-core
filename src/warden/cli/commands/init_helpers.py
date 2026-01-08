@@ -121,6 +121,31 @@ def configure_agent_tools(project_root: Path) -> None:
             f.write(instruction)
         console.print(f"[green]✓ Created {default_rules}[/green]")
 
+    # 2.5: Create Claude Hooks (Verified Pattern)
+    claude_dir = project_root / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+    settings_path = claude_dir / "settings.json"
+    
+    if not settings_path.exists():
+        hooks_config = {
+            "hooks": {
+                "SessionStart": [
+                    {
+                        "matcher": "startup",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "cat $CLAUDE_PROJECT_DIR/.warden/AI_RULES.md"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        with open(settings_path, "w") as f:
+            json.dump(hooks_config, f, indent=2)
+        console.print(f"[green]✓ Created Claude Hooks: {settings_path}[/green]")
+
     # 3. Configure MCP (Global Configs)
     import json
     
@@ -129,15 +154,36 @@ def configure_agent_tools(project_root: Path) -> None:
     import shutil
     
     # Priority 1: Current Python Environment's Warden (venv)
-    # This ensures we use the version installed in this environment (likely the Python Core version)
-    # rather than a global Node.js version causing conflicts.
+    # This ensures we use the version installed in this environment
     venv_warden = Path(sys.prefix) / "bin" / "warden"
-    if venv_warden.exists():
-        warden_abs = str(venv_warden)
-    else:
-        # Priority 2: System Path
-        warden_abs = shutil.which("warden") or "warden"
     
+    warden_abs = None
+    if venv_warden.exists():
+         warden_abs = str(venv_warden)
+    else:
+        # Priority 2: System Path (Resolve to absolute)
+        # shutil.which returns absolute path if found
+        which_warden = shutil.which("warden")
+        if which_warden:
+            warden_abs = which_warden
+        else:
+             # Priority 3: Common Homebrew/Local locations
+             # GUI apps often don't have user PATH, so we must be explicit
+             common_paths = [
+                 Path("/opt/homebrew/bin/warden"),
+                 Path("/usr/local/bin/warden"),
+                 Path.home() / ".local/bin/warden"
+             ]
+             for p in common_paths:
+                 if p.exists():
+                     warden_abs = str(p)
+                     break
+    
+    # Fallback (User must verify PATH)
+    if not warden_abs:
+        warden_abs = "warden"
+        console.print("[yellow]Warning: Could not resolve absolute path for 'warden'. utilizing relative path.[/yellow]")
+
     mcp_config_entry = {
         "command": warden_abs,
         "args": ["serve", "mcp"],
@@ -149,6 +195,7 @@ def configure_agent_tools(project_root: Path) -> None:
     configs_to_update = [
         Path.home() / ".cursor" / "mcp.json",
         Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
+        Path.home() / ".config" / "claude-code" / "mcp_settings.json", # Claude Code CLI
         Path.home() / ".gemini" / "antigravity" / "mcp_config.json", # Antigravity Support
     ]
     
