@@ -125,8 +125,8 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             "README.md", "LICENSE", "pyproject.toml", "setup.py", ".gitignore",
             ".dockerignore", "Dockerfile", "Makefile", "requirements.txt",
             ".env", ".env.example", ".warden", ".git", ".github", ".vscode",
-            ".idea", "warden.yaml", "warden.yml"
-            ".idea", "warden.yaml", "warden.yml"
+            ".idea", "warden.yaml", "warden.yml", "GEMINI.md", "CLAUDE.md",
+            "poetry.lock", "start_warden_chat.sh"
         }
         
         # Module Placement Rules (Forbidden Path -> Correct Path)
