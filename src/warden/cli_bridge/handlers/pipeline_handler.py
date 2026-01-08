@@ -20,7 +20,7 @@ class PipelineHandler(BaseHandler):
         self.orchestrator = orchestrator
         self.project_root = project_root
 
-    async def execute_pipeline(self, file_path: str) -> Dict[str, Any]:
+    async def execute_pipeline(self, file_path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
         """Execute validation pipeline on a single file."""
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
@@ -35,7 +35,7 @@ class PipelineHandler(BaseHandler):
             language=self._detect_language(path),
         )
 
-        result, context = await self.orchestrator.execute([code_file])
+        result, context = await self.orchestrator.execute([code_file], frames_to_execute=frames)
         
         # Serialization handled by bridge or helper
         return result, context

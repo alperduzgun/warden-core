@@ -27,12 +27,36 @@ class FortificationAdapter(BaseWardenAdapter):
         "warden_get_fortification_suggestions",
         "warden_apply_fortification",
         "warden_get_security_score",
+        "warden_fix",
     })
     TOOL_CATEGORY = ToolCategory.FORTIFICATION
 
     def get_tool_definitions(self) -> List[MCPToolDefinition]:
         """Get fortification tool definitions."""
         return [
+            self._create_tool_definition(
+                name="warden_fix",
+                description="Request a semantic security fix for a vulnerability",
+                properties={
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the vulnerable file",
+                    },
+                    "line_number": {
+                        "type": "integer",
+                        "description": "Line number of the issue",
+                    },
+                    "issue_type": {
+                        "type": "string",
+                        "description": "Type of vulnerability (e.g. sql_injection, xss, secret)",
+                    },
+                    "context_code": {
+                        "type": "string",
+                        "description": "Vulnerable code snippet (optional)",
+                    },
+                },
+                required=["file_path", "line_number", "issue_type"],
+            ),
             self._create_tool_definition(
                 name="warden_get_fortification_suggestions",
                 description="Get security fortification suggestions for code",
@@ -78,6 +102,7 @@ class FortificationAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute fortification tool."""
         handlers = {
+            "warden_fix": self._execute_fix,
             "warden_get_fortification_suggestions": self._get_fortification_suggestions,
             "warden_apply_fortification": self._apply_fortification,
             "warden_get_security_score": self._get_security_score,
@@ -87,6 +112,22 @@ class FortificationAdapter(BaseWardenAdapter):
         if handler:
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
+
+    async def _execute_fix(self, arguments: Dict[str, Any]) -> MCPToolResult:
+        """Execute warden_fix tool."""
+        file_path = arguments.get("file_path")
+        line_number = arguments.get("line_number")
+        issue_type = arguments.get("issue_type")
+        context_code = arguments.get("context_code", "")
+
+        if self.bridge and hasattr(self.bridge, "request_fix"):
+            try:
+                result = await self.bridge.request_fix(file_path, line_number, issue_type, context_code)
+                return MCPToolResult.json_result(result)
+            except Exception as e:
+                return MCPToolResult.error(f"Fix generation failed: {e}")
+        
+        return MCPToolResult.error("Warden bridge available but request_fix not implemented")
 
     async def _get_fortification_suggestions(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get fortification suggestions."""

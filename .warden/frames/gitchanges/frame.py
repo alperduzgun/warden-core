@@ -16,8 +16,13 @@ Usage in CI/CD:
 
 import time
 import subprocess
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Set
+
+# Add current directory to path for local imports
+if str(Path(__file__).parent) not in sys.path:
+    sys.path.append(str(Path(__file__).parent))
 
 from warden.validation.domain.frame import (
     ValidationFrame,
@@ -31,7 +36,7 @@ from warden.validation.domain.enums import (
     FrameScope,
     FrameApplicability,
 )
-from ..git_diff_parser import GitDiffParser, FileDiff
+from git_diff_parser import GitDiffParser, FileDiff
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -53,6 +58,7 @@ class GitChangesFrame(ValidationFrame):
 
     # Required metadata
     name = "Git Changes Analysis"
+    frame_id = "gitchanges"
     description = "Validates only changed lines in git diff (for CI/CD and PR checks)"
     category = FrameCategory.GLOBAL
     priority = FramePriority.MEDIUM

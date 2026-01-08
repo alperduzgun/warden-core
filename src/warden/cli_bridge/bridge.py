@@ -61,14 +61,65 @@ class WardenBridge:
         
         self.pipeline_handler = PipelineHandler(self.orchestrator, self.project_root)
         self.config_handler.validate_consistency()
+        
+        # Store LLM service for semantic tools
+        self.llm_service = llm_service
 
         logger.info("warden_bridge_initialized", config=self.active_config_name, orchestrator=self.orchestrator is not None)
 
+    # --- Semantic Fixes ---
+
+    async def request_fix(self, file_path: str, line_number: int, issue_type: str, context_code: str = "") -> Dict[str, Any]:
+        """Request a semantic fix for a vulnerability."""
+        from warden.fortification.application.fortification_phase import FortificationPhase
+        
+        # Create minimal context for fortification
+        context = {
+            "project_root": self.project_root,
+            "language": self.pipeline_handler._detect_language(Path(file_path)),
+            "project_type": "unknown", # Could be detected
+            "framework": "unknown"     # Could be detected
+        }
+        
+        # Initialize phase with LLM service
+        phase = FortificationPhase(
+            config={"use_llm": True},
+            context=context,
+            llm_service=self.llm_service
+        )
+        
+        # Create minimal finding representation
+        finding = {
+            "type": issue_type,
+            "severity": "medium", # Default
+            "message": f"Fix requested for {issue_type}",
+            "file_path": file_path,
+            "line_number": line_number,
+            "code_snippet": context_code,
+            "id": "manual-request"
+        }
+        
+        # Generate fix directly using generator logic
+        # We access the internal generator for a single targeted fix
+        from warden.fortification.application.llm_fortification_generator import LLMFortificationGenerator
+        generator = LLMFortificationGenerator(self.llm_service)
+        
+        fix = await generator.generate_fortification(
+            finding=finding,
+            code_context=context_code,
+            framework=context["framework"],
+            language=context["language"]
+        )
+        
+        if fix:
+            return fix.to_json()
+        return {"error": "Could not generate fix"}
+
     # --- Pipeline Execution ---
 
-    async def execute_pipeline(self, file_path: str) -> Dict[str, Any]:
+    async def execute_pipeline(self, file_path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
         """Execute validation pipeline on a file."""
-        result, context = await self.pipeline_handler.execute_pipeline(file_path)
+        result, context = await self.pipeline_handler.execute_pipeline(file_path, frames)
         serialized = serialize_pipeline_result(result)
         serialized["context_summary"] = context.get_summary()
         return serialized

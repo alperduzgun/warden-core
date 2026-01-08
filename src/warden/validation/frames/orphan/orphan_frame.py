@@ -17,9 +17,12 @@ class OrphanFrame(ValidationFrame):
     name = "Orphan Code Detection"
     description = "Identifies unused functions and classes with compiler-grade precision."
     
-    async def execute(self, code_file: str) -> FrameResult:
+    async def execute(self, code_file: CodeFile) -> FrameResult:
         findings: List[Finding] = []
-        path = Path(code_file)
+        try:
+            path = Path(code_file.path)
+        except AttributeError:
+            path = Path(code_file)
         
         # Only check supported languages
         language = None

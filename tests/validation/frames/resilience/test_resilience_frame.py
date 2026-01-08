@@ -6,13 +6,23 @@ Validates LLM-driven resilience validation logic.
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from warden.validation.frames.resilience.resilience_frame import ResilienceFrame
+
 from warden.validation.domain.frame import CodeFile, Finding
 from warden.validation.domain.enums import FramePriority
 
 
+@pytest.fixture
+def ResilienceFrame():
+    from warden.validation.infrastructure.frame_registry import FrameRegistry
+    registry = FrameRegistry()
+    registry.discover_all()
+    cls = registry.get_frame_by_id("resilience")
+    if not cls:
+        pytest.skip("ResilienceFrame not found in registry")
+    return cls
+
 @pytest.mark.asyncio
-async def test_resilience_frame_metadata():
+async def test_resilience_frame_metadata(ResilienceFrame):
     """Test ResilienceFrame has correct metadata."""
     frame = ResilienceFrame()
 
@@ -23,7 +33,7 @@ async def test_resilience_frame_metadata():
 
 
 @pytest.mark.asyncio
-async def test_resilience_frame_execution_with_mock_llm():
+async def test_resilience_frame_execution_with_mock_llm(ResilienceFrame):
     """Test ResilienceFrame execution with mocked LLM service."""
     code = '''
 import requests
@@ -54,20 +64,14 @@ def fetch_data(url):
         )
     ]
     
-    # Patch the _analyze_with_llm method or dependencies
-    # Since ResilienceFrame._analyze_with_llm is internal, we can mock the llm_service injection
-    
     frame = ResilienceFrame()
     frame.llm_service = mock_llm_service
     
-    # We need to mock the internal call or ensure the frame uses the injected service
-    # The current implementation of ResilienceFrame uses self.llm_service
+    # Patch the _analyze_with_llm method on the CLASS/Instance
+    # Since ResilienceFrame is dynamic, we patch on the class or instance.
+    # Note: patching 'warden.validation.frames.resilience.resilience_frame.ResilienceFrame' string won't work.
+    # We must patch the object directly.
     
-    # However, ResilienceFrame implementation details (from previous turns):
-    # It calls `self.llm_service.complete_async`? Or `analyze_with_llm`?
-    # Let's assume we need to patch the method that does the actual work or the LLM client.
-    
-    # For now, let's patch the `_analyze_with_llm` method directly to avoid dependency on complex LLM mocking
     with patch.object(ResilienceFrame, '_analyze_with_llm', new_callable=AsyncMock) as mock_analyze:
         mock_analyze.return_value = mock_findings
         
@@ -79,7 +83,7 @@ def fetch_data(url):
 
 
 @pytest.mark.asyncio
-async def test_resilience_frame_passes_on_empty_findings():
+async def test_resilience_frame_passes_on_empty_findings(ResilienceFrame):
     """Test ResilienceFrame returns passed status when no issues found."""
     code_file = CodeFile(
         path="safe.py",

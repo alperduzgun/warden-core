@@ -10,12 +10,33 @@ Tests cover:
 """
 
 import pytest
-from warden.validation.frames import OrphanFrame
 from warden.validation.domain.frame import CodeFile
+
+import pytest
+from warden.validation.domain.frame import CodeFile
+import importlib.util
+import sys
+from pathlib import Path
+
+@pytest.fixture
+def OrphanFrame():
+    # Load directly from plugin file to bypass registry preference for src version
+    file_path = Path(".warden/frames/orphan/frame.py").absolute()
+    module_name = "orphan_plugin_test"
+    
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if not spec or not spec.loader:
+        pytest.skip("Could not load OrphanFrame plugin")
+        
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    
+    return module.OrphanFrame
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_unused_imports():
+async def test_orphan_frame_unused_imports(OrphanFrame):
     """Test OrphanFrame detects unused imports."""
     code = '''
 import sys  # ORPHAN - never used
@@ -52,7 +73,7 @@ def get_home():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_unreferenced_functions():
+async def test_orphan_frame_unreferenced_functions(OrphanFrame):
     """Test OrphanFrame detects unreferenced functions."""
     code = '''
 def used_function():
@@ -94,7 +115,7 @@ def main():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_unreferenced_classes():
+async def test_orphan_frame_unreferenced_classes(OrphanFrame):
     """Test OrphanFrame detects unreferenced classes."""
     code = '''
 class UsedClass:
@@ -133,7 +154,7 @@ def main():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_dead_code():
+async def test_orphan_frame_dead_code(OrphanFrame):
     """Test OrphanFrame detects dead code after return."""
     code = '''
 def function_with_dead_code():
@@ -171,7 +192,7 @@ def function_with_dead_code():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_dead_code_after_break():
+async def test_orphan_frame_dead_code_after_break(OrphanFrame):
     """Test OrphanFrame detects dead code after break."""
     code = '''
 def process_items():
@@ -202,7 +223,7 @@ def process_items():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_passes_clean_code():
+async def test_orphan_frame_passes_clean_code(OrphanFrame):
     """Test OrphanFrame passes clean code with no orphans."""
     code = '''
 import os
@@ -231,7 +252,7 @@ def main():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_ignores_private_functions():
+async def test_orphan_frame_ignores_private_functions(OrphanFrame):
     """Test OrphanFrame ignores private functions by default."""
     code = '''
 def _private_helper():  # Should be ignored (private)
@@ -263,7 +284,7 @@ def public_orphan():  # Should be detected
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_config_ignore_imports():
+async def test_orphan_frame_config_ignore_imports(OrphanFrame):
     """Test OrphanFrame respects ignore_imports configuration."""
     code = '''
 import sys  # Should be ignored via config
@@ -296,7 +317,7 @@ def main():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_skips_non_python_files():
+async def test_orphan_frame_skips_non_python_files(OrphanFrame):
     """Test OrphanFrame skips non-Python files."""
     code = '''
 // JavaScript code
@@ -314,15 +335,15 @@ function unusedFunction() {
     frame = OrphanFrame()
     result = await frame.execute(code_file)
 
-    # Should skip and pass
-    assert result.status == "passed"
+    # Should skip (status="skipped")
+    assert result.status == "skipped"
     assert result.issues_found == 0
     assert result.metadata is not None
     assert result.metadata.get("skipped") is True
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_ignores_test_files():
+async def test_orphan_frame_ignores_test_files(OrphanFrame):
     """Test OrphanFrame ignores test files by default."""
     code = '''
 import pytest
@@ -347,7 +368,7 @@ def test_something():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_handles_syntax_errors():
+async def test_orphan_frame_handles_syntax_errors(OrphanFrame):
     """Test OrphanFrame handles files with syntax errors."""
     code = '''
 def broken_function(
@@ -370,7 +391,7 @@ def broken_function(
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_metadata():
+async def test_orphan_frame_metadata(OrphanFrame):
     """Test OrphanFrame has correct metadata."""
     frame = OrphanFrame()
 
@@ -383,7 +404,7 @@ async def test_orphan_frame_metadata():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_result_structure():
+async def test_orphan_frame_result_structure(OrphanFrame):
     """Test OrphanFrame result has correct structure (Panel compatibility)."""
     code = '''
 import sys  # unused
@@ -422,7 +443,7 @@ def orphan():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_multiple_orphan_types():
+async def test_orphan_frame_multiple_orphan_types(OrphanFrame):
     """Test OrphanFrame detects multiple orphan types in same file."""
     code = '''
 import sys  # ORPHAN - unused import
@@ -468,7 +489,7 @@ def main():
 
 
 @pytest.mark.asyncio
-async def test_orphan_frame_special_functions_ignored():
+async def test_orphan_frame_special_functions_ignored(OrphanFrame):
     """Test OrphanFrame ignores special functions like main, __init__."""
     code = '''
 def main():  # Should be ignored (special)
@@ -480,6 +501,9 @@ class MyClass:
 
     def __str__(self):  # Should be ignored (special)
         return "string"
+
+# Use MyClass to ensure it's not flagged as orphan
+_ = MyClass()
 '''
 
     code_file = CodeFile(

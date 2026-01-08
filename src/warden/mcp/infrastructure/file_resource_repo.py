@@ -94,16 +94,24 @@ class FileResourceRepository(IResourceRepository):
             r.uri: r for r in WARDEN_RESOURCES
         }
 
-    async def list_available(self) -> List[MCPResourceDefinition]:
-        """List resources that exist on disk."""
-        available = []
-        for resource in self._resources.values():
-            if await self.exists(resource.uri):
-                available.append(resource)
-        return available
+    async def exists(self, uri: str) -> bool:
+        """Check if resource file exists."""
+        if uri == "warden://reports/latest":
+            return bool(self._find_latest_report())
+
+        resource = self._resources.get(uri)
+        if not resource:
+            return False
+        return (self.project_root / resource.file_path).exists()
 
     async def get_content(self, uri: str) -> Optional[str]:
         """Read resource content."""
+        if uri == "warden://reports/latest":
+            report_path = self._find_latest_report()
+            if not report_path:
+                raise MCPResourceNotFoundError(uri)
+            return report_path.read_text(encoding="utf-8")
+
         resource = self._resources.get(uri)
         if not resource:
             raise MCPResourceNotFoundError(uri)
@@ -118,12 +126,44 @@ class FileResourceRepository(IResourceRepository):
             logger.error("resource_read_error", uri=uri, error=str(e))
             raise MCPResourceNotFoundError(uri)
 
-    async def exists(self, uri: str) -> bool:
-        """Check if resource file exists."""
-        resource = self._resources.get(uri)
-        if not resource:
-            return False
-        return (self.project_root / resource.file_path).exists()
+    def _find_latest_report(self) -> Optional[Path]:
+        """Find the most recently modified report file."""
+        reports_dir = self.get_reports_dir()
+        if not reports_dir.exists():
+            return None
+            
+        # Filter for known report types
+        report_files = [
+            f for f in reports_dir.iterdir() 
+            if f.is_file() and f.suffix in {'.json', '.sarif', '.html', '.md'}
+        ]
+        
+        if not report_files:
+            return None
+            
+        # Return newest
+        return max(report_files, key=lambda f: f.stat().st_mtime)
+
+    async def list_available(self) -> List[MCPResourceDefinition]:
+        """List resources that exist on disk."""
+        available = []
+        for resource in self._resources.values():
+            if await self.exists(resource.uri):
+                available.append(resource)
+        
+        # Add dynamic latest report if available
+        latest_path = self._find_latest_report()
+        if latest_path:
+            available.append(MCPResourceDefinition(
+                uri="warden://reports/latest",
+                name="Latest Scan Report",
+                description="The most recently generated scan report",
+                resource_type=ResourceType.REPORT_JSON, # Default to generic report type
+                mime_type="application/json" if latest_path.suffix in {'.json', '.sarif'} else "text/plain",
+                file_path=str(latest_path.relative_to(self.project_root))
+            ))
+
+        return available
 
     def get_definition(self, uri: str) -> Optional[MCPResourceDefinition]:
         """Get resource definition by URI."""

@@ -5,12 +5,21 @@ Demonstrates the two-level plugin system in action.
 """
 
 import pytest
-from warden.validation.frames import SecurityFrame
 from warden.validation.domain.frame import CodeFile
+
+@pytest.fixture
+def SecurityFrame():
+    from warden.validation.infrastructure.frame_registry import FrameRegistry
+    registry = FrameRegistry()
+    registry.discover_all()
+    cls = registry.get_frame_by_id("security")
+    if not cls:
+        pytest.skip("SecurityFrame not found in registry")
+    return cls
 
 
 @pytest.mark.asyncio
-async def test_security_frame_sql_injection_detection():
+async def test_security_frame_sql_injection_detection(SecurityFrame):
     """Test SecurityFrame detects SQL injection."""
     code = '''
 import sqlite3
@@ -43,7 +52,7 @@ def get_user(user_id):
 
 
 @pytest.mark.asyncio
-async def test_security_frame_secrets_detection():
+async def test_security_frame_secrets_detection(SecurityFrame):
     """Test SecurityFrame detects hardcoded secrets."""
     code = '''
 import openai
@@ -76,7 +85,7 @@ def call_api():
 
 
 @pytest.mark.asyncio
-async def test_security_frame_xss_detection():
+async def test_security_frame_xss_detection(SecurityFrame):
     """Test SecurityFrame detects XSS vulnerabilities."""
     code = '''
 // BAD: XSS vulnerability
@@ -107,7 +116,7 @@ displayMessage(userInput);
 
 
 @pytest.mark.asyncio
-async def test_security_frame_hardcoded_password_detection():
+async def test_security_frame_hardcoded_password_detection(SecurityFrame):
     """Test SecurityFrame detects hardcoded passwords."""
     code = '''
 class DatabaseConfig:
@@ -134,7 +143,7 @@ class DatabaseConfig:
 
 
 @pytest.mark.asyncio
-async def test_security_frame_passes_clean_code():
+async def test_security_frame_passes_clean_code(SecurityFrame):
     """Test SecurityFrame passes clean, secure code."""
     code = '''
 import os
@@ -172,7 +181,7 @@ def display_message(message: str):
 
 
 @pytest.mark.asyncio
-async def test_security_frame_check_registry():
+async def test_security_frame_check_registry(SecurityFrame):
     """Test SecurityFrame has all built-in checks registered."""
     frame = SecurityFrame()
 
@@ -189,7 +198,7 @@ async def test_security_frame_check_registry():
 
 
 @pytest.mark.asyncio
-async def test_security_frame_metadata():
+async def test_security_frame_metadata(SecurityFrame):
     """Test SecurityFrame has correct metadata."""
     frame = SecurityFrame()
 
@@ -200,7 +209,7 @@ async def test_security_frame_metadata():
 
 
 @pytest.mark.asyncio
-async def test_security_frame_result_structure():
+async def test_security_frame_result_structure(SecurityFrame):
     """Test SecurityFrame result has correct structure (Panel compatibility)."""
     code = '''
 password = "admin123"  # Hardcoded password

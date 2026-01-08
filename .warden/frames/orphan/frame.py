@@ -320,8 +320,10 @@ class OrphanFrame(ValidationFrame):
                     frame_name=self.name,
                     status="skipped",
                     duration=time.perf_counter() - start_time,
+                    issues_found=0,
+                    is_blocker=False,
                     findings=[],
-                    metadata={"reason": "unsupported_language"}
+                    metadata={"reason": "unsupported_language", "skipped": True}
                 )
             
             orphan_findings = detector.detect_all()
@@ -474,7 +476,7 @@ class OrphanFrame(ValidationFrame):
             True if frame should run
         """
         # Check if we have a detector for this language (delegate to factory)
-        from ..orphan_detector import OrphanDetectorFactory
+        from orphan_detector import OrphanDetectorFactory
         
         # Get file extension
         import os
@@ -522,6 +524,10 @@ class OrphanFrame(ValidationFrame):
                 ]:
                     if finding.name.startswith("_"):
                         continue
+
+            # Filter entry points
+            if finding.name == "main":
+                continue
 
             filtered.append(finding)
 
