@@ -30,7 +30,12 @@ class WardenDoctor:
     def __init__(self, project_path: Path):
         self.project_path = project_path
         self.warden_dir = project_path / ".warden"
-        self.config_path = project_path / "warden.yaml"
+        
+        # Check standard location first, then legacy
+        standard_config = project_path / "warden.yaml"
+        legacy_config = self.warden_dir / "config.yaml"
+        
+        self.config_path = standard_config if standard_config.exists() else legacy_config
         self.fetcher = None
 
     def run_all(self) -> bool:
@@ -81,7 +86,30 @@ class WardenDoctor:
     def check_config(self) -> Tuple[CheckStatus, str]:
         if not self.config_path.exists():
             return CheckStatus.ERROR, "warden.yaml not found at root. Run 'warden init' to start."
-        return CheckStatus.SUCCESS, "warden.yaml found."
+            
+        try:
+            from warden.config.schema import WardenConfig
+            from pydantic import ValidationError
+            
+            with open(self.config_path, "r") as f:
+                data = yaml.safe_load(f) or {}
+                
+            WardenConfig.model_validate(data)
+            return CheckStatus.SUCCESS, "warden.yaml is valid and schema-compliant."
+            
+        except ValidationError as e:
+            error_details = []
+            for err in e.errors():
+                loc = ".".join(str(l) for l in err['loc'])
+                msg = err['msg']
+                error_details.append(f"{loc}: {msg}")
+            
+            return CheckStatus.ERROR, f"Configuration Schema Error:\n" + "\n".join(f"    - {d}" for d in error_details)
+            
+        except ImportError:
+             return CheckStatus.WARNING, "Pydantic not available. Skipping schema validation."
+        except Exception as e:
+            return CheckStatus.ERROR, f"Invalid YAML or unexpected error: {e}"
 
     def check_warden_dir(self) -> Tuple[CheckStatus, str]:
         if not self.warden_dir.exists():

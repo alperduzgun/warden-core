@@ -257,7 +257,14 @@ Updated: {scan_time}
         return 0
         
     except Exception as e:
-        console.print(f"[bold red]Error during scan:[/bold red] {e}")
+        console.print(f"\n[bold red]💥 Scan failed unexpectedly.[/bold red]")
+        console.print(f"[red]Error:[/red] {e}")
+
+        # Suggest doctor for likely configuration errors
+        if isinstance(e, (AttributeError, ValueError, KeyError, TypeError)):
+            console.print("\n[yellow]💡 Tip:[/yellow] This looks like a configuration or environment issue.")
+            console.print("Run [bold cyan]warden doctor[/bold cyan] to check your project setup.")
+
         if verbose:
             import traceback
             traceback.print_exc()

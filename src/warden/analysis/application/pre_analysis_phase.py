@@ -264,7 +264,7 @@ class PreAnalysisPhase:
             llm_config = await load_llm_config_async()
 
             # Get PRE-ANALYSIS specific config
-            pre_analysis_config = self.config.get("pre_analysis", {})
+            pre_analysis_config = self.config.get("pre_analysis") or {}
             confidence_threshold = pre_analysis_config.get("llm_threshold", 0.7)
             batch_size = pre_analysis_config.get("batch_size", 10)
 

@@ -295,16 +295,17 @@ class TreeSitterProvider(IASTProvider):
         if not self._available:
             return []
             
+        # Check if grammar is loaded before attempting query
+        ts_language = self._get_ts_language(language)
+        if not ts_language:
+            # Expected behavior if grammar not installed - silent return (debug log in init)
+            return []
+
         query_str = self._get_dependency_query_str(language)
         if not query_str:
             return []
             
         try:
-            # Get tree-sitter language and parser
-            ts_language = self._get_ts_language(language)
-            if not ts_language:
-                return []
-                
             parser = self.Parser()
             parser.set_language(ts_language)
             
@@ -321,7 +322,7 @@ class TreeSitterProvider(IASTProvider):
                         
             return sorted(list(dependencies))
         except Exception as e:
-            logger.warning(
+            logger.debug(
                 "tree_sitter_dependency_extraction_failed",
                 language=language.value,
                 error=str(e)

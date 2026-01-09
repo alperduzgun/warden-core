@@ -263,6 +263,20 @@ def init_command(
                     f.write(f"{k}={v}\n")
         console.print("[green]Updated .env[/green]")
 
+        # Create .env.example
+        env_example_path = Path(".env.example")
+        if not env_example_path.exists():
+            with open(env_example_path, "w") as f:
+                f.write("# Warden Environment Variables\n")
+                if provider == "azure":
+                    f.write("AZURE_OPENAI_API_KEY=\n")
+                    f.write("AZURE_OPENAI_ENDPOINT=\n")
+                    f.write("AZURE_OPENAI_DEPLOYMENT_NAME=\n")
+                else:
+                     # Generic key
+                     f.write(f"{provider.upper()}_API_KEY=\n")
+            console.print("[green]Created .env.example[/green]")
+
     provider = llm_config["provider"]
     model = llm_config["model"]
 
@@ -306,7 +320,8 @@ def init_command(
             "settings": {
                 "fail_fast": mode_config["fail_fast"],
                 "enable_classification": True,
-                "mode": ["vibe", "normal", "strict"][int(mode_choice)-1]
+                "mode": ["vibe", "normal", "strict"][int(mode_choice)-1],
+                "use_llm": provider != "none"
             },
             "semantic_search": vector_config
         }
@@ -412,14 +427,13 @@ rules:
 # --- Custom Rules Configuration ---
 # To enable your custom rules, uncomment the following lines:
 #
-# custom_rules:
-#   - .warden/rules/my_custom_rules.yaml
-#
+custom_rules:
+  - .warden/rules/my_custom_rules.yaml
 """
         if "custom_rules:" not in current_content:
             with open(config_path, "a") as f:
                 f.write(comment_block)
-            console.print("[green]Added custom rules example to config.yaml[/green]")
+            console.print("[green]Added custom rules configuration[/green]")
 
         # Semantic Search is now AUTO-ADDED, so no hint needed.
         
