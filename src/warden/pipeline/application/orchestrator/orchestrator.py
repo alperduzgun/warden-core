@@ -309,12 +309,19 @@ class PhaseOrchestrator:
                     verified_count = 0
                     dropped_count = 0
                     
-                    for frame_res in context.frame_results.values():
+                    for frame_id, frame_res in context.frame_results.items():
                         result_obj = frame_res.get('result')
                         if result_obj and result_obj.findings:
                             # Verify bindings
                             findings_list = [f.to_dict() if hasattr(f, 'to_dict') else f for f in result_obj.findings]
-                            verified_findings_dicts = await verifier.verify_findings(findings_list)
+                            
+                            # Run LLM-based verification if enabled
+                            logger.info("finding_verification_started", 
+                                        frame_id=frame_id, 
+                                        findings_count=len(findings_list))
+                            
+                            # Verify findings with LLM using PipelineContext
+                            verified_findings_dicts = await verifier.verify_findings(findings_list, context)
                             
                             verified_ids = {f['id'] for f in verified_findings_dicts}
                             

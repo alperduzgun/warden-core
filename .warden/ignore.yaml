@@ -94,6 +94,7 @@ frames:
     - "examples/**"
     - "test_fixtures/**"
     - "docs/**"
+    - "tests/**"
   
   orphan:
     # Entry points that look orphan but are intentional

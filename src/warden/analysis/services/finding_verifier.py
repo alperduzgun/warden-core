@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from warden.shared.infrastructure.logging import get_logger
 from warden.llm.providers.base import ILlmClient
 from warden.memory.application.memory_manager import MemoryManager
+from warden.shared.utils.retry_utils import async_retry
 
 logger = get_logger(__name__)
 
@@ -11,6 +12,9 @@ class FindingVerificationService:
     Verifies findings using LLM to reduce false positives.
     Leverages Persistent Cache and Rate Limits.
     """
+
+    DEFAULT_RETRIES = 3
+    FALLBACK_CONFIDENCE = 0.5
 
     def __init__(
         self, 
@@ -34,6 +38,7 @@ Instructions:
 2. Analyze the Logic: Does the code actually violate the rule in a dangerous way?
 3. Ignore "Test" files unless the issue is critical.
 4. Ignore "Type Hints" (e.g. Optional[str]) flagged as array access.
+5. If a CRITICAL issue is in a 'test' file, classify it as False Positive (Intentional) unless it poses a risk to the production build or developer environment.
 
 Return ONLY a JSON object:
 {
@@ -43,9 +48,12 @@ Return ONLY a JSON object:
 }
 """
 
-    async def verify_findings(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def verify_findings(self, findings: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
         """
         Filters out false positives from the findings list.
+        Args:
+            findings: List of raw findings
+            context: PipelineContext object (optional but recommended)
         """
         if not self.enabled or not self.llm:
             return findings
@@ -78,7 +86,7 @@ Return ONLY a JSON object:
 
             # 2. Ask LLM
             try:
-                result = await self._verify_with_llm(finding)
+                result = await self._verify_with_llm(finding, context)
                 
                 # 3. Save Cache
                 self._save_cache(cache_key, result)
@@ -114,9 +122,19 @@ Return ONLY a JSON object:
         if self.memory_manager:
             self.memory_manager.set_llm_cache(f"verify:{key}", data)
 
-    async def _verify_with_llm(self, finding: Dict[str, Any]) -> Dict:
+    async def _verify_with_llm(self, finding: Dict[str, Any], context: Any = None) -> Dict:
+        # Get Context Summary if available
+        context_prompt = ""
+        if context and hasattr(context, 'get_llm_context_prompt'):
+             context_prompt = context.get_llm_context_prompt("VALIDATION")
+
         prompt = f"""
-Finding to Verify:
+You are a Senior Security Engineer. Verify a potential finding in a specific project context.
+
+PROJECT CONTEXT:
+{context_prompt}
+
+FINDING TO VERIFY:
 - Rule ID: {finding.get('id')}
 - Message: {finding.get('message')}
 - File: {finding.get('location')}
@@ -125,15 +143,39 @@ Finding to Verify:
 {finding.get('code', 'N/A')}
 {finding.get('detail', '')}
 ```
+
+STRATEGY:
+1. ANALYZE FILE PURPOSE based on Path and Project Context:
+   - TEST Context? -> Use LENIENT security rules. Allow mocks, hardcoded credentials (e.g. mock tokens).
+   - SCRIPT/EXAMPLE? -> Use LENIENT rules.
+   - PRODUCTION/CORE? -> Use STRICT rules.
+
+2. ANALYZE CODE CONTEXT:
+   - Is it a Type Hint (e.g. List[int])? -> REJECT (False Positive).
+   - Is it a Comment/Docstring? -> REJECT.
+   - Is it an Import statement? -> REJECT (unless malicious import).
+
+3. DECISION:
+   - Return true_positive: true ONLY if the code presents an ACTUAL RUNTIME RISK in this specific context.
 """
+        # The caching logic is already handled in verify_findings,
+        # so this method just focuses on the LLM call and parsing.
+        result = await self._call_llm_with_retry(prompt)
+        return result
+
+    @async_retry(retries=DEFAULT_RETRIES)
+    async def _call_llm_with_retry(self, prompt: str) -> Dict[str, Any]:
+        """Call LLM with retry mechanism and parse response."""
         response = await self.llm.complete_async(prompt, self.system_prompt)
         
-        # Parse JSON
         try:
+            # Parse JSON from response (handle markdown code blocks if present)
             content = response.content.strip()
             if content.startswith('```json'):
                 content = content.replace('```json', '').replace('```', '')
             return json.loads(content)
         except Exception as e:
-            # Fallback if XML/JSON parsing fails
-            return {"is_true_positive": True, "confidence": 0.5, "reason": "Parsing failed"}
+            logger.warning("llm_response_parsing_failed", error=str(e), response_content=response.content[:200])
+            # Fallback if JSON parsing fails
+            return {"is_true_positive": True, "confidence": self.FALLBACK_CONFIDENCE, "reason": "LLM response parsing failed"}
+
