@@ -88,6 +88,7 @@ class PipelineConfig(BaseDomainModel):
     
     # Semantic Search configuration (NEW!)
     semantic_search_config: Optional[Dict[str, Any]] = None  # Configuration for semantic search service
+    llm_config: Optional[Dict[str, Any]] = None  # LLM configuration (tpm, rpm, etc.)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""

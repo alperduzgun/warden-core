@@ -354,6 +354,8 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             # Return original result on error
             return result
 
+            return result
+
     async def _load_suppression_matcher(self) -> Optional[SuppressionMatcher]:
         """
         Load suppression matcher from configuration.

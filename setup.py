@@ -57,6 +57,7 @@ setup(
         # Semantic Search & Local Embeddings
         "chromadb>=0.4.0",
         "sentence-transformers>=2.2.0",
+        "tiktoken>=0.5.0",  # For accurate token counting
     ],
     extras_require={
         "dev": [

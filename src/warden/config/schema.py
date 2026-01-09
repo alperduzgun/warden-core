@@ -44,6 +44,7 @@ class SettingsConfig(BaseModel):
     mode: str = "normal"
     timeout: int = 300
     min_severity: str = "high"
+    enable_issue_validation: bool = True
     
     # Nested configs
     pre_analysis: PreAnalysisConfig = Field(default_factory=PreAnalysisConfig)
@@ -67,6 +68,8 @@ class LlmConfig(BaseModel):
     provider: str = "azure_openai"
     timeout: int = 300
     max_retries: int = 2
+    tpm_limit: int = 1000  # Default for free tier
+    rpm_limit: int = 6     # Default for free tier
     
     # Providers
     providers: Dict[str, LlmProviderConfig] = Field(default_factory=dict)

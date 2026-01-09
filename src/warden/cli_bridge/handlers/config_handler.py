@@ -87,6 +87,8 @@ class ConfigHandler(BaseHandler):
             enable_cleaning=settings.get('enable_cleaning', True),
             pre_analysis_config=settings.get('pre_analysis_config', None),
             semantic_search_config=config_data.get('semantic_search', None),
+            llm_config=config_data.get('llm'),
+            enable_issue_validation=settings.get('enable_issue_validation', True),
             use_gitignore=settings.get('use_gitignore', True)
         )
 

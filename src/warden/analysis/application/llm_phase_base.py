@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from warden.llm.factory import create_client
+from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
+import tiktoken
 from warden.shared.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -37,6 +39,8 @@ class LLMPhaseConfig:
     fallback_to_rules: bool = True
     temperature: float = 0.3  # Lower for more deterministic outputs
     max_tokens: int = 800  # Reduced to stay within context limits
+    tpm_limit: int = 1000  # Default Free Tier
+    rpm_limit: int = 6     # Default Free Tier
 
 
 @dataclass
@@ -103,7 +107,23 @@ class LLMPhaseBase(ABC):
         self.llm = llm_service
         self.project_root = project_root
         self.use_gitignore = use_gitignore
+        self.memory_manager = kwargs.get('memory_manager')
         self.cache = LLMCache() if self.config.cache_enabled else None
+
+        
+        # Initialize Rate Limiter
+        # Note: In a real app, this should probably be a singleton injected service
+        # to share limits across phases. For now, we init per phase (or passed config).
+        # Initialize Rate Limiter with config values
+        self.rate_limiter = RateLimiter(RateLimitConfig(
+            tpm=self.config.tpm_limit, 
+            rpm=self.config.rpm_limit
+        ))
+        # Initializing tokenizer (cl100k_base is used by gpt-4, gpt-3.5)
+        try:
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            self.tokenizer = None
 
         # Enable LLM if service is provided
         if llm_service:
@@ -174,12 +194,22 @@ class LLMPhaseBase(ABC):
             cache_key = self._generate_cache_key(context)
             cached = self.cache.get(cache_key)
             if cached:
+                return cached
+
+        # Check persistent cache (MemoryManager)
+        if use_cache and self.memory_manager:
+            cache_key = cache_key or self._generate_cache_key(context)
+            persistent_cached = self.memory_manager.get_llm_cache(cache_key)
+            if persistent_cached:
                 logger.debug(
-                    "llm_cache_hit",
+                    "llm_persistent_cache_hit",
                     phase=self.phase_name,
                     key=cache_key[:8],
                 )
-                return cached
+                # Syced back to in-memory cache for faster next access
+                if self.cache:
+                    self.cache.set(cache_key, persistent_cached)
+                return persistent_cached
 
         try:
             # Prepare prompts with pipeline context
@@ -229,8 +259,13 @@ class LLMPhaseBase(ABC):
                 result = self.parse_llm_response(response.content)
 
                 # Cache result (cache the parsed result, not the raw response)
-                if cache_key and self.cache:
-                    self.cache.set(cache_key, result)
+                if cache_key:
+                    if self.cache:
+                        self.cache.set(cache_key, result)
+                    if self.memory_manager:
+                        self.memory_manager.set_llm_cache(cache_key, result)
+                        # Mark for saving later (or save now if needed)
+                        # In the pipeline, orchestrator saves memory at the end
 
                 logger.info(
                     "llm_analysis_complete",
@@ -301,7 +336,7 @@ class LLMPhaseBase(ABC):
         user_prompt: str,
     ) -> Optional[Any]:  # Returns LlmResponse
         """
-        Call LLM with retry logic.
+        Call LLM with retry logic and PROACTIVE RATE LIMITING.
 
         Args:
             system_prompt: System prompt
@@ -310,6 +345,22 @@ class LLMPhaseBase(ABC):
         Returns:
             LLM response or None if all retries failed
         """
+        # 1. Estimate Token Cost
+        estimated_tokens = 100 # Safety buffer 
+        if self.tokenizer:
+            try:
+                # Count input tokens
+                input_text = system_prompt + user_prompt
+                estimated_tokens += len(self.tokenizer.encode(input_text))
+                # Add estimation for max output tokens (default 800 in config)
+                estimated_tokens += self.config.max_tokens
+            except Exception:
+                pass
+        
+        # 2. Acquire Rate Limit (Waits here if needed)
+        # This prevents 429s by not sending the request until we have budget
+        await self.rate_limiter.acquire(estimated_tokens)
+
         for attempt in range(self.config.max_retries):
             try:
                 # Call LLM with timeout

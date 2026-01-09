@@ -137,7 +137,8 @@ def parse_simple_format(data: Dict[str, Any]) -> PipelineConfig:
     settings = PipelineSettings(
         fail_fast=settings_data.get('fail_fast', True),
         timeout=settings_data.get('timeout'),
-        parallel=settings_data.get('parallel', False)
+        parallel=settings_data.get('parallel', False),
+        enable_issue_validation=settings_data.get('enable_issue_validation', True)
     )
 
     # Generate nodes
@@ -267,7 +268,8 @@ def parse_full_format(data: Dict[str, Any]) -> PipelineConfig:
     settings = PipelineSettings(
         fail_fast=settings_data.get('fail_fast', True),
         timeout=settings_data.get('timeout'),
-        parallel=settings_data.get('parallel', False)
+        parallel=settings_data.get('parallel', False),
+        enable_issue_validation=settings_data.get('enable_issue_validation', True)
     )
 
     return PipelineConfig(

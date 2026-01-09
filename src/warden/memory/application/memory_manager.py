@@ -184,6 +184,51 @@ class MemoryManager:
         logger.debug("adding_file_state_fact", fact_id=fact_id)
         self.add_fact(fact)
 
+    def get_llm_cache(self, key: str) -> Optional[Any]:
+        """
+        Get cached LLM response from memory.
+        
+        Args:
+            key: Cache key (usually hash of prompt/context)
+            
+        Returns:
+            Cached response data or None
+        """
+        fact_id = f"llmcache:{key}"
+        fact = self.knowledge_graph.facts.get(fact_id)
+        if fact:
+            # Check TTL if stored in metadata
+            # For LLM cache, we might want longer persistence than file state
+            return fact.metadata.get("response")
+        return None
+
+    def set_llm_cache(self, key: str, value: Any) -> None:
+        """
+        Store LLM response in memory.
+        
+        Args:
+            key: Unique cache key
+            value: Data to cache
+        """
+        fact_id = f"llmcache:{key}"
+        
+        fact = Fact(
+            id=fact_id,
+            category="llm_cache",
+            subject=key[:50],  # Use prefix as subject
+            predicate="cached_response",
+            object="json_data",
+            source="LLMPhaseBase",
+            confidence=1.0,
+            metadata={
+                "key": key,
+                "response": value,
+                "cached_at": datetime.now().isoformat()
+            }
+        )
+        
+        self.add_fact(fact)
+
     def get_project_purpose(self) -> Optional[Dict[str, str]]:
         """
         Get stored project purpose and architecture description.

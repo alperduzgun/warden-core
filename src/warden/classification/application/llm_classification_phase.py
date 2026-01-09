@@ -43,7 +43,7 @@ class LLMClassificationPhase(LLMPhaseBase):
     Intelligently selects validation frames and suppresses false positives.
     """
 
-    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None, context: Dict[str, Any] = None, semantic_search_service: Any = None) -> None:
+    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None, context: Dict[str, Any] = None, semantic_search_service: Any = None, memory_manager: Any = None) -> None:
         """
         Initialize LLM classification phase.
         
@@ -53,8 +53,9 @@ class LLMClassificationPhase(LLMPhaseBase):
             available_frames: List of validation frames to choose from
             context: Pipeline context dictionary
             semantic_search_service: Optional semantic search service
+            memory_manager: Optional memory manager for caching
         """
-        super().__init__(config, llm_service)
+        super().__init__(config, llm_service, memory_manager)
         self.available_frames = available_frames or []
         self.context = context or {}
         self.semantic_search_service = semantic_search_service

@@ -1,5 +1,5 @@
 advanced:
-  debug: false
+  debug: true
   frame_timeout: 300
   max_workers: 4
 ci:
@@ -79,6 +79,8 @@ llm:
     api_key: ${GROQ_API_KEY}
     provider: groq
   max_retries: 2
+  tpm_limit: 10000
+  rpm_limit: 60
   model: gpt-4o
   provider: azure_openai
   timeout: 300
@@ -101,12 +103,13 @@ semantic_search:
   model: all-MiniLM-L6-v2
   provider: local
 settings:
-  enable_analysis: true
+  enable_analysis: false
   enable_classification: true
   enable_cleaning: true
   enable_fortification: true
   enable_pre_analysis: true
   enable_validation: true
+  enable_issue_validation: true
   fail_fast: false
   frame_timeout: 120
   min_severity: high

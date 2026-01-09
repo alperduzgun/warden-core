@@ -59,11 +59,17 @@ class ClassificationExecutor(BasePhaseExecutor):
                 from warden.analysis.application.llm_phase_base import LLMPhaseConfig
 
                 phase = ClassificationPhase(
-                    config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
+                    config=LLMPhaseConfig(
+                        enabled=True, 
+                        fallback_to_rules=True,
+                        tpm_limit=self.config.llm_config.get('tpm_limit', 1000) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'tpm_limit', 1000) if hasattr(self.config, 'llm') else 1000),
+                        rpm_limit=self.config.llm_config.get('rpm_limit', 6) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'rpm_limit', 6) if hasattr(self.config, 'llm') else 6)
+                    ),
                     llm_service=self.llm_service,
                     available_frames=self.available_frames,
                     context=phase_context,
-                    semantic_search_service=self.semantic_search_service
+                    semantic_search_service=self.semantic_search_service,
+                    memory_manager=getattr(self.config, 'memory_manager', None)
                 )
                 logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:

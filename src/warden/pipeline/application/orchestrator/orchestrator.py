@@ -24,6 +24,8 @@ from warden.shared.infrastructure.logging import get_logger
 from .phase_executor import PhaseExecutor
 from .frame_executor import FrameExecutor
 from warden.shared.services.semantic_search_service import SemanticSearchService
+from warden.analysis.services.finding_verifier import FindingVerificationService
+from warden.llm.factory import create_client
 
 logger = get_logger(__name__)
 
@@ -278,6 +280,66 @@ class PhaseOrchestrator:
                         "phase_name": "VALIDATION",
                         "reason": "disabled_in_config"
                     })
+
+            # Phase 3.5: VERIFICATION (False Positive Reduction)
+            # Must run BEFORE Fortification to avoid fixing false positives
+            if getattr(self.config, 'enable_issue_validation', False):
+                logger.info("phase_started", phase="VERIFICATION")
+                try:
+                    # Initialize verifier
+                    # We create client here or reuse service if it matches ILlmClient interface
+                    # For safety, let's create a fresh client using factory based on config
+                    verify_llm = create_client() 
+                    
+                    # We need memory manager. In PhaseOrchestrator we don't hold a ref to it directly usually,
+                    # but it might be in config or context. 
+                    # If not available, cache won't work but verification will.
+                    verify_mem_manager = getattr(self.config, 'memory_manager', None)
+
+                    verifier = FindingVerificationService(
+                        llm_client=verify_llm, 
+                        memory_manager=verify_mem_manager,
+                        enabled=True
+                    )
+
+                    # Collect all findings from context
+                    all_findings_raw = []
+                    # We need to update findings in place within frame results
+                    
+                    verified_count = 0
+                    dropped_count = 0
+                    
+                    for frame_res in context.frame_results.values():
+                        result_obj = frame_res.get('result')
+                        if result_obj and result_obj.findings:
+                            # Verify bindings
+                            findings_list = [f.to_dict() if hasattr(f, 'to_dict') else f for f in result_obj.findings]
+                            verified_findings_dicts = await verifier.verify_findings(findings_list)
+                            
+                            verified_ids = {f['id'] for f in verified_findings_dicts}
+                            
+                            # Filter original objects
+                            final_findings = [f for f in result_obj.findings if (f.get('id') if isinstance(f, dict) else f.id) in verified_ids]
+                            
+                            dropped = len(result_obj.findings) - len(final_findings)
+                            dropped_count += dropped
+                            verified_count += len(final_findings)
+                            
+                            result_obj.findings = final_findings
+                            result_obj.issues_found = len(final_findings)
+                    
+                    # Sync context.findings
+                    all_new_findings = []
+                    for fr in context.frame_results.values():
+                        res = fr.get('result')
+                        if res and res.findings:
+                            all_new_findings.extend(res.findings)
+                    context.findings = all_new_findings
+                    
+                    logger.info("verification_phase_completed", verified=verified_count, dropped=dropped_count)
+
+                except Exception as e:
+                    logger.warning("verification_phase_failed", error=str(e))
 
             # Phase 4: FORTIFICATION
             enable_fortification = getattr(self.config, 'enable_fortification', True)

@@ -68,10 +68,16 @@ class AnalysisExecutor(BasePhaseExecutor):
                 from warden.analysis.application.llm_phase_base import LLMPhaseConfig
 
                 phase = AnalysisPhase(
-                    config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
+                    config=LLMPhaseConfig(
+                        enabled=True, 
+                        fallback_to_rules=True,
+                        tpm_limit=self.config.llm_config.get('tpm_limit', 1000) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'tpm_limit', 1000) if hasattr(self.config, 'llm') else 1000),
+                        rpm_limit=self.config.llm_config.get('rpm_limit', 6) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'rpm_limit', 6) if hasattr(self.config, 'llm') else 6)
+                    ),
                     llm_service=self.llm_service,
                     project_root=self.project_root,
                     use_gitignore=getattr(self.config, 'use_gitignore', True),
+                    memory_manager=getattr(self.config, 'memory_manager', None)
                 )
                 if verbose:
                     logger.info("using_llm_analysis_phase_verbose", llm_provider=self.llm_service.__class__.__name__ if self.llm_service else "None")
