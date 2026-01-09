@@ -1,14 +1,16 @@
 name: Release Warden Core
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Warden CI"]
+    types:
+      - completed
 
 jobs:
   build-n-publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
     permissions:
       contents: write  # For creating release
       id-token: write  # MANDATORY for trusted publishing
@@ -17,6 +19,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ github.event.workflow_run.head_sha }}
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -37,17 +40,15 @@ jobs:
         
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
       with:
         files: dist/*
         
     - name: Update Homebrew Formula
-      if: startsWith(github.ref, 'refs/tags/')
       continue-on-error: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        TAG_NAME=${GITHUB_REF#refs/tags/}
+        TAG_NAME=${{ github.event.workflow_run.head_branch }}
         TARBALL_URL="https://github.com/alperduzgun/warden-core/archive/refs/tags/${TAG_NAME}.tar.gz"
         
         echo "Updating formula for ${TAG_NAME}..."
