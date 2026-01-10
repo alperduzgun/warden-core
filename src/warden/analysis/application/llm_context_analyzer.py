@@ -11,10 +11,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 import structlog
+import tiktoken
 
 from warden.llm.factory import create_client
 from warden.llm.config import LlmConfiguration, load_llm_config_async
 from warden.llm.types import LlmRequest, LlmResponse
+from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import ProjectContext, Framework, ProjectType
 
@@ -71,6 +73,16 @@ class LlmContextAnalyzer:
         self.batch_size = batch_size
         self.cache_enabled = cache_enabled
         self.cache: Dict[str, LlmContextDecision] = {}
+        
+        # Initialize Rate Limiter (conservative defaults for context analysis)
+        # TPM/RPM values should ideally come from shared config, using safe defaults
+        self.rate_limiter = RateLimiter(RateLimitConfig(tpm=5000, rpm=30))
+        
+        # Initialize tokenizer for token estimation
+        try:
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            self.tokenizer = None
 
         logger.info(
             "llm_context_analyzer_initialized",
@@ -406,7 +418,18 @@ Return JSON:
         return self._parse_llm_response(response.content)
 
     async def _call_llm(self, prompt: str) -> LlmResponse:
-        """Call LLM with prompt."""
+        """Call LLM with prompt and rate limiting."""
+        # Estimate tokens for rate limiting
+        estimated_tokens = 600  # Base buffer for output
+        if self.tokenizer:
+            try:
+                estimated_tokens += len(self.tokenizer.encode(prompt))
+            except Exception:
+                pass
+        
+        # Acquire rate limit before sending
+        await self.rate_limiter.acquire(estimated_tokens)
+        
         request = LlmRequest(
             system_prompt="You are an expert code analyzer specializing in understanding project structure and file contexts. Provide accurate, concise analysis.",
             user_message=prompt,
@@ -417,7 +440,18 @@ Return JSON:
         return await self.llm.send_async(request)
 
     async def _call_llm_batch(self, batch_prompt: str) -> LlmResponse:
-        """Call LLM for batch analysis."""
+        """Call LLM for batch analysis with rate limiting."""
+        # Estimate tokens for rate limiting
+        estimated_tokens = 2200  # Base buffer for output
+        if self.tokenizer:
+            try:
+                estimated_tokens += len(self.tokenizer.encode(batch_prompt))
+            except Exception:
+                pass
+        
+        # Acquire rate limit before sending
+        await self.rate_limiter.acquire(estimated_tokens)
+        
         request = LlmRequest(
             system_prompt="You are an expert code analyzer. Analyze multiple files efficiently and accurately.",
             user_message=batch_prompt,
