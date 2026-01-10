@@ -45,6 +45,26 @@ Warden gives you granular control over what to check:
 *   **Global Config:** Define suppressions in `.warden/suppressions.yaml`.
 *   **File Exclusion:** Respects `.gitignore` and supports `.warden/ignore.yaml`.
 
+### 4. 🧠 Hallucination Prevention (Suppression System)
+AI analysis can sometimes produce "hallucinations" – findings that look like issues but are actually valid code patterns (false positives). Warden provides a dedicated **Suppression Phase** to filter these out.
+
+**How it works:**
+1.  **Generation:** Frames analyze code and may generate false positives (e.g., `stress-unclosed_file` on a managed stream).
+2.  **Filtration:** Before reporting, Warden checks `.warden/rules/suppressions.yaml`.
+3.  **Suppression:** If a finding matches a suppression rule, it is silently removed from the report.
+
+**Configuration (`.warden/rules/suppressions.yaml`):**
+```yaml
+enabled: true
+entries:
+  - id: "suppress-stress-fp"        # Unique ID for the rule
+    rules:
+      - "stress-unclosed_file"      # The Finding ID to suppress (e.g. hallucination)
+    file: "src/utils/stream.py"     # Specific file path
+    reason: "Standard streams are managed by system"
+```
+> **Note:** Unlike `CustomRule`s which are *active* checks, Suppressions are *passive* filters that run at the very end of the pipeline.
+
 ---
 
 ## 🏁 Quick Start
@@ -103,7 +123,10 @@ AI Agents working in a Warden project follow this strict protocol:
 │   ├── AI_RULES.md          # Protocol for AI Agents
 │   ├── config.yaml          # Pipeline configuration
 │   ├── ignore.yaml          # File exclusions
-│   ├── suppressions.yaml    # False positive rules
+│   ├── ignore.yaml          # File exclusions
+│   └── rules/               # Custom rules & Suppressions
+│       ├── suppressions.yaml # False positive rules
+│       └── ...
 │   └── reports/             # Scan results (JSON, SARIF)
 ├── .claude/
 │   └── settings.json        # Hooks for auto-loading context

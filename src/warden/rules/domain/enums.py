@@ -41,3 +41,4 @@ class RuleType(Enum):
     CONVENTION = "convention" 
     PATTERN = "pattern"
     SCRIPT = "script"
+

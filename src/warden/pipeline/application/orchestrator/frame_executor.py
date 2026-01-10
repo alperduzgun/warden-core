@@ -26,6 +26,7 @@ from warden.shared.infrastructure.logging import get_logger
 from .frame_matcher import FrameMatcher
 from .result_aggregator import ResultAggregator
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
+import fnmatch
 
 logger = get_logger(__name__)
 
@@ -428,6 +429,20 @@ class FrameExecutor:
             if hasattr(frame, 'batch_summary') and frame.batch_summary:
                 result_metadata["llm_filter_summary"] = frame.batch_summary
 
+            # Apply Config-Based Suppressions (Internal Findings)
+            if hasattr(frame, 'config') and frame.config and 'suppressions' in frame.config:
+                suppressions = frame.config['suppressions']
+                if suppressions and frame_findings:
+                     # Filter findings
+                     findings_before = len(frame_findings)
+                     frame_findings = self._apply_config_suppressions(frame_findings, suppressions)
+                     findings_after = len(frame_findings)
+                     
+                     if findings_before != findings_after:
+                         logger.info("suppression_applied", 
+                               frame_id=frame.frame_id, 
+                               suppressed=findings_before - findings_after)
+
             frame_result = FrameResult(
                 frame_id=frame.frame_id,
                 frame_name=frame.name,
@@ -585,3 +600,69 @@ class FrameExecutor:
         return (clean_files / total_files) * 100
 
 
+    def _apply_config_suppressions(self, findings: List[Any], suppressions: List[Dict[str, Any]]) -> List[Any]:
+        """
+        Apply configuration-based suppression rules.
+        
+        Args:
+           findings: List of finding objects
+           suppressions: List of suppression dicts (from config.yaml)
+           
+        Returns:
+           Filtered list of findings
+        """
+        if not findings or not suppressions:
+            return findings
+
+        filtered_findings = []
+        
+        for finding in findings:
+            is_suppressed = False
+            
+            # Finding attributes
+            f_id = getattr(finding, 'id', getattr(finding, 'rule', ''))
+            
+            # Extract file path
+            f_path = ""
+            if hasattr(finding, 'file_path'):
+                f_path = finding.file_path
+            elif hasattr(finding, 'location'):
+                f_path = finding.location.split(':')[0]
+            
+            for rule_cfg in suppressions:
+                rule_pattern = rule_cfg.get('rule')
+                file_patterns = rule_cfg.get('files', [])
+                if isinstance(file_patterns, str):
+                    file_patterns = [file_patterns]
+                
+                # Check Finding ID Match (Logic: if rule is '*', match all)
+                if rule_pattern != '*' and rule_pattern != f_id:
+                    continue
+                    
+                # Check File Pattern Match
+                matched_file = False
+                if not file_patterns: 
+                    # If no files specified, global suppression for this rule? 
+                    # Let's assume explicit file listing is safer, but empty list = none
+                    continue
+                    
+                if f_path:
+                    for pattern in file_patterns:
+                        if fnmatch.fnmatch(f_path, pattern):
+                            matched_file = True
+                            break
+                            
+                if not matched_file:
+                    continue
+                        
+                # If we get here, matched
+                logger.debug("suppressing_finding_by_config", 
+                            finding=f_id, 
+                            file=f_path)
+                is_suppressed = True
+                break
+            
+            if not is_suppressed:
+                filtered_findings.append(finding)
+                
+        return filtered_findings

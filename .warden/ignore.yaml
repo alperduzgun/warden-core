@@ -96,11 +96,6 @@ frames:
     - "docs/**"
     - "tests/**"
   
-  resilience:
-    # False Positives: Retry logic is handled via decorators/delegation but missed by analyzer
-    - "src/warden/analysis/services/finding_verifier.py"
-    - "src/warden/pipeline/application/orchestrator/orchestrator.py"
-
   orphan:
     # Entry points that look orphan but are intentional
     - "scripts/**"
