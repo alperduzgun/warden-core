@@ -41,14 +41,20 @@ class RateLimiter:
         self._requests = float(config.rpm)
         self._last_request_refill = time.time()
         
-        # Locks for thread safety (in async context)
-        self._lock = asyncio.Lock()
+        # Lock will be lazily initialized to avoid event loop binding issues
+        self._lock: Optional[asyncio.Lock] = None
         
         logger.info(
             "rate_limiter_initialized",
             tpm=config.tpm,
             rpm=config.rpm
         )
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Get or create the asyncio lock (lazy initialization)."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def _refill(self):
         """Refill buckets based on time elapsed."""
@@ -82,7 +88,7 @@ class RateLimiter:
         Returns:
             Wait time in seconds (0.0 if immediate)
         """
-        async with self._lock:
+        async with self._get_lock():
             await self._refill()
             
             wait_time = 0.0
@@ -133,7 +139,7 @@ class RateLimiter:
             return await self.acquire(estimated_tokens)
 
         # Consume execution cost
-        async with self._lock:
+        async with self._get_lock():
             # Re-check in case another task stole it (rare in single loop, but robust)
             await self._refill()
             if self._requests >= 1 and self._tokens >= estimated_tokens:

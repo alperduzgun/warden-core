@@ -259,6 +259,7 @@ class PreAnalysisPhase:
         try:
             from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer
             from warden.llm.config import load_llm_config_async
+            from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
 
             # Load LLM configuration
             llm_config = await load_llm_config_async()
@@ -267,6 +268,13 @@ class PreAnalysisPhase:
             pre_analysis_config = self.config.get("pre_analysis") or {}
             confidence_threshold = pre_analysis_config.get("llm_threshold", 0.7)
             batch_size = pre_analysis_config.get("batch_size", 10)
+            
+            # Rate limit config (default to conservative but usable limits)
+            tpm = pre_analysis_config.get("tpm", 30000)  # 30k tokens/min
+            rpm = pre_analysis_config.get("rpm", 100)    # 100 req/min
+
+            # Initialize shared Rate Limiter for this phase
+            rate_limiter = RateLimiter(RateLimitConfig(tpm=tpm, rpm=rpm))
 
             # Initialize LLM analyzer
             self.llm_analyzer = LlmContextAnalyzer(
@@ -274,6 +282,7 @@ class PreAnalysisPhase:
                 confidence_threshold=confidence_threshold,
                 batch_size=batch_size,
                 cache_enabled=True,
+                rate_limiter=rate_limiter,
             )
 
             logger.info(
@@ -426,11 +435,7 @@ class PreAnalysisPhase:
                         # Fallback to analysis on error matches
                         pass
 
-        context_info = await loop.run_in_executor(
-            None,
-            self.file_analyzer.analyze_file,
-            Path(code_file.path)
-        )
+        context_info = await self.file_analyzer.analyze_file_async(Path(code_file.path))
         
         # Enrich context info with hash and impact status
         context_info.content_hash = content_hash
