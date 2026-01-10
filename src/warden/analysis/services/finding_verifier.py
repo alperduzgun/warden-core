@@ -154,6 +154,8 @@ STRATEGY:
    - Is it a Type Hint (e.g. List[int])? -> REJECT (False Positive).
    - Is it a Comment/Docstring? -> REJECT.
    - Is it an Import statement? -> REJECT (unless malicious import).
+   - Does it use `@async_retry` or `@retry` decorator? -> REJECT (Resilience is handled).
+   - Is it a Router/Delegator (delegates to adapter/service)? -> REJECT (Resilience is delegated).
 
 3. DECISION:
    - Return true_positive: true ONLY if the code presents an ACTUAL RUNTIME RISK in this specific context.
