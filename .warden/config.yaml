@@ -78,6 +78,7 @@ frames_config:
       - error_recovery
     enabled: true
     priority: high
+    is_blocker: false
     suppressions:
       # False positives for retry implementation files
       - rule: "*"

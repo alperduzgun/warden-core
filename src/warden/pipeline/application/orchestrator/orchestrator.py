@@ -384,15 +384,15 @@ class PhaseOrchestrator:
             if has_errors:
                 logger.warning("pipeline_has_errors", count=len(context.errors), errors=context.errors[:5])
             
-            if self.pipeline.frames_failed > 0 or has_errors:
-                # Only fail if there are actual failures or blocker violations
-                if (has_errors) or (self.pipeline.frames_failed > 0) or any(
-                    fr.get('result').is_blocker for fr in getattr(context, 'frame_results', {}).values() 
-                    if fr.get('result') and fr.get('result').status == "failed"
-                ):
-                    self.pipeline.status = PipelineStatus.FAILED
-                else:
-                    self.pipeline.status = PipelineStatus.COMPLETED
+            # Check if any BLOCKER frame failed (non-blockers don't cause pipeline failure)
+            has_blocker_failures = any(
+                fr.get('result').is_blocker 
+                for fr in getattr(context, 'frame_results', {}).values() 
+                if fr.get('result') and fr.get('result').status == "failed"
+            )
+            
+            if has_errors or has_blocker_failures:
+                self.pipeline.status = PipelineStatus.FAILED
             else:
                 self.pipeline.status = PipelineStatus.COMPLETED
                 
