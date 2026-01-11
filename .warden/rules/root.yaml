@@ -21,15 +21,15 @@ frame_rules:
     post_rules:
       - security-audit
     on_fail: stop
-  chaos:
-    pre_rules:
-      - async-method-naming
-    on_fail: continue
+#  chaos:
+#    pre_rules:
+#      - async-method-naming
+#    on_fail: continue
   orphan:
     pre_rules:
       - no-secrets
     on_fail: continue
-  architectural:
+  architecturalconsistency:
     pre_rules:
       - no-secrets
       - cli-pipeline-status-check
@@ -40,12 +40,12 @@ frame_rules:
     pre_rules:
       - file-size-limit
     on_fail: continue
-  env-security:
+  environmentsecurity:
     pre_rules:
       - env-var-api-keys
       - no-secrets
     on_fail: stop
-  demo-security:
+  demosecurity:
     pre_rules:
       - no-secrets
     on_fail: continue

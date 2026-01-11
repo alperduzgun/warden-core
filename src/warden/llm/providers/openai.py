@@ -34,9 +34,19 @@ class OpenAIClient(ILlmClient):
         else:
             self._base_url = config.endpoint or "https://api.openai.com/v1"
 
+        self._usage = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0
+        }
+
     @property
     def provider(self) -> LlmProvider:
         return self._provider
+
+    def get_usage(self) -> Dict[str, int]:
+        """Get cumulative token usage."""
+        return self._usage.copy()
 
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         start_time = time.time()
@@ -81,15 +91,23 @@ class OpenAIClient(ILlmClient):
                 )
 
             usage = result.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+
+            # Update cumulative usage
+            self._usage["prompt_tokens"] += prompt_tokens
+            self._usage["completion_tokens"] += completion_tokens
+            self._usage["total_tokens"] += total_tokens
 
             return LlmResponse(
                 content=result["choices"][0]["message"]["content"],
                 success=True,
                 provider=self.provider,
                 model=result.get("model"),
-                prompt_tokens=usage.get("prompt_tokens"),
-                completion_tokens=usage.get("completion_tokens"),
-                total_tokens=usage.get("total_tokens"),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
                 duration_ms=duration_ms
             )
 

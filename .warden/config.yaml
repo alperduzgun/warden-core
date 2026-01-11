@@ -19,7 +19,7 @@ frames:
 - resilience
 - fuzz
 - orphan
-- env-security
+# - env-security (Duplicate of environmentsecurity)
 - stress
 - demosecurity
 - architecturalconsistency
@@ -34,8 +34,8 @@ frames_config:
     check_hardcoded_passwords: true
     enabled: true
     severity_level: high
-  env-security:
-    enabled: true
+#  env-security:
+#    enabled: true
   environmentsecurity:
     enabled: true
   orphan:

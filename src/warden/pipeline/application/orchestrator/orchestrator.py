@@ -401,6 +401,14 @@ class PhaseOrchestrator:
                 
             self.pipeline.completed_at = datetime.now()
 
+            # Capture LLM Usage if available
+            if self.llm_service and hasattr(self.llm_service, 'get_usage'):
+                usage = self.llm_service.get_usage()
+                context.total_tokens = usage.get('total_tokens', 0)
+                context.prompt_tokens = usage.get('prompt_tokens', 0)
+                context.completion_tokens = usage.get('completion_tokens', 0)
+                logger.info("llm_usage_recorded", **usage)
+
             logger.info(
                 "pipeline_execution_completed",
                 pipeline_id=context.pipeline_id,

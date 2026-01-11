@@ -485,13 +485,14 @@ class OrphanFrame(ValidationFrame):
         
         # Supported extensions: Python (native) + Universal AST languages
         supported_extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".cs"}
-        if ext not in supported_extensions:
-            return False
-
-        # Check if test file should be ignored
         if self.ignore_test_files:
             if "test_" in code_file.path or "_test." in code_file.path or ".test." in code_file.path:
+                logger.debug("orphan_skipped_test", file=code_file.path, ignored=True)
                 return False
+
+        if ext not in supported_extensions:
+            logger.debug("orphan_skipped_ext", file=code_file.path, ext=ext, supported=supported_extensions)
+            return False
 
         return True
 
