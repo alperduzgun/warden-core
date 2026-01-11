@@ -15,12 +15,13 @@ class DefaultRulesLoader:
         """Initialize the default rules loader."""
         self.rules_dir = Path(__file__).parent
 
-    def get_rules_for_language(self, language: str) -> List[CustomRule]:
+    def get_rules_for_language(self, language: str, context_tags: Optional[Dict[str, str]] = None) -> List[CustomRule]:
         """
         Get all default rules for a specific language.
 
         Args:
             language: Programming language (e.g., 'python', 'javascript')
+            context_tags: Optional dictionary of context tags (e.g., {'framework': 'fastapi'})
 
         Returns:
             List of CustomRule objects for the language
@@ -39,6 +40,17 @@ class DefaultRulesLoader:
 
                     if 'rules' in data:
                         for rule_data in data['rules']:
+                            # Check activation criteria if context tags provided
+                            if context_tags and 'activation' in rule_data:
+                                activation = rule_data['activation']
+                                should_load = True
+                                for key, value in activation.items():
+                                    if context_tags.get(key) != value:
+                                        should_load = False
+                                        break
+                                if not should_load:
+                                    continue
+                            
                             # Convert pattern to conditions for compatibility
                             conditions = {}
                             if 'pattern' in rule_data:
