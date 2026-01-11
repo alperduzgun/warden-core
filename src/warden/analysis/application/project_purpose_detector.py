@@ -158,7 +158,12 @@ Return strictly JSON:
         for f in found_entries[:3]:
             try:
                 # Read the beginning of the file to understand its role
-                content = f.read_text(encoding='utf-8', errors='ignore')[:1500]
+                # Increased limit to 3000 chars to avoid false "incomplete file" anomalies
+                full_content = f.read_text(encoding='utf-8', errors='ignore')
+                content = full_content[:3000]
+                if len(full_content) > 3000:
+                    content += "\n...[TRUNCATED]"
+                
                 samples += f"\nFILE: {f.name}\n```\n{content}\n```\n"
             except Exception as e:
                 logger.debug("sample_read_failed", file=str(f), error=str(e))

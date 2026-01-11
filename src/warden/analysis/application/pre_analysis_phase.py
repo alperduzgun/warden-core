@@ -321,8 +321,8 @@ class PreAnalysisPhase:
         if not project_context.purpose and self.llm_analyzer:
             detector = ProjectPurposeDetector(self.project_root, self.config.get("llm_config"))
             # We need the file list for discovery canvas
-            # Convert Path objects to list
-            all_files = list(self.project_root.rglob("*"))
+            # Use analyzer's filtered list to avoid pollution (like __pycache__)
+            all_files = self.project_analyzer.get_all_files()
             purpose, arch = await detector.detect_async(
                 all_files, 
                 project_context.config_files
@@ -640,7 +640,7 @@ class PreAnalysisPhase:
         if purpose_data:
             context.purpose = purpose_data.get("purpose", "")
             context.architecture_description = purpose_data.get("architecture_description", "")
-            logger.info("project_purpose_restored_from_memory")
+            logger.info("project_purpose_restored_from_memory", purpose_preview=context.purpose[:50], source="memory_manager")
 
         # Load service abstractions from memory if not detected in current run
         # (or merge with detected ones)

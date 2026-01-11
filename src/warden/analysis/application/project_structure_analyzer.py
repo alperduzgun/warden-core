@@ -27,6 +27,7 @@ from warden.analysis.domain.project_context import (
     ProjectConventions,
 )
 from warden.llm.config import LlmConfiguration
+from warden.analysis.application.discovery.gitignore_filter import create_gitignore_filter
 
 logger = structlog.get_logger()
 
@@ -53,6 +54,9 @@ class ProjectStructureAnalyzer:
         self.file_extensions: Set[str] = set()
         self.directory_structure: Dict[str, int] = {}  # dir -> file count
         self.framework = None  # Will be set during analysis
+        
+        # Initialize Gitignore Filter
+        self.gitignore_filter = create_gitignore_filter(self.project_root)
 
     async def analyze_async(self, initial_context: Optional[ProjectContext] = None) -> ProjectContext:
         """
@@ -145,6 +149,19 @@ class ProjectStructureAnalyzer:
             context.detection_warnings.append(f"Analysis failed: {str(e)}")
             context.detection_time = time.perf_counter() - start_time
             return context
+
+    def get_all_files(self) -> List[Path]:
+        """
+        Get all files in the project, respecting gitignore rules.
+        
+        Returns:
+            List of Path objects for all valid files.
+        """
+        files = []
+        for file_path in self.project_root.rglob("*"):
+            if file_path.is_file() and not self.gitignore_filter.should_ignore(file_path):
+                files.append(file_path)
+        return files
 
     async def _detect_config_files_async(self) -> None:
         """Detect and categorize configuration files."""
@@ -248,17 +265,17 @@ class ProjectStructureAnalyzer:
             if found_dirs:
                 self.special_dirs[special_type] = found_dirs
 
-        # Collect file extensions
-        for file_path in self.project_root.rglob("*"):
-            if file_path.is_file():
-                ext = file_path.suffix
-                if ext:
-                    self.file_extensions.add(ext)
+        # Collect file extensions (using filtered list)
+        for file_path in self.get_all_files():
+            # Files are already filtered by get_all_files()
+            ext = file_path.suffix
+            if ext:
+                self.file_extensions.add(ext)
 
-                # Count files per directory
-                parent_dir = file_path.parent.relative_to(self.project_root)
-                dir_str = str(parent_dir) if str(parent_dir) != "." else "root"
-                self.directory_structure[dir_str] = self.directory_structure.get(dir_str, 0) + 1
+            # Count files per directory
+            parent_dir = file_path.parent.relative_to(self.project_root)
+            dir_str = str(parent_dir) if str(parent_dir) != "." else "root"
+            self.directory_structure[dir_str] = self.directory_structure.get(dir_str, 0) + 1
 
     async def _collect_statistics_async(self) -> ProjectStatistics:
         """Collect statistical information about the project."""
