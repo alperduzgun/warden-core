@@ -60,11 +60,12 @@ class TestDynamicRulesLoader(unittest.TestCase):
         self.assertIn("generic-rule-1", ids)
 
     def test_no_context(self):
-        # If no context provided, it should load everything (default fallback)
-        # OR currently implementation treats None as "no filter", so it loads everything.
+        # Strict Logic: If no context provided, rules with activation requirements must be SKIPPED.
+        # This prevents accidental loading of framework-specific rules in generic contexts.
         rules = self.loader.get_rules_for_language("python", context_tags=None)
         ids = [r.id for r in rules]
-        self.assertIn("fastapi-rule-1", ids)
+        self.assertNotIn("fastapi-rule-1", ids)
+        self.assertIn("generic-rule-1", ids)
 
 if __name__ == '__main__':
     unittest.main()
