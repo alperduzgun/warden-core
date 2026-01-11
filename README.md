@@ -56,7 +56,13 @@ Warden gives you granular control over what to check:
 *   **Global Config:** Define suppressions in `.warden/suppressions.yaml`.
 *   **File Exclusion:** Respects `.gitignore` and supports `.warden/ignore.yaml`.
 
-### 4. 🧠 Hallucination Prevention (Suppression System)
+### 5. 🧠 Structural Intelligence & Hygiene (New!)
+Warden goes beyond code syntax; it understands your **Project Architecture**:
+*   **Anomaly Detection:** Uses AI to identify structural flaws (e.g., redundant configuration files, orphaned directories) that static analysis misses.
+*   **Smart Hygiene:** Automatically filters noise (`__pycache__`, `node_modules`) globally, ensuring AI focuses only on relevant code.
+*   **One-Config Standard:** Enforces a single source of truth (`.warden/config.yaml`), preventing "Config Drift".
+
+### 6. 🧠 Hallucination Prevention (Suppression System)
 AI analysis can sometimes produce "hallucinations" – findings that look like issues but are actually valid code patterns (false positives). Warden provides a dedicated **Suppression Phase** to filter these out.
 
 **How it works:**
