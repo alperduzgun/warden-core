@@ -39,7 +39,18 @@ Warden runs your code through 6 specialized "Frames":
 5.  **ArchitecturalConsistencyFrame (Medium):** Enforces SOLID principles and file limits.
 6.  **StressTestingFrame (Low):** Identifies performance bottlenecks (N+1 queries).
 
-### 3. 🚦 False Positive Management
+### 3. ✨ Warden Craftsman (New!)
+Warden doesn't just find bugs; it acts as a **Senior Software Craftsman**. The Cleaning Phase (`code-simplifier`) analyzes your code for:
+*   **Elegance:** Simplifying nested logic and removing redundant variables.
+*   **Clarity:** Reducing cognitive load and improving readability.
+*   **Modernization:** Suggesting modern language features (e.g., Python `f-strings`, `list comprehensions`).
+
+*Try it yourself:*
+```bash
+warden scan examples/messy_code.py
+```
+
+### 4. 🚦 False Positive Management
 Warden gives you granular control over what to check:
 *   **Inline Suppression:** Use `# warden-ignore: rule-id` to suppress specific issues.
 *   **Global Config:** Define suppressions in `.warden/suppressions.yaml`.

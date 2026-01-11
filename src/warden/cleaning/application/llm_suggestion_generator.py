@@ -156,69 +156,61 @@ class LLMSuggestionGenerator:
         code_snippet = code_file.content[:3000]
 
         prompt = f"""
-        You are a senior software engineer reviewing code for quality improvements.
+        You are a **Senior Software Craftsman** and **Code Quality Architect**.
+        Your goal is not just to find bugs, but to elevate the code to a state of **Elegance, Clarity, and Maintainability**.
 
-        PROJECT CONTEXT:
+        ### PHILOSOPHY
+        1.  **Readability is King**: Code is read 10x more than it is written. Optimize for the reader's cognitive load.
+        2.  **Behavioral Invariance**: You must NEVER change the functionality or external behavior of the code.
+        3.  **Simplicity > Cleverness**: Prefer explicit, boring code over clever one-liners.
+        4.  **Idiomatic Excellence**: Apply the highest standards of {language} best practices.
+
+        ### PROJECT CONTEXT
         - Type: {project_type}
         - Framework: {framework}
         - Language: {language}
-        - Current Quality Score: {self.context.get('quality_score_before', 0):.1f}/10
+        - Quality Score: {self.context.get('quality_score_before', 0):.1f}/10
 
-        FILE: {code_file.path}
-
-        CODE TO REVIEW:
+        ### TARGET CODE ({code_file.path}):
         ```{language}
         {code_snippet}
         ```
 
-        KNOWN ISSUES ({len(file_findings)} security issues found):
-        {self._format_findings(file_findings[:5])}
+        ### ANALYSIS DIRECTIVES
+        Identify specific opportunities to improve the code in these dimensions:
 
-        Analyze this code and suggest improvements in these areas:
+        1.  **Simplification**: Reduce nesting (Guard Clauses), simplify boolean logic, remove redundant variables.
+        2.  **Modernization**: Use modern {language} features (e.g., f-strings, type hints, list comprehensions where appropriate).
+        3.  **Cognitive Load**: Split complex functions, rename vague variables to precise intent.
+        4.  **Structure**: Group related logic, enforce Separation of Concerns.
+        5.  **Dead Code**: Ruthlessly identify unused elements.
 
-        1. DEAD CODE: Identify unused imports, variables, functions
-        2. DUPLICATION: Find repeated code that could be extracted
-        3. COMPLEXITY: Identify overly complex functions needing refactoring
-        4. NAMING: Suggest better names for variables and functions
-        5. STRUCTURE: Recommend better code organization
-        6. PERFORMANCE: Identify optimization opportunities
-        7. BEST PRACTICES: Suggest {framework} best practices
+        ### OUTPUT FORMAT
+        Response MUST be valid JSON with this exact structure:
 
-        Format your response as JSON with two arrays:
-        - cleanings: Simple improvements (dead code, naming, imports)
-        - refactorings: Complex changes (extract methods, restructure)
-
-        Each suggestion should have:
-        - title: Brief description
-        - type: Category of improvement
-        - location: Where in the code
-        - current_code: The problematic code
-        - improved_code: The suggested improvement
-        - impact: Expected impact on quality (low/medium/high)
-        - effort: Implementation effort (low/medium/high)
-
-        Example response:
         {{
             "cleanings": [
                 {{
-                    "title": "Remove unused import",
-                    "type": "dead_code",
-                    "location": "Line 5",
-                    "current_code": "import unused_module",
-                    "improved_code": "",
-                    "impact": "low",
-                    "effort": "low"
+                    "title": "Brief title (e.g., 'Use Guard Clause')",
+                    "type": "simplification|modernization|dead_code|naming",
+                    "location": "Line X or range",
+                    "current_code": "The exact code block to change",
+                    "improved_code": "The elegantly refactored version",
+                    "impact": "low|medium|high",
+                    "effort": "low|medium|high",
+                    "description": "Why this improves the code (focus on maintainability)"
                 }}
             ],
             "refactorings": [
                 {{
-                    "title": "Extract complex validation logic",
-                    "type": "complexity",
-                    "location": "Lines 50-120",
-                    "current_code": "# Complex function body",
-                    "improved_code": "# Refactored into smaller functions",
+                    "title": "Title for larger structural change",
+                    "type": "complexity|structure",
+                    "location": "Line range",
+                    "current_code": "Snippet of the complex area",
+                    "improved_code": "The refactored structure (or description if too large)",
                     "impact": "high",
-                    "effort": "medium"
+                    "effort": "medium|high",
+                    "description": "Architectural reasoning for this change"
                 }}
             ]
         }}
