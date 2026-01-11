@@ -132,8 +132,10 @@ def _setup_semantic_search(config_path: Path):
                   console.print(f"[red]Installation error: {e}[/red]")
 
     except Exception as e:
-        console.print(f"[red]Warning: Failed to initialize index (Soft Failure): {e}[/red]")
-        console.print("[dim]The project is initialized, but semantic features may be limited.[/dim]")
+        console.print(f"\n[red]❌ Semantic Indexing Failed[/red]")
+        console.print(f"[red]Error: {str(e)}[/red]")
+        console.print("[yellow]💡 Suggestion: Run 'warden index' manually to see detailed errors.[/yellow]")
+        console.print("[dim]The project is initialized, but AI features (Orphan/Purpose) may be limited until fixed.[/dim]")
 
 async def _create_baseline(root: Path, config_path: Path):
     """Run initial scan and save as baseline."""
@@ -334,14 +336,12 @@ def init_command(
                 "api_version": "2024-02-15-preview"
             }
         
-        # New root manifest
-        root_config_path = Path.cwd() / "warden.yaml"
+        # New root manifest (Standardized to .warden/config.yaml)
+        root_config_path = warden_dir / "config.yaml"
         with open(root_config_path, "w") as f:
             yaml.dump(config_data, f, default_flow_style=False)
-        console.print(f"[green]Created project manifest: [bold]{root_config_path.name}[/bold][/green]")
+        console.print(f"[green]Created project configuration: [bold]{root_config_path}[/bold][/green]")
         
-        # Also symlink or copy to .warden/config.yaml for internal consistency if needed
-        # But moving forward, let's use the root file as the main config
         config_path = root_config_path 
 
     else:
