@@ -46,6 +46,7 @@ class PreAnalysisPhase:
         project_root: Path,
         progress_callback: Optional[Callable] = None,
         config: Optional[Dict[str, Any]] = None,
+        rate_limiter: Optional[Any] = None,
     ) -> None:
         """
         Initialize PRE-ANALYSIS phase.
@@ -58,6 +59,7 @@ class PreAnalysisPhase:
         self.project_root = Path(project_root)
         self.progress_callback = progress_callback
         self.config = config or {}
+        self.rate_limiter = rate_limiter
 
         # Initialize analyzers
         self.project_analyzer = ProjectStructureAnalyzer(self.project_root, self.config.get("llm_config"))
@@ -270,11 +272,14 @@ class PreAnalysisPhase:
             batch_size = pre_analysis_config.get("batch_size", 10)
             
             # Rate limit config (default to conservative but usable limits)
-            tpm = pre_analysis_config.get("tpm", 30000)  # 30k tokens/min
-            rpm = pre_analysis_config.get("rpm", 100)    # 100 req/min
+            # tpm = pre_analysis_config.get("tpm", 30000)  # 30k tokens/min
+            # rpm = pre_analysis_config.get("rpm", 100)    # 100 req/min
 
             # Initialize shared Rate Limiter for this phase
-            rate_limiter = RateLimiter(RateLimitConfig(tpm=tpm, rpm=rpm))
+            # rate_limiter = RateLimiter(RateLimitConfig(tpm=tpm, rpm=rpm))
+            
+            # Use injected rate limiter or fallback (though fallback shouldn't happen with correct dependency injection)
+            rate_limiter = self.rate_limiter
 
             # Initialize LLM analyzer
             self.llm_analyzer = LlmContextAnalyzer(

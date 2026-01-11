@@ -35,6 +35,7 @@ class LLMSuggestionGenerator:
         llm_service: LLMService,
         context: Optional[Dict[str, Any]] = None,
         semantic_search_service: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize LLM suggestion generator.
@@ -47,6 +48,7 @@ class LLMSuggestionGenerator:
         self.llm_service = llm_service
         self.context = context or {}
         self.semantic_search_service = semantic_search_service
+        self.rate_limiter = rate_limiter
 
         logger.info(
             "llm_suggestion_generator_initialized",
@@ -88,6 +90,12 @@ class LLMSuggestionGenerator:
             prompt += f"\n# ADDITIONAL CONTEXT\n{semantic_context}"
 
         try:
+            # Acquire rate limit if available
+            if self.rate_limiter:
+                # Estimate tokens: prompt chars / 4 + output estimate
+                estimated_tokens = (len(prompt) // 4) + 1000
+                await self.rate_limiter.acquire(estimated_tokens)
+
             # Get LLM suggestions
             response = await self.llm_service.complete_async(
                 prompt=prompt,

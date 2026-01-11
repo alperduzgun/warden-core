@@ -26,8 +26,9 @@ class ClassificationExecutor(BasePhaseExecutor):
         frames: List[ValidationFrame] = None,
         available_frames: List[ValidationFrame] = None,
         semantic_search_service: Any = None,
+        rate_limiter: Any = None,
     ):
-        super().__init__(config, progress_callback, project_root, llm_service)
+        super().__init__(config, progress_callback, project_root, llm_service, rate_limiter)
         self.frames = frames or []
         self.available_frames = available_frames or self.frames
         self.semantic_search_service = semantic_search_service
@@ -69,7 +70,8 @@ class ClassificationExecutor(BasePhaseExecutor):
                     available_frames=self.available_frames,
                     context=phase_context,
                     semantic_search_service=self.semantic_search_service,
-                    memory_manager=getattr(self.config, 'memory_manager', None)
+                    memory_manager=getattr(self.config, 'memory_manager', None),
+                    rate_limiter=self.rate_limiter
                 )
                 logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:

@@ -43,6 +43,7 @@ class FortificationExecutor(BasePhaseExecutor):
                 context=phase_context,
                 llm_service=self.llm_service,
                 semantic_search_service=self.semantic_search_service,
+                rate_limiter=self.rate_limiter
             )
 
             # Ensure validated_issues exists and is a list

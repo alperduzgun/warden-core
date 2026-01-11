@@ -19,6 +19,7 @@ class RateLimitConfig:
     """Rate limit configuration."""
     tpm: int = 1000  # Tokens Per Minute
     rpm: int = 6     # Requests Per Minute
+    burst: int = 1   # Max concurrent requests (bucket size)
 
 
 class RateLimiter:
@@ -37,8 +38,8 @@ class RateLimiter:
         self._tokens = float(config.tpm)
         self._last_token_refill = time.time()
         
-        # Request Bucket
-        self._requests = float(config.rpm)
+        # Request Bucket - Capacity is burst, Rate is rpm
+        self._requests = float(config.burst)
         self._last_request_refill = time.time()
         
         # Lock will be lazily initialized to avoid event loop binding issues
@@ -47,7 +48,8 @@ class RateLimiter:
         logger.info(
             "rate_limiter_initialized",
             tpm=config.tpm,
-            rpm=config.rpm
+            rpm=config.rpm,
+            burst=config.burst
         )
 
     def _get_lock(self) -> asyncio.Lock:
@@ -75,7 +77,8 @@ class RateLimiter:
         new_requests = elapsed_requests * request_rate
         
         if new_requests > 0:
-            self._requests = min(self.config.rpm, self._requests + new_requests)
+            # Cap at burst size, not RPM
+            self._requests = min(self.config.burst, self._requests + new_requests)
             self._last_request_refill = now
 
     async def acquire(self, estimated_tokens: int) -> float:

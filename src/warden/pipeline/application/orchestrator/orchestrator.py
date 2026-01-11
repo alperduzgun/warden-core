@@ -51,6 +51,7 @@ class PhaseOrchestrator:
         project_root: Optional[Path] = None,
         llm_service: Optional[Any] = None,
         available_frames: Optional[List[ValidationFrame]] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize phase orchestrator.
@@ -65,6 +66,7 @@ class PhaseOrchestrator:
         """
         self.frames = frames or []
         self.available_frames = available_frames or self.frames  # Fallback to frames if not provided
+        self.rate_limiter = rate_limiter
 
         # Handle both dict and PipelineConfig for backward compatibility
         if config is None:
@@ -102,7 +104,8 @@ class PhaseOrchestrator:
             llm_service=self.llm_service,
             # Validation logic needs all available frames for AI selection
             frames=self.available_frames,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
+            rate_limiter=self.rate_limiter
         )
 
         # Initialize frame executor

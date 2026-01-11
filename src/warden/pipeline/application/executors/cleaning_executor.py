@@ -41,6 +41,7 @@ class CleaningExecutor(BasePhaseExecutor):
                 config=getattr(self.config, 'cleaning_config', {}),
                 context=phase_context,
                 llm_service=self.llm_service,
+                rate_limiter=self.rate_limiter
             )
 
             # Optimization: Filter out unchanged files

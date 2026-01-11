@@ -37,6 +37,7 @@ class PhaseExecutor:
         llm_service: Optional[Any] = None,
         frames: Optional[List[ValidationFrame]] = None,
         semantic_search_service: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize phase executor.
@@ -55,6 +56,7 @@ class PhaseExecutor:
         self.llm_service = llm_service
         self.frames = frames or []
         self.semantic_search_service = semantic_search_service
+        self.rate_limiter = rate_limiter
 
         # Initialize specific executors
         self.pre_analysis_executor = PreAnalysisExecutor(
@@ -62,14 +64,16 @@ class PhaseExecutor:
             progress_callback=self._progress_callback,
             project_root=self.project_root,
             llm_service=self.llm_service,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
+            rate_limiter=self.rate_limiter
         )
         self.analysis_executor = AnalysisExecutor(
             config=self.config,
             progress_callback=self._progress_callback,
             project_root=self.project_root,
             llm_service=self.llm_service,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
+            rate_limiter=self.rate_limiter
         )
         self.classification_executor = ClassificationExecutor(
             config=self.config,
@@ -79,21 +83,24 @@ class PhaseExecutor:
             # Pass all available frames to classification for dynamic selection
             frames=self.frames,
             available_frames=self.frames,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
+            rate_limiter=self.rate_limiter
         )
         self.fortification_executor = FortificationExecutor(
             config=self.config,
             progress_callback=self._progress_callback,
             project_root=self.project_root,
             llm_service=self.llm_service,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
+            rate_limiter=self.rate_limiter
         )
         self.cleaning_executor = CleaningExecutor(
             config=self.config,
             progress_callback=self._progress_callback,
             project_root=self.project_root,
             llm_service=self.llm_service,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
+            rate_limiter=self.rate_limiter
         )
     
     @property

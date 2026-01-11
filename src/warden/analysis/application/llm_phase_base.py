@@ -92,6 +92,7 @@ class LLMPhaseBase(ABC):
         llm_service: Optional[Any] = None,
         project_root: Optional[Path] = None,
         use_gitignore: bool = True,
+        rate_limiter: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -102,6 +103,7 @@ class LLMPhaseBase(ABC):
             llm_service: Pre-configured LLM service/client
             project_root: Root directory of the project
             use_gitignore: Whether to use .gitignore patterns
+            rate_limiter: Optional shared RateLimiter
         """
         self.config = config or LLMPhaseConfig(enabled=False)
         self.llm = llm_service
@@ -112,13 +114,15 @@ class LLMPhaseBase(ABC):
 
         
         # Initialize Rate Limiter
-        # Note: In a real app, this should probably be a singleton injected service
-        # to share limits across phases. For now, we init per phase (or passed config).
-        # Initialize Rate Limiter with config values
-        self.rate_limiter = RateLimiter(RateLimitConfig(
-            tpm=self.config.tpm_limit, 
-            rpm=self.config.rpm_limit
-        ))
+        # Use injected rate limiter if provided (preferred for shared limits)
+        if rate_limiter:
+            self.rate_limiter = rate_limiter
+        else:
+            # Fallback to local rate limiter (per-phase limits)
+            self.rate_limiter = RateLimiter(RateLimitConfig(
+                tpm=self.config.tpm_limit, 
+                rpm=self.config.rpm_limit
+            ))
         # Initializing tokenizer (cl100k_base is used by gpt-4, gpt-3.5)
         try:
             self.tokenizer = tiktoken.get_encoding("cl100k_base")

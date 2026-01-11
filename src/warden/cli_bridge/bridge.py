@@ -50,13 +50,20 @@ class WardenBridge:
         config_data = self.config_handler.load_pipeline_config(config_path)
         self.active_config_name = config_data["name"]
 
+        # Initialize Rate Limiter (Centralized to prevent Event Loop issues)
+        from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
+        # Default limits, can be overridden by config if needed
+        # Set burst=1 to be safe against concurrency limits
+        self.rate_limiter = RateLimiter(RateLimitConfig(tpm=5000, rpm=10, burst=1))
+
         # Initialize Orchestrator
         from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator
         self.orchestrator = PhaseOrchestrator(
             frames=config_data["frames"],
             config=config_data["config"],
             llm_service=llm_service,
-            available_frames=config_data["available_frames"]
+            available_frames=config_data["available_frames"],
+            rate_limiter=self.rate_limiter
         )
         
         self.pipeline_handler = PipelineHandler(self.orchestrator, self.project_root)

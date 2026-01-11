@@ -66,6 +66,7 @@ class FortificationPhase:
         context: Optional[Dict[str, Any]] = None,
         llm_service: Optional[LLMService] = None,
         semantic_search_service: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize fortification phase.
@@ -74,11 +75,13 @@ class FortificationPhase:
             config: Phase configuration
             context: Pipeline context from previous phases
             llm_service: Optional LLM service for enhanced fixes
+            rate_limiter: Optional rate limiter for LLM calls
         """
         self.config = config or {}
         self.context = context or {}
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
+        self.rate_limiter = rate_limiter
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
 
         # Initialize IgnoreMatcher
@@ -240,6 +243,12 @@ class FortificationPhase:
         prompt = self._create_llm_prompt(issue_type, issues, semantic_context)
 
         try:
+            # Acquire rate limit if available
+            if self.rate_limiter:
+                # Estimate tokens: prompt chars / 4 + output limit
+                estimated_tokens = (len(prompt) // 4) + 2000
+                await self.rate_limiter.acquire(estimated_tokens)
+
             # Step 3: Get LLM suggestions
             response = await self.llm_service.complete_async(
                 prompt=prompt,

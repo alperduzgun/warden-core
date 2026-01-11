@@ -77,7 +77,8 @@ class AnalysisExecutor(BasePhaseExecutor):
                     llm_service=self.llm_service,
                     project_root=self.project_root,
                     use_gitignore=getattr(self.config, 'use_gitignore', True),
-                    memory_manager=getattr(self.config, 'memory_manager', None)
+                    memory_manager=getattr(self.config, 'memory_manager', None),
+                    rate_limiter=self.rate_limiter
                 )
                 if verbose:
                     logger.info("using_llm_analysis_phase_verbose", llm_provider=self.llm_service.__class__.__name__ if self.llm_service else "None")

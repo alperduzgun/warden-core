@@ -54,6 +54,7 @@ class CleaningPhase:
         context: Optional[Dict[str, Any]] = None,
         llm_service: Optional[LLMService] = None,
         semantic_search_service: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize cleaning phase.
@@ -67,6 +68,7 @@ class CleaningPhase:
         self.context = context or {}
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
+        self.rate_limiter = rate_limiter
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
         
         # Initialize IgnoreMatcher
@@ -87,6 +89,7 @@ class CleaningPhase:
                 llm_service=llm_service,
                 context=context,
                 semantic_search_service=semantic_search_service,
+                rate_limiter=rate_limiter,
             )
         else:
             self.llm_generator = None
