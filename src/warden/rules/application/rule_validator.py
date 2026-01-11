@@ -10,7 +10,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import structlog
 
@@ -32,54 +32,59 @@ class CustomRuleValidator:
 
     Attributes:
         rules: List of active custom rules to validate against
+        llm_service: Optional LLM service for AI-powered validation
     """
 
-    def __init__(self, rules: List[CustomRule]):
+    def __init__(self, rules: List[CustomRule], llm_service: Optional[Any] = None):
         """Initialize validator with custom rules.
 
         Args:
             rules: List of custom rules (only enabled rules are kept)
+            llm_service: Optional LLM service instance
         """
         self.rules = [r for r in rules if r.enabled]
-        logger.info("custom_rule_validator_initialized", rule_count=len(self.rules))
+        self.llm_service = llm_service
+        logger.info("custom_rule_validator_initialized", rule_count=len(self.rules), has_llm=llm_service is not None)
 
-    async def validate_file(self, file_path: Path) -> List[CustomRuleViolation]:
-        """Validate a file against all active rules.
+    async def validate_file_async(
+        self, 
+        file_path: Path | str, 
+        rules: Optional[List[CustomRule]] = None
+    ) -> List[CustomRuleViolation]:
+        """Validate a file against rules.
 
         Args:
             file_path: Path to the file to validate
+            rules: Optional list of rules to validate against (overrides global rules)
 
         Returns:
             List of rule violations found
-
-        Raises:
-            FileNotFoundError: If file does not exist
-            ValueError: If file is too large or unreadable
         """
-        # Validate file exists
+        # Support both Path and str
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        # Check file size (max 10MB)
-        if file_path.stat().st_size > 10 * 1024 * 1024:
-            raise ValueError(f"File too large: {file_path}")
+        # Use passed rules or fallback to global rules
+        active_rules = rules if rules is not None else self.rules
+        
+        if not active_rules:
+            return []
 
         # Read file content
         try:
-            with open(file_path, encoding="utf-8") as f:
-                content = f.read()
-                lines = content.split("\n")
-        except UnicodeDecodeError as e:
-            logger.warning(
-                "file_decode_error",
-                file_path=str(file_path),
-                error=str(e),
-            )
-            raise ValueError(f"Cannot decode file: {file_path}") from e
+            content = file_path.read_text(encoding="utf-8")
+            lines = content.split("\n")
+        except Exception as e:
+            logger.error("file_read_error", file=str(file_path), error=str(e))
+            return []
 
         violations = []
 
-        for rule in self.rules:
+        for rule in active_rules:
+            logger.debug("processing_rule", rule_id=rule.id, rule_type=rule.type)
             # Check language filter
             if rule.language and not self._is_language_match(file_path, rule.language):
                 continue
@@ -101,6 +106,12 @@ class CustomRuleValidator:
                 violation = await self._validate_script(rule, file_path)
                 if violation:
                     violations.append(violation)
+            elif rule.type == "ai":
+                if self.llm_service:
+                    ai_violations = await self._validate_ai_rule(rule, file_path, content)
+                    violations.extend(ai_violations)
+                else:
+                    logger.warning("ai_rule_skipped_no_llm", rule_id=rule.id)
 
         logger.info(
             "file_validation_complete",
@@ -690,3 +701,83 @@ class CustomRuleValidator:
                 duration=duration,
             )
             return None
+
+    async def _validate_ai_rule(
+        self,
+        rule: CustomRule,
+        file_path: Path,
+        content: str,
+    ) -> List[CustomRuleViolation]:
+        """Validate code using LLM as a pure AI rule.
+
+        Args:
+            rule: AI rule to validate
+            file_path: File being validated
+            content: File content
+
+        Returns:
+            List of violations found
+        """
+        if not self.llm_service:
+            return []
+
+        # Prepare prompt for LLM
+        prompt = f"""
+You are a Senior Code Auditor. Your task is to audit the following code against a specific PROJECT RULE.
+
+PROJECT RULE:
+- ID: {rule.id}
+- Name: {rule.name}
+- Directive: {rule.description}
+- Severity: {rule.severity.value if hasattr(rule.severity, 'value') else rule.severity}
+
+CODE TO AUDIT ({file_path.name}):
+```
+{content[:10000]}  # Limit content size for LLM
+```
+
+INSTRUCTIONS:
+1. Does the code violate the PROJECT RULE?
+2. If yes, explain exactly WHY and where in the code (provide line numbers if possible).
+3. If no violation is found, return as clean.
+
+RETURN ONLY A JSON OBJECT:
+{{
+    "violation_found": boolean,
+    "line_number": integer (0 if multiple or unknown),
+    "explanation": "Short explanation",
+    "suggestion": "How to fix it"
+}}
+"""
+        try:
+            # Call LLM service (assuming complete_async interface)
+            logger.debug("executing_ai_rule", rule_id=rule.id, file=str(file_path))
+            response = await self.llm_service.complete_async(prompt, "You are a specialized code validation agent.")
+            logger.debug("ai_rule_response_received", rule_id=rule.id)
+            
+            # Parse JSON response
+            from warden.shared.utils.json_parser import parse_json_from_llm
+            result = parse_json_from_llm(response.content if hasattr(response, 'content') else str(response))
+            
+            if result.get("violation_found"):
+                logger.info("ai_rule_violation_found", rule_id=rule.id, file=str(file_path), explanation=result.get("explanation"))
+                return [
+                    CustomRuleViolation(
+                        rule_id=rule.id,
+                        rule_name=rule.name,
+                        category=rule.category,
+                        severity=rule.severity,
+                        is_blocker=rule.is_blocker,
+                        file=str(file_path),
+                        line=result.get("line_number", 1),
+                        message=rule.message.format(reason=result.get("explanation")) if rule.message and "{reason}" in rule.message else (result.get("explanation") or f"AI violation: {rule.name}"),
+                        suggestion=result.get("suggestion"),
+                        code_snippet=None, # AI doesn't always provide snippets
+                    )
+                ]
+            
+            return []
+
+        except Exception as e:
+            logger.error("ai_rule_execution_failed", rule_id=rule.id, error=str(e))
+            return []

@@ -2,7 +2,7 @@
 import structlog
 from typing import List
 from pathlib import Path
-from warden.validation.domain.frame import ValidationFrame, FrameResult, Finding
+from warden.validation.domain.frame import ValidationFrame, FrameResult, Finding, CodeFile
 from warden.lsp import LSPManager
 
 logger = structlog.get_logger()

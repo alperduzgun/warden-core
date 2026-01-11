@@ -86,7 +86,7 @@ class PhaseOrchestrator:
         # Initialize rule validator if global rules exist
         self.rule_validator = None
         if self.config.global_rules:
-            self.rule_validator = CustomRuleValidator(self.config.global_rules)
+            self.rule_validator = CustomRuleValidator(self.config.global_rules, llm_service=self.llm_service)
 
         # Initialize Semantic Search Service if enabled in config
         self.semantic_search_service = None

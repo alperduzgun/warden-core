@@ -79,7 +79,7 @@ class LanguageServerClient:
         try:
             logger.info("lsp_shutting_down")
             await self.send_request("shutdown", {})
-            self._send_notification("exit", {})
+            await self.send_notification("exit", {})
             
             # Cancel reader
             if self._reader_task:
@@ -133,7 +133,7 @@ class LanguageServerClient:
                 del self._pending_requests[req_id]
             raise
 
-    def _send_notification(self, method: str, params: Any):
+    async def send_notification(self, method: str, params: Any):
         """Send a fire-and-forget notification."""
         if not self.process: return
         
@@ -142,7 +142,7 @@ class LanguageServerClient:
             "method": method,
             "params": params
         }
-        asyncio.create_task(self._write_message(msg))
+        await self._write_message(msg)
 
     def on_notification(self, method: str, handler: Callable):
         """Register a handler for a notification method."""

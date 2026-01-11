@@ -16,6 +16,10 @@ class RuleCategory(Enum):
     SECURITY = "security"
     CONVENTION = "convention"
     PERFORMANCE = "performance"
+    ARCHITECTURAL = "architectural"
+    CONSISTENCY = "consistency"
+    BACKEND_IPC = "backend-ipc"
+    LOGIC = "logic"
     CUSTOM = "custom"
 
 
@@ -29,6 +33,9 @@ class RuleSeverity(Enum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+    ERROR = "error"
+    WARNING = "warning"
+    INFO = "info"
 
 
 class RuleType(Enum):
@@ -41,4 +48,5 @@ class RuleType(Enum):
     CONVENTION = "convention" 
     PATTERN = "pattern"
     SCRIPT = "script"
+    AI = "ai"
 

@@ -116,30 +116,34 @@ class FrameExecutor:
                     "frames_failed": 0,
                     "no_frames_reason": "no_frames_selected"
                 })
-                
-                # Emit completion event even for early return
-                if self.progress_callback:
-                    self.progress_callback("phase_completed", {
-                        "phase": "VALIDATION",
-                        "phase_name": "VALIDATION",
-                        "duration": time.perf_counter() - start_time
-                    })
-                return
 
             # Initialize results container safery for concurrency
             if not hasattr(context, 'frame_results') or context.frame_results is None:
                 context.frame_results = {}
 
             # Execute frames based on strategy
-            if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
-                await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
-            elif self.config.strategy == ExecutionStrategy.PARALLEL:
-                await self._execute_frames_parallel(context, filtered_files, frames_to_execute, pipeline)
-            elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
-                await self._execute_frames_fail_fast(context, filtered_files, frames_to_execute, pipeline)
-            else:
-                # Default to sequential
-                await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
+            if frames_to_execute:
+                if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
+                    await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.PARALLEL:
+                    await self._execute_frames_parallel(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
+                    await self._execute_frames_fail_fast(context, filtered_files, frames_to_execute, pipeline)
+                else:
+                    await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
+            
+            # Execute Global Rules (Rules that apply to all files independent of frames)
+            if self.rule_validator and self.rule_validator.rules:
+                logger.info("executing_global_rules", rule_count=len(self.rule_validator.rules))
+                global_violations = []
+                for code_file in filtered_files:
+                    file_violations = await self.rule_validator.validate_file_async(code_file.path)
+                    global_violations.extend(file_violations)
+                
+                if global_violations:
+                    logger.info("global_rules_found_violations", count=len(global_violations))
+                    # Add to context findings
+                    context.findings.extend(global_violations)
 
             # Store results in context
             self.result_aggregator.store_validation_results(context, pipeline)

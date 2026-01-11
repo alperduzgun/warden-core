@@ -71,7 +71,7 @@ class LSPManager:
             # Initialize
             resp = await client.initialize(root_path)
             # await client.initialized() # Some servers require this notification
-            client._send_notification("initialized", {})
+            await client.send_notification("initialized", {})
             
             self._clients[language] = client
             return client

@@ -74,6 +74,34 @@ class ConfigHandler(BaseHandler):
             self.active_config_name = config_data.get('name', 'project-config')
 
         settings = config_data.get('settings', {})
+        # Load all rules using RulesYAMLLoader
+        from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+        from warden.rules.domain.models import FrameRules
+        
+        loader = RulesYAMLLoader() # Static methods used below
+        project_rule_config = RulesYAMLLoader.load_rules_sync(self.project_root)
+        
+        # Extract global rules as objects
+        global_rules_objects = []
+        if project_rule_config.global_rules:
+            # project_rule_config.global_rules is List[str] (IDs)
+            # Find the actual rule objects in project_rule_config.rules
+            rule_map = {r.id: r for r in project_rule_config.rules}
+            for rid in project_rule_config.global_rules:
+                if rid in rule_map:
+                    global_rules_objects.append(rule_map[rid])
+        
+        # Build frame rules (map IDs to FrameRules objects)
+        pipeline_frame_rules = {}
+        for fid, fr_data in project_rule_config.frame_rules.items():
+            pre_rules = [rule_map[rid] for rid in fr_data.pre_rules if rid in rule_map]
+            post_rules = [rule_map[rid] for rid in fr_data.post_rules if rid in rule_map]
+            pipeline_frame_rules[fid] = FrameRules(
+                pre_rules=pre_rules,
+                post_rules=post_rules,
+                on_fail=fr_data.on_fail
+            )
+
         pipeline_config = PipelineConfig(
             fail_fast=settings.get('fail_fast', True),
             timeout=settings.get('timeout', 300),
@@ -89,7 +117,9 @@ class ConfigHandler(BaseHandler):
             semantic_search_config=config_data.get('semantic_search', None),
             llm_config=config_data.get('llm'),
             enable_issue_validation=settings.get('enable_issue_validation', True),
-            use_gitignore=settings.get('use_gitignore', True)
+            use_gitignore=settings.get('use_gitignore', True),
+            global_rules=global_rules_objects,
+            frame_rules=pipeline_frame_rules
         )
 
         return {

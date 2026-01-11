@@ -40,7 +40,11 @@ class ResultAggregator:
             if frame_result and hasattr(frame_result, 'findings'):
                 all_findings.extend(frame_result.findings)
 
-        context.findings = all_findings
+        if not hasattr(context, 'findings') or context.findings is None:
+            context.findings = []
+            
+        # Add frame findings to existing findings (e.g. from global rules)
+        context.findings.extend(all_findings)
 
         # Ensure validated_issues is always set, even if empty
         validated_issues = []

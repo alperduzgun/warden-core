@@ -1,0 +1,1474 @@
+🛡️  Warden Scanner
+Scanning: examples/dogfooding
+
+2026-01-12 01:43:50 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:43:50 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:43:50 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:43:50 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:43:50 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:43:50 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:43:50 [info     ] frame_discovery_started
+2026-01-12 01:43:50 [debug    ] scanning_builtin_frames        frames_dir=/Users/alper/Documents/Development/Personal/warden-core/src/warden/validation/frames
+2026-01-12 01:43:50 [debug    ] frame_file_not_found           expected_file=/Users/alper/Documents/Development/Personal/warden-core/src/warden/validation/frames/architectural/architectural_frame.py frame_name=architectural
+2026-01-12 01:43:50 [debug    ] Attempting to import frame: orphan
+2026-01-12 01:43:50 [debug    ] Discovered built-in frame: orphan
+2026-01-12 01:43:50 [debug    ] builtin_frame_discovered       frame_class=OrphanFrame frame_name=orphan
+2026-01-12 01:43:50 [info     ] builtin_frames_discovered      count=1 frames=['OrphanFrame']
+2026-01-12 01:43:50 [info     ] builtin_frames_discovered      count=1 frames=['OrphanFrame']
+2026-01-12 01:43:50 [info     ] entry_point_frames_discovered  count=0 frames=[]
+2026-01-12 01:43:50 [debug    ] scanning_local_frames          path=/Users/alper/.warden/frames source=global
+2026-01-12 01:43:50 [debug    ] scanning_local_frames          path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames source=project
+2026-01-12 01:43:50 [debug    ] frame_py_not_found             path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/universal
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=ConfigValidationFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/config source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=GitChangesFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/gitchanges source=project
+2026-01-12 01:43:50 [info     ] builtin_checks_registered      count=4 frame='Security Analysis'
+2026-01-12 01:43:50 [info     ] check_discovery_started        frame_id=security
+2026-01-12 01:43:50 [info     ] entry_point_checks_discovered  checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [debug    ] local_check_directory_not_found frame_id=security path=/Users/alper/.warden/checks/security
+2026-01-12 01:43:50 [info     ] local_checks_discovered        checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [info     ] check_discovery_complete       frame_id=security total_discovered=0 unique_checks=0
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=SecurityFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/security source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=PropertyFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/property source=project
+2026-01-12 01:43:50 [debug    ] frame_metadata_loaded          frame='Environment Security Validator' version=1.0.0
+2026-01-12 01:43:50 [info     ] env_security_frame_initialized check_hardcoded=True check_validation=True config={} frame='Environment Security Validator' version=1.0.0
+2026-01-12 01:43:50 [info     ] env_security_frame_initialized check_hardcoded=True check_validation=True config={} frame='Environment Security Validator' version=1.0.0
+2026-01-12 01:43:50 [debug    ] frame_metadata_stored          frame_id=environmentsecurity metadata={'name': 'Environment Security Validator', 'id': 'env-security', 'version': '1.0.0', 'author': 'Warden Security Team', 'description': 'Detects environment variable security issues and best practices violations', 'category': 'global', 'priority': 'critical', 'scope': 'file_level', 'is_blocker': True, 'applicability': [{'language': 'python'}, {'language': 'javascript'}, {'language': 'typescript'}], 'min_warden_version': '1.0.0', 'max_warden_version': None, 'config_schema': {'enabled': {'type': 'boolean', 'default': True, 'description': 'Enable environment security validation'}, 'check_hardcoded_credentials': {'type': 'boolean', 'default': True, 'description': 'Detect hardcoded API keys, tokens, and secrets'}, 'check_missing_env_validation': {'type': 'boolean', 'default': True, 'description': 'Ensure environment variables are validated before use'}, 'check_insecure_defaults': {'type': 'boolean', 'default': True, 'description': 'Detect insecure default values for sensitive configs'}, 'sensitive_patterns': {'type': 'array', 'default': ['API_KEY', 'SECRET', 'TOKEN', 'PASSWORD', 'PRIVATE_KEY', 'AWS_', 'AZURE_', 'GOOGLE_'], 'description': 'Patterns that indicate sensitive environment variables'}, 'allowed_default_values': {'type': 'array', 'default': ['localhost', '127.0.0.1', '0.0.0.0', 'development', 'test'], 'description': 'Safe default values for non-sensitive configs'}, 'severity_level': {'type': 'string', 'default': 'critical', 'description': 'Default severity for security findings'}, 'fail_on_missing_dotenv': {'type': 'boolean', 'default': False, 'description': 'Fail if .env.example is missing but env vars are used'}}, 'tags': ['security', 'environment', 'credentials', 'best-practices', 'production-ready'], 'source': 'community'}
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=EnvironmentSecurityFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/env-security source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=ResilienceFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/resilience source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=ArchitecturalConsistencyFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/architectural source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=ProjectArchitectureFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/project_architecture source=project
+2026-01-12 01:43:50 [debug    ] frame_metadata_loaded          frame='Demo Security Validator' version=1.0.0
+2026-01-12 01:43:50 [info     ] demo_frame_initialized         check_passwords=True check_sql=True config={} frame='Demo Security Validator' version=1.0.0
+2026-01-12 01:43:50 [info     ] demo_frame_initialized         check_passwords=True check_sql=True config={} frame='Demo Security Validator' version=1.0.0
+2026-01-12 01:43:50 [debug    ] frame_metadata_stored          frame_id=demosecurity metadata={'name': 'Demo Security Validator', 'id': 'demo-security', 'version': '1.0.0', 'author': 'Warden Team', 'description': 'Demo custom frame with auto-generated config', 'category': 'global', 'priority': 'high', 'scope': 'file_level', 'is_blocker': False, 'applicability': [{'language': 'python'}], 'min_warden_version': '1.0.0', 'max_warden_version': None, 'config_schema': {'enabled': {'type': 'boolean', 'default': True, 'description': 'Enable this frame'}, 'check_hardcoded_passwords': {'type': 'boolean', 'default': True, 'description': 'Check for hardcoded passwords'}, 'check_sql_injection': {'type': 'boolean', 'default': True, 'description': 'Check for SQL injection patterns'}, 'password_patterns': {'type': 'array', 'default': ['password', 'passwd', 'pwd'], 'description': 'Password keywords to detect'}, 'severity_level': {'type': 'string', 'default': 'high', 'description': 'Default severity level for findings'}}, 'tags': ['custom', 'security', 'demo'], 'source': 'community'}
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=DemoSecurityFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/demo-security source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=OrphanFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/orphan source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=FuzzFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/fuzz source=project
+2026-01-12 01:43:50 [info     ] local_frame_loaded             frame=StressFrame path=/Users/alper/Documents/Development/Personal/warden-core/.warden/frames/stress source=project
+2026-01-12 01:43:50 [info     ] local_frames_discovered        count=12 frames=['ConfigValidationFrame', 'GitChangesFrame', 'SecurityFrame', 'PropertyFrame', 'EnvironmentSecurityFrame', 'ResilienceFrame', 'ArchitecturalConsistencyFrame', 'ProjectArchitectureFrame', 'DemoSecurityFrame', 'OrphanFrame', 'FuzzFrame', 'StressFrame']
+2026-01-12 01:43:50 [info     ] env_frames_discovered          count=0 frames=[]
+2026-01-12 01:43:50 [info     ] builtin_checks_registered      count=4 frame='Security Analysis'
+2026-01-12 01:43:50 [info     ] check_discovery_started        frame_id=security
+2026-01-12 01:43:50 [info     ] entry_point_checks_discovered  checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [debug    ] local_check_directory_not_found frame_id=security path=/Users/alper/.warden/checks/security
+2026-01-12 01:43:50 [info     ] local_checks_discovered        checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [info     ] check_discovery_complete       frame_id=security total_discovered=0 unique_checks=0
+2026-01-12 01:43:50 [info     ] env_security_frame_initialized check_hardcoded=True check_validation=True config={} frame='Environment Security Validator' version=1.0.0
+2026-01-12 01:43:50 [info     ] demo_frame_initialized         check_passwords=True check_sql=True config={} frame='Demo Security Validator' version=1.0.0
+2026-01-12 01:43:50 [debug    ] duplicate_frame_skipped        frame=OrphanFrame frame_id=orphan
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=OrphanFrame frame_id=orphan
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=ConfigValidationFrame frame_id=config
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=GitChangesFrame frame_id=gitchanges
+2026-01-12 01:43:50 [info     ] builtin_checks_registered      count=4 frame='Security Analysis'
+2026-01-12 01:43:50 [info     ] check_discovery_started        frame_id=security
+2026-01-12 01:43:50 [info     ] entry_point_checks_discovered  checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [debug    ] local_check_directory_not_found frame_id=security path=/Users/alper/.warden/checks/security
+2026-01-12 01:43:50 [info     ] local_checks_discovered        checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [info     ] check_discovery_complete       frame_id=security total_discovered=0 unique_checks=0
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=SecurityFrame frame_id=security
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=PropertyFrame frame_id=property
+2026-01-12 01:43:50 [info     ] env_security_frame_initialized check_hardcoded=True check_validation=True config={} frame='Environment Security Validator' version=1.0.0
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=EnvironmentSecurityFrame frame_id=environmentsecurity
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=ResilienceFrame frame_id=resilience
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=ArchitecturalConsistencyFrame frame_id=architecturalconsistency
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=ProjectArchitectureFrame frame_id=projectarchitecture
+2026-01-12 01:43:50 [info     ] demo_frame_initialized         check_passwords=True check_sql=True config={} frame='Demo Security Validator' version=1.0.0
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=DemoSecurityFrame frame_id=demosecurity
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=FuzzFrame frame_id=fuzz
+2026-01-12 01:43:50 [debug    ] frame_registered               frame=StressFrame frame_id=stress
+2026-01-12 01:43:50 [info     ] frame_discovery_complete       total_discovered=13 unique_frames=12
+2026-01-12 01:43:50 [info     ] builtin_checks_registered      count=4 frame='Security Analysis'
+2026-01-12 01:43:50 [info     ] check_discovery_started        frame_id=security
+2026-01-12 01:43:50 [info     ] entry_point_checks_discovered  checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [debug    ] local_check_directory_not_found frame_id=security path=/Users/alper/.warden/checks/security
+2026-01-12 01:43:50 [info     ] local_checks_discovered        checks=[] count=0 frame_id=security
+2026-01-12 01:43:50 [info     ] check_discovery_complete       frame_id=security total_discovered=0 unique_checks=0
+2026-01-12 01:43:50 [info     ] env_security_frame_initialized check_hardcoded=True check_validation=True config={'pre_rules': ['env-var-api-keys', 'no-secrets'], 'on_fail': 'stop', 'enabled': True} frame='Environment Security Validator' version=1.0.0
+2026-01-12 01:43:50 [info     ] demo_frame_initialized         check_passwords=True check_sql=True config={'pre_rules': ['no-secrets'], 'on_fail': 'continue', 'check_hardcoded_passwords': True, 'enabled': True, 'severity_level': 'high'} frame='Demo Security Validator' version=1.0.0
+2026-01-12 01:43:50 [warning  ] missing_rule_id                frame_id=architecturalconsistency message="Rule ID 'cli-pipeline-status-check' not found in rules list" rule_id=cli-pipeline-status-check rule_type=pre_rules
+2026-01-12 01:43:50 [warning  ] missing_rule_id                frame_id=architecturalconsistency message="Rule ID 'llm-context-propagation-check' not found in rules list" rule_id=llm-context-propagation-check rule_type=pre_rules
+2026-01-12 01:43:50 [warning  ] frame_rules_missing_ids        message='Found 2 missing rule IDs in frame_rules' missing_count=2 missing_ids=['architecturalconsistency.pre_rules: cli-pipeline-status-check', 'architecturalconsistency.pre_rules: llm-context-propagation-check']
+2026-01-12 01:43:50 [info     ] frame_rules_loaded             frame_count=8 frames=['security', 'orphan', 'architecturalconsistency', 'stress', 'environmentsecurity', 'demosecurity', 'fuzz', 'property'] message='Loaded frame_rules for 8 frames'
+2026-01-12 01:43:50 [info     ] rules_loaded                   enabled_count=17 frame_rules_count=8 global_rules_count=4 rule_count=18 source=/Users/alper/Documents/Development/Personal/warden-core/.warden/rules
+2026-01-12 01:43:50 [info     ] rate_limiter_initialized       burst=1 rpm=10 tpm=5000
+2026-01-12 01:43:50 [info     ] custom_rule_validator_initialized has_llm=True rule_count=4
+2026-01-12 01:43:50,804 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2026-01-12 01:43:53 [info     ] local_embedding_model_loaded   device=cpu model=all-MiniLM-L6-v2
+2026-01-12 01:43:53 [info     ] embedding_generator_initialized dimensions=1536 model=all-MiniLM-L6-v2 provider=local
+2026-01-12 01:43:54,246 - chromadb.telemetry.product.posthog - INFO - Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2026-01-12 01:43:54 [info     ] code_indexer_initialized       adapter_type=ChromaDBAdapter chunk_size=500
+2026-01-12 01:43:54 [info     ] semantic_searcher_initialized  adapter_type=ChromaDBAdapter
+2026-01-12 01:43:54 [info     ] context_retriever_initialized  max_chars=16000 max_tokens=4000
+2026-01-12 01:43:54 [info     ] semantic_search_service_ready  enabled=True
+2026-01-12 01:43:54 [info     ] phase_orchestrator_initialized frame_count=10 frame_rules_count=8 project_root=/Users/alper/Documents/Development/Personal/warden-core strategy=sequential
+2026-01-12 01:43:54 [warning  ] Frames in config.yaml but not in rules.yaml: ['config', 'resilience']
+2026-01-12 01:43:54 [warning  ] Frame consistency validation failed: 1 warnings
+2026-01-12 01:43:54 [warning  ] frame_consistency_warning      warning="Frames in config.yaml but not in rules.yaml: ['config', 'resilience']"
+2026-01-12 01:43:54 [info     ] warden_bridge_initialized      config=project-config orchestrator=True
+2026-01-12 01:43:54 [info     ] ignore_patterns_loaded         directories=23 file_patterns=16 frame_rules=3 path_patterns=8
+2026-01-12 01:43:54 [info     ] gitignore_patterns_loaded      count=102
+2026-01-12 01:43:54 [info     ] pipeline_execution_started     file_count=6 frames_override=None pipeline_id=bef37b62-90fe-493b-afbb-8def47d922e9
+2026-01-12 01:43:54 [info     ] executing_phase                phase=PRE_ANALYSIS
+2026-01-12 01:43:54 [info     ] pre_analysis_phase_started     file_count=6 project_root=/Users/alper/Documents/Development/Personal/warden-core
+2026-01-12 01:43:54 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:43:54 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:43:54 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:43:54 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:43:54 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:43:54 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:43:54 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:43:54 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:43:54 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:43:54 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:43:54 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:43:54 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:43:54 [info     ] llm_context_analyzer_initialized batch_size=10 cache_enabled=True confidence_threshold=0.7 llm_enabled=True rate_limiter_enabled=True
+2026-01-12 01:43:54 [info     ] llm_analyzer_initialized       batch_size=10 confidence_threshold=0.7
+▶ Phase: PRE_ANALYSIS
+2026-01-12 01:43:54 [info     ] memory_loaded                  fact_count=58 last_updated=1768171316.804257
+2026-01-12 01:43:54 [info     ] project_purpose_restored_from_memory purpose_preview='Warden Core is designed as an AI-powered tool for ' source=memory_manager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ProviderConfig
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=LlmProvider
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ConfigManager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ProjectConfigManager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=LlmProviderConfig
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=LSPManager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=MCPResourceManager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=TreeSitterProvider
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=PythonASTProvider
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ASTProviderLoader
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ASTProviderRegistry
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=IASTProvider
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ASTProviderPriority
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ASTProviderMetadata
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=Settings
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ExternalServiceError
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=IRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=IIssueRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ISuppressionRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=IIssueHistoryRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=LLMService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=SecuritySuggestionService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=CodeImprovementService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=SemanticSearchService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=MCPService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=SessionManager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ResourceProviderService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ToolExecutorService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=FileResourceRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=IResourceRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=AzureKeyVaultProvider
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ISecretProvider
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=SecretManager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=SecretProviderConfig
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=WardenServiceStub
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=WardenServiceServicer
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=WardenService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=FileHistoryRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=FileIssueRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=FileSuppressionRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=BaseFileRepository
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=WardenServicer
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=WardenServicerBase
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=MemoryManager
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ServiceCategory
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ServiceAbstraction
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=ServiceAbstractionDetector
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=FindingVerificationService
+2026-01-12 01:43:54 [debug    ] service_abstraction_restored_from_memory service=JavaParserProvider
+2026-01-12 01:43:54 [info     ] analyzing_project_structure
+2026-01-12 01:43:54 [info     ] project_structure_analysis_started project_root=/Users/alper/Documents/Development/Personal/warden-core
+2026-01-12 01:43:57 [debug    ] statistics_collection_started
+2026-01-12 01:43:58 [debug    ] statistics_collection_completed code_files=349 test_files=90 total_files=1045
+2026-01-12 01:43:58 [debug    ] framework_detection_started
+2026-01-12 01:43:58 [debug    ] framework_detection_started
+2026-01-12 01:43:58 [debug    ] convention_detection_started
+2026-01-12 01:43:59 [debug    ] convention_detection_completed file_naming=snake_case uses_linter=False uses_type_hints=False
+2026-01-12 01:43:59 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:43:59 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:43:59 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:43:59 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:43:59 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:43:59 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:43:59 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:43:59 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:43:59 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:43:59 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:43:59 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:43:59 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:43:59 [info     ] ast_provider_discovery_started
+2026-01-12 01:43:59 [debug    ] loading_builtin_providers
+2026-01-12 01:43:59 [debug    ] initializing_tree_sitter_languages
+2026-01-12 01:43:59 [debug    ] grammar_not_installed          language=java
+2026-01-12 01:43:59 [debug    ] grammar_not_installed          language=csharp
+2026-01-12 01:43:59 [info     ] tree_sitter_languages_loaded   languages=['javascript', 'typescript', 'tsx', 'go']
+2026-01-12 01:43:59 [info     ] provider_registered            languages=['python', 'javascript', 'typescript', 'java', 'c', 'cpp', 'go', 'rust'] priority=3 provider_name=tree-sitter
+2026-01-12 01:43:59 [debug    ] builtin_provider_loaded        provider_name=tree-sitter
+2026-01-12 01:43:59 [info     ] provider_registered            languages=['python'] priority=1 provider_name=python-native
+2026-01-12 01:43:59 [debug    ] builtin_provider_loaded        provider_name=python-native
+2026-01-12 01:43:59 [debug    ] loading_entry_point_providers
+2026-01-12 01:43:59 [debug    ] loading_local_plugins
+2026-01-12 01:43:59 [debug    ] local_plugin_dir_not_found     path=/Users/alper/.warden/ast-providers
+2026-01-12 01:43:59 [debug    ] loading_env_providers
+2026-01-12 01:43:59 [info     ] ast_provider_discovery_completed loaded_providers=['warden.ast.providers.tree_sitter_provider.TreeSitterProvider', 'warden.ast.providers.python_ast_provider.PythonASTProvider'] total_providers=2
+2026-01-12 01:43:59 [info     ] service_abstraction_detection_started project=/Users/alper/Documents/Development/Personal/warden-core
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=Colors node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ProviderConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LlmConfiguration node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RateLimitConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RateLimiter node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LlmProvider node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LlmRequest node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LlmResponse node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=AnalysisIssue node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=AnalysisResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ClassificationCharacteristics node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ClassificationResult node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IPCServer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ConfigManager node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ErrorCode node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IPCError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IPCRequest node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IPCResponse node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=StreamChunk node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=WardenBridge node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=HTTPServer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MinimalWardenBridge node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=GrpcServer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ProtoConverters node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ProjectDetector node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ProjectConfig node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ValidationError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ValidationResult node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=YAMLExportError node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ConfigGenerator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ProjectConfigManager node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LanguageTemplate node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=YAMLParseError node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ProjectType node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ProjectConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SemanticSearchConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=PreAnalysisConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SettingsConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LlmProviderConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LlmConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CiOutputConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CiConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=WardenConfig node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LanguageServerClient node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LSPSymbolGraph node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LSPManager node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPServer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPErrorCode node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPRequest node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPResponse node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPServerCapabilities node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPServerInfo node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPResource node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPResourceContent node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPTool node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPToolResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPProtocol node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ResourceDefinition node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MCPResourceManager node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SimpleLogger node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SuppressionType node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SuppressionEntry node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SuppressionConfig node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ContextRetriever node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ContextOptimizer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ChunkType node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CodeChunk node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=EmbeddingMetadata node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SearchResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SearchQuery node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SearchResponse node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IndexStats node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RetrievalContext node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CodeChunker node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SemanticSearcher node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=EmbeddingGenerator node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=EmbeddingCache node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CodeIndexer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=VectorStoreAdapter node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ChromaDBAdapter node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=QdrantAdapter node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=InstallConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=InstallResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=AutoInstaller node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=PaymentProcessor node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=StatusReporter node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=HtmlReportGenerator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ReportGenerator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=BaseUniversalFrame node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameMetadata node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameMetadataError node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameListItem node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameRegistry node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckLoader node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckLoadError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckValidationError node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ValidationContext node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LLMValidator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FramePriority node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameScope node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameCategory node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameApplicability node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckSeverity node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckFinding node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ValidationCheck node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckRegistry node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=Finding node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ValidationFrame node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ValidationFrameError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CodeFile node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=OrphanFrame node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RegistryClient node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=WardenPackageError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LockfileCorruptionError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=GitRefResolutionError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IntegrityCheckFailure node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=PartialInstallError node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CheckStatus node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=WardenDoctor node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=FrameFetcher node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IssueSeverity node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IssueState node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=StateTransition node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=WardenIssue node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=GitLabCIConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=GitLabCITemplate node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=AzurePipelinesConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=AzurePipelinesTemplate node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=GitHubActionsConfig node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=GitHubActionsTemplate node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=GitHubCli node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=PreCommitHook node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CommitMessageHook node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=HookInstallResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=HookInstaller node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=PrePushHook node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningSuggestion node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LLMCleaningGenerator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LLMSuggestionGenerator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningOrchestrator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=PatternAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningPhaseResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningPhase node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningIssueType node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningIssueSeverity node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=Cleaning node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningIssue node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningSuggestion node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningResult node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CleaningAnalyzerPriority node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=BaseCleaningAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=LSPDiagnosticsAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ComplexityAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MaintainabilityAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=MagicNumberAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=DocumentationAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=NamingAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=DuplicationAnalyzer node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=TreeSitterProvider node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=PythonASTProvider node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ASTProviderLoader node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ASTProviderRegistry node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=IASTProvider node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ASTProviderPriority node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ASTNodeType node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ParseStatus node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CodeLanguage node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=SourceLocation node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ASTNode node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ParseError node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ParseResult node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=ASTProviderMetadata node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=DefaultRulesLoader node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=CustomRuleValidator node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RulesYAMLLoader node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RuleCategory node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RuleSeverity node_type=class
+2026-01-12 01:43:59 [debug    ] analyzing_service_candidate    name=RuleType node_type=class
+2026-01-12 01:43:59 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CustomRule node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CustomRuleViolation node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameRules node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectRuleConfig node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Fortification node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMFortificationGenerator node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationResult node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationPhase node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationOrchestrator node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationActionType node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortifierPriority node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Fortification node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationAction node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationSuggestion node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationResult node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=BaseFortifier node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LoggingSuggestion node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LoggingFortifier node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ValidationSuggestion node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=InputValidationFortifier node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DisposalSuggestion node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResourceDisposalFortifier node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ErrorHandlingSuggestion node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ErrorHandlingFortifier node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MetaAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=YAMLMerger node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Settings node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IgnoreMatcher node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=WardenException node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ValidationError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=NotFoundError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AlreadyExistsError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ConfigurationError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ExternalServiceError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecurityError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PersistenceError node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=BaseDomainModel node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ModuleInfo node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectContext node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IRepository node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IIssueRepository node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ISuppressionRepository node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IIssueHistoryRepository node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMService node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecuritySuggestionService node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CodeImprovementService node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SemanticSearchService node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPService node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SessionManager node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResourceProviderService node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ToolExecutorService node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ToolRegistry node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileResourceRepository node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=WardenBridgeAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=STDIOTransport node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IResourceRepository node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ITransport node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IToolExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPErrorCode node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ServerStatus node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MessageType node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResourceType node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ToolCategory node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPSession node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPToolDefinition node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPResourceDefinition node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPToolResult node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProtocolVersion node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResourceUri node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ServerInfo node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ServerCapabilities node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPDomainError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPTransportError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPToolNotFoundError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPToolExecutionError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPResourceNotFoundError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPProtocolError node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MCPSessionError node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=HealthAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CleanupAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IssueAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DiscoveryAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ConfigAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AnalysisAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SuppressionAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ReportAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=BaseWardenAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LlmAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SearchAdapter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AzureKeyVaultProvider node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ISecretProvider node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=TemplateResolver node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecretManager node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecretSource node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecretValue node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecretProviderConfig node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Position node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectSummary node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineSettings node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CustomRule node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameNodeData node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=GlobalRuleNodeData node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=StartNodeData node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=EndNodeData node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineNode node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=EdgeStyle node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineEdge node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineConfig node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=WardenServiceStub node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=WardenServiceServicer node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=WardenService node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileHistoryRepository node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileIssueRepository node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileSuppressionRepository node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=BaseFileRepository node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=WardenServicer node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=WardenServicerBase node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SuppressionMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ReportGenerationMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ConfigurationMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IssueManagementMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileDiscoveryMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResultAnalysisMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CleanupMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=HealthStatusMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SemanticSearchMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LlmOperationsMixin node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MemoryManager node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Fact node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=KnowledgeGraph node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MetricsAggregator node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileContextAnalyzer node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ConventionDetector node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IntegrityIssue node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IntegrityScanner node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMPhaseConfig node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMCache node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMPhaseBase node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PromptTemplates node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResultAnalyzer node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=StatisticsCollector node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DependencyGraph node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AnalysisPhase node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LlmContextDecision node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LlmContextAnalyzer node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameworkDetector node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IssueTracker node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectStructureAnalyzer node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PreAnalysisPhase node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMAnalysisPhase node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ServiceCategory node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ServiceAbstraction node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ServiceAbstractionDetector node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectPurposeDetector node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=TrendDirection node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AnalysisStatus node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IssueTrend node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SeverityStats node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameStats node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AnalysisResult node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=IssueSnapshot node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=MetricBreakdown node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CodeHotspot node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=QuickWin node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=QualityMetrics node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileContext node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ContextWeight node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ContextWeights node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileContextInfo node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PreAnalysisResult node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectType node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Framework node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Architecture node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=TestFramework node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=BuildTool node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectStatistics node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectConventions node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectContext node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FindingVerificationService node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileClassifier node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileType node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=Framework node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DiscoveredFile node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameworkDetectionResult node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DiscoveryStats node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DiscoveryResult node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileDiscoverer node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameworkDetector node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=GitignoreFilter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SemanticResolver node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineHandler node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMHandler node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ToolHandler node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=BaseHandler node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ConfigHandler node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=QwenCodeClient node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=GroqClient node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=OpenAIClient node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DeepSeekClient node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AnthropicClient node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ILlmClient node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=EnhancedPipelineOrchestrator node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineStatus node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ExecutionStrategy node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FramePriority node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=TestStatus node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FindingSeverity node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=StepType node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SubStepType node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=StepStatus node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameExecution node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineConfig node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ValidationPipeline node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineResult node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SubStep node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineStep node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineSummary node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineRun node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PipelineContext node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CleaningExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PreAnalysisExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ClassificationExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AnalysisExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=BasePhaseExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FortificationExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResultAggregator node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PhaseExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameExecutor node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FrameMatcher node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PhaseOrchestrator node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SuppressionReason node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMClassificationPhase node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ClassificationResult node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ClassificationResult node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ClassificationPhase node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=UniversalSecretScanner node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ConfigValidationFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DiffHunk node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FileDiff node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=GitDiffParser node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=GitChangesFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecurityFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PropertyFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ResilienceFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=OrganizationViolation node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ArchitecturalConsistencyFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ArchitecturalViolation node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ProjectArchitectureFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DemoSecurityFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FilterDecision node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=LLMOrphanFilter node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=OrphanFinding node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=AbstractOrphanDetector node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=PythonOrphanDetector node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ReferenceCollector node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=DeadCodeFinder node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=UniversalOrphanDetector node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=TreeSitterOrphanDetector node_type=class
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=OrphanDetectorFactory node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=OrphanFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=FuzzFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=StressFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=ErrorHandlingCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=CircuitBreakerCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=RetryCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=TimeoutCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=XSSCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SQLInjectionCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=SecretsCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=HardcodedPasswordCheck node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=RedisSecurityFrame node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] analyzing_service_candidate    name=JavaParserProvider node_type=class
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:00 [info     ] synthesizing_bypass_rules      count=49
+2026-01-12 01:44:05,704 - httpx - INFO - HTTP Request: POST https://voice-via-ai-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2026-01-12 01:44:05 [info     ] bypass_rules_synthesized       count=0
+2026-01-12 01:44:05 [info     ] service_abstraction_detection_completed categories=['custom', 'custom', 'config_management', 'config_management', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'config_management', 'custom', 'database_access', 'database_access', 'database_access', 'database_access', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'database_access', 'database_access', 'custom', 'secret_management', 'secret_management', 'secret_management', 'custom', 'custom', 'custom', 'database_access', 'database_access', 'database_access', 'database_access', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom', 'custom'] detected_count=49
+2026-01-12 01:44:05 [info     ] service_abstractions_detected  count=49 services=['ProviderConfig', 'LlmProvider', 'ConfigManager', 'ProjectConfigManager', 'LlmProviderConfig', 'LSPManager', 'MCPResourceManager', 'TreeSitterProvider', 'PythonASTProvider', 'ASTProviderLoader', 'ASTProviderRegistry', 'IASTProvider', 'ASTProviderPriority', 'ASTProviderMetadata', 'Settings', 'ExternalServiceError', 'IRepository', 'IIssueRepository', 'ISuppressionRepository', 'IIssueHistoryRepository', 'LLMService', 'SecuritySuggestionService', 'CodeImprovementService', 'SemanticSearchService', 'MCPService', 'SessionManager', 'ResourceProviderService', 'ToolExecutorService', 'FileResourceRepository', 'IResourceRepository', 'AzureKeyVaultProvider', 'ISecretProvider', 'SecretManager', 'SecretProviderConfig', 'WardenServiceStub', 'WardenServiceServicer', 'WardenService', 'FileHistoryRepository', 'FileIssueRepository', 'FileSuppressionRepository', 'BaseFileRepository', 'WardenServicer', 'WardenServicerBase', 'MemoryManager', 'ServiceCategory', 'ServiceAbstraction', 'ServiceAbstractionDetector', 'FindingVerificationService', 'JavaParserProvider']
+2026-01-12 01:44:05 [info     ] project_structure_analysis_completed confidence=0.65 duration=11.266780707999715 framework=none project_type=microservice
+2026-01-12 01:44:05 [info     ] project_structure_analyzed     architecture=unknown confidence=0.65 framework=none project_type=microservice purpose='Warden Core is designed as an AI-powered tool for ...'
+2026-01-12 01:44:05 [info     ] ast_provider_discovery_started
+2026-01-12 01:44:05 [debug    ] loading_builtin_providers
+2026-01-12 01:44:05 [debug    ] initializing_tree_sitter_languages
+2026-01-12 01:44:05 [debug    ] grammar_not_installed          language=java
+2026-01-12 01:44:05 [debug    ] grammar_not_installed          language=csharp
+2026-01-12 01:44:05 [info     ] tree_sitter_languages_loaded   languages=['javascript', 'typescript', 'tsx', 'go']
+2026-01-12 01:44:05 [info     ] provider_registered            languages=['python', 'javascript', 'typescript', 'java', 'c', 'cpp', 'go', 'rust'] priority=3 provider_name=tree-sitter
+2026-01-12 01:44:05 [debug    ] builtin_provider_loaded        provider_name=tree-sitter
+2026-01-12 01:44:05 [info     ] provider_registered            languages=['python'] priority=1 provider_name=python-native
+2026-01-12 01:44:05 [debug    ] builtin_provider_loaded        provider_name=python-native
+2026-01-12 01:44:05 [debug    ] loading_entry_point_providers
+2026-01-12 01:44:05 [debug    ] loading_local_plugins
+2026-01-12 01:44:05 [debug    ] local_plugin_dir_not_found     path=/Users/alper/.warden/ast-providers
+2026-01-12 01:44:05 [debug    ] loading_env_providers
+2026-01-12 01:44:05 [info     ] ast_provider_discovery_completed loaded_providers=['warden.ast.providers.tree_sitter_provider.TreeSitterProvider', 'warden.ast.providers.python_ast_provider.PythonASTProvider'] total_providers=2
+2026-01-12 01:44:05 [debug    ] DEBUG_SCAN: Checking /Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py with lang CodeLanguage.PYTHON
+2026-01-12 01:44:05 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:05 [debug    ] ast_cached_in_context          file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py
+2026-01-12 01:44:05 [debug    ] DEBUG_SCAN: Checking /Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py with lang CodeLanguage.PYTHON
+2026-01-12 01:44:05 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:05 [debug    ] ast_cached_in_context          file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py
+2026-01-12 01:44:05 [debug    ] DEBUG_SCAN: Checking /Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py with lang CodeLanguage.PYTHON
+2026-01-12 01:44:05 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:05 [debug    ] ast_cached_in_context          file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py
+2026-01-12 01:44:05 [debug    ] DEBUG_SCAN: Checking /Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py with lang CodeLanguage.PYTHON
+2026-01-12 01:44:05 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:05 [debug    ] ast_cached_in_context          file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py
+2026-01-12 01:44:05 [debug    ] DEBUG_SCAN: Checking /Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py with lang CodeLanguage.PYTHON
+2026-01-12 01:44:05 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:05 [debug    ] ast_cached_in_context          file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py
+2026-01-12 01:44:05 [debug    ] DEBUG_SCAN: Checking /Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py with lang CodeLanguage.PYTHON
+2026-01-12 01:44:05 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:05 [debug    ] ast_cached_in_context          file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py
+2026-01-12 01:44:05 [info     ] executing_build_verification   command='/opt/homebrew/opt/python@3.13/bin/python3.13 -m compileall -q .'
+2026-01-12 01:44:07 [info     ] dependency_impact_analysis_started
+2026-01-12 01:44:07 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:07 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:07 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:07 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:07 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:07 [debug    ] provider_selected              language=python priority=1 provider_name=python-native selection=auto
+2026-01-12 01:44:07 [info     ] analyzing_file_contexts        file_count=6
+2026-01-12 01:44:07 [debug    ] file_context_restored_from_memory file=examples/dogfooding/python/orphan_test.py
+2026-01-12 01:44:07 [debug    ] file_context_restored_from_memory file=examples/dogfooding/python/chaos_test.py
+2026-01-12 01:44:07 [debug    ] file_context_restored_from_memory file=examples/dogfooding/python/security_vulnerabilities.py
+2026-01-12 01:44:07 [debug    ] file_context_restored_from_memory file=examples/dogfooding/python/property_test.py
+2026-01-12 01:44:07 [debug    ] file_context_restored_from_memory file=examples/dogfooding/python/architectural_test.py
+2026-01-12 01:44:07 [debug    ] file_context_restored_from_memory file=examples/dogfooding/python/vulnerable_code.py
+2026-01-12 01:44:07 [info     ] pre_analysis_phase_completed   context_distribution={'test': 4, 'example': 2} duration=13.359671750004054 files_analyzed=6 framework=none project_type=microservice
+2026-01-12 01:44:07 [info     ] memory_saved                   fact_count=58 path=/Users/alper/Documents/Development/Personal/warden-core/.warden/memory/knowledge_graph.json
+2026-01-12 01:44:07 [debug    ] saving_file_state              file=examples/dogfooding/python/orphan_test.py hash=d68329ddcc160a568aefe8206dd370a4818942f2b32a0619c1c5a3a350cf3908
+2026-01-12 01:44:07 [debug    ] adding_file_state_fact         fact_id=filestate:examples/dogfooding/python/orphan_test.py
+2026-01-12 01:44:07 [debug    ] saving_file_state              file=examples/dogfooding/python/chaos_test.py hash=b0bb94ff3ff8bb9ec5f42d9269d070e2a39f71da06e1d1f0ee5970dca2f477b3
+2026-01-12 01:44:07 [debug    ] adding_file_state_fact         fact_id=filestate:examples/dogfooding/python/chaos_test.py
+2026-01-12 01:44:07 [debug    ] saving_file_state              file=examples/dogfooding/python/security_vulnerabilities.py hash=a84ca928d22c808974fb6813e12984417078c47d7d96e1bb3cdf4cb36e939882
+2026-01-12 01:44:07 [debug    ] adding_file_state_fact         fact_id=filestate:examples/dogfooding/python/security_vulnerabilities.py
+2026-01-12 01:44:07 [debug    ] saving_file_state              file=examples/dogfooding/python/property_test.py hash=036d58b0ea91715ff75851c293854946fce70aa8f464d411444655f5c2235646
+2026-01-12 01:44:07 [debug    ] adding_file_state_fact         fact_id=filestate:examples/dogfooding/python/property_test.py
+2026-01-12 01:44:07 [debug    ] saving_file_state              file=examples/dogfooding/python/architectural_test.py hash=f5b2c49b3ef038bfe6c6c1d593ed5b691146a63b6ad9d97c1e3e39e2d3cf6385
+2026-01-12 01:44:07 [debug    ] adding_file_state_fact         fact_id=filestate:examples/dogfooding/python/architectural_test.py
+2026-01-12 01:44:07 [debug    ] saving_file_state              file=examples/dogfooding/python/vulnerable_code.py hash=89d61208d6782b38f1958a512de7a168e54786246deafe4d31ec1588b559de36
+2026-01-12 01:44:07 [debug    ] adding_file_state_fact         fact_id=filestate:examples/dogfooding/python/vulnerable_code.py
+2026-01-12 01:44:07 [info     ] memory_saved                   fact_count=58 path=/Users/alper/Documents/Development/Personal/warden-core/.warden/memory/knowledge_graph.json
+2026-01-12 01:44:07 [info     ] memory_saved                   fact_count=58 path=/Users/alper/Documents/Development/Personal/warden-core/.warden/memory/knowledge_graph.json
+2026-01-12 01:44:07 [info     ] triggering_semantic_indexing
+2026-01-12 01:44:07 [debug    ] file_unchanged_skipping_index  file_path=examples/dogfooding/python/orphan_test.py hash=d68329ddcc160a568aefe8206dd370a4818942f2b32a0619c1c5a3a350cf3908
+2026-01-12 01:44:07 [debug    ] file_unchanged_skipping_index  file_path=examples/dogfooding/python/chaos_test.py hash=b0bb94ff3ff8bb9ec5f42d9269d070e2a39f71da06e1d1f0ee5970dca2f477b3
+2026-01-12 01:44:07 [debug    ] file_unchanged_skipping_index  file_path=examples/dogfooding/python/security_vulnerabilities.py hash=a84ca928d22c808974fb6813e12984417078c47d7d96e1bb3cdf4cb36e939882
+2026-01-12 01:44:07 [debug    ] file_unchanged_skipping_index  file_path=examples/dogfooding/python/property_test.py hash=036d58b0ea91715ff75851c293854946fce70aa8f464d411444655f5c2235646
+2026-01-12 01:44:07 [debug    ] file_unchanged_skipping_index  file_path=examples/dogfooding/python/architectural_test.py hash=f5b2c49b3ef038bfe6c6c1d593ed5b691146a63b6ad9d97c1e3e39e2d3cf6385
+2026-01-12 01:44:07 [debug    ] file_unchanged_skipping_index  file_path=examples/dogfooding/python/vulnerable_code.py hash=89d61208d6782b38f1958a512de7a168e54786246deafe4d31ec1588b559de36
+2026-01-12 01:44:07 [info     ] batch_indexing_completed       files_indexed=0 total_chunks=0 total_files=6
+2026-01-12 01:44:07 [info     ] phase_completed                phase=PRE_ANALYSIS project_type=microservice
+2026-01-12 01:44:07 [info     ] phase_enabled                  enabled=True enforced=True phase=CLASSIFICATION
+2026-01-12 01:44:07 [info     ] executing_phase                phase=CLASSIFICATION
+2026-01-12 01:44:07 [info     ] rate_limiter_initialized       burst=1 rpm=60 tpm=10000
+2026-01-12 01:44:07 [info     ] llm_phase_initialized          cache=True has_llm=True model=gpt-4o phase=CLASSIFICATION
+2026-01-12 01:44:07 [info     ] using_llm_classification_phase available_frames=12
+2026-01-12 01:44:07 [info     ] classification_phase_skipped_optimization reason=all_files_unchanged
+2026-01-12 01:44:07 [info     ] phase_completed                phase=CLASSIFICATION selected_frames=[]
+2026-01-12 01:44:07 [info     ] phase_enabled                  enabled=True phase=VALIDATION
+2026-01-12 01:44:07 [info     ] executing_phase                phase=VALIDATION
+2026-01-12 01:44:07 [info     ] validation_file_filtering      filtered_files=6 filtered_out=0 total_files=6
+2026-01-12 01:44:07 [info     ] no_classification_results_using_all_frames
+2026-01-12 01:44:07 [info     ] Using 10 enabled configured frames
+2026-01-12 01:44:07 [info     ] executing_frames_sequential    count=10
+2026-01-12 01:44:07 [info     ] ignore_patterns_loaded         directories=23 file_patterns=16 frame_rules=3 path_patterns=8
+2026-01-12 01:44:07 [info     ] gitignore_patterns_loaded      count=102
+2026-01-12 01:44:07 [debug    ] frame_ignore_match             file=examples/dogfooding/python/orphan_test.py frame=security pattern=examples/**
+2026-01-12 01:44:07 [debug    ] frame_ignore_match             file=examples/dogfooding/python/chaos_test.py frame=security pattern=examples/**
+2026-01-12 01:44:07 [debug    ] frame_ignore_match             file=examples/dogfooding/python/security_vulnerabilities.py frame=security pattern=examples/**
+2026-01-12 01:44:07 [debug    ] frame_ignore_match             file=examples/dogfooding/python/property_test.py frame=security pattern=examples/**
+2026-01-12 01:44:07 [debug    ] frame_ignore_match             file=examples/dogfooding/python/architectural_test.py frame=security pattern=examples/**
+2026-01-12 01:44:07 [debug    ] frame_ignore_match             file=examples/dogfooding/python/vulnerable_code.py frame=security pattern=examples/**
+2026-01-12 01:44:07 [info     ] frame_specific_ignore          frame=security ignored=6 remaining=0
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=security
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=environmentsecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=environmentsecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=environmentsecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=environmentsecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=environmentsecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=environmentsecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=environmentsecurity
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=environmentsecurity remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=environmentsecurity
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=environmentsecurity
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=config
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=config
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=config
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=config
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=config
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=config
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=config
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=config remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=config
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=config
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=resilience
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=resilience
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=resilience
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=resilience
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=resilience
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=resilience
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=resilience
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=resilience remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=resilience
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=resilience
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=demosecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=demosecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=demosecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=demosecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=demosecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=demosecurity
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=demosecurity
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=demosecurity remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=demosecurity
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=demosecurity
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=property
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=property
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=property
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=property
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=property
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=property
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=property
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=property remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=property
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=property
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=fuzz
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=fuzz
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=fuzz
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=fuzz
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=fuzz
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=fuzz
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=fuzz
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=fuzz remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=fuzz
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=fuzz
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=orphan
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=orphan
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=orphan
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=orphan
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=orphan
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=orphan
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=orphan
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=orphan remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=orphan
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=orphan
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=stress
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=stress
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=stress
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=stress
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=stress
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=stress
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=stress
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=stress remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=stress
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=stress
+2026-01-12 01:44:07 [info     ] frame_batch_execution_start    files_to_scan=6 frame_id=architecturalconsistency
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py frame=architecturalconsistency
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py frame=architecturalconsistency
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py frame=architecturalconsistency
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py frame=architecturalconsistency
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py frame=architecturalconsistency
+2026-01-12 01:44:07 [debug    ] skipping_unchanged_file_batch  file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py frame=architecturalconsistency
+2026-01-12 01:44:07 [info     ] smart_caching_active           frame=architecturalconsistency remaining=0 skipped=6
+2026-01-12 01:44:07 [info     ] all_files_cached_skipping_batch frame=architecturalconsistency
+2026-01-12 01:44:07 [info     ] frame_executed_successfully    files_scanned=0 findings=0 frame_id=architecturalconsistency
+2026-01-12 01:44:07 [info     ] executing_global_rules         rule_count=4
+2026-01-12 01:44:07 [debug    ] processing_rule                rule_id=no-secrets rule_type=security
+2026-01-12 01:44:07 [debug    ] processing_rule                rule_id=file-size-limit rule_type=script
+2026-01-12 01:44:07 [info     ] script_execution_start         file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh timeout=10
+▶ Phase: CLASSIFICATION
+▶ Phase: VALIDATION
+  ✅ Security Analysis (0.01s) - 0 issues
+  ✅ Environment Security Validator (0.00s) - 0 issues
+  ✅ Config Validation (0.00s) - 0 issues
+  ✅ Resilience Architecture Analysis (0.00s) - 0 issues
+  ✅ Demo Security Validator (0.00s) - 0 issues
+  ✅ Property Testing (0.00s) - 0 issues
+  ✅ Fuzz Testing (0.00s) - 0 issues
+  ✅ Orphan Code Detection (0.00s) - 0 issues
+  ✅ Stress Testing (0.00s) - 0 issues
+  ✅ Architectural Consistency Local (0.00s) - 0 issues
+2026-01-12 01:44:07 [info     ] script_execution_complete      duration=0.013873815536499023 exit_code=0 file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh stderr_length=0 stdout_length=0
+2026-01-12 01:44:07 [debug    ] processing_rule                rule_id=orchestrator-total-frames-check rule_type=convention
+2026-01-12 01:44:07 [debug    ] processing_rule                rule_id=ai-logic-check rule_type=ai
+2026-01-12 01:44:07 [debug    ] executing_ai_rule              file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py rule_id=ai-logic-check
+2026-01-12 01:44:09,180 - httpx - INFO - HTTP Request: POST https://voice-via-ai-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2026-01-12 01:44:09 [debug    ] ai_rule_response_received      rule_id=ai-logic-check
+2026-01-12 01:44:09 [info     ] ai_rule_violation_found        explanation='The code contains dead code and unused imports, functions, and classes, which indicate poor programming logic and inefficient code maintenance. These elements should be removed to ensure cleaner and more efficient code.' file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py rule_id=ai-logic-check
+2026-01-12 01:44:09 [info     ] file_validation_complete       file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py violation_count=1
+2026-01-12 01:44:09 [debug    ] processing_rule                rule_id=no-secrets rule_type=security
+2026-01-12 01:44:09 [debug    ] processing_rule                rule_id=file-size-limit rule_type=script
+2026-01-12 01:44:09 [info     ] script_execution_start         file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh timeout=10
+2026-01-12 01:44:09 [info     ] script_execution_complete      duration=0.02933812141418457 exit_code=0 file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh stderr_length=0 stdout_length=0
+2026-01-12 01:44:09 [debug    ] processing_rule                rule_id=orchestrator-total-frames-check rule_type=convention
+2026-01-12 01:44:09 [debug    ] processing_rule                rule_id=ai-logic-check rule_type=ai
+2026-01-12 01:44:09 [debug    ] executing_ai_rule              file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py rule_id=ai-logic-check
+2026-01-12 01:44:10,824 - httpx - INFO - HTTP Request: POST https://voice-via-ai-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2026-01-12 01:44:10 [debug    ] ai_rule_response_received      rule_id=ai-logic-check
+2026-01-12 01:44:10 [info     ] ai_rule_violation_found        explanation='The code violates the AI Logic Audit rule by lacking proper chaos engineering patterns. It has missing timeout handling in `fetch_user_data` (line 13), no retry logic in `send_notification` (line 20), lacks a circuit breaker in `process_payment` (line 30), and has an infinite retry potential in `sync_data_dangerous` (line 40). These issues can lead to poor programming logic and potential race conditions.' file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py rule_id=ai-logic-check
+2026-01-12 01:44:10 [info     ] file_validation_complete       file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/chaos_test.py violation_count=1
+2026-01-12 01:44:10 [debug    ] processing_rule                rule_id=no-secrets rule_type=security
+2026-01-12 01:44:10 [debug    ] processing_rule                rule_id=file-size-limit rule_type=script
+2026-01-12 01:44:10 [info     ] script_execution_start         file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh timeout=10
+2026-01-12 01:44:10 [info     ] script_execution_complete      duration=0.020812034606933594 exit_code=0 file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh stderr_length=0 stdout_length=0
+2026-01-12 01:44:10 [debug    ] processing_rule                rule_id=orchestrator-total-frames-check rule_type=convention
+2026-01-12 01:44:10 [debug    ] processing_rule                rule_id=ai-logic-check rule_type=ai
+2026-01-12 01:44:10 [debug    ] executing_ai_rule              file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py rule_id=ai-logic-check
+2026-01-12 01:44:12,440 - httpx - INFO - HTTP Request: POST https://voice-via-ai-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2026-01-12 01:44:12 [debug    ] ai_rule_response_received      rule_id=ai-logic-check
+2026-01-12 01:44:12 [info     ] ai_rule_violation_found        explanation='The code contains multiple instances of poor programming logic leading to security vulnerabilities such as SQL Injection, Command Injection, and Path Traversal. These vulnerabilities can lead to unauthorized data access and execution of arbitrary commands, which are severe security risks. Additionally, the presence of hardcoded secrets poses a significant risk for exploitation.' file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py rule_id=ai-logic-check
+2026-01-12 01:44:12 [info     ] file_validation_complete       file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/security_vulnerabilities.py violation_count=1
+2026-01-12 01:44:12 [debug    ] processing_rule                rule_id=no-secrets rule_type=security
+2026-01-12 01:44:12 [debug    ] processing_rule                rule_id=file-size-limit rule_type=script
+2026-01-12 01:44:12 [info     ] script_execution_start         file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh timeout=10
+2026-01-12 01:44:12 [info     ] script_execution_complete      duration=0.022426843643188477 exit_code=0 file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh stderr_length=0 stdout_length=0
+2026-01-12 01:44:12 [debug    ] processing_rule                rule_id=orchestrator-total-frames-check rule_type=convention
+2026-01-12 01:44:12 [debug    ] processing_rule                rule_id=ai-logic-check rule_type=ai
+2026-01-12 01:44:12 [debug    ] executing_ai_rule              file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py rule_id=ai-logic-check
+2026-01-12 01:44:13,606 - httpx - INFO - HTTP Request: POST https://voice-via-ai-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2026-01-12 01:44:13 [debug    ] ai_rule_response_received      rule_id=ai-logic-check
+2026-01-12 01:44:13 [info     ] ai_rule_violation_found        explanation='The code violates the PROJECT RULE by having functions with poor programming logic that lack proper input validation, error handling, and bounds checking, potentially leading to runtime errors and inefficient execution.' file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py rule_id=ai-logic-check
+2026-01-12 01:44:13 [info     ] file_validation_complete       file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/property_test.py violation_count=1
+2026-01-12 01:44:13 [debug    ] processing_rule                rule_id=no-secrets rule_type=security
+2026-01-12 01:44:13 [debug    ] processing_rule                rule_id=file-size-limit rule_type=script
+2026-01-12 01:44:13 [info     ] script_execution_start         file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh timeout=10
+2026-01-12 01:44:13 [info     ] script_execution_complete      duration=0.01580524444580078 exit_code=0 file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh stderr_length=0 stdout_length=0
+2026-01-12 01:44:13 [debug    ] processing_rule                rule_id=orchestrator-total-frames-check rule_type=convention
+2026-01-12 01:44:13 [debug    ] processing_rule                rule_id=ai-logic-check rule_type=ai
+2026-01-12 01:44:13 [debug    ] executing_ai_rule              file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py rule_id=ai-logic-check
+2026-01-12 01:44:15,087 - httpx - INFO - HTTP Request: POST https://voice-via-ai-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2026-01-12 01:44:15 [debug    ] ai_rule_response_received      rule_id=ai-logic-check
+2026-01-12 01:44:15 [info     ] ai_rule_violation_found        explanation="The `UserManager` class violates good programming logic by being a 'God Class' with too many responsibilities, making it difficult to maintain and extend." file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py rule_id=ai-logic-check
+2026-01-12 01:44:15 [info     ] file_validation_complete       file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/architectural_test.py violation_count=1
+2026-01-12 01:44:15 [debug    ] processing_rule                rule_id=no-secrets rule_type=security
+2026-01-12 01:44:15 [debug    ] processing_rule                rule_id=file-size-limit rule_type=script
+2026-01-12 01:44:15 [info     ] script_execution_start         file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh timeout=10
+2026-01-12 01:44:15 [info     ] script_execution_complete      duration=0.024216651916503906 exit_code=0 file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py rule_id=file-size-limit rule_name='File Size Must Not Exceed 10MB' script_path=/Users/alper/Documents/Development/Personal/warden-core/.warden/scripts/check_file_size.sh stderr_length=0 stdout_length=0
+2026-01-12 01:44:15 [debug    ] processing_rule                rule_id=orchestrator-total-frames-check rule_type=convention
+2026-01-12 01:44:15 [debug    ] processing_rule                rule_id=ai-logic-check rule_type=ai
+2026-01-12 01:44:15 [debug    ] executing_ai_rule              file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py rule_id=ai-logic-check
+2026-01-12 01:44:17,102 - httpx - INFO - HTTP Request: POST https://voice-via-ai-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2026-01-12 01:44:17 [debug    ] ai_rule_response_received      rule_id=ai-logic-check
+2026-01-12 01:44:17 [info     ] ai_rule_violation_found        explanation='The code has multiple logic issues and vulnerabilities: SQL Injection in get_user function (line 18), XSS in hello function (line 29), path traversal in read_file function (line 36), inefficient and complex logic in process_data function (line 43), weak cryptography in hash_password function using MD5 (line 92), and using debug mode in production (line 98).' file=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py rule_id=ai-logic-check
+2026-01-12 01:44:17 [info     ] file_validation_complete       file_path=/Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/vulnerable_code.py violation_count=1
+2026-01-12 01:44:17 [info     ] global_rules_found_violations  count=6
+2026-01-12 01:44:17 [info     ] phase_completed                findings=6 phase=VALIDATION
+2026-01-12 01:44:17 [info     ] phase_started                  phase=VERIFICATION
+2026-01-12 01:44:17 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:44:17 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:44:17 [info     ] verification_phase_completed   dropped=0 verified=0
+2026-01-12 01:44:17 [info     ] phase_enabled                  enabled=True phase=FORTIFICATION
+2026-01-12 01:44:17 [info     ] executing_phase                phase=FORTIFICATION
+2026-01-12 01:44:17 [info     ] ignore_patterns_loaded         directories=23 file_patterns=16 frame_rules=3 path_patterns=8
+2026-01-12 01:44:17 [info     ] gitignore_patterns_loaded      count=102
+2026-01-12 01:44:17 [info     ] fortification_phase_initialized context_keys=['pipeline_id', 'file_path', 'project_root', 'use_gitignore', 'source_code', 'language', 'project_type', 'framework', 'file_context', 'file_contexts', 'project_metadata', 'quality_metrics', 'quality_score', 'quality_score_before', 'quality_confidence', 'hotspots', 'quick_wins', 'technical_debt_hours', 'selected_frames', 'suppression_rules', 'frame_priorities', 'classification_reasoning', 'learned_patterns', 'findings', 'validated_issues', 'false_positives', 'true_positives', 'frame_results', 'previous_llm_interactions'] use_llm=True
+2026-01-12 01:44:17 [info     ] fortification_phase_started    issue_count=0 use_llm=True
+2026-01-12 01:44:17 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:44:17 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:44:17 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:44:17 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:44:17 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:44:17 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:44:17 [info     ] secret_provider_mode           mode=local_development
+2026-01-12 01:44:17 [debug    ] dotenv_loaded                  key_count=12 path=/Users/alper/Documents/Development/Personal/warden-core/.env
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_ENDPOINT source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_DEPLOYMENT_NAME source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=AZURE_OPENAI_API_VERSION source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENAI_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=ANTHROPIC_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=DEEPSEEK_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=QWENCODE_API_KEY
+2026-01-12 01:44:17 [debug    ] secret_retrieved               key=GROQ_API_KEY source=dotenv
+2026-01-12 01:44:17 [debug    ] secret_not_found               key=OPENROUTER_API_KEY
+2026-01-12 01:44:17 [info     ] code_fortifier_initialized     fortifier_count=4 fortifiers=['Input Validation', 'Error Handling', 'Resource Disposal', 'Logging']
+2026-01-12 01:44:17 [info     ] phase_completed                fortifications=0 phase=FORTIFICATION
+2026-01-12 01:44:17 [info     ] phase_enabled                  enabled=True phase=CLEANING
+2026-01-12 01:44:17 [info     ] executing_phase                phase=CLEANING
+2026-01-12 01:44:17 [info     ] ignore_patterns_loaded         directories=23 file_patterns=16 frame_rules=3 path_patterns=8
+2026-01-12 01:44:17 [info     ] gitignore_patterns_loaded      count=102
+2026-01-12 01:44:17 [info     ] llm_suggestion_generator_initialized has_context=True
+2026-01-12 01:44:17 [info     ] cleaning_phase_initialized     context_keys=['pipeline_id', 'file_path', 'project_root', 'use_gitignore', 'source_code', 'language', 'project_type', 'framework', 'file_context', 'file_contexts', 'project_metadata', 'quality_metrics', 'quality_score', 'quality_score_before', 'quality_confidence', 'hotspots', 'quick_wins', 'technical_debt_hours', 'selected_frames', 'suppression_rules', 'frame_priorities', 'classification_reasoning', 'learned_patterns', 'findings', 'validated_issues', 'false_positives', 'true_positives', 'frame_results', 'fortifications', 'applied_fixes', 'security_improvements', 'previous_llm_interactions'] use_llm=True
+2026-01-12 01:44:17 [info     ] cleaning_phase_skipped_optimization reason=all_files_unchanged
+2026-01-12 01:44:17 [info     ] phase_completed                phase=CLEANING quality_improvement=0.0 suggestions=0
+2026-01-12 01:44:17 [info     ] llm_usage_recorded             completion_tokens=789 prompt_tokens=4347 total_tokens=5136
+2026-01-12 01:44:17 [info     ] pipeline_execution_completed   pipeline_id=bef37b62-90fe-493b-afbb-8def47d922e9 summary='Pipeline bef37b62-90fe-493b-afbb-8def47d922e9 Summary:\nFile: /Users/alper/Documents/Development/Personal/warden-core/examples/dogfooding/python/orphan_test.py\nProject: microservice / none'
+▶ Phase: FORTIFICATION
+▶ Phase: CLEANING
+
+
+       Scan Results        
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ Metric          ┃ Value ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ Total Frames    │ 10    │
+│ Passed          │ 10    │
+│ Failed          │ 0     │
+│ Total Issues    │ 0     │
+│ Critical Issues │ 0     │
+└─────────────────┴───────┘
+Debug: status=2 (int), is_success=True
+
+✨ Scan Succeeded!
+
+📝 Generating Reports:
+  ✅ JSON: .warden/reports/warden-report.json
+  ✅ SARIF: .warden/reports/warden-report.sarif
