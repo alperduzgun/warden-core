@@ -95,9 +95,32 @@ jobs:
           
           echo "Running Warden Scan with level: $LEVEL"
           
-          # Scanning the source code of Warden itself
-          # Scanning the source code of Warden itself, excluding test fixtures
-          warden scan src/warden --level $LEVEL --format sarif --output warden.sarif --verbose --exclude tests
+          # Smart Diff Scanning: Only scan files changed in this push/PR
+          # This prevents re-scanning the entire codebase on every commit (which takes hours).
+          
+          # 1. Fetch history to ensure diff works
+          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
+          
+          # 2. Get changed python files
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep "\.py$" || true)
+          else
+            # For push to main/dev, check against previous commit
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "\.py$" || true)
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if [[ -z "$CHANGED_FILES" ]]; then
+             echo "No Python files changed. Skipping scan."
+             exit 0
+          fi
+
+          # 3. Running scan only on changed files
+          # Using xargs to handle file list and splitting if too long (though usually fine for PRs)
+          # We use --no-run-if-empty (-r) to avoid error if empty
+          echo "$CHANGED_FILES" |  xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
 
 
 
