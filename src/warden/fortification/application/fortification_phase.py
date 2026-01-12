@@ -342,16 +342,26 @@ class FortificationPhase:
             
             for i, result in enumerate(semantic_context[:3]):  # Max 3 examples
                 # Handle different result types
-                if hasattr(result, 'file_path'):
+                # Handle different result types (object or dict)
+                file_path = "unknown"
+                content = ""
+                line = "N/A"
+                
+                if hasattr(result, 'chunk'):  # SearchResult object with chunk
+                     chunk = result.chunk
+                     file_path = getattr(chunk, 'file_path', 'unknown')
+                     content = getattr(chunk, 'content', str(chunk))
+                     line = getattr(chunk, 'start_line', 'N/A')
+                elif hasattr(result, 'file_path'): # Direct object
                     file_path = result.file_path
-                    content = getattr(result, 'content', str(result))[:500]
+                    content = getattr(result, 'content', str(result))
                     line = getattr(result, 'line_number', 'N/A')
                 elif isinstance(result, dict):
                     file_path = result.get('file_path', 'unknown')
-                    content = result.get('content', str(result))[:500]
+                    content = result.get('content', str(result))
                     line = result.get('line_number', 'N/A')
-                else:
-                    continue
+                
+                content = content[:500]
                 
                 example = f"### Example {i+1}: {file_path}:{line}\n```{language}\n{content}\n```\n"
                 

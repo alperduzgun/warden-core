@@ -120,7 +120,7 @@ semantic_search:
   model: all-MiniLM-L6-v2
   provider: local
 settings:
-  enable_analysis: false
+  enable_analysis: true
   enable_classification: true
   enable_cleaning: true
   enable_fortification: true

@@ -110,6 +110,7 @@ class LLMPhaseBase(ABC):
         self.project_root = project_root
         self.use_gitignore = use_gitignore
         self.memory_manager = kwargs.get('memory_manager')
+        self.semantic_search_service: Optional[Any] = kwargs.get('semantic_search_service')
         self.cache = LLMCache() if self.config.cache_enabled else None
 
         

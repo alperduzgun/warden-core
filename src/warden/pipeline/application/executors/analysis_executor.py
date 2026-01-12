@@ -62,6 +62,8 @@ class AnalysisExecutor(BasePhaseExecutor):
                 from warden.analysis.application.llm_analysis_phase import LLMAnalysisPhase as AnalysisPhase
                 from warden.analysis.application.llm_phase_base import LLMPhaseConfig
 
+                from warden.shared.services.semantic_search_service import SemanticSearchService
+
                 phase = AnalysisPhase(
                     config=LLMPhaseConfig(
                         enabled=True, 
@@ -73,6 +75,7 @@ class AnalysisExecutor(BasePhaseExecutor):
                     project_root=self.project_root,
                     use_gitignore=getattr(self.config, 'use_gitignore', True),
                     memory_manager=getattr(self.config, 'memory_manager', None),
+                    semantic_search_service=SemanticSearchService(),
                     rate_limiter=self.rate_limiter
                 )
                 if verbose:

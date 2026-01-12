@@ -99,6 +99,10 @@ Also identify:
 
 Return as JSON."""
 
+        related_context = context.get("related_context")
+        if related_context:
+            prompt += f"\n\nRELEVANT CODE CONTEXT (from Vector DB):\n{related_context}\n\nUse this context to check for consistency with existing project patterns."
+
         if is_impacted:
             prompt += "\n\nCRITICAL HINT: This file is being re-analyzed because its dependencies have changed. Focus heavily on integration consistency, interface alignment, and potential breaking changes from upstream services."
 
@@ -196,6 +200,17 @@ Return as JSON."""
             "initial_metrics": initial_metrics or {},
             "is_impacted": is_impacted,
         }
+
+        # --- Active Context Retrieval Integration ---
+        if hasattr(self, 'semantic_search_service') and self.semantic_search_service and self.semantic_search_service.is_available():
+            try:
+                formatted_context = await self._retrieve_and_format_context(file_path, code)
+                if formatted_context:
+                    context["related_context"] = formatted_context
+                    logger.debug("active_context_retrieved", file=str(file_path))
+            except Exception as e:
+                logger.warning("active_context_retrieval_failed", error=str(e))
+        # ---------------------------------------------
 
         # Try LLM analysis
         llm_result = await self.analyze_with_llm_async(context)
@@ -433,3 +448,46 @@ Return as JSON."""
 
         # Return default metrics if no files
         return self._create_default_metrics(FileContext.PRODUCTION)
+
+    async def _retrieve_and_format_context(self, file_path: Path, code: str) -> Optional[str]:
+        """
+        Retrieve and format related code context from semantic search.
+        
+        Args:
+            file_path: Path of the file being analyzed
+            code: Content of the file
+            
+        Returns:
+            Formatted context string or None
+        """
+        # Use a summary of the code and filename as query
+        query = f"Code quality analysis for {file_path.name}: {code[:300]}"
+        # Detect language for filtering if possible
+        lang_str = self._detect_language(file_path)
+        
+        retrieval = await self.semantic_search_service.get_context(query, language=lang_str)
+        
+        if not retrieval or not retrieval.relevant_chunks:
+            return None
+            
+        formatted_context = ""
+        relevant_count = 0
+        
+        for chunk in retrieval.relevant_chunks:
+            # Skip self if matched (using robust path comparison)
+            # Assuming chunk.relative_path is relative to project root
+            # We can't easily do Path comparison without project root here easily unless stored,
+            # but usually relative_path is unique enough.
+            # Safe check: if filename and some content matches
+            if chunk.relative_path.endswith(file_path.name):
+                # Potential self-match, check content overlap or skip to be safe
+                continue
+                
+            formatted_context += f"\n--- Related File: {chunk.relative_path} (Lines {chunk.start_line}-{chunk.end_line}) ---\n"
+            formatted_context += f"{chunk.content}\n"
+            relevant_count += 1
+            
+        if relevant_count > 0:
+            return formatted_context
+            
+        return None

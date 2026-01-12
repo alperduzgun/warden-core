@@ -18,6 +18,9 @@ from warden.analysis.application.discovery.classifier import FileClassifier
 from warden.analysis.application.discovery.gitignore_filter import GitignoreFilter, create_gitignore_filter
 from warden.analysis.application.discovery.framework_detector import FrameworkDetector
 
+import structlog
+logger = structlog.get_logger(__name__)
+
 
 class FileDiscoverer:
     """
@@ -120,42 +123,87 @@ class FileDiscoverer:
             List of DiscoveredFile objects
         """
         discovered_files: List[DiscoveredFile] = []
+        
+        # Try Rust discovery first
+        try:
+            import warden_core_rust
+            logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path))
+            rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore)
+            
+            for path_str, size_bytes in rust_files:
+                file_path = Path(path_str)
+                
+                # Double check max depth if needed
+                if self.max_depth is not None:
+                    try:
+                        relative = file_path.relative_to(self.root_path)
+                        if len(relative.parts) > self.max_depth:
+                            continue
+                    except ValueError:
+                        continue
 
-        # Walk directory tree
-        for file_path in self._walk_directory(self.root_path, current_depth=0):
-            # Skip if gitignore says so
-            if self.gitignore_filter and self.gitignore_filter.should_ignore(file_path):
-                continue
+                # Skip binary and non-code files
+                if self.classifier.should_skip(file_path):
+                    continue
 
-            # Skip non-files (directories, symlinks, etc.)
-            if not file_path.is_file():
-                continue
+                # Classify file
+                file_type = self.classifier.classify(file_path)
 
-            # Skip binary and non-code files
-            if self.classifier.should_skip(file_path):
-                continue
+                # Create DiscoveredFile
+                relative_path = file_path.relative_to(self.root_path)
+                discovered_file = DiscoveredFile(
+                    path=str(file_path),
+                    relative_path=str(relative_path),
+                    file_type=file_type,
+                    size_bytes=size_bytes,
+                    is_analyzable=file_type.is_analyzable,
+                    metadata={"engine": "rust"},
+                )
+                discovered_files.append(discovered_file)
+            
+            logger.info("discovery_process_complete", engine="rust", file_count=len(discovered_files))
+            return discovered_files
 
-            # Classify file
-            file_type = self.classifier.classify(file_path)
+        except (ImportError, Exception) as e:
+            # Fallback to Python discovery
+            logger.warning("rust_discovery_failed_falling_back", error=str(e))
+            logger.debug("discovery_engine_selected", engine="python", project_root=str(self.root_path))
+            
+            for file_path in self._walk_directory(self.root_path, current_depth=0):
+                # Skip if gitignore says so (already covered by _walk_directory items, 
+                # but adding for safety if logic changes)
+                if self.gitignore_filter and self.gitignore_filter.should_ignore(file_path):
+                    continue
 
-            # Get file size
-            try:
-                size_bytes = file_path.stat().st_size
-            except OSError:
-                size_bytes = 0
+                # Skip non-files
+                if not file_path.is_file():
+                    continue
 
-            # Create DiscoveredFile
-            relative_path = file_path.relative_to(self.root_path)
-            discovered_file = DiscoveredFile(
-                path=str(file_path),
-                relative_path=str(relative_path),
-                file_type=file_type,
-                size_bytes=size_bytes,
-                is_analyzable=file_type.is_analyzable,
-                metadata={},
-            )
+                # Skip binary and non-code files
+                if self.classifier.should_skip(file_path):
+                    continue
 
-            discovered_files.append(discovered_file)
+                # Classify file
+                file_type = self.classifier.classify(file_path)
+
+                # Get file size
+                try:
+                    size_bytes = file_path.stat().st_size
+                except OSError:
+                    size_bytes = 0
+
+                # Create DiscoveredFile
+                relative_path = file_path.relative_to(self.root_path)
+                discovered_file = DiscoveredFile(
+                    path=str(file_path),
+                    relative_path=str(relative_path),
+                    file_type=file_type,
+                    size_bytes=size_bytes,
+                    is_analyzable=file_type.is_analyzable,
+                    metadata={"engine": "python"},
+                )
+
+                discovered_files.append(discovered_file)
 
         return discovered_files
 
