@@ -28,6 +28,8 @@ from warden.ast.application.provider_loader import ASTProviderLoader
 from warden.analysis.application.dependency_graph import DependencyGraph
 from warden.ast.domain.enums import CodeLanguage
 from warden.validation.domain.frame import CodeFile
+from warden.shared.utils.hasher import NormalizedHasher
+from warden.shared.utils.language_utils import get_language_from_path
 
 logger = structlog.get_logger()
 
@@ -425,7 +427,7 @@ class PreAnalysisPhase:
         loop = asyncio.get_event_loop()
         
         # Calculate content hash (PRE-ANALYSIS step)
-        content_hash = self._calculate_file_hash(code_file.content)
+        content_hash = self._calculate_file_hash(code_file.content, code_file.path)
         
         # Normalize path to relative for memory portability (CI vs Local)
         try:
@@ -483,8 +485,15 @@ class PreAnalysisPhase:
 
         return context_info
 
-    def _calculate_file_hash(self, content: str) -> str:
-        """Calculate SHA-256 hash of file content."""
+    def _calculate_file_hash(self, content: str, file_path: Optional[str] = None) -> str:
+        """Calculate SHA-256 hash of file content. Uses normalization if enabled."""
+        hashing_config = self.config.get("hashing", {})
+        use_normalization = hashing_config.get("normalized", True)
+        
+        if use_normalization and file_path:
+            lang = get_language_from_path(file_path)
+            return NormalizedHasher.calculate_normalized_hash(content, lang)
+            
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
     def _get_default_context(self, file_path: str) -> Any:
@@ -796,7 +805,7 @@ class PreAnalysisPhase:
         # 3. Identify physically changed files
         changed_physically = []
         for cf in code_files:
-            content_hash = self._calculate_file_hash(cf.content)
+            content_hash = self._calculate_file_hash(cf.content, cf.path)
             rel_path = str(Path(cf.path).relative_to(self.project_root))
             
             # Check memory for existing state

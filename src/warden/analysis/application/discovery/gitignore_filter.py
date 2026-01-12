@@ -262,5 +262,9 @@ def create_gitignore_filter(project_root: Path) -> GitignoreFilter:
     # Load .gitignore from project root
     gitignore_path = project_root / ".gitignore"
     git_filter.load_gitignore(gitignore_path)
+    
+    # Load .wardenignore from project root (explicit override)
+    wardenignore_path = project_root / ".wardenignore"
+    git_filter.load_gitignore(wardenignore_path)
 
     return git_filter

@@ -165,7 +165,46 @@ Warden is designed with modular "Frames" and extends easily:
 *   **Pipes & Filters:** Sequential execution pipeline.
 *   **Priority Groups:** Critical security checks run first (Fail-Fast).
 *   **LSP Synergy:** Uses Language Server Protocol for deep code understanding.
-*   **Vector Search:** Semantic search for context-aware fixes.
+*   **Vector Search & Memory:** Semantic search for context-aware fixes and specialized "Project Purpose" memory.
+
+### 🏆 The Hybrid Guardian Identity
+
+Warden stands out by being a **Hybrid Architecture Guardian**. Unlike cloud-only review bots that rely heavily on PR context and SaaS infrastructure, Warden is designed as a **Privacy-First, Local-First** sentinel.
+
+| Feature | ☁️ Traditional Cloud Bot | 🛡️ Warden Core (The Guardian) |
+| :--- | :--- | :--- |
+| **Execution** | Cloud SaaS Only | **Local + CI/CD + Cloud** |
+| **Privacy** | Code leaves your machine | **100% Local Processing** (LLM is optional/configurable) |
+| **Context** | Pull Request & Tickets | **Project Purpose & Architecture Graph** |
+| **Deep Scan** | Full Sandbox Build | **Dependency Graph & Impact Analysis** |
+| **Memory** | Vector DB (SaaS) | **Local Vector DB + Knowledge Graph** |
+| **Cost** | Per-Token / User | **Optimized (Deterministic Rules First)** |
+
+#### 🔑 Key Differentiators
+
+1.  **Project Purpose Detector (Intent Analysis):**
+    Typical cloud bots deduce intent from Jira/Linear tickets. Warden deduces it **directly from your code**. It analyzes your codebase to understand if it's a "Crypto Wallet" or "E-Commerce API" and adjusts its rules accordingly.
+
+2.  **Architectural Frames:**
+    We don't just look for bugs. We look for **Architectural Crimes**.
+    *   *Did the Domain layer import Infrastructure?*
+    *   *Is the code strictly following Clean Architecture?*
+    *   *Are we drifting from the established design patterns?*
+
+3.  **Active Memory (The "Brain"):**
+    Warden doesn't just scan; it **remembers**.
+    *   **Semantic Hashing:** Ignores whitespace/comment changes to avoid re-scanning.
+    *   **Knowledge Graph:** Stores "Facts" about your project (e.g., "This project uses `pydantic` v2").
+    *   **Vector Search:** (Roadmap) Retrieving similar historical code blocks to guide valid fixes.
+
+#### 🧬 Anatomy of the Guardian
+
+*   **🧠 The Brain (Project Context):** Does not just lint; it *understands* (e.g., "This is a Crypto Wallet, so security is paramount").
+*   **👀 The Eyes (DependencyGraph):** Sees the "Butterfly Effect" — how a change in `utils.py` breaks `api.py`.
+*   **📚 The Memory (Vector DB):** Recalls historical context and similar code patterns (Active Retrieval capabilities).
+*   **⚡ The Reflexes (Semantic Hashing):** Ignores noise (whitespace, comments) to focus purely on meaningful logic.
+
+> **The Philosophy:** Warden is not a "Reviewer" that you wait for; it is a **Guardian** that stands at the gate of your repo, ensuring quality *before* commitment.
 
 ---
 
