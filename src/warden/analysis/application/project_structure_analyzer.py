@@ -60,20 +60,27 @@ class ProjectStructureAnalyzer:
         self.directory_structure: Dict[str, int] = {}  # dir -> file count
         self.framework = None  # Will be set during analysis
         self.analysis_level = analysis_level
+        self._injected_files: Optional[List[Path]] = None
         
         # Initialize Gitignore Filter
         self.gitignore_filter = create_gitignore_filter(self.project_root)
 
-    async def analyze_async(self, initial_context: Optional[ProjectContext] = None) -> ProjectContext:
+    async def analyze_async(
+        self, 
+        initial_context: Optional[ProjectContext] = None,
+        all_files: Optional[List[Path]] = None
+    ) -> ProjectContext:
         """
         Analyze project structure and detect characteristics.
 
         Args:
             initial_context: Optional pre-initialized context (e.g. from memory)
-
+            all_files: Optional list of pre-discovered files to avoid redundant disk walk
+            
         Returns:
             ProjectContext with detected information
         """
+        self._injected_files = all_files
         start_time = time.perf_counter()
 
         logger.info(
@@ -163,6 +170,10 @@ class ProjectStructureAnalyzer:
         Returns:
             List of Path objects for all valid files.
         """
+        if self._injected_files is not None:
+            return self._injected_files
+
+        logger.warning("project_structure_analyzer_fallback_to_sync_rglob", reason="no_injected_files")
         files = []
         for file_path in self.project_root.rglob("*"):
             if file_path.is_file() and not self.gitignore_filter.should_ignore(file_path):
@@ -288,7 +299,7 @@ class ProjectStructureAnalyzer:
         from warden.analysis.application.statistics_collector import StatisticsCollector
 
         collector = StatisticsCollector(self.project_root, self.special_dirs)
-        return await collector.collect_async()
+        return await collector.collect_async(all_files=self._injected_files)
 
     def _detect_primary_language(self) -> str:
         """Detect the primary programming language of the project."""
@@ -663,7 +674,7 @@ class ProjectStructureAnalyzer:
                 llm_config=self.llm_config,
                 analysis_level=self.analysis_level
             )
-            abstractions = await detector.detect_async()
+            abstractions = await detector.detect_async(all_files=self._injected_files)
             
             # Convert to serializable dict
             result = {}

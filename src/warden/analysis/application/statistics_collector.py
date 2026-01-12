@@ -5,7 +5,7 @@ Collects statistical information about the project during PRE-ANALYSIS phase.
 """
 
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional, Any
 import structlog
 
 from warden.analysis.domain.project_context import ProjectStatistics
@@ -34,20 +34,31 @@ class StatisticsCollector:
         """
         self.project_root = project_root
         self.special_dirs = special_dirs
+        self._injected_files: Optional[List[Path]] = None
 
-    async def collect_async(self) -> ProjectStatistics:
+    async def collect_async(self, all_files: Optional[List[Path]] = None) -> ProjectStatistics:
         """
         Collect statistical information about the project.
 
+        Args:
+            all_files: Optional list of pre-discovered files
+            
         Returns:
             ProjectStatistics with collected metrics
         """
+        self._injected_files = all_files
         logger.debug("statistics_collection_started")
 
         stats = ProjectStatistics()
 
         # Count files by type
-        for file_path in self.project_root.rglob("*"):
+        if all_files is not None:
+            all_files_to_scan = all_files
+        else:
+            logger.warning("statistics_collector_fallback_to_sync_rglob", reason="no_injected_files")
+            all_files_to_scan = self.project_root.rglob("*")
+            
+        for file_path in all_files_to_scan:
             if file_path.is_file():
                 # Skip hidden and special directories
                 if any(part.startswith('.') for part in file_path.parts[:-1]):
@@ -106,14 +117,29 @@ class StatisticsCollector:
         """Calculate maximum directory depth."""
         max_depth = 0
 
+        if self._injected_files is not None:
+            for path in self._injected_files:
+                try:
+                    depth = len(path.parent.relative_to(self.project_root).parts)
+                    max_depth = max(max_depth, depth)
+                except Exception:
+                    continue
+            return max_depth
+
         try:
             for dirpath, _, _ in self.project_root.walk():
                 depth = len(Path(dirpath).relative_to(self.project_root).parts)
                 max_depth = max(max_depth, depth)
         except Exception as e:
-            logger.debug("max_depth_calculation_error", error=str(e))
+            logger.warning("max_depth_calculation_fallback_to_sync_rglob", error=str(e))
             # Fallback to simple calculation
-            for path in self.project_root.rglob("*"):
+            if self._injected_files is not None:
+                all_files_to_scan = self._injected_files
+            else:
+                logger.warning("max_depth_fallback_no_injected_files")
+                all_files_to_scan = self.project_root.rglob("*")
+                
+            for path in all_files_to_scan:
                 if path.is_dir():
                     try:
                         depth = len(path.relative_to(self.project_root).parts)

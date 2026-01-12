@@ -134,7 +134,8 @@ class PreAnalysisPhase:
             self.trust_memory_context = is_env_valid
 
             # Analyze structure (will only discover purpose if missing after enrichment)
-            project_context = await self._analyze_project_structure_async(project_context)
+            all_paths = [Path(cf.path) for cf in code_files]
+            project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
 
             # Ensure AST providers are loaded for integrity check
             await self.ast_loader.load_all()
@@ -327,17 +328,25 @@ class PreAnalysisPhase:
             )
             self.llm_analyzer = None
 
-    async def _analyze_project_structure_async(self, initial_context: Optional[ProjectContext] = None) -> ProjectContext:
+    async def _analyze_project_structure_async(
+        self, 
+        initial_context: Optional[ProjectContext] = None,
+        all_files: Optional[List[Path]] = None
+    ) -> ProjectContext:
         """
         Analyze project structure and characteristics.
 
+        Args:
+            initial_context: Optional pre-initialized context
+            all_files: Optional list of pre-discovered files
+            
         Returns:
             ProjectContext with detected information
         """
         logger.info("analyzing_project_structure")
 
         # Run project structure analysis
-        project_context = await self.project_analyzer.analyze_async(initial_context)
+        project_context = await self.project_analyzer.analyze_async(initial_context, all_files=all_files)
 
         # Step 2.1: Semantic Discovery (Purpose and Architecture)
         # Check if we already have it in memory via enrichment (called in execute)

@@ -27,6 +27,7 @@ from .frame_matcher import FrameMatcher
 from .result_aggregator import ResultAggregator
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 import fnmatch
+from warden.validation.application.rust_validation_engine import RustValidationEngine
 
 logger = get_logger(__name__)
 
@@ -132,7 +133,10 @@ class FrameExecutor:
                 else:
                     await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
             
-            # Execute Global Rules (Rules that apply to all files independent of frames)
+            # Phase 1: Global Rust-based Pre-filtering
+            await self._run_rust_pre_filtering_async(context, filtered_files)
+
+            # Execute Global Rules (Standard Python Rules - Fallback/Legacy)
             if self.rule_validator and self.rule_validator.rules:
                 logger.info("executing_global_rules", rule_count=len(self.rule_validator.rules))
                 global_violations = []
@@ -167,6 +171,49 @@ class FrameExecutor:
                 "llm_used": self.llm_service is not None
             })
 
+
+    async def _run_rust_pre_filtering_async(
+        self,
+        context: PipelineContext,
+        code_files: List[CodeFile],
+    ) -> None:
+        """Run global high-performance pre-filtering using Rust engine."""
+        project_root = getattr(context, 'project_root', Path.cwd())
+        # Prepare engine
+        engine = RustValidationEngine(project_root, llm_service=self.llm_service)
+        
+        # 1. Load default global rules (System Rules)
+        rule_paths = [
+            project_root / "src/warden/rules/defaults/python/security.yaml",
+            project_root / "src/warden/rules/defaults/javascript/security.yaml",
+        ]
+        
+        for path in rule_paths:
+            if path.exists():
+                await engine.load_rules_from_yaml_async(path)
+        
+        # 2. Add custom rules from validator (Project Rules)
+        if self.rule_validator and self.rule_validator.rules:
+            # Only add rules that have regex patterns and are not already handled or are appropriate for Rust
+            regex_rules = [r for r in self.rule_validator.rules if r.pattern and r.type != 'ai']
+            if regex_rules:
+                engine.add_custom_rules(regex_rules)
+        
+        if not engine.rust_rules:
+            logger.debug("no_global_rust_rules_and_no_custom_regex_rules_skipping_scan")
+            return
+
+        # Prepare file paths
+        file_paths = [Path(cf.path) for cf in code_files]
+        
+        # Execute scan
+        try:
+            findings = await engine.scan_project_async(file_paths)
+            if findings:
+                logger.info("rust_pre_filtering_found_issues", count=len(findings))
+                context.findings.extend(findings)
+        except Exception as e:
+            logger.error("rust_pre_filtering_failed", error=str(e), error_type=type(e).__name__)
 
     async def _execute_frames_sequential_async(
         self,
