@@ -122,6 +122,9 @@ class FrameExecutor:
             if not hasattr(context, 'frame_results') or context.frame_results is None:
                 context.frame_results = {}
 
+            # Phase 1: Global Rust-based Pre-filtering
+            await self._run_rust_pre_filtering_async(context, filtered_files)
+
             # Execute frames based on strategy
             if frames_to_execute:
                 if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
@@ -133,8 +136,6 @@ class FrameExecutor:
                 else:
                     await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
             
-            # Phase 1: Global Rust-based Pre-filtering
-            await self._run_rust_pre_filtering_async(context, filtered_files)
 
             # Execute Global Rules (Standard Python Rules - Fallback/Legacy)
             if self.rule_validator and self.rule_validator.rules:
@@ -180,16 +181,21 @@ class FrameExecutor:
         """Run global high-performance pre-filtering using Rust engine."""
         project_root = getattr(context, 'project_root', Path.cwd())
         # Prepare engine
-        engine = RustValidationEngine(project_root, llm_service=self.llm_service)
+        engine = RustValidationEngine(project_root)
         
         # 1. Load default global rules (System Rules)
+        import warden
+        package_root = Path(warden.__file__).parent
         rule_paths = [
-            project_root / "src/warden/rules/defaults/python/security.yaml",
-            project_root / "src/warden/rules/defaults/javascript/security.yaml",
+            package_root / "rules/defaults/python/security.yaml",
+            package_root / "rules/defaults/javascript/security.yaml",
         ]
         
+        logger.info("debug_rule_paths", package_root=str(package_root))
         for path in rule_paths:
-            if path.exists():
+            exists = path.exists()
+            logger.info("debug_rule_path_check", path=str(path), exists=exists)
+            if exists:
                 await engine.load_rules_from_yaml_async(path)
         
         # 2. Add custom rules from validator (Project Rules)
@@ -210,8 +216,23 @@ class FrameExecutor:
         try:
             findings = await engine.scan_project_async(file_paths)
             if findings:
-                logger.info("rust_pre_filtering_found_issues", count=len(findings))
-                context.findings.extend(findings)
+                total_hits = len(findings)
+                logger.info("rust_scan_raw_hits", count=total_hits)
+                
+                # Alpha Judgment: Global high-speed filtering
+                from warden.validation.application.alpha_judgment import AlphaJudgment
+                alpha = AlphaJudgment(config=self.config.dict() if hasattr(self.config, 'dict') else {})
+                
+                filtered_findings = alpha.evaluate(findings, code_files)
+                
+                if filtered_findings:
+                    logger.info("rust_pre_filtering_found_issues", 
+                              raw=total_hits, 
+                              filtered=len(filtered_findings))
+                    context.findings.extend(filtered_findings)
+                else:
+                    logger.info("alpha_judgment_filtered_all_hits", raw=total_hits)
+
         except Exception as e:
             logger.error("rust_pre_filtering_failed", error=str(e), error_type=type(e).__name__)
 
