@@ -65,7 +65,7 @@ class CleanupAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -82,7 +82,7 @@ class CleanupAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _analyze_cleanup(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _analyze_cleanup_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Analyze code for cleanup opportunities."""
         path = arguments.get("path", str(self.project_root))
         analyzers = arguments.get("analyzers", [])
@@ -104,14 +104,14 @@ class CleanupAdapter(BaseWardenAdapter):
             "suggestions": suggestions,
         })
 
-    async def _get_cleanup_suggestions(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_cleanup_suggestions_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get cleanup suggestions."""
         path = arguments.get("path", str(self.project_root))
 
         # Delegate to analyze_cleanup
-        return await self._analyze_cleanup(arguments)
+        return await self._analyze_cleanup_async(arguments)
 
-    async def _get_cleanup_score(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_cleanup_score_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get cleanup score."""
         if self.bridge and hasattr(self.bridge, "get_cleanup_score"):
             try:

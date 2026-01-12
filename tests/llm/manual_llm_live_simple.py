@@ -83,7 +83,7 @@ async def test_code_analysis():
     code = '''
 def get_user(user_id):
     query = f"SELECT * FROM users WHERE id = '{user_id}'"
-    return db.execute(query)
+    return db.execute_async(query)
 '''
 
     request = LlmRequest(
@@ -144,7 +144,7 @@ def get_user(user_id):
         return False
 
 
-async def main():
+async def main_async():
     """Run all tests"""
     print("\n" + "=" * 60)
     print("🚀 Warden LLM Integration Live Tests")
@@ -190,4 +190,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main_async())

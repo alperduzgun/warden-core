@@ -168,7 +168,7 @@ Return as JSON."""
                 "technical_debt_hours": 0.0,
             }
 
-    async def analyze_code_quality(
+    async def analyze_code_quality_async(
         self,
         code: str,
         file_path: Path,
@@ -198,7 +198,7 @@ Return as JSON."""
         }
 
         # Try LLM analysis
-        llm_result = await self.analyze_with_llm(context)
+        llm_result = await self.analyze_with_llm_async(context)
 
         if llm_result:
             # Create QualityMetrics from LLM result
@@ -233,7 +233,7 @@ Return as JSON."""
         # Default metrics if everything fails
         return self._create_default_metrics(file_context), 0.3
 
-    async def analyze_batch(
+    async def analyze_batch_async(
         self,
         files: List[Tuple[str, Path, FileContext, bool]],
         initial_metrics: Optional[Dict[Path, Dict[str, float]]] = None,
@@ -266,7 +266,7 @@ Return as JSON."""
             contexts.append(context)
 
         # Batch LLM analysis
-        llm_results = await self.analyze_batch_with_llm(contexts)
+        llm_results = await self.analyze_batch_with_llm_async(contexts)
 
         # Process results
         for i, (code, path, file_context, is_impacted) in enumerate(files):
@@ -389,7 +389,7 @@ Return as JSON."""
             technical_debt_hours=0.0,
         )
 
-    async def execute(self, code_files: List[Any], pipeline_context: Optional[Any] = None, impacted_files: List[str] = None) -> QualityMetrics:
+    async def execute_async(self, code_files: List[Any], pipeline_context: Optional[Any] = None, impacted_files: List[str] = None) -> QualityMetrics:
         """
         Execute LLM-enhanced analysis phase.
 
@@ -414,7 +414,7 @@ Return as JSON."""
             is_impacted = impacted_files and str(file_path) in impacted_files
 
             # Analyze with LLM
-            metrics, confidence = await self.analyze_code_quality(
+            metrics, confidence = await self.analyze_code_quality_async(
                 code=code,
                 file_path=file_path,
                 file_context=file_context,

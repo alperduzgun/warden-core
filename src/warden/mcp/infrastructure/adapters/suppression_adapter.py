@@ -116,7 +116,7 @@ class SuppressionAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -134,7 +134,7 @@ class SuppressionAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _add_suppression(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _add_suppression_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Add a suppression rule."""
         rule_id = arguments.get("rule_id")
         justification = arguments.get("justification")
@@ -168,7 +168,7 @@ class SuppressionAdapter(BaseWardenAdapter):
             "suppression": suppression,
         })
 
-    async def _remove_suppression(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _remove_suppression_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Remove a suppression rule."""
         suppression_id = arguments.get("suppression_id")
 
@@ -185,14 +185,14 @@ class SuppressionAdapter(BaseWardenAdapter):
             "message": f"Suppression {suppression_id} removed",
         })
 
-    async def _get_suppressions(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_suppressions_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get all suppression rules."""
         return MCPToolResult.json_result({
             "suppressions": list(self._suppressions.values()),
             "total_count": len(self._suppressions),
         })
 
-    async def _check_suppression(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _check_suppression_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Check if an issue is suppressed."""
         rule_id = arguments.get("rule_id")
         file_path = arguments.get("file_path")

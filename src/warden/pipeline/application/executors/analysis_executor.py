@@ -36,13 +36,8 @@ class AnalysisExecutor(BasePhaseExecutor):
             })
 
         try:
-            # Use LLM version if LLM service is available and configured
-            use_llm = self.llm_service is not None
-
-            # Check pre_analysis_config for use_llm setting
-            if hasattr(self.config, 'pre_analysis_config') and isinstance(self.config.pre_analysis_config, dict):
-                config_use_llm = self.config.pre_analysis_config.get('use_llm', True)
-                use_llm = self.llm_service and config_use_llm
+            # Respect global use_llm flag and LLM service availability
+            use_llm = getattr(self.config, 'use_llm', True) and self.llm_service is not None
 
             if verbose:
                 logger.info(
@@ -85,8 +80,16 @@ class AnalysisExecutor(BasePhaseExecutor):
                 logger.info("using_llm_analysis_phase")
             else:
                 from warden.analysis.application.analysis_phase import AnalysisPhase
+                analysis_config = getattr(self.config, 'analysis_config', {})
+                if not isinstance(analysis_config, dict):
+                    analysis_config = {}
+                
+                # Propagate analysis_level
+                if hasattr(self.config, 'analysis_level'):
+                    analysis_config["analysis_level"] = self.config.analysis_level.value
+
                 phase = AnalysisPhase(
-                    config=getattr(self.config, 'analysis_config', {}),
+                    config=analysis_config,
                     project_root=self.project_root,
                     use_gitignore=getattr(self.config, 'use_gitignore', True),
                 )
@@ -133,7 +136,7 @@ class AnalysisExecutor(BasePhaseExecutor):
                 ]
                 
                 llm_start_time = time.perf_counter()
-                result = await phase.execute(files_to_analyze, pipeline_context=context, impacted_files=impacted_paths)
+                result = await phase.execute_async(files_to_analyze, pipeline_context=context, impacted_files=impacted_paths)
                 llm_duration = time.perf_counter() - llm_start_time
 
             if verbose:

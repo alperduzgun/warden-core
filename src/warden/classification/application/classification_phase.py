@@ -85,7 +85,7 @@ class ClassificationPhase:
             hotspots = self.context.get("hotspots", [])
 
             # Default frame selection based on project type
-            result.selected_frames = await self._select_frames_for_project(
+            result.selected_frames = await self._select_frames_for_project_async(
                 project_type, framework, quality_score
             )
 
@@ -123,7 +123,7 @@ class ClassificationPhase:
 
         return result
 
-    async def _select_frames_for_project(
+    async def _select_frames_for_project_async(
         self,
         project_type: str,
         framework: str,

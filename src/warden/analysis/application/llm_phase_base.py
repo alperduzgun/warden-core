@@ -167,7 +167,7 @@ class LLMPhaseBase(ABC):
         """Parse LLM response to phase-specific format."""
         pass
 
-    async def analyze_with_llm(
+    async def analyze_with_llm_async(
         self,
         context: Dict[str, Any],
         use_cache: bool = True,
@@ -234,7 +234,7 @@ class LLMPhaseBase(ABC):
 
             # Call LLM with retry logic
             llm_start_time = time.time()
-            response = await self._call_llm_with_retry(system_prompt, user_prompt)
+            response = await self._call_llm_with_retry_async(system_prompt, user_prompt)
             llm_duration = time.time() - llm_start_time
 
             logger.info(
@@ -293,7 +293,7 @@ class LLMPhaseBase(ABC):
 
         return None
 
-    async def analyze_batch_with_llm(
+    async def analyze_batch_with_llm_async(
         self,
         items: List[Dict[str, Any]],
         use_cache: bool = True,
@@ -316,7 +316,7 @@ class LLMPhaseBase(ABC):
 
             # Process batch concurrently
             batch_tasks = [
-                self.analyze_with_llm(item, use_cache) for item in batch
+                self.analyze_with_llm_async(item, use_cache) for item in batch
             ]
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
@@ -334,7 +334,7 @@ class LLMPhaseBase(ABC):
 
         return results
 
-    async def _call_llm_with_retry(
+    async def _call_llm_with_retry_async(
         self,
         system_prompt: str,
         user_prompt: str,
@@ -363,7 +363,7 @@ class LLMPhaseBase(ABC):
         
         # 2. Acquire Rate Limit (Waits here if needed)
         # This prevents 429s by not sending the request until we have budget
-        await self.rate_limiter.acquire(estimated_tokens)
+        await self.rate_limiter.acquire_async(estimated_tokens)
 
         for attempt in range(self.config.max_retries):
             try:
@@ -430,7 +430,7 @@ class LLMPhaseBase(ABC):
             and confidence < self.config.confidence_threshold
         )
 
-    async def enhance_with_llm(
+    async def enhance_with_llm_async(
         self,
         initial_result: Any,
         confidence: float,
@@ -458,7 +458,7 @@ class LLMPhaseBase(ABC):
         }
 
         # Get LLM enhancement
-        llm_result = await self.analyze_with_llm(enhanced_context)
+        llm_result = await self.analyze_with_llm_async(enhanced_context)
 
         if llm_result:
             logger.info(

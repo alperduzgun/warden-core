@@ -145,7 +145,7 @@ class HTTPServer:
 
         try:
             # Execute pipeline with streaming
-            async for event in self.bridge.execute_pipeline_stream(str(path), frames=frames):
+            async for event in self.bridge.execute_pipeline_stream_async(str(path), frames=frames):
                 # Send SSE event
                 event_type = event.get('type', 'progress')
                 event_data = json.dumps(event)
@@ -185,14 +185,14 @@ class HTTPServer:
         logger.info("scanning_file", path=str(path), frames=frames)
 
         # Perform scan
-        result = await self.bridge.scan(str(path), frames=frames)
+        result = await self.bridge.scan_async(str(path), frames=frames)
 
         return result
 
     async def handle_get_config(self, params):
         """Handle get_config request"""
         try:
-            config = await self.bridge.get_config()
+            config = await self.bridge.get_config_async()
 
             # Extract available frames
             frames_available = []
@@ -221,7 +221,7 @@ class HTTPServer:
                 "error": str(e)
             }
 
-    async def start(self, host='localhost', port=6173):
+    async def start_async(self, host='localhost', port=6173):
         """Start the HTTP server"""
         logger.info("http_server_starting", host=host, port=port)
 
@@ -231,7 +231,7 @@ class HTTPServer:
         runner = web.AppRunner(self.app)
         await runner.setup()
         site = web.TCPSite(runner, host, port)
-        await site.start()
+        await site.start_async()
 
         logger.info("http_server_started", url=f"http://{host}:{port}")
 
@@ -242,10 +242,10 @@ class HTTPServer:
             logger.info("http_server_stopping")
             await runner.cleanup()
 
-async def main():
+async def main_async():
     """Main entry point"""
     server = HTTPServer()
-    await server.start()
+    await server.start_async()
 
 if __name__ == "__main__":
     # Configure logging
@@ -265,4 +265,4 @@ if __name__ == "__main__":
         cache_logger_on_first_use=True,
     )
 
-    asyncio.run(main())
+    asyncio.run(main_async())

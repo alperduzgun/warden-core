@@ -79,13 +79,13 @@ class MCPService:
             "tools/call": self._handle_tools_call,
         }
 
-    async def start(self) -> None:
+    async def start_async(self) -> None:
         """Start the MCP service main loop."""
         session = self.session_manager.create_session()
-        session.start()
+        session.start_async()
 
         # Start background tasks
-        self._watcher_task = asyncio.create_task(self._watch_report_file())
+        self._watcher_task = asyncio.create_task(self._watch_report_file_async())
 
         logger.info("mcp_service_starting", project_root=str(self.project_root))
 
@@ -97,7 +97,7 @@ class MCPService:
                 if not message:
                     continue
 
-                response = await self._process_message(message, session)
+                response = await self._process_message_async(message, session)
                 if response:
                     await self.transport.write_message(response)
 
@@ -113,11 +113,11 @@ class MCPService:
                 except asyncio.CancelledError:
                     pass
             
-            session.stop()
+            session.stop_async()
             await self.transport.close()
             logger.info("mcp_service_stopped")
 
-    async def _process_message(
+    async def _process_message_async(
         self, raw: str, session: MCPSession
     ) -> Optional[str]:
         """Process incoming message and return response."""
@@ -157,7 +157,7 @@ class MCPService:
     # Handler Methods
     # =========================================================================
 
-    async def _handle_initialize(
+    async def _handle_initialize_async(
         self, params: Optional[Dict], session: MCPSession
     ) -> Dict:
         """Handle initialize request."""
@@ -167,7 +167,7 @@ class MCPService:
             "serverInfo": self._server_info.to_dict(),
         }
 
-    async def _handle_initialized(
+    async def _handle_initialized_async(
         self, params: Optional[Dict], session: MCPSession
     ) -> None:
         """Handle initialized notification."""
@@ -175,20 +175,20 @@ class MCPService:
         logger.info("mcp_client_initialized")
         return None
 
-    async def _handle_ping(
+    async def _handle_ping_async(
         self, params: Optional[Dict], session: MCPSession
     ) -> Dict:
         """Handle ping request."""
         return {}
 
-    async def _handle_resources_list(
+    async def _handle_resources_list_async(
         self, params: Optional[Dict], session: MCPSession
     ) -> Dict:
         """Handle resources/list request."""
         resources = await self.resource_provider.list_resources()
         return {"resources": [r.to_mcp_format() for r in resources]}
 
-    async def _handle_resources_read(
+    async def _handle_resources_read_async(
         self, params: Optional[Dict], session: MCPSession
     ) -> Dict:
         """Handle resources/read request."""
@@ -198,20 +198,20 @@ class MCPService:
         content = await self.resource_provider.read_resource(uri)
         return {"contents": [content]}
 
-    async def _handle_tools_list(
+    async def _handle_tools_list_async(
         self, params: Optional[Dict], session: MCPSession
     ) -> Dict:
         """Handle tools/list request."""
         tools = self._tool_registry.list_all(self.tool_executor.bridge_available)
         return {"tools": [t.to_mcp_format() for t in tools]}
 
-    async def _handle_tools_call(
+    async def _handle_tools_call_async(
         self, params: Optional[Dict], session: MCPSession
     ) -> Dict:
         """Handle tools/call request."""
         if not params or "name" not in params:
             raise MCPProtocolError("Missing required parameter: name")
-        result = await self.tool_executor.execute(
+        result = await self.tool_executor.execute_async(
             params["name"],
             params.get("arguments", {}),
         )
@@ -221,7 +221,7 @@ class MCPService:
     # Notification & Background Tasks
     # =========================================================================
 
-    async def send_notification(self, method: str, params: Dict[str, Any]) -> None:
+    async def send_notification_async(self, method: str, params: Dict[str, Any]) -> None:
         """
         Send a JSON-RPC notification to the client.
 
@@ -239,7 +239,7 @@ class MCPService:
         })
         await self.transport.write_message(message)
 
-    async def _watch_report_file(self) -> None:
+    async def _watch_report_file_async(self) -> None:
         """
         Background task to watch warden_report.json for changes.
         Sends notifications/resources/updated when changed.
@@ -278,7 +278,7 @@ class MCPService:
                         logger.info("mcp_report_updated", path=str(report_path))
                         
                         # Notify clients that reports resource has changed
-                        await self.send_notification(
+                        await self.send_notification_async(
                             "notifications/resources/updated",
                             {"uri": "warden://reports/latest"}
                         )

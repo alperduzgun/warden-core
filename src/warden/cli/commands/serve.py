@@ -2,8 +2,8 @@ import typer
 import asyncio
 from pathlib import Path
 from typing import Optional
-from warden.services.ipc_entry import main as ipc_main
-from warden.services.grpc_entry import main as grpc_main
+from warden.services.ipc_entry import main_async as ipc_main
+from warden.services.grpc_entry import main_async as grpc_main
 
 serve_app = typer.Typer(name="serve", help="Start Warden backend services")
 

@@ -14,7 +14,7 @@ import yaml
 import importlib
 import importlib.util
 from pathlib import Path
-from typing import List, Type, Dict, Any
+from typing import List, Type, Dict, Any, Optional
 from dataclasses import dataclass
 
 from warden.validation.domain.frame import ValidationFrame, ValidationFrameError
@@ -63,13 +63,16 @@ class FrameRegistry:
         self.frame_metadata: Dict[str, FrameMetadata] = {}
         self._config_cache: Dict[str, Dict[str, Any]] = {}  # Cache for merged configs
 
-    def discover_all(self) -> List[Type[ValidationFrame]]:
+    def discover_all(self, project_root: Optional[Path] = None) -> List[Type[ValidationFrame]]:
         """
         Discover all available frames from all sources.
 
+        Args:
+            project_root: Optional project root for local frame discovery
+            
         Returns:
             List of ValidationFrame classes
-
+            
         Raises:
             ValidationFrameError: If frame discovery fails critically
         """
@@ -92,7 +95,7 @@ class FrameRegistry:
         )
 
         # 3. Discover local directory frames
-        local_frames = self._discover_local_frames()
+        local_frames = self._discover_local_frames(project_root)
         logger.info(
             "local_frames_discovered",
             count=len(local_frames),
@@ -463,28 +466,26 @@ class FrameRegistry:
 
         return frames
 
-    def _discover_local_frames(self) -> List[Type[ValidationFrame]]:
+    def _discover_local_frames(self, project_root: Optional[Path] = None) -> List[Type[ValidationFrame]]:
         """
         Discover frames from local directories.
 
         Searches in TWO locations:
         1. Global: ~/.warden/frames/ (for all projects)
-        2. Project-specific: <cwd>/.warden/frames/ (for current project only)
+        2. Project-specific: {project_root}/.warden/frames/ (for current project only)
 
-        Each frame should be in its own directory with:
-        - frame.py (contains ValidationFrame subclass)
-        - frame.yaml (metadata)
-
-        Returns:
-            List of ValidationFrame classes from local directories
+        If project_root is not provided, defaults to Path.cwd().
         """
         frames: List[Type[ValidationFrame]] = []
 
         # 1. Global frames directory (~/.warden/frames/)
         global_frames_dir = Path.home() / ".warden" / "frames"
 
-        # 2. Project-specific frames directory (<cwd>/.warden/frames/)
-        project_frames_dir = Path.cwd() / ".warden" / "frames"
+        # 2. Project-specific frames directory
+        if project_root:
+            project_frames_dir = project_root / ".warden" / "frames"
+        else:
+            project_frames_dir = Path.cwd() / ".warden" / "frames"
 
         # Scan both locations
         search_paths = [

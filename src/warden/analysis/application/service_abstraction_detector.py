@@ -137,7 +137,8 @@ class ServiceAbstractionDetector:
         self, 
         project_root: Path, 
         project_context: Optional[ProjectContext] = None,
-        llm_config: Optional[LlmConfiguration] = None
+        llm_config: Optional[LlmConfiguration] = None,
+        analysis_level: Optional[Any] = None
     ) -> None:
         """
         Initialize detector.
@@ -150,6 +151,7 @@ class ServiceAbstractionDetector:
         self.project_root = Path(project_root)
         self.project_context = project_context
         self.abstractions: Dict[str, ServiceAbstraction] = {}
+        self.analysis_level = analysis_level
         
         # Initialize AST registry
         self.registry = ASTProviderRegistry()
@@ -161,6 +163,12 @@ class ServiceAbstractionDetector:
         except Exception as e:
             logger.debug("llm_client_creation_failed_for_detector", error=str(e))
             self.llm = None
+
+        # Check analysis level - bypass LLM initialization if basic
+        from warden.pipeline.domain.enums import AnalysisLevel
+        if self.analysis_level == AnalysisLevel.BASIC:
+            self.llm = None
+            logger.debug("llm_disabled_for_detector", reason="analysis_level_basic")
     
     async def _ensure_registry(self) -> None:
         """Ensure AST registry is initialized and loaded."""

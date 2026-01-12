@@ -117,3 +117,14 @@ class StepStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+
+
+class AnalysisLevel(str, Enum):
+    """
+    Scanning analysis levels.
+    
+    Determines the depth of AI-driven analysis.
+    """
+    BASIC = "basic"        # No LLM, regex/AST only
+    STANDARD = "standard"  # Default LLM usage with caching
+    DEEP = "deep"          # Full semantic and logic audit

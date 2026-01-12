@@ -38,10 +38,18 @@ class FortificationExecutor(BasePhaseExecutor):
             # Get context from previous phases
             phase_context = context.get_context_for_phase("FORTIFICATION")
 
+            # Skip if disabled in config
+            if not getattr(self.config, 'enable_fortification', True):
+                logger.info("fortification_phase_disabled_via_config")
+                return
+
+            # Respect global use_llm flag
+            llm_service = self.llm_service if getattr(self.config, 'use_llm', True) else None
+
             phase = FortificationPhase(
                 config=getattr(self.config, 'fortification_config', {}),
                 context=phase_context,
-                llm_service=self.llm_service,
+                llm_service=llm_service,
                 semantic_search_service=self.semantic_search_service,
                 rate_limiter=self.rate_limiter
             )

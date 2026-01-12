@@ -84,7 +84,7 @@ class SecuritySuggestionService:
         """Initialize security suggestion service."""
         self.llm_service = llm_service or LLMService()
 
-    async def generate_fortification(self, issue: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_fortification_async(self, issue: Dict[str, Any]) -> Dict[str, Any]:
         """Generate fortification for a security issue."""
         severity = issue.get("severity", "medium")
 

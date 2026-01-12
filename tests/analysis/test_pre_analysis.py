@@ -274,7 +274,7 @@ class TestPreAnalysisPhase:
             ]
 
             phase = PreAnalysisPhase(project_root)
-            result = await phase.execute(code_files)
+            result = await phase.execute_async(code_files)
 
             assert isinstance(result, PreAnalysisResult)
             assert result.total_files_analyzed == 2
@@ -306,7 +306,7 @@ class TestPreAnalysisPhase:
                 code_files.append(CodeFile(path=str(full_path), content="# code", language="python"))
 
             phase = PreAnalysisPhase(project_root)
-            result = await phase.execute(code_files)
+            result = await phase.execute_async(code_files)
 
             # Check context distribution
             assert result.files_by_context.get("production", 0) >= 1
@@ -326,7 +326,7 @@ class TestPreAnalysisPhase:
             code_files = [CodeFile(path=str(test_file), content="def test_sql_injection(): pass", language="python")]
 
             phase = PreAnalysisPhase(project_root)
-            result = await phase.execute(code_files)
+            result = await phase.execute_async(code_files)
 
             # Check suppression configuration
             context_info = result.file_contexts.get(str(test_file))
@@ -356,7 +356,7 @@ class TestPreAnalysisPhase:
             ]
 
             phase = PreAnalysisPhase(project_root)
-            result = await phase.execute(code_files)
+            result = await phase.execute_async(code_files)
 
             # Vendor file should be skipped
             assert phase.should_skip_file(str(vendor_file), result)
@@ -379,7 +379,7 @@ class TestPreAnalysisPhase:
             code_files = [CodeFile(path=str(project_root / "test.py"), content="print('test')", language="python")]
 
             phase = PreAnalysisPhase(project_root, progress_callback)
-            await phase.execute(code_files)
+            await phase.execute_async(code_files)
 
             # Check that progress events were fired
             event_names = [event for event, _ in progress_events]
@@ -425,7 +425,7 @@ def test_sql_injection_detection():
 
             # Run PRE-ANALYSIS
             phase = PreAnalysisPhase(project_root)
-            result = await phase.execute(code_files)
+            result = await phase.execute_async(code_files)
 
             # Production file should NOT suppress SQL injection
             prod_context = result.file_contexts[str(prod_file)]

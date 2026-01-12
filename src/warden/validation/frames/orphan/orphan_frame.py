@@ -17,7 +17,7 @@ class OrphanFrame(ValidationFrame):
     name = "Orphan Code Detection"
     description = "Identifies unused functions and classes with compiler-grade precision."
     
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         findings: List[Finding] = []
         try:
             path = Path(code_file.path)
@@ -45,7 +45,7 @@ class OrphanFrame(ValidationFrame):
             lsp_manager = LSPManager.get_instance()
             # Root path logic needs improvement in real app (ProjectContext)
             # Defaulting to 2 levels up for now as a heuristic
-            client = await lsp_manager.get_client(language, str(path.parent.parent)) 
+            client = await lsp_manager.get_client_async(language, str(path.parent.parent)) 
             
             if not client:
                 logger.debug("orphan_lsp_unavailable", file=code_file)
@@ -62,7 +62,7 @@ class OrphanFrame(ValidationFrame):
             # 1. Get Symbols (Functions/Classes)
             uri = f"file://{code_file}"
             # Ensure file is open in LSP
-            await client.send_notification("textDocument/didOpen", {
+            await client.send_notification_async("textDocument/didOpen", {
                 "textDocument": {
                     "uri": uri,
                     "languageId": language,
@@ -71,7 +71,7 @@ class OrphanFrame(ValidationFrame):
                 }
             })
             
-            symbols_resp = await client.send_request("textDocument/documentSymbol", {
+            symbols_resp = await client.send_request_async("textDocument/documentSymbol", {
                 "textDocument": {"uri": uri}
             })
             
@@ -88,7 +88,7 @@ class OrphanFrame(ValidationFrame):
 
             # 2. Check References for each symbol
             for symbol in symbols_resp:
-                 await self._check_symbol(client, uri, symbol, findings)
+                 await self._check_symbol_async(client, uri, symbol, findings)
 
         except Exception as e:
             logger.error("orphan_frame_error", error=str(e), file=code_file)
@@ -114,7 +114,7 @@ class OrphanFrame(ValidationFrame):
             findings=findings
         )
 
-    async def _check_symbol(self, client, uri, symbol, findings):
+    async def _check_symbol_async(self, client, uri, symbol, findings):
         """Recursively check references for a symbol."""
         kind = symbol.get("kind")
         # 12=Function, 5=Class, 6=Method (LSP kinds)
@@ -123,7 +123,7 @@ class OrphanFrame(ValidationFrame):
             if name.startswith("_"): return
             
             # Request References
-            refs = await client.send_request("textDocument/references", {
+            refs = await client.send_request_async("textDocument/references", {
                 "textDocument": {"uri": uri},
                 "position": symbol.get("selectionRange", symbol.get("range"))["start"],
                 "context": {"includeDeclaration": False}
@@ -143,4 +143,4 @@ class OrphanFrame(ValidationFrame):
         
         if "children" in symbol:
             for child in symbol["children"]:
-                await self._check_symbol(client, uri, child, findings)
+                await self._check_symbol_async(client, uri, child, findings)

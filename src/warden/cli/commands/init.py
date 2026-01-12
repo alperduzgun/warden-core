@@ -90,7 +90,7 @@ def _setup_semantic_search(config_path: Path):
          service = SemanticSearchService(ss_config)
          
          # Inner function to perform indexing to avoid DRY violation
-         async def run_indexing_if_files_exist():
+         async def run_indexing_if_files_exist_async():
              code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
              files = [f for f in Path.cwd().rglob("*") if f.is_file() and f.suffix in code_extensions and "node_modules" not in str(f) and ".venv" not in str(f) and ".git" not in str(f)]
              
@@ -107,7 +107,7 @@ def _setup_semantic_search(config_path: Path):
                  console.print("[dim]Run 'warden index' later to complete setup.[/dim]")
 
          if service.is_available():
-             asyncio.run(run_indexing_if_files_exist())
+             asyncio.run(run_indexing_if_files_exist_async())
          else:
               console.print("[yellow]Semantic service dependencies missing.[/yellow]")
               console.print("[dim]Auto-installing required dependencies (Mandatory for AI features)...[/dim]")
@@ -119,7 +119,7 @@ def _setup_semantic_search(config_path: Path):
                   # Retry setup
                   service = SemanticSearchService(ss_config)
                   if service.is_available():
-                      asyncio.run(run_indexing_if_files_exist())
+                      asyncio.run(run_indexing_if_files_exist_async())
                   else:
                       console.print("[red]Service unavailable even after install.[/red]")
                       
@@ -137,7 +137,7 @@ def _setup_semantic_search(config_path: Path):
         console.print("[yellow]💡 Suggestion: Run 'warden index' manually to see detailed errors.[/yellow]")
         console.print("[dim]The project is initialized, but AI features (Orphan/Purpose) may be limited until fixed.[/dim]")
 
-async def _create_baseline(root: Path, config_path: Path):
+async def _create_baseline_async(root: Path, config_path: Path):
     """Run initial scan and save as baseline."""
     console.print("\n[bold blue]📉 Creating Baseline...[/bold blue]")
     console.print("[dim]Running initial scan to identify existing technical debt...[/dim]")
@@ -149,7 +149,7 @@ async def _create_baseline(root: Path, config_path: Path):
         # Run scan on current directory
         # We assume '.' finds all files via scan logic
         # Since execute_pipeline takes a file/dir path, we pass root string.
-        result = await bridge.execute_pipeline(str(root))
+        result = await bridge.execute_pipeline_async(str(root))
         
         # Save baseline
         baseline_path = root / ".warden" / "baseline.json"
@@ -470,7 +470,7 @@ custom_rules:
     # --- Step 9: Baseline ---
     if Confirm.ask("\nCreate Baseline from current issues? (Recommended for existing projects)", default=True):
         try:
-             asyncio.run(_create_baseline(Path.cwd(), config_path))
+             asyncio.run(_create_baseline_async(Path.cwd(), config_path))
         except KeyboardInterrupt:
              console.print("\n[yellow]⚠️  Baseline creation skipped by user.[/yellow]")
         except Exception as e:

@@ -50,7 +50,7 @@ exclude:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             assert config.project_name == "test-project"
             assert config.language == "python"
@@ -70,7 +70,7 @@ exclude:
     async def test_load_missing_file(self):
         """Test loading non-existent file raises error."""
         with pytest.raises(FileNotFoundError):
-            await RulesYAMLLoader.load_from_file(Path("nonexistent.yaml"))
+            await RulesYAMLLoader.load_from_file_async(Path("nonexistent.yaml"))
 
     @pytest.mark.asyncio
     async def test_invalid_yaml_structure(self):
@@ -87,7 +87,7 @@ rules:
 
         try:
             with pytest.raises(ValueError, match="Missing 'project' section"):
-                await RulesYAMLLoader.load_from_file(temp_path)
+                await RulesYAMLLoader.load_from_file_async(temp_path)
         finally:
             temp_path.unlink()
 
@@ -117,7 +117,7 @@ rules:
 
         try:
             with pytest.raises(ValueError, match="Invalid category"):
-                await RulesYAMLLoader.load_from_file(temp_path)
+                await RulesYAMLLoader.load_from_file_async(temp_path)
         finally:
             temp_path.unlink()
 
@@ -160,7 +160,7 @@ rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             assert len(config.rules) == 2
             assert config.rules[0].id == "rule1"
@@ -215,7 +215,7 @@ frame_rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Check frame_rules were loaded
             assert len(config.frame_rules) == 1
@@ -296,7 +296,7 @@ frame_rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Check all frames loaded
             assert len(config.frame_rules) == 3
@@ -354,7 +354,7 @@ frame_rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Should still load, but only with valid rules
             assert "security" in config.frame_rules
@@ -399,7 +399,7 @@ frame_rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Should default to "stop"
             assert config.frame_rules["security"].on_fail == "stop"
@@ -435,7 +435,7 @@ frame_rules: {}
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Should return empty dict
             assert len(config.frame_rules) == 0
@@ -469,7 +469,7 @@ rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Should return empty dict
             assert len(config.frame_rules) == 0
@@ -507,7 +507,7 @@ frame_rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Should default to "stop"
             assert config.frame_rules["security"].on_fail == "stop"
@@ -547,7 +547,7 @@ frame_rules:
             temp_path = Path(f.name)
 
         try:
-            config = await RulesYAMLLoader.load_from_file(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
 
             # Should still create the frame rule with empty lists
             assert "security" in config.frame_rules

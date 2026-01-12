@@ -46,7 +46,7 @@ class ResultAnalyzer:
         """
         self.issue_tracker = issue_tracker
 
-    async def analyze(
+    async def analyze_async(
         self,
         pipeline_result: PipelineResult,
         project_id: str = "",
@@ -229,7 +229,7 @@ class ResultAnalyzer:
         issue_trends: List[IssueTrend] = []
 
         # Get all issues
-        all_issues = self.issue_tracker.get_all_issues()
+        all_issues = self.issue_tracker.get_all_issues_async()
 
         # Group by issue type
         issue_by_type: Dict[str, List[Any]] = {}

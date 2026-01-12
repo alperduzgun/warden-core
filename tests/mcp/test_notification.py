@@ -45,7 +45,7 @@ async def test_report_file_notification(tmp_path):
     service = MCPService(transport, project_root)
     
     # Start service task
-    service_task = asyncio.create_task(service.start())
+    service_task = asyncio.create_task(service.start_async())
     
     # Allow startup
     await asyncio.sleep(1)

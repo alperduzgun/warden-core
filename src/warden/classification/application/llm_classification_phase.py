@@ -116,7 +116,7 @@ class LLMClassificationPhase(LLMPhaseBase):
                 "reasoning": "Default frame selection due to parse error",
             }
 
-    async def classify_and_select_frames(
+    async def classify_and_select_frames_async(
         self,
         project_type: ProjectType,
         framework: Framework,
@@ -161,7 +161,7 @@ class LLMClassificationPhase(LLMPhaseBase):
                 logger.warning("semantic_context_retrieval_failed", error=str(e))
 
         # Try LLM classification
-        llm_result = await self.analyze_with_llm(context)
+        llm_result = await self.analyze_with_llm_async(context)
 
         if llm_result:
             selected_frames = llm_result["selected_frames"]
@@ -204,7 +204,7 @@ class LLMClassificationPhase(LLMPhaseBase):
 
         return selected_frames, suppression_config, 0.6
 
-    async def generate_suppression_rules(
+    async def generate_suppression_rules_async(
         self,
         findings: List[Dict[str, Any]],
         file_contexts: Dict[str, Dict[str, Any]],
@@ -242,7 +242,7 @@ For each finding that should be suppressed:
 
 Return as JSON list of suppression rules."""
 
-        llm_result = await self.analyze_with_llm(
+        llm_result = await self.analyze_with_llm_async(
             {"custom_prompt": prompt}
         )
 
@@ -252,7 +252,7 @@ Return as JSON list of suppression rules."""
         # Fallback to rule-based suppression
         return self._rule_based_suppression(findings, file_contexts)
 
-    async def learn_from_feedback(
+    async def learn_from_feedback_async(
         self,
         false_positive_ids: List[str],
         true_positive_ids: List[str],
@@ -293,7 +293,7 @@ Extract patterns to:
 
 Return patterns as JSON."""
 
-        llm_result = await self.analyze_with_llm({"custom_prompt": prompt})
+        llm_result = await self.analyze_with_llm_async({"custom_prompt": prompt})
 
         if llm_result:
             # Cache learned patterns for future use
@@ -472,7 +472,7 @@ Return patterns as JSON."""
                 previous_issues_count=len(previous_issues)
             )
 
-            selected_frames, suppression_config, confidence = await self.classify_and_select_frames(
+            selected_frames, suppression_config, confidence = await self.classify_and_select_frames_async(
                 project_type=project_type,
                 framework=framework,
                 file_contexts=file_contexts,

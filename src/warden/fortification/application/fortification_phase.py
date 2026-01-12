@@ -247,7 +247,7 @@ class FortificationPhase:
             if self.rate_limiter:
                 # Estimate tokens: prompt chars / 4 + output limit
                 estimated_tokens = (len(prompt) // 4) + 2000
-                await self.rate_limiter.acquire(estimated_tokens)
+                await self.rate_limiter.acquire_async(estimated_tokens)
 
             # Step 3: Get LLM suggestions
             response = await self.llm_service.complete_async(
@@ -473,7 +473,7 @@ Focus on framework-specific best practices for {framework}.
             "sql_injection": {
                 "title": "Use Parameterized Queries",
                 "detail": "Replace string concatenation with parameterized queries",
-                "code": "cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))",
+                "code": "cursor.execute_async('SELECT * FROM users WHERE id = ?', (user_id,))",
                 "auto_fixable": True,
             },
             "xss": {

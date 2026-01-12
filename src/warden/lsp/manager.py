@@ -49,7 +49,7 @@ class LSPManager:
              self._binaries["javascript"] = "typescript-language-server"
              self._binaries["typescript"] = "typescript-language-server"
 
-    async def get_client(self, language: str, root_path: str) -> Optional[LanguageServerClient]:
+    async def get_client_async(self, language: str, root_path: str) -> Optional[LanguageServerClient]:
         """
         Get or spawn a client for the given language.
         """
@@ -66,12 +66,12 @@ class LSPManager:
         
         try:
             client = LanguageServerClient(binary, args, cwd=root_path)
-            await client.start()
+            await client.start_async()
             
             # Initialize
-            resp = await client.initialize(root_path)
+            resp = await client.initialize_async(root_path)
             # await client.initialized() # Some servers require this notification
-            await client.send_notification("initialized", {})
+            await client.send_notification_async("initialized", {})
             
             self._clients[language] = client
             return client
@@ -80,8 +80,8 @@ class LSPManager:
             logger.error("lsp_spawn_failed", language=language, error=str(e))
             return None
 
-    async def shutdown_all(self):
+    async def shutdown_all_async(self):
         """Shutdown all active servers."""
         for lang, client in self._clients.items():
-            await client.shutdown()
+            await client.shutdown_async()
         self._clients.clear()

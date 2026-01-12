@@ -261,12 +261,12 @@ def test_issue_tracker_clear():
     snapshot = IssueSnapshot(issues=[issue], total_issues=1)
     tracker.track_snapshot(snapshot)
 
-    assert len(tracker.get_all_issues()) > 0
+    assert len(tracker.get_all_issues_async()) > 0
     assert len(tracker.snapshots) > 0
 
     # Clear
     tracker.clear()
 
     # Should be empty
-    assert len(tracker.get_all_issues()) == 0
+    assert len(tracker.get_all_issues_async()) == 0
     assert len(tracker.snapshots) == 0

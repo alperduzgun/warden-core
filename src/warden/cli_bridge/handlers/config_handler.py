@@ -32,7 +32,7 @@ class ConfigHandler(BaseHandler):
             return {
                 "config": self._get_default_pipeline_config(),
                 "frames": self.get_default_frames(),
-                "available_frames": self.get_available_frames(),
+                "available_frames": self.get_available_frames_async(),
                 "name": "default"
             }
 
@@ -147,7 +147,7 @@ class ConfigHandler(BaseHandler):
     def get_default_frames(self) -> List[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
-        registry.discover_all()
+        registry.discover_all(project_root=self.project_root)
         
         default_ids = ["security", "resilience", "architecturalconsistency", "orphan", "fuzz", "property"]
         frames = []
@@ -165,10 +165,10 @@ class ConfigHandler(BaseHandler):
                     logger.warning("default_frame_init_failed", fid=fid, error=str(e))
         return frames
 
-    def get_available_frames(self) -> List[Any]:
+    def get_available_frames_async(self) -> List[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
-        registry.discover_all()
+        registry.discover_all(project_root=self.project_root)
         frames = []
         for fid, cls in registry.registered_frames.items():
             try:
@@ -180,7 +180,7 @@ class ConfigHandler(BaseHandler):
     def _instantiate_all_frames(self, frame_config: Dict[str, Any]) -> Tuple[List[Any], Dict[str, Any]]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
-        registry.discover_all()
+        registry.discover_all(project_root=self.project_root)
         
         available = []
         frame_map = {}

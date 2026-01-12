@@ -97,7 +97,7 @@ class FileContextAnalyzer:
                 # Enhance with LLM
                 from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer
                 if isinstance(self.llm_analyzer, LlmContextAnalyzer):
-                    context, confidence, method = await self.llm_analyzer.analyze_file_context(
+                    context, confidence, method = await self.llm_analyzer.analyze_file_context_async(
                         file_path=file_path,
                         initial_context=context,
                         initial_confidence=confidence,
@@ -184,6 +184,9 @@ class FileContextAnalyzer:
                 r".*\.spec\.",
                 r"__tests__/",
                 r".*\.test\.",
+                r"tests/unit/",
+                r"tests/integration/",
+                r"tests/e2e/",
             ],
             FileContext.EXAMPLE: [
                 r"example[s]?/",
@@ -327,7 +330,9 @@ class FileContextAnalyzer:
         for context, patterns in self.path_patterns.items():
             for pattern in patterns:
                 if pattern.search(path_str):
-                    return (context, 0.95)
+                    # Higher confidence for clear directory patterns
+                    confidence = 0.98 if context in [FileContext.TEST, FileContext.VENDOR, FileContext.GENERATED] else 0.95
+                    return (context, confidence)
 
         return None
 

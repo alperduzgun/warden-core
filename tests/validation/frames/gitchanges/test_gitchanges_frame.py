@@ -332,7 +332,7 @@ class TestGitChangesFrame:
 
         # Mock git diff to return empty output
         with patch.object(frame, "_get_git_diff", return_value=""):
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
         assert result.status == "passed"
         assert result.issues_found == 0
@@ -350,7 +350,7 @@ class TestGitChangesFrame:
 
         # Mock git diff to return sample diff
         with patch.object(frame, "_get_git_diff", return_value=SAMPLE_DIFF):
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
         assert result.status == "passed"
         assert result.issues_found > 0
@@ -375,7 +375,7 @@ class TestGitChangesFrame:
             "_get_git_diff",
             side_effect=subprocess.CalledProcessError(1, "git"),
         ):
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
         assert result.status == "passed"
         assert result.metadata["status"] == "git_error"
@@ -518,7 +518,7 @@ class TestGitChangesFrameIntegration:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout=SAMPLE_DIFF)
 
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
             # Verify result
             assert isinstance(result, FrameResult)

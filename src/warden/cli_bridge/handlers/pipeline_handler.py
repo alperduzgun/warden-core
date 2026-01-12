@@ -20,7 +20,7 @@ class PipelineHandler(BaseHandler):
         self.orchestrator = orchestrator
         self.project_root = project_root
 
-    async def execute_pipeline(self, file_path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def execute_pipeline_async(self, file_path: str, frames: Optional[List[str]] = None, analysis_level: str = "standard") -> Dict[str, Any]:
         """Execute validation pipeline on a single file."""
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
@@ -35,12 +35,16 @@ class PipelineHandler(BaseHandler):
             language=self._detect_language(path),
         )
 
-        result, context = await self.orchestrator.execute([code_file], frames_to_execute=frames)
+        result, context = await self.orchestrator.execute_async(
+            [code_file], 
+            frames_to_execute=frames,
+            analysis_level=analysis_level
+        )
         
         # Serialization handled by bridge or helper
         return result, context
 
-    async def execute_pipeline_stream(self, file_path: str, frames: Optional[List[str]] = None) -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream_async(self, file_path: str, frames: Optional[List[str]] = None, analysis_level: str = "standard") -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
@@ -65,7 +69,13 @@ class PipelineHandler(BaseHandler):
 
         try:
             # Run in background
-            pipeline_task = asyncio.create_task(self.orchestrator.execute(code_files, frames_to_execute=frames))
+            pipeline_task = asyncio.create_task(
+                self.orchestrator.execute_async(
+                    code_files, 
+                    frames_to_execute=frames,
+                    analysis_level=analysis_level
+                )
+            )
 
             while not pipeline_task.done() or not progress_queue.empty():
                 try:

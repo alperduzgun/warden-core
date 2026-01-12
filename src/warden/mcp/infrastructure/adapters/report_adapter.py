@@ -118,7 +118,7 @@ class ReportAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -136,7 +136,7 @@ class ReportAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _generate_html_report(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _generate_html_report_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Generate HTML report."""
         run_id = arguments.get("run_id", str(uuid.uuid4()))
         output_path = arguments.get("output_path")
@@ -177,7 +177,7 @@ class ReportAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"HTML report generation failed: {e}")
 
-    async def _generate_pdf_report(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _generate_pdf_report_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Generate PDF report."""
         run_id = arguments.get("run_id", str(uuid.uuid4()))
         output_path = arguments.get("output_path")
@@ -201,7 +201,7 @@ class ReportAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"PDF report generation failed: {e}")
 
-    async def _generate_json_report(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _generate_json_report_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Generate JSON report."""
         run_id = arguments.get("run_id", str(uuid.uuid4()))
         output_path = arguments.get("output_path")
@@ -254,7 +254,7 @@ class ReportAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"JSON report generation failed: {e}")
 
-    async def _get_report_status(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_report_status_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get report generation status."""
         report_id = arguments.get("report_id")
 

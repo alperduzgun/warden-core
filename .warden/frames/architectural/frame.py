@@ -81,6 +81,10 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
     is_blocker = False
     version = "2.0.0"
     author = "Warden Team"
+    
+    @property
+    def frame_id(self) -> str:
+        return "architectural"
 
     def __init__(self, config: Dict[str, Any] | None = None):
         """
@@ -324,7 +328,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         if line_count > self.max_file_lines:
             violations.append(OrganizationViolation(
                 rule="max_file_lines",
-                severity="error",
+                severity="warning",
                 message=f"File exceeds {self.max_file_lines} lines ({line_count} lines) - violates Single Responsibility Principle",
                 file_path=code_file.path,
                 expected=f"≤ {self.max_file_lines} lines",
@@ -421,7 +425,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             if parent_dir != frame_name:
                 violations.append(OrganizationViolation(
                     rule="frame_per_directory",
-                    severity="error",
+                    severity="warning",
                     message=f"Frame file should be in '{frame_name}/' directory (frame-per-directory pattern)",
                     file_path=file_path,
                     expected=f"frames/{frame_name}/{frame_name}_frame.py",

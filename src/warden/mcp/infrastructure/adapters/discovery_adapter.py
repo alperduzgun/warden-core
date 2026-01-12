@@ -101,7 +101,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -119,7 +119,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _discover_files(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _discover_files_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Discover project files."""
         path = Path(arguments.get("path", str(self.project_root)))
         max_depth = arguments.get("max_depth", 10)
@@ -179,7 +179,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Discovery failed: {e}")
 
-    async def _get_files_by_type(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_files_by_type_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get files filtered by language type."""
         types = arguments.get("types", [])
 
@@ -219,7 +219,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"File filtering failed: {e}")
 
-    async def _detect_frameworks(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _detect_frameworks_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Detect frameworks in project."""
         path = Path(arguments.get("path", str(self.project_root)))
 
@@ -275,7 +275,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
             "total_count": len(frameworks),
         })
 
-    async def _get_project_stats(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_project_stats_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get project statistics."""
         stats = {
             "total_files": 0,

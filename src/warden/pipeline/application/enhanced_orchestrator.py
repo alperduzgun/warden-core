@@ -75,7 +75,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
 
         )
 
-    async def execute_with_discovery(self, project_path: str) -> PipelineResult:
+    async def execute_with_discovery_async(self, project_path: str) -> PipelineResult:
         """
         Execute pipeline with automatic file discovery.
 
@@ -94,7 +94,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
 
         Example:
             >>> orchestrator = EnhancedPipelineOrchestrator(frames=[SecurityFrame()])
-            >>> result = await orchestrator.execute_with_discovery("/path/to/project")
+            >>> result = await orchestrator.execute_with_discovery_async("/path/to/project")
             >>> print(f"Total findings: {result.total_findings}")
         """
         logger.info(
@@ -103,13 +103,13 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         )
 
         # Phase 1: Discovery (if enabled)
-        code_files = await self._discover_files_phase(project_path)
+        code_files = await self._discover_files_phase_async(project_path)
 
         # Phase 2: Build context (if enabled)
-        await self._load_build_context_phase(project_path)
+        await self._load_build_context_phase_async(project_path)
 
         # Phase 3: Run validation frames
-        result = await super().execute(code_files)
+        result = await super().execute_async(code_files)
 
 
 
@@ -123,7 +123,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
 
         return result
 
-    async def _discover_files_phase(self, project_path: str) -> List[CodeFile]:
+    async def _discover_files_phase_async(self, project_path: str) -> List[CodeFile]:
         """
         Phase 1: Discover files in project.
 
@@ -157,7 +157,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             self.discovery_result = await discoverer.discover_async()
 
             # Convert to CodeFile objects
-            code_files = await self._convert_to_code_files(
+            code_files = await self._convert_to_code_files_async(
                 self.discovery_result.get_analyzable_files()
             )
 
@@ -179,7 +179,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             # Return empty list on error
             return []
 
-    async def _convert_to_code_files(
+    async def _convert_to_code_files_async(
         self, discovered_files: List[DiscoveredFile]
     ) -> List[CodeFile]:
         """
@@ -238,7 +238,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         # If we only have extension, we can create a dummy path
         return get_language_from_path(f"dummy{extension}").value
 
-    async def _load_build_context_phase(self, project_path: str) -> None:
+    async def _load_build_context_phase_async(self, project_path: str) -> None:
         """
         Phase 2: Load build context from project.
 

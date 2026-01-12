@@ -70,21 +70,21 @@ class PipelineAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
     ) -> MCPToolResult:
         """Execute pipeline tool."""
         if tool_name == "warden_execute_pipeline":
-            return await self._execute_pipeline(arguments)
+            return await self._execute_pipeline_async(arguments)
         elif tool_name == "warden_execute_pipeline_stream":
-            return await self._execute_pipeline_stream(arguments)
+            return await self._execute_pipeline_stream_async(arguments)
         else:
             return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
     @async_retry(retries=5, initial_delay=1.0)
-    async def _execute_pipeline(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _execute_pipeline_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Execute full validation pipeline."""
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")
@@ -93,7 +93,7 @@ class PipelineAdapter(BaseWardenAdapter):
              raise RuntimeError("Warden bridge not available")
 
         try:
-            result = await self.bridge.execute_pipeline(
+            result = await self.bridge.execute_pipeline_async(
                 file_path=path,
                 frames=frames,
             )
@@ -102,7 +102,7 @@ class PipelineAdapter(BaseWardenAdapter):
             return MCPToolResult.error(f"Pipeline execution failed: {e}")
 
     @async_retry(retries=5, initial_delay=1.0)
-    async def _execute_pipeline_stream(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _execute_pipeline_stream_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Execute pipeline with streaming (collect all events)."""
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")
@@ -116,7 +116,7 @@ class PipelineAdapter(BaseWardenAdapter):
             events = []
             final_result = None
 
-            async for event in self.bridge.execute_pipeline_stream(
+            async for event in self.bridge.execute_pipeline_stream_async(
                 file_path=path,
                 frames=frames,
                 verbose=verbose,

@@ -37,10 +37,18 @@ class CleaningExecutor(BasePhaseExecutor):
             # Get context from previous phases
             phase_context = context.get_context_for_phase("CLEANING")
 
+            # Skip if disabled in config
+            if not getattr(self.config, 'enable_cleaning', True):
+                logger.info("cleaning_phase_disabled_via_config")
+                return
+
+            # Respect global use_llm flag
+            llm_service = self.llm_service if getattr(self.config, 'use_llm', True) else None
+
             phase = CleaningPhase(
                 config=getattr(self.config, 'cleaning_config', {}),
                 context=phase_context,
-                llm_service=self.llm_service,
+                llm_service=llm_service,
                 rate_limiter=self.rate_limiter
             )
 

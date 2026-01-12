@@ -18,7 +18,7 @@ class PaymentProcessor:
             cursor = conn.cursor()
             
             # Problem: SQL Injection risk (though resilience frame focuses on architecture)
-            cursor.execute(f"INSERT INTO transactions VALUES ({user_id}, {amount}, 'SUCCESS')")
+            cursor.execute_async(f"INSERT INTO transactions VALUES ({user_id}, {amount}, 'SUCCESS')")
             conn.commit()
             
             # Problem: Connection not closed in finally block.

@@ -162,11 +162,11 @@ STRATEGY:
 """
         # The caching logic is already handled in verify_findings,
         # so this method just focuses on the LLM call and parsing.
-        result = await self._call_llm_with_retry(prompt)
+        result = await self._call_llm_with_retry_async(prompt)
         return result
 
     @async_retry(retries=DEFAULT_RETRIES)
-    async def _call_llm_with_retry(self, prompt: str) -> Dict[str, Any]:
+    async def _call_llm_with_retry_async(self, prompt: str) -> Dict[str, Any]:
         """Call LLM with retry mechanism and parse response."""
         response = await self.llm.complete_async(prompt, self.system_prompt)
         

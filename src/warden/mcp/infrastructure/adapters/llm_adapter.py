@@ -116,7 +116,7 @@ class LlmAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -135,7 +135,7 @@ class LlmAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _analyze_with_llm(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _analyze_with_llm_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Analyze code with LLM."""
         code = arguments.get("code")
         prompt = arguments.get("prompt")
@@ -152,7 +152,7 @@ class LlmAdapter(BaseWardenAdapter):
         try:
             # Collect streaming response
             response_text = ""
-            async for chunk in self.bridge.analyze_with_llm(code, prompt, provider):
+            async for chunk in self.bridge.analyze_with_llm_async(code, prompt, provider):
                 if isinstance(chunk, dict):
                     response_text += chunk.get("content", "")
                 else:
@@ -166,7 +166,7 @@ class LlmAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"LLM analysis failed: {e}")
 
-    async def _classify_code(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _classify_code_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Classify code for frame recommendation."""
         code = arguments.get("code")
         file_path = arguments.get("file_path", "")
@@ -205,7 +205,7 @@ class LlmAdapter(BaseWardenAdapter):
             "method": "basic_heuristic",
         }
 
-    async def _test_llm_provider(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _test_llm_provider_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Test LLM provider connectivity."""
         provider = arguments.get("provider")
         prompt = arguments.get("prompt", "Hello, respond with 'OK' if you can read this.")
@@ -229,7 +229,7 @@ class LlmAdapter(BaseWardenAdapter):
                 "error_message": str(e),
             })
 
-    async def _get_available_models(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_available_models_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get available models for provider."""
         provider = arguments.get("provider")
 
@@ -264,7 +264,7 @@ class LlmAdapter(BaseWardenAdapter):
         }
         return provider_models.get(provider.lower(), [])
 
-    async def _validate_llm_config(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _validate_llm_config_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Validate LLM configuration."""
         provider = arguments.get("provider")
         config = arguments.get("config", {})

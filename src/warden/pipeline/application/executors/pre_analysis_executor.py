@@ -34,11 +34,13 @@ class PreAnalysisExecutor(BasePhaseExecutor):
         try:
             from warden.analysis.application.pre_analysis_phase import PreAnalysisPhase
 
-            # Prepare config for Phase
             phase_config = {
                 "pre_analysis": getattr(self.config, 'pre_analysis_config', {}),
                 "semantic_search": getattr(self.config, 'semantic_search_config', {}),
-                "integrity_config": getattr(self.config, 'integrity_config', {}) if hasattr(self.config, 'integrity_config') else {}
+                "integrity_config": getattr(self.config, 'integrity_config', {}) if hasattr(self.config, 'integrity_config') else {},
+                "analysis_level": getattr(self.config, 'analysis_level', None),
+                "use_llm": getattr(self.config, 'use_llm', True) if hasattr(self.config, 'use_llm') else True,
+                "llm_config": getattr(self.config, 'llm_config', None)
             }
 
             phase = PreAnalysisPhase(
@@ -47,7 +49,7 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 rate_limiter=self.rate_limiter,
             )
 
-            result = await phase.execute(code_files, pipeline_context=context)
+            result = await phase.execute_async(code_files, pipeline_context=context)
 
             # Store results in context
             context.project_type = result.project_context

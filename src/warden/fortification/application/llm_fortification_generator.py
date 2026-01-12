@@ -185,7 +185,7 @@ Return as JSON with:
             )
             return self._get_default_fix()
 
-    async def generate_fortification(
+    async def generate_fortification_async(
         self,
         finding: Dict[str, Any],
         code_context: str,
@@ -212,7 +212,7 @@ Return as JSON with:
         }
 
         # Try LLM generation
-        llm_result = await self.analyze_with_llm(context)
+        llm_result = await self.analyze_with_llm_async(context)
 
         if llm_result:
             fortification = Fortification(
@@ -238,7 +238,7 @@ Return as JSON with:
         # Fallback to template-based fix
         return self._generate_template_fix(finding, framework, language)
 
-    async def generate_batch_fortifications(
+    async def generate_batch_fortifications_async(
         self,
         findings: List[Dict[str, Any]],
         code_contexts: Dict[str, str],
@@ -272,7 +272,7 @@ Return as JSON with:
             contexts.append(context)
 
         # Batch LLM processing
-        llm_results = await self.analyze_batch_with_llm(contexts)
+        llm_results = await self.analyze_batch_with_llm_async(contexts)
 
         # Process results
         for i, finding in enumerate(findings):
@@ -344,10 +344,10 @@ from sqlalchemy import text
 
 # Safe parameterized query
 query = text("SELECT * FROM users WHERE username = :username")
-result = db.execute(query, {"username": username})"""
+result = db.execute_async(query, {"username": username})"""
             else:
                 suggested = """# Use parameterized query
-cursor.execute(
+cursor.execute_async(
     "SELECT * FROM users WHERE username = %s",
     (username,)
 )"""

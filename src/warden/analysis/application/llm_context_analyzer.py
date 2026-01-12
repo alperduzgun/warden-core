@@ -92,7 +92,7 @@ class LlmContextAnalyzer:
             rate_limiter_enabled=rate_limiter is not None,
         )
 
-    async def analyze_file_context(
+    async def analyze_file_context_async(
         self,
         file_path: Path,
         initial_context: FileContext,
@@ -144,7 +144,7 @@ class LlmContextAnalyzer:
                     file_content = f.read()[:5000]  # Limit for LLM
 
             # Call LLM for analysis
-            decision = await self._analyze_with_llm(
+            decision = await self._analyze_with_llm_async(
                 file_path=file_path,
                 file_content=file_content,
                 initial_guess=initial_context,
@@ -176,7 +176,7 @@ class LlmContextAnalyzer:
             )
             return initial_context, initial_confidence, "rule-based-fallback"
 
-    async def analyze_project_structure(
+    async def analyze_project_structure_async(
         self,
         project_root: Path,
         file_list: List[Path],
@@ -222,7 +222,7 @@ class LlmContextAnalyzer:
             )
 
             # Call LLM for analysis
-            decision = await self._analyze_project_with_llm(
+            decision = await self._analyze_project_with_llm_async(
                 project_summary=project_summary,
                 initial_type=initial_project_type,
                 initial_framework=initial_framework,
@@ -248,7 +248,7 @@ class LlmContextAnalyzer:
             )
             return initial_project_type, initial_framework, initial_confidence
 
-    async def analyze_batch(
+    async def analyze_batch_async(
         self,
         files: List[Tuple[Path, FileContext, float]],
     ) -> List[Tuple[FileContext, float, str]]:
@@ -285,7 +285,7 @@ class LlmContextAnalyzer:
             batch_prompt = self._create_batch_prompt(needs_llm)
 
             # Call LLM
-            response = await self._call_llm_batch(batch_prompt)
+            response = await self._call_llm_batch_async(batch_prompt)
 
             # Parse batch response
             decisions = self._parse_batch_response(response, len(needs_llm))
@@ -317,7 +317,7 @@ class LlmContextAnalyzer:
             )
             return [(ctx, conf, "rule-based-fallback") for _, ctx, conf in files]
 
-    async def _analyze_with_llm(
+    async def _analyze_with_llm_async(
         self,
         file_path: Path,
         file_content: str,
@@ -364,10 +364,10 @@ Return JSON:
   "secondary_contexts": ["other_possible_contexts"]
 }}"""
 
-        response = await self._call_llm(prompt)
+        response = await self._call_llm_async(prompt)
         return self._parse_llm_response(response.content)
 
-    async def _analyze_project_with_llm(
+    async def _analyze_project_with_llm_async(
         self,
         project_summary: str,
         initial_type: ProjectType,
@@ -414,10 +414,10 @@ Return JSON:
   "reasoning": "Brief explanation"
 }}"""
 
-        response = await self._call_llm(prompt)
+        response = await self._call_llm_async(prompt)
         return self._parse_llm_response(response.content)
 
-    async def _call_llm(self, prompt: str) -> LlmResponse:
+    async def _call_llm_async(self, prompt: str) -> LlmResponse:
         """Call LLM with prompt and rate limiting."""
         if self.rate_limiter:
             # Estimate tokens for rate limiting
@@ -429,7 +429,7 @@ Return JSON:
                     pass
             
             # Acquire rate limit before sending
-            await self.rate_limiter.acquire(estimated_tokens)
+            await self.rate_limiter.acquire_async(estimated_tokens)
 
         request = LlmRequest(
             system_prompt="You are an expert code analyzer specializing in understanding project structure and file contexts. Provide accurate, concise analysis.",
@@ -440,7 +440,7 @@ Return JSON:
 
         return await self.llm.send_async(request)
 
-    async def _call_llm_batch(self, batch_prompt: str) -> LlmResponse:
+    async def _call_llm_batch_async(self, batch_prompt: str) -> LlmResponse:
         """Call LLM for batch analysis with rate limiting."""
         if self.rate_limiter:
             # Estimate tokens for rate limiting
@@ -452,7 +452,7 @@ Return JSON:
                     pass
             
             # Acquire rate limit before sending
-            await self.rate_limiter.acquire(estimated_tokens)
+            await self.rate_limiter.acquire_async(estimated_tokens)
 
         request = LlmRequest(
             system_prompt="You are an expert code analyzer. Analyze multiple files efficiently and accurately.",

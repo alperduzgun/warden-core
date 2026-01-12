@@ -39,7 +39,12 @@ class ProjectStructureAnalyzer:
     Part of the PRE-ANALYSIS phase for context detection.
     """
 
-    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None) -> None:
+    def __init__(
+        self, 
+        project_root: Path, 
+        llm_config: Optional[LlmConfiguration] = None,
+        analysis_level: Optional[Any] = None
+    ) -> None:
         """
         Initialize analyzer with project root.
         
@@ -54,6 +59,7 @@ class ProjectStructureAnalyzer:
         self.file_extensions: Set[str] = set()
         self.directory_structure: Dict[str, int] = {}  # dir -> file count
         self.framework = None  # Will be set during analysis
+        self.analysis_level = analysis_level
         
         # Initialize Gitignore Filter
         self.gitignore_filter = create_gitignore_filter(self.project_root)
@@ -654,7 +660,8 @@ class ProjectStructureAnalyzer:
             detector = ServiceAbstractionDetector(
                 self.project_root, 
                 project_context=context,
-                llm_config=self.llm_config
+                llm_config=self.llm_config,
+                analysis_level=self.analysis_level
             )
             abstractions = await detector.detect_async()
             

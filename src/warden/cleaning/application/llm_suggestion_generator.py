@@ -94,7 +94,7 @@ class LLMSuggestionGenerator:
             if self.rate_limiter:
                 # Estimate tokens: prompt chars / 4 + output estimate
                 estimated_tokens = (len(prompt) // 4) + 1000
-                await self.rate_limiter.acquire(estimated_tokens)
+                await self.rate_limiter.acquire_async(estimated_tokens)
 
             # Get LLM suggestions
             response = await self.llm_service.complete_async(

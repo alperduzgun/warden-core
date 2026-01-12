@@ -149,10 +149,11 @@ class PhaseOrchestrator:
         if self.frames:
             self.frames.sort(key=lambda f: f.priority.value if hasattr(f, 'priority') else 999)
 
-    async def execute(
+    async def execute_async(
         self,
         code_files: List[CodeFile],
         frames_to_execute: Optional[List[str]] = None,
+        analysis_level: Optional[str] = None,
     ) -> tuple[PipelineResult, PipelineContext]:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -165,7 +166,7 @@ class PhaseOrchestrator:
         Returns:
             Tuple of (PipelineResult, PipelineContext)
         """
-        context = await self.execute_pipeline_async(code_files, frames_to_execute)
+        context = await self.execute_pipeline_async(code_files, frames_to_execute, analysis_level)
 
         # Build PipelineResult from context for compatibility
         result = self._build_pipeline_result(context)
@@ -176,6 +177,7 @@ class PhaseOrchestrator:
         self,
         code_files: List[CodeFile],
         frames_to_execute: Optional[List[str]] = None,
+        analysis_level: Optional[str] = None,
     ) -> PipelineContext:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -199,6 +201,23 @@ class PhaseOrchestrator:
                 elif ext == ".go": language = "go"
                 elif ext == ".java": language = "java"
                 elif ext == ".cs": language = "csharp"
+
+        # Apply analysis level if provided
+        if analysis_level:
+            from warden.pipeline.domain.enums import AnalysisLevel
+            try:
+                self.config.analysis_level = AnalysisLevel(analysis_level.lower())
+                logger.info("analysis_level_overridden", level=self.config.analysis_level.value)
+                
+                # Global overrides for BASIC level to ensure speed and local-only execution
+                if self.config.analysis_level == AnalysisLevel.BASIC:
+                    self.config.use_llm = False
+                    self.config.enable_fortification = False
+                    self.config.enable_cleaning = False
+                    # Classification and Analysis will fallback to rule-based automatically if use_llm is False
+                    logger.info("basic_level_overrides_applied", use_llm=False, fortification=False, cleaning=False)
+            except ValueError:
+                logger.warning("invalid_analysis_level", provided=analysis_level, fallback=self.config.analysis_level.value)
 
         # Initialize shared context
         context = PipelineContext(

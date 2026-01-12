@@ -16,7 +16,7 @@ def run_threads():
     for _ in range(10):
         t = threading.Thread(target=increment_poorly)
         threads.append(t)
-        t.start()
+        t.start_async()
     
     for t in threads:
         t.join()

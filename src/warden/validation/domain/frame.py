@@ -151,7 +151,7 @@ class ValidationFrame(ABC):
             scope = FrameScope.FILE_LEVEL
             is_blocker = True
 
-            async def execute(self, code_file: CodeFile) -> FrameResult:
+            async def execute_async(self, code_file: CodeFile) -> FrameResult:
                 # Validation logic here
                 pass
 
@@ -211,7 +211,7 @@ class ValidationFrame(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'description' attribute")
 
     @abstractmethod
-    async def execute(self, code_file: "CodeFile") -> FrameResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: "CodeFile") -> FrameResult:  # type: ignore[name-defined]
         """
         Execute validation frame on code file.
 
@@ -234,7 +234,7 @@ class ValidationFrame(ABC):
         """
         pass
 
-    async def execute_batch(self, code_files: List["CodeFile"]) -> List[FrameResult]:
+    async def execute_batch_async(self, code_files: List["CodeFile"]) -> List[FrameResult]:
         """
         Execute validation on multiple files in PARALLEL.
 
@@ -244,16 +244,16 @@ class ValidationFrame(ABC):
         concurrency = self.config.get("concurrency_limit", 50) if isinstance(self.config, dict) else 50
         semaphore = asyncio.Semaphore(concurrency)
         
-        async def execute_safe(code_file: "CodeFile") -> Any:
+        async def execute_safe_async(code_file: "CodeFile") -> Any:
             async with semaphore:
                 try:
-                    return await self.execute(code_file)
+                    return await self.execute_async(code_file)
                 except Exception as e:
                     # Log error but don't crash batch
                     return None
 
         # Launch all tasks
-        tasks = [execute_safe(f) for f in code_files]
+        tasks = [execute_safe_async(f) for f in code_files]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Filter out None results and exceptions

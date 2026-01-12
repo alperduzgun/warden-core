@@ -21,7 +21,7 @@ class IToolExecutor(ABC):
     """
 
     @abstractmethod
-    async def execute(
+    async def execute_async(
         self,
         tool: MCPToolDefinition,
         arguments: Dict[str, Any],

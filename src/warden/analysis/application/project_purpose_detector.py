@@ -61,7 +61,7 @@ class ProjectPurposeDetector:
         logger.info("project_purpose_discovery_started", root=str(self.project_root))
 
         # 1. Prepare discovery canvas (context for LLM)
-        canvas = await self._create_discovery_canvas(file_list, config_files)
+        canvas = await self._create_discovery_canvas_async(file_list, config_files)
         
         # 2. Construct LLM prompt
         prompt = f"""Analyze the following project 'Discovery Canvas' and synthesize its high-level purpose and architecture.
@@ -133,7 +133,7 @@ Return strictly JSON:
             logger.error("project_purpose_discovery_failed", error=str(e))
             return "Discovery failed", "Manual architectural analysis required"
 
-    async def _create_discovery_canvas(self, file_list: List[Path], config_files: Dict[str, str]) -> str:
+    async def _create_discovery_canvas_async(self, file_list: List[Path], config_files: Dict[str, str]) -> str:
         """Collect project metadata for the LLM discovery prompt."""
         # 1. Directory Structure (trimmed for token safety)
         dirs = sorted(list(set(str(f.parent.relative_to(self.project_root)) for f in file_list[:500])))

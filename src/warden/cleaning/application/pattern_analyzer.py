@@ -121,9 +121,9 @@ class PatternAnalyzer:
         complex_funcs = []
 
         for i, match in enumerate(functions):
-            start_pos = match.start()
+            start_pos = match.start_async()
             # Find end of function (next function or end of file)
-            end_pos = functions[i + 1].start() if i + 1 < len(functions) else len(content)
+            end_pos = functions[i + 1].start_async() if i + 1 < len(functions) else len(content)
             func_content = content[start_pos:end_pos]
 
             # Count lines and complexity metrics

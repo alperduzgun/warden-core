@@ -30,7 +30,7 @@ async def test_integrity_scanner_syntax_check():
         CodeFile(path="/tmp/broken.py", content="impot os", language="python")
     ]
     
-    issues = await scanner.scan(code_files, ProjectContext())
+    issues = await scanner.scan_async(code_files, ProjectContext())
     
     assert len(issues) == 1
     assert issues[0].file_path == "broken.py"
@@ -51,7 +51,7 @@ async def test_integrity_scanner_build_verification_success():
         mock_proc.returncode = 0
         mock_subprocess.return_value = mock_proc
         
-        issues = await scanner.scan([], context)
+        issues = await scanner.scan_async([], context)
         
         assert len(issues) == 0
         mock_subprocess.assert_called_once()
@@ -71,7 +71,7 @@ async def test_integrity_scanner_build_verification_failure():
         mock_proc.returncode = 1
         mock_subprocess.return_value = mock_proc
         
-        issues = await scanner.scan([], context)
+        issues = await scanner.scan_async([], context)
         
         assert len(issues) == 1
         assert issues[0].file_path == "BUILD"

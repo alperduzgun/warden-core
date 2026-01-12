@@ -22,8 +22,8 @@ from rich import print as rprint
 
 # Internal imports
 from warden.cli_bridge.bridge import WardenBridge
-from warden.services.ipc_entry import main as ipc_main
-from warden.services.grpc_entry import main as grpc_main
+from warden.services.ipc_entry import main_async as ipc_main
+from warden.services.grpc_entry import main_async as grpc_main
 
 # Initialize Typer app
 app = typer.Typer(
@@ -167,7 +167,7 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], verbose: bool)
 
     try:
         # Execute pipeline with streaming
-        async for event in bridge.execute_pipeline_stream(
+        async for event in bridge.execute_pipeline_stream_async(
             file_path=path,
             frames=frames,
             verbose=verbose

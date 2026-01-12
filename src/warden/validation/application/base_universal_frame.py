@@ -28,7 +28,7 @@ class BaseUniversalFrame(ValidationFrame):
         # For now, we rely on the FrameExecutor to have registered providers
         # or we manually ensure they are loaded.
 
-    async def get_universal_ast(self, code_file: CodeFile) -> Optional[ASTNode]:
+    async def get_universal_ast_async(self, code_file: CodeFile) -> Optional[ASTNode]:
         """
         Retrieve the universal AST for a code file.
         """

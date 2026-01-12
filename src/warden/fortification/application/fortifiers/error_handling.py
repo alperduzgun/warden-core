@@ -132,7 +132,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             )
             try:
                 # Use LLM to generate better suggestions (NOT to modify code!)
-                enhanced = await self._enhance_suggestions_with_llm(
+                enhanced = await self._enhance_suggestions_with_llm_async(
                     code_file, fortification_suggestions
                 )
                 if enhanced:
@@ -215,7 +215,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             # Detect database operations
             if any(
                 keyword in stripped_line
-                for keyword in [".execute(", ".query(", "cursor.", "session."]
+                for keyword in [".execute_async(", ".query(", "cursor.", "session."]
             ) and not self._is_inside_try_except(lines, i):
                 suggestions.append(
                     ErrorHandlingSuggestion(
@@ -290,7 +290,7 @@ class ErrorHandlingFortifier(BaseFortifier):
         snippet_lines = lines[start:end]
         return "\n".join(snippet_lines)
 
-    async def _enhance_suggestions_with_llm(
+    async def _enhance_suggestions_with_llm_async(
         self,
         code_file: CodeFile,
         suggestions: List[Fortification],

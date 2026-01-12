@@ -49,8 +49,8 @@ class ClassificationExecutor(BasePhaseExecutor):
             })
 
         try:
-            # Use LLM version if LLM service is available
-            use_llm = self.llm_service is not None
+            # Respect global use_llm flag and LLM service availability
+            use_llm = getattr(self.config, 'use_llm', True) and self.llm_service is not None
 
             # Get context from previous phases
             phase_context = context.get_context_for_phase("CLASSIFICATION")

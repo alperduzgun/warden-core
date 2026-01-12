@@ -58,7 +58,7 @@ class RateLimiter:
             self._lock = asyncio.Lock()
         return self._lock
 
-    async def _refill(self):
+    async def _refill_async(self):
         """Refill buckets based on time elapsed."""
         now = time.time()
         
@@ -81,7 +81,7 @@ class RateLimiter:
             self._requests = min(self.config.burst, self._requests + new_requests)
             self._last_request_refill = now
 
-    async def acquire(self, estimated_tokens: int) -> float:
+    async def acquire_async(self, estimated_tokens: int) -> float:
         """
         Acquire permission to send a request.
         
@@ -92,7 +92,7 @@ class RateLimiter:
             Wait time in seconds (0.0 if immediate)
         """
         async with self._get_lock():
-            await self._refill()
+            await self._refill_async()
             
             wait_time = 0.0
             
@@ -139,16 +139,16 @@ class RateLimiter:
 
         if wait_time > 0:
             await asyncio.sleep(wait_time + 0.1)  # Add small buffer
-            return await self.acquire(estimated_tokens)
+            return await self.acquire_async(estimated_tokens)
 
         # Consume execution cost
         async with self._get_lock():
             # Re-check in case another task stole it (rare in single loop, but robust)
-            await self._refill()
+            await self._refill_async()
             if self._requests >= 1 and self._tokens >= estimated_tokens:
                 self._requests -= 1
                 self._tokens -= estimated_tokens
                 return 0.0
             else:
                 # Lost the race, try again
-                return await self.acquire(estimated_tokens)
+                return await self.acquire_async(estimated_tokens)

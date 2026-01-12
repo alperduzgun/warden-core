@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from pydantic import Field
 from warden.shared.domain.base_model import BaseDomainModel
-from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
+from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy, AnalysisLevel
 from warden.validation.domain.frame import ValidationFrame, FrameResult
 from warden.rules.domain.models import CustomRule, FrameRules
 
@@ -57,6 +57,8 @@ class PipelineConfig(BaseDomainModel):
     parallel_limit: int = 4  # Max concurrent frames in parallel mode
     skip_non_blockers: bool = False  # Skip non-blocker frames if blocker fails
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns (global)
+    analysis_level: AnalysisLevel = AnalysisLevel.STANDARD  # NEW: Scannig depth level
+    use_llm: bool = True  # NEW: Global LLM control flag
 
     # Optional pre-processing phases
     enable_discovery: bool = True  # Run file discovery before validation
@@ -95,6 +97,7 @@ class PipelineConfig(BaseDomainModel):
         data = super().to_json()
         # Convert enum to string value
         data["strategy"] = self.strategy.value
+        data["analysisLevel"] = self.analysis_level.value
 
         # Convert custom rules
         data["globalRules"] = [rule.to_json() for rule in self.global_rules]

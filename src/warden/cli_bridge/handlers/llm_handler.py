@@ -16,7 +16,7 @@ class LLMHandler(BaseHandler):
     def __init__(self, llm_config: Any):
         self.llm_config = llm_config
 
-    async def analyze_with_llm(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
+    async def analyze_with_llm_async(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
         """Execute LLM analysis with streaming or full completion."""
         from warden.llm.types import LlmProvider
         from warden.llm.factory import create_client
@@ -36,7 +36,7 @@ class LLMHandler(BaseHandler):
                 raise IPCError(ErrorCode.LLM_ERROR, "No LLM provider available")
 
             if stream:
-                async for chunk in llm_client.stream_completion(prompt):
+                async for chunk in llm_client.stream_completion_async(prompt):
                     yield chunk
             else:
                 response = await llm_client.complete_async(prompt)

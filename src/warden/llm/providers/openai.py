@@ -186,7 +186,7 @@ class OpenAIClient(ILlmClient):
 
         return response
 
-    async def stream_completion(self, prompt: str, system_prompt: str = "You are a helpful coding assistant."):
+    async def stream_completion_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant."):
         """
         Streaming completion method.
 

@@ -91,7 +91,7 @@ async def test_azure_openai_code_analysis(azure_config):
     code = '''
 def get_user(user_id):
     query = f"SELECT * FROM users WHERE id = '{user_id}'"
-    return db.execute(query)
+    return db.execute_async(query)
 '''
 
     request = LlmRequest(

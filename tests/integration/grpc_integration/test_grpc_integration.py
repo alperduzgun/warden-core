@@ -36,11 +36,11 @@ class TestGrpcIntegration:
 
         # Bind to random port
         port = server.add_insecure_port("[::]:0")
-        await server.start()
+        await server.start_async()
 
         yield port
 
-        await server.stop(grace=0)
+        await server.stop_async(grace=0)
 
     @pytest.fixture
     async def grpc_channel(self, grpc_server):
@@ -196,7 +196,7 @@ class TestGrpcServerLifecycle:
         server = GrpcServer(port=0)
 
         # Should not raise
-        await server.stop()
+        await server.stop_async()
 
 
 class TestProtocolBufferSerialization:

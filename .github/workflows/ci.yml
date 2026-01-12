@@ -74,8 +74,18 @@ jobs:
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
           DEFAULT_LLM_MODEL: ${{ secrets.DEFAULT_LLM_MODEL }}
         run: |
+          # Layered Scan Strategy: 
+          # - Pull Requests: BASIC (Local-only, Fast, catches structural issues)
+          # - Main/Tags: STANDARD (AI-enhanced, finds deeper logic/security issues)
+          LEVEL="standard"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            LEVEL="basic"
+          fi
+          
+          echo "Running Warden Scan with level: $LEVEL"
+          
           # Scanning the source code of Warden itself
-          warden scan src/warden --format sarif --output warden.sarif --verbose
+          warden scan src/warden --level $LEVEL --format sarif --output warden.sarif --verbose
 
 
 

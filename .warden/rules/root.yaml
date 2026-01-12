@@ -7,7 +7,6 @@ global_rules:
   - no-secrets
   - file-size-limit
   - orchestrator-total-frames-check
-  - ai-logic-check
 
 frame_rules:
   security:

@@ -76,7 +76,7 @@ class WardenBridge:
 
     # --- Semantic Fixes ---
 
-    async def request_fix(self, file_path: str, line_number: int, issue_type: str, context_code: str = "") -> Dict[str, Any]:
+    async def request_fix_async(self, file_path: str, line_number: int, issue_type: str, context_code: str = "") -> Dict[str, Any]:
         """Request a semantic fix for a vulnerability."""
         from warden.fortification.application.fortification_phase import FortificationPhase
         
@@ -111,7 +111,7 @@ class WardenBridge:
         from warden.fortification.application.llm_fortification_generator import LLMFortificationGenerator
         generator = LLMFortificationGenerator(self.llm_service)
         
-        fix = await generator.generate_fortification(
+        fix = await generator.generate_fortification_async(
             finding=finding,
             code_context=context_code,
             framework=context["framework"],
@@ -124,16 +124,16 @@ class WardenBridge:
 
     # --- Pipeline Execution ---
 
-    async def execute_pipeline(self, file_path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def execute_pipeline_async(self, file_path: str, frames: Optional[List[str]] = None, analysis_level: str = "standard") -> Dict[str, Any]:
         """Execute validation pipeline on a file."""
-        result, context = await self.pipeline_handler.execute_pipeline(file_path, frames)
+        result, context = await self.pipeline_handler.execute_pipeline_async(file_path, frames, analysis_level)
         serialized = serialize_pipeline_result(result)
         serialized["context_summary"] = context.get_summary()
         return serialized
 
-    async def execute_pipeline_stream(self, file_path: str, frames: Optional[List[str]] = None, verbose: bool = False) -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream_async(self, file_path: str, frames: Optional[List[str]] = None, verbose: bool = False, analysis_level: str = "standard") -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
-        async for event in self.pipeline_handler.execute_pipeline_stream(file_path, frames):
+        async for event in self.pipeline_handler.execute_pipeline_stream_async(file_path, frames, analysis_level):
             if event.get("type") == "result":
                 result = event["result"]
                 context = event["context"]
@@ -143,12 +143,12 @@ class WardenBridge:
                 }
             yield event
 
-    async def scan(self, path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def scan_async(self, path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
         """Legacy scan implementation (for compatibility)."""
         # Simplified scan: execute on directory and return summary
         all_issues = []
         files_scanned = 0
-        async for event in self.execute_pipeline_stream(path, frames):
+        async for event in self.execute_pipeline_stream_async(path, frames):
             if event["type"] == "result":
                 res = event["data"]
                 # Flatten issues for legacy CLI support
@@ -169,13 +169,13 @@ class WardenBridge:
                 }
         return {"success": False, "error": "Scan failed"}
 
-    async def analyze(self, filePath: str) -> Dict[str, Any]:
+    async def analyze_async(self, filePath: str) -> Dict[str, Any]:
         """Alias for execute_pipeline."""
-        return await self.execute_pipeline(filePath)
+        return await self.execute_pipeline_async(filePath)
 
     # --- Configuration & Metadata ---
 
-    async def get_config(self) -> Dict[str, Any]:
+    async def get_config_async(self) -> Dict[str, Any]:
         """Get Warden and LLM configuration."""
         providers = []
         if self.llm_config:
@@ -204,35 +204,35 @@ class WardenBridge:
             "config_name": self.active_config_name
         }
 
-    async def get_available_frames(self) -> List[Dict[str, Any]]:
+    async def get_available_frames_async(self) -> List[Dict[str, Any]]:
         """List all currently active frames with metadata."""
-        config = await self.get_config()
+        config = await self.get_config_async()
         return config["frames"]
 
-    async def update_frame_status(self, frame_id: str, enabled: bool) -> Dict[str, Any]:
+    async def update_frame_status_async(self, frame_id: str, enabled: bool) -> Dict[str, Any]:
         """Update frame status in project config."""
         from warden.cli_bridge.config_manager import ConfigManager
         config_mgr = ConfigManager(self.project_root)
-        result = config_mgr.update_frame_status(frame_id, enabled)
+        result = config_mgr.update_frame_status_async(frame_id, enabled)
         return {"success": True, "frame_id": frame_id, "enabled": enabled}
 
     # --- LLM Analysis ---
 
-    async def analyze_with_llm(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
+    async def analyze_with_llm_async(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
         """Stream LLM analysis response."""
-        async for chunk in self.llm_handler.analyze_with_llm(prompt, provider, stream):
+        async for chunk in self.llm_handler.analyze_with_llm_async(prompt, provider, stream):
             yield chunk
 
     # --- Tooling & Diagnostics ---
 
-    async def get_available_providers(self) -> List[Dict[str, Any]]:
+    async def get_available_providers_async(self) -> List[Dict[str, Any]]:
         """List discoverable AST/LSP providers."""
-        return await self.tool_handler.get_available_providers()
+        return await self.tool_handler.get_available_providers_async()
 
     async def test_provider(self, language: str) -> Dict[str, Any]:
         """Test a specific language provider."""
         return await self.tool_handler.test_provider(language)
 
-    async def ping(self) -> Dict[str, str]:
+    async def ping_async(self) -> Dict[str, str]:
         """Health check."""
         return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}

@@ -68,4 +68,4 @@ class TestDynamicRulesLoader(unittest.TestCase):
         self.assertIn("generic-rule-1", ids)
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main_async()

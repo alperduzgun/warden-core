@@ -70,7 +70,7 @@ class FileDiscoverer:
         start_time = time.time()
 
         # Discover files
-        files = await self._discover_files()
+        files = await self._discover_files_async()
 
         # Detect frameworks
         framework_detector = FrameworkDetector(self.root_path)
@@ -112,7 +112,7 @@ class FileDiscoverer:
 
         return asyncio.run(self.discover_async())
 
-    async def _discover_files(self) -> List[DiscoveredFile]:
+    async def _discover_files_async(self) -> List[DiscoveredFile]:
         """
         Discover all files in the project.
 

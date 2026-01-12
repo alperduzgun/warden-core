@@ -15,7 +15,7 @@ class LSPSymbolGraph:
     def __init__(self):
         self.lsp_manager = LSPManager.get_instance()
 
-    async def build_graph(self, root_path: str, files: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    async def build_graph_async(self, root_path: str, files: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """
         Build symbol hierarchy for a list of files.
         
@@ -36,7 +36,7 @@ class LSPSymbolGraph:
         for language, lang_files in files_by_lang.items():
             if not lang_files: continue
             
-            client = await self.lsp_manager.get_client(language, root_path)
+            client = await self.lsp_manager.get_client_async(language, root_path)
             if not client:
                 logger.debug("symbol_graph_lsp_unavailable", language=language)
                 continue
@@ -46,7 +46,7 @@ class LSPSymbolGraph:
                     uri = f"file://{file_path}"
                     # Ensure open
                     # TODO: optimize if already open
-                    await client.send_notification("textDocument/didOpen", {
+                    await client.send_notification_async("textDocument/didOpen", {
                         "textDocument": {
                             "uri": uri,
                             "languageId": language,
@@ -55,7 +55,7 @@ class LSPSymbolGraph:
                         }
                     })
                     
-                    symbols = await client.send_request("textDocument/documentSymbol", {
+                    symbols = await client.send_request_async("textDocument/documentSymbol", {
                         "textDocument": {"uri": uri}
                     })
                     

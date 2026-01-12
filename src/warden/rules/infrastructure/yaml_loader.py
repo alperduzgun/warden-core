@@ -47,7 +47,7 @@ class RulesYAMLLoader:
         return RulesYAMLLoader._parse_yaml_data(data, str(rules_path))
 
     @staticmethod
-    async def load_from_file(file_path: Path) -> ProjectRuleConfig:
+    async def load_from_file_async(file_path: Path) -> ProjectRuleConfig:
         """Load rules configuration from YAML file.
 
         Args:
@@ -64,12 +64,12 @@ class RulesYAMLLoader:
             raise FileNotFoundError(f"Rules path not found: {file_path}")
 
         if file_path.is_dir():
-             return await RulesYAMLLoader._load_from_directory(file_path)
+             return await RulesYAMLLoader._load_from_directory_async(file_path)
 
-        return await RulesYAMLLoader._load_single_file(file_path)
+        return await RulesYAMLLoader._load_single_file_async(file_path)
 
     @staticmethod
-    async def _load_single_file(file_path: Path) -> ProjectRuleConfig:
+    async def _load_single_file_async(file_path: Path) -> ProjectRuleConfig:
         """Load rules configuration from a single YAML file."""
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -81,7 +81,7 @@ class RulesYAMLLoader:
         return RulesYAMLLoader._parse_yaml_data(data, str(file_path))
 
     @staticmethod
-    async def _load_from_directory(dir_path: Path) -> ProjectRuleConfig:
+    async def _load_from_directory_async(dir_path: Path) -> ProjectRuleConfig:
         """Load rules from all YAML files in a directory and merge them."""
         # Use shared merger logic (DRY)
         from warden.shared.utils.yaml_merger import YAMLMerger

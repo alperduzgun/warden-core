@@ -67,6 +67,14 @@ class AnalysisPhase:
             "lsp_diagnostics": LSPDiagnosticsAnalyzer(),
         }
         
+        # Get analysis level from config
+        from warden.pipeline.domain.enums import AnalysisLevel
+        level_str = self.config.get("analysis_level", "standard")
+        try:
+            self.analysis_level = AnalysisLevel(level_str.lower())
+        except (ValueError, AttributeError):
+            self.analysis_level = AnalysisLevel.STANDARD
+        
         # Initialize IgnoreMatcher
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.ignore_matcher = IgnoreMatcher(self.project_root, use_gitignore=use_gitignore)
@@ -104,7 +112,7 @@ class AnalysisPhase:
             "testability": 0.10,
         }
 
-    async def execute(
+    async def execute_async(
         self,
         code_files: List[CodeFile],
         pipeline_context: Optional[Any] = None,
@@ -156,11 +164,24 @@ class AnalysisPhase:
             })
 
         try:
-            # Run all analyzers in parallel for each file
+            # Limit concurrency to prevent system overload (340+ files * 7 analyzers = 2000+ tasks)
+            semaphore = asyncio.Semaphore(20) # Process 20 files at a time
+            
+            async def analyze_with_limit(cf):
+                async with semaphore:
+                    return await self._analyze_file_async(cf, pipeline_context)
+
+            # Run all analyzers in parallel for all files with semi-concurrency
+            tasks = [analyze_with_limit(cf) for cf in code_files]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
             all_results = {}
-            for code_file in code_files:
-                file_results = await self._analyze_file(code_file, pipeline_context)
-                all_results[code_file.path] = file_results
+            for cf, res in zip(code_files, results):
+                if isinstance(res, Exception):
+                    logger.error("file_analysis_failed", file=cf.path, error=str(res))
+                    all_results[cf.path] = {}
+                else:
+                    all_results[cf.path] = res
 
             # Aggregate results using MetricsAggregator
             metrics = self.metrics_aggregator.aggregate(all_results)
@@ -199,7 +220,7 @@ class AnalysisPhase:
                 file_count=len(code_files),
             )
 
-    async def _analyze_file(self, code_file: CodeFile, pipeline_context: Optional[Any] = None) -> Dict[str, Any]:
+    async def _analyze_file_async(self, code_file: CodeFile, pipeline_context: Optional[Any] = None) -> Dict[str, Any]:
         """
         Run all analyzers on a single file.
 
@@ -218,13 +239,21 @@ class AnalysisPhase:
         if pipeline_context and hasattr(pipeline_context, 'ast_cache'):
             ast_tree = pipeline_context.ast_cache.get(code_file.path)
 
+        # Subsetting analyzers for BASIC level to hit performance targets
+        from warden.pipeline.domain.enums import AnalysisLevel
+        is_basic = self.analysis_level == AnalysisLevel.BASIC
+
         # Core analyzers for scoring
         tasks["complexity"] = asyncio.create_task(
             self.analyzers["complexity"].analyze_async(code_file, ast_tree=ast_tree)
         )
-        tasks["duplication"] = asyncio.create_task(
-            self.analyzers["duplication"].analyze_async(code_file, ast_tree=ast_tree)
-        )
+        
+        # Skip duplication check in BASIC level (heavy)
+        if not is_basic:
+            tasks["duplication"] = asyncio.create_task(
+                self.analyzers["duplication"].analyze_async(code_file, ast_tree=ast_tree)
+            )
+            
         tasks["maintainability"] = asyncio.create_task(
             self.analyzers["maintainability"].analyze_async(code_file, ast_tree=ast_tree)
         )
@@ -238,9 +267,11 @@ class AnalysisPhase:
             self.analyzers["testability"].analyze_async(code_file, ast_tree=ast_tree)
         )
         
-        tasks["lsp_diagnostics"] = asyncio.create_task(
-            self.analyzers["lsp_diagnostics"].analyze_async(code_file, ast_tree=ast_tree)
-        )
+        # Skip LSP in BASIC level (slow/external dependency)
+        if not is_basic:
+            tasks["lsp_diagnostics"] = asyncio.create_task(
+                self.analyzers["lsp_diagnostics"].analyze_async(code_file, ast_tree=ast_tree)
+            )
 
         # Additional analyzer for hotspots
         tasks["magic_numbers"] = asyncio.create_task(
@@ -279,7 +310,7 @@ class AnalysisPhase:
             )
             return {}
 
-    async def execute_with_llm(self, code_files: List[CodeFile]) -> QualityMetrics:
+    async def execute_with_llm_async(self, code_files: List[CodeFile]) -> QualityMetrics:
         """
         Execute analysis with LLM enhancement.
 
@@ -294,7 +325,7 @@ class AnalysisPhase:
             Will be implemented when LLM analyzer is added.
         """
         # First run standard analysis
-        metrics = await self.execute(code_files)
+        metrics = await self.execute_async(code_files)
 
         if self.config.get("use_llm", False):
             logger.info("llm_enhancement_requested_but_not_implemented")

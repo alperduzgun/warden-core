@@ -124,13 +124,13 @@ class FrameExecutor:
             # Execute frames based on strategy
             if frames_to_execute:
                 if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
-                    await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
+                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
                 elif self.config.strategy == ExecutionStrategy.PARALLEL:
-                    await self._execute_frames_parallel(context, filtered_files, frames_to_execute, pipeline)
+                    await self._execute_frames_parallel_async(context, filtered_files, frames_to_execute, pipeline)
                 elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
-                    await self._execute_frames_fail_fast(context, filtered_files, frames_to_execute, pipeline)
+                    await self._execute_frames_fail_fast_async(context, filtered_files, frames_to_execute, pipeline)
                 else:
-                    await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
+                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
             
             # Execute Global Rules (Rules that apply to all files independent of frames)
             if self.rule_validator and self.rule_validator.rules:
@@ -168,7 +168,7 @@ class FrameExecutor:
             })
 
 
-    async def _execute_frames_sequential(
+    async def _execute_frames_sequential_async(
         self,
         context: PipelineContext,
         code_files: List[CodeFile],
@@ -183,9 +183,9 @@ class FrameExecutor:
                 logger.info("skipping_frame_fail_fast", frame_id=frame.frame_id)
                 continue
 
-            await self._execute_frame_with_rules(context, frame, code_files, pipeline)
+            await self._execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
-    async def _execute_frames_parallel(
+    async def _execute_frames_parallel_async(
         self,
         context: PipelineContext,
         code_files: List[CodeFile],
@@ -197,14 +197,14 @@ class FrameExecutor:
 
         semaphore = asyncio.Semaphore(self.config.parallel_limit or 3)
 
-        async def execute_with_semaphore(frame):
+        async def execute_with_semaphore_async(frame):
             async with semaphore:
-                await self._execute_frame_with_rules(context, frame, code_files, pipeline)
+                await self._execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
         tasks = [execute_with_semaphore(frame) for frame in frames_to_execute]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _execute_frames_fail_fast(
+    async def _execute_frames_fail_fast_async(
         self,
         context: PipelineContext,
         code_files: List[CodeFile],
@@ -215,14 +215,14 @@ class FrameExecutor:
         logger.info("executing_frames_fail_fast", count=len(frames_to_execute))
 
         for frame in frames_to_execute:
-            result = await self._execute_frame_with_rules(context, frame, code_files, pipeline)
+            result = await self._execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
             # Check if frame has blocker issues
             if result and hasattr(result, 'has_blocker_issues') and result.has_blocker_issues:
                 logger.info("stopping_on_blocker", frame_id=frame.frame_id)
                 break
 
-    async def _execute_frame_with_rules(
+    async def _execute_frame_with_rules_async(
         self,
         context: PipelineContext,
         frame: ValidationFrame,
@@ -283,7 +283,7 @@ class FrameExecutor:
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:
             logger.info("executing_pre_rules", frame_id=frame.frame_id, rule_count=len(frame_rules.pre_rules))
-            pre_violations = await self._execute_rules(frame_rules.pre_rules, code_files)
+            pre_violations = await self._execute_rules_async(frame_rules.pre_rules, code_files)
 
             if pre_violations and self._has_blocker_violations(pre_violations):
                 if frame_rules.on_fail == "stop":
@@ -327,7 +327,7 @@ class FrameExecutor:
             execution_errors = 0
             
             # Helper to execute single file
-            async def execute_single_file(c_file: CodeFile) -> Optional[FrameResult]:
+            async def execute_single_file_async(c_file: CodeFile) -> Optional[FrameResult]:
                 # Check for caching
                 file_context = context.file_contexts.get(c_file.path)
                 if file_context and getattr(file_context, 'is_unchanged', False):
@@ -339,7 +339,7 @@ class FrameExecutor:
                     
                 try:
                     # frames usually return FrameResult
-                    return await frame.execute(c_file)
+                    return await frame.execute_async(c_file)
                 except Exception as ex:
                     logger.error("frame_file_execution_error", 
                                 frame=frame.frame_id, 
@@ -379,7 +379,7 @@ class FrameExecutor:
                 else:
                     try:
                         f_results = await asyncio.wait_for(
-                            frame.execute_batch(files_to_scan),
+                            frame.execute_batch_async(files_to_scan),
                             timeout=self.config.frame_timeout or 300.0  # Increased timeout for batch
                         )
                         
@@ -496,7 +496,7 @@ class FrameExecutor:
         # Execute POST rules
         post_violations = []
         if frame_rules and frame_rules.post_rules:
-            post_violations = await self._execute_rules(frame_rules.post_rules, code_files)
+            post_violations = await self._execute_rules_async(frame_rules.post_rules, code_files)
 
             if post_violations and self._has_blocker_violations(post_violations):
                 if frame_rules.on_fail == "stop":
@@ -553,7 +553,7 @@ class FrameExecutor:
 
         return filtered
 
-    async def _execute_rules(
+    async def _execute_rules_async(
         self,
         rules: List[CustomRule],
         code_files: List[CodeFile],

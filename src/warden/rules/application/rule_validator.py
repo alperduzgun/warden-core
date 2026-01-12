@@ -103,12 +103,12 @@ class CustomRuleValidator:
                     self._validate_convention_rule(rule, file_path, lines, content)
                 )
             elif rule.type == "script":
-                violation = await self._validate_script(rule, file_path)
+                violation = await self._validate_script_async(rule, file_path)
                 if violation:
                     violations.append(violation)
             elif rule.type == "ai":
                 if self.llm_service:
-                    ai_violations = await self._validate_ai_rule(rule, file_path, content)
+                    ai_violations = await self._validate_ai_rule_async(rule, file_path, content)
                     violations.extend(ai_violations)
                 else:
                     logger.warning("ai_rule_skipped_no_llm", rule_id=rule.id)
@@ -504,7 +504,7 @@ class CustomRuleValidator:
 
         return violations
 
-    async def _validate_script(
+    async def _validate_script_async(
         self,
         rule: CustomRule,
         file_path: Path,
@@ -702,7 +702,7 @@ class CustomRuleValidator:
             )
             return None
 
-    async def _validate_ai_rule(
+    async def _validate_ai_rule_async(
         self,
         rule: CustomRule,
         file_path: Path,

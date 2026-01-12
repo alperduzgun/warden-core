@@ -20,6 +20,8 @@ def scan_command(
     format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
+    level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
+    no_ai: bool = typer.Option(False, "--no-ai", help="Shorthand for --level basic"),
 ) -> None:
     """
     Run the full Warden pipeline on a file or directory.
@@ -29,7 +31,11 @@ def scan_command(
     
     # Run async scan function
     try:
-        exit_code = asyncio.run(_run_scan_async(path, frames, format, output, verbose))
+        # Handle --no-ai shorthand
+        if no_ai:
+            level = "basic"
+            
+        exit_code = asyncio.run(_run_scan_async(path, frames, format, output, verbose, level))
         if exit_code != 0:
             raise typer.Exit(exit_code)
     except KeyboardInterrupt:
@@ -37,7 +43,7 @@ def scan_command(
         raise typer.Exit(130)
 
 
-async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool) -> int:
+async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard") -> int:
     """Async implementation of scan command."""
     
     console.print(f"[bold cyan]🛡️  Warden Scanner[/bold cyan]")
@@ -58,10 +64,11 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, o
 
     try:
         # Execute pipeline with streaming
-        async for event in bridge.execute_pipeline_stream(
+        async for event in bridge.execute_pipeline_stream_async(
             file_path=path,
             frames=frames,
-            verbose=verbose
+            verbose=verbose,
+            analysis_level=level
         ):
             event_type = event.get("type")
             
