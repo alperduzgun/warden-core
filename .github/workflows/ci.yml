@@ -96,7 +96,8 @@ jobs:
           echo "Running Warden Scan with level: $LEVEL"
           
           # Scanning the source code of Warden itself
-          warden scan src/warden --level $LEVEL --format sarif --output warden.sarif --verbose
+          # Scanning the source code of Warden itself, excluding test fixtures
+          warden scan src/warden --level $LEVEL --format sarif --output warden.sarif --verbose --exclude tests
 
 
 
