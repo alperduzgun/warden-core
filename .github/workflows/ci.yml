@@ -34,6 +34,17 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src/warden_rust
+
       # Removed apt-get install as build-essential is pre-installed on ubuntu-latest
       # and it saves ~1-2 minutes of setup time.
 
