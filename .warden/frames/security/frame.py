@@ -137,7 +137,7 @@ class SecurityFrame(ValidationFrame):
                     error=str(e),
                 )
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute all security checks on code file.
 

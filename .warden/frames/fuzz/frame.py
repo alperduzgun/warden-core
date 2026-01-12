@@ -131,7 +131,7 @@ Output must be a valid JSON object with the following structure:
         # Serial execution for now to ensure reliability, bug fixes first.
         return await super().execute_batch(code_files)
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute fuzz testing checks on code file.
 

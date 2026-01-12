@@ -48,7 +48,7 @@ class OrphanFrame(ValidationFrame):
             client = await lsp_manager.get_client_async(language, str(path.parent.parent)) 
             
             if not client:
-                logger.debug("orphan_lsp_unavailable", file=code_file)
+                logger.debug("orphan_lsp_unavailable", file=str(path))
                 return FrameResult(
                     frame_id=self.frame_id,
                     frame_name=self.name,
@@ -60,7 +60,7 @@ class OrphanFrame(ValidationFrame):
                 )
 
             # 1. Get Symbols (Functions/Classes)
-            uri = f"file://{code_file}"
+            uri = f"file://{path.absolute()}"
             # Ensure file is open in LSP
             await client.send_notification_async("textDocument/didOpen", {
                 "textDocument": {
@@ -91,7 +91,7 @@ class OrphanFrame(ValidationFrame):
                  await self._check_symbol_async(client, uri, symbol, findings)
 
         except Exception as e:
-            logger.error("orphan_frame_error", error=str(e), file=code_file)
+            logger.error("orphan_frame_error", error=str(e), file=str(path))
             return FrameResult(
                  frame_id=self.frame_id,
                  frame_name=self.name,

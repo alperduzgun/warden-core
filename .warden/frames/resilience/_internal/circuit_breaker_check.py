@@ -48,7 +48,7 @@ class CircuitBreakerCheck(ValidationCheck):
         r"circuitbreaker",
     ]
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute circuit breaker check."""
         findings: List[CheckFinding] = []
 

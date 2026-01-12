@@ -48,7 +48,7 @@ class ConfigValidationFrame(ValidationFrame):
         super().__init__(config)
         self._registered_frame_ids: Set[str] = set()
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """Execute config validation (called per file, but we only care about config.yaml)."""
         # Skip non-config files
         if not code_file.path.endswith("config.yaml") or ".warden" not in code_file.path:

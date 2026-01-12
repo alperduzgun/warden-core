@@ -277,7 +277,7 @@ class OrphanFrame(ValidationFrame):
         else:
             return f"Analyzed {candidates} candidates from {file_count} files."
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute orphan code detection on code file.
 

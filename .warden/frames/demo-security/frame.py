@@ -67,7 +67,7 @@ class DemoSecurityFrame(ValidationFrame):
             check_sql=self.check_sql,
         )
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """Execute demo validation."""
         start_time = time.perf_counter()
         findings: List[Finding] = []

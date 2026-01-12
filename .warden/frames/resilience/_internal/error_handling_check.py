@@ -79,7 +79,7 @@ class ErrorHandlingCheck(ValidationCheck):
         r"socket\.",
     ]
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute error handling check."""
         findings: List[CheckFinding] = []
 

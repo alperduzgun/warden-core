@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from warden.llm.factory import create_client
 from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
-import tiktoken
 from warden.shared.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -126,8 +125,10 @@ class LLMPhaseBase(ABC):
             ))
         # Initializing tokenizer (cl100k_base is used by gpt-4, gpt-3.5)
         try:
+            import tiktoken
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
-        except Exception:
+        except (ImportError, Exception):
+            logger.debug("tiktoken_not_available_using_fallback")
             self.tokenizer = None
 
         # Enable LLM if service is provided
@@ -364,6 +365,11 @@ class LLMPhaseBase(ABC):
         
         # 2. Acquire Rate Limit (Waits here if needed)
         # This prevents 429s by not sending the request until we have budget
+        if not self.tokenizer:
+            # Fallback estimation: ~4 chars per token
+            input_text = system_prompt + user_prompt
+            estimated_tokens = (len(input_text) // 4) + self.config.max_tokens + 50
+        
         await self.rate_limiter.acquire_async(estimated_tokens)
 
         for attempt in range(self.config.max_retries):

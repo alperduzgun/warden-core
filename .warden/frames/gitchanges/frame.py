@@ -90,7 +90,7 @@ class GitChangesFrame(ValidationFrame):
         # Parser
         self.diff_parser = GitDiffParser()
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute git changes analysis on code file.
 

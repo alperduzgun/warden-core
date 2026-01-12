@@ -153,7 +153,7 @@ Output must be a valid JSON object with the following structure:
                 
         return all_results
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute property testing checks on code file.
 

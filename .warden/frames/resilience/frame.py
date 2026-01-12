@@ -57,7 +57,7 @@ class ResilienceFrame(ValidationFrame):
             logger.warning("resilience_prompt_import_failed")
             self.system_prompt = "You are a Resilience Engineer."
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute resilience analysis on code file.
 

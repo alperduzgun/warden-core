@@ -97,7 +97,7 @@ class ProjectArchitectureFrame(ValidationFrame):
         )
         self.strict_mode = self.config.get("strict_mode", False)
 
-    async def execute(self, project_context: ProjectContext) -> FrameResult:
+    async def execute_async(self, project_context: ProjectContext) -> FrameResult:
         """
         Execute project-level architectural validation.
 

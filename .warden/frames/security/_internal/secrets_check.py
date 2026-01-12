@@ -94,7 +94,7 @@ class SecretsCheck(ValidationCheck):
             ],
         )
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute secrets detection."""
         findings: List[CheckFinding] = []
 

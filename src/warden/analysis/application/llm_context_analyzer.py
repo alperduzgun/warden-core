@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 import structlog
-import tiktoken
 
 from warden.llm.factory import create_client
 from warden.llm.config import LlmConfiguration, load_llm_config_async
@@ -79,8 +78,10 @@ class LlmContextAnalyzer:
 
         # Initialize tokenizer for token estimation
         try:
+            import tiktoken
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
-        except Exception:
+        except (ImportError, Exception):
+            logger.debug("tiktoken_not_available_for_context_analyzer_using_fallback")
             self.tokenizer = None
 
         logger.info(

@@ -170,7 +170,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             logger.error(f"Failed to load custom rules: {e}")
             return []
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute architectural validation.
 
