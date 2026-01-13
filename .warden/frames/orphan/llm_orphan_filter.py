@@ -135,6 +135,8 @@ class LLMOrphanFilter:
         if llm_service:
             self.llm = llm_service
         else:
+            # Create default config if not provided
+            llm_config = LlmConfiguration()
             self.llm = create_client(llm_config)
             
         self.semantic_search_service = semantic_search_service
