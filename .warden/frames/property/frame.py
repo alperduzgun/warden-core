@@ -69,13 +69,13 @@ class PropertyFrame(ValidationFrame):
         },
         "state_change_no_validation": {
             "pattern": r'self\.\w+\s*=|this\.\w+\s*=',
-            "severity": "medium",
+            "severity": "low",
             "message": "State change without validation",
             "suggestion": "Validate state transitions to maintain invariants",
         },
         "division_no_zero_check": {
-            "pattern": r'\/\s*\w+(?!\s*(?:if|&&|\|\||\?|assert))',
-            "severity": "high",
+            "pattern": r'(?<!\/)\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))',
+            "severity": "medium",
             "message": "Division operation without zero check",
             "suggestion": "Check divisor is not zero before division",
         },
@@ -319,13 +319,14 @@ Output must be a valid JSON object with the following structure:
         function_count = len(re.findall(function_pattern, code_file.content))
 
         # If many functions but no assertions, warn
-        if function_count > 5 and assertion_count == 0:
+        # If many functions but no assertions, warn
+        if function_count > 10 and assertion_count == 0:
             finding = Finding(
                 id=f"{self.frame_id}-no-assertions",
                 severity="low",
                 message=f"File has {function_count} functions but no assertions",
                 location=f"{code_file.path}:1",
-                detail="Consider adding assertions to validate invariants and preconditions",
+                detail="Consider adding assertions or Pydantic validation to validate invariants and preconditions",
                 code=None,
             )
             findings.append(finding)

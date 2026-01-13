@@ -151,9 +151,13 @@ class WardenBridge:
         # Simplified scan: execute on directory and return summary
         all_issues = []
         files_scanned = 0
+        last_summary = {}
+        last_duration = 0
         async for event in self.execute_pipeline_stream_async(path, frames):
             if event["type"] == "result":
                 res = event["data"]
+                last_summary = res.get("summary", {})
+                last_duration = res.get("duration", 0)
                 # Flatten issues for legacy CLI support
                 for fr in res.get("frame_results", []):
                     for f in fr.get("findings", []):
@@ -164,13 +168,16 @@ class WardenBridge:
                             "line": f.get("line", 0),
                             "frame": fr.get("frame_id")
                         })
-                return {
-                    "success": True,
-                    "issues": all_issues,
-                    "summary": res.get("summary", {}),
-                    "duration": res.get("duration", 0)
-                }
-        return {"success": False, "error": "Scan failed"}
+        
+        if not all_issues and not last_summary:
+            return {"success": False, "error": "Scan failed or no files found"}
+
+        return {
+            "success": True,
+            "issues": all_issues,
+            "summary": last_summary,
+            "duration": last_duration
+        }
 
     async def analyze_async(self, filePath: str) -> Dict[str, Any]:
         """Alias for execute_pipeline."""
@@ -232,7 +239,7 @@ class WardenBridge:
         """List discoverable AST/LSP providers."""
         return await self.tool_handler.get_available_providers_async()
 
-    async def test_provider(self, language: str) -> Dict[str, Any]:
+    async def test_provider_async(self, language: str) -> Dict[str, Any]:
         """Test a specific language provider."""
         return await self.tool_handler.test_provider(language)
 
