@@ -526,8 +526,19 @@ jobs:
           restore-keys: |
             ollama-models-${{{{ runner.os }}}}-
 
-      - name: Install and Start Ollama
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Warden
+        run: pip install warden-core
+
+      - name: Run Scan
+        env: 
+          OLLAMA_HOST: http://localhost:11434
         run: |
+          # --- OLLAMA SETUP ---
           echo "Installing Ollama..."
           curl -fsSL https://ollama.com/install.sh | sh
           
@@ -545,12 +556,9 @@ jobs:
           
           echo "Pulling Qwen model..."
           ollama pull qwen2.5-coder:0.5b
-
-      - name: Install Warden
-        run: pip install warden-core
-
-      - name: Run Scan
-        run: warden scan . --format sarif --output warden.sarif --level standard
+          
+          # --- RUN SCAN ---
+          warden scan . --format sarif --output warden.sarif --level standard
         continue-on-error: {'true' if mode_choice == '1' else 'false'}
 
       - name: Upload Artifacts
