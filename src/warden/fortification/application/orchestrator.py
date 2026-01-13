@@ -6,7 +6,7 @@ Executes fortifiers in priority order and combines results.
 """
 
 import structlog
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortificationAction

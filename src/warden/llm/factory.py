@@ -8,12 +8,6 @@ from typing import Optional, Union
 from .config import LlmConfiguration, load_llm_config, ProviderConfig
 from .types import LlmProvider
 from .providers.base import ILlmClient
-from .providers.anthropic import AnthropicClient
-from .providers.deepseek import DeepSeekClient
-from .providers.qwencode import QwenCodeClient
-from .providers.openai import OpenAIClient
-from .providers.groq import GroqClient
-
 
 def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILlmClient:
     """Create a client for a specific provider configuration."""
@@ -21,16 +15,22 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
         raise ValueError(f"Provider {provider.value} is not configured or enabled")
 
     if provider == LlmProvider.ANTHROPIC:
+        from .providers.anthropic import AnthropicClient
         return AnthropicClient(config)
     elif provider == LlmProvider.DEEPSEEK:
+        from .providers.deepseek import DeepSeekClient
         return DeepSeekClient(config)
     elif provider == LlmProvider.QWENCODE:
+        from .providers.qwencode import QwenCodeClient
         return QwenCodeClient(config)
     elif provider == LlmProvider.OPENAI:
+        from .providers.openai import OpenAIClient
         return OpenAIClient(config, LlmProvider.OPENAI)
     elif provider == LlmProvider.AZURE_OPENAI:
+        from .providers.openai import OpenAIClient
         return OpenAIClient(config, LlmProvider.AZURE_OPENAI)
     elif provider == LlmProvider.GROQ:
+        from .providers.groq import GroqClient
         return GroqClient(config)
     else:
         raise NotImplementedError(f"Provider {provider.value} not implemented")

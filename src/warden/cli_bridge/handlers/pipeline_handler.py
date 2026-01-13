@@ -5,7 +5,7 @@ Handles scanning files and streaming pipeline progress.
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional, AsyncIterator
+from typing import Any, Dict, List, Optional, AsyncIterator, Union
 from warden.shared.infrastructure.logging import get_logger
 from warden.cli_bridge.protocol import IPCError, ErrorCode
 from warden.validation.domain.frame import CodeFile
@@ -44,18 +44,25 @@ class PipelineHandler(BaseHandler):
         # Serialization handled by bridge or helper
         return result, context
 
-    async def execute_pipeline_stream_async(self, file_path: str, frames: Optional[List[str]] = None, analysis_level: str = "standard") -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream_async(self, paths: Union[str, List[str]], frames: Optional[List[str]] = None, analysis_level: str = "standard") -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
 
-        path = Path(file_path)
-        if not path.exists():
-            raise IPCError(ErrorCode.FILE_NOT_FOUND, f"File not found: {file_path}")
+        # Normalize to list
+        if isinstance(paths, str):
+            path_list = [Path(paths)]
+        else:
+            path_list = [Path(p) for p in paths]
 
-        code_files = self._collect_files(path)
+        code_files = self._collect_files(path_list)
         if not code_files:
-            raise IPCError(ErrorCode.INVALID_PARAMS, f"No supported code files found in: {file_path}")
+            # We don't raise error if empty here, just skip to avoid breaking on partial diffs
+            # But if it's a single file request and missing, we might want to warn
+            # For now, let's just yield nothing or raise if truly empty request
+             # Log warning instead of error to allow partial valid scans
+            logger.warning("no_code_files_found", paths=str(paths))
+            return 
 
         progress_queue: asyncio.Queue = asyncio.Queue()
         pipeline_done = asyncio.Event()
@@ -92,7 +99,7 @@ class PipelineHandler(BaseHandler):
         finally:
             self.orchestrator.progress_callback = original_callback
 
-    def _collect_files(self, path: Path) -> List[CodeFile]:
+    def _collect_files(self, paths: List[Path]) -> List[CodeFile]:
         # Logic from bridge.py lines 596-678
         from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
         
@@ -101,16 +108,28 @@ class PipelineHandler(BaseHandler):
         ignore_matcher = IgnoreMatcher(self.project_root, use_gitignore=use_gitignore)
         
         files_to_scan = []
-        if path.is_file():
-            files_to_scan = [path]
-        else:
-            for item in path.rglob("*"):
-                if item.is_file() and item.suffix in code_extensions:
-                    if any(ignore_matcher.should_ignore_directory(p) for p in item.parts):
-                        continue
-                    if ignore_matcher.should_ignore_path(item):
-                        continue
-                    files_to_scan.append(item)
+        
+        for root_path in paths:
+            if not root_path.exists():
+                logger.warning("file_not_found_skipping", path=str(root_path))
+                continue
+                
+            if root_path.is_file():
+                if any(ignore_matcher.should_ignore_directory(p) for p in root_path.parts):
+                    continue
+                if ignore_matcher.should_ignore_path(root_path):
+                    continue
+                files_to_scan.append(root_path)
+            else:
+                # Directory scan
+                for item in root_path.rglob("*"):
+                    if item.is_file() and item.suffix in code_extensions:
+                        if any(ignore_matcher.should_ignore_directory(p) for p in item.parts):
+                            continue
+                        if ignore_matcher.should_ignore_path(item):
+                            continue
+                        files_to_scan.append(item)
+
 
         code_files = []
         for p in files_to_scan[:1000]: # Limit protection

@@ -6,7 +6,7 @@ Adds structured logging (structlog) to functions and critical operations.
 
 import structlog
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType

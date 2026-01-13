@@ -8,6 +8,7 @@ to enable context-aware analysis and false positive prevention.
 import asyncio
 import time
 from pathlib import Path
+import fnmatch
 from typing import Dict, List, Optional, Any, Callable, Set
 import structlog
 import hashlib
@@ -33,6 +34,29 @@ from warden.shared.utils.language_utils import get_language_from_path
 
 logger = structlog.get_logger()
 
+# Context-Aware Criticality Map
+# Defines which file patterns are "Critical" (must be LLM verified) for specific project types.
+# All other low-confidence files in these project types will be handled by Rust/Rule-based only.
+CRITICALITY_MAP = {
+    "mobile": [
+        "android/key.properties", "**/android/key.properties", 
+        "ios/*.plist", "**/ios/*.plist", 
+        "lib/main.dart", "lib/**/*auth*", "lib/**/*config*", "lib/**/*service*",
+        "pubspec.yaml", "**/pubspec.yaml"
+    ],
+    "web": [
+        "src/App.*", "src/main.*", "src/**/*auth*", "src/**/*config*", 
+        "vite.config.*", "next.config.*", ".env*"
+    ],
+    "backend": [
+        "settings.py", "**/settings.py", 
+        "config.py", "**/config.py", 
+        "models.py", "**/models.py", 
+        "auth.py", "**/auth.py",
+        "security.py", "**/security.py", 
+        "pyproject.toml", "poetry.lock"
+    ]
+}
 
 class PreAnalysisPhase:
     """
@@ -458,10 +482,23 @@ class PreAnalysisPhase:
         if self.llm_analyzer:
             # Collect files that still have low confidence
             ambiguous_items = []
+            
+            # Get project context from file analyzer
+            p_ctx = self.file_analyzer.project_context if self.file_analyzer else None
+
             for path_str, ctx_info in raw_contexts.items():
                 if ctx_info.confidence < 0.7:
-                    # Prepare tuple for Batch analyzer: (Path, FileContext, float)
-                    ambiguous_items.append((Path(path_str), ctx_info.context, ctx_info.confidence))
+                    # CONTEXT-AWARE SNIPER:
+                    # Only send to LLM if file is critical for this project type
+                    is_critical = True
+                    if p_ctx:
+                        is_critical = self._is_file_critical(path_str, p_ctx)
+                    
+                    if is_critical:
+                        # Prepare tuple for Batch analyzer: (Path, FileContext, float)
+                        ambiguous_items.append((Path(path_str), ctx_info.context, ctx_info.confidence))
+                    else:
+                        logger.debug("skipping_llm_for_non_critical_file", file=path_str)
 
             if ambiguous_items:
                 logger.info("batch_llm_enhancement_trigger", count=len(ambiguous_items))
@@ -483,6 +520,34 @@ class PreAnalysisPhase:
                     logger.warning("batch_llm_enhancement_failed", error=str(e))
 
         return raw_contexts
+
+    def _is_file_critical(self, file_path: str, project_context: ProjectContext) -> bool:
+        """Check if file is critical based on project context."""
+        # Determine strict project type key for map
+        p_type = "backend" # Default fallback
+        
+        # Check explicit type first
+        if project_context.project_type.value in ["mobile", "android", "ios"]:
+            p_type = "mobile"
+        elif project_context.project_type.value in ["web", "frontend"]:
+            p_type = "web"
+        # Check purpose keywords if generic
+        elif project_context.purpose:
+            purpose = project_context.purpose.lower()
+            if "mobile" in purpose or "flutter" in purpose:
+                p_type = "mobile"
+            elif "frontend" in purpose or "react" in purpose:
+                p_type = "web"
+
+        patterns = CRITICALITY_MAP.get(p_type, CRITICALITY_MAP["backend"])
+        
+        # ALWAYS check backend criticals too (safety net for hybrid repos)
+        all_patterns = patterns + CRITICALITY_MAP["backend"]
+        
+        for pattern in all_patterns:
+            if fnmatch.fnmatch(file_path, pattern):
+                return True
+        return False
 
     async def _analyze_single_file_async(self, code_file: CodeFile, is_impacted: bool = False, use_llm: bool = True) -> Any:
         """
