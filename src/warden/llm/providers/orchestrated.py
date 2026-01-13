@@ -10,6 +10,7 @@ from typing import Optional
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.resilience import resilient
 
 logger = get_logger(__name__)
 
@@ -49,6 +50,7 @@ class OrchestratedLlmClient(ILlmClient):
         # Returns the default (smart) provider's type for external consistency
         return self.smart_client.provider
 
+    @resilient(timeout_seconds=60, retry_max_attempts=3, circuit_breaker_enabled=True)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Routes request to the appropriate tier.
