@@ -1,0 +1,6 @@
+packages:
+  orphan:
+    content_hash: sha256:11f7a3df5be30751b7bc4b6b914b384db1f3d8d784cd4bace86238678f109343
+    git: https://github.com/Appnova-EU-OU/warden-hub.git
+    path: frames/orphan
+    ref: 2cdfbf8e71261a5179ef6fff8b5663f697a4308d

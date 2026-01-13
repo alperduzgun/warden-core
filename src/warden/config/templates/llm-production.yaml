@@ -1,0 +1,154 @@
+# Warden LLM Configuration - Production Setup
+# Full LLM setup with fallback chain and all providers
+
+pipeline:
+  name: "llm-production-validation"
+  description: "Production-grade validation with LLM fallback chain"
+  fail_fast: true
+  max_retries: 2
+
+# LLM Configuration with Fallback Chain
+llm:
+  enabled: true
+  default_provider: azure_openai
+  fallback_providers:
+    - deepseek
+    - qwencode
+    - groq
+
+  # Provider Configurations
+  providers:
+    # Primary: Azure OpenAI (GPT-4o)
+    azure_openai:
+      enabled: true
+      api_key: ${AZURE_OPENAI_API_KEY}
+      endpoint: ${AZURE_OPENAI_ENDPOINT}
+      default_model: ${AZURE_OPENAI_DEPLOYMENT_NAME:-gpt-4o}
+      api_version: ${AZURE_OPENAI_API_VERSION:-2024-02-01}
+
+    # Fallback 1: DeepSeek Coder (Cost-effective)
+    deepseek:
+      enabled: true
+      api_key: ${DEEPSEEK_API_KEY}
+      endpoint: https://api.deepseek.com
+      default_model: deepseek-coder
+
+    # Fallback 2: QwenCode (Alibaba Cloud)
+    qwencode:
+      enabled: true
+      api_key: ${QWENCODE_API_KEY}
+      endpoint: https://dashscope.aliyuncs.com
+      default_model: qwen2.5-coder-32b-instruct
+
+    # Fallback 3: Groq (Ultra-fast)
+    groq:
+      enabled: true
+      api_key: ${GROQ_API_KEY}
+      endpoint: https://api.groq.com/openai/v1
+      default_model: llama-3.1-70b-versatile
+
+    # Optional: Anthropic Claude
+    anthropic:
+      enabled: false
+      api_key: ${ANTHROPIC_API_KEY}
+      endpoint: https://api.anthropic.com
+      default_model: claude-3-5-sonnet-20241022
+
+    # Optional: OpenAI
+    openai:
+      enabled: false
+      api_key: ${OPENAI_API_KEY}
+      endpoint: https://api.openai.com/v1
+      default_model: gpt-4o
+
+# Pipeline Stages
+stages:
+  # Stage 1: LLM-Enhanced Analysis
+  - name: "analysis"
+    enabled: true
+    use_llm: true
+    timeout_seconds: 120
+    retry_on_failure: true
+
+  # Stage 2: LLM-Enhanced Classification
+  - name: "classification"
+    enabled: true
+    use_llm: true
+    timeout_seconds: 60
+    retry_on_failure: true
+
+  # Stage 3: Parallel Validation Frames
+  - name: "validation"
+    enabled: true
+    parallel: true
+    priority_groups:
+      - priority: "critical"
+        frames: ["security"]
+        timeout_seconds: 300
+        is_blocker: true
+
+      - priority: "high"
+        frames: ["chaos", "fuzz"]
+        timeout_seconds: 180
+        is_blocker: false
+
+      - priority: "medium"
+        frames: ["property", "architectural"]
+        timeout_seconds: 120
+        is_blocker: false
+
+      - priority: "low"
+        frames: ["stress"]
+        timeout_seconds: 90
+        is_blocker: false
+
+  # Stage 4: Fortification (Optional)
+  - name: "fortification"
+    enabled: false
+    timeout_seconds: 180
+
+  # Stage 5: Cleaning (Optional)
+  - name: "cleaning"
+    enabled: false
+    timeout_seconds: 60
+
+# Resilience Settings
+resilience:
+  retry:
+    max_attempts: 3
+    backoff_multiplier: 2
+    initial_delay_ms: 1000
+    max_delay_ms: 10000
+
+  timeout:
+    default_seconds: 300
+    llm_request_seconds: 60
+    frame_execution_seconds: 300
+
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    success_threshold: 2
+    timeout_seconds: 60
+
+# Logging
+logging:
+  level: "INFO"
+  structured: true
+  correlation_id: true
+  output_format: "json"
+  include_timestamps: true
+
+# Performance
+performance:
+  max_concurrent_frames: 5
+  max_concurrent_llm_requests: 2
+  cache_llm_responses: true
+  cache_ttl_minutes: 30
+
+# Monitoring
+monitoring:
+  enabled: true
+  track_metrics: true
+  track_costs: true
+  alert_on_failures: true

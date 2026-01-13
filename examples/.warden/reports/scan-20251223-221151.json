@@ -1,0 +1,516 @@
+{
+  "id": "scan-20251223-221151",
+  "timestamp": "2025-12-23T19:11:51.525Z",
+  "path": "/Users/alper/Documents/Development/Personal/warden-core/examples",
+  "filesScanned": 9,
+  "totalFiles": 9,
+  "duration": 1.889,
+  "totalIssues": 119,
+  "severity": {
+    "critical": 4,
+    "high": 14,
+    "medium": 98,
+    "low": 3
+  },
+  "files": [
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/custom-frames/redis-security/checks/__init__.py",
+      "relativePath": "./custom-frames/redis-security/checks/__init__.py",
+      "issues": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "passed",
+          "duration": 0.00023220799630507827,
+          "issues": 0
+        },
+        {
+          "id": "chaos",
+          "name": "Chaos Engineering",
+          "status": "passed",
+          "duration": 0.00017775001469999552,
+          "issues": 0
+        },
+        {
+          "id": "projectarchitecture",
+          "name": "Project Architecture Analysis",
+          "status": "passed",
+          "duration": 0,
+          "issues": 0
+        },
+        {
+          "id": "property",
+          "name": "Property Testing",
+          "status": "passed",
+          "duration": 0.00004008301766589284,
+          "issues": 0
+        },
+        {
+          "id": "architecturalconsistency",
+          "name": "Architectural Consistency",
+          "status": "passed",
+          "duration": 0.00010924998787231743,
+          "issues": 0
+        },
+        {
+          "id": "gitchanges",
+          "name": "Git Changes Analysis",
+          "status": "passed",
+          "duration": 0.009595333016477525,
+          "issues": 0
+        },
+        {
+          "id": "orphan",
+          "name": "Orphan Code Analysis",
+          "status": "passed",
+          "duration": 0.00019808299839496613,
+          "issues": 0
+        },
+        {
+          "id": "fuzz",
+          "name": "Fuzz Testing",
+          "status": "passed",
+          "duration": 0.00004854099825024605,
+          "issues": 0
+        },
+        {
+          "id": "stress",
+          "name": "Stress Testing",
+          "status": "passed",
+          "duration": 0.000040916987927630544,
+          "issues": 0
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/custom-frames/redis-security/frame.py",
+      "relativePath": "./custom-frames/redis-security/frame.py",
+      "issues": 1,
+      "critical": 1,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "failed",
+          "duration": 0.00961458298843354,
+          "issues": 1
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/custom-frames/redis-security/test_examples/insecure_redis.py",
+      "relativePath": "./custom-frames/redis-security/test_examples/insecure_redis.py",
+      "issues": 3,
+      "critical": 2,
+      "high": 1,
+      "medium": 0,
+      "low": 0,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "failed",
+          "duration": 0.001346500008367002,
+          "issues": 3
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/custom-frames/redis-security/test_examples/secure_redis.py",
+      "relativePath": "./custom-frames/redis-security/test_examples/secure_redis.py",
+      "issues": 7,
+      "critical": 0,
+      "high": 3,
+      "medium": 3,
+      "low": 1,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "passed",
+          "duration": 0.001368166005704552,
+          "issues": 0
+        },
+        {
+          "id": "chaos",
+          "name": "Chaos Engineering",
+          "status": "passed",
+          "duration": 0.0006366669840645045,
+          "issues": 0
+        },
+        {
+          "id": "projectarchitecture",
+          "name": "Project Architecture Analysis",
+          "status": "passed",
+          "duration": 0,
+          "issues": 0
+        },
+        {
+          "id": "property",
+          "name": "Property Testing",
+          "status": "warning",
+          "duration": 0.00022166597773320973,
+          "issues": 4
+        },
+        {
+          "id": "architecturalconsistency",
+          "name": "Architectural Consistency",
+          "status": "warning",
+          "duration": 0.001455499994335696,
+          "issues": 1
+        },
+        {
+          "id": "gitchanges",
+          "name": "Git Changes Analysis",
+          "status": "passed",
+          "duration": 0.00804954199702479,
+          "issues": 0
+        },
+        {
+          "id": "orphan",
+          "name": "Orphan Code Analysis",
+          "status": "passed",
+          "duration": 0.000034666998544707894,
+          "issues": 0
+        },
+        {
+          "id": "fuzz",
+          "name": "Fuzz Testing",
+          "status": "warning",
+          "duration": 0.0002080830163322389,
+          "issues": 2
+        },
+        {
+          "id": "stress",
+          "name": "Stress Testing",
+          "status": "passed",
+          "duration": 0.00022170899319462478,
+          "issues": 0
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/custom-frames/redis-security/test_manual.py",
+      "relativePath": "./custom-frames/redis-security/test_manual.py",
+      "issues": 47,
+      "critical": 0,
+      "high": 2,
+      "medium": 45,
+      "low": 0,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "passed",
+          "duration": 0.0035189590125810355,
+          "issues": 0
+        },
+        {
+          "id": "chaos",
+          "name": "Chaos Engineering",
+          "status": "passed",
+          "duration": 0.0010867499804589897,
+          "issues": 0
+        },
+        {
+          "id": "projectarchitecture",
+          "name": "Project Architecture Analysis",
+          "status": "passed",
+          "duration": 0,
+          "issues": 0
+        },
+        {
+          "id": "property",
+          "name": "Property Testing",
+          "status": "passed",
+          "duration": 0.0004556250059977174,
+          "issues": 0
+        },
+        {
+          "id": "architecturalconsistency",
+          "name": "Architectural Consistency",
+          "status": "warning",
+          "duration": 0.0022668330057058483,
+          "issues": 1
+        },
+        {
+          "id": "gitchanges",
+          "name": "Git Changes Analysis",
+          "status": "passed",
+          "duration": 0.011764416005462408,
+          "issues": 0
+        },
+        {
+          "id": "orphan",
+          "name": "Orphan Code Analysis",
+          "status": "passed",
+          "duration": 0.0000341250270139426,
+          "issues": 0
+        },
+        {
+          "id": "fuzz",
+          "name": "Fuzz Testing",
+          "status": "warning",
+          "duration": 0.00046012498205527663,
+          "issues": 44
+        },
+        {
+          "id": "stress",
+          "name": "Stress Testing",
+          "status": "warning",
+          "duration": 0.0004937500052619725,
+          "issues": 2
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/custom-frames/redis-security/tests/__init__.py",
+      "relativePath": "./custom-frames/redis-security/tests/__init__.py",
+      "issues": 0,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "passed",
+          "duration": 0.00020658300491049886,
+          "issues": 0
+        },
+        {
+          "id": "chaos",
+          "name": "Chaos Engineering",
+          "status": "passed",
+          "duration": 0.0001670829951763153,
+          "issues": 0
+        },
+        {
+          "id": "projectarchitecture",
+          "name": "Project Architecture Analysis",
+          "status": "passed",
+          "duration": 0,
+          "issues": 0
+        },
+        {
+          "id": "property",
+          "name": "Property Testing",
+          "status": "passed",
+          "duration": 0.000026458001229912043,
+          "issues": 0
+        },
+        {
+          "id": "architecturalconsistency",
+          "name": "Architectural Consistency",
+          "status": "passed",
+          "duration": 0.0001197500096168369,
+          "issues": 0
+        },
+        {
+          "id": "gitchanges",
+          "name": "Git Changes Analysis",
+          "status": "passed",
+          "duration": 0.007633833010913804,
+          "issues": 0
+        },
+        {
+          "id": "orphan",
+          "name": "Orphan Code Analysis",
+          "status": "passed",
+          "duration": 0.0001961250090971589,
+          "issues": 0
+        },
+        {
+          "id": "fuzz",
+          "name": "Fuzz Testing",
+          "status": "passed",
+          "duration": 0.00004012498538941145,
+          "issues": 0
+        },
+        {
+          "id": "stress",
+          "name": "Stress Testing",
+          "status": "passed",
+          "duration": 0.00003899997682310641,
+          "issues": 0
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/custom-frames/redis-security/tests/test_frame.py",
+      "relativePath": "./custom-frames/redis-security/tests/test_frame.py",
+      "issues": 1,
+      "critical": 0,
+      "high": 1,
+      "medium": 0,
+      "low": 0,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "passed",
+          "duration": 0.0018585420039016753,
+          "issues": 0
+        },
+        {
+          "id": "chaos",
+          "name": "Chaos Engineering",
+          "status": "passed",
+          "duration": 0.0006256249907892197,
+          "issues": 0
+        },
+        {
+          "id": "projectarchitecture",
+          "name": "Project Architecture Analysis",
+          "status": "passed",
+          "duration": 0,
+          "issues": 0
+        },
+        {
+          "id": "property",
+          "name": "Property Testing",
+          "status": "passed",
+          "duration": 0.00022941699717193842,
+          "issues": 0
+        },
+        {
+          "id": "architecturalconsistency",
+          "name": "Architectural Consistency",
+          "status": "passed",
+          "duration": 0.0008095829980447888,
+          "issues": 0
+        },
+        {
+          "id": "gitchanges",
+          "name": "Git Changes Analysis",
+          "status": "passed",
+          "duration": 0.0074111249996349216,
+          "issues": 0
+        },
+        {
+          "id": "orphan",
+          "name": "Orphan Code Analysis",
+          "status": "passed",
+          "duration": 0.00003287498839199543,
+          "issues": 0
+        },
+        {
+          "id": "fuzz",
+          "name": "Fuzz Testing",
+          "status": "passed",
+          "duration": 0.00022933399304747581,
+          "issues": 0
+        },
+        {
+          "id": "stress",
+          "name": "Stress Testing",
+          "status": "warning",
+          "duration": 0.00027704102103598416,
+          "issues": 1
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/ipc_example.py",
+      "relativePath": "./ipc_example.py",
+      "issues": 59,
+      "critical": 0,
+      "high": 7,
+      "medium": 50,
+      "low": 2,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "passed",
+          "duration": 0.005144665978150442,
+          "issues": 0
+        },
+        {
+          "id": "chaos",
+          "name": "Chaos Engineering",
+          "status": "warning",
+          "duration": 0.0016972090234048665,
+          "issues": 1
+        },
+        {
+          "id": "projectarchitecture",
+          "name": "Project Architecture Analysis",
+          "status": "passed",
+          "duration": 0,
+          "issues": 0
+        },
+        {
+          "id": "property",
+          "name": "Property Testing",
+          "status": "warning",
+          "duration": 0.0006552919803652912,
+          "issues": 7
+        },
+        {
+          "id": "architecturalconsistency",
+          "name": "Architectural Consistency",
+          "status": "warning",
+          "duration": 0.003974749997723848,
+          "issues": 1
+        },
+        {
+          "id": "gitchanges",
+          "name": "Git Changes Analysis",
+          "status": "passed",
+          "duration": 0.00795229198411107,
+          "issues": 0
+        },
+        {
+          "id": "orphan",
+          "name": "Orphan Code Analysis",
+          "status": "warning",
+          "duration": 1.6663425829901826,
+          "issues": 1
+        },
+        {
+          "id": "fuzz",
+          "name": "Fuzz Testing",
+          "status": "warning",
+          "duration": 0.000622958003077656,
+          "issues": 49
+        },
+        {
+          "id": "stress",
+          "name": "Stress Testing",
+          "status": "passed",
+          "duration": 0.0006950419920030981,
+          "issues": 0
+        }
+      ]
+    },
+    {
+      "path": "/Users/alper/Documents/Development/Personal/warden-core/examples/test_security.py",
+      "relativePath": "./test_security.py",
+      "issues": 1,
+      "critical": 1,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "frames": [
+        {
+          "id": "security",
+          "name": "Security Analysis",
+          "status": "failed",
+          "duration": 0.0005412079917732626,
+          "issues": 1
+        }
+      ]
+    }
+  ],
+  "status": "completed"
+}

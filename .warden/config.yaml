@@ -1,0 +1,147 @@
+advanced:
+  debug: true
+  frame_timeout: 300
+  max_workers: 4
+ci:
+  enabled: true
+  fail_on_blocker: true
+  output:
+  - format: markdown
+    path: .warden/reports/WARDEN_REPORT.md
+  - format: json
+    path: .warden/reports/warden-report.json
+  - format: sarif
+    path: .warden/reports/warden-report.sarif
+frames:
+- config
+- security
+- environmentsecurity
+- resilience
+- fuzz
+- orphan
+# - env-security (Duplicate of environmentsecurity)
+- stress
+- demosecurity
+- architecturalconsistency
+- property
+frames_config:
+  architecturalconsistency:
+    enabled: true
+    priority: low
+  config:
+    enabled: true
+  demosecurity:
+    check_hardcoded_passwords: true
+    enabled: true
+    severity_level: high
+#  env-security:
+#    enabled: true
+  environmentsecurity:
+    enabled: true
+  orphan:
+    enabled: true
+    ignore_imports:
+    - annotations
+    - TYPE_CHECKING
+    ignore_private: false
+    ignore_test_files: true
+    use_llm_filter: true
+
+  security:
+    checks:
+    - sql-injection
+    - xss
+    - secrets
+    - command-injection
+    - path-traversal
+    enabled: true
+    is_blocker: false
+    priority: critical
+  stress:
+    checks:
+    - api_load_testing
+    - async_performance
+    enabled: true
+    suppressions:
+      # False positives for unclosed files in managed streams/Path.read_text
+      - rule: stress-unclosed_file
+        files:
+          - src/warden/cli_bridge/handlers/pipeline_handler.py
+          - src/warden/secrets/application/template_resolver.py
+          - src/warden/mcp/ports/transport.py
+          - src/warden/mcp/infrastructure/stdio_transport.py
+  resilience:
+    checks:
+      - timeout_handling
+      - retry_logic
+      - circuit_breaker
+      - error_recovery
+    enabled: true
+    priority: high
+    is_blocker: false
+    suppressions:
+      # False positives for retry implementation files
+      - rule: "*"
+        files:
+          - src/warden/shared/utils/retry_utils.py
+          - src/warden/analysis/services/finding_verifier.py
+          - src/warden/pipeline/application/orchestrator/orchestrator.py
+llm:
+  azure:
+    api_key: ${AZURE_OPENAI_API_KEY}
+    api_version: ${AZURE_OPENAI_API_VERSION}
+    deployment_name: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+    endpoint: ${AZURE_OPENAI_ENDPOINT}
+  fallback:
+    api_key: ${GROQ_API_KEY}
+    provider: groq
+  max_retries: 2
+  tpm_limit: 10000
+  rpm_limit: 60
+  model: gpt-4o
+  provider: azure_openai
+  timeout: 300
+project:
+  description: Warden configuration for warden-core
+  detected_at: '2025-12-24T16:35:53.922859'
+  framework: fastapi
+  frameworks: []
+  language: python
+  name: warden-core
+  project_type: monorepo
+  sdk_version: '3.11'
+  type: microservice
+semantic_search:
+  chroma_path: .warden/embeddings
+  collection_name: warden_warden_core
+  database: chromadb
+  enabled: true
+  max_context_tokens: 4000
+  model: all-MiniLM-L6-v2
+  provider: local
+settings:
+  enable_analysis: true
+  enable_classification: true
+  enable_cleaning: true
+  enable_fortification: true
+  enable_pre_analysis: true
+  enable_validation: true
+  enable_issue_validation: true
+  enable_suppression: false
+  fail_fast: false
+  frame_timeout: 120
+  min_severity: high
+  mode: normal
+  pre_analysis_config:
+    batch_size: 10
+    cache_enabled: true
+    llm_threshold: 0.7
+    use_llm: true
+  timeout: 300
+
+# --- Custom Rules Configuration ---
+# To enable your custom rules, uncomment the following lines:
+#
+# custom_rules:
+#   - .warden/rules/my_custom_rules.yaml
+#

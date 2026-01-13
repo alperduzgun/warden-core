@@ -1,0 +1,28 @@
+# Full Validation Pipeline Template
+# Focus: Comprehensive testing with all 6 frames
+# Use case: Pre-production validation, CI/CD pipelines
+
+version: "1.0"
+name: "Full Validation Pipeline"
+
+# All 6 validation frames (executed by priority)
+frames:
+  - security       # Priority: CRITICAL (runs first, blocker)
+  - chaos          # Priority: HIGH (resilience testing)
+  - fuzz           # Priority: MEDIUM (edge cases)
+  - property       # Priority: MEDIUM (idempotency)
+  - architectural  # Priority: MEDIUM (design patterns)
+  - stress         # Priority: LOW (runs last)
+
+# Execution order (automatic priority-based):
+# Sequential mode: security → chaos → fuzz/property/architectural → stress
+# Parallel mode:
+#   Group 1: security (critical) - runs alone
+#   Group 2: chaos (high) - runs alone
+#   Group 3: fuzz + property + architectural (medium) - parallel
+#   Group 4: stress (low) - runs alone
+
+settings:
+  fail_fast: false  # Run all frames even if one fails
+  timeout: 600      # 10 minutes for comprehensive scan
+  parallel: true    # Run frames in parallel (grouped by priority)

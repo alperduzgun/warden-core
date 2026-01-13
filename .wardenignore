@@ -1,0 +1,4 @@
+.git/
+.warden/
+__pycache__/
+tests/

@@ -1,0 +1,66 @@
+# Python Style Rules
+# PEP 8 and best practices for Python
+
+rules:
+  - id: py-line-too-long
+    name: "Line Too Long"
+    description: "Lines should not exceed 120 characters (PEP 8: 79)"
+    severity: low
+    tags: [style, pep8]
+    pattern: |
+      ^.{121,}$
+    message: "Line exceeds 120 characters. Consider breaking it up"
+
+  - id: py-class-naming
+    name: "Class Naming Convention"
+    description: "Classes should use PascalCase"
+    severity: low
+    tags: [style, naming]
+    pattern: |
+      class\s+[a-z_][a-zA-Z0-9_]*\s*(\(|:)
+    message: "Class names should use PascalCase (e.g., MyClass)"
+
+  - id: py-function-naming
+    name: "Function Naming Convention"
+    description: "Functions should use snake_case"
+    severity: low
+    tags: [style, naming]
+    pattern: |
+      def\s+[A-Z][a-zA-Z0-9]*\s*\(
+    message: "Function names should use snake_case (e.g., my_function)"
+
+  - id: py-import-order
+    name: "Import Organization"
+    description: "Imports should be organized: standard, third-party, local"
+    severity: low
+    tags: [style, imports]
+    pattern: |
+      ^from\s+\.\s+import.*\n^import\s+
+    message: "Organize imports: standard library, third-party, then local"
+
+  - id: py-todo-fixme
+    name: "TODO/FIXME Comments"
+    description: "Track technical debt"
+    severity: info
+    tags: [style, maintenance]
+    pattern: |
+      #\s*(TODO|FIXME|HACK|XXX)
+    message: "Technical debt marker found. Consider creating an issue"
+
+  - id: py-global-usage
+    name: "Avoid Global Variables"
+    description: "Global variables should be avoided"
+    severity: medium
+    tags: [style, best-practice]
+    pattern: |
+      ^global\s+
+    message: "Global variables make code harder to test and maintain"
+
+  - id: py-bare-except
+    name: "Bare Except Clause"
+    description: "Avoid bare except clauses"
+    severity: medium
+    tags: [style, error-handling]
+    pattern: |
+      except\s*:
+    message: "Bare except catches all exceptions. Be specific about what you're catching"

@@ -1,0 +1,45 @@
+rules:
+  - id: async-method-naming
+    name: Async Methods Must End with _async
+    category: convention
+    severity: medium
+    isBlocker: false
+    description: All async methods must have _async suffix for code clarity
+    enabled: true
+    type: convention
+    conditions:
+      naming:
+        asyncMethodSuffix: _async
+    examples:
+      invalid:
+        - 'async def validate_file(file_path: str):'
+        - 'async def load_from_file(path: Path):'
+        - 'async def detect_frameworks(root: Path):'
+      valid:
+        - 'async def validate_file_async(file_path: str):'
+        - 'async def load_from_file_async(path: Path):'
+        - 'async def detect_frameworks_async(root: Path):'
+    message: Async methods must end with '_async' suffix for code clarity (e.g.,
+      validate_file -> validate_file_async)
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - '**/tests/**'
+
+custom_rules:
+  - id: no-print
+    pattern: 'print\('
+    message: "Use 'logger.info' instead of 'print()' for production logging"
+    severity: warning
+    files: ["*.py"]
+    exclude: ["tests/*", "*_test.py"]
+  
+  - id: no-pdb
+    pattern: 'import pdb; pdb.set_trace()'
+    message: "Remove debugger breakpoints before committing"
+    severity: error
+    files: ["*.py"]

@@ -1,0 +1,51 @@
+name: "Demo Security Validator"
+id: "demo-security"
+version: "1.0.0"
+author: "Warden Team"
+description: "Demo custom frame with auto-generated config"
+
+# Frame classification
+category: "global"
+priority: "high"
+scope: "file_level"
+is_blocker: false
+
+# Applicability
+applicability:
+  - language: "python"
+
+# Warden version
+min_warden_version: "1.0.0"
+
+# Configuration schema (AUTO-GENERATED!)
+config_schema:
+  enabled:
+    type: "boolean"
+    default: true
+    description: "Enable this frame"
+
+  check_hardcoded_passwords:
+    type: "boolean"
+    default: true
+    description: "Check for hardcoded passwords"
+
+  check_sql_injection:
+    type: "boolean"
+    default: true
+    description: "Check for SQL injection patterns"
+
+  password_patterns:
+    type: "array"
+    default: ["password", "passwd", "pwd"]
+    description: "Password keywords to detect"
+
+  severity_level:
+    type: "string"
+    default: "high"
+    description: "Default severity level for findings"
+
+# Tags
+tags:
+  - "custom"
+  - "security"
+  - "demo"

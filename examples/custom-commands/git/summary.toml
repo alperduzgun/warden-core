@@ -1,0 +1,23 @@
+# Git Summary Command
+# Usage: /git:summary
+
+prompt = """
+Please summarize the recent development activity based on the following git information:
+
+**Recent Commits:**
+!{git log --oneline -10}
+
+**Current Branch:**
+!{git branch --show-current}
+
+**Modified Files:**
+!{git status --short}
+
+Provide:
+1. Summary of recent changes
+2. Active development areas
+3. Potential merge conflicts or issues
+4. Recommendations for next steps
+"""
+
+description = "Summarize recent git activity and development status"

@@ -1,0 +1,191 @@
+# Warden Custom Rules Configuration
+# This file defines project-specific validation rules
+
+project:
+  name: "warden-core"
+  language: "python"
+  framework: "fastapi"
+
+rules:
+  # Security Rules
+  - id: "no-hardcoded-secrets"
+    name: "No Hardcoded Secrets"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "Prevent hardcoded secrets in code"
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - "api[_-]?key\\s*=\\s*[\"'][^\"']+[\"']"
+          - "password\\s*=\\s*[\"'][^\"']+[\"']"
+          - "secret\\s*=\\s*[\"'][^\"']+[\"']"
+          - "token\\s*=\\s*[\"'][^\"']+[\"']"
+    examples:
+      invalid:
+        - 'api_key = "sk-1234567890"'
+        - 'password = "MyPassword123"'
+      valid:
+        - 'api_key = os.getenv("API_KEY")'
+        - 'password = config.get("password")'
+    message: "Hardcoded secret detected. Use environment variables or secret management."
+    exceptions:
+      - "*.test.py"
+      - "*.spec.py"
+      - "test_*.py"
+
+  - id: "no-personal-emails"
+    name: "Corporate Email Only"
+    category: security
+    severity: critical
+    isBlocker: true
+    description: "Git commits must use corporate email"
+    enabled: true
+    type: security
+    conditions:
+      git:
+        authorEmailBlacklist:
+          - "@gmail.com"
+          - "@yahoo.com"
+          - "@hotmail.com"
+          - "@outlook.com"
+    message: "Use corporate email for commits"
+
+  # Convention Rules
+  - id: "async-method-naming"
+    name: "Async Method Naming Convention"
+    category: convention
+    severity: medium
+    isBlocker: false
+    description: "Async methods must end with _async suffix"
+    enabled: true
+    type: convention
+    conditions:
+      naming:
+        asyncMethodSuffix: "_async"
+    examples:
+      invalid:
+        - "async def process_payment():"
+      valid:
+        - "async def process_payment_async():"
+    message: "Async methods must end with '_async' suffix"
+    language:
+      - "python"
+
+  - id: "api-versioning"
+    name: "API Versioning Required"
+    category: convention
+    severity: high
+    isBlocker: true
+    description: "All API endpoints must include version prefix"
+    enabled: true
+    type: convention
+    conditions:
+      api:
+        routePattern: "^/v[0-9]+/"
+        versioningRequired: true
+    examples:
+      invalid:
+        - '@app.get("/users")'
+        - '@app.post("/payment")'
+      valid:
+        - '@app.get("/v1/users")'
+        - '@app.post("/v1/payment")'
+    message: "API routes must include version prefix (e.g., /v1/, /v2/)"
+    language:
+      - "python"
+
+  - id: "redis-key-format"
+    name: "Redis Key Naming Convention"
+    category: convention
+    severity: high
+    isBlocker: false
+    description: "Redis keys must follow env:module:key format"
+    enabled: true
+    type: convention
+    conditions:
+      redis:
+        keyPattern: "^(dev|staging|prod):[a-z_]+:[a-z0-9_-]+$"
+        environmentPrefixRequired: true
+        keyNoSpaces: true
+        keyNoUppercase: true
+    examples:
+      valid:
+        - "prod:users:user_123"
+        - "dev:cache:session_abc"
+        - "staging:orders:order_456"
+      invalid:
+        - "user123"
+        - "PROD:USERS:USER123"
+        - "prod:users:user 123"
+    message: "Redis keys must follow pattern: env:module:key (lowercase, no spaces)"
+    language:
+      - "python"
+
+  # Script-based Rules
+  - id: "file-size-limit"
+    name: "File Size Limit"
+    category: convention
+    severity: medium
+    isBlocker: false
+    description: "Files should not exceed 500KB"
+    enabled: true
+    type: script
+    scriptPath: ".warden/scripts/check_file_size.sh"
+    timeout: 10
+    message: "File exceeds size limit"
+    conditions: {}
+
+  - id: "no-todos-in-production"
+    name: "No TODO/FIXME Comments"
+    category: convention
+    severity: high
+    isBlocker: true
+    description: "Production code must not contain TODO or FIXME comments"
+    enabled: false
+    type: script
+    scriptPath: ".warden/scripts/check_no_todos.sh"
+    timeout: 5
+    message: "TODO/FIXME comments found - complete work before deployment"
+    conditions: {}
+    exceptions:
+      - "*.test.py"
+      - "*.spec.py"
+      - "test_*.py"
+
+  - id: "complexity-check"
+    name: "File Complexity Limit"
+    category: performance
+    severity: medium
+    isBlocker: false
+    description: "Files should not exceed 1000 lines (complexity check)"
+    enabled: false
+    type: script
+    scriptPath: ".warden/scripts/check_complexity.sh"
+    timeout: 5
+    message: "File is too complex - consider refactoring"
+    conditions: {}
+    language:
+      - "python"
+
+# AI Validation Configuration
+ai_validation:
+  enabled: true
+  llm_provider: "openai"
+
+# Exclusion Patterns
+exclude:
+  paths:
+    - "node_modules/"
+    - "venv/"
+    - ".venv/"
+    - "dist/"
+    - "build/"
+    - "__pycache__/"
+  files:
+    - "*.test.py"
+    - "*.spec.py"
+    - "test_*.py"
+    - "*_test.py"

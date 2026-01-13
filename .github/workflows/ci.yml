@@ -1,0 +1,133 @@
+name: Warden CI
+
+on:
+  push:
+    branches: [ main, dev ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  warden-scan:
+    name: Self-Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src/warden_rust
+
+      # Removed apt-get install as build-essential is pre-installed on ubuntu-latest
+      # and it saves ~1-2 minutes of setup time.
+
+      - name: Install Warden
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+          # Verify installation
+          warden --help
+
+      - name: Cache Warden Storage
+        uses: actions/cache@v4
+        with:
+          path: |
+            .warden/memory
+            .warden/embeddings
+          key: warden-storage-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            warden-storage-${{ runner.os }}-
+
+      - name: Cache AI Models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-${{ hashFiles('.warden/config.yaml') }}
+          restore-keys: |
+            hf-models-${{ runner.os }}-
+
+      - name: Run Warden Scan
+        # continue-on-error removed to enforce quality gate
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          DEFAULT_LLM_MODEL: ${{ secrets.DEFAULT_LLM_MODEL }}
+        run: |
+          # Layered Scan Strategy: 
+          # - Pull Requests: BASIC (Local-only, Fast, catches structural issues)
+          # - Main/Tags: STANDARD (AI-enhanced, finds deeper logic/security issues)
+          LEVEL="standard"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            LEVEL="basic"
+          fi
+          
+          echo "Running Warden Scan with level: $LEVEL"
+          
+          # Smart Diff Scanning: Only scan files changed in this push/PR
+          # This prevents re-scanning the entire codebase on every commit (which takes hours).
+          
+          # 1. Fetch history to ensure diff works
+          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
+          
+          # 2. Get changed python files
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep "\.py$" || true)
+          else
+            # For push to main/dev, check against previous commit
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "\.py$" || true)
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if [[ -z "$CHANGED_FILES" ]]; then
+             echo "No Python files changed. Skipping scan."
+             exit 0
+          fi
+
+          # 3. Running scan only on changed files
+          # Using xargs to handle file list and splitting if too long (though usually fine for PRs)
+          # We use --no-run-if-empty (-r) to avoid error if empty
+          echo "$CHANGED_FILES" |  xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
+
+
+
+      - name: Archive SARIF Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: warden-scan-results
+          path: warden.sarif
+
