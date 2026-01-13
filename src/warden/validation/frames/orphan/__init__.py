@@ -1,4 +1,3 @@
 
-from warden.validation.frames.orphan.orphan_frame import OrphanFrame
+__all__ = []
 
-__all__ = ["OrphanFrame"]

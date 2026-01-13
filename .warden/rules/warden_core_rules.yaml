@@ -55,3 +55,28 @@ rules:
       Solution: Catch specific exceptions and log them using the logger.
     language:
       - python
+
+  - id: require-resilience-in-clients
+    name: LLM Clients Must Be Resilient
+    category: architectural
+    severity: error
+    isBlocker: true
+    description: All LLM clients/providers must utilize the resilience framework (Circuit Breaker, Retry).
+    enabled: true
+    type: convention
+    conditions:
+      path_pattern: "src/warden/llm/providers/.*\.py"
+      patterns:
+        - "(@resilient|from.*resilience.*import)"
+    examples:
+      invalid:
+        - "async def send_async(self, request):"
+      valid:
+        - "@resilient(timeout_seconds=60)\n    async def send_async(self, request):"
+    message: |
+      LLM Client missing Resilience!
+      
+      Problem: LLM providers are fragile and must use the shared resilience infrastructure.
+      Solution: Decorate the execution method with @resilient or use the CircuitBreaker manually.
+    language:
+      - python
