@@ -97,7 +97,8 @@ Return strictly JSON:
                 system_prompt="You are an expert system architect and code analyzer. Analyze project structure to provide semantic context and detect structural drift or ambiguity.",
                 user_message=prompt,
                 max_tokens=800,
-                temperature=0.0
+                temperature=0.0,
+                use_fast_tier=True  # Use local Qwen for cost optimization
             )
             
             response = await self.llm.send_async(request)
