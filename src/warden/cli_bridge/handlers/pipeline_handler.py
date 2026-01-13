@@ -55,7 +55,7 @@ class PipelineHandler(BaseHandler):
         else:
             path_list = [Path(p) for p in paths]
 
-        code_files = self._collect_files(path_list)
+        code_files = await self._collect_files_async(path_list)
         if not code_files:
             # We don't raise error if empty here, just skip to avoid breaking on partial diffs
             # But if it's a single file request and missing, we might want to warn
@@ -99,49 +99,41 @@ class PipelineHandler(BaseHandler):
         finally:
             self.orchestrator.progress_callback = original_callback
 
-    def _collect_files(self, paths: List[Path]) -> List[CodeFile]:
-        # Logic from bridge.py lines 596-678
-        from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
+    async def _collect_files_async(self, paths: List[Path]) -> List[CodeFile]:
+        """Collect and prepare code files for pipeline execution using optimized discoverer."""
+        from warden.analysis.application.discovery.discoverer import FileDiscoverer
         
-        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cs', '.go', '.rs', '.cpp', '.c', '.h'}
-        use_gitignore = getattr(self.orchestrator.config, 'use_gitignore', True) if self.orchestrator else True
-        ignore_matcher = IgnoreMatcher(self.project_root, use_gitignore=use_gitignore)
-        
-        files_to_scan = []
+        code_files = []
+        seen_paths = set()
         
         for root_path in paths:
             if not root_path.exists():
-                logger.warning("file_not_found_skipping", path=str(root_path))
+                logger.warning("path_not_found_skipping", path=str(root_path))
                 continue
-                
-            if root_path.is_file():
-                if any(ignore_matcher.should_ignore_directory(p) for p in root_path.parts):
+            
+            # Use optimized FileDiscoverer (leverages Rust)
+            discoverer = FileDiscoverer(root_path, use_gitignore=True)
+            discovery_result = await discoverer.discover_async()
+            
+            for f in discovery_result.get_analyzable_files():
+                if f.path in seen_paths:
                     continue
-                if ignore_matcher.should_ignore_path(root_path):
-                    continue
-                files_to_scan.append(root_path)
-            else:
-                # Directory scan
-                for item in root_path.rglob("*"):
-                    if item.is_file() and item.suffix in code_extensions:
-                        if any(ignore_matcher.should_ignore_directory(p) for p in item.parts):
-                            continue
-                        if ignore_matcher.should_ignore_path(item):
-                            continue
-                        files_to_scan.append(item)
-
-
-        code_files = []
-        for p in files_to_scan[:1000]: # Limit protection
-            try:
-                code_files.append(CodeFile(
-                    path=str(p.absolute()),
-                    content=p.read_text(encoding="utf-8", errors='replace'),
-                    language=self._detect_language(p),
-                ))
-            except Exception as e:
-                logger.warning("file_read_error", file=str(p), error=str(e))
-        return code_files
+                    
+                try:
+                    p = Path(f.path)
+                    code_files.append(CodeFile(
+                        path=str(p.absolute()),
+                        content=p.read_text(encoding="utf-8", errors='replace'),
+                        language=f.file_type.value,
+                        line_count=f.line_count or 0,
+                        hash=f.hash,
+                        metadata=f.metadata
+                    ))
+                    seen_paths.add(f.path)
+                except Exception as e:
+                    logger.warning("file_read_error", file=f.path, error=str(e))
+        
+        return code_files[:1000] # Limit protection
 
     def _detect_language(self, path: Path) -> str:
         ext = path.suffix.lower()

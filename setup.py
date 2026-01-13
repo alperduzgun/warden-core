@@ -58,6 +58,7 @@ setup(
         "pydantic>=2.5.0",
         "psutil>=5.9.0",
         "structlog>=24.1.0",
+        "pyright>=1.1.300",  # Python LSP for static analysis
         "grpcio>=1.59.0",
         "grpcio-tools>=1.59.0", 
         "pydantic-settings>=2.0.0",
