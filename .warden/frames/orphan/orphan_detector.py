@@ -14,12 +14,17 @@ import ast
 import os
 from dataclasses import dataclass
 from typing import List, Dict, Set, Tuple, Optional, Any
-from pathlib import Path
-import structlog
 
 from warden.ast.domain.models import ASTNode
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
 from warden.ast.application.provider_registry import ASTProviderRegistry
+import structlog
+
+# Try to import Rust extension
+try:
+    from warden import warden_core_rust
+except ImportError:
+    warden_core_rust = None
 
 logger = structlog.get_logger(__name__)
 
@@ -542,10 +547,110 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         return "\n".join(lines).strip()
 
 
+
 class TreeSitterOrphanDetector(AbstractOrphanDetector):
     # [DEPRECATED] Internal tree-sitter logic moved to TreeSitterProvider
-    # Kept for backward compatibility during migration
     pass
+
+
+class RustOrphanDetector(AbstractOrphanDetector):
+    """
+    High-performance orphan detector using Rust + Tree-sitter.
+    
+    Delegates parsing and extraction to the Rust extension (warden_core_rust).
+    """
+    
+    def detect_all(self) -> List[OrphanFinding]:
+        if not warden_core_rust:
+            logger.warning("rust_orhan_detector_unavailable", reason="Extension not loaded")
+            return []
+
+        findings: List[OrphanFinding] = []
+        
+        # Map extension to language string for Rust
+        _, ext = os.path.splitext(self.file_path)
+        ext = ext.lower()
+        lang_map = {
+            ".py": "python",
+            ".ts": "typescript", ".tsx": "typescript",
+            ".js": "javascript", ".jsx": "javascript",
+            ".go": "go",
+            ".java": "java"
+        }
+        language = lang_map.get(ext)
+        if not language:
+            return []
+
+        try:
+            # 1. Get Metadata (Definitions + References) from Rust
+            meta = warden_core_rust.get_ast_metadata(self.code, language)
+            
+            # 2. Convert reference list to counts for fast lookup
+            # This is a heuristic: "If name appears <= 1 time, it might be unused"
+            # (1 time = the definition itself).
+            from collections import Counter
+            ref_counts = Counter(meta.references)
+            
+            # 3. Check Functions
+            for func in meta.functions:
+                if self._is_orphan(func.name, ref_counts):
+                     # Double check specific suppression (e.g. main)
+                    if self._should_skip(func.name):
+                        continue
+                        
+                    findings.append(OrphanFinding(
+                        orphan_type="unreferenced_function",
+                        name=func.name,
+                        line_number=func.line_number,
+                        code_snippet=func.code_snippet,
+                        reason=f"Function '{func.name}' appears unused (ref_count={ref_counts[func.name]})"
+                    ))
+
+            # 4. Check Classes
+            for cls in meta.classes:
+                if self._is_orphan(cls.name, ref_counts):
+                    findings.append(OrphanFinding(
+                        orphan_type="unreferenced_class",
+                        name=cls.name,
+                        line_number=cls.line_number,
+                        code_snippet=cls.code_snippet,
+                        reason=f"Class '{cls.name}' appears unused (ref_count={ref_counts[cls.name]})"
+                    ))
+
+            # 5. Check Imports
+            # Imports are tricky because "references" captures ALL identifiers.
+            # If I import "foo", and use "foo", ref_count will be 2 (import + usage).
+            # If I import "foo" and DON'T use it, ref_count is 1 (import only).
+            # Limitation: Re-exports in __init__.py might be flagged if not careful.
+            for imp in meta.imports:
+                # Import names can be "os" or "join" (from os.path).
+                # Tree-sitter query captures the local name.
+                if self._is_orphan(imp.name, ref_counts):
+                     findings.append(OrphanFinding(
+                        orphan_type="unused_import",
+                        name=imp.name,
+                        line_number=imp.line_number,
+                        code_snippet=imp.code_snippet,
+                        reason=f"Import '{imp.name}' appears unused"
+                    ))
+
+        except Exception as e:
+            logger.error("rust_orphan_detection_failed", file=self.file_path, error=str(e))
+            
+        return findings
+
+    def _is_orphan(self, name: str, ref_counts: Dict[str, int]) -> bool:
+        """
+        Check if a name is likely an orphan.
+        Heuristic: If count <= 1, it's unused (only the definition/import site).
+        """
+        # If name is not in references (shouldn't happen if query is correct)
+        count = ref_counts.get(name, 0)
+        return count <= 1
+
+    def _should_skip(self, name: str) -> bool:
+        return name in ["main", "__init__", "__str__", "__repr__", "setup", "teardown"]
+
 
 
 class OrphanDetectorFactory:
@@ -566,11 +671,13 @@ class OrphanDetectorFactory:
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
         
-        # Python uses Native AST (more mature)
         if ext == ".py":
+            # Prefer Rust if available for speed
+            if warden_core_rust:
+                return RustOrphanDetector(code, file_path)
             return PythonOrphanDetector(code, file_path)
             
-        # Non-Python uses Universal AST via TreeSitterProvider
+        # Non-Python uses Universal AST or Rust
         try:
             language = CodeLanguage.UNKNOWN
             if ext in [".ts", ".tsx"]:
@@ -585,6 +692,11 @@ class OrphanDetectorFactory:
                 language = CodeLanguage.CSHARP
 
             if language != CodeLanguage.UNKNOWN:
+                # Prefer Rust for supported languages
+                if warden_core_rust and language in [CodeLanguage.TYPESCRIPT, CodeLanguage.JAVASCRIPT, CodeLanguage.GO, CodeLanguage.JAVA]:
+                     return RustOrphanDetector(code, file_path)
+
+                # Fallback to Universal AST
                 registry = ASTProviderRegistry()
                 provider = registry.get_provider(language)
                 if provider:
