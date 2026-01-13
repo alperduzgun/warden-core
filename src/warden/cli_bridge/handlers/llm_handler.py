@@ -13,8 +13,9 @@ logger = get_logger(__name__)
 class LLMHandler(BaseHandler):
     """Handles LLM-powered analysis and chat streaming."""
 
-    def __init__(self, llm_config: Any):
+    def __init__(self, llm_config: Any, llm_service: Optional[Any] = None):
         self.llm_config = llm_config
+        self.llm_service = llm_service
 
     async def analyze_with_llm_async(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
         """Execute LLM analysis with streaming or full completion."""
@@ -31,7 +32,11 @@ class LLMHandler(BaseHandler):
                     raise IPCError(ErrorCode.INVALID_PARAMS, f"Invalid provider: {provider}")
 
             # Get client
-            llm_client = create_client(resolved_provider)
+            if self.llm_service and (not provider or self.llm_service.provider == resolved_provider):
+                llm_client = self.llm_service
+            else:
+                llm_client = create_client(resolved_provider)
+                
             if not llm_client:
                 raise IPCError(ErrorCode.LLM_ERROR, "No LLM provider available")
 

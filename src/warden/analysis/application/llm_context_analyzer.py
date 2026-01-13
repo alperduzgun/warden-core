@@ -49,6 +49,7 @@ class LlmContextAnalyzer:
         batch_size: int = 10,
         cache_enabled: bool = True,
         rate_limiter: Optional[RateLimiter] = None,
+        llm_service: Optional[Any] = None,
     ):
         """
         Initialize LLM context analyzer.
@@ -59,16 +60,19 @@ class LlmContextAnalyzer:
             batch_size: Number of files to analyze per LLM call
             cache_enabled: Cache LLM responses for similar patterns
             rate_limiter: Optional shared rate limiter to prevent 429s
+            llm_service: Optional shared LLM service
         """
-        try:
-            self.llm = create_client(llm_config) if llm_config else None
-        except Exception as e:
-            logger.warning(
-                "llm_client_creation_failed",
-                error=str(e),
-                fallback="no_llm",
-            )
-            self.llm = None
+        self.llm = llm_service
+        if not self.llm:
+            try:
+                self.llm = create_client(llm_config) if llm_config else None
+            except Exception as e:
+                logger.warning(
+                    "llm_client_creation_failed",
+                    error=str(e),
+                    fallback="no_llm",
+                )
+                self.llm = None
 
         self.confidence_threshold = confidence_threshold
         self.batch_size = batch_size

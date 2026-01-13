@@ -37,7 +37,8 @@ class OpenAIClient(ILlmClient):
         self._usage = {
             "total_tokens": 0,
             "prompt_tokens": 0,
-            "completion_tokens": 0
+            "completion_tokens": 0,
+            "request_count": 0
         }
 
     @property
@@ -99,6 +100,7 @@ class OpenAIClient(ILlmClient):
             self._usage["prompt_tokens"] += prompt_tokens
             self._usage["completion_tokens"] += completion_tokens
             self._usage["total_tokens"] += total_tokens
+            self._usage["request_count"] += 1
 
             return LlmResponse(
                 content=result["choices"][0]["message"]["content"],
@@ -156,13 +158,14 @@ class OpenAIClient(ILlmClient):
         except (ValueError, AttributeError):
             return False
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
         Args:
             prompt: User prompt
             system_prompt: System prompt (optional)
+            model: Model name override (optional)
 
         Returns:
             LlmResponse object with content and token usage
@@ -173,7 +176,7 @@ class OpenAIClient(ILlmClient):
         request = LlmRequest(
             user_message=prompt,
             system_prompt=system_prompt,
-            model=self._default_model,
+            model=model or self._default_model,
             temperature=0.7,
             max_tokens=2000,
             timeout_seconds=30.0

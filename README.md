@@ -88,6 +88,15 @@ entries:
 ```
 > **Note:** Unlike `CustomRule`s which are *active* checks, Suppressions are *passive* filters that run at the very end of the pipeline.
 
+### 8. 🛡️ Hybrid Analysis (Verification Phase)
+Warden reduces false positives by implementing a "Trust but Verify" approach:
+1.  **Fast Scan:** Static analysis (Regex/LSP) quickly identifies potential issues.
+2.  **LLM Judge:** A specialized prompt acts as a "Senior Security Engineer", reviewing the finding against the code context.
+3.  **Result:**
+    -   **True Positives:** Passed to Fortification for fixing.
+    -   **False Positives:** (e.g., Type Hints mistaken for arrays) are silently filtered out BEFORE consuming tokens on auto-fix generation.
+
+
 ---
 
 ## 🏁 Quick Start

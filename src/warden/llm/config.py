@@ -24,6 +24,7 @@ class ProviderConfig:
     default_model: Optional[str] = None
     api_version: Optional[str] = None  # For Azure OpenAI
     enabled: bool = True
+    concurrency: int = 4  # Max concurrent requests for this provider
 
     def validate(self, provider_name: str) -> list[str]:
         """
@@ -88,6 +89,11 @@ class LlmConfiguration:
     azure_openai: ProviderConfig = field(default_factory=ProviderConfig)
     groq: ProviderConfig = field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = field(default_factory=ProviderConfig)
+
+    # Model Tiering (Optional)
+    smart_model: Optional[str] = None  # High-reasoning model (e.g. gpt-4o)
+    fast_model: Optional[str] = None   # Fast/Cheap model (e.g. gpt-4o-mini)
+    max_concurrency: int = 4           # Global max concurrent requests
 
     def get_provider_config(self, provider: LlmProvider) -> Optional[ProviderConfig]:
         """
@@ -258,7 +264,20 @@ async def load_llm_config_async() -> LlmConfiguration:
         "QWENCODE_API_KEY",
         "GROQ_API_KEY",
         "OPENROUTER_API_KEY",
+        "WARDEN_SMART_MODEL",
+        "WARDEN_FAST_MODEL",
+        "WARDEN_LLM_CONCURRENCY",
     ])
+
+    # Model Tiering & Concurrency
+    config.smart_model = secrets["WARDEN_SMART_MODEL"].value
+    config.fast_model = secrets["WARDEN_FAST_MODEL"].value
+    
+    if secrets["WARDEN_LLM_CONCURRENCY"].found:
+        try:
+            config.max_concurrency = int(secrets["WARDEN_LLM_CONCURRENCY"].value)
+        except ValueError:
+            pass
 
     # Configure Azure OpenAI (primary provider for Warden)
     azure_api_key = secrets["AZURE_OPENAI_API_KEY"]

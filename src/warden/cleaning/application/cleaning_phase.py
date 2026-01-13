@@ -161,10 +161,25 @@ class CleaningPhase:
                     detail=sug.suggestion
                 ))
 
+            # Heuristic: Skip LLM cleaning if code quality is already Good/Excellent (>7.0)
+            # This saves quota on files that are already in good shape.
+            skip_llm_for_quality = False
+            phase_results = self.context.get("phase_results", {}) if isinstance(self.context, dict) else getattr(self.context, "phase_results", {})
+            file_metrics = phase_results.get("ANALYSIS", {}).get("metrics", {}).get(code_file.path)
+            
+            if file_metrics:
+                overall_score = file_metrics.get("overall_score", 0.0)
+                if overall_score >= 7.0:
+                    skip_llm_for_quality = True
+                    logger.info("skipping_llm_cleaning_high_quality", file=code_file.path, score=overall_score)
+
             # Legacy rule-based/llm suggestions
-            if self.use_llm:
+            if self.use_llm and not skip_llm_for_quality:
+                logger.debug("generating_llm_cleaning_suggestions", file=code_file.path)
                 suggestions = await self._generate_llm_suggestions_async(code_file)
             else:
+                if self.use_llm and skip_llm_for_quality:
+                    logger.debug("falling_back_to_rules_due_to_high_quality", file=code_file.path)
                 suggestions = await self._generate_rule_based_suggestions_async(code_file)
 
             for sug in suggestions.get("cleanings", []):

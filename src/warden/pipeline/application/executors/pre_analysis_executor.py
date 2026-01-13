@@ -47,6 +47,7 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 project_root=self.project_root,
                 config=phase_config,
                 rate_limiter=self.rate_limiter,
+                llm_service=self.llm_service,
             )
 
             result = await phase.execute_async(code_files, pipeline_context=context)

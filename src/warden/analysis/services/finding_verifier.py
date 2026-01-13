@@ -48,7 +48,7 @@ Return ONLY a JSON object:
 }
 """
 
-    async def verify_findings(self, findings: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
+    async def verify_findings_async(self, findings: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
         """
         Filters out false positives from the findings list.
         Args:
@@ -77,6 +77,7 @@ Return ONLY a JSON object:
             # 1. Check Cache
             cached_result = self._check_cache(cache_key)
             if cached_result:
+                cached_result['cached'] = True # Mark for orchestrator logging
                 if cached_result.get('is_true_positive'):
                     finding['verification_metadata'] = cached_result
                     verified_findings.append(finding)
@@ -159,16 +160,23 @@ STRATEGY:
 
 3. DECISION:
    - Return true_positive: true ONLY if the code presents an ACTUAL RUNTIME RISK in this specific context.
+   - IMPORANT: Ignore the "Finding Message" if the code itself is standard/safe. The finding description might be hallucinated or overly aggressive.
+   - ABSOLUTELY REJECT if it is merely a Type Hint, Comment, or Import.
 """
         # The caching logic is already handled in verify_findings,
         # so this method just focuses on the LLM call and parsing.
-        result = await self._call_llm_with_retry_async(prompt)
+        result = await self._call_llm_with_retry_async(prompt, context)
         return result
 
     @async_retry(retries=DEFAULT_RETRIES)
-    async def _call_llm_with_retry_async(self, prompt: str) -> Dict[str, Any]:
+    async def _call_llm_with_retry_async(self, prompt: str, context: Any = None) -> Dict[str, Any]:
         """Call LLM with retry mechanism and parse response."""
-        response = await self.llm.complete_async(prompt, self.system_prompt)
+        # Use smart model for verification if configured
+        model = None
+        if context and hasattr(context, 'llm_config') and context.llm_config:
+            model = getattr(context.llm_config, 'smart_model', None)
+
+        response = await self.llm.complete_async(prompt, self.system_prompt, model=model)
         
         try:
             # Parse JSON from response (handle markdown code blocks if present)

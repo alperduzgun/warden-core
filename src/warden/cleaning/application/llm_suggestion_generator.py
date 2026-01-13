@@ -96,10 +96,18 @@ class LLMSuggestionGenerator:
                 estimated_tokens = (len(prompt) // 4) + 1000
                 await self.rate_limiter.acquire_async(estimated_tokens)
 
+            # Determine model tier
+            model = None
+            if self.context and hasattr(self.context, 'llm_config') and self.context.llm_config:
+                model = getattr(self.context.llm_config, 'fast_model', None)
+            elif isinstance(self.context, dict) and "llm_config" in self.context:
+                model = self.context["llm_config"].get("fast_model")
+
             # Get LLM suggestions
             response = await self.llm_service.complete_async(
                 prompt=prompt,
                 system_prompt="You are a senior software engineer specialized in code quality and refactoring. Respond only with valid JSON.",
+                model=model
             )
 
             # Parse LLM response - response is an LlmResponse object

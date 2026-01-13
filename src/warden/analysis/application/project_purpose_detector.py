@@ -27,21 +27,25 @@ class ProjectPurposeDetector:
     redundant project-wide explanations.
     """
 
-    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None):
+    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None, llm_service: Optional[Any] = None):
         """
         Initialize the detector.
         
         Args:
             project_root: Root directory of the project.
             llm_config: Optional LLM configuration.
+            llm_service: Optional shared LLM service.
         """
         self.project_root = Path(project_root)
-        try:
-            # We use the default client if no config is provided
-            self.llm = create_client(llm_config) if llm_config else create_client()
-        except Exception as e:
-            logger.warning("llm_client_creation_failed", error=str(e), fallback="no_llm")
-            self.llm = None
+        self.llm = llm_service
+        
+        if not self.llm:
+            try:
+                # We use the default client if no config is provided
+                self.llm = create_client(llm_config) if llm_config else create_client()
+            except Exception as e:
+                logger.warning("llm_client_creation_failed", error=str(e), fallback="no_llm")
+                self.llm = None
 
     async def detect_async(self, file_list: List[Path], config_files: Dict[str, str]) -> Tuple[str, str]:
         """

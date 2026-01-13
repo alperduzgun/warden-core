@@ -43,7 +43,8 @@ class ProjectStructureAnalyzer:
         self, 
         project_root: Path, 
         llm_config: Optional[LlmConfiguration] = None,
-        analysis_level: Optional[Any] = None
+        analysis_level: Optional[Any] = None,
+        llm_service: Optional[Any] = None
     ) -> None:
         """
         Initialize analyzer with project root.
@@ -51,9 +52,11 @@ class ProjectStructureAnalyzer:
         Args:
             project_root: Root directory of the project to analyze
             llm_config: Optional LLM configuration
+            llm_service: Optional shared LLM service
         """
         self.project_root = Path(project_root)
         self.llm_config = llm_config
+        self.llm_service = llm_service
         self.config_files: Dict[str, str] = {}
         self.special_dirs: Dict[str, List[str]] = {}
         self.file_extensions: Set[str] = set()
@@ -672,7 +675,8 @@ class ProjectStructureAnalyzer:
                 self.project_root, 
                 project_context=context,
                 llm_config=self.llm_config,
-                analysis_level=self.analysis_level
+                analysis_level=self.analysis_level,
+                llm_service=self.llm_service
             )
             abstractions = await detector.detect_async(all_files=self._injected_files)
             

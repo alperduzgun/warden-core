@@ -38,6 +38,7 @@ class IgnoreMatcher:
         self.project_root = project_root
         self.ignore_file = project_root / ".warden" / "ignore.yaml"
         self.gitignore_file = project_root / ".gitignore"
+        self.wardenignore_file = project_root / ".wardenignore"
         self.use_gitignore = use_gitignore
         
         # Loaded patterns
@@ -77,6 +78,9 @@ class IgnoreMatcher:
             # Also load .gitignore if enabled
             if self.use_gitignore:
                 self._load_gitignore()
+            
+            # Load .wardenignore
+            self._load_wardenignore()
                 
             self._loaded = True
 
@@ -112,6 +116,34 @@ class IgnoreMatcher:
             
         except Exception as e:
             logger.warning("gitignore_load_failed", error=str(e))
+
+    def _load_wardenignore(self) -> None:
+        """Load patterns from .wardenignore file."""
+        if not self.wardenignore_file.exists():
+            return
+
+        try:
+            patterns = []
+            with open(self.wardenignore_file) as f:
+                for line in f:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if not line or line.startswith("#"):
+                        continue
+                    
+                    # Normalize pattern
+                    if line.endswith("/"):
+                        line = line.rstrip("/")
+                        patterns.append(f"**/{line}/**")
+                        patterns.append(f"{line}/**")
+                    
+                    patterns.append(line)
+            
+            self._path_patterns.extend(patterns)
+            logger.info("wardenignore_patterns_loaded", count=len(patterns))
+            
+        except Exception as e:
+            logger.warning("wardenignore_load_failed", error=str(e))
 
     def should_ignore_directory(self, dir_name: str) -> bool:
         """

@@ -49,6 +49,7 @@ class PreAnalysisPhase:
         progress_callback: Optional[Callable] = None,
         config: Optional[Dict[str, Any]] = None,
         rate_limiter: Optional[Any] = None,
+        llm_service: Optional[Any] = None,
     ) -> None:
         """
         Initialize PRE-ANALYSIS phase.
@@ -57,18 +58,22 @@ class PreAnalysisPhase:
             project_root: Root directory of the project
             progress_callback: Optional callback for progress updates
             config: Optional configuration including LLM settings
+            rate_limiter: Optional rate limiter for LLM calls
+            llm_service: Optional shared LLM service.
         """
         self.project_root = Path(project_root)
         self.progress_callback = progress_callback
         self.config = config or {}
         self.rate_limiter = rate_limiter
+        self.llm_service = llm_service
 
         # Initialize analyzers
         from warden.pipeline.domain.enums import AnalysisLevel
         self.project_analyzer = ProjectStructureAnalyzer(
             self.project_root, 
             llm_config=self.config.get("llm_config"),
-            analysis_level=self.config.get("analysis_level", AnalysisLevel.STANDARD)
+            analysis_level=self.config.get("analysis_level", AnalysisLevel.STANDARD),
+            llm_service=self.llm_service
         )
         self.file_analyzer: Optional[FileContextAnalyzer] = None  # Created after project analysis
         self.llm_analyzer = None  # Will be initialized if enabled
@@ -312,6 +317,7 @@ class PreAnalysisPhase:
                 batch_size=batch_size,
                 cache_enabled=True,
                 rate_limiter=rate_limiter,
+                llm_service=self.llm_service,
             )
 
             logger.info(
@@ -354,7 +360,11 @@ class PreAnalysisPhase:
         analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
         
         if not project_context.purpose and self.llm_analyzer and analysis_level != AnalysisLevel.BASIC:
-            detector = ProjectPurposeDetector(self.project_root, self.config.get("llm_config"))
+            detector = ProjectPurposeDetector(
+                self.project_root, 
+                llm_config=self.config.get("llm_config"),
+                llm_service=self.llm_service
+            )
             # We need the file list for discovery canvas
             # Use analyzer's filtered list to avoid pollution (like __pycache__)
             all_files = self.project_analyzer.get_all_files()

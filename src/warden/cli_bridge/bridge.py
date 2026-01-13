@@ -38,8 +38,11 @@ class WardenBridge:
         from warden.llm.factory import create_client
         try:
             self.llm_config = load_llm_config()
-            self.llm_handler = LLMHandler(self.llm_config)
             llm_service = create_client(self.llm_config.default_provider)
+            if llm_service:
+                # Attach for tiering awareness
+                llm_service.config = self.llm_config
+            self.llm_handler = LLMHandler(self.llm_config, llm_service=llm_service)
         except Exception as e:
             logger.warning("llm_init_failed_in_bridge", error=str(e))
             self.llm_config = None
