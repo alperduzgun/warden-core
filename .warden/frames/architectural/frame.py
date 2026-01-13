@@ -73,7 +73,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
     """
 
     # Required metadata
-    name = "Architectural Consistency Local"
+    name = "Architectural Consistency TEST"
     description = "Validates SOLID principles, file organization, and project structure (Local Enhanced)"
     category = FrameCategory.LANGUAGE_SPECIFIC
     priority = FramePriority.MEDIUM
@@ -154,14 +154,19 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         
         # Load performance rules from performance.yaml
         self.performance_rules = self._load_rules_from_yaml("performance.yaml")
+        
+        # Load Warden-Core specific rules
+        self.warden_core_rules = self._load_rules_from_yaml("warden_core_rules.yaml")
 
     def _load_rules_from_yaml(self, filename: str) -> List[Dict[str, Any]]:
         """Load rules from a YAML file in .warden/rules."""
         try:
             cwd = Path.cwd()
             rules_path = cwd / ".warden" / "rules" / filename
+            logger.debug(f"Attempting to load rules from: {rules_path}")
             
             if not rules_path.exists():
+                logger.warning(f"Rules file not found: {rules_path}")
                 return []
                 
             with open(rules_path, 'r') as f:
@@ -191,12 +196,6 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute architectural validation.
-
-        Args:
-            code_file: Code file to validate
-
-        Returns:
-            FrameResult with architectural findings
         """
         start_time = time.perf_counter()
 
@@ -282,6 +281,20 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 scenarios_executed.append("Performance rules check")
                 perf_violations = self._check_standard_yaml_rules(code_file, self.performance_rules, "performance_rule")
                 violations.extend(perf_violations)
+            
+            # 12. Warden-Core Project Laws (Hardcoded conventions)
+            law_violations = self._check_project_laws(code_file)
+            violations.extend(law_violations)
+
+            # 13. Warden-Core specific rules (Project Laws from YAML)
+            if self.warden_core_rules:
+                scenarios_executed.append("Project architectural laws check")
+                core_violations = self._check_standard_yaml_rules(
+                    code_file, 
+                    self.warden_core_rules, 
+                    "core_rule"
+                )
+                violations.extend(core_violations)
 
             # Convert violations to findings
             findings = self._violations_to_findings(violations, code_file)
@@ -447,7 +460,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             if parent_dir != frame_name:
                 violations.append(OrganizationViolation(
                     rule="frame_per_directory",
-                    severity="warning",
+                    severity="error",
                     message=f"Frame file should be in '{frame_name}/' directory (frame-per-directory pattern)",
                     file_path=file_path,
                     expected=f"frames/{frame_name}/{frame_name}_frame.py",
@@ -603,7 +616,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                     if not name.endswith("_async"):
                         violations.append(OrganizationViolation(
                             rule="async_naming_convention",
-                            severity="warning",
+                            severity="error",
                             message=f"Async method '{name}' should end with '_async' suffix",
                             file_path=f"{code_file.path}:{node.lineno}",
                             expected=f"{name}_async",
@@ -640,6 +653,47 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                     expected=f"{expected}/...",
                     actual=path_str,
                 ))
+        
+        return violations
+
+    def _check_project_laws(self, code_file: CodeFile) -> List[OrganizationViolation]:
+        """
+        Check for hardcoded project laws (Warden-Core specific).
+        """
+        violations = []
+        if code_file.language.lower() != "python":
+            return violations
+
+        content = code_file.content
+        path = code_file.path
+
+        # 1. Mandatory __all__ in Frame Packages
+        if ("validation/frames" in path or ".warden/frames" in path) and path.endswith("__init__.py"):
+            if "__all__ =" not in content and "__all__=" not in content:
+                violations.append(OrganizationViolation(
+                    rule="mandatory_all_export",
+                    severity="warning",
+                    message="Missing __all__ export in frame package __init__.py",
+                    file_path=path,
+                    expected="__all__ = [...]",
+                    actual="Missing __all__",
+                ))
+
+        # 2. Mandatory Logger Initialization
+        # Exceptions (don't need loggers)
+        exceptions = ["__init__.py", "types.py", "enums.py", "models.py", "constants.py"]
+        if not any(path.endswith(exc) for exc in exceptions):
+            # Check if it's a logic file (deep in src or a frame)
+            if "domain" in path or "application" in path or "infrastructure" in path or "_frame.py" in path:
+                if "logger =" not in content:
+                    violations.append(OrganizationViolation(
+                        rule="mandatory_logger_init",
+                        severity="warning",
+                        message="Missing logger initialization (logger = get_logger(__name__))",
+                        file_path=path,
+                        expected="logger = get_logger(__name__)",
+                        actual="No logger found",
+                    ))
         
         return violations
 
@@ -930,12 +984,17 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
 
             # Check exceptions (Global Ignorance)
             excluded = False
-            for exc in rule.get('exceptions', []):
-                if fnmatch.fnmatch(path.name, exc) or fnmatch.fnmatch(code_file.path, exc):
+            for exc in rule.get('exceptions', []) + rule.get('excludes', []):
+                if self._is_path_matching(code_file.path, exc):
                     excluded = True
                     break
             if excluded:
                 continue
+
+            # Check includes
+            if rule.get('includes'):
+                if not self._is_path_matching(code_file.path, rule['includes']):
+                    continue
 
             # Check regex patterns
             conditions = rule.get('conditions', {})
@@ -961,3 +1020,15 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                     logger.error(f"Invalid regex '{pattern}' in rule {rule.get('id')}: {e}")
                     
         return violations
+
+    def _is_path_matching(self, path: str, patterns: str | List[str]) -> bool:
+        """Helper to match path against one or more glob patterns."""
+        if isinstance(patterns, str):
+            patterns = [patterns]
+        
+        path_obj = Path(path)
+        for pattern in patterns:
+            # Match both filename and full path
+            if fnmatch.fnmatch(path_obj.name, pattern) or fnmatch.fnmatch(path, pattern):
+                return True
+        return False

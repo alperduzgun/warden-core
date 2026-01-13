@@ -274,6 +274,10 @@ class FortificationPhase:
                 model=model
             )
 
+            if not response:
+                logger.warning("llm_security_fix_response_empty", issue_type=issue_type)
+                return await self._generate_rule_based_fixes_async(issue_type, issues)
+
             # Step 4: Parse LLM response into fortifications
             parsed_fixes = self._parse_llm_response(response, issues)
             fixes.extend(parsed_fixes)
@@ -349,7 +353,7 @@ class FortificationPhase:
             issue_details.append(
                 f"- File: {issue.get('file_path', 'unknown')}\n"
                 f"  Line: {issue.get('line_number', 'unknown')}\n"
-                f"  Code: {issue.get('code_snippet', 'N/A')[:100]}"
+                f"  Code: {(issue.get('code_snippet') or 'N/A')[:100]}"
             )
 
         # Format semantic context if available
@@ -380,6 +384,7 @@ class FortificationPhase:
                     content = result.get('content', str(result))
                     line = result.get('line_number', 'N/A')
                 
+                content = content or ""
                 content = content[:500]
                 
                 example = f"### Example {i+1}: {file_path}:{line}\n```{language}\n{content}\n```\n"
@@ -472,8 +477,8 @@ Focus on framework-specific best practices for {framework}.
 
             # Create basic fortification from response
             fortification = {
-                "title": f"Fix for {issues[0].get('type', 'issue')}",
-                "detail": response[:500],  # First 500 chars as detail
+                "title": f"Fix for {issues[0].get('type', 'issue')}" if issues else "Security Fix",
+                "detail": (response or "")[:500],  # First 500 chars as detail
                 "code": "",
                 "auto_fixable": False,
                 "severity": issues[0].get("severity", "medium") if issues else "medium",

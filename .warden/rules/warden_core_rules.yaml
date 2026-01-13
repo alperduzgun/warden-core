@@ -1,0 +1,57 @@
+rules:
+  - id: async-method-naming
+    name: Async Methods Must Have _async Suffix
+    category: architectural
+    severity: error
+    isBlocker: true
+    description: All async methods and functions must end with the '_async' suffix to maintain project-wide consistency.
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - '^\s*async\s+def\s+(?!\w+_async\()(\w+)\('
+    examples:
+      invalid:
+        - "async def process_file(file):"
+      valid:
+        - "async def process_file_async(file):"
+    message: |
+      Async method missing '_async' suffix!
+      
+      Problem: Following project standards, all async defs must end with '_async'.
+      Solution: Rename the method to '{1}_async'.
+    language:
+      - python
+
+  - id: no-empty-except
+    name: No Empty Except Blocks
+    category: logic
+    severity: error
+    isBlocker: true
+    description: Empty except blocks (pass) hide potential bugs and make debugging impossible.
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - 'except.*:\s+pass'
+        - 'except\s+Exception\s*:\s+pass'
+    examples:
+      invalid:
+        - |
+          try:
+              do_something()
+          except:
+              pass
+      valid:
+        - |
+          try:
+              do_something()
+          except Exception as e:
+              logger.error(f"Failed: {e}")
+    message: |
+      Empty except block detected!
+      
+      Problem: 'except: pass' swallows errors without logging.
+      Solution: Catch specific exceptions and log them using the logger.
+    language:
+      - python

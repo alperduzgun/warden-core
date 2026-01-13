@@ -140,8 +140,6 @@ settings:
   timeout: 300
 
 # --- Custom Rules Configuration ---
-# To enable your custom rules, uncomment the following lines:
-#
-# custom_rules:
-#   - .warden/rules/my_custom_rules.yaml
-#
+custom_rules:
+  - .warden/rules/my_custom_rules.yaml
+  - .warden/rules/warden_core_rules.yaml

@@ -1,9 +1,9 @@
 # Warden Security Status
-Updated: 2026-01-13 17:34:58
+Updated: 2026-01-13 18:26:40
 
 **Status**: ✅ PASS
-**Critical Issues**: 1
-**Total Issues**: 5
+**Critical Issues**: 0
+**Total Issues**: 13
 
 > [!NOTE]
 > If status is FAIL, please check the full report or run `warden scan` for details.
