@@ -498,21 +498,71 @@ on:
     branches: [{branch}]
   pull_request:
     branches: [{branch}]
+
 jobs:
   warden:
+    name: Security & Quality Scan
     runs-on: ubuntu-latest
+    env:
+      OLLAMA_HOST: http://localhost:11434
+      # Add other secrets here (e.g., OPENAI_API_KEY) if using cloud models
+      # OPENAI_API_KEY: ${{{{ secrets.OPENAI_API_KEY }}}}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install warden-core
-      - run: warden scan . --format sarif --output warden.sarif
+          cache: 'pip'
+
+      - name: Cache Ollama Models
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama
+          key: ollama-models-${{{{ runner.os }}}}-v1
+          restore-keys: |
+            ollama-models-${{{{ runner.os }}}}-
+
+      - name: Install and Start Ollama
+        run: |
+          echo "Installing Ollama..."
+          curl -fsSL https://ollama.com/install.sh | sh
+          
+          echo "Starting Ollama Server..."
+          ollama serve &
+          
+          echo "Waiting for service..."
+          for i in {{1..30}}; do
+            if curl -s http://localhost:11434/api/tags >/dev/null; then
+              echo "Ollama is ready!"
+              break
+            fi
+            sleep 1
+          done
+          
+          echo "Pulling Qwen model..."
+          ollama pull qwen2.5-coder:0.5b
+
+      - name: Install Warden
+        run: pip install warden-core
+
+      - name: Run Scan
+        run: warden scan . --format sarif --output warden.sarif --level standard
         continue-on-error: {'true' if mode_choice == '1' else 'false'}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: warden-report
+          path: warden.sarif
 """
             with open(workflow_path, "w") as f:
                 f.write(content)
-            console.print(f"[green]Created CI workflow: {workflow_path}[/green]")
+            console.print(f"[green]Created robust CI workflow with Local LLM support: {workflow_path}[/green]")
 
     # --- Step 10: Install dependencies ---
     console.print("\n[bold blue]📦 Installing Frames & Rules...[/bold blue]")

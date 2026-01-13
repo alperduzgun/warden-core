@@ -136,8 +136,14 @@ class FileDiscoverer:
                 logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path))
                 rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore)
                 
-                for path_str, size_bytes in rust_files:
+                # STEP 1: Batch get stats (Parallel line count, hash, binary check)
+                raw_paths = [f[0] for f in rust_files]
+                stats_batch = warden_core_rust.get_file_stats(raw_paths)
+                stats_map = {s.path: s for s in stats_batch}
+                
+                for path_str, initial_size in rust_files:
                     file_path = Path(path_str)
+                    rust_stat = stats_map.get(path_str)
                     
                     # Double check max depth if needed
                     if self.max_depth is not None:
@@ -148,7 +154,11 @@ class FileDiscoverer:
                         except ValueError:
                             continue
 
-                    # Skip binary and non-code files
+                    # Early binary skip via Rust stats
+                    if rust_stat and rust_stat.is_binary:
+                        continue
+
+                    # Fallback to Python classifier for file-type specific skip rules
                     if self.classifier.should_skip(file_path):
                         continue
 
@@ -161,7 +171,9 @@ class FileDiscoverer:
                         path=str(file_path),
                         relative_path=str(relative_path),
                         file_type=file_type,
-                        size_bytes=size_bytes,
+                        size_bytes=rust_stat.size if rust_stat else initial_size,
+                        line_count=rust_stat.line_count if rust_stat else 0,
+                        hash=rust_stat.hash if rust_stat else None,
                         is_analyzable=file_type.is_analyzable,
                         metadata={"engine": "rust"},
                     )

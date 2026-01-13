@@ -34,12 +34,7 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          components: clippy, rustfmt
-
+      # Rust is pre-installed on ubuntu-latest. We only cache the artifacts.
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
         with:
@@ -68,10 +63,32 @@ jobs:
       - name: Cache AI Models
         uses: actions/cache@v4
         with:
-          path: ~/.cache/huggingface
-          key: hf-models-${{ runner.os }}-${{ hashFiles('.warden/config.yaml') }}
+          path: ~/.ollama
+          key: ollama-models-${{ runner.os }}-${{ hashFiles('.warden/config.yaml') }}
           restore-keys: |
-            hf-models-${{ runner.os }}-
+            ollama-models-${{ runner.os }}-
+
+      - name: Install and Start Ollama
+        run: |
+          # 1. Install Ollama
+          curl -fsSL https://ollama.com/install.sh | sh
+          
+          # 2. Start Server in Background
+          ollama serve &
+          
+          # 3. Wait for Server to be ready
+          echo "Waiting for Ollama service..."
+          for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags >/dev/null; then
+              echo "Ollama service is ready!"
+              break
+            fi
+            sleep 1
+          done
+          
+          # 4. Pull the lightweight Qwen model
+          echo "Pulling qwen2.5-coder:0.5b..."
+          ollama pull qwen2.5-coder:0.5b
 
       - name: Run Warden Scan
         # continue-on-error removed to enforce quality gate
@@ -84,14 +101,15 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
           DEFAULT_LLM_MODEL: ${{ secrets.DEFAULT_LLM_MODEL }}
+          # Ensure Warden detects local Ollama
+          OLLAMA_HOST: http://localhost:11434
         run: |
           # Layered Scan Strategy: 
-          # - Pull Requests: BASIC (Local-only, Fast, catches structural issues)
-          # - Main/Tags: STANDARD (AI-enhanced, finds deeper logic/security issues)
+          # - All Events: STANDARD (Full AI analysis with Local LLM)
+          # We have optimized the CI to include Ollama and Qwen, so we use STANDARD
+          # to ensure comprehensive validation even in PRs.
+          
           LEVEL="standard"
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            LEVEL="basic"
-          fi
           
           echo "Running Warden Scan with level: $LEVEL"
           

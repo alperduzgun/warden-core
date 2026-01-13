@@ -370,10 +370,14 @@ class CodeFile:
     framework: str | None = None  # fastapi, react, flutter, etc.
     size_bytes: int = 0
     line_count: int = 0
+    hash: Optional[str] = None
+    metadata: Dict[str, Any] = None
 
     def __post_init__(self) -> None:
         """Calculate size and line count if not provided."""
-        if self.size_bytes == 0:
+        if self.metadata is None:
+            self.metadata = {}
+        if self.size_bytes == 0 and self.content:
             self.size_bytes = len(self.content.encode("utf-8"))
-        if self.line_count == 0:
+        if self.line_count == 0 and self.content:
             self.line_count = self.content.count("\n") + 1

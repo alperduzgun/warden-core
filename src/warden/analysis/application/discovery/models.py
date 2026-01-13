@@ -111,6 +111,8 @@ class DiscoveredFile(BaseDomainModel):
     file_type: FileType
     size_bytes: int
     is_analyzable: bool  # Can Warden analyze this file?
+    hash: Optional[str] = None
+    line_count: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

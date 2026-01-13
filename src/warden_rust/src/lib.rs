@@ -1,10 +1,12 @@
 use pyo3::prelude::*;
 use ignore::WalkBuilder;
 use std::path::Path;
+use std::fs::File;
 use regex::Regex;
 use rayon::prelude::*;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
+use sha2::{Sha256, Digest};
+use content_inspector::{inspect, ContentType};
 
 #[pyclass]
 #[derive(Clone)]
@@ -21,6 +23,21 @@ impl RustRule {
     fn new(id: String, pattern: String) -> Self {
         RustRule { id, pattern }
     }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct FileStats {
+    #[pyo3(get)]
+    pub path: String,
+    #[pyo3(get)]
+    pub size: u64,
+    #[pyo3(get)]
+    pub line_count: usize,
+    #[pyo3(get)]
+    pub is_binary: bool,
+    #[pyo3(get)]
+    pub hash: String,
 }
 
 #[pyclass]
@@ -64,6 +81,67 @@ fn discover_files(root_path: String, use_gitignore: bool) -> PyResult<Vec<(Strin
         }
     }
     Ok(files)
+}
+
+#[pyfunction]
+fn get_file_stats(paths: Vec<String>) -> PyResult<Vec<FileStats>> {
+    let stats: Vec<FileStats> = paths.par_iter().map(|path_str| {
+        let path = Path::new(path_str);
+        let mut stats = FileStats {
+            path: path_str.clone(),
+            size: 0,
+            line_count: 0,
+            is_binary: false,
+            hash: String::new(),
+        };
+
+        if let Ok(metadata) = path.metadata() {
+            stats.size = metadata.len();
+        }
+
+        if let Ok(mut file) = File::open(path) {
+            // Read first 1024 bytes for binary check
+            let mut buffer = [0; 1024];
+            let bytes_read = file.read(&mut buffer).unwrap_or(0);
+            stats.is_binary = inspect(&buffer[..bytes_read]) == ContentType::BINARY;
+
+            if !stats.is_binary {
+                // Return to start for hash and line count
+                // Re-open/seek might be expensive, but line counting is necessary
+                // For simplicity, we'll re-read everything.
+                if let Ok(file_reopen) = File::open(path) {
+                    let reader = BufReader::new(file_reopen);
+                    let mut line_count = 0;
+                    let mut hasher = Sha256::new();
+                    
+                    for line_result in reader.lines() {
+                        if let Ok(line) = line_result {
+                            line_count += 1;
+                            hasher.update(line.as_bytes());
+                            hasher.update(b"\n");
+                        }
+                    }
+                    stats.line_count = line_count;
+                    stats.hash = format!("{:x}", hasher.finalize());
+                }
+            } else {
+                // For binary, just do a fast whole-file hash if small
+                if stats.size < 50_000_000 { // 50MB limit for full hash
+                    if let Ok(mut file_reopen) = File::open(path) {
+                        let mut hasher = Sha256::new();
+                        let mut buffer = Vec::new();
+                        if file_reopen.read_to_end(&mut buffer).is_ok() {
+                            hasher.update(&buffer);
+                            stats.hash = format!("{:x}", hasher.finalize());
+                        }
+                    }
+                }
+            }
+        }
+        stats
+    }).collect();
+
+    Ok(stats)
 }
 
 #[pyfunction]
@@ -114,7 +192,9 @@ fn match_patterns(files: Vec<String>, rules: Vec<RustRule>) -> PyResult<Vec<Matc
 fn warden_core_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustRule>()?;
     m.add_class::<MatchHit>()?;
+    m.add_class::<FileStats>()?;
     m.add_function(wrap_pyfunction!(discover_files, m)?)?;
+    m.add_function(wrap_pyfunction!(get_file_stats, m)?)?;
     m.add_function(wrap_pyfunction!(match_patterns, m)?)?;
     Ok(())
 }
