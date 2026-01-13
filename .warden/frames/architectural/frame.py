@@ -84,7 +84,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
     
     @property
     def frame_id(self) -> str:
-        return "architectural"
+        return "architecturalconsistency"
 
     def __init__(self, config: Dict[str, Any] | None = None):
         """
@@ -151,12 +151,29 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         
         # Load custom rules from conventions.yaml
         self.custom_rules = self._load_custom_rules()
+        
+        # Load performance rules from performance.yaml
+        self.performance_rules = self._load_rules_from_yaml("performance.yaml")
+
+    def _load_rules_from_yaml(self, filename: str) -> List[Dict[str, Any]]:
+        """Load rules from a YAML file in .warden/rules."""
+        try:
+            cwd = Path.cwd()
+            rules_path = cwd / ".warden" / "rules" / filename
+            
+            if not rules_path.exists():
+                return []
+                
+            with open(rules_path, 'r') as f:
+                data = yaml.safe_load(f)
+                return data.get('rules', [])
+        except Exception as e:
+            logger.error(f"Failed to load rules from {filename}: {e}")
+            return []
 
     def _load_custom_rules(self) -> List[Dict[str, Any]]:
-        """Load custom rules from .warden/rules/conventions.yaml"""
+        """Load custom rules from .warden/rules/conventions.yaml (Legacy support)."""
         try:
-            # Try to find project root by looking for .warden
-            # Heuristic: go up until .warden is found, or use CWD
             cwd = Path.cwd()
             rules_path = cwd / ".warden" / "rules" / "conventions.yaml"
             
@@ -165,7 +182,8 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 
             with open(rules_path, 'r') as f:
                 data = yaml.safe_load(f)
-                return data.get('custom_rules', [])
+                # Support both legacy 'custom_rules' list and standard 'rules' list
+                return data.get('custom_rules', data.get('rules', []))
         except Exception as e:
             logger.error(f"Failed to load custom rules: {e}")
             return []
@@ -256,10 +274,14 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             # 10. Root Hygiene check (AI-Driven)
             if self.check_root_hygiene:
                 scenarios_executed.append("Root Hygiene check")
-                # Need project root to determine if file is in root
-                # Assuming project_context has root_path or we derive from path
                 root_violations = await self._check_root_hygiene(code_file)
                 violations.extend(root_violations)
+
+            # 11. Performance Rules (Standard YAML Schema)
+            if self.performance_rules:
+                scenarios_executed.append("Performance rules check")
+                perf_violations = self._check_standard_yaml_rules(code_file, self.performance_rules, "performance_rule")
+                violations.extend(perf_violations)
 
             # Convert violations to findings
             findings = self._violations_to_findings(violations, code_file)
@@ -878,4 +900,64 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             except re.error as e:
                 logger.error(f"Invalid regex pattern in rule {rule.get('id')}: {e}")
                 
+        return violations
+
+    # ============================================
+    # GENERIC YAML RULE CHECKER
+    # ============================================
+
+    def _check_standard_yaml_rules(
+        self, 
+        code_file: CodeFile, 
+        rules: List[Dict[str, Any]],
+        rule_prefix: str
+    ) -> List[OrganizationViolation]:
+        """
+        Check standard Warden YAML rules (v2 schema).
+        
+        Schema:
+          - id: rule-id
+            conditions:
+              patterns: [regex1, regex2]
+            exceptions: [glob1, glob2]
+        """
+        violations = []
+        path = Path(code_file.path)
+        
+        for rule in rules:
+            if not rule.get('enabled', True):
+                continue
+
+            # Check exceptions (Global Ignorance)
+            excluded = False
+            for exc in rule.get('exceptions', []):
+                if fnmatch.fnmatch(path.name, exc) or fnmatch.fnmatch(code_file.path, exc):
+                    excluded = True
+                    break
+            if excluded:
+                continue
+
+            # Check regex patterns
+            conditions = rule.get('conditions', {})
+            patterns = conditions.get('patterns', [])
+            
+            # Also support legacy single 'pattern'
+            if 'pattern' in rule:
+                patterns.append(rule['pattern'])
+
+            for pattern in patterns:
+                try:
+                    if re.search(pattern, code_file.content, re.MULTILINE):
+                        violations.append(OrganizationViolation(
+                            rule=rule.get('id', 'unknown_rule'),
+                            severity=rule.get('severity', 'warning'),
+                            message=rule.get('message', "Pattern found"),
+                            file_path=code_file.path,
+                            expected=f"Not match '{pattern}'",
+                            actual="Pattern matched in file",
+                        ))
+                        break # One violation per rule is enough
+                except re.error as e:
+                    logger.error(f"Invalid regex '{pattern}' in rule {rule.get('id')}: {e}")
+                    
         return violations

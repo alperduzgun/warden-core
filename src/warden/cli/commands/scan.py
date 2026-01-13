@@ -15,7 +15,7 @@ console = Console()
 
 def scan_command(
     ctx: typer.Context,
-    path: str = typer.Argument(".", help="Path to scan (file or directory)"),
+    paths: List[str] = typer.Argument(None, help="Paths to scan (files or directories). Defaults to ."),
     frames: Optional[List[str]] = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
     format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
@@ -24,7 +24,7 @@ def scan_command(
     no_ai: bool = typer.Option(False, "--no-ai", help="Shorthand for --level basic"),
 ) -> None:
     """
-    Run the full Warden pipeline on a file or directory.
+    Run the full Warden pipeline on files or directories.
     """
     # We defer import to avoid slow startup for other commands
     from warden.shared.infrastructure.logging import get_logger
@@ -35,7 +35,11 @@ def scan_command(
         if no_ai:
             level = "basic"
             
-        exit_code = asyncio.run(_run_scan_async(path, frames, format, output, verbose, level))
+        # Default to "." if no paths provided
+        if not paths:
+            paths = ["."]
+
+        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level))
         if exit_code != 0:
             raise typer.Exit(exit_code)
     except KeyboardInterrupt:
@@ -43,11 +47,12 @@ def scan_command(
         raise typer.Exit(130)
 
 
-async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard") -> int:
+async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard") -> int:
     """Async implementation of scan command."""
     
+    display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
     console.print(f"[bold cyan]🛡️  Warden Scanner[/bold cyan]")
-    console.print(f"[dim]Scanning: {path}[/dim]\n")
+    console.print(f"[dim]Scanning: {display_paths}[/dim]\n")
 
     # Initialize bridge
     bridge = WardenBridge(project_root=Path.cwd())
@@ -65,7 +70,7 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], format: str, o
     try:
         # Execute pipeline with streaming
         async for event in bridge.execute_pipeline_stream_async(
-            file_path=path,
+            file_path=paths,
             frames=frames,
             verbose=verbose,
             analysis_level=level

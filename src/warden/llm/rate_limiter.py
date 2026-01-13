@@ -116,6 +116,33 @@ class RateLimiter:
                     # Should not happen if TPM > 0
                     wait_time = 3600.0 
 
+            # ADAPTIVE PACING (Flow Control)
+            # Slow down execution as we approach capacity limits to avoid API "burst" bans.
+            # This is smoother than hitting a hard wall and waiting 60s.
+            if self.config.tpm > 0:
+                token_utilization = 1.0 - (self._tokens / self.config.tpm)
+                
+                if token_utilization > 0.95:
+                    # >95% capacity used: Emergency braking
+                    # API is likely to throttle us massively if we send now.
+                    pacing_delay = 5.0
+                    if pacing_delay > wait_time:
+                        logger.warning("adaptive_pacing_emergency", usage=f"{token_utilization*100:.1f}%", delay=pacing_delay)
+                        wait_time = pacing_delay
+                        
+                elif token_utilization > 0.85:
+                    # >85% capacity used: Heavy braking
+                    pacing_delay = 1.5
+                    if pacing_delay > wait_time:
+                        logger.info("adaptive_pacing_heavy", usage=f"{token_utilization*100:.1f}%", delay=pacing_delay)
+                        wait_time = pacing_delay
+                        
+                elif token_utilization > 0.70:
+                    # >70% capacity used: Light feathering
+                    pacing_delay = 0.2
+                    if pacing_delay > wait_time:
+                         wait_time = pacing_delay
+
             if wait_time > 0:
                 logger.warning(
                     "rate_limit_throttle",

@@ -103,24 +103,32 @@ jobs:
           
           # 2. Get changed python files
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep "\.py$" || true)
+            CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.base_ref }}...HEAD | grep "\.py$" || true)
           else
             # For push to main/dev, check against previous commit
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "\.py$" || true)
+            CHANGED_FILES=$(git diff --name-only --diff-filter=d HEAD~1 HEAD | grep "\.py$" || true)
           fi
 
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          if [[ -z "$CHANGED_FILES" ]]; then
-             echo "No Python files changed. Skipping scan."
-             exit 0
+          # 3. Running scan
+          # If manually triggered (workflow_dispatch) via UI, assume FULL SCAN (.)
+          # Otherwise, run incremental scan on CHANGED_FILES or full scan if no changes detected but requested.
+          
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+             echo "Running FULL SCAN on entire repository (Manual Trigger)..."
+             warden scan . --level $LEVEL --format sarif --output warden.sarif --verbose
+          else
+             # Incremental Mode for PR/Push
+             if [[ -z "$CHANGED_FILES" ]]; then
+                echo "No Python files changed. Skipping scan."
+                exit 0
+             fi
+             echo "Running INCREMENTAL SCAN on changed files..."
+             # Now warden scan accepts multiple arguments, so we can pass them directly via xargs (without -n1)
+             echo "$CHANGED_FILES" | xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
           fi
-
-          # 3. Running scan only on changed files
-          # Using xargs to handle file list and splitting if too long (though usually fine for PRs)
-          # We use --no-run-if-empty (-r) to avoid error if empty
-          echo "$CHANGED_FILES" |  xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
 
 
 

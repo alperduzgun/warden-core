@@ -7,7 +7,7 @@ Refactored into modular handlers to maintain < 500 lines per core rules.
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional, AsyncIterator
+from typing import Any, Dict, List, Optional, AsyncIterator, Union
 from datetime import datetime
 
 from warden.cli_bridge.protocol import IPCError, ErrorCode
@@ -134,7 +134,7 @@ class WardenBridge:
         serialized["context_summary"] = context.get_summary()
         return serialized
 
-    async def execute_pipeline_stream_async(self, file_path: str, frames: Optional[List[str]] = None, verbose: bool = False, analysis_level: str = "standard") -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream_async(self, file_path: Union[str, List[str]], frames: Optional[List[str]] = None, verbose: bool = False, analysis_level: str = "standard") -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         async for event in self.pipeline_handler.execute_pipeline_stream_async(file_path, frames, analysis_level):
             if event.get("type") == "result":
