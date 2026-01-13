@@ -150,7 +150,7 @@ class LLMClassificationPhase(LLMPhaseBase):
                 )
                 
                 # Call LLM
-                response = await self.llm.complete_async(prompt, self.get_system_prompt())
+                response = await self.llm.complete_async(prompt, self.get_system_prompt(), use_fast_tier=True)
                 
                 # Parse Batch Results
                 batch_results = self._parse_classification_batch_response(response.content, len(batch_files))

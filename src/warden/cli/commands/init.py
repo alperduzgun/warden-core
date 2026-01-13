@@ -315,6 +315,8 @@ def init_command(
             "llm": {
                 "provider": provider,
                 "model": model,
+                "smart_model": model,
+                "fast_model": llm_config.get("fast_model", "qwen2.5-coder:0.5b"),
                 "timeout": 300
             },
             "frames": meta.suggested_frames,
@@ -323,7 +325,8 @@ def init_command(
                 "fail_fast": mode_config["fail_fast"],
                 "enable_classification": True,
                 "mode": ["vibe", "normal", "strict"][int(mode_choice)-1],
-                "use_llm": provider != "none"
+                "use_llm": provider != "none",
+                "use_local_llm": llm_config.get("use_local_llm", False)
             },
             "semantic_search": vector_config
         }

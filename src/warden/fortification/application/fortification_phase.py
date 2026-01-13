@@ -37,13 +37,16 @@ class FortificationResult:
 
 class FortificationPhase:
     """
-    Phase 4: FORTIFICATION - Generate security fixes.
+    Phase 4: FORTIFICATION - Generate security remediation guidance.
 
     Responsibilities:
     - Analyze vulnerabilities from validation
-    - Generate context-aware fixes
-    - Provide framework-specific solutions
-    - Create auto-applicable patches
+    - Generate context-aware remediation suggestions
+    - Provide framework-specific code examples
+    - Assess fixability (auto-fixable flag for reporting)
+    
+    Warden is a Read-Only tool. This phase acts as an AI Tech Lead,
+    providing advice but NEVER modifying source code directly.
     """
 
     # Delegated to FortificationPromptBuilder
@@ -107,7 +110,10 @@ class FortificationPhase:
         original_issue_count = len(validated_issues)
         validated_issues = [
             issue for issue in validated_issues
-            if not self.ignore_matcher.should_ignore_for_frame(Path(issue.get("file_path", "")), "fortification")
+            if not self.ignore_matcher.should_ignore_for_frame(
+                Path(issue.get("file_path", "") if isinstance(issue, dict) else getattr(issue, "file_path", "")), 
+                "fortification"
+            )
         ]
         
         if len(validated_issues) < original_issue_count:
@@ -146,7 +152,10 @@ class FortificationPhase:
                     all_fortifications.append(Fortification(
                         id=f"fort-{len(all_fortifications)}",
                         title=action.type.value.replace("_", " ").title(),
-                        detail=action.description
+                        detail=action.description,
+                        severity=action.severity.lower() if hasattr(action, 'severity') else "high",
+                        auto_fixable=True,
+                        line_number=action.line_number
                     ))
 
         # Legacy rule-based/llm fixes for validated issues
@@ -172,6 +181,8 @@ class FortificationPhase:
                     file_path=fix.get("file_path"),
                     line_number=fix.get("line_number"),
                     confidence=fix.get("confidence", 0.0),
+                    severity=fix.get("severity", "medium"),
+                    auto_fixable=fix.get("auto_fixable", False),
                     finding_id=fid
                 ))
 
@@ -429,16 +440,17 @@ class FortificationPhase:
         # Count issues by severity
         issue_severity_counts = {}
         for issue in issues:
-            severity = issue.get("severity", "medium")
+            severity = issue.get("severity", "medium") if isinstance(issue, dict) else getattr(issue, "severity", "medium")
             issue_severity_counts[severity] = issue_severity_counts.get(severity, 0) + 1
 
         # Count fixes by severity
         fix_severity_counts = {}
         auto_fixable_count = 0
         for fix in fortifications:
-            severity = fix.get("severity", "medium")
+            # Use attribute access since these are Fortification objects
+            severity = getattr(fix, "severity", "medium")
             fix_severity_counts[severity] = fix_severity_counts.get(severity, 0) + 1
-            if fix.get("auto_fixable", False):
+            if getattr(fix, "auto_fixable", False):
                 auto_fixable_count += 1
 
         # Calculate coverage

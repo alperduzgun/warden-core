@@ -10,8 +10,9 @@ export interface Fortification {
     detail: string;
 }
 
-NOTE: This is a placeholder implementation for future fortification features.
-The fortification step will analyze code and suggest defensive improvements.
+NOTE: Warden is a Read-Only tool. The fortification phase provides security remediation 
+guidance and code suggestions, acting as an AI Tech Lead. It NEVER modifies source 
+code directly.
 """
 
 from datetime import datetime
@@ -38,8 +39,8 @@ class FortifierPriority(Enum):
 
 class Fortification(BaseDomainModel):
     """
-    A single fortification suggestion.
-    Represents a defensive code improvement that should be applied.
+    A fortification/remediation suggestion.
+    Represents a defensive code improvement recommended by the AI Tech Lead.
     """
     id: str  # Unique ID for the fortification itself
     finding_id: Optional[str] = None  # ID of the finding this fixes
@@ -50,6 +51,8 @@ class Fortification(BaseDomainModel):
     file_path: Optional[str] = None
     line_number: Optional[int] = None
     confidence: float = 0.0
+    severity: str = "medium"
+    auto_fixable: bool = False
 
 class FortificationAction(BaseDomainModel):
     """Represents a single fortification action applied to code."""

@@ -196,7 +196,7 @@ Return ONLY a JSON array of objects in the EXACT order:
         if context and hasattr(context, 'llm_config') and context.llm_config:
             model = getattr(context.llm_config, 'smart_model', None)
 
-        response = await self.llm.complete_async(prompt, self.system_prompt, model=model)
+        response = await self.llm.complete_async(prompt, self.system_prompt, model=model, use_fast_tier=True)
         
         try:
             content = response.content.strip()

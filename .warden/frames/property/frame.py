@@ -369,7 +369,8 @@ Output must be a valid JSON object with the following structure:
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
                 user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
-                temperature=0.1
+                temperature=0.1,
+                use_fast_tier=True
             )
             
             response = await client.send_async(request)

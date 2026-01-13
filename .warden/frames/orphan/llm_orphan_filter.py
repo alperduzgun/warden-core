@@ -674,6 +674,7 @@ You have deep understanding of:
             user_message=user_message,
             max_tokens=3000,
             temperature=0.0,  # Deterministic for consistency
+            use_fast_tier=True
         )
 
         response = await self.llm.send_async(request)

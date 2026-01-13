@@ -61,13 +61,15 @@ class ILlmClient(ABC):
         """
         pass
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None) -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None, use_fast_tier: bool = False) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
         Args:
             prompt: User prompt
             system_prompt: System prompt (optional)
+            model: Model override (optional)
+            use_fast_tier: If True, request fast (local) tier
 
         Returns:
             LlmResponse with content and token usage
@@ -82,7 +84,8 @@ class ILlmClient(ABC):
             model=model,  # Use provider default or override
             temperature=0.7,
             max_tokens=2000,
-            timeout_seconds=30.0
+            timeout_seconds=30.0,
+            use_fast_tier=use_fast_tier
         )
 
         response = await self.send_async(request)

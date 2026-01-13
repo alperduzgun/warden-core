@@ -32,6 +32,9 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
     elif provider == LlmProvider.GROQ:
         from .providers.groq import GroqClient
         return GroqClient(config)
+    elif provider == LlmProvider.OLLAMA:
+        from .providers.ollama import OllamaClient
+        return OllamaClient(config)
     else:
         raise NotImplementedError(f"Provider {provider.value} not implemented")
 
@@ -65,7 +68,25 @@ def create_client(
     if not provider_config:
         raise ValueError(f"No configuration found for provider: {provider}")
 
-    return create_provider_client(provider, provider_config)
+    # Create primary (smart) client
+    smart_client = create_provider_client(provider, provider_config)
+    
+    # Try to create local (fast) client if enabled
+    fast_client = None
+    if config.ollama.enabled:
+        try:
+            fast_client = create_provider_client(LlmProvider.OLLAMA, config.ollama)
+        except Exception:
+            pass
+
+    # Wrap in OrchestratedLlmClient for tiered execution support
+    from .providers.orchestrated import OrchestratedLlmClient
+    return OrchestratedLlmClient(
+        smart_client=smart_client,
+        fast_client=fast_client,
+        smart_model=config.smart_model,
+        fast_model=config.fast_model
+    )
 
 
 async def create_client_with_fallback(config: Optional[LlmConfiguration] = None) -> ILlmClient:
