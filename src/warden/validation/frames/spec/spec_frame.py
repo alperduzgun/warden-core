@@ -128,6 +128,21 @@ class SpecFrame(ValidationFrame):
                     error=str(e),
                 )
 
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+        """
+        Execute spec analysis asynchronously.
+
+        Note: This frame operates at PROJECT_LEVEL, so code_file
+        is typically the project root or a representative file.
+
+        Args:
+            code_file: Code file (project context)
+
+        Returns:
+            FrameResult with contract gap findings
+        """
+        return await self.execute(code_file)
+
     async def execute(self, code_file: CodeFile) -> FrameResult:
         """
         Execute spec analysis.

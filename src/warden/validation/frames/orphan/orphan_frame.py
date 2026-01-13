@@ -1,23 +1,26 @@
 
 import structlog
-from typing import List
+from typing import List, TYPE_CHECKING
 from pathlib import Path
-from warden.validation.domain.frame import ValidationFrame, FrameResult, Finding, CodeFile
+from warden.validation.domain.frame import ValidationFrame, FrameResult, Finding
 from warden.lsp import LSPManager
+
+if TYPE_CHECKING:
+    from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
 
 class OrphanFrame(ValidationFrame):
     """
     Detects Orphaned (Unused) Code using LSP References.
-    
+
     Precision: High (Uses Reference Count from Language Server)
     """
-    
+
     name = "Orphan Code Detection"
     description = "Identifies unused functions and classes with compiler-grade precision."
-    
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+
+    async def execute_async(self, code_file: "CodeFile") -> FrameResult:
         findings: List[Finding] = []
         try:
             path = Path(code_file.path)
