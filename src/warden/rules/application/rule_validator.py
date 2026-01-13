@@ -750,9 +750,18 @@ RETURN ONLY A JSON OBJECT:
 }}
 """
         try:
-            # Call LLM service (assuming complete_async interface)
-            logger.debug("executing_ai_rule", rule_id=rule.id, file=str(file_path))
-            response = await self.llm_service.complete_async(prompt, "You are a specialized code validation agent.")
+            # Determine model from config if available (attached in WardenBridge)
+            model = None
+            if hasattr(self.llm_service, 'config') and self.llm_service.config:
+                model = getattr(self.llm_service.config, 'smart_model', None)
+
+            # Call LLM service with model override
+            logger.debug("executing_ai_rule", rule_id=rule.id, file=str(file_path), model=model)
+            response = await self.llm_service.complete_async(
+                prompt=prompt, 
+                system_prompt="You are a specialized code validation agent.",
+                model=model
+            )
             logger.debug("ai_rule_response_received", rule_id=rule.id)
             
             # Parse JSON response

@@ -38,20 +38,22 @@ class FortificationOrchestrator:
     4. Logging (MEDIUM)
     """
 
-    def __init__(self, fortifiers: Optional[List[BaseFortifier]] = None):
+    def __init__(self, fortifiers: Optional[List[BaseFortifier]] = None, llm_service: Optional[Any] = None):
         """
         Initialize Code Fortifier.
 
         Args:
             fortifiers: Optional list of fortifiers. If None, uses default set.
+            llm_service: Optional shared LLM service.
         """
+        self.llm_service = llm_service
         if fortifiers is None:
             # Default fortifiers
             self._fortifiers = [
-                InputValidationFortifier(),
-                ErrorHandlingFortifier(),
-                ResourceDisposalFortifier(),
-                LoggingFortifier(),
+                InputValidationFortifier(llm_service=llm_service),
+                ErrorHandlingFortifier(llm_service=llm_service),
+                ResourceDisposalFortifier(llm_service=llm_service),
+                LoggingFortifier(llm_service=llm_service),
             ]
         else:
             self._fortifiers = fortifiers

@@ -38,12 +38,14 @@ class LoggingFortifier(BaseFortifier):
     - Database operations
     """
 
-    def __init__(self):
-        """Initialize Logging Fortifier."""
-        try:
-            self._llm_provider = create_client()
-        except Exception:
-            self._llm_provider = None  # LLM optional
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize Logging Fortifier.
+
+        Args:
+            llm_service: Optional shared LLM service.
+        """
+        self._llm_provider = llm_service
 
     @property
     def name(self) -> str:

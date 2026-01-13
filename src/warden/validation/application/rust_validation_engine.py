@@ -12,8 +12,8 @@ import structlog
 import yaml
 
 try:
-    import warden_core_rust
-    from warden_core_rust import RustRule, MatchHit
+    from warden import warden_core_rust
+    from warden.warden_core_rust import RustRule, MatchHit
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False

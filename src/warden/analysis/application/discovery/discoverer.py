@@ -126,47 +126,54 @@ class FileDiscoverer:
         
         # Try Rust discovery first
         try:
-            import warden_core_rust
-            logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path))
-            rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore)
-            
-            for path_str, size_bytes in rust_files:
-                file_path = Path(path_str)
+            from warden import warden_core_rust
+            RUST_AVAILABLE = True
+        except ImportError:
+            RUST_AVAILABLE = False
+
+        if RUST_AVAILABLE:
+            try:
+                logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path))
+                rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore)
                 
-                # Double check max depth if needed
-                if self.max_depth is not None:
-                    try:
-                        relative = file_path.relative_to(self.root_path)
-                        if len(relative.parts) > self.max_depth:
+                for path_str, size_bytes in rust_files:
+                    file_path = Path(path_str)
+                    
+                    # Double check max depth if needed
+                    if self.max_depth is not None:
+                        try:
+                            relative = file_path.relative_to(self.root_path)
+                            if len(relative.parts) > self.max_depth:
+                                continue
+                        except ValueError:
                             continue
-                    except ValueError:
+
+                    # Skip binary and non-code files
+                    if self.classifier.should_skip(file_path):
                         continue
 
-                # Skip binary and non-code files
-                if self.classifier.should_skip(file_path):
-                    continue
+                    # Classify file
+                    file_type = self.classifier.classify(file_path)
 
-                # Classify file
-                file_type = self.classifier.classify(file_path)
+                    # Create DiscoveredFile
+                    relative_path = file_path.relative_to(self.root_path)
+                    discovered_file = DiscoveredFile(
+                        path=str(file_path),
+                        relative_path=str(relative_path),
+                        file_type=file_type,
+                        size_bytes=size_bytes,
+                        is_analyzable=file_type.is_analyzable,
+                        metadata={"engine": "rust"},
+                    )
+                    discovered_files.append(discovered_file)
+                
+                logger.info("discovery_process_complete", engine="rust", file_count=len(discovered_files))
+                return discovered_files
 
-                # Create DiscoveredFile
-                relative_path = file_path.relative_to(self.root_path)
-                discovered_file = DiscoveredFile(
-                    path=str(file_path),
-                    relative_path=str(relative_path),
-                    file_type=file_type,
-                    size_bytes=size_bytes,
-                    is_analyzable=file_type.is_analyzable,
-                    metadata={"engine": "rust"},
-                )
-                discovered_files.append(discovered_file)
-            
-            logger.info("discovery_process_complete", engine="rust", file_count=len(discovered_files))
-            return discovered_files
+            except Exception as e:
+                logger.warning("rust_discovery_failed_falling_back", error=str(e))
 
-        except (ImportError, Exception) as e:
             # Fallback to Python discovery
-            logger.warning("rust_discovery_failed_falling_back", error=str(e))
             logger.debug("discovery_engine_selected", engine="python", project_root=str(self.root_path))
             
             for file_path in self._walk_directory(self.root_path, current_depth=0):

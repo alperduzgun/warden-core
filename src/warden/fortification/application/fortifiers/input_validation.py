@@ -39,12 +39,14 @@ class InputValidationFortifier(BaseFortifier):
     - JSON data
     """
 
-    def __init__(self):
-        """Initialize Input Validation Fortifier."""
-        try:
-            self._llm_provider = create_client()
-        except Exception:
-            self._llm_provider = None  # LLM optional
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize Input Validation Fortifier.
+
+        Args:
+            llm_service: Optional shared LLM service.
+        """
+        self._llm_provider = llm_service
 
     @property
     def name(self) -> str:

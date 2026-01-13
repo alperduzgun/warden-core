@@ -214,8 +214,14 @@ class PhaseOrchestrator:
                     self.config.use_llm = False
                     self.config.enable_fortification = False
                     self.config.enable_cleaning = False
+                    self.config.enable_issue_validation = False
                     # Classification and Analysis will fallback to rule-based automatically if use_llm is False
                     logger.info("basic_level_overrides_applied", use_llm=False, fortification=False, cleaning=False)
+                elif self.config.analysis_level == AnalysisLevel.STANDARD:
+                    self.config.use_llm = True
+                    self.config.enable_fortification = True
+                    self.config.enable_issue_validation = True
+                    logger.info("standard_level_overrides_applied", use_llm=True, fortification=True, verification=True)
             except ValueError:
                 logger.warning("invalid_analysis_level", provided=analysis_level, fallback=self.config.analysis_level.value)
 
@@ -228,6 +234,7 @@ class PhaseOrchestrator:
             use_gitignore=getattr(self.config, 'use_gitignore', True),
             source_code=code_files[0].content if code_files else "",
             language=language,
+            llm_config=getattr(self.llm_service, 'config', None) if hasattr(self.llm_service, 'config') else None
         )
 
         # Create pipeline entity
@@ -306,69 +313,7 @@ class PhaseOrchestrator:
             # Phase 3.5: VERIFICATION (False Positive Reduction)
             # Must run BEFORE Fortification to avoid fixing false positives
             if getattr(self.config, 'enable_issue_validation', False):
-                logger.info("phase_started", phase="VERIFICATION")
-                try:
-                    # Initialize verifier
-                    # We create client here or reuse service if it matches ILlmClient interface
-                    # For safety, let's create a fresh client using factory based on config
-                    verify_llm = create_client() 
-                    
-                    # We need memory manager. In PhaseOrchestrator we don't hold a ref to it directly usually,
-                    # but it might be in config or context. 
-                    # If not available, cache won't work but verification will.
-                    verify_mem_manager = getattr(self.config, 'memory_manager', None)
-
-                    verifier = FindingVerificationService(
-                        llm_client=verify_llm, 
-                        memory_manager=verify_mem_manager,
-                        enabled=True
-                    )
-
-                    # Collect all findings from context
-                    all_findings_raw = []
-                    # We need to update findings in place within frame results
-                    
-                    verified_count = 0
-                    dropped_count = 0
-                    
-                    for frame_id, frame_res in context.frame_results.items():
-                        result_obj = frame_res.get('result')
-                        if result_obj and result_obj.findings:
-                            # Verify bindings
-                            findings_list = [f.to_dict() if hasattr(f, 'to_dict') else f for f in result_obj.findings]
-                            
-                            # Run LLM-based verification if enabled
-                            logger.info("finding_verification_started", 
-                                        frame_id=frame_id, 
-                                        findings_count=len(findings_list))
-                            
-                            # Verify findings with LLM using PipelineContext
-                            verified_findings_dicts = await verifier.verify_findings(findings_list, context)
-                            
-                            verified_ids = {f['id'] for f in verified_findings_dicts}
-                            
-                            # Filter original objects
-                            final_findings = [f for f in result_obj.findings if (f.get('id') if isinstance(f, dict) else f.id) in verified_ids]
-                            
-                            dropped = len(result_obj.findings) - len(final_findings)
-                            dropped_count += dropped
-                            verified_count += len(final_findings)
-                            
-                            result_obj.findings = final_findings
-                            result_obj.issues_found = len(final_findings)
-                    
-                    # Sync context.findings
-                    all_new_findings = []
-                    for fr in context.frame_results.values():
-                        res = fr.get('result')
-                        if res and res.findings:
-                            all_new_findings.extend(res.findings)
-                    context.findings = all_new_findings
-                    
-                    logger.info("verification_phase_completed", verified=verified_count, dropped=dropped_count)
-
-                except Exception as e:
-                    logger.warning("verification_phase_failed", error=str(e))
+                await self._execute_verification_phase_async(context)
 
             # Phase 4: FORTIFICATION
             enable_fortification = getattr(self.config, 'enable_fortification', True)
@@ -426,6 +371,7 @@ class PhaseOrchestrator:
                 context.total_tokens = usage.get('total_tokens', 0)
                 context.prompt_tokens = usage.get('prompt_tokens', 0)
                 context.completion_tokens = usage.get('completion_tokens', 0)
+                context.request_count = usage.get('request_count', 0)
                 logger.info("llm_usage_recorded", **usage)
 
             logger.info(
@@ -460,6 +406,85 @@ class PhaseOrchestrator:
             raise
 
         return context
+
+    async def _execute_verification_phase_async(self, context: PipelineContext) -> None:
+        """
+        Execute Phase 3.5: Verification (LLM-based filtering).
+        Reduces false positives before expensive fortification or reporting.
+        """
+        logger.info("phase_started", phase="VERIFICATION")
+        try:
+            # Initialize verifier once per phase
+            verify_llm = self.llm_service or create_client()
+            verify_mem_manager = getattr(self.config, 'memory_manager', None)
+
+            verifier = FindingVerificationService(
+                llm_client=verify_llm,
+                memory_manager=verify_mem_manager,
+                enabled=True
+            )
+
+            verified_count = 0
+            dropped_count = 0
+
+            for frame_id, frame_res in context.frame_results.items():
+                result_obj = frame_res.get('result')
+                if result_obj and result_obj.findings:
+                    # Sync findings from object to dict for verifier contract
+                    findings_to_verify = [f.to_dict() if hasattr(f, 'to_dict') else f for f in result_obj.findings]
+                    
+                    # Track metrics locally for logs
+                    total_findings = len(findings_to_verify)
+
+                    logger.info("finding_verification_started",
+                                frame_id=frame_id,
+                                findings_count=len(findings_to_verify))
+
+                    # Verify findings via LLM (Strict Async naming)
+                    verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)
+
+                    verified_ids = {f['id'] for f in verified_findings_dicts}
+
+                    # Filter original objects in-place
+                    final_findings = []
+                    cached_count = 0
+                    
+                    for f in result_obj.findings:
+                        fid = f.get('id') if isinstance(f, dict) else f.id
+                        if fid in verified_ids:
+                            final_findings.append(f)
+                            # Check if it was cached
+                            if any(vf.get('verification_metadata', {}).get('cached') for vf in verified_findings_dicts if vf['id'] == fid):
+                                cached_count += 1
+
+                    dropped = len(result_obj.findings) - len(final_findings)
+                    dropped_count += dropped
+                    verified_count += len(final_findings)
+
+                    result_obj.findings = final_findings
+                    result_obj.issues_found = len(final_findings)
+                    
+                    logger.info("finding_verification_complete", 
+                                frame_id=frame_id, 
+                                total=total_findings,
+                                verified=len(final_findings), 
+                                dropped=dropped,
+                                cached=cached_count)
+
+            # Synchronize globally in context
+            all_verified = []
+            for fr in context.frame_results.values():
+                res = fr.get('result')
+                if res and res.findings:
+                    all_verified.extend(res.findings)
+            context.findings = all_verified
+
+            logger.info("verification_phase_completed", 
+                        total_verified=verified_count, 
+                        total_dropped=dropped_count)
+
+        except Exception as e:
+            logger.warning("verification_phase_failed", error=str(e))
 
     def _apply_baseline(self, context: PipelineContext) -> None:
         """Filter out existing issues present in baseline."""

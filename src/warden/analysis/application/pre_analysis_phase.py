@@ -49,6 +49,7 @@ class PreAnalysisPhase:
         progress_callback: Optional[Callable] = None,
         config: Optional[Dict[str, Any]] = None,
         rate_limiter: Optional[Any] = None,
+        llm_service: Optional[Any] = None,
     ) -> None:
         """
         Initialize PRE-ANALYSIS phase.
@@ -57,18 +58,22 @@ class PreAnalysisPhase:
             project_root: Root directory of the project
             progress_callback: Optional callback for progress updates
             config: Optional configuration including LLM settings
+            rate_limiter: Optional rate limiter for LLM calls
+            llm_service: Optional shared LLM service.
         """
         self.project_root = Path(project_root)
         self.progress_callback = progress_callback
         self.config = config or {}
         self.rate_limiter = rate_limiter
+        self.llm_service = llm_service
 
         # Initialize analyzers
         from warden.pipeline.domain.enums import AnalysisLevel
         self.project_analyzer = ProjectStructureAnalyzer(
             self.project_root, 
             llm_config=self.config.get("llm_config"),
-            analysis_level=self.config.get("analysis_level", AnalysisLevel.STANDARD)
+            analysis_level=self.config.get("analysis_level", AnalysisLevel.STANDARD),
+            llm_service=self.llm_service
         )
         self.file_analyzer: Optional[FileContextAnalyzer] = None  # Created after project analysis
         self.llm_analyzer = None  # Will be initialized if enabled
@@ -312,6 +317,7 @@ class PreAnalysisPhase:
                 batch_size=batch_size,
                 cache_enabled=True,
                 rate_limiter=rate_limiter,
+                llm_service=self.llm_service,
             )
 
             logger.info(
@@ -354,7 +360,11 @@ class PreAnalysisPhase:
         analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
         
         if not project_context.purpose and self.llm_analyzer and analysis_level != AnalysisLevel.BASIC:
-            detector = ProjectPurposeDetector(self.project_root, self.config.get("llm_config"))
+            detector = ProjectPurposeDetector(
+                self.project_root, 
+                llm_config=self.config.get("llm_config"),
+                llm_service=self.llm_service
+            )
             # We need the file list for discovery canvas
             # Use analyzer's filtered list to avoid pollution (like __pycache__)
             all_files = self.project_analyzer.get_all_files()
@@ -383,51 +393,105 @@ class PreAnalysisPhase:
         impacted_files: Set[str] = None
     ) -> Dict[str, Any]:
         """
-        Analyze context for each file.
+        Analyze context for each file using Rule-based pass → Semantic Spread → Batch LLM.
 
         Args:
             code_files: List of code files to analyze
+            impacted_files: Files that must be re-analyzed regardless of cache
 
         Returns:
             Dictionary mapping file paths to FileContextInfo
         """
         logger.info(
-            "analyzing_file_contexts",
+            "analyzing_file_contexts_optimized",
             file_count=len(code_files),
+            mode="batch_plus_semantic"
         )
 
-        # Create tasks for parallel analysis
+        # STEP 1: Rule-based fast pass (LLM disabled here)
         tasks = []
         for code_file in code_files:
             is_impacted = bool(impacted_files and code_file.path in impacted_files)
+            # Pass use_llm=False to force fast rule-based + memory check
             task = asyncio.create_task(
-                self._analyze_single_file_async(code_file, is_impacted)
+                self._analyze_single_file_async(code_file, is_impacted, use_llm=False)
             )
             tasks.append((code_file.path, task))
 
-        # Wait for all analyses to complete
-        file_contexts = {}
+        raw_contexts = {}
         for file_path, task in tasks:
             try:
-                context_info = await task
-                file_contexts[file_path] = context_info
+                raw_contexts[file_path] = await task
             except Exception as e:
-                logger.warning(
-                    "file_context_analysis_failed",
-                    file=file_path,
-                    error=str(e),
-                )
-                # Use default production context on failure
-                file_contexts[file_path] = self._get_default_context(file_path)
+                logger.warning("rule_pass_failed", file=file_path, error=str(e))
+                raw_contexts[file_path] = self._get_default_context(file_path)
 
-        return file_contexts
+        # STEP 2: Semantic Spread (Directory-based context propagation)
+        # Group by directory to spread context from clear files to ambiguous ones
+        dir_groups = {}
+        for path_str, ctx_info in raw_contexts.items():
+            dir_path = str(Path(path_str).parent)
+            if dir_path not in dir_groups:
+                dir_groups[dir_path] = []
+            dir_groups[dir_path].append(ctx_info)
 
-    async def _analyze_single_file_async(self, code_file: CodeFile, is_impacted: bool = False) -> Any:
+        from warden.analysis.domain.file_context import FileContext
+        
+        for dir_path, files in dir_groups.items():
+            # Find dominant high-confidence context in this directory (excluding PRODUCTION default)
+            clear_contexts = [f for f in files if f.confidence >= 0.85 and f.context != FileContext.PRODUCTION]
+            
+            if clear_contexts:
+                # Use the most frequent clear context
+                from collections import Counter
+                dominant_ctx = Counter([f.context for f in clear_contexts]).most_common(1)[0][0]
+                
+                # Spread to low confidence files in the same directory
+                for f in files:
+                    if f.confidence < 0.7:
+                        f.context = dominant_ctx
+                        f.confidence = 0.8  # Boosted by semantic spread
+                        f.detection_method += "+semantic_spread"
+                        logger.debug("semantic_context_spread", file=f.file_path, context=dominant_ctx.value)
+
+        # STEP 3: Batch LLM Analysis for remaining ambiguous files
+        if self.llm_analyzer:
+            # Collect files that still have low confidence
+            ambiguous_items = []
+            for path_str, ctx_info in raw_contexts.items():
+                if ctx_info.confidence < 0.7:
+                    # Prepare tuple for Batch analyzer: (Path, FileContext, float)
+                    ambiguous_items.append((Path(path_str), ctx_info.context, ctx_info.confidence))
+
+            if ambiguous_items:
+                logger.info("batch_llm_enhancement_trigger", count=len(ambiguous_items))
+                
+                # Perform batch analysis (e.g. 10 files per LLM call)
+                # LLM analyzer already has an internal batching mechanism
+                try:
+                    batch_results = await self.llm_analyzer.analyze_batch_async(ambiguous_items)
+                    
+                    # Merge results back
+                    for i, (path, _, _) in enumerate(ambiguous_items):
+                        path_str = str(path)
+                        if i < len(batch_results):
+                            new_ctx, new_conf, method = batch_results[i]
+                            raw_contexts[path_str].context = new_ctx
+                            raw_contexts[path_str].confidence = new_conf
+                            raw_contexts[path_str].detection_method = method
+                except Exception as e:
+                    logger.warning("batch_llm_enhancement_failed", error=str(e))
+
+        return raw_contexts
+
+    async def _analyze_single_file_async(self, code_file: CodeFile, is_impacted: bool = False, use_llm: bool = True) -> Any:
         """
         Analyze a single file's context.
 
         Args:
             code_file: Code file to analyze
+            is_impacted: Whether the file is impacted by a dependency change
+            use_llm: Whether to use LLM for enhancement
 
         Returns:
             FileContextInfo for the file
@@ -446,7 +510,7 @@ class PreAnalysisPhase:
             rel_path = code_file.path
 
         # Check memory for existing state
-        if self.trust_memory_context and self.memory_manager and self.memory_manager._is_loaded:
+        if self.config.get("trust_memory_context", True) and self.memory_manager and self.memory_manager._is_loaded:
             stored_state = self.memory_manager.get_file_state(rel_path)
             
             # If hash matches AND not impacted, mark as unchanged
@@ -475,7 +539,7 @@ class PreAnalysisPhase:
                         # Fallback to analysis on error matches
                         pass
 
-        context_info = await self.file_analyzer.analyze_file_async(Path(code_file.path))
+        context_info = await self.file_analyzer.analyze_file_async(Path(code_file.path), use_llm=use_llm)
         
         # Enrich context info with hash and impact status
         context_info.content_hash = content_hash

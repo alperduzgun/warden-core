@@ -49,6 +49,7 @@ class LlmContextAnalyzer:
         batch_size: int = 10,
         cache_enabled: bool = True,
         rate_limiter: Optional[RateLimiter] = None,
+        llm_service: Optional[Any] = None,
     ):
         """
         Initialize LLM context analyzer.
@@ -59,16 +60,19 @@ class LlmContextAnalyzer:
             batch_size: Number of files to analyze per LLM call
             cache_enabled: Cache LLM responses for similar patterns
             rate_limiter: Optional shared rate limiter to prevent 429s
+            llm_service: Optional shared LLM service
         """
-        try:
-            self.llm = create_client(llm_config) if llm_config else None
-        except Exception as e:
-            logger.warning(
-                "llm_client_creation_failed",
-                error=str(e),
-                fallback="no_llm",
-            )
-            self.llm = None
+        self.llm = llm_service
+        if not self.llm:
+            try:
+                self.llm = create_client(llm_config) if llm_config else None
+            except Exception as e:
+                logger.warning(
+                    "llm_client_creation_failed",
+                    error=str(e),
+                    fallback="no_llm",
+                )
+                self.llm = None
 
         self.confidence_threshold = confidence_threshold
         self.batch_size = batch_size
@@ -282,14 +286,22 @@ class LlmContextAnalyzer:
         )
 
         try:
-            # Create batch prompt
-            batch_prompt = self._create_batch_prompt(needs_llm)
+            # Internal sub-batching to avoid TPM limit deadlocks
+            SUB_BATCH_SIZE = 20
+            decisions = []
+            
+            for i in range(0, len(needs_llm), SUB_BATCH_SIZE):
+                sub_batch = needs_llm[i : i + SUB_BATCH_SIZE]
+                
+                # Create batch prompt for sub-batch
+                batch_prompt = self._create_batch_prompt(sub_batch)
 
-            # Call LLM
-            response = await self._call_llm_batch_async(batch_prompt)
+                # Call LLM
+                response = await self._call_llm_batch_async(batch_prompt)
 
-            # Parse batch response
-            decisions = self._parse_batch_response(response, len(needs_llm))
+                # Parse batch response
+                sub_decisions = self._parse_batch_response(response, len(sub_batch))
+                decisions.extend(sub_decisions)
 
             # Merge results
             results = []
@@ -301,6 +313,7 @@ class LlmContextAnalyzer:
                     if llm_index < len(decisions):
                         decision = decisions[llm_index]
                         try:
+                            # Use new context from LLM
                             new_ctx = FileContext(decision.context)
                             results.append((new_ctx, decision.confidence, "llm-batch"))
                         except ValueError:
@@ -497,21 +510,38 @@ Return JSON:
             )
 
     def _extract_json(self, text: str) -> str:
-        """Extract JSON from LLM response."""
+        """Extract JSON (object or array) from LLM response."""
         text = text.strip()
 
-        # Remove markdown code blocks
+        # Try to find JSON block in markdown
         if "```json" in text:
-            start = text.find("{", text.find("```json"))
-            end = text.rfind("}", 0, text.rfind("```") if "```" in text[start:] else len(text)) + 1
-        else:
-            start = text.find("{")
-            end = text.rfind("}") + 1
+            start_search = text.find("```json") + 7
+            snippet = text[start_search:]
+            markdown_end = snippet.find("```")
+            if markdown_end != -1:
+                text = snippet[:markdown_end]
+            else:
+                text = snippet
 
+        # Find first container start
+        start_obj = text.find("{")
+        start_arr = text.find("[")
+        
+        if start_obj == -1 and start_arr == -1:
+            return ""
+            
+        start = start_obj if (start_obj != -1 and (start_arr == -1 or start_obj < start_arr)) else start_arr
+        
+        # Find last container end
+        end_obj = text.rfind("}")
+        end_arr = text.rfind("]")
+        
+        end = max(end_obj, end_arr) + 1
+        
         if start != -1 and end > start:
             return text[start:end]
 
-        return ""  # Return empty string if no JSON found
+        return ""
 
     def _create_project_summary(
         self,

@@ -46,6 +46,7 @@ class PipelineContext:
     project_root: Optional[Path] = None  # NEW: Root directory of the project
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns
     language: str = "python"
+    llm_config: Optional[Any] = None  # NEW: Global LLM configuration for tiering
 
     # Memory limits (class variables)
     MAX_LLM_HISTORY: int = field(default=100, init=False)
@@ -105,6 +106,7 @@ class PipelineContext:
     total_tokens: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    request_count: int = 0
 
     # Metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -200,6 +202,7 @@ class PipelineContext:
             "use_gitignore": self.use_gitignore,
             "source_code": self.source_code,
             "language": self.language,
+            "llm_config": self.llm_config,
         }
 
         # PRE-ANALYSIS gets basic context
@@ -370,6 +373,7 @@ class PipelineContext:
             "fortifications_count": len(self.fortifications),
             "cleaning_suggestions_count": len(self.cleaning_suggestions),
             "llm_interactions": len(self.llm_history),
+            "llm_requests": self.request_count,
             "metadata": self.metadata,
         }
 
@@ -378,6 +382,7 @@ class PipelineContext:
         summary_parts = [
             f"Pipeline {self.pipeline_id} Summary:",
             f"File: {self.file_path}",
+            f"AI Requests: {self.request_count}",
         ]
 
         if self.project_type:

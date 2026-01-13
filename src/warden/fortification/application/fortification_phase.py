@@ -129,7 +129,7 @@ class FortificationPhase:
             )
 
         from warden.fortification.application.orchestrator import FortificationOrchestrator
-        orchestrator = FortificationOrchestrator()
+        orchestrator = FortificationOrchestrator(llm_service=self.llm_service)
 
         all_fortifications = []
         all_actions = []
@@ -169,10 +169,21 @@ class FortificationPhase:
                 fixes = await self._generate_rule_based_fixes_async(issue_type, issues)
             
             for fix in fixes:
+                # Use the finding ID from the fix or the first issue in the group
+                fid = fix.get("finding_id")
+                if not fid and issues:
+                    fid = issues[0].get("id")
+
                 all_fortifications.append(Fortification(
                     id=f"fix-{len(all_fortifications)}",
                     title=fix.get("title", "Security Fix"),
-                    detail=fix.get("detail", "")
+                    detail=fix.get("detail", ""),
+                    suggested_code=fix.get("code") or fix.get("suggested_code"),
+                    original_code=fix.get("original_code"),
+                    file_path=fix.get("file_path"),
+                    line_number=fix.get("line_number"),
+                    confidence=fix.get("confidence", 0.0),
+                    finding_id=fid
                 ))
 
         result = FortificationResult(
@@ -249,10 +260,18 @@ class FortificationPhase:
                 estimated_tokens = (len(prompt) // 4) + 2000
                 await self.rate_limiter.acquire_async(estimated_tokens)
 
+            # Determine model tier
+            model = None
+            if self.context and hasattr(self.context, 'llm_config') and self.context.llm_config:
+                model = getattr(self.context.llm_config, 'smart_model', None)
+            elif isinstance(self.context, dict) and "llm_config" in self.context:
+                model = self.context["llm_config"].get("smart_model")
+
             # Step 3: Get LLM suggestions
             response = await self.llm_service.complete_async(
                 prompt=prompt,
                 max_tokens=2000,
+                model=model
             )
 
             # Step 4: Parse LLM response into fortifications

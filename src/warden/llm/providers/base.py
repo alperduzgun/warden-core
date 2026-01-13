@@ -9,6 +9,7 @@ All provider implementations must inherit from this interface
 
 from abc import ABC, abstractmethod
 import json
+from typing import Optional
 from ..types import LlmProvider, LlmRequest, LlmResponse
 
 
@@ -60,7 +61,7 @@ class ILlmClient(ABC):
         """
         pass
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
@@ -78,7 +79,7 @@ class ILlmClient(ABC):
         request = LlmRequest(
             user_message=prompt,
             system_prompt=system_prompt,
-            model=None,  # Use provider default
+            model=model,  # Use provider default or override
             temperature=0.7,
             max_tokens=2000,
             timeout_seconds=30.0

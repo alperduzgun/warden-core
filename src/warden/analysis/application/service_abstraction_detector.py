@@ -138,7 +138,8 @@ class ServiceAbstractionDetector:
         project_root: Path, 
         project_context: Optional[ProjectContext] = None,
         llm_config: Optional[LlmConfiguration] = None,
-        analysis_level: Optional[Any] = None
+        analysis_level: Optional[Any] = None,
+        llm_service: Optional[Any] = None
     ) -> None:
         """
         Initialize detector.
@@ -147,6 +148,7 @@ class ServiceAbstractionDetector:
             project_root: Root directory of the project
             project_context: Optional project context for language detection
             llm_config: Optional LLM configuration for bypass synthesis
+            llm_service: Optional shared LLM service
         """
         self.project_root = Path(project_root)
         self.project_context = project_context
@@ -159,11 +161,13 @@ class ServiceAbstractionDetector:
         self._registry_initialized = False
         
         # Initialize LLM
-        try:
-            self.llm = create_client(llm_config) if llm_config else create_client()
-        except Exception as e:
-            logger.debug("llm_client_creation_failed_for_detector", error=str(e))
-            self.llm = None
+        self.llm = llm_service
+        if not self.llm:
+            try:
+                self.llm = create_client(llm_config) if llm_config else create_client()
+            except Exception as e:
+                logger.debug("llm_client_creation_failed_for_detector", error=str(e))
+                self.llm = None
 
         # Check analysis level - bypass LLM initialization if basic
         from warden.pipeline.domain.enums import AnalysisLevel

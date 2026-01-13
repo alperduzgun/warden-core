@@ -116,93 +116,105 @@ class LLMClassificationPhase(LLMPhaseBase):
                 "reasoning": "Default frame selection due to parse error",
             }
 
-    async def classify_and_select_frames_async(
+    async def classify_batch_async(
         self,
         project_type: ProjectType,
         framework: Framework,
+        files: List[str],
         file_contexts: Dict[str, Dict[str, Any]],
-        file_path: Optional[str] = None,
         previous_issues: Optional[List[Dict[str, Any]]] = None,
-    ) -> Tuple[List[str], Dict[str, Any], float]:
+    ) -> Dict[str, Tuple[List[str], Dict[str, Any], float]]:
         """
-        Classify project and select validation frames.
-
-        Args:
-            project_type: Type of project
-            framework: Framework being used
-            file_contexts: File context information
-            file_path: Optional specific file to analyze
-            previous_issues: Issues from previous runs
-
-        Returns:
-            Selected frame IDs, suppression config, and confidence
+        Classify multiple files in batch for frame selection.
         """
-        context = {
-            "project_type": project_type.value,
-            "framework": framework.value,
-            "file_contexts": file_contexts,
-            "file_path": file_path or "",
-            "previous_issues": previous_issues or [],
-        }
+        results = {}
+        if not files:
+            return results
 
-        # Retrieve semantic context if service is available
-        if self.semantic_search_service and self.semantic_search_service.is_available():
+        if not self.config.enabled or not self.llm:
+            # Fallback for all
+            for file_path in files:
+                selected_frames = self._rule_based_selection(project_type, framework, {file_path: file_contexts.get(file_path, {})})
+                suppression_config = self._default_suppression_config({file_path: file_contexts.get(file_path, {})})
+                results[file_path] = (selected_frames, suppression_config, 0.6)
+            return results
+
+        BATCH_SIZE = 10
+        for i in range(0, len(files), BATCH_SIZE):
+            batch_files = files[i : i + BATCH_SIZE]
+            
             try:
-                semantic_context = await self.semantic_search_service.get_context(
-                    query=f"Architectural patterns and security sensitive code in {file_path}",
-                    language="python" # Should be dynamic based on code_files[0].language
+                # Prepare Batch Prompt
+                prompt = self._format_classification_batch_user_prompt(
+                    project_type, framework, batch_files, file_contexts, previous_issues
                 )
-                if semantic_context:
-                    context["semantic_context"] = {
-                        "relevant_chunks": [c.content[:500] for c in semantic_context.relevant_chunks[:3]],
-                        "average_score": semantic_context.average_score
-                    }
+                
+                # Call LLM
+                response = await self.llm.complete_async(prompt, self.get_system_prompt())
+                
+                # Parse Batch Results
+                batch_results = self._parse_classification_batch_response(response.content, len(batch_files))
+                
+                # Map back
+                for idx, file_path in enumerate(batch_files):
+                    llm_data = batch_results[idx] if idx < len(batch_results) else None
+                    if llm_data:
+                        selected_frames = llm_data.get("selected_frames", ["security", "chaos", "orphan"])
+                        # Normalize
+                        selected_frames = [f.lower().replace("frame", "").strip() for f in selected_frames]
+                        
+                        suppression_config = {
+                            "rules": llm_data.get("suppression_rules", []),
+                            "priorities": llm_data.get("priorities", {}),
+                            "reasoning": llm_data.get("reasoning", ""),
+                        }
+                        results[file_path] = (selected_frames, suppression_config, 0.85)
+                    else:
+                        # Fallback
+                        selected_frames = self._rule_based_selection(project_type, framework, {file_path: file_contexts.get(file_path, {})})
+                        suppression_config = self._default_suppression_config({file_path: file_contexts.get(file_path, {})})
+                        results[file_path] = (selected_frames, suppression_config, 0.5)
+
             except Exception as e:
-                logger.warning("semantic_context_retrieval_failed", error=str(e))
+                logger.error("batch_classification_failed", error=str(e))
+                for file_path in batch_files:
+                    selected_frames = self._rule_based_selection(project_type, framework, {file_path: file_contexts.get(file_path, {})})
+                    suppression_config = self._default_suppression_config({file_path: file_contexts.get(file_path, {})})
+                    results[file_path] = (selected_frames, suppression_config, 0.5)
 
-        # Try LLM classification
-        llm_result = await self.analyze_with_llm_async(context)
+        return results
 
-        if llm_result:
-            selected_frames = llm_result["selected_frames"]
+    def _format_classification_batch_user_prompt(self, project_type, framework, files, file_contexts, previous_issues) -> str:
+        batch_summary = ""
+        for i, file_path in enumerate(files):
+            ctx = file_contexts.get(file_path, {})
+            batch_summary += f"""
+FILE #{i}: {file_path}
+Context: {json.dumps(ctx)}
+"""
+        return f"""Classify and select validation frames for {len(files)} files in a {framework.value} {project_type.value} project.
+Return a JSON array of objects with schema:
+{{
+  "idx": int,
+  "selected_frames": ["security", "chaos", ...],
+  "suppression_rules": [...],
+  "priorities": {{...}},
+  "reasoning": "..."
+}}
 
-            # Normalize frame names (LLM might return class names like "SecurityFrame")
-            normalized_frames = []
-            for frame in selected_frames:
-                # Convert class names to frame IDs
-                # SecurityFrame -> security, ChaosFrame -> chaos, etc.
-                normalized = frame.lower().replace("frame", "").replace("-", "").replace("_", "")
-                normalized_frames.append(normalized)
+FILES TO ANALYZE:
+{batch_summary}
+"""
 
-            selected_frames = normalized_frames
-
-            # Safety check: ensure we always have some frames
-            if not selected_frames:
-                logger.warning("llm_classification_empty", fallback_to_defaults=True)
-                selected_frames = ["security", "chaos", "orphan"]
-
-            suppression_config = {
-                "rules": llm_result["suppression_rules"],
-                "priorities": llm_result["priorities"],
-                "reasoning": llm_result["reasoning"],
-            }
-
-            logger.info(
-                "llm_classification_complete",
-                selected_frames=selected_frames,
-                suppression_count=len(llm_result["suppression_rules"]),
-                confidence=0.85,
-            )
-
-            return selected_frames, suppression_config, 0.85
-
-        # Fallback to rule-based classification
-        selected_frames = self._rule_based_selection(
-            project_type, framework, file_contexts
-        )
-        suppression_config = self._default_suppression_config(file_contexts)
-
-        return selected_frames, suppression_config, 0.6
+    def _parse_classification_batch_response(self, response: str, count: int) -> List[Dict[str, Any]]:
+        try:
+            from warden.shared.utils.json_parser import parse_json_from_llm
+            result = parse_json_from_llm(response)
+            if isinstance(result, list):
+                return result
+            return []
+        except:
+            return []
 
     async def generate_suppression_rules_async(
         self,
@@ -411,19 +423,83 @@ Return patterns as JSON."""
 
     async def execute_async(self, code_files: List[Any]) -> Any:
         """
-        Execute LLM-enhanced classification phase.
-
-        This is the main entry point called by the orchestrator.
+        Execute LLM-enhanced classification phase with True Batching.
         """
+        if not code_files:
+            return self._create_default_result(["security", "chaos", "orphan"])
+
         logger.info(
-            "llm_classification_phase_starting",
-            file_count=len(code_files) if code_files else 0,
+            "llm_classification_phase_starting_batch",
+            file_count=len(code_files),
             has_llm=self.llm is not None
         )
 
-        # Mock classification result for now
-        from dataclasses import dataclass
+        # Prepare context
+        project_type_str = self.context.get("project_type", ProjectType.APPLICATION.value)
+        framework_str = self.context.get("framework", Framework.NONE.value)
+        
+        def get_enum_safe(enum_cls, value, default):
+            try:
+                return enum_cls(value)
+            except ValueError:
+                return default
 
+        project_type = get_enum_safe(ProjectType, project_type_str, ProjectType.APPLICATION)
+        framework = get_enum_safe(Framework, framework_str, Framework.NONE)
+        
+        raw_file_contexts = self.context.get("file_contexts", {})
+        file_contexts = {}
+        for path, ctx in raw_file_contexts.items():
+            if hasattr(ctx, "model_dump"):
+                file_contexts[path] = ctx.model_dump(mode='json')
+            elif hasattr(ctx, "to_json"):
+                file_contexts[path] = ctx.to_json()
+            elif hasattr(ctx, "dict"):
+                file_contexts[path] = ctx.dict()
+            else:
+                file_contexts[path] = ctx
+
+        previous_issues = self.context.get("previous_issues", [])
+        file_paths = [cf.path for cf in code_files]
+
+        # Perform Batch Classification
+        # classify_batch_async returns Dict[str, Tuple[List[str], Dict[str, Any], float]]
+        batch_results = await self.classify_batch_async(
+            project_type=project_type,
+            framework=framework,
+            files=file_paths,
+            file_contexts=file_contexts,
+            previous_issues=previous_issues
+        )
+
+        if not batch_results:
+             return self._create_default_result(["security", "chaos", "orphan"])
+
+        # Aggregate results
+        # For frames, we take a UNION of all frames suggested for any file in the project
+        all_frames = set()
+        all_suppression_rules = []
+        all_priorities = {}
+        all_reasoning = []
+
+        for file_path, (frames, suppression_config, confidence) in batch_results.items():
+            all_frames.update(frames)
+            all_suppression_rules.extend(suppression_config.get("rules", []))
+            all_priorities.update(suppression_config.get("priorities", {}))
+            if suppression_config.get("reasoning"):
+                all_reasoning.append(f"{file_path}: {suppression_config['reasoning']}")
+
+        # Ensure we always have some base frames
+        if not all_frames:
+            all_frames = {"security", "chaos", "orphan"}
+
+        logger.info(
+            "llm_batch_classification_complete",
+            frames=list(all_frames),
+            files_analyzed=len(batch_results)
+        )
+
+        from dataclasses import dataclass
         @dataclass
         class ClassificationResult:
             selected_frames: List[str]
@@ -432,79 +508,28 @@ Return patterns as JSON."""
             reasoning: str
             learned_patterns: List[Dict[str, Any]]
 
-        # Use LLM to select frames if available
-        if self.llm and code_files:
-            # Use actual context values
-            project_type_str = self.context.get("project_type", ProjectType.APPLICATION.value)
-            framework_str = self.context.get("framework", Framework.NONE.value)
-            
-            # Helper to safely convert string to Enum
-            def get_enum_safe(enum_cls, value, default):
-                try:
-                    return enum_cls(value)
-                except ValueError:
-                    return default
-
-            project_type = get_enum_safe(ProjectType, project_type_str, ProjectType.APPLICATION)
-            framework = get_enum_safe(Framework, framework_str, Framework.NONE)
-            # Serialize file contexts if they are objects
-            raw_file_contexts = self.context.get("file_contexts", {})
-            file_contexts = {}
-            for path, ctx in raw_file_contexts.items():
-                # Handle Pydantic models (FileContextInfo)
-                if hasattr(ctx, "model_dump"):
-                    file_contexts[path] = ctx.model_dump(mode='json')
-                elif hasattr(ctx, "to_json"):
-                    file_contexts[path] = ctx.to_json()
-                elif hasattr(ctx, "dict"):
-                    file_contexts[path] = ctx.dict()
-                else:
-                    file_contexts[path] = ctx
-
-            previous_issues = self.context.get("previous_issues", [])
-
-            # Log context usage for traceability
-            logger.info(
-                "llm_classification_using_context",
-                project_type=project_type.value,
-                framework=framework.value,
-                file_contexts_count=len(file_contexts),
-                previous_issues_count=len(previous_issues)
-            )
-
-            selected_frames, suppression_config, confidence = await self.classify_and_select_frames_async(
-                project_type=project_type,
-                framework=framework,
-                file_contexts=file_contexts,
-                file_path=code_files[0].path if code_files else None,
-                previous_issues=previous_issues
-            )
-
-            logger.info(
-                "llm_classification_complete",
-                frames=selected_frames,
-                confidence=confidence,
-                used_llm=True
-            )
-
-            # Final safety check before returning
-            if not selected_frames:
-                logger.warning("execute_async_empty_frames", using_fallback=True)
-                selected_frames = ["security", "chaos", "orphan"]
-
-            return ClassificationResult(
-                selected_frames=selected_frames,
-                suppression_rules=suppression_config.get("rules", []),
-                frame_priorities=suppression_config.get("priorities", {}),
-                reasoning=suppression_config.get("reasoning", "LLM-based selection"),
-                learned_patterns=[]
-            )
-
-        # Fallback to default
         return ClassificationResult(
-            selected_frames=["security", "chaos", "orphan"],
+            selected_frames=list(all_frames),
+            suppression_rules=all_suppression_rules[:100], # Cap it
+            frame_priorities=all_priorities,
+            reasoning=" | ".join(all_reasoning[:5]) + ("..." if len(all_reasoning) > 5 else ""),
+            learned_patterns=[]
+        )
+
+    def _create_default_result(self, frames: List[str]) -> Any:
+        from dataclasses import dataclass
+        @dataclass
+        class ClassificationResult:
+            selected_frames: List[str]
+            suppression_rules: List[Dict[str, Any]]
+            frame_priorities: Dict[str, str]
+            reasoning: str
+            learned_patterns: List[Dict[str, Any]]
+            
+        return ClassificationResult(
+            selected_frames=frames,
             suppression_rules=[],
-            frame_priorities={"security": "CRITICAL", "chaos": "HIGH", "orphan": "MEDIUM"},
-            reasoning="Default frame selection (no LLM)",
+            frame_priorities={f: "HIGH" for f in frames},
+            reasoning="Default frames (fallback)",
             learned_patterns=[]
         )

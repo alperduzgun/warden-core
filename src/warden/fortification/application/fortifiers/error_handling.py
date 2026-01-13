@@ -45,12 +45,14 @@ class ErrorHandlingFortifier(BaseFortifier):
     - External API calls
     """
 
-    def __init__(self):
-        """Initialize Error Handling Fortifier."""
-        try:
-            self._llm_provider = create_client()
-        except Exception:
-            self._llm_provider = None  # LLM optional
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize Error Handling Fortifier.
+
+        Args:
+            llm_service: Optional shared LLM service.
+        """
+        self._llm_provider = llm_service
 
     @property
     def name(self) -> str:

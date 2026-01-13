@@ -24,6 +24,23 @@ from warden.validation.domain.enums import (
 
 
 @dataclass
+class Remediation:
+    """
+    Suggested fix for a finding.
+    """
+    description: str
+    code: str  # The replacement code
+    unified_diff: str | None = None
+    
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "description": self.description,
+            "code": self.code,
+            "unified_diff": self.unified_diff
+        }
+
+
+@dataclass
 class Finding:
     """
     A single validation finding (issue/warning).
@@ -48,6 +65,7 @@ class Finding:
     line: int = 0  # Line number (1-based)
     column: int = 0  # Column number (1-based)
     is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
+    remediation: Remediation | None = None  # 🛡️ NEW: Suggested fix
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel JSON."""
@@ -60,7 +78,9 @@ class Finding:
             "code": self.code,
             "line": self.line,
             "column": self.column,
+
             "isBlocker": self.is_blocker,  # Exposed to UI/Report
+            "remediation": self.remediation.to_json() if self.remediation else None,
         }
 
     def to_dict(self) -> Dict[str, Any]:

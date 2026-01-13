@@ -54,8 +54,32 @@ class FortificationExecutor(BasePhaseExecutor):
                 rate_limiter=self.rate_limiter
             )
 
-            # Ensure validated_issues exists and is a list
-            validated_issues = getattr(context, 'validated_issues', [])
+            # Use findings from context (whether validated or raw)
+            raw_findings = getattr(context, 'findings', []) or []
+            
+            # Convert objects to dicts expected by FortificationPhase
+            validated_issues = []
+            for f in raw_findings:
+                # Handle Finding object or dict
+                if hasattr(f, 'to_json'):
+                    # Parse location for file path
+                    file_path = f.location.split(':')[0] if f.location else ""
+                    
+                    # Map Finding object to Fortification Dictionary Contract
+                    issue = {
+                        "id": f.id,
+                        "type": f.id.split('-')[0] if '-' in f.id else "issue", # Heuristic for type from ID
+                        "severity": f.severity,
+                        "message": f.message,
+                        "detail": f.detail,
+                        "file_path": file_path,
+                        "line_number": f.line,
+                        "code_snippet": f.code
+                    }
+                    validated_issues.append(issue)
+                elif isinstance(f, dict):
+                     validated_issues.append(f)
+
             if validated_issues is None:
                 validated_issues = []
 
@@ -65,6 +89,42 @@ class FortificationExecutor(BasePhaseExecutor):
             context.fortifications = result.fortifications
             context.applied_fixes = result.applied_fixes
             context.security_improvements = result.security_improvements
+
+            # Link Fortifications back to Findings for Reporting
+            from warden.validation.domain.frame import Remediation
+            
+            # Create a lookup for findings
+            findings_map = {f.id: f for f in context.findings}
+            
+            for fort in result.fortifications:
+                # Get Finding ID from fortification
+                fid = getattr(fort, 'finding_id', None)
+                if fid and fid in findings_map:
+                    finding = findings_map[fid]
+                    # Create Remediation object
+                    remediation = Remediation(
+                        desc=fort.title,
+                        code=fort.suggested_code,
+                        diff=None # Can be generated if original_code exists
+                    )
+                    
+                    # Log diff generation attempt
+                    if fort.original_code and fort.suggested_code:
+                         try:
+                             import difflib
+                             diff = difflib.unified_diff(
+                                 fort.original_code.splitlines(),
+                                 fort.suggested_code.splitlines(),
+                                 fromfile='original',
+                                 tofile='fixed',
+                                 lineterm=''
+                             )
+                             remediation.diff = '\n'.join(list(diff))
+                         except Exception:
+                             pass
+                    
+                    # Assign to finding
+                    finding.remediation = remediation
 
             # Add phase result
             context.add_phase_result("FORTIFICATION", {

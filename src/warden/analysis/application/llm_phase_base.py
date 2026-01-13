@@ -128,8 +128,10 @@ class LLMPhaseBase(ABC):
             import tiktoken
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
         except (ImportError, Exception):
-            logger.debug("tiktoken_not_available_using_fallback")
             self.tokenizer = None
+
+        # Preferred Model Tier (smart or fast)
+        self.preferred_model_tier = kwargs.get('preferred_model_tier', 'smart')
 
         # Enable LLM if service is provided
         if llm_service:
@@ -174,6 +176,7 @@ class LLMPhaseBase(ABC):
         context: Dict[str, Any],
         use_cache: bool = True,
         pipeline_context: Optional['PipelineContext'] = None,
+        model: Optional[str] = None,
     ) -> Optional[Any]:
         """
         Analyze with LLM support.
@@ -188,6 +191,11 @@ class LLMPhaseBase(ABC):
         """
         if not self.config.enabled or not self.llm:
             return None
+
+        # Determine model from pipeline context if not provided
+        if not model and pipeline_context and pipeline_context.llm_config:
+            tier_attr = f"{self.preferred_model_tier}_model"
+            model = getattr(pipeline_context.llm_config, tier_attr, None)
 
         # Enrich context with pipeline history if available
         if pipeline_context:
@@ -236,7 +244,7 @@ class LLMPhaseBase(ABC):
 
             # Call LLM with retry logic
             llm_start_time = time.time()
-            response = await self._call_llm_with_retry_async(system_prompt, user_prompt)
+            response = await self._call_llm_with_retry_async(system_prompt, user_prompt, model=model)
             llm_duration = time.time() - llm_start_time
 
             logger.info(
@@ -299,6 +307,8 @@ class LLMPhaseBase(ABC):
         self,
         items: List[Dict[str, Any]],
         use_cache: bool = True,
+        pipeline_context: Optional['PipelineContext'] = None,
+        model: Optional[str] = None,
     ) -> List[Optional[Any]]:
         """
         Analyze multiple items in batches.
@@ -312,13 +322,24 @@ class LLMPhaseBase(ABC):
         """
         results = []
 
+        # Determine batch size from config or global max_concurrency
+        batch_size = self.config.batch_size
+        llm_config = getattr(self.llm, 'config', None) if hasattr(self.llm, 'config') else None
+        if llm_config and hasattr(llm_config, 'max_concurrency'):
+            batch_size = llm_config.max_concurrency
+
         # Process in batches
-        for i in range(0, len(items), self.config.batch_size):
-            batch = items[i : i + self.config.batch_size]
+        for i in range(0, len(items), batch_size):
+            batch = items[i : i + batch_size]
 
             # Process batch concurrently
             batch_tasks = [
-                self.analyze_with_llm_async(item, use_cache) for item in batch
+                self.analyze_with_llm_async(
+                    item, 
+                    use_cache=use_cache,
+                    pipeline_context=pipeline_context,
+                    model=model
+                ) for item in batch
             ]
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
@@ -340,6 +361,7 @@ class LLMPhaseBase(ABC):
         self,
         system_prompt: str,
         user_prompt: str,
+        model: Optional[str] = None,
     ) -> Optional[Any]:  # Returns LlmResponse
         """
         Call LLM with retry logic and PROACTIVE RATE LIMITING.
@@ -378,7 +400,8 @@ class LLMPhaseBase(ABC):
                 response = await asyncio.wait_for(
                     self.llm.complete_async(
                         prompt=user_prompt,
-                        system_prompt=system_prompt
+                        system_prompt=system_prompt,
+                        model=model
                     ),
                     timeout=self.config.timeout,
                 )
