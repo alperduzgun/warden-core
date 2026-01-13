@@ -73,6 +73,15 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Cache Baseline Report
+        id: baseline-cache
+        uses: actions/cache@v4
+        with:
+          path: .warden/baseline.sarif
+          key: warden-baseline-${{ github.ref_name }}-${{ hashFiles('.warden/config.yaml') }}
+          restore-keys: |
+            warden-baseline-${{ github.ref_name }}-
+
       - name: Run Warden Scan
         # continue-on-error removed to enforce quality gate
         env:
@@ -98,7 +107,7 @@ jobs:
           
           echo "Waiting for Ollama service..."
           for i in {1..30}; do
-            if curl -s http://localhost:11434/api/tags >/dev/null; then
+            if curl -s http://localhost:11434/api/tags > /dev/null; then
               echo "Ollama service is ready!"
               break
             fi
@@ -110,51 +119,54 @@ jobs:
           
           # --- SCAN EXECUTION ---
           
-          # Layered Scan Strategy: 
-          # - All Events: STANDARD (Full AI analysis with Local LLM)
-          # We have optimized the CI to include Ollama and Qwen, so we use STANDARD
-          # to ensure comprehensive validation even in PRs.
+          # Determine scan strategy: Baseline (first run) or Incremental (subsequent runs)
+          if [[ -f ".warden/baseline.sarif" ]]; then
+            echo "✅ Baseline found - Running INCREMENTAL SCAN"
+            SCAN_MODE="incremental"
+          else
+            echo "🔍 No baseline found - Running FULL DEEP SCAN to establish baseline"
+            SCAN_MODE="baseline"
+          fi
           
           LEVEL="standard"
           
-          echo "Running Warden Scan with level: $LEVEL"
-          
-          # Smart Diff Scanning: Only scan files changed in this push/PR
-          # This prevents re-scanning the entire codebase on every commit (which takes hours).
-          
-          # 1. Fetch history to ensure diff works
-          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
-          
-          # 2. Get changed python files
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.base_ref }}...HEAD | grep "\.py$" || true)
+          if [[ "$SCAN_MODE" == "baseline" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # BASELINE SCAN: Full deep scan of entire project
+            echo "Running FULL SCAN on entire repository..."
+            warden scan . --level deep --format sarif --output warden.sarif --verbose
+            
+            # Save as baseline for future incremental scans
+            mkdir -p .warden
+            cp warden.sarif .warden/baseline.sarif
+            echo "📦 Baseline saved to .warden/baseline.sarif"
           else
-            # For push to main/dev, check against previous commit
-            CHANGED_FILES=$(git diff --name-only --diff-filter=d HEAD~1 HEAD | grep "\.py$" || true)
+            # INCREMENTAL SCAN: Only scan files changed in this push/PR
+            echo "Running INCREMENTAL SCAN on changed files..."
+            
+            # 1. Fetch history to ensure diff works
+            git fetch origin ${{ github.base_ref || 'main' }} --depth=1
+            
+            # 2. Get changed python files
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.base_ref }}...HEAD | grep "\.py$" || true)
+            else
+              # For push to main/dev, check against previous commit
+              CHANGED_FILES=$(git diff --name-only --diff-filter=d HEAD~1 HEAD | grep "\.py$" || true)
+            fi
+
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+
+            # 3. Run scan on changed files
+            if [[ -z "$CHANGED_FILES" ]]; then
+               echo "No Python files changed. Skipping scan."
+               # Still output baseline as current report for consistency
+               cp .warden/baseline.sarif warden.sarif
+               exit 0
+            fi
+            
+            echo "$CHANGED_FILES" | xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
           fi
-
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-
-          # 3. Running scan
-          # If manually triggered (workflow_dispatch) via UI, assume FULL SCAN (.)
-          # Otherwise, run incremental scan on CHANGED_FILES or full scan if no changes detected but requested.
-          
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-             echo "Running FULL SCAN on entire repository (Manual Trigger)..."
-             warden scan . --level $LEVEL --format sarif --output warden.sarif --verbose
-          else
-             # Incremental Mode for PR/Push
-             if [[ -z "$CHANGED_FILES" ]]; then
-                echo "No Python files changed. Skipping scan."
-                exit 0
-             fi
-             echo "Running INCREMENTAL SCAN on changed files..."
-             # Now warden scan accepts multiple arguments, so we can pass them directly via xargs (without -n1)
-             echo "$CHANGED_FILES" | xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
-          fi
-
-
 
       - name: Archive SARIF Artifact
         uses: actions/upload-artifact@v4
