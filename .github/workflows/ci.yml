@@ -68,27 +68,10 @@ jobs:
           restore-keys: |
             ollama-models-${{ runner.os }}-
 
-      - name: Install and Start Ollama
-        run: |
-          # 1. Install Ollama
-          curl -fsSL https://ollama.com/install.sh | sh
-          
-          # 2. Start Server in Background
-          ollama serve &
-          
-          # 3. Wait for Server to be ready
-          echo "Waiting for Ollama service..."
-          for i in {1..30}; do
-            if curl -s http://localhost:11434/api/tags >/dev/null; then
-              echo "Ollama service is ready!"
-              break
-            fi
-            sleep 1
-          done
-          
-          # 4. Pull the lightweight Qwen model
-          echo "Pulling qwen2.5-coder:0.5b..."
-          ollama pull qwen2.5-coder:0.5b
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Run Warden Scan
         # continue-on-error removed to enforce quality gate
@@ -104,6 +87,29 @@ jobs:
           # Ensure Warden detects local Ollama
           OLLAMA_HOST: http://localhost:11434
         run: |
+          # --- OLLAMA SETUP ---
+          # We run this here to ensure the background process persists for the scan duration.
+          
+          echo "Installing Ollama..."
+          curl -fsSL https://ollama.com/install.sh | sh
+          
+          echo "Starting Ollama Server..."
+          ollama serve &
+          
+          echo "Waiting for Ollama service..."
+          for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags >/dev/null; then
+              echo "Ollama service is ready!"
+              break
+            fi
+            sleep 1
+          done
+          
+          echo "Pulling qwen2.5-coder:0.5b..."
+          ollama pull qwen2.5-coder:0.5b
+          
+          # --- SCAN EXECUTION ---
+          
           # Layered Scan Strategy: 
           # - All Events: STANDARD (Full AI analysis with Local LLM)
           # We have optimized the CI to include Ollama and Qwen, so we use STANDARD
