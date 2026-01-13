@@ -144,15 +144,29 @@ fn get_file_stats(paths: Vec<String>) -> PyResult<Vec<FileStats>> {
     Ok(stats)
 }
 
+
+#[pyclass]
+#[derive(Clone)]
+pub struct AstNodeInfo {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub line_number: usize,
+    #[pyo3(get)]
+    pub code_snippet: String,
+}
+
 #[pyclass]
 #[derive(Clone)]
 pub struct AstMetadata {
     #[pyo3(get)]
-    pub functions: Vec<String>,
+    pub functions: Vec<AstNodeInfo>,
     #[pyo3(get)]
-    pub classes: Vec<String>,
+    pub classes: Vec<AstNodeInfo>,
     #[pyo3(get)]
-    pub imports: Vec<String>,
+    pub imports: Vec<AstNodeInfo>,
+    #[pyo3(get)]
+    pub references: Vec<String>,
 }
 
 fn get_language_parser(lang: &str) -> Option<tree_sitter::Language> {
@@ -166,25 +180,28 @@ fn get_language_parser(lang: &str) -> Option<tree_sitter::Language> {
     }
 }
 
-// Queries for extracting definitions
-fn get_queries(lang: &str) -> (&str, &str, &str) {
+// Queries for definitions and references
+fn get_queries(lang: &str) -> (&str, &str, &str, &str) {
     match lang {
         "python" => (
             "(function_definition name: (identifier) @name)",
             "(class_definition name: (identifier) @name)",
-            "(import_from_statement (dotted_name (identifier) @name)) (import_statement (dotted_name (identifier) @name))"
+            "(import_from_statement (dotted_name (identifier) @name)) (import_statement (dotted_name (identifier) @name))",
+            "(identifier) @name" // Capture ALL identifiers as references
         ),
         "typescript" | "javascript" => (
             "(function_declaration name: (identifier) @name) (method_definition name: (property_identifier) @name)",
             "(class_declaration name: (type_identifier) @name)",
-            "(import_statement (import_clause (named_imports (import_specifier name: (identifier) @name))))"
+            "(import_statement (import_clause (named_imports (import_specifier name: (identifier) @name))))",
+            "(identifier) @name"
         ),
          "go" => (
             "(function_declaration name: (identifier) @name) (method_declaration name: (field_identifier) @name)",
             "(type_declaration (type_spec name: (type_identifier) @name))",
-            "(import_spec path: (interpreted_string_literal) @name)"
+            "(import_spec path: (interpreted_string_literal) @name)",
+            "(identifier) @name"
         ),
-        _ => ("", "", "") // TODO: Add others
+        _ => ("", "", "", "") 
     }
 }
 
@@ -198,6 +215,7 @@ fn get_ast_metadata(content: String, language: String) -> PyResult<AstMetadata> 
             functions: vec![],
             classes: vec![],
             imports: vec![],
+            references: vec![],
         });
     }
 
@@ -205,54 +223,64 @@ fn get_ast_metadata(content: String, language: String) -> PyResult<AstMetadata> 
     let tree = parser.parse(&content, None).unwrap();
     let root_node = tree.root_node();
     
-    let (func_q, class_q, imp_q) = get_queries(&language);
+    let (func_q, class_q, imp_q, ref_q) = get_queries(&language);
     
-    let mut functions = Vec::new();
-    let mut classes = Vec::new();
-    let mut imports = Vec::new();
+    let process_query = |query_str: &str| -> Vec<AstNodeInfo> {
+        let mut results = Vec::new();
+        if query_str.is_empty() { return results; }
+        
+        if let Ok(query) = tree_sitter::Query::new(lang_parser.unwrap(), query_str) {
+            let mut cursor = tree_sitter::QueryCursor::new();
+            for m in cursor.matches(&query, root_node, content.as_bytes()) {
+                for capture in m.captures {
+                    if let Ok(text) = capture.node.utf8_text(content.as_bytes()) {
+                        let start_line = capture.node.start_position().row + 1;
+                        // Use parent for snippet context
+                        let snippet = capture.node.parent()
+                            .and_then(|p| p.utf8_text(content.as_bytes()).ok())
+                            .unwrap_or(text)
+                            .lines().next().unwrap_or(text).to_string(); // First line only
+                        
+                        let snippet = if snippet.len() > 200 { snippet[..200].to_string() + "..." } else { snippet.to_string() };
 
-    // Helper to execute query and collect captures
-    // Note: In a real impl we'd compile these once. Here we do it ad-hoc for simplicity in this iteration.
-    if let Ok(query) = tree_sitter::Query::new(lang_parser.unwrap(), func_q) {
-        let mut cursor = tree_sitter::QueryCursor::new();
-        for m in cursor.matches(&query, root_node, content.as_bytes()) {
-            for capture in m.captures {
-                if let Ok(text) = capture.node.utf8_text(content.as_bytes()) {
-                     functions.push(text.to_string());
+                        results.push(AstNodeInfo {
+                            name: text.to_string(),
+                            line_number: start_line,
+                            code_snippet: snippet,
+                        });
+                    }
                 }
             }
         }
-    }
+        results
+    };
 
-    if let Ok(query) = tree_sitter::Query::new(lang_parser.unwrap(), class_q) {
-        let mut cursor = tree_sitter::QueryCursor::new();
-        for m in cursor.matches(&query, root_node, content.as_bytes()) {
-             for capture in m.captures {
-                if let Ok(text) = capture.node.utf8_text(content.as_bytes()) {
-                     classes.push(text.to_string());
+    // Process references separately (simple string list)
+    let mut references = Vec::new();
+    if !ref_q.is_empty() {
+        if let Ok(query) = tree_sitter::Query::new(lang_parser.unwrap(), ref_q) {
+             let mut cursor = tree_sitter::QueryCursor::new();
+             for m in cursor.matches(&query, root_node, content.as_bytes()) {
+                for capture in m.captures {
+                    if let Ok(text) = capture.node.utf8_text(content.as_bytes()) {
+                        references.push(text.to_string());
+                    }
                 }
-            }
+             }
         }
     }
-
-    // Imports (Simplified)
-    if let Ok(query) = tree_sitter::Query::new(lang_parser.unwrap(), imp_q) {
-        let mut cursor = tree_sitter::QueryCursor::new();
-         for m in cursor.matches(&query, root_node, content.as_bytes()) {
-             for capture in m.captures {
-                if let Ok(text) = capture.node.utf8_text(content.as_bytes()) {
-                     imports.push(text.to_string());
-                }
-            }
-        }
-    }
+    // Return all references (not deduped) to allow counting
+    // references.sort();
+    // references.dedup();
 
     Ok(AstMetadata {
-        functions,
-        classes,
-        imports
+        functions: process_query(func_q),
+        classes: process_query(class_q),
+        imports: process_query(imp_q),
+        references
     })
 }
+
 
 #[pyfunction]
 fn match_patterns(files: Vec<String>, rules: Vec<RustRule>) -> PyResult<Vec<MatchHit>> {
@@ -301,6 +329,7 @@ fn match_patterns(files: Vec<String>, rules: Vec<RustRule>) -> PyResult<Vec<Matc
 #[pymodule]
 fn warden_core_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AstMetadata>()?;
+    m.add_class::<AstNodeInfo>()?;
     m.add_class::<RustRule>()?;
     m.add_class::<MatchHit>()?;
     m.add_class::<FileStats>()?;

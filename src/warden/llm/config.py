@@ -272,6 +272,7 @@ async def load_llm_config_async() -> LlmConfiguration:
         "WARDEN_SMART_MODEL",
         "WARDEN_FAST_MODEL",
         "WARDEN_LLM_CONCURRENCY",
+        "OLLAMA_HOST",
     ])
 
     # Model Tiering & Concurrency
