@@ -450,6 +450,7 @@ Return JSON:
             user_message=prompt,
             max_tokens=500,
             temperature=0.0,  # Deterministic
+            use_fast_tier=True  # Use local Qwen for privacy and cost
         )
 
         return await self.llm.send_async(request)
@@ -473,6 +474,7 @@ Return JSON:
             user_message=batch_prompt,
             max_tokens=2000,
             temperature=0.0,
+            use_fast_tier=True  # Use local Qwen for batch analysis
         )
 
         return await self.llm.send_async(request)

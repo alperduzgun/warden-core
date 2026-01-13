@@ -187,7 +187,7 @@ Warden stands out by being a **Hybrid Architecture Guardian**. Unlike cloud-only
 | **Context** | Pull Request & Tickets | **Project Purpose & Architecture Graph** |
 | **Deep Scan** | Full Sandbox Build | **Dependency Graph & Impact Analysis** |
 | **Memory** | Vector DB (SaaS) | **Local Vector DB + Knowledge Graph** |
-| **Cost** | Per-Token / User | **Optimized (Deterministic Rules First)** |
+| **Cost** | Per-Token / User | **Optimized (Qwen Fast Tier + Deterministic Rules First)** |
 
 #### 🔑 Key Differentiators
 
