@@ -275,7 +275,9 @@ class ValidationFrame(ABC):
                 try:
                     return await self.execute_async(code_file)
                 except Exception as e:
-                    # Log error but don't crash batch
+                    import traceback
+                    print(f"ERROR executing frame {self.frame_id} on {code_file.path}: {e}")
+                    traceback.print_exc()
                     return None
 
         # Launch all tasks

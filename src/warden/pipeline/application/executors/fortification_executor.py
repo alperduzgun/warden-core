@@ -4,7 +4,7 @@ Fortification Phase Executor.
 
 import time
 import traceback
-from typing import List
+from typing import List, Any
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.validation.domain.frame import CodeFile
@@ -12,6 +12,13 @@ from warden.shared.infrastructure.logging import get_logger
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 
 logger = get_logger(__name__)
+
+
+def fort_get(obj: Any, key: str, default: Any = None) -> Any:
+    """Helper to safely get values from both dicts and objects."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 class FortificationExecutor(BasePhaseExecutor):
@@ -97,29 +104,39 @@ class FortificationExecutor(BasePhaseExecutor):
             findings_map = {f.id: f for f in context.findings}
             
             for fort in result.fortifications:
-                # Get Finding ID from fortification
-                fid = getattr(fort, 'finding_id', None)
+                # Handle both object and dict (including camelCase from to_json)
+                if isinstance(fort, dict):
+                    fid = fort.get('finding_id') or fort.get('findingId')
+                    title = fort.get('title', 'Security Fix')
+                    suggested_code = fort.get('suggested_code') or fort.get('suggestedCode')
+                    original_code = fort.get('original_code') or fort.get('originalCode')
+                else:
+                    fid = getattr(fort, 'finding_id', None)
+                    title = getattr(fort, 'title', 'Security Fix')
+                    suggested_code = getattr(fort, 'suggested_code', None)
+                    original_code = getattr(fort, 'original_code', None)
+
                 if fid and fid in findings_map:
                     finding = findings_map[fid]
-                    # Create Remediation object
+                    # Create Remediation object (matching dataclass field names)
                     remediation = Remediation(
-                        desc=fort.title,
-                        code=fort.suggested_code,
-                        diff=None # Can be generated if original_code exists
+                        description=title,
+                        code=suggested_code or "",
+                        unified_diff=None # Can be generated if original_code exists
                     )
                     
                     # Log diff generation attempt
-                    if fort.original_code and fort.suggested_code:
+                    if original_code and suggested_code:
                          try:
                              import difflib
                              diff = difflib.unified_diff(
-                                 fort.original_code.splitlines(),
-                                 fort.suggested_code.splitlines(),
+                                 original_code.splitlines(),
+                                 suggested_code.splitlines(),
                                  fromfile='original',
                                  tofile='fixed',
                                  lineterm=''
                              )
-                             remediation.diff = '\n'.join(list(diff))
+                             remediation.unified_diff = '\n'.join(list(diff))
                          except Exception:
                              pass
                     
@@ -129,8 +146,14 @@ class FortificationExecutor(BasePhaseExecutor):
             # Add phase result
             context.add_phase_result("FORTIFICATION", {
                 "fortifications_count": len(result.fortifications),
-                "critical_fixes": len([f for f in result.fortifications if f.get("severity") == "critical"]),
-                "auto_fixable": len([f for f in result.fortifications if f.get("auto_fixable")]),
+                "critical_fixes": len([
+                    f for f in result.fortifications 
+                    if fort_get(f, "severity") == "critical"
+                ]),
+                "auto_fixable": len([
+                    f for f in result.fortifications 
+                    if fort_get(f, "auto_fixable") or fort_get(f, "autoFixable")
+                ]),
             })
 
             logger.info(

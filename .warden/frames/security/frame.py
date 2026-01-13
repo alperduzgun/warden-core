@@ -172,7 +172,7 @@ class SecurityFrame(ValidationFrame):
                     file_path=code_file.path,
                 )
 
-                result = await check.execute(code_file)
+                result = await check.execute_async(code_file)
                 check_results.append(result)
 
                 logger.debug(
@@ -208,8 +208,8 @@ class SecurityFrame(ValidationFrame):
                         if search_results:
                             semantic_context = "\n[Semantic Context from other files]:\n"
                             for res in search_results:
-                                if res.file_path != code_file.path:
-                                    semantic_context += f"- File: {res.file_path}\n  Code: {res.content[:200]}...\n"
+                                if res.chunk.file_path != code_file.path:
+                                    semantic_context += f"- File: {res.chunk.file_path}\n  Code: {res.chunk.content[:200]}...\n"
                     except Exception as e:
                         logger.warning("security_semantic_search_failed", error=str(e))
 
