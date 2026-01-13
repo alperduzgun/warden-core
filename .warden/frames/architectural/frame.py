@@ -674,7 +674,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                     rule="mandatory_all_export",
                     severity="warning",
                     message="Missing __all__ export in frame package __init__.py",
-                    file_path=path,
+                    file_path=f"{path}:1",
                     expected="__all__ = [...]",
                     actual="Missing __all__",
                 ))
@@ -690,7 +690,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                         rule="mandatory_logger_init",
                         severity="warning",
                         message="Missing logger initialization (logger = get_logger(__name__))",
-                        file_path=path,
+                        file_path=f"{path}:1",
                         expected="logger = get_logger(__name__)",
                         actual="No logger found",
                     ))
@@ -710,11 +710,24 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         findings = []
 
         for i, violation in enumerate(violations):
+            # Ensure path includes at least line 1 if no line specified
+            location = violation.file_path
+            line = 1
+            if ":" in location:
+                try:
+                    line_part = location.split(":")[-1]
+                    line = int(line_part)
+                except ValueError:
+                    location = f"{location}:1"
+            else:
+                location = f"{location}:1"
+
             finding = Finding(
                 id=f"{self.frame_id}-{violation.rule}-{i}",
                 severity="medium" if violation.severity == "error" else "low",
                 message=violation.message,
-                location=violation.file_path,
+                location=location,
+                line=line,
                 detail=(
                     f"**Rule:** {violation.rule}\n\n"
                     f"**Expected:** {violation.expected}\n\n"
