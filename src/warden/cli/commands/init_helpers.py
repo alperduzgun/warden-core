@@ -18,9 +18,9 @@ def configure_llm(existing_config: dict) -> tuple[dict, dict]:
     existing_model = llm_cfg.get('model', 'gpt-4o')
     env_vars = {}
     
-    provider_choices = ["openai", "azure", "groq", "anthropic", "none (static only)"]
+    provider_choices = ["openai", "azure", "groq", "anthropic", "ollama (local)", "none (static only)"]
     default_prov = existing_provider if existing_provider in provider_choices else "openai"
-    provider_selection = Prompt.ask("Select LLM Provider", choices=provider_choices, default=default_prov)
+    provider_selection = Prompt.ask("Select Default (Smart) LLM Provider", choices=provider_choices, default=default_prov)
     
     if provider_selection == "none (static only)":
         if not Confirm.ask("Proceed without AI?", default=False):
@@ -37,10 +37,25 @@ def configure_llm(existing_config: dict) -> tuple[dict, dict]:
         env_vars["AZURE_OPENAI_DEPLOYMENT_NAME"] = Prompt.ask("Deployment Name")
     else:
         has_key = key_var in os.environ or any(k.endswith("_API_KEY") for k in existing_config.get('llm', {}))
-        if not has_key:
+        if not has_key and provider != "ollama":
              env_vars[key_var] = Prompt.ask(f"{provider} API Key", password=True)
+        elif provider == "ollama":
+             # Ollama uses OLLAMA_HOST, check if user wants to change default
+             default_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+             if Confirm.ask(f"Use default Ollama host ({default_host})?", default=True):
+                 env_vars["OLLAMA_HOST"] = default_host
+             else:
+                 env_vars["OLLAMA_HOST"] = Prompt.ask("Enter Ollama Host URL", default=default_host)
 
     llm_config = {"provider": provider, "model": model, "timeout": 300}
+    
+    # Add Local (Fast) LLM support toggle
+    if provider != "ollama":
+        if Confirm.ask("Enable Yerel LLM (Ollama) for faster/cheaper checks?", default=True):
+            llm_config["use_local_llm"] = True
+            llm_config["fast_model"] = "qwen2.5-coder:0.5b"
+            console.print("[green]✓ Local LLM enabled as Fast Tier.[/green]")
+
     if provider == "azure":
         llm_config['azure'] = {
             "endpoint": "${AZURE_OPENAI_ENDPOINT}",

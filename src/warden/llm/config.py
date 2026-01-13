@@ -36,8 +36,10 @@ class ProviderConfig:
         errors = []
 
         if not self.api_key:
-            errors.append(f"{provider_name}: API key is required but not configured")
-        elif len(self.api_key) < 10:
+            # Ollama doesn't require an API key
+            if provider_name.lower() != "ollama":
+                errors.append(f"{provider_name}: API key is required but not configured")
+        elif len(self.api_key) < 10 and provider_name.lower() != "ollama":
             errors.append(f"{provider_name}: API key appears invalid (too short)")
 
         if not self.default_model:
@@ -89,6 +91,7 @@ class LlmConfiguration:
     azure_openai: ProviderConfig = field(default_factory=ProviderConfig)
     groq: ProviderConfig = field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = field(default_factory=ProviderConfig)
+    ollama: ProviderConfig = field(default_factory=ProviderConfig)
 
     # Model Tiering (Optional)
     smart_model: Optional[str] = None  # High-reasoning model (e.g. gpt-4o)
@@ -112,7 +115,8 @@ class LlmConfiguration:
             LlmProvider.OPENAI: self.openai,
             LlmProvider.AZURE_OPENAI: self.azure_openai,
             LlmProvider.GROQ: self.groq,
-            LlmProvider.OPENROUTER: self.openrouter
+            LlmProvider.OPENROUTER: self.openrouter,
+            LlmProvider.OLLAMA: self.ollama
         }
         return mapping.get(provider)
 
@@ -156,7 +160,8 @@ DEFAULT_MODELS = {
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.1-70b-versatile",
-    LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet"
+    LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
+    LlmProvider.OLLAMA: "qwen2.5-coder:0.5b"
 }
 
 
@@ -334,6 +339,11 @@ async def load_llm_config_async() -> LlmConfiguration:
         config.openrouter.api_key = openrouter_secret.value
         config.openrouter.enabled = True
         configured_providers.append(LlmProvider.OPENROUTER)
+
+    # Configure Ollama (Local)
+    config.ollama.endpoint = secrets["OLLAMA_HOST"].value or "http://localhost:11434"
+    config.ollama.enabled = True  # Enabled by default for dual-tier fallback
+    configured_providers.append(LlmProvider.OLLAMA)
 
     # Set default provider and fallback chain based on what's configured
     if configured_providers:
