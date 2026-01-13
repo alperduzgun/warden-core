@@ -9,6 +9,7 @@ All provider implementations must inherit from this interface
 
 from abc import ABC, abstractmethod
 import json
+from typing import Optional
 from ..types import LlmProvider, LlmRequest, LlmResponse
 
 

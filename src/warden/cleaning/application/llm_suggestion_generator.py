@@ -101,7 +101,11 @@ class LLMSuggestionGenerator:
             if self.context and hasattr(self.context, 'llm_config') and self.context.llm_config:
                 model = getattr(self.context.llm_config, 'fast_model', None)
             elif isinstance(self.context, dict) and "llm_config" in self.context:
-                model = self.context["llm_config"].get("fast_model")
+                config = self.context["llm_config"]
+                if isinstance(config, dict):
+                    model = config.get("fast_model")
+                else:
+                    model = getattr(config, "fast_model", None)
 
             # Get LLM suggestions
             response = await self.llm_service.complete_async(

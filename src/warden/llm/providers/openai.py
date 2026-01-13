@@ -7,7 +7,7 @@ Based on C# OpenAIClient.cs
 import httpx
 import time
 import json
-from typing import Dict, Any, AsyncGenerator
+from typing import Dict, Any, AsyncGenerator, Optional
 
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse

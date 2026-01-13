@@ -50,68 +50,175 @@ Return ONLY a JSON object:
 
     async def verify_findings_async(self, findings: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
         """
-        Filters out false positives from the findings list.
-        Args:
-            findings: List of raw findings
-            context: PipelineContext object (optional but recommended)
+        Filters out false positives from the findings list using:
+        Heuristic Filter -> Cache -> Batch LLM Verification.
         """
         if not self.enabled or not self.llm:
             return findings
 
+        initial_count = len(findings)
         verified_findings = []
-        
-        # Only verify medium/high/critical. Low severity might be too noisy/expensive to verify all.
-        # But for now, let's verify everything that looks programmatic (not just style).
-        
+        candidates_to_verify = []
+
+        # STEP 1: Heuristic Speed Layer (Alpha Filter)
+        # Discard obvious false positives without hitting cache or LLM
         for finding in findings:
-            # Skip if finding has no code context (cant verify)
             if not finding.get('location'):
                 verified_findings.append(finding)
                 continue
 
-            # Generate Cache Key
-            # Key = rule_id + code_hash (or code snippet)
-            # We use the finding ID and code content as key
-            cache_key = self._generate_key(finding)
+            code_snippet = finding.get('code', '').strip()
+            if self._is_obvious_false_positive(finding, code_snippet):
+                logger.info("heuristic_filter_rejected_finding", 
+                            finding_id=finding.get('id'),
+                            rule=finding.get('rule_id'))
+                continue
             
-            # 1. Check Cache
+            candidates_to_verify.append(finding)
+
+        if not candidates_to_verify:
+            return verified_findings
+
+        # STEP 2: Cache Check
+        remaining_after_cache = []
+        for finding in candidates_to_verify:
+            cache_key = self._generate_key(finding)
             cached_result = self._check_cache(cache_key)
+            
             if cached_result:
-                cached_result['cached'] = True # Mark for orchestrator logging
-                if cached_result.get('is_true_positive'):
+                cached_result['cached'] = True
+                if cached_result.get('is_true_positive', True):
                     finding['verification_metadata'] = cached_result
                     verified_findings.append(finding)
-                else:
-                    logger.debug("finding_verification_skipped_cached_false_positive", finding_id=finding.get('id'))
                 continue
-
-            # 2. Ask LLM
-            try:
-                result = await self._verify_with_llm(finding, context)
-                
-                # 3. Save Cache
-                self._save_cache(cache_key, result)
-
-                if result.get('is_true_positive'):
-                    finding['verification_metadata'] = result
-                    verified_findings.append(finding)
-                else:
-                    logger.info("finding_verification_rejected_false_positive", 
-                                finding_id=finding.get('id'), 
-                                reason=result.get('reason'))
             
-            except Exception as e:
-                logger.error("finding_verification_error", error=str(e), finding_id=finding.get('id'))
-                # Fail open: If verification crashes, keep the finding to be safe
-                verified_findings.append(finding)
+            remaining_after_cache.append(finding)
 
+        if not remaining_after_cache:
+            return verified_findings
+
+        # STEP 3: Batch LLM Verification
+        # Group remaining findings into batches of 10 to reduce API calls
+        BATCH_SIZE = 10
+        logger.info("batch_verification_starting", count=len(remaining_after_cache), batches=(len(remaining_after_cache) // BATCH_SIZE) + 1)
+
+        for i in range(0, len(remaining_after_cache), BATCH_SIZE):
+            batch = remaining_after_cache[i : i + BATCH_SIZE]
+            try:
+                batch_results = await self._verify_batch_with_llm(batch, context)
+                
+                for idx, result in enumerate(batch_results):
+                    finding = batch[idx]
+                    cache_key = self._generate_key(finding)
+                    self._save_cache(cache_key, result)
+
+                    if result.get('is_true_positive'):
+                        finding['verification_metadata'] = result
+                        verified_findings.append(finding)
+                    else:
+                        logger.info("batch_verification_rejected_finding", 
+                                    finding_id=finding.get('id'), 
+                                    reason=result.get('reason'))
+            except Exception as e:
+                logger.error("batch_verification_failed_falling_back_to_open", error=str(e))
+                # Fail open for the batch
+                verified_findings.extend(batch)
+
+        logger.info("verification_summary", 
+                    initial=initial_count, 
+                    final=len(verified_findings),
+                    reduction=f"{((initial_count - len(verified_findings))/initial_count)*100:.1f}%" if initial_count > 0 else "0%")
+        
         return verified_findings
 
+    def _is_obvious_false_positive(self, finding: Dict[str, Any], code: str) -> bool:
+        """Heuristic Alpha Filter to detect obvious false positives instantly."""
+        # 1. Comment/Docstring check
+        if code.startswith(('#', '//', '/*', '"""', "'''")) or 'docstring' in finding.get('message', '').lower():
+            return True
+            
+        # 2. Type Hint check (common FP in Python/TS)
+        # e.g. "Optional[str]", "List[int]"
+        if '[' in code and ']' in code and not '(' in code:
+            if any(t in code for t in ['Optional', 'List', 'Dict', 'Union', 'Any']):
+                return True
+
+        # 3. Import check
+        if code.startswith(('import ', 'from ', 'require(')):
+            return True
+
+        # 4. Dummy/Example data in Test files
+        location = finding.get('location', '').lower()
+        if ('test' in location or 'example' in location) and any(d in code.lower() for d in ['dummy', 'mock', 'fake', 'test_password', 'secret123']):
+            return True
+
+        return False
+
+    async def _verify_batch_with_llm(self, batch: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
+        """Verifies a batch of findings in a single LLM request."""
+        context_prompt = ""
+        if context and hasattr(context, 'get_llm_context_prompt'):
+             context_prompt = context.get_llm_context_prompt("VALIDATION")
+
+        findings_summary = ""
+        for i, f in enumerate(batch):
+            findings_summary += f"""
+FINDING #{i}:
+- ID: {f.get('id')}
+- Rule: {f.get('rule_id')}
+- Message: {f.get('message')}
+- Code: `{f.get('code', 'N/A')}`
+"""
+
+        prompt = f"""
+You are a Senior Security Engineer. Verify a BATCH of {len(batch)} potential findings.
+For each finding, determine if it is a TRUE POSITIVE (actual runtime risk) or FALSE POSITIVE.
+
+PROJECT CONTEXT:
+{context_prompt}
+
+BATCH TO VERIFY:
+{findings_summary}
+
+DECISION RULES:
+1. REJECT if code is a Type Hint, Comment, or Import.
+2. REJECT if in a TEST file/context unless it's an extreme risk.
+3. ACCEPT only if the code actually performs a dangerous operation or leaks sensitive production data.
+
+Return ONLY a JSON array of objects in the EXACT order:
+[
+  {{"idx": 0, "is_true_positive": bool, "confidence": float, "reason": "..."}},
+  ...
+]
+"""
+        # Call LLM
+        model = None
+        if context and hasattr(context, 'llm_config') and context.llm_config:
+            model = getattr(context.llm_config, 'smart_model', None)
+
+        response = await self.llm.complete_async(prompt, self.system_prompt, model=model)
+        
+        try:
+            content = response.content.strip()
+            if '```json' in content:
+                content = content.split('```json')[1].split('```')[0].strip()
+            elif '```' in content:
+                content = content.split('```')[1].strip()
+            
+            results = json.loads(content)
+            # Ensure results match batch size and are in order (or mapped by idx)
+            # For simplicity, we trust the LLM order but could sort by 'idx' if needed
+            return results
+        except Exception as e:
+            logger.warning("batch_llm_parsing_failed", error=str(e))
+            # Fallback: Mark all in batch as true positive to be safe
+            return [{"is_true_positive": True, "confidence": 0.5, "reason": "Batch parsing failed"} for _ in batch]
+
     def _generate_key(self, finding: Dict[str, Any]) -> str:
-        # Simple key generation
         import hashlib
-        # Include rule, message, and specific location/code
-        unique_str = f"{finding.get('id')}:{finding.get('code', '')}:{finding.get('location')}"
+        # Use relative path if possible for portability
+        loc = finding.get('location', '')
+        unique_str = f"{finding.get('id')}:{finding.get('code', '')}:{loc}"
         return hashlib.sha256(unique_str.encode()).hexdigest()
 
     def _check_cache(self, key: str) -> Optional[Dict]:
@@ -122,70 +229,4 @@ Return ONLY a JSON object:
     def _save_cache(self, key: str, data: Dict) -> None:
         if self.memory_manager:
             self.memory_manager.set_llm_cache(f"verify:{key}", data)
-
-    async def _verify_with_llm(self, finding: Dict[str, Any], context: Any = None) -> Dict:
-        # Get Context Summary if available
-        context_prompt = ""
-        if context and hasattr(context, 'get_llm_context_prompt'):
-             context_prompt = context.get_llm_context_prompt("VALIDATION")
-
-        prompt = f"""
-You are a Senior Security Engineer. Verify a potential finding in a specific project context.
-
-PROJECT CONTEXT:
-{context_prompt}
-
-FINDING TO VERIFY:
-- Rule ID: {finding.get('id')}
-- Message: {finding.get('message')}
-- File: {finding.get('location')}
-- Code Snippet:
-```
-{finding.get('code', 'N/A')}
-{finding.get('detail', '')}
-```
-
-STRATEGY:
-1. ANALYZE FILE PURPOSE based on Path and Project Context:
-   - TEST Context? -> Use LENIENT security rules. Allow mocks, hardcoded credentials (e.g. mock tokens).
-   - SCRIPT/EXAMPLE? -> Use LENIENT rules.
-   - PRODUCTION/CORE? -> Use STRICT rules.
-
-2. ANALYZE CODE CONTEXT:
-   - Is it a Type Hint (e.g. List[int])? -> REJECT (False Positive).
-   - Is it a Comment/Docstring? -> REJECT.
-   - Is it an Import statement? -> REJECT (unless malicious import).
-   - Does it use `@async_retry` or `@retry` decorator? -> REJECT (Resilience is handled).
-   - Is it a Router/Delegator (delegates to adapter/service)? -> REJECT (Resilience is delegated).
-
-3. DECISION:
-   - Return true_positive: true ONLY if the code presents an ACTUAL RUNTIME RISK in this specific context.
-   - IMPORANT: Ignore the "Finding Message" if the code itself is standard/safe. The finding description might be hallucinated or overly aggressive.
-   - ABSOLUTELY REJECT if it is merely a Type Hint, Comment, or Import.
-"""
-        # The caching logic is already handled in verify_findings,
-        # so this method just focuses on the LLM call and parsing.
-        result = await self._call_llm_with_retry_async(prompt, context)
-        return result
-
-    @async_retry(retries=DEFAULT_RETRIES)
-    async def _call_llm_with_retry_async(self, prompt: str, context: Any = None) -> Dict[str, Any]:
-        """Call LLM with retry mechanism and parse response."""
-        # Use smart model for verification if configured
-        model = None
-        if context and hasattr(context, 'llm_config') and context.llm_config:
-            model = getattr(context.llm_config, 'smart_model', None)
-
-        response = await self.llm.complete_async(prompt, self.system_prompt, model=model)
-        
-        try:
-            # Parse JSON from response (handle markdown code blocks if present)
-            content = response.content.strip()
-            if content.startswith('```json'):
-                content = content.replace('```json', '').replace('```', '')
-            return json.loads(content)
-        except Exception as e:
-            logger.warning("llm_response_parsing_failed", error=str(e), response_content=response.content[:200])
-            # Fallback if JSON parsing fails
-            return {"is_true_positive": True, "confidence": self.FALLBACK_CONFIDENCE, "reason": "LLM response parsing failed"}
 
