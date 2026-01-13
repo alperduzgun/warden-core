@@ -11,8 +11,12 @@ from .providers.base import ILlmClient
 
 def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILlmClient:
     """Create a client for a specific provider configuration."""
-    if not config.enabled or not config.api_key:
-        raise ValueError(f"Provider {provider.value} is not configured or enabled")
+    # Ollama doesn't require an API key (local deployment)
+    if provider != LlmProvider.OLLAMA:
+        if not config.enabled or not config.api_key:
+            raise ValueError(f"Provider {provider.value} is not configured or enabled")
+    elif not config.enabled:
+        raise ValueError(f"Provider {provider.value} is not enabled")
 
     if provider == LlmProvider.ANTHROPIC:
         from .providers.anthropic import AnthropicClient
@@ -76,8 +80,11 @@ def create_client(
     if config.ollama.enabled:
         try:
             fast_client = create_provider_client(LlmProvider.OLLAMA, config.ollama)
-        except Exception:
-            pass
+        except Exception as e:
+            # Log but don't fail - orchestration will work without fast tier
+            import structlog
+            logger = structlog.get_logger(__name__)
+            logger.warning("ollama_client_creation_failed", error=str(e))
 
     # Wrap in OrchestratedLlmClient for tiered execution support
     from .providers.orchestrated import OrchestratedLlmClient
