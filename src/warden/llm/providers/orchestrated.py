@@ -30,12 +30,19 @@ class OrchestratedLlmClient(ILlmClient):
         smart_client: ILlmClient, 
         fast_client: Optional[ILlmClient] = None,
         smart_model: Optional[str] = None,
-        fast_model: Optional[str] = None
+        fast_model: Optional[str] = None,
+        metrics_collector = None
     ):
         self.smart_client = smart_client
         self.fast_client = fast_client
         self.smart_model = smart_model
         self.fast_model = fast_model
+        
+        # Initialize metrics collector
+        if metrics_collector is None:
+            from warden.llm.metrics import LLMMetricsCollector
+            metrics_collector = LLMMetricsCollector()
+        self.metrics = metrics_collector
         
         logger.debug(
             "orchestrated_llm_client_initialized",
@@ -55,6 +62,8 @@ class OrchestratedLlmClient(ILlmClient):
         """
         Routes request to the appropriate tier.
         """
+        import time
+        
         # 1. Determine target client and model
         target_client = self.smart_client
         target_model = request.model or self.smart_model
@@ -76,8 +85,20 @@ class OrchestratedLlmClient(ILlmClient):
             model=target_model or "default"
         )
 
-        # 2. Execute request
+        # 2. Execute request and track time
+        start_time = time.time()
         response = await target_client.send_async(request)
+        duration_ms = int((time.time() - start_time) * 1000)
+        
+        # Record metrics
+        self.metrics.record_request(
+            tier=tier_label,
+            provider=target_client.provider.value,
+            model=target_model or "default",
+            success=response.success,
+            duration_ms=duration_ms,
+            error=response.error_message
+        )
 
         # 3. Fallback logic: If fast tier fails, retry with smart tier
         if not response.success and tier_label == "fast" and self.smart_client:
@@ -88,7 +109,20 @@ class OrchestratedLlmClient(ILlmClient):
             )
             # Reset model to smart default
             request.model = self.smart_model
+            
+            # Retry with smart tier and record metrics
+            start_time = time.time()
             response = await self.smart_client.send_async(request)
+            duration_ms = int((time.time() - start_time) * 1000)
+            
+            self.metrics.record_request(
+                tier="smart",
+                provider=self.smart_client.provider.value,
+                model=self.smart_model or "default",
+                success=response.success,
+                duration_ms=duration_ms,
+                error=response.error_message
+            )
 
         return response
 
