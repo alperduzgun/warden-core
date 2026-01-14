@@ -102,7 +102,14 @@ jobs:
           echo "Installing Ollama..."
           curl -fsSL https://ollama.com/install.sh | sh
           
-          echo "Starting Ollama Server..."
+          echo "Getting Ollama..."
+          curl -fsSL https://ollama.com/install.sh | sh
+          
+          # Stop the system service (which runs as 'ollama' user and uses /usr/share/ollama)
+          # We want to run as the current user ('runner') to use the restored ~/.ollama cache
+          sudo systemctl stop ollama
+          
+          echo "Starting Local Ollama Server (Runner User)..."
           ollama serve &
           
           echo "Waiting for Ollama service..."
