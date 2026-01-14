@@ -23,6 +23,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Free Disk Space (Manual)
+        run: |
+          echo "Freeing disk space..."
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/powershell
+          echo "Disk space freed."
+
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
@@ -106,8 +115,8 @@ jobs:
           
           # The install script starts a systemd service as 'ollama' user.
           # We must stop it to run our own instance as 'runner' user (to see the cache).
-          sudo systemctl stop ollama
-          sudo systemctl disable ollama
+          sudo systemctl stop ollama || true
+          sudo systemctl disable ollama || true
           
           echo "Debug: Checking Cache Content..."
           ls -la ~/.ollama || echo "No .ollama directory found"
