@@ -34,6 +34,7 @@ class FileDiscoverer:
         root_path: str | Path,
         max_depth: Optional[int] = None,
         use_gitignore: bool = True,
+        max_size_mb: Optional[int] = None,
     ) -> None:
         """
         Initialize the file discoverer.
@@ -50,6 +51,7 @@ class FileDiscoverer:
         self.root_path = Path(root_path).resolve()
         self.max_depth = max_depth
         self.use_gitignore = use_gitignore
+        self.max_size_mb = max_size_mb
 
         # Initialize components
         self.classifier = FileClassifier()
@@ -133,8 +135,8 @@ class FileDiscoverer:
 
         if RUST_AVAILABLE:
             try:
-                logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path))
-                rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore)
+                logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path), max_size_mb=self.max_size_mb)
+                rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore, self.max_size_mb)
                 
                 # STEP 1: Batch get stats (Parallel line count, hash, binary check)
                 raw_paths = [f[0] for f in rust_files]

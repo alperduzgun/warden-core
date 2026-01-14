@@ -15,8 +15,8 @@ Usage:
     result = await frame.execute(code_file)
 """
 
-from ..gitchanges_frame import GitChangesFrame
-from ..git_diff_parser import (
+from warden.validation.frames.gitchanges.gitchanges_frame import GitChangesFrame
+from warden.validation.frames.gitchanges.git_diff_parser import (
     GitDiffParser,
     DiffHunk,
     FileDiff,

@@ -56,8 +56,8 @@ pub struct MatchHit {
 }
 
 #[pyfunction]
-#[pyo3(signature = (root_path, use_gitignore=true))]
-fn discover_files(root_path: String, use_gitignore: bool) -> PyResult<Vec<(String, u64)>> {
+#[pyo3(signature = (root_path, use_gitignore=true, max_size_mb=None))]
+fn discover_files(root_path: String, use_gitignore: bool, max_size_mb: Option<u64>) -> PyResult<Vec<(String, u64)>> {
     let mut files = Vec::new();
     let mut builder = WalkBuilder::new(&root_path);
     
@@ -71,12 +71,32 @@ fn discover_files(root_path: String, use_gitignore: bool) -> PyResult<Vec<(Strin
 
     let walker = builder.build();
 
+    // Default hard limit: 100MB if not specified, to prevent system freeze
+    let size_limit_bytes = max_size_mb.unwrap_or(100) * 1024 * 1024;
+
     for result in walker {
         if let Ok(entry) = result {
             if entry.file_type().map_or(false, |ft| ft.is_file()) {
-                let path = entry.path().to_string_lossy().to_string();
+                let path = entry.path();
+                
+                // 1. Early Size Check (Fast metadata check)
                 let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-                files.push((path, size));
+                if size > size_limit_bytes {
+                    continue; // Skip huge files immediately
+                }
+
+                // 2. Early Binary Check (Read first 1024 bytes)
+                // We do this here to prevent these files from even entering Python memory
+                if let Ok(mut file) = File::open(path) {
+                    let mut buffer = [0; 1024];
+                    let bytes_read = file.read(&mut buffer).unwrap_or(0);
+                    if inspect(&buffer[..bytes_read]) == ContentType::BINARY {
+                        continue; // Skip binary files (images, bins, etc.)
+                    }
+                }
+
+                let path_str = path.to_string_lossy().to_string();
+                files.push((path_str, size));
             }
         }
     }
@@ -326,16 +346,139 @@ fn match_patterns(files: Vec<String>, rules: Vec<RustRule>) -> PyResult<Vec<Matc
     Ok(hits)
 }
 
+#[pyclass]
+#[derive(Clone)]
+pub struct MetricRule {
+    #[pyo3(get, set)]
+    pub id: String,
+    #[pyo3(get, set)]
+    pub metric_type: String, // "line_count", "size_bytes"
+    #[pyo3(get, set)]
+    pub threshold: u64,
+}
+
+#[pymethods]
+impl MetricRule {
+    #[new]
+    fn new(id: String, metric_type: String, threshold: u64) -> Self {
+        MetricRule { id, metric_type, threshold }
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct ValidationResult {
+    #[pyo3(get)]
+    pub rule_id: String,
+    #[pyo3(get)]
+    pub file_path: String,
+    #[pyo3(get)]
+    pub message: String,
+    #[pyo3(get)]
+    pub line: usize,
+    #[pyo3(get)]
+    pub snippet: String,
+}
+
+#[pyfunction]
+fn validate_files(
+    files: Vec<String>, 
+    regex_rules: Vec<RustRule>, 
+    metric_rules: Vec<MetricRule>
+) -> PyResult<Vec<ValidationResult>> {
+    
+    // Compile regex rules
+    let compiled_regexes: Vec<(String, Regex)> = regex_rules.into_iter()
+        .filter_map(|r| Regex::new(&r.pattern).ok().map(|re| (r.id, re)))
+        .collect();
+
+    let results: Vec<ValidationResult> = files.par_iter()
+        .flat_map(|path_str| {
+            let path = Path::new(path_str);
+            let mut file_results = Vec::new();
+
+            // 1. Check Metadata Metrics (Fastest)
+            if !metric_rules.is_empty() {
+                if let Ok(metadata) = path.metadata() {
+                    let size = metadata.len();
+                    
+                    // Size check
+                    for rule in &metric_rules {
+                        if rule.metric_type == "size_bytes" && size > rule.threshold {
+                            file_results.push(ValidationResult {
+                                rule_id: rule.id.clone(),
+                                file_path: path_str.clone(),
+                                message: format!("File size {} exceeds limit {}", size, rule.threshold),
+                                line: 0,
+                                snippet: String::new(),
+                            });
+                        }
+                    }
+
+                    // Line count check (requires reading, but avoiding regex)
+                    let check_lines = metric_rules.iter().any(|r| r.metric_type == "line_count");
+                    if check_lines {
+                        if let Ok(file) = File::open(path) {
+                            let reader = BufReader::new(file);
+                            let line_count = reader.lines().count();
+                             for rule in &metric_rules {
+                                if rule.metric_type == "line_count" && line_count as u64 > rule.threshold {
+                                    file_results.push(ValidationResult {
+                                        rule_id: rule.id.clone(),
+                                        file_path: path_str.clone(),
+                                        message: format!("Line count {} exceeds limit {}", line_count, rule.threshold),
+                                        line: 0,
+                                        snippet: String::new(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Check Regex Patterns (Slower)
+            if !compiled_regexes.is_empty() {
+                if let Ok(file) = File::open(path) {
+                    let reader = BufReader::new(file);
+                    for (ln, line_result) in reader.lines().enumerate() {
+                        if let Ok(line) = line_result {
+                            for (id, re) in &compiled_regexes {
+                                if let Some(m) = re.find(&line) {
+                                    file_results.push(ValidationResult {
+                                        rule_id: id.clone(),
+                                        file_path: path_str.clone(),
+                                        message: "Pattern match found".to_string(),
+                                        line: ln + 1,
+                                        snippet: line.trim().to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            file_results
+        })
+        .collect();
+
+    Ok(results)
+}
+
 #[pymodule]
 fn warden_core_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AstMetadata>()?;
     m.add_class::<AstNodeInfo>()?;
     m.add_class::<RustRule>()?;
+    m.add_class::<MetricRule>()?;
     m.add_class::<MatchHit>()?;
     m.add_class::<FileStats>()?;
+    m.add_class::<ValidationResult>()?;
     m.add_function(wrap_pyfunction!(discover_files, m)?)?;
     m.add_function(wrap_pyfunction!(get_file_stats, m)?)?;
     m.add_function(wrap_pyfunction!(get_ast_metadata, m)?)?;
     m.add_function(wrap_pyfunction!(match_patterns, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_files, m)?)?;
     Ok(())
 }

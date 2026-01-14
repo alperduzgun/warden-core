@@ -11,6 +11,12 @@ import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import sys
+
+try:
+    from warden import warden_core_rust
+except ImportError:
+    warden_core_rust = None
 
 import structlog
 
@@ -60,6 +66,53 @@ class CustomRuleValidator:
         Returns:
             List of rule violations found
         """
+        return await self.validate_batch_async([file_path], rules)
+
+    async def validate_batch_async(
+        self,
+        file_paths: List[Path | str],
+        rules: Optional[List[CustomRule]] = None
+    ) -> List[CustomRuleViolation]:
+        """Validate multiple files against rules efficiently.
+        
+        Automatically routes rules to Rust engine if capable.
+        """
+        # Normalize paths
+        paths = [Path(p) if isinstance(p, str) else p for p in file_paths]
+        valid_paths = [p for p in paths if p.exists()]
+        
+        if not valid_paths:
+            return []
+
+        active_rules = rules if rules is not None else self.rules
+        if not active_rules:
+            return []
+
+        all_violations = []
+
+        # 1. Router: Classify Rules
+        rust_rules, python_rules = self._classify_rules(active_rules)
+
+        # 2. Rust Execution (Parallel Batch)
+        if rust_rules and warden_core_rust:
+            try:
+                rust_violations = await self._execute_rust_validation(valid_paths, rust_rules)
+                all_violations.extend(rust_violations)
+            except Exception as e:
+                logger.error("rust_validation_failed_fallback_to_python", error=str(e))
+                # Fallback: Treat all as python rules
+                python_rules.extend(rust_rules)
+
+        # 3. Python Execution (Iterative Fallback)
+        if python_rules:
+            for file_path in valid_paths:
+                violations = await self._validate_single_file_python(file_path, python_rules)
+                all_violations.extend(violations)
+                
+        return all_violations
+
+    async def _validate_single_file_python(self, file_path: Path, rules: List[CustomRule]) -> List[CustomRuleViolation]:
+        """Legacy validation logic (refactored from validate_file_async)."""
         # Support both Path and str
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -83,7 +136,7 @@ class CustomRuleValidator:
 
         violations = []
 
-        for rule in active_rules:
+        for rule in rules:
             logger.debug("processing_rule", rule_id=rule.id, rule_type=rule.type)
             # Check language filter
             if rule.language and not self._is_language_match(file_path, rule.language):
@@ -790,3 +843,119 @@ RETURN ONLY A JSON OBJECT:
         except Exception as e:
             logger.error("ai_rule_execution_failed", rule_id=rule.id, error=str(e))
             return []
+
+    def _classify_rules(self, rules: List[CustomRule]) -> tuple[List[CustomRule], List[CustomRule]]:
+        """Intelligent Router: Split rules into Rust-capable and Python-only."""
+        rust_rules = []
+        python_rules = []
+
+        if not warden_core_rust:
+            return [], rules
+
+        for rule in rules:
+            if self._is_rust_capable(rule):
+                rust_rules.append(rule)
+            else:
+                python_rules.append(rule)
+        
+        if rust_rules:
+            logger.info("rules_routed_to_rust", count=len(rust_rules), rules=[r.id for r in rust_rules])
+        
+        return rust_rules, python_rules
+
+    def _is_rust_capable(self, rule: CustomRule) -> bool:
+        """Check if rule can be executed by Rust engine."""
+        if rule.type != "convention":
+            return False
+            
+        # Must not have script path
+        if rule.script_path:
+            return False
+
+        # Must have compatible conditions
+        # Supported: patterns (regex), max_lines (metric), max_size_mb (metric)
+        conditions = rule.conditions
+        
+        supported_keys = {'patterns', 'max_lines', 'max_size_mb'}
+        keys = set(conditions.keys())
+        
+        # If keys is subset of supported -> Pure Rust rule
+        if keys.issubset(supported_keys) and keys:
+            # CHECK: Verify Regex Compatibility
+            # Rust 'regex' crate does not support look-arounds or backreferences
+            if "patterns" in conditions:
+                for pattern in conditions["patterns"]:
+                    # Check for look-around: (?=, (?<=, (?!, (?<!
+                    # Check for backreference: \1, \2 (basic heuristic)
+                    if any(x in pattern for x in ["(?=", "(?<=", "(?!", "(?<!"]):
+                        logger.debug("rule_routed_to_python_incompatible_regex", 
+                                   rule_id=rule.id, 
+                                   reason="look-around")
+                        return False
+                    
+                    # Backreferences like \1 might be valid escapes, but we'll be conservative
+                    # If regex contains \1, \2.. it implies backref or octal escape.
+                    # Rust regex doesn't support backrefs in match.
+                    if "\\" in pattern:
+                        # Simple check for backslash followed by digit 1-9
+                        import re
+                        if re.search(r"\\[1-9]", pattern):
+                            logger.debug("rule_routed_to_python_incompatible_regex", 
+                                       rule_id=rule.id, 
+                                       reason="backreference")
+                            return False
+
+            return True
+            
+        return False
+
+    async def _execute_rust_validation(self, paths: List[Path], rules: List[CustomRule]) -> List[CustomRuleViolation]:
+        """Prepare and execute Rust validation."""
+        path_strs = [str(p.absolute()) for p in paths]
+        
+        regex_rules = []
+        metric_rules = []
+        
+        # Map for ID traceback
+        rule_map = {r.id: r for r in rules}
+
+        for r in rules:
+            # 1. Metrics
+            if "max_size_mb" in r.conditions:
+                threshold_bytes = r.conditions["max_size_mb"] * 1024 * 1024
+                metric_rules.append(warden_core_rust.MetricRule(r.id, "size_bytes", int(threshold_bytes)))
+            
+            if "max_lines" in r.conditions:
+                metric_rules.append(warden_core_rust.MetricRule(r.id, "line_count", int(r.conditions["max_lines"])))
+
+            # 2. Patterns
+            if "patterns" in r.conditions:
+                for pattern in r.conditions["patterns"]:
+                    regex_rules.append(warden_core_rust.RustRule(r.id, pattern))
+
+        # Call Rust (Offload)
+        # Run in executor to avoid blocking event loop
+        loop = asyncio.get_running_loop()
+        results = await loop.run_in_executor(
+            None, 
+            lambda: warden_core_rust.validate_files(path_strs, regex_rules, metric_rules)
+        )
+
+        violations = []
+        for res in results:
+            rule = rule_map.get(res.rule_id)
+            if not rule: continue
+            
+            violations.append(CustomRuleViolation(
+                rule_id=rule.id,
+                rule_name=rule.name,
+                category=rule.category,
+                severity=rule.severity,
+                is_blocker=rule.is_blocker,
+                file=res.file_path,
+                line=res.line,
+                message=res.message,
+                code_snippet=res.snippet
+            ))
+            
+        return violations
