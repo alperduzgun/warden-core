@@ -114,8 +114,13 @@ jobs:
             sleep 1
           done
           
-          echo "Pulling qwen2.5-coder:0.5b..."
-          ollama pull qwen2.5-coder:0.5b
+          echo "Checking for existing models..."
+          if ollama list | grep -q "qwen2.5-coder:0.5b"; then
+            echo "✅ Model qwen2.5-coder:0.5b already cached."
+          else
+            echo "⬇️ Model not found in cache. Pulling..."
+            ollama pull qwen2.5-coder:0.5b
+          fi
           
           # --- SCAN EXECUTION ---
           
