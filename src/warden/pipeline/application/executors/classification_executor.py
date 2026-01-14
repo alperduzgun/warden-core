@@ -163,6 +163,7 @@ class ClassificationExecutor(BasePhaseExecutor):
             context.frame_priorities = result.frame_priorities
             context.classification_reasoning = result.reasoning
             context.learned_patterns = result.learned_patterns
+            context.advisories = getattr(result, "advisories", [])
 
             # Add phase result
             context.add_phase_result("CLASSIFICATION", {

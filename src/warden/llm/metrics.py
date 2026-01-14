@@ -7,6 +7,15 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from datetime import datetime
 
+_global_metrics_collector = None
+
+def get_global_metrics_collector():
+    """Get the global LLM metrics collector singleton."""
+    global _global_metrics_collector
+    if _global_metrics_collector is None:
+        _global_metrics_collector = LLMMetricsCollector()
+    return _global_metrics_collector
+
 
 @dataclass
 class LLMRequestMetrics:

@@ -668,6 +668,7 @@ class PhaseOrchestrator:
             metadata={
                 "strategy": self.config.strategy.value,
                 "fail_fast": self.config.fail_fast,
+                "advisories": getattr(context, "advisories", []),
                 "frame_executions": [
                     {
                         "frame_id": fe.frame_id,

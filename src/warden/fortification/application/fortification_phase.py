@@ -100,7 +100,9 @@ class FortificationPhase:
         """
         Execute fortification phase.
         """
-        logger.info(
+        # Use debug level for empty runs to reduce CI noise
+        log_func = logger.info if validated_issues else logger.debug
+        log_func(
             "fortification_phase_started",
             issue_count=len(validated_issues),
             use_llm=self.use_llm,

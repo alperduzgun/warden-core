@@ -76,11 +76,11 @@ class FrameRegistry:
         Raises:
             ValidationFrameError: If frame discovery fails critically
         """
-        logger.info("frame_discovery_started")
+        logger.debug("frame_discovery_started")
 
         # 1. Discover built-in frames
         builtin_frames = self._discover_builtin_frames()
-        logger.info(
+        logger.debug(
             "builtin_frames_discovered",
             count=len(builtin_frames),
             frames=[f.__name__ for f in builtin_frames],
@@ -88,7 +88,7 @@ class FrameRegistry:
 
         # 2. Discover entry point frames (PyPI)
         entry_point_frames = self._discover_entry_point_frames()
-        logger.info(
+        logger.debug(
             "entry_point_frames_discovered",
             count=len(entry_point_frames),
             frames=[f.__name__ for f in entry_point_frames],
@@ -96,7 +96,7 @@ class FrameRegistry:
 
         # 3. Discover local directory frames
         local_frames = self._discover_local_frames(project_root)
-        logger.info(
+        logger.debug(
             "local_frames_discovered",
             count=len(local_frames),
             frames=[f.__name__ for f in local_frames],
@@ -104,7 +104,7 @@ class FrameRegistry:
 
         # 4. Discover environment variable frames
         env_frames = self._discover_env_frames()
-        logger.info(
+        logger.debug(
             "env_frames_discovered",
             count=len(env_frames),
             frames=[f.__name__ for f in env_frames],

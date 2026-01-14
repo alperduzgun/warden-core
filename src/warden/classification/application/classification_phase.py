@@ -26,6 +26,7 @@ class ClassificationResult:
     frame_priorities: Dict[str, int] = field(default_factory=dict)
     reasoning: str = ""
     learned_patterns: List[Dict[str, Any]] = field(default_factory=list)
+    advisories: List[str] = field(default_factory=list)  # AI Strategic Advice / Warnings
     confidence: float = 0.0
     duration: float = 0.0
 
