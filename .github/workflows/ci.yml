@@ -125,6 +125,7 @@ jobs:
           done
           
           echo "Checking for existing models..."
+          ollama list # Verify models visible to the server
           if ollama list | grep -q "qwen2.5-coder:0.5b"; then
             echo "✅ Model qwen2.5-coder:0.5b already cached."
           else
