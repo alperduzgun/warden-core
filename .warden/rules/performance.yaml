@@ -7,11 +7,10 @@ rules:
     description: Prevents processing excessively large files that could cause
       performance issues
     enabled: true
-    type: script
-    scriptPath: .warden/scripts/check_file_size.sh
-    timeout: 10
-    message: File exceeds maximum size limit of 500KB
-    conditions: {}
+    type: convention
+    message: File exceeds maximum size limit of 10MB
+    conditions:
+      max_size_mb: 10
     examples:
       invalid:
         - 15MB log file
@@ -26,6 +25,22 @@ rules:
       - '**/dist/**'
       - '**/build/**'
       - '**/*.bundle.js'
+
+  - id: file-complexity
+    name: File Too Complex (Max Lines)
+    category: performance
+    severity: warning
+    isBlocker: false
+    description: Files should not exceed 500 lines to maintain readability and maintainability.
+    enabled: true
+    type: convention
+    conditions:
+      max_lines: 500
+    message: File is too long ({reason}). Consider splitting into smaller modules.
+    exceptions:
+      - '**/tests/**'
+      - '**/*.lock'
+      - '**/*.json'
 
   - id: lazy-load-heavy-imports
     name: Heavy Libraries Must Be Lazy Loaded

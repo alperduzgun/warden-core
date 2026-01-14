@@ -19,6 +19,6 @@ Usage:
     result = await frame.execute(code_file)
 """
 
-from ..security_frame import SecurityFrame
+from warden.validation.frames.security.security_frame import SecurityFrame
 
 __all__ = ["SecurityFrame"]

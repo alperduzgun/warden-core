@@ -145,12 +145,24 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             discovery_config = self.config.discovery_config or {}
             max_depth = discovery_config.get("max_depth")
             use_gitignore = discovery_config.get("use_gitignore", True)
+            max_size_mb = discovery_config.get("max_size_mb")
+
+            # Fallback to global rules for size limit if not explicitly in discovery_config
+            if max_size_mb is None and self.config.global_rules:
+                for rule in self.config.global_rules:
+                    if rule.id == "file-size-limit" and rule.enabled:
+                        max_size_mb = rule.conditions.get("max_size_mb")
+                        if max_size_mb:
+                            logger.info("discovery_limit_extracted_from_global_rules", rule_id=rule.id, limit_mb=max_size_mb)
+                            break
 
             # Create discoverer
+            logger.info("discovery_parameters", max_size_mb=max_size_mb, use_gitignore=use_gitignore)
             discoverer = FileDiscoverer(
                 root_path=project_path,
                 max_depth=max_depth,
                 use_gitignore=use_gitignore,
+                max_size_mb=max_size_mb,
             )
 
             # Run discovery

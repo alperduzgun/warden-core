@@ -10,6 +10,6 @@ Usage:
     result = await frame.execute(code_file)
 """
 
-from ..resilience_frame import ResilienceFrame
+from warden.validation.frames.resilience.resilience_frame import ResilienceFrame
 
 __all__ = ["ResilienceFrame"]

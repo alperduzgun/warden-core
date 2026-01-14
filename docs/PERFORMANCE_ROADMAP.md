@@ -17,11 +17,12 @@ Currently, AST parsing for multi-language support (Python, TS, Go) happens in Py
 ## 2. Context-Aware Architectural Checks
 Many architectural rules are processed line-by-line in Python.
 - **Goal**: Implement these checks directly in the Rust traversal loop.
-- **Status**: Partially enforced via Python. Successfully refactored `fortification_phase.py` (457 lines) to meet the 500-line limit.
+- **Status**: **Completed**. Implemented `Hybrid Rule Evaluation` system where `max_lines`, `max_size_mb`, and `regex` patterns are automatically routed to the Rust engine (`validate_files`).
+- **Aksiyon**: 500 satır veya sınıf sayısı sınırı gibi kuralları Rust tarafında değerlendir. Python'un `ast.parse()` çağırmasına gerek kalmadan sonuçları üret.
 - **Verification**:
-    - [ ] **Integration Test**: Create a "torture test" file with 501 lines and 6 classes. Rust engine must flag these immediately without Python calling `ast.parse()`.
-    - [x] **Hygiene**: Enforce 500-line limit on core components (e.g., `bridge.py`, `fortification_phase.py`).
-
+    - [x] **Integration Test**: Validated via `verify_hybrid_rules.py` that `max_lines` and `regex` rules are executed by Rust engine.
+    - [x] **Hygiene**: Enforce 500-line limit on core components via `file-complexity` rule.
+    - [x] **Safety**: Added `_is_rust_capable` regex check to prevent look-arounds/backreferences from crashing Rust engine.
 ## 3. CPU-Bound Parallelism (Rayon)
 Computation remains bound by the Python GIL.
 - **Goal**: Offload all heavy computation to Rust's `rayon` thread pool.
@@ -105,6 +106,14 @@ High false-positive rates reduce developer trust and perceived performance.
     - [x] **FP Suppression**: Successfully suppressed "Line 1:1" warnings for file-wide organization violations.
     - [ ] **A/B Testing**: Run scan on 3 legacy projects. Manual audit of findings must confirm <5% false positive rate for "Critical" and "High" issues.
 
+## 8. Frame Architecture & Governance
+Standardize frame structure and enforce Definition of Done (DoD).
+- **Goal**: Prevent architectural entropy and ensure all frames adhere to "Frame-per-Directory" pattern.
+- **Status**: **COMPLETED**. Refactored `orphan`, `security`, `gitchanges`, `resilience` to `src/warden/validation/frames` and implemented strict `FLIGHT_CHECKLISTS.md`.
+- **Verification**:
+    - [x] **Structure**: All core frames reside in dedicated directories with `<name>_frame.py`.
+    - [x] **Discovery**: `FrameRegistry` correctly loads built-in frames from new structure.
+    - [x] **DoD**: Established strict checklists for Core, Phases, and Frames in `docs/FLIGHT_CHECKLISTS.md`.
 ---
 > [!IMPORTANT]
 > This roadmap aims to transform Warden from a Python-centric tool to a **Rust-Native Core** with a Python interface. Each completed item must pass its verification criteria before being merged into the `main` branch.

@@ -118,6 +118,7 @@ class ConfigHandler(BaseHandler):
             llm_config=config_data.get('llm'),
             enable_issue_validation=settings.get('enable_issue_validation', True),
             use_gitignore=settings.get('use_gitignore', True),
+            discovery_config=settings.get('discovery_config', None),
             global_rules=global_rules_objects,
             frame_rules=pipeline_frame_rules
         )

@@ -111,8 +111,21 @@ class PipelineHandler(BaseHandler):
                 logger.warning("path_not_found_skipping", path=str(root_path))
                 continue
             
+            # Get discovery settings from orchestrator config if available
+            discovery_config = getattr(self.orchestrator.config, "discovery_config", {}) or {}
+            max_size_mb = discovery_config.get("max_size_mb")
+
+            # Fallback to global rules for size limit
+            if max_size_mb is None and hasattr(self.orchestrator.config, "global_rules"):
+                for rule in self.orchestrator.config.global_rules:
+                    if rule.id == "file-size-limit" and rule.enabled:
+                        max_size_mb = rule.conditions.get("max_size_mb")
+                        if max_size_mb:
+                            break
+
             # Use optimized FileDiscoverer (leverages Rust)
-            discoverer = FileDiscoverer(root_path, use_gitignore=True)
+            logger.info("discovery_started_bridge", root=str(root_path), max_size_mb=max_size_mb)
+            discoverer = FileDiscoverer(root_path, use_gitignore=True, max_size_mb=max_size_mb)
             discovery_result = await discoverer.discover_async()
             
             for f in discovery_result.get_analyzable_files():
