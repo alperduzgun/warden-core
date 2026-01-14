@@ -181,7 +181,9 @@ jobs:
             fi
             
             set +e # Capture exit code
-            echo "$CHANGED_FILES" | xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
+            # Flatten newlines to spaces for direct argument passing
+            FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ')
+            warden scan $FILES --level $LEVEL --format sarif --output warden.sarif --verbose
             EXIT_CODE=$?
             set -e
 
