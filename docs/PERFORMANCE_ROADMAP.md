@@ -55,7 +55,7 @@ LLM latency is the primary bottleneck for "Smart" phases.
     - [ ] **Context Quality**: Ensure semantic results are ranked by relevance before being injected into LLM prompts.
 
 ## 6.1. LLM Tier Strategy (Qwen Fast Tier Optimization)
-**Status**: **Completed** ✅
+**Status**: **Phase 1 Completed** ✅ | **Phase 2-3 In Progress** 🚧
 
 Warden implements a **Hybrid LLM Architecture** to maximize cost efficiency and privacy while maintaining quality:
 
@@ -69,6 +69,8 @@ Warden implements a **Hybrid LLM Architecture** to maximize cost efficiency and 
 - ✅ **Finding Verifier** - False positive filtering (high frequency)
 - ✅ **Project Purpose Detector** - Project structure analysis (one-time, privacy-sensitive)
 - ✅ **Context Analyzer** - File context detection (high frequency, privacy-sensitive)
+- ✅ **Analysis Phase** - Quality metrics analysis (NEW: Phase 1 migration)
+- ✅ **Cleaning Phase** - Code improvement suggestions (NEW: Phase 1 migration)
 
 **Benefits**:
 - **80-90% Token Cost Reduction**: Most operations use free local LLM
@@ -81,7 +83,6 @@ Warden implements a **Hybrid LLM Architecture** to maximize cost efficiency and 
 
 **Operations Using Smart Tier** (default):
 - ⚠️ **Fortification Phase** - Security fix generation (critical, complex)
-- ⚠️ **Cleaning Phase** - Refactoring suggestions (complex logic)
 
 **Implementation**:
 - `OrchestratedLlmClient` routes requests based on `use_fast_tier` flag
@@ -92,6 +93,7 @@ Warden implements a **Hybrid LLM Architecture** to maximize cost efficiency and 
 - [x] **Ollama Integration**: Verified local client creation works
 - [x] **Routing Logic**: Confirmed `tier=fast` logs in CI
 - [x] **Fallback Mechanism**: Tested Azure fallback when Ollama unavailable
+- [x] **Phase 1 Migration**: Analysis + Cleaning migrated to Qwen (Expected: 40-50% Qwen usage)
 - [ ] **Cost Metrics**: Measure token usage reduction in production scans
 
 
