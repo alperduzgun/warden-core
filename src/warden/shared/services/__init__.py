@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 import asyncio
 
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.resilience import resilient
 
 logger = get_logger(__name__)
 
@@ -36,6 +37,7 @@ class LLMService:
             self.llm_available = False
             logger.warning("llm_service_unavailable", error=str(e))
 
+    @resilient(name="llm_generate_suggestion", timeout_seconds=30.0, retry_max_attempts=3, circuit_breaker_enabled=True)
     async def generate_suggestion(self, issue: Dict[str, Any]) -> Optional[str]:
         """Generate a fix suggestion for an issue."""
         if not self.enabled or not self.llm_available:
@@ -49,6 +51,7 @@ class LLMService:
             logger.error("suggestion_generation_failed", error=str(e))
             return None
 
+    @resilient(name="llm_analyze_code", timeout_seconds=60.0, retry_max_attempts=3, circuit_breaker_enabled=True)
     async def analyze_code(self, code: str, context: str = "") -> Dict[str, Any]:
         """Analyze code with LLM."""
         if not self.enabled or not self.llm_available:

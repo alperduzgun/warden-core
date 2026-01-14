@@ -35,91 +35,63 @@ class FortificationPromptBuilder:
         context: Dict[str, Any],
         semantic_context: Optional[List[Any]] = None,
     ) -> str:
-        """Create LLM prompt for fix generation."""
+        """Create optimized LLM prompt for fix generation."""
         # Get context information
-        project_type = context.get("project_type", "unknown")
         framework = context.get("framework", "unknown")
         language = context.get("language", "python")
 
-        # Format issues for prompt
+        # Format issues (Compact)
         issue_details = []
-        for issue in issues[:5]:  # Limit to 5 examples
+        for issue in issues[:5]:  # Limit to 5
+            snippet = (issue.get('code_snippet') or 'N/A')[:80] # Reduced to 80
             issue_details.append(
-                f"- File: {issue.get('file_path', 'unknown')}\n"
-                f"  Line: {issue.get('line_number', 'unknown')}\n"
-                f"  Code: {(issue.get('code_snippet') or 'N/A')[:100]}"
+                f"- {issue.get('file_path', '?')}:{issue.get('line_number', '?')}\n"
+                f"  `{snippet}`"
             )
 
-        # Format semantic context if available
+        # Format semantic context (Strict limit)
         semantic_section = ""
         if semantic_context:
             examples = []
+            max_chars = 1500  # Reduced validation context
             total_chars = 0
-            max_chars = 2000  # Max context characters
             
-            for i, result in enumerate(semantic_context[:3]):  # Max 3 examples
+            for i, result in enumerate(semantic_context[:3]):
                 file_path = "unknown"
                 content = ""
-                line = "N/A"
                 
-                if hasattr(result, 'chunk'):  # SearchResult object with chunk
+                # ... extractor logic same as before ...
+                if hasattr(result, 'chunk'):
                      chunk = result.chunk
                      file_path = getattr(chunk, 'file_path', 'unknown')
                      content = getattr(chunk, 'content', str(chunk))
-                     line = getattr(chunk, 'start_line', 'N/A')
-                elif hasattr(result, 'file_path'): # Direct object
+                elif hasattr(result, 'file_path'):
                     file_path = result.file_path
                     content = getattr(result, 'content', str(result))
-                    line = getattr(result, 'line_number', 'N/A')
                 elif isinstance(result, dict):
                     file_path = result.get('file_path', 'unknown')
                     content = result.get('content', str(result))
-                    line = result.get('line_number', 'N/A')
                 
-                content = (content or "")[:500]
+                content = (content or "")[:300] # Reduced from 500
                 
-                example = f"### Example {i+1}: {file_path}:{line}\n```{language}\n{content}\n```\n"
-                
-                if total_chars + len(example) > max_chars:
-                    break
-                    
+                example = f"# Ex{i+1} ({file_path})\n{content}\n"
+                if total_chars + len(example) > max_chars: break
                 examples.append(example)
                 total_chars += len(example)
             
             if examples:
-                semantic_section = f"""
-## SIMILAR SECURE PATTERNS FROM THIS PROJECT
-
-The following code snippets show how similar security issues 
-have been handled elsewhere in this codebase. 
-Use these as reference for style and approach:
-
-{"".join(examples)}
-
-IMPORTANT: Generate fixes that follow the patterns shown above.
-Match the coding style, library usage, and conventions of this project.
-"""
+                semantic_section = f"REFERENCE PATTERNS:\n{''.join(examples)}\n"
 
         prompt = f"""
-You are a security expert fixing {issue_type} vulnerabilities.
+ACT: Security Expert. FRAMEWORK: {framework}. LANG: {language}.
+TASK: Fix {issue_type} vulnerabilities.
 
-PROJECT CONTEXT:
-- Type: {project_type}
-- Framework: {framework}
-- Language: {language}
 {semantic_section}
-ISSUES FOUND ({len(issues)} total):
+ISSUES:
 {"".join(issue_details)}
 
-Generate secure fixes for these {issue_type} vulnerabilities.
-For each fix, provide:
-1. Title: Clear description of the fix
-2. Detail: Explanation of what the fix does
-3. Code: The actual fix code
-4. Auto-fixable: Whether this can be automatically applied (true/false)
-
-Format your response as JSON array of fixes.
-Focus on framework-specific best practices for {framework}.
+OUTPUT JSON: [{{ "title": "...", "detail": "...", "code": "...", "auto_fixable": bool }}]
+Fix must match project style.
 """
         return prompt
 
