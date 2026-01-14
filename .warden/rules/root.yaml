@@ -46,10 +46,14 @@ frame_rules:
       - no-secrets
     on_fail: stop
   demosecurity:
+    scope:
+      - "examples/**"
     pre_rules:
       - no-secrets
     on_fail: continue
   fuzz:
+    scope:
+      - "examples/**"
     on_fail: continue
   property:
     on_fail: continue

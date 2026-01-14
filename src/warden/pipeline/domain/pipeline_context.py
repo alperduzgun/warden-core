@@ -77,6 +77,7 @@ class PipelineContext:
     frame_priorities: Dict[str, str] = field(default_factory=dict)
     classification_reasoning: str = ""
     learned_patterns: List[Dict[str, Any]] = field(default_factory=list)
+    advisories: List[str] = field(default_factory=list)  # NEW: AI Strategic Warnings
 
     # Phase 3: VALIDATION Results
     findings: List[Dict[str, Any]] = field(default_factory=list)

@@ -65,7 +65,7 @@ rules:
     enabled: true
     type: convention
     conditions:
-      path_pattern: "src/warden/llm/providers/.*\.py"
+      path_pattern: 'src/warden/llm/providers/.*\.py'
       patterns:
         - "(@resilient|from.*resilience.*import)"
     examples:

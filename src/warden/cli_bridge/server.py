@@ -19,6 +19,7 @@ from warden.cli_bridge.protocol import (
     ErrorCode,
     StreamChunk,
 )
+from warden.shared.utils.retry_utils import async_retry as retry_async
 
 # Optional imports - graceful degradation if Warden logging not available
 try:
@@ -159,8 +160,9 @@ class IPCServer:
             writer.close()
             await writer.wait_closed()
 
+    @retry_async(retries=3, initial_delay=0.5, backoff_factor=2.0)
     async def _run_socket_async(self) -> None:
-        """Run server using Unix socket"""
+        """Run server using Unix socket (Retries on bind failure)"""
         logger.info("ipc_server_starting_socket", socket_path=self.socket_path)
 
         # Remove existing socket file

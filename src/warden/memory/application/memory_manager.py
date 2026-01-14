@@ -58,7 +58,7 @@ class MemoryManager:
                 self.knowledge_graph = KnowledgeGraph.from_json(data)
                 self._is_loaded = True
                 
-            logger.info(
+            logger.debug(
                 "memory_loaded", 
                 fact_count=len(self.knowledge_graph.facts),
                 last_updated=self.knowledge_graph.last_updated
@@ -81,7 +81,7 @@ class MemoryManager:
             async with aiofiles.open(self.memory_file, mode='w') as f:
                 await f.write(content)
                 
-            logger.info(
+            logger.debug(
                 "memory_saved", 
                 fact_count=len(self.knowledge_graph.facts),
                 path=str(self.memory_file)

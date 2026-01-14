@@ -7,43 +7,57 @@ from typing import Any, Dict, List, Optional
 from warden.analysis.domain.project_context import Framework, ProjectType
 
 def get_classification_system_prompt(available_frames: Optional[List[Any]] = None) -> str:
-    """Get classification system prompt."""
+    """Get classification system prompt with Strategic Selection Principles."""
     if available_frames:
         frames_descriptions = "\n".join([
             f"- {f.frame_id}: {f.description}" 
             for f in available_frames
         ])
     else:
-        frames_descriptions = """- SecurityFrame: SQL injection, XSS, hardcoded secrets
-- ChaosFrame: Error handling, timeouts, resilience
-- OrphanFrame: Unused code detection
-- ArchitecturalFrame: Design pattern compliance
-- StressFrame: Performance and load testing
-- PropertyFrame: Invariant and contract validation
-- FuzzFrame: Input validation and edge cases"""
+        frames_descriptions = """- SecurityFrame: Critical vulnerability detection (SQLi, XSS, Secrets).
+- ChaosFrame: Resilience testing (Retry, Timeout, Circuit Breaker).
+- OrphanFrame: Dead code detection (Unused functions/classes).
+- ArchitecturalFrame: Design pattern and coupling analysis.
+- StressFrame: Performance/Load testing for critical paths.
+- PropertyFrame: Invariant and API contract validation.
+- FuzzFrame: [EXPERIMENTAL/HIGH NOISE] Aggressive boundary testing. Use only if requested or for complex parsing logic.
+- DemoSecurityFrame: [DEMO ONLY] Example security rules for training."""
 
-    return f"""You are a senior Software Architect and Security Engineer. Determine the optimal validation strategy for the project.
+    return f"""You are the Lead Software Architect and Technical Advisor for this project.
+Your goal is to design a high-value, low-noise validation strategy tailored to the project's specific context.
 
-Task:
-1. Select validation frames for the codebase.
-2. Identify focal areas for suppression (test/example code).
-3. Prioritize frames by risk.
+### PRINCIPLES OF STRATEGIC SELECTION:
+1. **Contextual Relevance**: Select frames that target risks INHERENT to the technology stack.
+   - *Example*: Skip memory-safety checks for garbage-collected languages (Python/JS) unless navigating FFI.
+   - *Example*: Skip 'Chaos' validation for simple CLI scripts; reserve it for distributed/networked services.
 
-Available Frames:
+2. **Noise Intolerance (Precision > Recall)**:
+   - Identify frames that rely on mechanisms mismatching the language runtime (e.g., static array bounds checks in Python).
+   - **AGGRESSIVELY SUPPRESS** frames like 'FuzzFrame' or 'DemoSecurityFrame' for production code unless specific signal justifies them (e.g., historical bugs).
+   - If a frame is known to be noisy, only select it if the ROI (Return on Investment) is high.
+
+3. **Dependency-Awareness**:
+   - Trigger specialized frames based on libraries found in 'STATS'.
+   - *Example*: Detect `sqlalchemy` -> Enable SQL-focused Security rules.
+   - *Example*: Detect `react` -> Enable Frontend Performance rules.
+
+### TASK:
+1. Analyze the `TYPE`, `FRAMEWORK`, `STATS` (dependencies), and `HISTORY`.
+2. Select the optimal set of Validation Frames.
+3. Define suppression rules for noise reduction (especially for tests/examples).
+4. Provide architectural reasoning for your choices.
+
+### AVAILABLE FRAMES:
 {frames_descriptions}
 
 Return a JSON object:
 {{
   "selected_frames": ["frame_id_1", "frame_id_2"],
-  "suppression_rules": [{{"pattern": "*.test.py", "reason": "test_code", "suppress": ["security"]}}],
-  "priorities": {{"security": "CRITICAL", "chaos": "HIGH"}},
-  "reasoning": "Brief explanation"
+  "suppression_rules": [{{"pattern": "tests/*", "reason": "Redundant checks", "suppress": ["security"]}}],
+  "priorities": {{ "security": "CRITICAL", "chaos": "HIGH" }},
+  "advisories": ["Note: Fuzzing disabled due to Python runtime context", "Warn: High complexity in auth module detected"],
+  "reasoning": "Selected SecurityFrame due to sensitive dependencies (SQLAlchemy). Rejected FuzzFrame due to high noise risk in Python runtime. Enabled ChaosFrame for API resilience."
 }}
-
-Guidelines:
-- Skip security for test files.
-- Prioritize frames that found issues before.
-- Use only valid frame IDs from the list provided.
 """
 
 def format_classification_user_prompt(context: Dict[str, Any]) -> str:

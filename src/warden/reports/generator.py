@@ -109,10 +109,38 @@ class ReportGenerator:
                             "rules": []
                         }
                     },
+                    "invocations": [
+                        {
+                            "executionSuccessful": True,
+                            "toolExecutionNotifications": []
+                        }
+                    ],
                     "results": []
                 }
             ]
         }
+        
+        # Inject AI Advisories from Metadata
+        metadata = scan_results.get('metadata', {})
+        advisories = metadata.get('advisories', []) 
+        # Fallback to check if it's in top-level for some reason
+        if not advisories:
+            advisories = scan_results.get('advisories', [])
+            
+        if advisories:
+            notifications = []
+            for advice in advisories:
+                notifications.append({
+                    "descriptor": {
+                        "id": "AI001", 
+                        "name": "AI Advisor Note"
+                    },
+                    "message": {
+                        "text": advice
+                    },
+                    "level": "note"
+                })
+            sarif["runs"][0]["invocations"][0]["toolExecutionNotifications"] = notifications
         
         # Add custom properties for LLM usage and metrics
         properties = {}

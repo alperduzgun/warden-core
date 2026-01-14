@@ -55,9 +55,14 @@ class WardenBridge:
 
         # Initialize Rate Limiter (Centralized to prevent Event Loop issues)
         from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
-        # Default limits, can be overridden by config if needed
-        # Set burst=1 to be safe against concurrency limits
-        self.rate_limiter = RateLimiter(RateLimitConfig(tpm=5000, rpm=10, burst=1))
+        import os
+        
+        # Load limits from env or use defaults
+        tpm = int(os.getenv("WARDEN_LIMIT_TPM", "5000"))
+        rpm = int(os.getenv("WARDEN_LIMIT_RPM", "10"))
+        burst = int(os.getenv("WARDEN_LIMIT_BURST", "1"))
+        
+        self.rate_limiter = RateLimiter(RateLimitConfig(tpm=tpm, rpm=rpm, burst=burst))
 
         # Initialize Orchestrator
         from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator

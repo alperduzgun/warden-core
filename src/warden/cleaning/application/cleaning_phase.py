@@ -107,7 +107,9 @@ class CleaningPhase:
         """
         Execute cleaning phase.
         """
-        logger.info(
+        # Use debug level for phase start if no files to avoid CI noise
+        log_func = logger.info if code_files else logger.debug
+        log_func(
             "cleaning_phase_started",
             file_count=len(code_files),
             use_llm=self.use_llm,

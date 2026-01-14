@@ -441,11 +441,13 @@ class FrameExecutor:
                     return None
 
             if code_files:
-                logger.info(
-                    "frame_batch_execution_start",
-                    frame_id=frame.frame_id,
-                    files_to_scan=len(code_files)
-                )
+                # Optimized logging for batch start
+                if len(code_files) > 1:
+                    logger.debug(
+                        "frame_batch_execution_start",
+                        frame_id=frame.frame_id,
+                        files_to_scan=len(code_files)
+                    )
 
                 # Use batch execution if available (default impl iterates anyway)
                 # But optimized frames (like OrphanFrame) will use smart batching
@@ -463,10 +465,11 @@ class FrameExecutor:
                         files_to_scan.append(cf)
                 
                 if cached_files > 0:
-                     logger.info("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
+                     log_func = logger.info if len(files_to_scan) > 0 else logger.debug
+                     log_func("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
                 
                 if not files_to_scan:
-                     logger.info("all_files_cached_skipping_batch", frame=frame.frame_id)
+                     logger.debug("all_files_cached_skipping_batch", frame=frame.frame_id)
                      # Return empty list or simulation of results
                      f_results = []
                 else:
@@ -557,10 +560,17 @@ class FrameExecutor:
             else:
                 pipeline.frames_passed += 1
 
-            logger.info("frame_executed_successfully",
-                       frame_id=frame.frame_id,
-                       files_scanned=files_scanned,
-                       findings=len(frame_result.findings))
+            # Only log successful completion at info level if there was actual work or findings
+            if files_scanned > 0 or len(frame_result.findings) > 0:
+                logger.info("frame_executed_successfully",
+                           frame_id=frame.frame_id,
+                           files_scanned=files_scanned,
+                           findings=len(frame_result.findings))
+            else:
+                logger.debug("frame_executed_successfully",
+                           frame_id=frame.frame_id,
+                           files_scanned=files_scanned,
+                           findings=0)
 
         except asyncio.TimeoutError:
             # This outer timeout technically catches only if we wrapped the whole loop in timeout

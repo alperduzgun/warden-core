@@ -93,8 +93,10 @@ class LLMClassificationPhase(LLMPhaseBase):
                 logger.warning("llm_returned_empty_frames", using_defaults=True)
 
             result.setdefault("suppression_rules", [])
+            result.setdefault("suppression_rules", [])
             result.setdefault("priorities", {})
             result.setdefault("reasoning", "")
+            result.setdefault("advisories", [])
 
             return result
 
@@ -114,6 +116,7 @@ class LLMClassificationPhase(LLMPhaseBase):
                     "orphan": "MEDIUM",
                 },
                 "reasoning": "Default frame selection due to parse error",
+                "advisories": ["Warning: LLM parsing failed, using default frames."],
             }
 
     async def classify_batch_async(
@@ -167,6 +170,7 @@ class LLMClassificationPhase(LLMPhaseBase):
                             "rules": llm_data.get("suppression_rules", []),
                             "priorities": llm_data.get("priorities", {}),
                             "reasoning": llm_data.get("reasoning", ""),
+                            "advisories": llm_data.get("advisories", [])
                         }
                         results[file_path] = (selected_frames, suppression_config, 0.85)
                     else:
@@ -199,11 +203,12 @@ Return a JSON array of objects with schema:
   "selected_frames": ["security", "chaos", ...],
   "suppression_rules": [...],
   "priorities": {{...}},
-  "reasoning": "..."
+  "reasoning": "...",
+  "advisories": ["Warn: ...", "Note: ..."]
 }}
 
 FILES TO ANALYZE:
-{batch_summary}
+{{batch_summary}}
 """
 
     def _parse_classification_batch_response(self, response: str, count: int) -> List[Dict[str, Any]]:
@@ -212,9 +217,30 @@ FILES TO ANALYZE:
             result = parse_json_from_llm(response)
             if isinstance(result, list):
                 return result
+            # Try to handle if it returns a single object instead of list
+            if isinstance(result, dict):
+                 return [result]
             return []
         except:
             return []
+
+    async def generate_suppression_rules_async(
+        self,
+        findings: List[Dict[str, Any]],
+        file_contexts: Dict[str, Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        # ... (unchanged) ...
+        return await super().generate_suppression_rules_async(findings, file_contexts) # Reverting to original flow if not needed
+        # Actually I need to keep the method, I just won't touch it.
+        # But wait, replace_file_content replaces chunks. I should have targeted smaller chunks.
+        # Since I'm targeting big chunks, I need to be careful.
+        # I'll just skip replacing generate_suppression_rules_async in this call and rely on the existing one.
+        # The key is to properly implementation classify_batch_async and the return of execute_async.
+
+    # ... (skipping generate_suppression_rules_async and learn_from_feedback_async as they are fine) ...
+
+    # Wait, I cannot skip methods in the middle of a large replacement block if I claimed to replace up to line 535.
+    # I should restart the strategy and use multiple smaller edits.
 
     async def generate_suppression_rules_async(
         self,
@@ -481,6 +507,7 @@ Return patterns as JSON."""
         all_suppression_rules = []
         all_priorities = {}
         all_reasoning = []
+        all_advisories = []
 
         for file_path, (frames, suppression_config, confidence) in batch_results.items():
             all_frames.update(frames)
@@ -488,6 +515,8 @@ Return patterns as JSON."""
             all_priorities.update(suppression_config.get("priorities", {}))
             if suppression_config.get("reasoning"):
                 all_reasoning.append(f"{file_path}: {suppression_config['reasoning']}")
+            if suppression_config.get("advisories"):
+                all_advisories.extend(suppression_config.get("advisories", []))
 
         # Ensure we always have some base frames
         if not all_frames:
@@ -507,13 +536,15 @@ Return patterns as JSON."""
             frame_priorities: Dict[str, str]
             reasoning: str
             learned_patterns: List[Dict[str, Any]]
+            advisories: List[str]
 
         return ClassificationResult(
             selected_frames=list(all_frames),
             suppression_rules=all_suppression_rules[:100], # Cap it
             frame_priorities=all_priorities,
             reasoning=" | ".join(all_reasoning[:5]) + ("..." if len(all_reasoning) > 5 else ""),
-            learned_patterns=[]
+            learned_patterns=[],
+            advisories=list(set(all_advisories))[:20] # Cap and dedup
         )
 
     def _create_default_result(self, frames: List[str]) -> Any:

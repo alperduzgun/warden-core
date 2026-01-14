@@ -8,6 +8,7 @@ from typing import Optional, Union
 from .config import LlmConfiguration, load_llm_config, ProviderConfig
 from .types import LlmProvider
 from .providers.base import ILlmClient
+from .metrics import get_global_metrics_collector
 
 def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILlmClient:
     """Create a client for a specific provider configuration."""
@@ -122,3 +123,9 @@ async def create_client_with_fallback(config: Optional[LlmConfiguration] = None)
 
     raise RuntimeError("No available LLM providers found.")
 
+__all__ = [
+    "create_client",
+    "create_provider_client",
+    "create_client_with_fallback",
+    "get_global_metrics_collector"
+]

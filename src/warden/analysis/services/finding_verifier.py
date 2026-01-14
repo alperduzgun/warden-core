@@ -16,6 +16,19 @@ class FindingVerificationService:
     DEFAULT_RETRIES = 3
     FALLBACK_CONFIDENCE = 0.5
 
+    def _get(self, obj: Any, key: str, default: Any = None) -> Any:
+        """Helper to get values from Finding objects or dicts."""
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    def _set(self, obj: Any, key: str, value: Any) -> None:
+        """Helper to set values on Finding objects or dicts."""
+        if isinstance(obj, dict):
+            obj[key] = value
+        else:
+            setattr(obj, key, value)
+
     def __init__(
         self, 
         llm_client: ILlmClient, 
@@ -63,15 +76,15 @@ Return ONLY a JSON object:
         # STEP 1: Heuristic Speed Layer (Alpha Filter)
         # Discard obvious false positives without hitting cache or LLM
         for finding in findings:
-            if not finding.get('location'):
+            if not self._get(finding, 'location'):
                 verified_findings.append(finding)
                 continue
 
-            code_snippet = finding.get('code', '').strip()
+            code_snippet = (self._get(finding, 'code') or '').strip()
             if self._is_obvious_false_positive(finding, code_snippet):
                 logger.info("heuristic_filter_rejected_finding", 
-                            finding_id=finding.get('id'),
-                            rule=finding.get('rule_id'))
+                            finding_id=self._get(finding, 'id'),
+                            rule=self._get(finding, 'rule_id'))
                 continue
             
             candidates_to_verify.append(finding)
@@ -88,7 +101,7 @@ Return ONLY a JSON object:
             if cached_result:
                 cached_result['cached'] = True
                 if cached_result.get('is_true_positive', True):
-                    finding['verification_metadata'] = cached_result
+                    self._set(finding, 'verification_metadata', cached_result)
                     verified_findings.append(finding)
                 continue
             
@@ -105,7 +118,7 @@ Return ONLY a JSON object:
         for i in range(0, len(remaining_after_cache), BATCH_SIZE):
             batch = remaining_after_cache[i : i + BATCH_SIZE]
             try:
-                batch_results = await self._verify_batch_with_llm(batch, context)
+                batch_results = await self._verify_batch_with_llm_async(batch, context)
                 
                 for idx, result in enumerate(batch_results):
                     finding = batch[idx]
@@ -113,15 +126,22 @@ Return ONLY a JSON object:
                     self._save_cache(cache_key, result)
 
                     if result.get('is_true_positive'):
-                        finding['verification_metadata'] = result
+                        self._set(finding, 'verification_metadata', result)
                         verified_findings.append(finding)
                     else:
                         logger.info("batch_verification_rejected_finding", 
-                                    finding_id=finding.get('id'), 
+                                    finding_id=self._get(finding, 'id'), 
                                     reason=result.get('reason'))
             except Exception as e:
                 logger.error("batch_verification_failed_falling_back_to_open", error=str(e))
-                # Fail open for the batch
+                # Fallback: Capture the failure as an advisory/note and fail safe
+                for finding in batch:
+                    self._set(finding, 'verification_metadata', {
+                        "is_true_positive": True,
+                        "confidence": self.FALLBACK_CONFIDENCE,
+                        "reason": f"LLM Verification Unavailable: {str(e)}",
+                        "fallback": True
+                    })
                 verified_findings.extend(batch)
 
         logger.info("verification_summary", 
@@ -131,10 +151,10 @@ Return ONLY a JSON object:
         
         return verified_findings
 
-    def _is_obvious_false_positive(self, finding: Dict[str, Any], code: str) -> bool:
+    def _is_obvious_false_positive(self, finding: Any, code: str) -> bool:
         """Heuristic Alpha Filter to detect obvious false positives instantly."""
         # 1. Comment/Docstring check
-        if code.startswith(('#', '//', '/*', '"""', "'''")) or 'docstring' in finding.get('message', '').lower():
+        if code.startswith(('#', '//', '/*', '"""', "'''")) or 'docstring' in (self._get(finding, 'message') or '').lower():
             return True
             
         # 2. Type Hint check (common FP in Python/TS)
@@ -148,13 +168,14 @@ Return ONLY a JSON object:
             return True
 
         # 4. Dummy/Example data in Test files
-        location = finding.get('location', '').lower()
+        location = (self._get(finding, 'location') or '').lower()
         if ('test' in location or 'example' in location) and any(d in code.lower() for d in ['dummy', 'mock', 'fake', 'test_password', 'secret123']):
             return True
 
         return False
 
-    async def _verify_batch_with_llm(self, batch: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
+    @async_retry(retries=2, initial_delay=1.0, backoff_factor=2.0)
+    async def _verify_batch_with_llm_async(self, batch: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
         """Verifies a batch of findings in a single LLM request."""
         context_prompt = ""
         if context and hasattr(context, 'get_llm_context_prompt'):
@@ -164,10 +185,10 @@ Return ONLY a JSON object:
         for i, f in enumerate(batch):
             findings_summary += f"""
 FINDING #{i}:
-- ID: {f.get('id')}
-- Rule: {f.get('rule_id')}
-- Message: {f.get('message')}
-- Code: `{f.get('code', 'N/A')}`
+- ID: {self._get(f, 'id')}
+- Rule: {self._get(f, 'rule_id')}
+- Message: {self._get(f, 'message')}
+- Code: `{self._get(f, 'code', 'N/A')}`
 """
 
         prompt = f"""
@@ -199,6 +220,9 @@ Return ONLY a JSON array of objects in the EXACT order:
         response = await self.llm.complete_async(prompt, self.system_prompt, model=model, use_fast_tier=True)
         
         try:
+            if not response.success or not response.content:
+                raise ValueError(f"LLM request failed: {response.error_message}")
+            
             content = response.content.strip()
             if '```json' in content:
                 content = content.split('```json')[1].split('```')[0].strip()
@@ -214,19 +238,25 @@ Return ONLY a JSON array of objects in the EXACT order:
             # Fallback: Mark all in batch as true positive to be safe
             return [{"is_true_positive": True, "confidence": 0.5, "reason": "Batch parsing failed"} for _ in batch]
 
-    def _generate_key(self, finding: Dict[str, Any]) -> str:
+    def _generate_key(self, finding: Any) -> str:
         import hashlib
         # Use relative path if possible for portability
-        loc = finding.get('location', '')
-        unique_str = f"{finding.get('id')}:{finding.get('code', '')}:{loc}"
+        loc = self._get(finding, 'location', '')
+        unique_str = f"{self._get(finding, 'id')}:{self._get(finding, 'code', '')}:{loc}"
         return hashlib.sha256(unique_str.encode()).hexdigest()
 
     def _check_cache(self, key: str) -> Optional[Dict]:
-        if self.memory_manager:
-            return self.memory_manager.get_llm_cache(f"verify:{key}")
+        try:
+            if self.memory_manager:
+                return self.memory_manager.get_llm_cache(f"verify:{key}")
+        except Exception as e:
+            logger.warning("cache_lookup_failed", key=key, error=str(e))
         return None
 
     def _save_cache(self, key: str, data: Dict) -> None:
-        if self.memory_manager:
-            self.memory_manager.set_llm_cache(f"verify:{key}", data)
+        try:
+            if self.memory_manager:
+                self.memory_manager.set_llm_cache(f"verify:{key}", data)
+        except Exception as e:
+            logger.warning("cache_save_failed", key=key, error=str(e))
 
