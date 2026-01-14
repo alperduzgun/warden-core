@@ -134,7 +134,7 @@ jobs:
             # BASELINE SCAN: Full deep scan of entire project
             echo "Running FULL SCAN on entire repository..."
             set +e # Capture exit code
-            warden scan . --level deep --format sarif --output warden.sarif --verbose
+            warden scan . --level deep --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
             
@@ -183,7 +183,7 @@ jobs:
             set +e # Capture exit code
             # Flatten newlines to spaces for direct argument passing
             FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ')
-            warden scan $FILES --level $LEVEL --format sarif --output warden.sarif --verbose
+            warden scan $FILES --level $LEVEL --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
 
