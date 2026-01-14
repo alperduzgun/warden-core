@@ -249,6 +249,15 @@ class PipelineResult(BaseDomainModel):
             "completionTokens": self.completion_tokens,
         }
         
+        # Add LLM performance metrics
+        try:
+            from warden.llm.factory import get_global_metrics_collector
+            metrics_collector = get_global_metrics_collector()
+            data["llmMetrics"] = metrics_collector.get_summary()
+        except Exception:
+            # Gracefully handle if metrics not available
+            pass
+        
         data["qualityScore"] = self.quality_score
         data["artifacts"] = self.artifacts
 
