@@ -13,6 +13,48 @@ from warden.cli_bridge.bridge import WardenBridge
 
 console = Console()
 
+
+def _display_llm_summary(metrics: dict):
+    """Display LLM performance summary in CLI."""
+    console.print("\n[bold cyan]🤖 LLM Performance Summary[/bold cyan]")
+    
+    total_time = metrics.get("totalTime", "N/A")
+    total_requests = metrics.get("totalRequests", 0)
+    console.print(f"  Total LLM Requests: {total_requests}")
+    console.print(f"  Total LLM Time: {total_time}")
+    
+    if metrics.get("fastTier"):
+        fast = metrics["fastTier"]
+        console.print(f"\n  [green]⚡ Fast Tier (Qwen):[/green]")
+        console.print(f"    Requests: {fast['requests']} ({fast['percentage']}%)")
+        console.print(f"    Success Rate: {fast['successRate']}%")
+        console.print(f"    Avg Response: {fast['avgResponseTime']}")
+        console.print(f"    Total Time: {fast['totalTime']} ({fast['timePercentage']}% of total)")
+        if fast.get('timeouts', 0) > 0:
+            console.print(f"    [yellow]⚠️  Timeouts: {fast['timeouts']}[/yellow]")
+    
+    if metrics.get("smartTier"):
+        smart = metrics["smartTier"]
+        console.print(f"\n  [blue]🧠 Smart Tier (Azure):[/blue]")
+        console.print(f"    Requests: {smart['requests']} ({smart['percentage']}%)")
+        console.print(f"    Avg Response: {smart['avgResponseTime']}")
+        console.print(f"    Total Time: {smart['totalTime']} ({smart['timePercentage']}% of total)")
+    
+    if metrics.get("costAnalysis"):
+        cost = metrics["costAnalysis"]
+        console.print(f"\n  [bold green]💰 Savings:[/bold green]")
+        console.print(f"    Cost: {cost['estimatedCostSavings']}")
+        console.print(f"    Time: {cost['estimatedTimeSavings']}")
+    
+    if metrics.get("issues"):
+        console.print("\n  [yellow]⚠️  Performance Issues:[/yellow]")
+        for issue in metrics["issues"]:
+            console.print(f"    - {issue['message']}")
+            if issue.get('recommendations'):
+                for rec in issue['recommendations']:
+                    console.print(f"      → {rec}")
+
+
 def scan_command(
     ctx: typer.Context,
     paths: List[str] = typer.Argument(None, help="Paths to scan (files or directories). Defaults to ."),
@@ -122,6 +164,12 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                     table.add_row("Critical Issues", f"[{'red' if critical > 0 else 'green'}]{critical}[/]")
                     
                     console.print("\n", table)
+                    
+                    # Display LLM Performance Metrics
+                    llm_metrics = res.get('llmMetrics', {})
+                    if llm_metrics:
+                        _display_llm_summary(llm_metrics)
+                    
                     # Status check (COMPLETED=2)
                     status_raw = res.get('status')
                     # Handle both integer and string statuses (Enums are often serialized to name or value)

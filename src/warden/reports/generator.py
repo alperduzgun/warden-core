@@ -114,12 +114,19 @@ class ReportGenerator:
             ]
         }
         
-        # Add custom properties for LLM usage
+        # Add custom properties for LLM usage and metrics
+        properties = {}
+        
         llm_usage = scan_results.get('llmUsage', {})
         if llm_usage:
-            sarif["runs"][0]["properties"] = {
-                "llmUsage": llm_usage
-            }
+            properties["llmUsage"] = llm_usage
+        
+        llm_metrics = scan_results.get('llmMetrics', {})
+        if llm_metrics:
+            properties["llmMetrics"] = llm_metrics
+        
+        if properties:
+            sarif["runs"][0]["properties"] = properties
 
         run = sarif["runs"][0]
         rules_map = {}
