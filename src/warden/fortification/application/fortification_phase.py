@@ -255,6 +255,23 @@ class FortificationPhase:
                 )
                 # Continue without semantic context
                 pass
+        
+        # Deduplicate and Re-Rank semantic context
+        # Ensure we prioritize the highest scoring examples, especially since we merged multiple queries
+        if semantic_context:
+            # unique by content to avoid dupes
+            seen = set()
+            unique_context = []
+            for item in semantic_context:
+                # content attribute or str representation
+                content = getattr(item, 'content', str(item))
+                if content not in seen:
+                    seen.add(content)
+                    unique_context.append(item)
+            
+            # Sort by score descending (if available)
+            unique_context.sort(key=lambda x: getattr(x, 'score', 0.0), reverse=True)
+            semantic_context = unique_context
 
         # Step 2: Create context-aware prompt with semantic examples
         prompt = FortificationPromptBuilder.create_llm_prompt(
