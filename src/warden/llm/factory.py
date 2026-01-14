@@ -22,10 +22,10 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
         from .providers.anthropic import AnthropicClient
         return AnthropicClient(config)
     elif provider == LlmProvider.DEEPSEEK:
-        from .providers.deepseek import DeepSeekClient
+        # from .providers.deepseek import DeepSeekClient # Already imported at module level
         return DeepSeekClient(config)
     elif provider == LlmProvider.QWENCODE:
-        from .providers.qwencode import QwenCodeClient
+        # from .providers.qwencode import QwenCodeClient # Already imported at module level
         return QwenCodeClient(config)
     elif provider == LlmProvider.OPENAI:
         from .providers.openai import OpenAIClient
@@ -92,7 +92,8 @@ def create_client(
         smart_client=smart_client,
         fast_client=fast_client,
         smart_model=config.smart_model,
-        fast_model=config.fast_model
+        fast_model=config.fast_model,
+        metrics_collector=get_global_metrics_collector()
     )
 
 
