@@ -99,13 +99,15 @@ jobs:
           # --- OLLAMA SETUP ---
           # We run this here to ensure the background process persists for the scan duration.
           
-          echo "Installing Ollama..."
+          # We run this here to ensure the background process persists for the scan duration.
+          
+          echo "Installing Ollama (Official Script)..."
           curl -fsSL https://ollama.com/install.sh | sh
           
-          echo "Getting Ollama Binary..."
-          curl -L https://ollama.com/download/ollama-linux-amd64 -o ollama
-          chmod +x ollama
-          sudo mv ollama /usr/local/bin/ollama
+          # The install script starts a systemd service as 'ollama' user.
+          # We must stop it to run our own instance as 'runner' user (to see the cache).
+          sudo systemctl stop ollama
+          sudo systemctl disable ollama
           
           echo "Debug: Checking Cache Content..."
           ls -la ~/.ollama || echo "No .ollama directory found"
