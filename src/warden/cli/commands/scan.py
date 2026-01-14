@@ -14,6 +14,81 @@ from warden.cli_bridge.bridge import WardenBridge
 console = Console()
 
 
+async def _generate_smart_failure_summary(critical_count: int, frames_failed: int, result_data: dict) -> None:
+    """
+    Generate an intelligent failure summary using Local LLM if available.
+    """
+    try:
+        # Check if Local LLM is available (Fast Tier)
+        # We can reuse the bridge check or try to instantiate a lightweight client
+        from warden.llm.factory import create_client
+        client = create_client()
+        
+        # 1. Check availability first (Fail fast)
+        if not await client.is_available_async():
+            # console.print("[dim]Local AI unavailable, skipping analysis.[/dim]")
+            return
+
+        console.print("\n[dim]🤔 Analyzing failure reason with Local AI (timeout: 5s)...[/dim]")
+        
+        # 2. Aggregate Findings
+        categories = {}
+        findings = result_data.get('findings', [])
+        
+        # If too many findings, limit to critical ones
+        critical_findings = [f for f in findings if str(f.get('severity')).upper() == 'CRITICAL']
+        if not critical_findings:
+            critical_findings = findings[:50] # Fallback to top 50 if no explicit critical tag
+            
+        for f in critical_findings:
+            cat = f.get('category', 'General')
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(f)
+            
+        # 3. Prepare Context (Sampled)
+        summary_context = f"""
+        Scan Failed.
+        Stats: {critical_count} critical issues, {frames_failed} failed frames.
+        
+        Top Issue Categories:
+        """
+        
+        for cat, items in list(categories.items())[:5]: # Top 5 categories
+            check = items[0]
+            summary_context += f"\n- {cat} ({len(items)} occurrences)\n"
+            summary_context += f"  Example: {check.get('message')} at {check.get('file_path')}:{check.get('line_number')}\n"
+
+        # 4. Ask LLM with strict Timeout
+        prompt = f"""
+        Analyze this security scan failure and provide a concise EXECUTIVE SUMMARY (max 3 sentences).
+        Explain WHY the build failed and WHAT is the most important action to take.
+        Do not list all issues. Focus on patterns.
+        
+        CONTEXT:
+        {summary_context}
+        """
+        
+        # Enforce 5s timeout to avoid blocking CI
+        response = await asyncio.wait_for(
+            client.complete_async(
+                prompt, 
+                system_prompt="You are a warm, helpful DevSecOps assistant. Explain failures clearly.",
+                use_fast_tier=True # Force Fast Tier (Qwen)
+            ),
+            timeout=5.0
+        )
+        
+        console.print(f"\n[bold red]🤖 Qwen Analysis:[/bold red]")
+        console.print(f"[white]{response.content}[/white]")
+        
+    except asyncio.TimeoutError:
+        console.print("\n[dim]⚠️  AI Analysis timed out (skipped)[/dim]")
+    except Exception as e:
+        # Silent fail - this is an enhancement, not a critical path
+        # console.print(f"[dim]AI Analysis unavailable: {e}[/dim]")
+        pass
+
 def _display_llm_summary(metrics: dict):
     """Display LLM performance summary in CLI."""
     console.print("\n[bold cyan]🤖 LLM Performance Summary[/bold cyan]")
@@ -308,11 +383,13 @@ Updated: {scan_time}
              
         if critical_count > 0:
             console.print(f"[bold red]❌ Scan failed: {critical_count} critical issues found.[/bold red]")
-            return 1
+            await _generate_smart_failure_summary(critical_count, frames_failed, final_result_data)
+            return 2  # Exit code 2: Policy Failure (Findings found)
             
         if frames_failed > 0:
             console.print(f"[bold red]❌ Scan failed: {frames_failed} frames failed.[/bold red]")
-            return 1
+            await _generate_smart_failure_summary(critical_count, frames_failed, final_result_data)
+            return 2  # Exit code 2: Policy Failure (Frames failed)
 
         return 0
         

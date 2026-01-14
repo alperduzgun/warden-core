@@ -133,7 +133,22 @@ jobs:
           if [[ "$SCAN_MODE" == "baseline" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # BASELINE SCAN: Full deep scan of entire project
             echo "Running FULL SCAN on entire repository..."
+            set +e # Capture exit code
             warden scan . --level deep --format sarif --output warden.sarif --verbose
+            EXIT_CODE=$?
+            set -e
+            
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "✅ Scan passed successfully."
+            elif [ $EXIT_CODE -eq 2 ]; then
+              echo "🚫 SCANNED FAILED: CRITICAL ISSUES FOUND"
+              echo "::error title=Policy Violation::Critical issues were found in the codebase. Please review the SARIF report."
+              exit 1
+            else
+              echo "💥 SCANNED FAILED: RUNTIME ERROR"
+              echo "::error title=System Error::Warden encountered an unexpected error."
+              exit 1
+            fi
             
             # Save as baseline for future incremental scans
             mkdir -p .warden
@@ -165,7 +180,22 @@ jobs:
                exit 0
             fi
             
+            set +e # Capture exit code
             echo "$CHANGED_FILES" | xargs warden scan --level $LEVEL --format sarif --output warden.sarif --verbose
+            EXIT_CODE=$?
+            set -e
+
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "✅ Scan passed successfully."
+            elif [ $EXIT_CODE -eq 2 ]; then
+              echo "🚫 SCANNED FAILED: CRITICAL ISSUES FOUND"
+              echo "::error title=Policy Violation::Critical issues were found in the changed files. Please review the SARIF report."
+              exit 1
+            else
+              echo "💥 SCANNED FAILED: RUNTIME ERROR"
+              echo "::error title=System Error::Warden encountered an unexpected error."
+              exit 1
+            fi
           fi
 
       - name: Archive SARIF Artifact
