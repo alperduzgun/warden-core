@@ -108,11 +108,18 @@ High false-positive rates reduce developer trust and perceived performance.
     - [x] **FP Suppression**: Successfully suppressed "Line 1:1" warnings for file-wide organization violations.
     - [ ] **A/B Testing**: Run scan on 3 legacy projects. Manual audit of findings must confirm <5% false positive rate for "Critical" and "High" issues.
 
-## 8. Frame Architecture & Governance
+## 8. Resilience & Reliability (Mechanic Sigorta)
+Preventing cascading failures and ensuring system stability during LLM unavailability.
+- **Goal**: Implement circuit breakers and advanced fallbacks to handle transient and persistent LLM failures.
+- **Status**: **COMPLETED** ✅
+- **Verification**:
+    - [x] **Circuit Breaker**: Added `@resilient` decorator to `LLMService` (3 failure threshold, 60s timeout).
+    - [x] **Advanced Fallback**: Replaced "fail-safe approval" with `review_required` flag and "Manual Review Required" labels in reports when LLM fails.
+
+## 9. Frame Architecture & Governance
 Standardize frame structure and enforce Definition of Done (DoD).
 - **Goal**: Prevent architectural entropy and ensure all frames adhere to "Frame-per-Directory" pattern.
 - **Status**: **COMPLETED**. Refactored `orphan`, `security`, `gitchanges`, `resilience` to `src/warden/validation/frames` and implemented strict `FLIGHT_CHECKLISTS.md`.
-- **Verification**:
     - [x] **Structure**: All core frames reside in dedicated directories with `<name>_frame.py`.
     - [x] **Discovery**: `FrameRegistry` correctly loads built-in frames from new structure.
     - [x] **DoD**: Established strict checklists for Core, Phases, and Frames in `docs/FLIGHT_CHECKLISTS.md`.

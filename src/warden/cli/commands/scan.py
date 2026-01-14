@@ -238,6 +238,11 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                     table.add_row("Total Issues", str(res.get('total_findings', 0)))
                     table.add_row("Critical Issues", f"[{'red' if critical > 0 else 'green'}]{critical}[/]")
                     
+                    # Add Manual Review if present
+                    manual_review = res.get('manual_review_findings', 0)
+                    if manual_review > 0:
+                        table.add_row("Manual Review", f"[yellow]{manual_review}[/yellow]")
+                    
                     console.print("\n", table)
                     
                     # Display LLM Performance Metrics

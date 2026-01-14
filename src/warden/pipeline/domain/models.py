@@ -208,6 +208,7 @@ class PipelineResult(BaseDomainModel):
     high_findings: int
     medium_findings: int
     low_findings: int
+    manual_review_findings: int = 0
 
     # Frame results
     frame_results: List[FrameResult] = Field(default_factory=list)
@@ -272,6 +273,7 @@ class PipelineResult(BaseDomainModel):
         data["high_findings"] = self.high_findings
         data["medium_findings"] = self.medium_findings
         data["low_findings"] = self.low_findings
+        data["manual_review_findings"] = self.manual_review_findings
         data["quality_score"] = self.quality_score
 
         return data

@@ -212,8 +212,19 @@ class ReportGenerator:
                 }
                 
                 # Add detail if available
-                if finding.get('detail'):
-                    result["message"]["text"] += f"\\n\\nDetails: {finding['detail']}"
+                detail = finding.get('detail', '')
+                
+                # Check for manual review flag in verification metadata
+                verification = finding.get('verification_metadata', {})
+                if verification.get('review_required'):
+                    result["message"]["text"] = f"⚠️ [MANUAL REVIEW REQUIRED] {result['message']['text']}"
+                    if not detail:
+                        detail = verification.get('reason', 'LLM verification was uncertain or skipped.')
+                    else:
+                        detail = f"{verification.get('reason', 'Verification uncertain')} | {detail}"
+
+                if detail:
+                    result["message"]["text"] += f"\\n\\nDetails: {detail}"
                     
                 run["results"].append(result)
         
