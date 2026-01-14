@@ -616,12 +616,20 @@ class PhaseOrchestrator:
             
             return str(val).lower() if val else ''
 
+        # Helper to get review_required from finding
+        def is_review_required(f: Any) -> bool:
+            if isinstance(f, dict):
+                return f.get('verification_metadata', {}).get('review_required', False)
+            v = getattr(f, 'verification_metadata', {})
+            return v.get('review_required', False) if isinstance(v, dict) else False
+
         # Calculate finding counts
         findings = context.findings if hasattr(context, 'findings') else []
         critical_findings = len([f for f in findings if get_severity(f) == 'critical'])
         high_findings = len([f for f in findings if get_severity(f) == 'high'])
         medium_findings = len([f for f in findings if get_severity(f) == 'medium'])
         low_findings = len([f for f in findings if get_severity(f) == 'low'])
+        manual_review_count = len([f for f in findings if is_review_required(f)])
         total_findings = len(findings)
 
         # Calculate quality score if not present or default
@@ -662,6 +670,7 @@ class PhaseOrchestrator:
             high_findings=high_findings,
             medium_findings=medium_findings,
             low_findings=low_findings,
+            manual_review_findings=manual_review_count,
 
             frame_results=frame_results,
             # Populate metadata

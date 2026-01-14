@@ -133,13 +133,14 @@ Return ONLY a JSON object:
                                     finding_id=self._get(finding, 'id'), 
                                     reason=result.get('reason'))
             except Exception as e:
-                logger.error("batch_verification_failed_falling_back_to_open", error=str(e))
-                # Fallback: Capture the failure as an advisory/note and fail safe
+                logger.error("batch_verification_failed_manual_review_needed", error=str(e))
+                # Fallback: Mark for manual review instead of failing open blindly
                 for finding in batch:
                     self._set(finding, 'verification_metadata', {
-                        "is_true_positive": True,
+                        "is_true_positive": True, # Still include but flag it
                         "confidence": self.FALLBACK_CONFIDENCE,
-                        "reason": f"LLM Verification Unavailable: {str(e)}",
+                        "reason": f"Fallback: LLM Unavailable ({str(e)}). Manual Verification Required.",
+                        "review_required": True,
                         "fallback": True
                     })
                 verified_findings.extend(batch)
@@ -235,8 +236,13 @@ Return ONLY a JSON array of objects in the EXACT order:
             return results
         except Exception as e:
             logger.warning("batch_llm_parsing_failed", error=str(e))
-            # Fallback: Mark all in batch as true positive to be safe
-            return [{"is_true_positive": True, "confidence": 0.5, "reason": "Batch parsing failed"} for _ in batch]
+            # Fallback: Mark for manual review due to parsing error
+            return [{
+                "is_true_positive": True, 
+                "confidence": 0.4, # Slightly lower confidence for parse errors
+                "reason": f"LLM responded but output parsing failed. Manual Review recommended.",
+                "review_required": True
+            } for _ in batch]
 
     def _generate_key(self, finding: Any) -> str:
         import hashlib
