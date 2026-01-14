@@ -111,7 +111,8 @@ class LLMSuggestionGenerator:
             response = await self.llm_service.complete_async(
                 prompt=prompt,
                 system_prompt="You are a senior software engineer specialized in code quality and refactoring. Respond only with valid JSON.",
-                model=model
+                model=model,
+                use_fast_tier=True  # Use Qwen for cost optimization (Phase 1 migration)
             )
 
             # Parse LLM response - response is an LlmResponse object
