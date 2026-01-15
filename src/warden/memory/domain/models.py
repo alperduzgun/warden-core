@@ -5,19 +5,14 @@ Defines the structure of knowledge stored in Warden's Persistent Memory.
 """
 
 import time
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from uuid import uuid4
 
 from warden.shared.domain.base_model import BaseDomainModel
 
 
-from datetime import datetime
 from pydantic import Field
-from typing import Dict, List, Optional, Any
-from uuid import uuid4
 
-from warden.shared.domain.base_model import BaseDomainModel
 
 
 class Fact(BaseDomainModel):

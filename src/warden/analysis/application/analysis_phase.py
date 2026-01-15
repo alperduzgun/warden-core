@@ -158,9 +158,9 @@ class AnalysisPhase:
 
         # Notify progress callback
         if self.progress_callback:
-            self.progress_callback("analysis_started", {
-                "phase": "analysis",
-                "total_files": len(code_files),
+            self.progress_callback("progress_init", {
+                "total_units": len(code_files),
+                "phase": "ANALYSIS"
             })
 
         try:
@@ -169,7 +169,14 @@ class AnalysisPhase:
             
             async def analyze_with_limit(cf):
                 async with semaphore:
-                    return await self._analyze_file_async(cf, pipeline_context)
+                    result = await self._analyze_file_async(cf, pipeline_context)
+                    if self.progress_callback:
+                        self.progress_callback("progress_update", {
+                            "increment": 1,
+                            "phase": "ANALYSIS",
+                            "file": cf.path
+                        })
+                    return result
 
             # Run all analyzers in parallel for all files with semi-concurrency
             tasks = [analyze_with_limit(cf) for cf in code_files]

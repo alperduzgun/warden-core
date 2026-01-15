@@ -7,7 +7,7 @@ by proactively suspending execution before requests are sent.
 
 import asyncio
 import time
-from typing import Optional, Tuple
+from typing import Optional
 from dataclasses import dataclass
 import structlog
 

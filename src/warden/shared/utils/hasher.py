@@ -8,7 +8,6 @@ whitespace and comments.
 
 import re
 import hashlib
-from typing import Optional
 from warden.ast.domain.enums import CodeLanguage
 
 class NormalizedHasher:

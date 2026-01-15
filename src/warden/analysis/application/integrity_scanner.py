@@ -5,15 +5,14 @@ Provides validation for code syntax and basic build verification.
 """
 
 import asyncio
-import shlex
 import structlog
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 
 from warden.validation.domain.frame import CodeFile
-from warden.analysis.domain.project_context import ProjectContext, ProjectType, Framework
+from warden.analysis.domain.project_context import ProjectContext, Framework
 from warden.ast.application.provider_registry import ASTProviderRegistry
 from warden.ast.domain.enums import CodeLanguage
 

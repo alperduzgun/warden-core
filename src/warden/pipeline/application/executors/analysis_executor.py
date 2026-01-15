@@ -56,7 +56,7 @@ class AnalysisExecutor(BasePhaseExecutor):
             )
 
             # Get context from previous phases
-            phase_context = context.get_context_for_phase("ANALYSIS")
+            context.get_context_for_phase("ANALYSIS")
 
             if use_llm:
                 from warden.analysis.application.llm_analysis_phase import LLMAnalysisPhase as AnalysisPhase

@@ -10,7 +10,6 @@ Tests coverage:
 - Adding/removing inline suppressions
 """
 
-import pytest
 from warden.suppression.matcher import SuppressionMatcher
 from warden.suppression.models import (
     SuppressionConfig,

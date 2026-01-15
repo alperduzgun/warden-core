@@ -5,7 +5,6 @@ Generates security fixes and patches for identified vulnerabilities.
 Uses LLM to create context-aware, framework-specific solutions.
 """
 
-import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional

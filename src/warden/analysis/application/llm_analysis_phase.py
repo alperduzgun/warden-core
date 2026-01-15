@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
-    LLMPhaseConfig,
     PromptTemplates,
 )
 from warden.analysis.domain.file_context import FileContext
@@ -444,7 +443,7 @@ FILES TO ANALYZE:
 
     def _create_default_metrics(self, file_context: FileContext) -> QualityMetrics:
         """Create default metrics when analysis fails."""
-        weights = self._get_context_weights(file_context)
+        self._get_context_weights(file_context)
 
         return QualityMetrics(
             complexity_score=5.0,

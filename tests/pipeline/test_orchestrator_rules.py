@@ -5,7 +5,6 @@ Validates edge cases and correct behavior of custom rules system.
 """
 
 import pytest
-from pathlib import Path
 from warden.pipeline import (
     PipelineOrchestrator,
     PipelineConfig,

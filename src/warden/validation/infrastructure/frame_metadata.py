@@ -188,7 +188,7 @@ class FrameMetadata:
         # Validate tags (should be list of strings)
         if self.tags:
             if not isinstance(self.tags, list):
-                errors.append(f"Invalid tags: Must be a list of strings")
+                errors.append("Invalid tags: Must be a list of strings")
             else:
                 for i, tag in enumerate(self.tags):
                     if not isinstance(tag, str):
@@ -196,7 +196,7 @@ class FrameMetadata:
 
         if errors:
             raise ValueError(
-                f"Frame metadata validation failed:\n  - " + "\n  - ".join(errors)
+                "Frame metadata validation failed:\n  - " + "\n  - ".join(errors)
             )
 
     def get_category_enum(self) -> FrameCategory:

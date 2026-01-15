@@ -8,7 +8,6 @@ import pytest
 import asyncio
 from pathlib import Path
 
-import grpc
 from grpc import aio
 
 from warden.grpc.generated import warden_pb2, warden_pb2_grpc

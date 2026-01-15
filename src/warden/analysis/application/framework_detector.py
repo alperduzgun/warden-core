@@ -6,7 +6,7 @@ Detects the main framework used in the project during PRE-ANALYSIS phase.
 
 import json
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict
 import structlog
 
 from warden.analysis.domain.project_context import Framework

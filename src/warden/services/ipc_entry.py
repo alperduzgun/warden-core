@@ -45,7 +45,7 @@ def check_single_instance():
             sys.exit(1)
         except (ProcessLookupError, ValueError):
             # Process doesn't exist, remove stale PID file
-            logger.info(f"🧹 Cleaning stale PID file")
+            logger.info("🧹 Cleaning stale PID file")
             PID_FILE.unlink()
 
     # Create .warden directory if it doesn't exist

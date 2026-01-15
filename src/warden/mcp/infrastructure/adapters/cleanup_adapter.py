@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.shared.utils.path_utils import sanitize_path
 
 
 class CleanupAdapter(BaseWardenAdapter):
@@ -87,26 +88,29 @@ class CleanupAdapter(BaseWardenAdapter):
         path = arguments.get("path", str(self.project_root))
         analyzers = arguments.get("analyzers", [])
 
-        if self.bridge and hasattr(self.bridge, "analyze_cleanup"):
-            try:
-                result = await self.bridge.analyze_cleanup(path, analyzers)
+        try:
+            safe_path = sanitize_path(path, self.project_root)
+            if self.bridge and hasattr(self.bridge, "analyze_cleanup"):
+                result = await self.bridge.analyze_cleanup(str(safe_path), analyzers)
                 return MCPToolResult.json_result(result)
-            except Exception as e:
-                return MCPToolResult.error(f"Cleanup analysis failed: {e}")
 
-        # Fallback: basic analysis
-        suggestions = self._basic_cleanup_analysis(Path(path))
+            # Fallback: basic analysis
+            suggestions = self._basic_cleanup_analysis(safe_path)
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "cleanup_score": 85.0,
-            "duration_ms": 100,
-            "suggestions": suggestions,
-        })
+            return MCPToolResult.json_result({
+                "success": True,
+                "cleanup_score": 85.0,
+                "duration_ms": 100,
+                "suggestions": suggestions,
+            })
+        except ValueError as e:
+            return MCPToolResult.error(f"Path validation failed: {e}")
+        except Exception as e:
+            return MCPToolResult.error(f"Cleanup analysis failed: {e}")
 
     async def _get_cleanup_suggestions_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get cleanup suggestions."""
-        path = arguments.get("path", str(self.project_root))
+        arguments.get("path", str(self.project_root))
 
         # Delegate to analyze_cleanup
         return await self._analyze_cleanup_async(arguments)

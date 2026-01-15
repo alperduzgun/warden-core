@@ -6,8 +6,7 @@ Context-aware frame selection and false positive suppression with AI.
 
 import json
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
@@ -17,7 +16,6 @@ from warden.classification.application.classification_prompts import (
     get_classification_system_prompt,
     format_classification_user_prompt,
 )
-from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import Framework, ProjectType
 from warden.shared.infrastructure.logging import get_logger
 
@@ -260,7 +258,7 @@ FILES TO ANALYZE:
         if not findings:
             return []
 
-        context = {
+        {
             "findings": findings[:50],  # Limit for token count
             "file_contexts": file_contexts,
         }

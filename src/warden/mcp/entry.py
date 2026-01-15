@@ -81,7 +81,6 @@ def run(project_root: Optional[str] = None) -> None:
     Args:
         project_root: Project root directory path
     """
-    import os
 
     root = Path(project_root) if project_root else Path.cwd()
     asyncio.run(main_async(root))

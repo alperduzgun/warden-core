@@ -4,7 +4,6 @@ Tests for IssueTracker.
 Validates issue lifecycle management and deduplication.
 """
 
-import pytest
 from datetime import datetime
 import hashlib
 

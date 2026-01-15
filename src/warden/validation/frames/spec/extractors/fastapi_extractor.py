@@ -19,7 +19,7 @@ Version: 1.0.0
 
 import re
 from pathlib import Path
-from typing import List, Optional, Set, Dict
+from typing import List, Optional, Set
 
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
@@ -32,7 +32,6 @@ from warden.validation.frames.spec.models import (
     FieldDefinition,
     EnumDefinition,
     PlatformType,
-    PlatformRole,
     OperationType,
 )
 from warden.ast.domain.enums import CodeLanguage
@@ -176,7 +175,7 @@ class FastAPIExtractor(BaseContractExtractor):
         for i, line in enumerate(lines):
             dec_match = decorator_pattern.search(line)
             if dec_match:
-                router_name = dec_match.group(1)  # app, router, etc.
+                dec_match.group(1)  # app, router, etc.
                 http_method = dec_match.group(2).lower()
                 path = dec_match.group(3)
                 response_model = dec_match.group(4)

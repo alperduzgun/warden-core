@@ -10,8 +10,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import sys
+from typing import Any, List, Optional
 
 try:
     from warden import warden_core_rust
@@ -20,7 +19,6 @@ except ImportError:
 
 import structlog
 
-from warden.rules.domain.enums import RuleCategory, RuleSeverity
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 
 logger = structlog.get_logger(__name__)

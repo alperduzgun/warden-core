@@ -11,7 +11,7 @@ Auto-discovers and loads AST providers from multiple sources:
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional, Type
+from typing import List, Optional
 import importlib
 import importlib.util
 import structlog

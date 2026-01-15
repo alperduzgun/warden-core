@@ -58,7 +58,7 @@ class FileContextAnalyzer:
         import asyncio
         try:
             # Try to get existing event loop
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # If we're in an async context, we need a workaround
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:

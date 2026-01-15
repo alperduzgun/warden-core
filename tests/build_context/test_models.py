@@ -4,7 +4,6 @@ Tests for build_context.models module.
 Tests Panel JSON compatibility and model functionality.
 """
 
-import pytest
 from warden.build_context.models import (
     BuildSystem,
     DependencyType,

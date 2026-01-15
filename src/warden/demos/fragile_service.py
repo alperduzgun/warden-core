@@ -8,7 +8,7 @@ class PaymentProcessor:
         # 1. External API Call - Critical point of failure
         # Problem: No timeout specified. If the bank is down, this will hang indefinitely.
         # Problem: No retry logic. A transient network blip causes failure.
-        response = requests.post(f"https://bank-api.com/charge", json={"user": user_id, "amount": amount})
+        response = requests.post("https://bank-api.com/charge", json={"user": user_id, "amount": amount})
         
         if response.status_code == 200:
             # 2. Database Operation - State consistency

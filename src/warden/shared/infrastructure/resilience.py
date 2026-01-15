@@ -15,10 +15,9 @@ import asyncio
 import functools
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Generic, Optional, TypeVar, List
-from collections import deque
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 from warden.shared.infrastructure.logging import get_logger
 

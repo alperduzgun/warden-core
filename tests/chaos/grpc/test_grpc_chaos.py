@@ -13,10 +13,10 @@ Tests edge cases, failure modes, and resilience:
 import pytest
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from warden.grpc.generated import warden_pb2, warden_pb2_grpc
-from warden.grpc.server import WardenServicer, GrpcServer
+from warden.grpc.generated import warden_pb2
+from warden.grpc.server import WardenServicer
 
 
 class TestChaosInvalidInputs:

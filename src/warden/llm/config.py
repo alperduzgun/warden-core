@@ -349,7 +349,11 @@ async def load_llm_config_async() -> LlmConfiguration:
 
     # Configure Ollama (Local)
     ollama_host_secret = secrets.get("OLLAMA_HOST")
-    config.ollama.endpoint = (ollama_host_secret.value if ollama_host_secret else None) or "http://localhost:11434"
+    ollama_endpoint = "http://localhost:11434"
+    if ollama_host_secret and hasattr(ollama_host_secret, 'found') and ollama_host_secret.found:
+        ollama_endpoint = ollama_host_secret.value or ollama_endpoint
+        
+    config.ollama.endpoint = ollama_endpoint
     config.ollama.enabled = True  # Enabled by default for dual-tier fallback
     configured_providers.append(LlmProvider.OLLAMA)
 

@@ -7,7 +7,7 @@ rather than language-specific representations.
 
 import structlog
 from typing import List, Dict, Any, Optional
-from warden.validation.domain.frame import ValidationFrame, FrameResult, CodeFile
+from warden.validation.domain.frame import ValidationFrame, CodeFile
 from warden.ast.application.provider_registry import ASTProviderRegistry
 from warden.ast.domain.models import ASTNode, ParseResult
 from warden.ast.domain.enums import CodeLanguage, ParseStatus

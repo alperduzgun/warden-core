@@ -4,7 +4,6 @@ import json
 import os
 import structlog
 from typing import Optional, Dict, Any, Callable
-from abc import ABC, abstractmethod
 
 logger = structlog.get_logger()
 
@@ -128,7 +127,7 @@ class LanguageServerClient:
             del self._pending_requests[req_id]
             logger.error("lsp_request_timeout", method=method, id=req_id)
             raise
-        except Exception as e:
+        except Exception:
             if req_id in self._pending_requests:
                 del self._pending_requests[req_id]
             raise

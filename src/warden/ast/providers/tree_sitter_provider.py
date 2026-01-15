@@ -6,9 +6,8 @@ Priority: TREE_SITTER (fallback for languages without native provider).
 """
 
 import time
-import json
 from datetime import datetime
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple
 
 from warden.ast.application.provider_interface import IASTProvider
 from warden.ast.domain.models import (
@@ -140,7 +139,7 @@ class TreeSitterProvider(IASTProvider):
         for lang, init_fn in lang_init.items():
             try:
                 self._language_objs[lang] = init_fn()
-            except ImportError as e:
+            except ImportError:
                 logger.debug("grammar_not_installed", language=lang.value)
             except Exception as e:
                 logger.warning("failed_to_load_grammar", language=lang.value, error=str(e))
@@ -431,12 +430,7 @@ class TreeSitterProvider(IASTProvider):
             # C# Specifics
             "using_directive": ASTNodeType.IMPORT,
             "namespace_declaration": ASTNodeType.MODULE,
-            "class_declaration": ASTNodeType.CLASS,
-            "method_declaration": ASTNodeType.METHOD,
             "property_declaration": ASTNodeType.PROPERTY,
-            
-            # Java Specifics
-            "import_declaration": ASTNodeType.IMPORT,
             "package_declaration": ASTNodeType.MODULE,
         }
         

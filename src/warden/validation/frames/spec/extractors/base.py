@@ -17,9 +17,6 @@ from typing import Dict, List, Optional, Type, Any
 
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    EnumDefinition,
     PlatformType,
     PlatformRole,
 )

@@ -6,18 +6,17 @@ Falls back to rule-based detection when LLM is unavailable.
 """
 
 import json
-import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 import structlog
 
 from warden.llm.factory import create_client
-from warden.llm.config import LlmConfiguration, load_llm_config_async
+from warden.llm.config import LlmConfiguration
 from warden.llm.types import LlmRequest, LlmResponse
-from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
+from warden.llm.rate_limiter import RateLimiter
 from warden.analysis.domain.file_context import FileContext
-from warden.analysis.domain.project_context import ProjectContext, Framework, ProjectType
+from warden.analysis.domain.project_context import Framework, ProjectType
 
 logger = structlog.get_logger()
 

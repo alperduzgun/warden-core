@@ -3,14 +3,11 @@
 
 import asyncio
 import json
-import os
 from pathlib import Path
-from dotenv import load_dotenv
 from aiohttp import web
 from .bridge import WardenBridge
 import structlog
 
-import structlog
 
 # Verify credentials using SecretManager (environment-aware)
 # This respects the environment: .env for local, env vars for CI/CD, Key Vault for production
@@ -29,7 +26,7 @@ async def verify_credentials():
     azure_endpoint = secrets["AZURE_OPENAI_ENDPOINT"]
     
     if azure_key.found:
-        print(f"✅ Azure OpenAI credentials loaded successfully")
+        print("✅ Azure OpenAI credentials loaded successfully")
         print(f"   Source: {azure_key.source.value}")
         print(f"   Endpoint: {azure_endpoint.value if azure_endpoint.found else 'not set'}")
         print(f"   Key: {azure_key.value[:10]}...")
@@ -38,7 +35,6 @@ async def verify_credentials():
         print(f"   Checked sources: {[p.__class__.__name__ for p in manager.providers]}")
 
 # Run verification
-import asyncio
 asyncio.run(verify_credentials())
 
 logger = structlog.get_logger()

@@ -12,7 +12,6 @@ from typing import List, Optional, Any
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
 from warden.validation.domain.frame import CodeFile
-from warden.llm.factory import create_client
 
 logger = structlog.get_logger()
 
@@ -222,7 +221,7 @@ class InputValidationFortifier(BaseFortifier):
                 [
                     f"if not {param}" in line,
                     f"if {param} is None" in line,
-                    f"raise ValueError" in line and param in line,
+                    "raise ValueError" in line and param in line,
                     f"assert {param}" in line,
                 ]
             ):

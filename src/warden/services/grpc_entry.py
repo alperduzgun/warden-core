@@ -8,7 +8,6 @@ Launched via: python -m warden.services.grpc_entry
 import asyncio
 import argparse
 import signal
-import sys
 from pathlib import Path
 
 # Absolute imports

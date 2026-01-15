@@ -121,7 +121,7 @@ class DemoSecurityFrame(ValidationFrame):
                     findings.append(Finding(
                         id=f"{self.frame_id}-password-{i}",
                         severity=self.severity_level,
-                        message=f"Potential hardcoded password detected",
+                        message="Potential hardcoded password detected",
                         location=f"{file_path}:{i}",
                         detail=(
                             f"Found password pattern: '{pattern}'\n"

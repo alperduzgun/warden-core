@@ -5,12 +5,11 @@ Manages Warden report resources for MCP protocol.
 Exposes validation reports, configuration, and status files.
 """
 
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
-from warden.mcp.protocol import MCPResource, MCPResourceContent, MCPErrorCode
+from warden.mcp.protocol import MCPResource, MCPResourceContent
 
 
 @dataclass

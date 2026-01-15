@@ -5,7 +5,7 @@ Detects project-specific service abstractions (like SecretManager, ConfigLoader)
 and their responsibilities for context-aware consistency enforcement.
 """
 
-from typing import Dict, List, Optional, Set, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass, field

@@ -9,7 +9,6 @@ It is designed to test the new LLM-based FMEA (Failure Mode & Effects Analysis) 
 
 import sqlite3
 import requests
-import time
 
 def process_payment(order_id: str, amount: float):
     # CRITICISM EXPECTED: Missing transaction rollback
@@ -35,7 +34,6 @@ def process_payment(order_id: str, amount: float):
 
 def batch_process(items):
     # CRITICISM EXPECTED: Infinite loop risk if items never empty
-    processed = []
     while len(items) > 0:
         item = items[0]
         try:

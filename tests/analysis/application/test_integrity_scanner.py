@@ -2,9 +2,8 @@
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
-from warden.analysis.application.integrity_scanner import IntegrityScanner, IntegrityIssue
+from warden.analysis.application.integrity_scanner import IntegrityScanner
 from warden.analysis.domain.project_context import ProjectContext, Framework
-from warden.ast.domain.enums import CodeLanguage
 from warden.validation.domain.frame import CodeFile
 
 @pytest.mark.asyncio

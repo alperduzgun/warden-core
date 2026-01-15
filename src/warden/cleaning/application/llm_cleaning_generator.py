@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
-    LLMPhaseConfig,
     PromptTemplates,
 )
 from warden.shared.infrastructure.logging import get_logger
@@ -367,7 +366,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
                     file_path=str(file_path),
                     line_range=(0, 0),
                     original_code=f"def {func_name}(): # {length} lines",
-                    suggested_code=f"# Break into smaller functions",
+                    suggested_code="# Break into smaller functions",
                     estimated_improvement=0.5,
                 )
             )

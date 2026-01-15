@@ -1,7 +1,5 @@
 import pytest
-import shutil
 import yaml
-from pathlib import Path
 from warden.services.package_manager.fetcher import FrameFetcher
 from warden.services.package_manager.exceptions import LockfileCorruptionError
 

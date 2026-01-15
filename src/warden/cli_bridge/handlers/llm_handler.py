@@ -3,7 +3,7 @@ LLM Handler for Warden Bridge.
 Handles AI-driven code analysis and streaming responses.
 """
 
-from typing import Any, Dict, List, Optional, AsyncIterator
+from typing import Any, Optional, AsyncIterator
 from warden.shared.infrastructure.logging import get_logger
 from warden.cli_bridge.protocol import IPCError, ErrorCode
 from warden.cli_bridge.handlers.base import BaseHandler

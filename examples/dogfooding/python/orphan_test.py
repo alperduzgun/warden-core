@@ -5,10 +5,7 @@ This file contains intentionally unused imports, functions, and classes
 to test the OrphanFrame detection capabilities.
 """
 
-import os
-import json
-import sys  # 🟡 UNUSED IMPORT
-from typing import List, Optional, Dict  # 🟡 Optional, Dict UNUSED
+from typing import List  # 🟡 Optional, Dict UNUSED
 
 
 # 🟡 UNUSED FUNCTION - should be detected
@@ -52,7 +49,6 @@ class ActiveService:
 def function_with_dead_code() -> str:
     return "result"
     print("This will never execute")  # 🟡 DEAD CODE
-    x = 1 + 1  # 🟡 DEAD CODE
 
 
 def main():

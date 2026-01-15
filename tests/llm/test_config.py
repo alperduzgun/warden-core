@@ -1,6 +1,5 @@
 """Test LLM configuration"""
 
-import pytest
 from warden.llm.config import ProviderConfig, LlmConfiguration, create_default_config
 from warden.llm.types import LlmProvider
 

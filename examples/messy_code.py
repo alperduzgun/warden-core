@@ -4,7 +4,7 @@ def process_data(data):
     if data:
         if len(data) > 0:
             for item in data:
-                if item.get('active') == True:
+                if item.get('active'):
                     if item.get('value') is not None:
                         if item.get('value') > 10:
                             temp_val = item['value'] * 2

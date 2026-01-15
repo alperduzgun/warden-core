@@ -5,7 +5,6 @@ import yaml
 import shutil
 from pathlib import Path
 from warden.rules.defaults.loader import DefaultRulesLoader
-from warden.rules.domain.models import CustomRule
 
 class TestDynamicRulesLoader(unittest.TestCase):
     def setUp(self):

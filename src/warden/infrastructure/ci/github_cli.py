@@ -59,7 +59,7 @@ class GitHubCli:
                         return False
                     return True
                 except subprocess.TimeoutExpired:
-                    console.print(f"[red]Installation timed out.[/red]")
+                    console.print("[red]Installation timed out.[/red]")
                 except subprocess.CalledProcessError:
                     console.print(f"[red]Failed to install gh via {pkg_manager}.[/red]")
                 except Exception as e:
@@ -112,8 +112,8 @@ class GitHubCli:
             return True
         except subprocess.TimeoutExpired:
             console.print(f"[red]Download timed out after {GitHubCli.CMD_TIMEOUT}s.[/red]")
-        except subprocess.CalledProcessError as e:
-            console.print(f"[red]Failed to download artifact.[/red] (Maybe no successful run yet?)")
+        except subprocess.CalledProcessError:
+            console.print("[red]Failed to download artifact.[/red] (Maybe no successful run yet?)")
         except Exception as e:
             console.print(f"[red]Error downloading artifact:[/red] {e}")
             

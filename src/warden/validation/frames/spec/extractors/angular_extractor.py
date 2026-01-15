@@ -32,7 +32,6 @@ from warden.validation.frames.spec.models import (
     FieldDefinition,
     EnumDefinition,
     PlatformType,
-    PlatformRole,
     OperationType,
 )
 from warden.ast.domain.enums import CodeLanguage
@@ -161,7 +160,7 @@ class AngularExtractor(BaseContractExtractor):
         )
 
         # Pattern for method containing the http call
-        method_pattern = re.compile(
+        re.compile(
             r"(?:async\s+)?(\w+)\s*\([^)]*\)\s*(?::\s*Observable<[^>]+>)?\s*\{",
             re.MULTILINE,
         )

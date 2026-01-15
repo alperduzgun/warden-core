@@ -5,9 +5,7 @@ Runs full Warden analysis before pushing to remote.
 """
 
 import subprocess
-import sys
 from pathlib import Path
-from typing import List, Optional
 
 
 class PrePushHook:

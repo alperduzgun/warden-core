@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from warden.llm.factory import create_client
 from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
 from warden.shared.infrastructure.logging import get_logger
 

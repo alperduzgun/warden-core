@@ -6,7 +6,7 @@ to actual project file paths using heuristics, project context, and LLM fallback
 """
 
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional
 import structlog
 from warden.analysis.domain.project_context import ProjectContext
 from warden.ast.domain.enums import CodeLanguage

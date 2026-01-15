@@ -5,13 +5,13 @@ MCP adapter for pipeline execution tools.
 Maps to gRPC PipelineMixin functionality.
 """
 
-from pathlib import Path
 from typing import Any, Dict, List
 
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
 from warden.shared.utils.retry_utils import async_retry
+from warden.shared.utils.path_utils import sanitize_path
 
 
 class PipelineAdapter(BaseWardenAdapter):
@@ -93,11 +93,14 @@ class PipelineAdapter(BaseWardenAdapter):
              raise RuntimeError("Warden bridge not available")
 
         try:
+            safe_path = sanitize_path(path, self.project_root)
             result = await self.bridge.execute_pipeline_async(
-                file_path=path,
+                file_path=str(safe_path),
                 frames=frames,
             )
             return MCPToolResult.json_result(result)
+        except ValueError as e:
+            return MCPToolResult.error(f"Path validation failed: {e}")
         except Exception as e:
             return MCPToolResult.error(f"Pipeline execution failed: {e}")
 
@@ -112,12 +115,13 @@ class PipelineAdapter(BaseWardenAdapter):
             raise RuntimeError("Warden bridge not available")
 
         try:
+            safe_path = sanitize_path(path, self.project_root)
             # Collect all streaming events
             events = []
             final_result = None
 
             async for event in self.bridge.execute_pipeline_stream_async(
-                file_path=path,
+                file_path=str(safe_path),
                 frames=frames,
                 verbose=verbose,
             ):

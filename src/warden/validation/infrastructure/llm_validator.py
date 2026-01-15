@@ -6,7 +6,7 @@ to reduce noise in validation results.
 """
 
 import json
-from typing import Dict, Any, List, Optional
+from typing import Any, List, Optional
 from dataclasses import dataclass
 import structlog
 

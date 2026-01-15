@@ -7,7 +7,7 @@ Tracks issues across multiple pipeline runs:
 - Historical tracking
 """
 
-from typing import List, Dict, Set
+from typing import List, Dict
 from datetime import datetime
 
 from warden.issues.domain.models import WardenIssue, StateTransition
@@ -84,7 +84,7 @@ class IssueTracker:
         # Build hash sets for comparison
         current_hashes = {issue.code_hash for issue in snapshot.issues}
         previous_hashes = {issue.code_hash for issue in previous_snapshot.issues}
-        stored_hashes = set(self.issues_by_hash.keys())
+        set(self.issues_by_hash.keys())
 
         # Categorize issues
         for issue in snapshot.issues:

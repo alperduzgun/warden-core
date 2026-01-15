@@ -53,12 +53,12 @@ def check_imports() -> bool:
         sys.path.insert(0, str(Path(__file__).parent / "src"))
         import warden_ast_java
 
-        print(f"  [OK] warden_ast_java imported")
+        print("  [OK] warden_ast_java imported")
         print(f"  [OK] Version: {warden_ast_java.__version__}")
 
         from warden_ast_java import JavaParserProvider
 
-        print(f"  [OK] JavaParserProvider imported")
+        print("  [OK] JavaParserProvider imported")
 
         return True
 

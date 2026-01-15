@@ -6,7 +6,6 @@ API: http://localhost:11434/api/chat
 
 import httpx
 import time
-from typing import Optional
 
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse

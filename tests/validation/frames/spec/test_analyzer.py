@@ -4,7 +4,6 @@ Tests for GapAnalyzer - Contract Comparison.
 Tests gap detection between consumer and provider contracts.
 """
 
-import pytest
 
 from warden.validation.frames.spec import (
     Contract,
@@ -14,7 +13,6 @@ from warden.validation.frames.spec import (
     EnumDefinition,
     OperationType,
     GapSeverity,
-    GapAnalyzer,
     GapAnalyzerConfig,
     analyze_contracts,
 )

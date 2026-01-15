@@ -7,7 +7,7 @@ Maps to gRPC SuppressionMixin functionality.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import uuid
 
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter

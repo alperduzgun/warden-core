@@ -13,7 +13,7 @@ import abc
 import ast
 import os
 from dataclasses import dataclass
-from typing import List, Dict, Set, Tuple, Optional, Any
+from typing import List, Dict, Set, Tuple, Optional
 
 from warden.ast.domain.models import ASTNode
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
@@ -393,7 +393,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                         self.findings.append(
                             OrphanFinding(
                                 orphan_type="dead_code",
-                                name=f"unreachable_statement",
+                                name="unreachable_statement",
                                 line_number=line_num,
                                 code_snippet=code_snippet,
                                 reason=f"Unreachable code after terminal statement at line {terminal_line}",

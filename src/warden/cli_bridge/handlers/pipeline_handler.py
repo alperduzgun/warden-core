@@ -10,6 +10,7 @@ from warden.shared.infrastructure.logging import get_logger
 from warden.cli_bridge.protocol import IPCError, ErrorCode
 from warden.validation.domain.frame import CodeFile
 from warden.cli_bridge.handlers.base import BaseHandler
+from warden.shared.utils.path_utils import sanitize_path
 
 logger = get_logger(__name__)
 
@@ -25,7 +26,11 @@ class PipelineHandler(BaseHandler):
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
 
-        path = Path(file_path)
+        try:
+            path = sanitize_path(file_path, self.project_root)
+        except ValueError as e:
+            raise IPCError(ErrorCode.VALIDATION_ERROR, str(e))
+
         if not path.exists():
             raise IPCError(ErrorCode.FILE_NOT_FOUND, f"File not found: {file_path}")
 
@@ -49,11 +54,14 @@ class PipelineHandler(BaseHandler):
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
 
-        # Normalize to list
-        if isinstance(paths, str):
-            path_list = [Path(paths)]
-        else:
-            path_list = [Path(p) for p in paths]
+        # Normalize to list and sanitize
+        try:
+            if isinstance(paths, str):
+                path_list = [sanitize_path(paths, self.project_root)]
+            else:
+                path_list = [sanitize_path(p, self.project_root) for p in paths]
+        except ValueError as e:
+            raise IPCError(ErrorCode.VALIDATION_ERROR, str(e))
 
         code_files = await self._collect_files_async(path_list)
         if not code_files:
@@ -65,7 +73,7 @@ class PipelineHandler(BaseHandler):
             return 
 
         progress_queue: asyncio.Queue = asyncio.Queue()
-        pipeline_done = asyncio.Event()
+        asyncio.Event()
 
         def progress_callback(event: str, data: dict) -> None:
             progress_queue.put_nowait({"type": "progress", "event": event, "data": data})

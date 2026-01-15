@@ -110,7 +110,6 @@ class ILlmClient(ABC):
             Dict containing findings list
         """
         from warden.shared.utils.json_parser import parse_json_from_llm
-        from typing import Dict, Any
 
         prompt = f"""
         You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
@@ -145,6 +144,6 @@ class ILlmClient(ABC):
                 
             parsed = parse_json_from_llm(response.content)
             return parsed or {"findings": []}
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
+        except (json.JSONDecodeError, ValueError, KeyError):
             # Log but don't crash - return safe default
             return {"findings": []}

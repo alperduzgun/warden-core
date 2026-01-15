@@ -103,7 +103,7 @@ class OrphanFrame(ValidationFrame):
         if self.use_llm_filter:
             logger.info("llm_orphan_filter_enabled", mode="intelligent_filtering")
 
-    async def execute_batch(self, code_files: List[CodeFile]) -> List[FrameResult]:
+    async def execute_batch_async(self, code_files: List[CodeFile]) -> List[FrameResult]:
         """
         Execute orphan detection on multiple files with Smart Batching.
         """
@@ -171,13 +171,10 @@ class OrphanFrame(ValidationFrame):
         # 2. Filtering Phase (LLM or Basic)
         final_findings_map = {}
         
-        # 2. Filtering Phase (LLM or Basic)
-        final_findings_map = {}
-        
         llm_filter = self._get_or_create_filter()
         if self.use_llm_filter and llm_filter and findings_map:
             # Smart Batch LLM Filtering
-            logger.info("starting_smart_batch_filter", total_candidates=sum(len(l) for l in findings_map.values()))
+            logger.info("starting_smart_batch_filter", total_candidates=sum(len(f_list) for f_list in findings_map.values()))
             final_findings_map = await llm_filter.filter_findings_batch(
                 findings_map, 
                 valid_files_map,
@@ -216,8 +213,8 @@ class OrphanFrame(ValidationFrame):
             ))
 
         # Calculate aggregate stats for CLI summary
-        total_candidates = sum(len(l) for l in findings_map.values())
-        final_count = sum(len(l) for l in final_findings_map.values())
+        total_candidates = sum(len(f_list) for f_list in findings_map.values())
+        final_count = sum(len(f_list) for f_list in final_findings_map.values())
         filtered_count = total_candidates - final_count
         
         # Build LLM filter summary for CLI display
@@ -476,7 +473,6 @@ class OrphanFrame(ValidationFrame):
             True if frame should run
         """
         # Check if we have a detector for this language (delegate to factory)
-        from orphan_detector import OrphanDetectorFactory
         
         # Get file extension
         import os

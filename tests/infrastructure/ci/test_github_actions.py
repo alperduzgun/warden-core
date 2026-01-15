@@ -2,7 +2,6 @@
 Tests for GitHub Actions template generator.
 """
 
-import pytest
 from pathlib import Path
 import tempfile
 import yaml

@@ -78,7 +78,7 @@ class ConfigHandler(BaseHandler):
         from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
         from warden.rules.domain.models import FrameRules
         
-        loader = RulesYAMLLoader() # Static methods used below
+        RulesYAMLLoader() # Static methods used below
         project_rule_config = RulesYAMLLoader.load_rules_sync(self.project_root)
         
         # Extract global rules as objects

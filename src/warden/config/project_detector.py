@@ -17,7 +17,6 @@ else:
         raise ImportError("tomli is required for Python < 3.11")
 
 from warden.analysis.application.discovery.framework_detector import FrameworkDetector
-from warden.analysis.application.discovery.models import FileType
 
 
 class ProjectDetector:
@@ -490,11 +489,10 @@ class ProjectDetector:
         ).exists()
 
         # Microservice frameworks
-        microservice_frameworks = {"fastapi", "express", "nest", "spring-boot"}
 
         # If has Docker + microservice framework, likely a microservice
         if has_dockerfile and any(
-            (self.project_root / f"requirements.txt").exists()
+            (self.project_root / "requirements.txt").exists()
             and fw in (self.project_root / "requirements.txt").read_text().lower()
             for fw in ["fastapi", "flask"]
         ):

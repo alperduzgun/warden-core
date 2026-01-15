@@ -5,7 +5,6 @@ MCP adapter for LLM-powered analysis tools.
 Maps to gRPC LlmOperationsMixin functionality.
 """
 
-from pathlib import Path
 from typing import Any, Dict, List
 
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter

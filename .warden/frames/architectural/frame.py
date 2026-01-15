@@ -508,7 +508,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 violations.append(OrganizationViolation(
                     rule="test_mirror_structure",
                     severity="warning",
-                    message=f"No corresponding test file found",
+                    message="No corresponding test file found",
                     file_path=file_path,
                     expected=str(expected_test_path),
                     actual="Test file missing",
@@ -538,7 +538,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             violations.append(OrganizationViolation(
                 rule="init_py_presence",
                 severity="error",
-                message=f"Package directory missing __init__.py",
+                message="Package directory missing __init__.py",
                 file_path=str(parent_dir),
                 expected="__init__.py present",
                 actual="__init__.py missing",
@@ -568,7 +568,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 violations.append(OrganizationViolation(
                     rule="filename_lowercase",
                     severity="warning",
-                    message=f"File name should be lowercase with underscores",
+                    message="File name should be lowercase with underscores",
                     file_path=file_path,
                     expected="lowercase_with_underscores.py",
                     actual=path.name,
@@ -989,7 +989,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             exceptions: [glob1, glob2]
         """
         violations = []
-        path = Path(code_file.path)
+        Path(code_file.path)
         
         for rule in rules:
             if not rule.get('enabled', True):

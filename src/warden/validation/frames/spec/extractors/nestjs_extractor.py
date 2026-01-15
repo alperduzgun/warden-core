@@ -33,7 +33,6 @@ from warden.validation.frames.spec.models import (
     FieldDefinition,
     EnumDefinition,
     PlatformType,
-    PlatformRole,
     OperationType,
 )
 from warden.ast.domain.enums import CodeLanguage
