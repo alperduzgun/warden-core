@@ -13,58 +13,50 @@ from typing import List, Dict, Any, Optional
 from warden.shared.domain.base_model import BaseDomainModel
 
 
-class FileType(Enum):
+from warden.ast.domain.enums import CodeLanguage
+
+class FileType(str, Enum):
     """
     Supported file types for code analysis.
-
-    Panel expects string values for display.
+    Delegates to LanguageRegistry for metadata to remain DRY.
     """
-
-    PYTHON = "python"
-    JAVASCRIPT = "javascript"
-    TYPESCRIPT = "typescript"
-    JSX = "jsx"
-    TSX = "tsx"
-    HTML = "html"
-    CSS = "css"
-    JSON = "json"
-    YAML = "yaml"
-    MARKDOWN = "markdown"
-    SHELL = "shell"
-    SQL = "sql"
-    GO = "go"
-    RUST = "rust"
-    JAVA = "java"
-    KOTLIN = "kotlin"
-    SWIFT = "swift"
-    RUBY = "ruby"
-    PHP = "php"
-    C = "c"
-    CPP = "cpp"
-    CSHARP = "csharp"
-    UNKNOWN = "unknown"
+    # Import members from CodeLanguage to maintain compatibility
+    PYTHON = CodeLanguage.PYTHON.value
+    JAVASCRIPT = CodeLanguage.JAVASCRIPT.value
+    TYPESCRIPT = CodeLanguage.TYPESCRIPT.value
+    JSX = CodeLanguage.JAVASCRIPT.value # Alias
+    TSX = CodeLanguage.TSX.value
+    HTML = CodeLanguage.HTML.value
+    CSS = CodeLanguage.CSS.value
+    JSON = CodeLanguage.JSON.value
+    YAML = CodeLanguage.YAML.value
+    MARKDOWN = CodeLanguage.MARKDOWN.value
+    SHELL = CodeLanguage.SHELL.value
+    SQL = CodeLanguage.SQL.value
+    GO = CodeLanguage.GO.value
+    RUST = CodeLanguage.RUST.value
+    JAVA = CodeLanguage.JAVA.value
+    KOTLIN = CodeLanguage.KOTLIN.value
+    SWIFT = CodeLanguage.SWIFT.value
+    RUBY = CodeLanguage.RUBY.value
+    PHP = CodeLanguage.PHP.value
+    C = CodeLanguage.C.value
+    CPP = CodeLanguage.CPP.value
+    CSHARP = CodeLanguage.CSHARP.value
+    UNKNOWN = CodeLanguage.UNKNOWN.value
 
     @property
     def extension(self) -> str:
         """Get primary file extension for this file type."""
-        from warden.shared.utils.language_utils import get_primary_extension
-        return get_primary_extension(self.value)
+        from warden.shared.languages.registry import LanguageRegistry
+        return LanguageRegistry.get_primary_extension(CodeLanguage(self.value))
 
     @property
     def is_analyzable(self) -> bool:
         """Check if this file type can be analyzed by Warden."""
-        analyzable_types = {
-            FileType.PYTHON,
-            FileType.JAVASCRIPT,
-            FileType.TYPESCRIPT,
-            FileType.JSX,
-            FileType.TSX,
-            FileType.GO,
-            FileType.RUST,
-            FileType.JAVA,
-            FileType.KOTLIN,
-        }
-        return self in analyzable_types
+        from warden.shared.languages.registry import LanguageRegistry
+        defn = LanguageRegistry.get_definition(CodeLanguage(self.value))
+        return defn.is_analyzable if defn else False
 
 
 class Framework(Enum):

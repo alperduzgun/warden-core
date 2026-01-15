@@ -214,11 +214,18 @@ class SecurityFrame(ValidationFrame):
                         logger.warning("security_semantic_search_failed", error=str(e))
 
                 
+                # Determine tier from metadata (Adaptive Hybrid Triage)
+                use_fast_tier = False
+                if code_file.metadata and code_file.metadata.get('triage_lane') == 'middle_lane':
+                    use_fast_tier = True
+                    logger.debug("using_fast_tier_for_security_analysis", file=code_file.path)
+
                 # Use the shared JSON parsing utility (which we will create next) or a robust method
                 # for now using a direct call pattern assuming service has structured output or we parse it
                 response = await self.llm_service.analyze_security_async(
                     code_file.content + semantic_context, 
-                    code_file.language
+                    code_file.language,
+                    use_fast_tier=use_fast_tier
                 )
                 logger.info("llm_security_response_received", response_count=len(response.get('findings', [])) if response else 0)
                 

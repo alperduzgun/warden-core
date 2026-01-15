@@ -143,7 +143,7 @@ class FileDiscoverer:
                 stats_batch = warden_core_rust.get_file_stats(raw_paths)
                 stats_map = {s.path: s for s in stats_batch}
                 
-                for path_str, initial_size in rust_files:
+                for path_str, initial_size, detected_lang in rust_files:
                     file_path = Path(path_str)
                     rust_stat = stats_map.get(path_str)
                     
@@ -164,8 +164,14 @@ class FileDiscoverer:
                     if self.classifier.should_skip(file_path):
                         continue
 
-                    # Classify file
-                    file_type = self.classifier.classify(file_path)
+                    # Classify file (Use Rust detected lang if valid, else fallback)
+                    if detected_lang and detected_lang != "unknown":
+                        try:
+                            file_type = FileType(detected_lang)
+                        except ValueError:
+                            file_type = self.classifier.classify(file_path)
+                    else:
+                        file_type = self.classifier.classify(file_path)
 
                     # Create DiscoveredFile
                     relative_path = file_path.relative_to(self.root_path)
@@ -177,7 +183,7 @@ class FileDiscoverer:
                         line_count=rust_stat.line_count if rust_stat else 0,
                         hash=rust_stat.hash if rust_stat else None,
                         is_analyzable=file_type.is_analyzable,
-                        metadata={"engine": "rust"},
+                        metadata={"engine": "rust", "detected_lang": detected_lang},
                     )
                     discovered_files.append(discovered_file)
                 

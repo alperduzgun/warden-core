@@ -316,25 +316,29 @@ class FrameRegistry:
 
             # Scan each subdirectory in frames/
             for frame_path in frames_dir.iterdir():
-                # Skip non-directories, __pycache__, and private directories
-                if not frame_path.is_dir() or frame_path.name.startswith("_"):
-                    continue
-
-                # Expected frame file: <frame_name>/<frame_name>_frame.py
-                frame_file = frame_path / f"{frame_path.name}_frame.py"
-
-                if not frame_file.exists() or not frame_file.is_file():
+                # Try standard Hub format first: <frame_name>/frame.py
+                hub_style_file = frame_path / "frame.py"
+                legacy_style_file = frame_path / f"{frame_path.name}_frame.py"
+                
+                module_path = None
+                
+                if hub_style_file.exists() and hub_style_file.is_file():
+                    module_path = f"warden.validation.frames.{frame_path.name}.frame"
+                    logger.debug(f"Found Hub-style frame: {frame_path.name}")
+                elif legacy_style_file.exists() and legacy_style_file.is_file():
+                    module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
+                    logger.debug(f"Found Legacy-style frame: {frame_path.name}")
+                else:
                     logger.debug(
                         "frame_file_not_found",
                         frame_name=frame_path.name,
-                        expected_file=str(frame_file),
+                        checked=[str(hub_style_file), str(legacy_style_file)],
                     )
                     continue
 
                 try:
                     # Dynamically import the frame module
-                    logger.debug(f"Attempting to import frame: {frame_path.name}")
-                    module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
+                    logger.debug(f"Attempting to import frame: {frame_path.name} from {module_path}")
                     module = importlib.import_module(module_path)
 
                     # Find ValidationFrame subclass in the module

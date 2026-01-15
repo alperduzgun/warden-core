@@ -61,6 +61,9 @@ class PipelineContext:
     file_context: Optional[FileContext] = None
     file_contexts: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     project_metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    # Phase 0.5: TRIAGE Results (Adaptive Hybrid Triage)
+    triage_decisions: Dict[str, Any] = field(default_factory=dict) # Key: file_path, Value: TriageDecision.model_dump()
 
     # Phase 1: ANALYSIS Results
     quality_metrics: Optional[QualityMetrics] = None
@@ -112,6 +115,9 @@ class PipelineContext:
     metadata: Dict[str, Any] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    
+    # Linter Metrics (Multi-Tool)
+    linter_metrics: Dict[str, Any] = field(default_factory=dict)
 
     # Cross-Phases Cache (New)
     # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)

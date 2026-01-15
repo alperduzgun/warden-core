@@ -32,22 +32,16 @@ class DiscoveryAdapter(BaseWardenAdapter):
     })
     TOOL_CATEGORY = ToolCategory.DISCOVERY
 
-    # Language extension mapping
-    LANGUAGE_EXTENSIONS = {
-        "python": [".py", ".pyi", ".pyw"],
-        "javascript": [".js", ".jsx", ".mjs"],
-        "typescript": [".ts", ".tsx"],
-        "java": [".java"],
-        "csharp": [".cs"],
-        "go": [".go"],
-        "rust": [".rs"],
-        "cpp": [".cpp", ".cc", ".cxx", ".c", ".h", ".hpp"],
-        "ruby": [".rb"],
-        "php": [".php"],
-        "kotlin": [".kt", ".kts"],
-        "swift": [".swift"],
-        "scala": [".scala"],
-    }
+    @property
+    def LANGUAGE_EXTENSIONS(self) -> Dict[str, List[str]]:
+        """Dynamic mapping from LanguageRegistry."""
+        from warden.shared.languages.registry import LanguageRegistry
+        mapping = {}
+        for lang in LanguageRegistry.get_code_languages():
+            defn = LanguageRegistry.get_definition(lang)
+            if defn:
+                mapping[lang.value] = list(defn.extensions)
+        return mapping
 
     def get_tool_definitions(self) -> List[MCPToolDefinition]:
         """Get discovery tool definitions."""

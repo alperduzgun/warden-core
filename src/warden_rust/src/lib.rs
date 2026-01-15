@@ -38,6 +38,40 @@ pub struct FileStats {
     pub is_binary: bool,
     #[pyo3(get)]
     pub hash: String,
+    #[pyo3(get)]
+    pub language: String,
+}
+
+fn detect_language_rs(path: &Path) -> String {
+    let ext = path.extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    
+    match ext.as_str() {
+        "py" | "pyw" => "python",
+        "js" | "jsx" | "mjs" | "cjs" => "javascript",
+        "ts" => "typescript",
+        "tsx" => "tsx",
+        "go" => "go",
+        "rs" => "rust",
+        "java" => "java",
+        "dart" => "dart",
+        "swift" => "swift",
+        "kt" | "kts" => "kotlin",
+        "c" => "c",
+        "h" => "c", // Default to C, heuristic later
+        "cpp" | "cc" | "cc" | "cxx" | "hpp" | "hh" => "cpp",
+        "cs" => "csharp",
+        "rb" => "ruby",
+        "php" => "php",
+        "md" => "markdown",
+        "yaml" | "yml" => "yaml",
+        "json" => "json",
+        "sql" => "sql",
+        "sh" => "shell",
+        _ => "unknown",
+    }.to_string()
 }
 
 #[pyclass]
@@ -57,7 +91,7 @@ pub struct MatchHit {
 
 #[pyfunction]
 #[pyo3(signature = (root_path, use_gitignore=true, max_size_mb=None))]
-fn discover_files(root_path: String, use_gitignore: bool, max_size_mb: Option<u64>) -> PyResult<Vec<(String, u64)>> {
+fn discover_files(root_path: String, use_gitignore: bool, max_size_mb: Option<u64>) -> PyResult<Vec<(String, u64, String)>> {
     let mut files = Vec::new();
     let mut builder = WalkBuilder::new(&root_path);
     
@@ -86,17 +120,17 @@ fn discover_files(root_path: String, use_gitignore: bool, max_size_mb: Option<u6
                 }
 
                 // 2. Early Binary Check (Read first 1024 bytes)
-                // We do this here to prevent these files from even entering Python memory
                 if let Ok(mut file) = File::open(path) {
                     let mut buffer = [0; 1024];
                     let bytes_read = file.read(&mut buffer).unwrap_or(0);
                     if inspect(&buffer[..bytes_read]) == ContentType::BINARY {
-                        continue; // Skip binary files (images, bins, etc.)
+                        continue; 
                     }
                 }
 
                 let path_str = path.to_string_lossy().to_string();
-                files.push((path_str, size));
+                let lang = detect_language_rs(path);
+                files.push((path_str, size, lang));
             }
         }
     }
@@ -113,6 +147,7 @@ fn get_file_stats(paths: Vec<String>) -> PyResult<Vec<FileStats>> {
             line_count: 0,
             is_binary: false,
             hash: String::new(),
+            language: detect_language_rs(path),
         };
 
         if let Ok(metadata) = path.metadata() {
@@ -127,8 +162,6 @@ fn get_file_stats(paths: Vec<String>) -> PyResult<Vec<FileStats>> {
 
             if !stats.is_binary {
                 // Return to start for hash and line count
-                // Re-open/seek might be expensive, but line counting is necessary
-                // For simplicity, we'll re-read everything.
                 if let Ok(file_reopen) = File::open(path) {
                     let reader = BufReader::new(file_reopen);
                     let mut line_count = 0;

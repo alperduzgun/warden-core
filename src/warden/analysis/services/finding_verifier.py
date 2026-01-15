@@ -18,11 +18,8 @@ class FindingVerificationService:
 
     def _get(self, obj: Any, key: str, default: Any = None) -> Any:
         """Helper to get values from Finding objects or dicts."""
-        if hasattr(obj, 'get'):
-            try:
-                return obj.get(key, default)
-            except (AttributeError, TypeError):
-                pass
+        if isinstance(obj, dict):
+            return obj.get(key, default)
         return getattr(obj, key, default)
 
     def _set(self, obj: Any, key: str, value: Any) -> None:
@@ -84,6 +81,17 @@ Return ONLY a JSON object:
                 continue
 
             code_snippet = (self._get(finding, 'code') or '').strip()
+            
+            # Skip verification for Linter findings (User request: Don't waste tokens on linters)
+            detail = self._get(finding, 'detail') or ""
+            if "(Ruff)" in detail or self._get(finding, 'id', '').startswith("lint_"):
+                # Mark as verified with high confidence without LLM
+                self._set(finding, 'confidence', 1.0)
+                self._set(finding, 'is_true_positive', True)
+                self._set(finding, 'verification_source', 'linter_deterministic')
+                verified_findings.append(finding)
+                continue
+
             if self._is_obvious_false_positive(finding, code_snippet):
                 logger.info("heuristic_filter_rejected_finding", 
                             finding_id=self._get(finding, 'id'),
@@ -187,13 +195,27 @@ Return ONLY a JSON object:
 
         findings_summary = ""
         for i, f in enumerate(batch):
-            findings_summary += f"""
+            try:
+                # SAFE ACCESS: Use internal helper to handle dict vs object
+                # Ensure we handle cases where f itself might be None or weird
+                if not f: continue
+                
+                f_id = self._get(f, 'id', 'unknown')
+                f_rule = self._get(f, 'rule_id', 'unknown')
+                f_msg = self._get(f, 'message', 'unknown')
+                f_code = self._get(f, 'code', 'N/A')
+                
+                findings_summary += f"""
 FINDING #{i}:
-- ID: {self._get(f, 'id')}
-- Rule: {self._get(f, 'rule_id')}
-- Message: {self._get(f, 'message')}
-- Code: `{self._get(f, 'code', 'N/A')}`
+- ID: {f_id}
+- Rule: {f_rule}
+- Message: {f_msg}
+- Code: `{f_code}`
 """
+            except Exception as e:
+                # CHAOS: Log and skip malformed findings instead of crashing batch
+                logger.warning("skipping_malformed_finding_in_batch", error=str(e))
+                continue
 
         prompt = f"""
 You are a Senior Security Engineer. Verify a BATCH of {len(batch)} potential findings.
@@ -249,9 +271,12 @@ Return ONLY a JSON array of objects in the EXACT order:
 
     def _generate_key(self, finding: Any) -> str:
         import hashlib
-        # Use relative path if possible for portability
-        loc = self._get(finding, 'location', '')
-        unique_str = f"{self._get(finding, 'id')}:{self._get(finding, 'code', '')}:{loc}"
+        # Safe access using internal helper
+        loc = self._get(finding, 'location') or ''
+        finding_id = self._get(finding, 'id')
+        code = self._get(finding, 'code') or ''
+        
+        unique_str = f"{finding_id}:{code}:{loc}"
         return hashlib.sha256(unique_str.encode()).hexdigest()
 
     def _check_cache(self, key: str) -> Optional[Dict]:

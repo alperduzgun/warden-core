@@ -567,17 +567,11 @@ class RustOrphanDetector(AbstractOrphanDetector):
 
         findings: List[OrphanFinding] = []
         
-        # Map extension to language string for Rust
-        _, ext = os.path.splitext(self.file_path)
-        ext = ext.lower()
-        lang_map = {
-            ".py": "python",
-            ".ts": "typescript", ".tsx": "typescript",
-            ".js": "javascript", ".jsx": "javascript",
-            ".go": "go",
-            ".java": "java"
-        }
-        language = lang_map.get(ext)
+        # Use central Registry for language ID
+        from warden.shared.languages.registry import LanguageRegistry
+        lang_enum = LanguageRegistry.get_language_from_path(self.file_path)
+        language = lang_enum.value if lang_enum != CodeLanguage.UNKNOWN else None
+        
         if not language:
             return []
 
@@ -679,17 +673,8 @@ class OrphanDetectorFactory:
             
         # Non-Python uses Universal AST or Rust
         try:
-            language = CodeLanguage.UNKNOWN
-            if ext in [".ts", ".tsx"]:
-                language = CodeLanguage.TYPESCRIPT
-            elif ext in [".js", ".jsx"]:
-                language = CodeLanguage.JAVASCRIPT
-            elif ext == ".go":
-                language = CodeLanguage.GO
-            elif ext == ".java":
-                language = CodeLanguage.JAVA
-            elif ext == ".cs":
-                language = CodeLanguage.CSHARP
+            from warden.shared.languages.registry import LanguageRegistry
+            language = LanguageRegistry.get_language_from_path(file_path)
 
             if language != CodeLanguage.UNKNOWN:
                 # Prefer Rust for supported languages

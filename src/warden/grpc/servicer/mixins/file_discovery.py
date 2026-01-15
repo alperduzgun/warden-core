@@ -239,25 +239,7 @@ class FileDiscoveryMixin:
             return warden_pb2.ProjectStats()
 
     def _detect_language(self, path: Path) -> str:
-        """Detect language from file extension."""
-        ext_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".jsx": "javascript",
-            ".tsx": "typescript",
-            ".java": "java",
-            ".cs": "csharp",
-            ".go": "go",
-            ".rs": "rust",
-            ".cpp": "cpp",
-            ".c": "c",
-            ".h": "c",
-            ".hpp": "cpp",
-            ".rb": "ruby",
-            ".php": "php",
-            ".kt": "kotlin",
-            ".swift": "swift",
-            ".scala": "scala"
-        }
-        return ext_map.get(path.suffix.lower(), "")
+        """Detect language using central LanguageRegistry."""
+        from warden.shared.languages.registry import LanguageRegistry
+        lang_enum = LanguageRegistry.get_language_from_path(path)
+        return lang_enum.value if lang_enum != CodeLanguage.UNKNOWN else ""

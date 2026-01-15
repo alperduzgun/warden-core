@@ -110,3 +110,47 @@ class RegistryClient:
     def get_core_frames(self) -> List[Dict[str, Any]]:
         """Get all frames marked as 'core'."""
         return [f for f in self._catalog_cache if f.get("tier") == "core"]
+
+    def suggest_for_language(self, language: str) -> List[str]:
+        """
+        Smart/Dynamic Frame Discovery based on language.
+        Returns a list of frame IDs that match the given language.
+        
+        Algorithm:
+        1. Exact Match: Language is in 'supported_languages' list (Future Proof).
+        2. Heuristic: Language name appears in ID (e.g. 'python_lint' contains 'python').
+        3. Heuristic: Language name appears in Category.
+        """
+        if not language:
+            return []
+            
+        lang = language.lower()
+        suggestions = []
+        
+        for frame in self._catalog_cache:
+            # Future Proof: If schema supports explicit tags
+            if lang in frame.get("supported_languages", []):
+                suggestions.append(frame["id"])
+                continue
+                
+            # Heuristic 1: ID contains lang (e.g. python_lint)
+            # We look for word boundaries ideally, but containment is good for MVP
+            # 'python' in 'python_lint' -> True
+            # 'go' in 'algo_frame' -> True (False Positive Risk). 
+            # Mitigation: Check explicit start or separator
+            fid = frame["id"].lower()
+            if fid.startswith(f"{lang}_") or f"_{lang}" in fid:
+                suggestions.append(frame["id"])
+                continue
+                
+            # Heuristic 2: Name contains lang
+            fname = frame["name"].lower()
+            if f" {lang} " in f" {fname} ": # Boundary check
+                suggestions.append(frame["id"])
+                continue
+
+            # Heuristic 3: Check description for "For Python" etc.
+            # Keeping it strict for now to avoid noise.
+            
+        return list(set(suggestions)) # Unique
+

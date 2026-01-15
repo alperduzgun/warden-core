@@ -149,6 +149,7 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
             List of complexity issues
         """
         issues = []
+        lines = code.split("\n")
 
         try:
             tree = ast_tree if ast_tree else ast.parse(code)
@@ -159,14 +160,14 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
         # Analyze all function definitions
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
-                issues.extend(self._check_function_complexity(node, code))
+                issues.extend(self._check_function_complexity(node, lines))
 
         return issues
 
     def _check_function_complexity(
         self,
         node: ast.FunctionDef,
-        code: str
+        lines: List[str]
     ) -> List[CleaningIssue]:
         """
         Check a function for complexity issues.
@@ -182,7 +183,7 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
         func_name = node.name
 
         # Check function length
-        func_lines = self._count_function_lines(node, code)
+        func_lines = self._count_function_lines(node, lines)
         if func_lines > MAX_FUNCTION_LINES:
             issues.append(
                 CleaningIssue(
@@ -231,18 +232,17 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _count_function_lines(self, node: ast.FunctionDef, code: str) -> int:
+    def _count_function_lines(self, node: ast.FunctionDef, lines: List[str]) -> int:
         """
         Count non-empty lines in a function.
 
         Args:
             node: Function definition AST node
-            code: Source code
+            lines: Source code split into lines
 
         Returns:
             Number of non-empty lines
         """
-        lines = code.split("\n")
         start_line = node.lineno - 1
 
         # Find end line by looking at the body

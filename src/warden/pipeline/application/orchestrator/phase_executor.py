@@ -17,7 +17,9 @@ from warden.pipeline.application.executors.pre_analysis_executor import PreAnaly
 from warden.pipeline.application.executors.analysis_executor import AnalysisExecutor
 from warden.pipeline.application.executors.classification_executor import ClassificationExecutor
 from warden.pipeline.application.executors.fortification_executor import FortificationExecutor
+from warden.pipeline.application.executors.fortification_executor import FortificationExecutor
 from warden.pipeline.application.executors.cleaning_executor import CleaningExecutor
+from warden.analysis.application.triage_phase import TriagePhase # Phase 0.5
 
 logger = get_logger(__name__)
 
@@ -73,7 +75,14 @@ class PhaseExecutor:
             project_root=self.project_root,
             llm_service=self.llm_service,
             semantic_search_service=self.semantic_search_service,
+
             rate_limiter=self.rate_limiter
+        )
+        self.triage_phase = TriagePhase(
+            project_root=self.project_root,
+            progress_callback=self._progress_callback,
+            config=self.config.pre_analysis_config, # Share config with pre_analysis or dedicated
+            llm_service=self.llm_service
         )
         self.classification_executor = ClassificationExecutor(
             config=self.config,
@@ -113,6 +122,7 @@ class PhaseExecutor:
         """Set progress callback and propagate to sub-executors."""
         self._progress_callback = value
         self.pre_analysis_executor.progress_callback = value
+        self.triage_phase.progress_callback = value
         self.analysis_executor.progress_callback = value
         self.classification_executor.progress_callback = value
         self.fortification_executor.progress_callback = value
@@ -125,6 +135,14 @@ class PhaseExecutor:
     ) -> None:
         """Execute PRE-ANALYSIS phase."""
         await self.pre_analysis_executor.execute_async(context, code_files)
+
+    async def execute_triage_async(
+        self,
+        context: PipelineContext,
+        code_files: List[CodeFile],
+    ) -> None:
+        """Execute TRIAGE phase (adaptive hybrid triage)."""
+        await self.triage_phase.execute_async(code_files, context)
 
     async def execute_analysis_async(
         self,

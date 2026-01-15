@@ -211,14 +211,5 @@ class IntegrityScanner:
         return None
 
     def _guess_language(self, path: str) -> CodeLanguage:
-        ext = Path(path).suffix.lower()
-        mapping = {
-            ".py": CodeLanguage.PYTHON,
-            ".ts": CodeLanguage.TYPESCRIPT,
-            ".tsx": CodeLanguage.TSX,
-            ".js": CodeLanguage.JAVASCRIPT,
-            ".jsx": CodeLanguage.JAVASCRIPT,
-            ".go": CodeLanguage.GO,
-            ".java": CodeLanguage.JAVA,
-        }
-        return mapping.get(ext, CodeLanguage.UNKNOWN)
+        from warden.shared.languages.registry import LanguageRegistry
+        return LanguageRegistry.get_language_from_path(Path(path))

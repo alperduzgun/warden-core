@@ -110,6 +110,10 @@ class PreAnalysisPhase:
         self.ast_loader = ASTProviderLoader(self.ast_registry)
         self.dependency_graph: Optional[DependencyGraph] = None  # Initialized in execute
         self.integrity_scanner = IntegrityScanner(self.project_root, self.ast_registry, self.config.get("integrity_config"))
+        
+        # Linter Infrastructure (Phase 0 Check)
+        from warden.analysis.services.linter_service import LinterService
+        self.linter_service = LinterService()
 
     async def execute_async(
         self, 
@@ -206,6 +210,11 @@ class PreAnalysisPhase:
 
             # Step 5: Calculate statistics
             statistics = self._calculate_statistics(file_contexts)
+
+            # Step 6: Tool Discovery (Pre-Flight Check)
+            # Detect available linters (Fail Fast / Degradation)
+            if self.linter_service:
+                await self.linter_service.detect_and_setup(project_context)
 
             # Create result
             result = PreAnalysisResult(

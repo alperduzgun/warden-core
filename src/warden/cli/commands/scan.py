@@ -31,8 +31,11 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
         console.print("\n[dim]🤔 Analyzing failure reason with Local AI (timeout: 5s)...[/dim]")
         
         # 2. Aggregate Findings
+        findings = []
+        frame_results = result_data.get('frame_results', result_data.get('frameResults', []))
+        for frame in frame_results:
+            findings.extend(frame.get('findings', []))
         categories = {}
-        findings = result_data.get('findings', [])
         
         # If too many findings, limit to critical ones
         critical_findings = [f for f in findings if str(f.get('severity')).upper() == 'CRITICAL']
@@ -264,6 +267,26 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                     critical = res.get('critical_findings', 0)
                 
                     if format == "text":
+                        # Segregate Findings (Linter vs Core)
+                        all_findings = res.get('findings', [])
+                        linter_findings = []
+                        core_findings = []
+                        
+                        for f in all_findings:
+                            # Robust check for Linter source
+                            detail = f.get('detail') or ""
+                            if "(Ruff)" in detail or str(f.get('id', '')).startswith("lint_"):
+                                linter_findings.append(f)
+                            else:
+                                core_findings.append(f)
+                                
+                        # Recalculate stats for cleaner report
+                        core_count = len(core_findings)
+                        core_critical = sum(1 for f in core_findings if str(f.get('severity')).lower() == 'critical')
+                        
+                        linter_count = len(linter_findings)
+                        linter_critical = sum(1 for f in linter_findings if str(f.get('severity')).lower() == 'critical')
+
                         table = Table(title="Scan Results")
                         table.add_column("Metric", style="cyan")
                         table.add_column("Value", style="magenta")
@@ -271,8 +294,19 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                         table.add_row("Total Frames", str(res.get('total_frames', 0)))
                         table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
                         table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
-                        table.add_row("Total Issues", str(res.get('total_findings', 0)))
-                        table.add_row("Critical Issues", f"[{'red' if critical > 0 else 'green'}]{critical}[/]")
+                        
+                        # Primary focus: Core Issues (Logic, Security, Architecture from AI/Frames)
+                        table.add_section()
+                        table.add_row("Core Issues", str(core_count))
+                        table.add_row("Critical Core Issues", f"[{'red' if core_critical > 0 else 'green'}]{core_critical}[/]")
+                        
+                        # Secondary focus: Linter Issues (Style, minor errors)
+                        if linter_count > 0:
+                            table.add_section()
+                            style = "yellow" if linter_critical > 0 else "dim"
+                            table.add_row("Linter Issues", f"[{style}]{linter_count}[/{style}]")
+                            if linter_critical > 0:
+                                table.add_row("Linter Critical", f"[red]{linter_critical}[/red]")
                         
                         # Add Manual Review if present
                         manual_review = res.get('manual_review_findings', 0)
@@ -280,6 +314,30 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                             table.add_row("Manual Review", f"[yellow]{manual_review}[/yellow]")
                         
                         console.print("\n", table)
+
+                        # 🚨 NEW: Show Missing Tool Hints (Visibility Improvement)
+                        # Check all frames results (if available in result_data or we need to access them differently)
+                        # Wait, result_data contains 'frames_failed' but not detailed skipped info easily.
+                        # Actually 'stats' object in this function tracks skipped counts, but we don't have the frame objects there locally?
+                        # We need to rely on the streaming events we processed? Or the final result structure.
+                        # Assuming final_result_data['results'] contains detailed frame results.
+                        
+                        frame_results = res.get('results', [])
+                        missing_tools = []
+                        for fr in frame_results:
+                            meta = fr.get('metadata', {}) or {}
+                            if meta.get('status') == 'skipped_tool_missing':
+                                hint = meta.get('install_hint')
+                                frame_name = fr.get('frame_name', 'Unknown Frame')
+                                if hint:
+                                    missing_tools.append((frame_name, hint))
+                        
+                        if missing_tools:
+                            console.print("\n[bold yellow]⚠️  Missing Dependencies (Action Required):[/bold yellow]")
+                            for name, hint in missing_tools:
+                                console.print(f"  • [cyan]{name}[/cyan]: {hint}")
+                            console.print("")
+
                         
                         # Display LLM Performance Metrics
                         llm_metrics = res.get('llmMetrics', {})
