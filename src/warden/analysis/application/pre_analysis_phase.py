@@ -7,6 +7,7 @@ to enable context-aware analysis and false positive prevention.
 
 import asyncio
 import time
+import re
 from pathlib import Path
 import fnmatch
 from typing import Dict, List, Optional, Any, Callable, Set
