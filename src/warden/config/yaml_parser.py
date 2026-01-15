@@ -35,7 +35,7 @@ edges:
 ```
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pathlib import Path
 import yaml
 
@@ -48,7 +48,7 @@ from warden.config.domain.models import (
     Position,
     CustomRule,
 )
-from warden.validation.domain.frame import get_frame_by_id, get_frames_by_priority
+from warden.validation.domain.frame import get_frame_by_id
 
 
 class YAMLParseError(Exception):

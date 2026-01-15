@@ -7,17 +7,13 @@ false positive suppression mechanisms.
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import patch
 import tempfile
-import os
 
 from warden.analysis.domain.project_context import (
-    ProjectContext,
     ProjectType,
     Framework,
-    Architecture,
     TestFramework,
-    BuildTool,
 )
 from warden.analysis.domain.file_context import (
     FileContext,

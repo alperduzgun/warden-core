@@ -7,7 +7,7 @@ Supports glob patterns for directories, files, and deep paths.
 
 import fnmatch
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 import yaml
 

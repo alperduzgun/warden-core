@@ -230,7 +230,7 @@ class LLMOrphanFilter:
         if not findings_map:
             return {}
 
-        start_time = time.perf_counter()
+        time.perf_counter()
         
         # 1. Flatten all findings
         all_flattened: List[tuple[str, OrphanFinding]] = [] # (file_path, finding)

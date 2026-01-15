@@ -2,7 +2,6 @@
 Tests for generated protobuf messages.
 """
 
-import pytest
 from warden.grpc.generated import warden_pb2
 
 

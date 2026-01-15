@@ -5,13 +5,13 @@ Infrastructure adapter for WardenBridge integration.
 Translates MCP tool calls to WardenBridge operations.
 """
 
-import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from warden.mcp.ports.tool_executor import IToolExecutor
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.errors import MCPToolExecutionError
+from warden.shared.utils.path_utils import sanitize_path
 
 # Optional imports for bridge functionality
 try:
@@ -108,11 +108,15 @@ class WardenBridgeAdapter(IToolExecutor):
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")
 
-        result = await self._bridge.execute_pipeline_async(
-            file_path=path,
-            frames=frames,
-        )
-        return MCPToolResult.json_result(result)
+        try:
+            safe_path = sanitize_path(path, self.project_root)
+            result = await self._bridge.execute_pipeline_async(
+                file_path=str(safe_path),
+                frames=frames,
+            )
+            return MCPToolResult.json_result(result)
+        except ValueError as e:
+            raise MCPToolExecutionError("warden_scan", f"Path validation failed: {e}")
 
     async def _execute_get_config_async(self) -> MCPToolResult:
         """Execute warden_get_config tool."""

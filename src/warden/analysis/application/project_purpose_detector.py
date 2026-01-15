@@ -6,14 +6,13 @@ from directory structure, dependencies, and code samples.
 """
 
 import json
-import asyncio
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import structlog
 
 from warden.llm.factory import create_client
 from warden.llm.config import LlmConfiguration
-from warden.llm.types import LlmRequest, LlmResponse
+from warden.llm.types import LlmRequest
 
 logger = structlog.get_logger()
 
@@ -36,7 +35,10 @@ class ProjectPurposeDetector:
             llm_config: Optional LLM configuration.
             llm_service: Optional shared LLM service.
         """
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).resolve()
+        
+        if not self.project_root.exists():
+            logger.warning("project_root_does_not_exist", path=str(self.project_root))
         self.llm = llm_service
         
         if not self.llm:

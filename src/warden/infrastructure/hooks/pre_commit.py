@@ -5,7 +5,6 @@ Runs Warden analysis on staged files before commit.
 """
 
 import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional
 

@@ -1,8 +1,7 @@
 """Report generator for Warden scan results."""
 
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import json
 
 from .html_generator import HtmlReportGenerator

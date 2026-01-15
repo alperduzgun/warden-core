@@ -50,7 +50,7 @@ async def test_azure_simple():
     response = await client.send_async(request)
 
     if response.success:
-        print(f"✅ SUCCESS")
+        print("✅ SUCCESS")
         print(f"   Provider: {response.provider.value}")
         print(f"   Response: {response.content}")
         print(f"   Tokens: {response.total_tokens}")
@@ -113,7 +113,7 @@ def get_user(user_id):
             print(f"❌ JSON Parse Error: {e}")
             print(f"   Raw Response: {response.content[:200]}...")
             return False
-        print(f"✅ SUCCESS")
+        print("✅ SUCCESS")
         print(f"   Score: {result['score']}/10")
         print(f"   Confidence: {result['confidence']}")
         print(f"   Issues Found: {len(result['issues'])}")
@@ -126,7 +126,7 @@ def get_user(user_id):
         )
 
         if has_sql_injection:
-            print(f"   ✅ SQL Injection Detected!")
+            print("   ✅ SQL Injection Detected!")
             sql_issue = next(
                 issue for issue in result["issues"]
                 if "sql" in issue.get("title", "").lower() or
@@ -136,7 +136,7 @@ def get_user(user_id):
             print(f"   Severity: {sql_issue['severity']}")
             print(f"   Confidence: {sql_issue['confidence']}")
         else:
-            print(f"   ⚠️  SQL Injection NOT detected (unexpected)")
+            print("   ⚠️  SQL Injection NOT detected (unexpected)")
 
         return True
     else:
@@ -149,7 +149,7 @@ async def main_async():
     print("\n" + "=" * 60)
     print("🚀 Warden LLM Integration Live Tests")
     print("=" * 60)
-    print(f"Provider: Azure OpenAI GPT-4o")
+    print("Provider: Azure OpenAI GPT-4o")
     print(f"Endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT', 'Not set')}")
     print("=" * 60)
 

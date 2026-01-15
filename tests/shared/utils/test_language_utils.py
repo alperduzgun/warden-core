@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 from warden.shared.utils.language_utils import (
     get_language_from_path,

@@ -25,13 +25,10 @@ def index_command():
     console.print("[bold cyan]Warden Indexer[/bold cyan] - Building semantic index...")
     
     # Use the high-level service for proper initialization
-    import os
     from pathlib import Path
     
     # Load config manually for standalone command
-    import os
     import yaml
-    from pathlib import Path
     
     project_root = Path.cwd()
     legacy_config = project_root / ".warden" / "config.yaml"
@@ -167,4 +164,4 @@ def search_command(
         )
 
     console.print(table)
-    console.print(f"\n[dim]Use [bold white]warden install <id>[/bold white] to add a frame to your project.[/dim]")
+    console.print("\n[dim]Use [bold white]warden install <id>[/bold white] to add a frame to your project.[/dim]")

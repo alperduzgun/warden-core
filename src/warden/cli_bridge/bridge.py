@@ -5,18 +5,17 @@ Exposes Warden's Python backend functionality to the Ink CLI through JSON-RPC.
 Refactored into modular handlers to maintain < 500 lines per core rules.
 """
 
-import asyncio
 from pathlib import Path
 from typing import Any, Dict, List, Optional, AsyncIterator, Union
 from datetime import datetime
 
-from warden.cli_bridge.protocol import IPCError, ErrorCode
 from warden.shared.infrastructure.logging import get_logger
 from warden.cli_bridge.handlers.config_handler import ConfigHandler
 from warden.cli_bridge.handlers.pipeline_handler import PipelineHandler
 from warden.cli_bridge.handlers.llm_handler import LLMHandler
 from warden.cli_bridge.handlers.tool_handler import ToolHandler
 from warden.cli_bridge.utils import serialize_pipeline_result
+from warden.shared.utils.path_utils import sanitize_path
 
 logger = get_logger(__name__)
 
@@ -88,16 +87,19 @@ class WardenBridge:
         """Request a semantic fix for a vulnerability."""
         from warden.fortification.application.fortification_phase import FortificationPhase
         
+        # Sanitize path
+        safe_path = sanitize_path(file_path, self.project_root)
+        
         # Create minimal context for fortification
         context = {
             "project_root": self.project_root,
-            "language": self.pipeline_handler._detect_language(Path(file_path)),
+            "language": self.pipeline_handler._detect_language(safe_path),
             "project_type": "unknown", # Could be detected
             "framework": "unknown"     # Could be detected
         }
         
         # Initialize phase with LLM service
-        phase = FortificationPhase(
+        FortificationPhase(
             config={"use_llm": True},
             context=context,
             llm_service=self.llm_service
@@ -155,7 +157,6 @@ class WardenBridge:
         """Legacy scan implementation (for compatibility)."""
         # Simplified scan: execute on directory and return summary
         all_issues = []
-        files_scanned = 0
         last_summary = {}
         last_duration = 0
         async for event in self.execute_pipeline_stream_async(path, frames):
@@ -228,7 +229,7 @@ class WardenBridge:
         """Update frame status in project config."""
         from warden.cli_bridge.config_manager import ConfigManager
         config_mgr = ConfigManager(self.project_root)
-        result = config_mgr.update_frame_status_async(frame_id, enabled)
+        config_mgr.update_frame_status_async(frame_id, enabled)
         return {"success": True, "frame_id": frame_id, "enabled": enabled}
 
     # --- LLM Analysis ---

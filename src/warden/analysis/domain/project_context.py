@@ -7,8 +7,7 @@ for the context-aware analysis system.
 
 from pydantic import Field
 from enum import Enum
-from typing import Dict, List, Optional, Any
-from pathlib import Path
+from typing import Dict, List, Any
 
 from warden.shared.domain.base_model import BaseDomainModel
 

@@ -196,11 +196,11 @@ class RulesYAMLLoader:
         # For non-script and non-ai rules, conditions is required
         rule_type = rule_data["type"]
         if rule_type not in ("script", "ai") and "conditions" not in rule_data:
-            raise ValueError(f"Missing required field 'conditions' in non-script/non-ai rule")
+            raise ValueError("Missing required field 'conditions' in non-script/non-ai rule")
 
         # For script rules, either 'script' or 'scriptPath' is required
         if rule_type == "script" and "script" not in rule_data and "scriptPath" not in rule_data:
-            raise ValueError(f"Script-type rule requires either 'script' or 'scriptPath' field")
+            raise ValueError("Script-type rule requires either 'script' or 'scriptPath' field")
 
         # Parse enums
         try:

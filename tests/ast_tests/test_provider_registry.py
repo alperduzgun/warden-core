@@ -4,7 +4,6 @@ Unit tests for ASTProviderRegistry.
 Tests provider registration, priority-based selection, and language routing.
 """
 
-import pytest
 
 from warden.ast.application.provider_interface import IASTProvider
 from warden.ast.application.provider_registry import ASTProviderRegistry

@@ -7,8 +7,7 @@ Extends the base PipelineOrchestrator with optional pre/post-processing phases:
 - Post: Suppression filtering (removes false positives)
 """
 
-import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Any, Optional
 from pathlib import Path
 
 from warden.pipeline.application.orchestrator import PhaseOrchestrator

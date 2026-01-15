@@ -3,8 +3,6 @@ import pytest
 import asyncio
 import json
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
 
 from warden.mcp.application.mcp_service import MCPService
 from warden.mcp.ports.transport import ITransport

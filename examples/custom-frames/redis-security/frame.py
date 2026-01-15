@@ -18,7 +18,7 @@ Real-world patterns detected:
 
 import re
 import time
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any
 
 from warden.validation.domain.frame import (
     ValidationFrame,

@@ -8,7 +8,6 @@ Mirrors src/warden/ structure into tests/.
 
 import os
 from pathlib import Path
-import sys
 
 def scaffold_tests(project_root: Path):
     src_dir = project_root / "src" / "warden"
@@ -56,11 +55,11 @@ def scaffold_tests(project_root: Path):
                 module_name = file.replace(".py", "")
                 
                 f.write(f'"""\nTests for {import_path}.{module_name}\n"""\n\n')
-                f.write(f"import pytest\n")
+                f.write("import pytest\n")
                 f.write(f"from {import_path} import {module_name}\n\n")
                 f.write(f"def test_{module_name}_placeholder():\n")
                 f.write(f'    """Placeholder test for {module_name}."""\n')
-                f.write(f"    assert True\n")
+                f.write("    assert True\n")
             
             # Ensure __init__.py exists in test directories
             current = test_dir

@@ -5,7 +5,7 @@ Provides weight configurations for different file contexts to enable
 context-aware quality scoring.
 """
 
-from typing import Dict, Any
+from typing import Dict
 from warden.analysis.domain.file_context import FileContext
 
 

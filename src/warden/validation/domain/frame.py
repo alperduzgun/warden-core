@@ -12,7 +12,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Any, List
+from typing import Dict, Any, List
 
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.validation.domain.enums import (

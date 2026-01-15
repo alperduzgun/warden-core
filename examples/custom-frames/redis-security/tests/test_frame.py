@@ -50,7 +50,7 @@ async def test_frame_detects_issues():
         language="python",
     )
 
-    result = await frame.execute(code_file)
+    await frame.execute(code_file)
 
     # TODO: Add assertions for expected findings
     # assert len(result.findings) > 0
@@ -69,7 +69,7 @@ async def test_frame_passes_valid_code():
         language="python",
     )
 
-    result = await frame.execute(code_file)
+    await frame.execute(code_file)
 
     # TODO: Add assertions
     # assert result.status == "passed"

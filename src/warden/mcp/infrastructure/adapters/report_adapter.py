@@ -185,7 +185,7 @@ class ReportAdapter(BaseWardenAdapter):
         if not output_path:
             output_path = str(self.project_root / ".warden" / f"report_{run_id}.pdf")
 
-        report_id = str(uuid.uuid4())
+        str(uuid.uuid4())
 
         try:
             # Try bridge method first

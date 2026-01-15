@@ -8,7 +8,7 @@ and other characteristics for the PRE-ANALYSIS phase.
 import asyncio
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Set, Any
 import json
 import structlog
 try:
@@ -419,7 +419,7 @@ class ProjectStructureAnalyzer:
                     data = json.load(f)
                     if "bin" in data:
                         return ProjectType.CLI_TOOL
-                    if data.get("private") == False:
+                    if not data.get("private"):
                         return ProjectType.LIBRARY
             except:
                 pass

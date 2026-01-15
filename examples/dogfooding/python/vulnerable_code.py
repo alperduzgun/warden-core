@@ -3,7 +3,6 @@ Example code with various security issues and code quality problems.
 This file is for testing Warden's detection capabilities.
 """
 
-import os
 import sqlite3
 from flask import Flask, request, render_template_string
 
@@ -19,9 +18,7 @@ b = 20
 x = a + b
 
 # Unused imports
-import json
 import hashlib
-import random
 
 # SQL Injection vulnerability
 def get_user(user_id):
@@ -122,7 +119,6 @@ def another_unused():
     return "This is never used"
 
 # Weak crypto
-import hashlib
 def hash_password(password):
     # VULNERABLE: MD5 is weak
     return hashlib.md5(password.encode()).hexdigest()

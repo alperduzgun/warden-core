@@ -1,5 +1,4 @@
 import unittest
-import hashlib
 from warden.shared.utils.hasher import NormalizedHasher
 from warden.ast.domain.enums import CodeLanguage
 

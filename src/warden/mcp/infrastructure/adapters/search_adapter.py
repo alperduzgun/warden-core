@@ -5,7 +5,6 @@ MCP adapter for semantic code search tools.
 Maps to gRPC SemanticSearchMixin functionality.
 """
 
-from pathlib import Path
 from typing import Any, Dict, List
 
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter

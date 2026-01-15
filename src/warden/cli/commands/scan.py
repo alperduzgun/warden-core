@@ -1,12 +1,11 @@
 import asyncio
-import sys
 import typer
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 
 # Internal imports
 from warden.cli_bridge.bridge import WardenBridge
@@ -79,12 +78,12 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
             timeout=5.0
         )
         
-        console.print(f"\n[bold red]🤖 Qwen Analysis:[/bold red]")
+        console.print("\n[bold red]🤖 Qwen Analysis:[/bold red]")
         console.print(f"[white]{response.content}[/white]")
         
     except asyncio.TimeoutError:
         console.print("\n[dim]⚠️  AI Analysis timed out (skipped)[/dim]")
-    except Exception as e:
+    except Exception:
         # Silent fail - this is an enhancement, not a critical path
         # console.print(f"[dim]AI Analysis unavailable: {e}[/dim]")
         pass
@@ -100,7 +99,7 @@ def _display_llm_summary(metrics: dict):
     
     if metrics.get("fastTier"):
         fast = metrics["fastTier"]
-        console.print(f"\n  [green]⚡ Fast Tier (Qwen):[/green]")
+        console.print("\n  [green]⚡ Fast Tier (Qwen):[/green]")
         console.print(f"    Requests: {fast['requests']} ({fast['percentage']}%)")
         console.print(f"    Success Rate: {fast['successRate']}%")
         console.print(f"    Avg Response: {fast['avgResponseTime']}")
@@ -110,14 +109,14 @@ def _display_llm_summary(metrics: dict):
     
     if metrics.get("smartTier"):
         smart = metrics["smartTier"]
-        console.print(f"\n  [blue]🧠 Smart Tier (Azure):[/blue]")
+        console.print("\n  [blue]🧠 Smart Tier (Azure):[/blue]")
         console.print(f"    Requests: {smart['requests']} ({smart['percentage']}%)")
         console.print(f"    Avg Response: {smart['avgResponseTime']}")
         console.print(f"    Total Time: {smart['totalTime']} ({smart['timePercentage']}% of total)")
     
     if metrics.get("costAnalysis"):
         cost = metrics["costAnalysis"]
-        console.print(f"\n  [bold green]💰 Savings:[/bold green]")
+        console.print("\n  [bold green]💰 Savings:[/bold green]")
         console.print(f"    Cost: {cost['estimatedCostSavings']}")
         console.print(f"    Time: {cost['estimatedTimeSavings']}")
     
@@ -144,7 +143,6 @@ def scan_command(
     Run the full Warden pipeline on files or directories.
     """
     # We defer import to avoid slow startup for other commands
-    from warden.shared.infrastructure.logging import get_logger
     
     # Run async scan function
     try:
@@ -168,7 +166,7 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
     """Async implementation of scan command."""
     
     display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
-    console.print(f"[bold cyan]🛡️  Warden Scanner[/bold cyan]")
+    console.print("[bold cyan]🛡️  Warden Scanner[/bold cyan]")
     console.print(f"[dim]Scanning: {display_paths}[/dim]\n")
 
     # Initialize bridge
@@ -184,84 +182,122 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
 
     final_result_data = None
 
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        "•",
+        TextColumn("[dim]{task.fields[status]}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True
+    )
+
+    overall_task = None
+    current_phase_task = None
+
     try:
-        # Execute pipeline with streaming
-        async for event in bridge.execute_pipeline_stream_async(
-            file_path=paths,
-            frames=frames,
-            verbose=verbose,
-            analysis_level=level
-        ):
-            event_type = event.get("type")
-            
-            if event_type == "progress":
-                evt = event['event']
-                data = event.get('data', {})
+        with progress:
+            # Execute pipeline with streaming
+            async for event in bridge.execute_pipeline_stream_async(
+                file_path=paths,
+                frames=frames,
+                verbose=verbose,
+                analysis_level=level
+            ):
+                event_type = event.get("type")
+                
+                if event_type == "progress":
+                    evt = event['event']
+                    data = event.get('data', {})
 
-                if format == "text":
-                    if evt == "phase_started":
-                        console.print(f"[bold blue]▶ Phase:[/bold blue] {data.get('phase')}")
+                    if evt == "progress_init":
+                        overall_task = progress.add_task("Overall Progress", total=data['total_units'], status="Initializing...")
                     
-                    elif evt == "frame_completed":
-                        stats["total"] += 1
-                        name = data.get('frame_name', data.get('frame_id'))
-                        status = data.get('status', 'unknown')
-                        icon = "✅" if status == "passed" else "❌" if status == "failed" else "⚠️" 
-                        style = "green" if status == "passed" else "red" if status == "failed" else "yellow"
-                        findings_count = data.get('findings', data.get('issues_found', 0))
+                    elif evt == "progress_update" and overall_task is not None:
+                        increment = data.get('increment', 0)
+                        status = data.get('status', data.get('phase', 'Processing...'))
+                        progress.update(overall_task, advance=increment, status=status)
+                        
+                        # Handle dynamic unit addition (e.g. Analysis/Verification finding counts)
+                        if "total_units" in data:
+                            # Safe task retrieval to avoid IndexError
+                            task = next((t for t in progress.tasks if t.id == overall_task), None)
+                            if task:
+                                progress.update(overall_task, total=task.total + data['total_units'])
 
-                        if status == "passed":
-                            stats["passed"] += 1
-                        elif status == "failed":
-                            stats["failed"] += 1
+                    if format == "text":
+                        if evt == "phase_started":
+                            phase_name = data.get('phase')
+                            if not verbose:
+                                if current_phase_task is not None:
+                                    progress.remove_task(current_phase_task)
+                                current_phase_task = progress.add_task(f"Phase: {phase_name}", total=None, status="In Progress")
+                            else:
+                                console.print(f"[bold blue]▶ Phase:[/bold blue] {phase_name}")
+                        
+                        elif evt == "frame_completed":
+                            stats["total"] += 1
+                            name = data.get('frame_name', data.get('frame_id'))
+                            status = data.get('status', 'unknown')
+                            icon = "✅" if status == "passed" else "❌" if status == "failed" else "⚠️" 
+                            style = "green" if status == "passed" else "red" if status == "failed" else "yellow"
+                            findings_count = data.get('findings', data.get('issues_found', 0))
+
+                            if status == "passed":
+                                stats["passed"] += 1
+                            elif status == "failed":
+                                stats["failed"] += 1
+                            else:
+                                stats["skipped"] += 1
+                                
+                            if verbose:
+                                console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
+
+                elif event_type == "result":
+                    # Final results
+                    final_result_data = event['data']
+                    res = final_result_data
+                    
+                    # Check critical findings
+                    critical = res.get('critical_findings', 0)
+                
+                    if format == "text":
+                        table = Table(title="Scan Results")
+                        table.add_column("Metric", style="cyan")
+                        table.add_column("Value", style="magenta")
+                        
+                        table.add_row("Total Frames", str(res.get('total_frames', 0)))
+                        table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
+                        table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
+                        table.add_row("Total Issues", str(res.get('total_findings', 0)))
+                        table.add_row("Critical Issues", f"[{'red' if critical > 0 else 'green'}]{critical}[/]")
+                        
+                        # Add Manual Review if present
+                        manual_review = res.get('manual_review_findings', 0)
+                        if manual_review > 0:
+                            table.add_row("Manual Review", f"[yellow]{manual_review}[/yellow]")
+                        
+                        console.print("\n", table)
+                        
+                        # Display LLM Performance Metrics
+                        llm_metrics = res.get('llmMetrics', {})
+                        if llm_metrics:
+                            _display_llm_summary(llm_metrics)
+                        
+                        # Status check (COMPLETED=2)
+                        status_raw = res.get('status')
+                        # Handle both integer and string statuses (Enums are often serialized to name or value)
+                        is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
+                        
+                        if verbose:
+                            console.print(f"[dim]Debug: status={status_raw} ({type(status_raw).__name__}), is_success={is_success}[/dim]")
+                        
+                        if is_success:
+                            console.print("\n[bold green]✨ Scan Succeeded![/bold green]")
                         else:
-                            stats["skipped"] += 1
-                            
-                        console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
-
-            elif event_type == "result":
-                # Final results
-                final_result_data = event['data']
-                res = final_result_data
-                
-                # Check critical findings
-                critical = res.get('critical_findings', 0)
-                
-                if format == "text":
-                    table = Table(title="Scan Results")
-                    table.add_column("Metric", style="cyan")
-                    table.add_column("Value", style="magenta")
-                    
-                    table.add_row("Total Frames", str(res.get('total_frames', 0)))
-                    table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
-                    table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
-                    table.add_row("Total Issues", str(res.get('total_findings', 0)))
-                    table.add_row("Critical Issues", f"[{'red' if critical > 0 else 'green'}]{critical}[/]")
-                    
-                    # Add Manual Review if present
-                    manual_review = res.get('manual_review_findings', 0)
-                    if manual_review > 0:
-                        table.add_row("Manual Review", f"[yellow]{manual_review}[/yellow]")
-                    
-                    console.print("\n", table)
-                    
-                    # Display LLM Performance Metrics
-                    llm_metrics = res.get('llmMetrics', {})
-                    if llm_metrics:
-                        _display_llm_summary(llm_metrics)
-                    
-                    # Status check (COMPLETED=2)
-                    status_raw = res.get('status')
-                    # Handle both integer and string statuses (Enums are often serialized to name or value)
-                    is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
-                    
-                    if verbose:
-                        console.print(f"[dim]Debug: status={status_raw} ({type(status_raw).__name__}), is_success={is_success}[/dim]")
-                    
-                    if is_success:
-                        console.print(f"\n[bold green]✨ Scan Succeeded![/bold green]")
-                    else:
-                        console.print(f"\n[bold red]💥 Scan Failed![/bold red]")
+                            console.print("\n[bold red]💥 Scan Failed![/bold red]")
 
             # Report Generation from Config
             if final_result_data:
@@ -341,7 +377,7 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
             elif format == "pdf":
                 generator.generate_pdf_report(final_result_data, out_path)
             
-            console.print(f"[bold green]Report saved![/bold green]")
+            console.print("[bold green]Report saved![/bold green]")
 
         # Save lightweight AI status file (Token-optimized)
         try:
@@ -383,7 +419,7 @@ Updated: {scan_time}
         frames_failed = final_result_data.get('frames_failed', 0)
         
         if not pipeline_ok:
-             console.print(f"[bold red]❌ Pipeline did not complete successfully.[/bold red]")
+             console.print("[bold red]❌ Pipeline did not complete successfully.[/bold red]")
              return 1
              
         if critical_count > 0:
@@ -399,7 +435,7 @@ Updated: {scan_time}
         return 0
         
     except Exception as e:
-        console.print(f"\n[bold red]💥 Scan failed unexpectedly.[/bold red]")
+        console.print("\n[bold red]💥 Scan failed unexpectedly.[/bold red]")
         console.print(f"[red]Error:[/red] {e}")
 
         # Suggest doctor for likely configuration errors

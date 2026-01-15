@@ -269,7 +269,6 @@ Output must be a valid JSON object with the following structure:
             
             if response.success and response.content:
                 # Parse JSON response
-                import json
                 
                 # Handle markdown code blocks if present
                 content = response.content

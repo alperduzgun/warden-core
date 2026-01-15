@@ -1,6 +1,5 @@
 """Tests for rule domain models."""
 
-import pytest
 
 from warden.rules.domain.enums import RuleCategory, RuleSeverity
 from warden.rules.domain.models import (

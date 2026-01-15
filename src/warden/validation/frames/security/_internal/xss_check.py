@@ -8,7 +8,7 @@ Detects potential XSS vulnerabilities:
 """
 
 import re
-from typing import List, Dict, Any
+from typing import List
 
 from warden.validation.domain.check import (
     ValidationCheck,

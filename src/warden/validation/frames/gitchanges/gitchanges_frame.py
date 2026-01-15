@@ -299,7 +299,7 @@ class GitChangesFrame(ValidationFrame):
                 severity="info",
                 message=f"Line {line_num} was added or modified",
                 location=f"{code_file.path}:{line_num}",
-                detail=f"This line was detected as changed in git diff",
+                detail="This line was detected as changed in git diff",
                 code=line_content.strip(),
             )
             findings.append(finding)

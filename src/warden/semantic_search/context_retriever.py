@@ -289,11 +289,11 @@ class ContextRetriever:
         """
         parts = [
             f"# Relevant Code Context for: {context.query_text}",
-            f"",
+            "",
             f"Total chunks: {context.chunk_count}",
             f"Estimated tokens: {context.total_tokens}",
             f"Average relevance: {context.average_score:.2f}",
-            f"",
+            "",
         ]
 
         for i, (chunk, score) in enumerate(
@@ -306,11 +306,11 @@ class ContextRetriever:
                     f"**Type:** {chunk.chunk_type.value}",
                     f"**Lines:** {chunk.start_line}-{chunk.end_line}",
                     f"**Language:** {chunk.language}",
-                    f"",
+                    "",
                     "```" + chunk.language,
                     chunk.content,
                     "```",
-                    f"",
+                    "",
                 ]
             )
 

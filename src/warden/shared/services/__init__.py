@@ -44,7 +44,7 @@ class LLMService:
             return None
 
         try:
-            prompt = self._build_suggestion_prompt(issue)
+            self._build_suggestion_prompt(issue)
             # Simplified for now
             return f"Fix suggestion for {issue.get('message', 'issue')}"
         except Exception as e:

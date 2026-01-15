@@ -10,12 +10,8 @@ Tests:
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
+from unittest.mock import Mock, patch
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
 from warden.validation.domain.frame import CodeFile, FrameResult
 import sys
 
@@ -31,7 +27,6 @@ def gitchanges_components():
     # Extract helper classes from the module where GitChangesFrame is defined
     # or from the git_diff_parser module directly (since we used absolute import)
     
-    import sys
     if "git_diff_parser" in sys.modules:
         parser_module = sys.modules["git_diff_parser"]
         return {

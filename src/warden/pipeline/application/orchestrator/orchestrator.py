@@ -4,10 +4,9 @@ Main Phase Orchestrator for 6-phase pipeline.
 Coordinates execution of all pipeline phases with shared PipelineContext.
 """
 
-import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, List, Optional, Callable
 from uuid import uuid4
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -298,6 +297,16 @@ class PhaseOrchestrator:
             if enable_validation:
                 logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
                 # Pass pipeline reference to frame executor
+                # Calculate work units for progress bar
+                total_work_units = self._calculate_total_work_units(context, code_files)
+                if self.progress_callback:
+                    self.progress_callback("progress_init", {
+                        "total_units": total_work_units,
+                        "phase_units": {
+                            "VALIDATION": len(context.selected_frames or []) * len(code_files) if context.selected_frames else 0,
+                        }
+                    })
+
                 await self.frame_executor.execute_validation_with_strategy_async(
                     context, code_files, self.pipeline
                 )
@@ -407,12 +416,36 @@ class PhaseOrchestrator:
 
         return context
 
+    def _calculate_total_work_units(self, context: PipelineContext, code_files: List[CodeFile]) -> int:
+        """Calculate total work units for progress reporting."""
+        total_units = 0
+        
+        # 1. Validation units (Effective Frames * Files)
+        # If no frames selected by classification yet, use configured frames as fallback estimate
+        selected_frames = getattr(context, 'selected_frames', [])
+        effective_frames_count = len(selected_frames) if selected_frames else len(self.frames)
+        
+        total_units += effective_frames_count * len(code_files)
+        
+        # 2. Verification and Fortification will be added dynamically as we find issues
+        
+        return max(total_units, 1)
+
     async def _execute_verification_phase_async(self, context: PipelineContext) -> None:
         """
         Execute Phase 3.5: Verification (LLM-based filtering).
         Reduces false positives before expensive fortification or reporting.
         """
         logger.info("phase_started", phase="VERIFICATION")
+        if self.progress_callback:
+            # We don't know exact units until we scan findings
+            total_findings = len(context.findings) if hasattr(context, 'findings') else 0
+            if total_findings > 0:
+                 self.progress_callback("progress_update", {
+                     "phase": "VERIFICATION",
+                     "total_units": total_findings
+                 })
+
         try:
             # Initialize verifier once per phase
             verify_llm = self.llm_service or create_client()
@@ -484,7 +517,8 @@ class PhaseOrchestrator:
                         total_dropped=dropped_count)
 
         except Exception as e:
-            logger.warning("verification_phase_failed", error=str(e))
+            import traceback
+            logger.warning("verification_phase_failed", error=str(e), type=type(e).__name__, traceback=traceback.format_exc())
 
     def _apply_baseline(self, context: PipelineContext) -> None:
         """Filter out existing issues present in baseline."""

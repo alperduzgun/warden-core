@@ -8,7 +8,6 @@ Validates .warden/config.yaml for:
 """
 
 from typing import Dict, Any, List, Optional, Set
-from pathlib import Path
 import yaml
 
 from warden.validation.domain.frame import ValidationFrame, FrameResult, Finding, CodeFile
@@ -86,7 +85,7 @@ class ConfigValidationFrame(ValidationFrame):
             findings.append(Finding(
                 id="config-yaml-parse-error",
                 severity="critical",
-                message=f"Invalid YAML syntax in config.yaml",
+                message="Invalid YAML syntax in config.yaml",
                 location=code_file.path,
                 detail=str(e),
                 line=1,

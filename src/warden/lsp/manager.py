@@ -1,5 +1,4 @@
 
-import asyncio
 import structlog
 from pathlib import Path
 from typing import Dict, Optional
@@ -69,7 +68,7 @@ class LSPManager:
             await client.start_async()
             
             # Initialize
-            resp = await client.initialize_async(root_path)
+            await client.initialize_async(root_path)
             # await client.initialized() # Some servers require this notification
             await client.send_notification_async("initialized", {})
             

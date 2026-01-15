@@ -10,7 +10,6 @@ Discovers and loads frames from:
 
 import os
 import sys
-import yaml
 import importlib
 import importlib.util
 from pathlib import Path
@@ -19,7 +18,6 @@ from dataclasses import dataclass
 
 from warden.validation.domain.frame import ValidationFrame, ValidationFrameError
 from warden.validation.infrastructure.frame_metadata import FrameMetadata
-from warden.validation.domain.enums import FramePriority
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)

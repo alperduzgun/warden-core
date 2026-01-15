@@ -6,7 +6,7 @@ Provides type-safe protocol layer for communication between Python backend and I
 
 from enum import IntEnum
 from typing import Any, Optional, Dict, Union
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 import json
 
 

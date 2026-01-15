@@ -1,6 +1,5 @@
 import typer
 import asyncio
-from pathlib import Path
 from typing import Optional
 from warden.services.ipc_entry import main_async as ipc_main
 from warden.services.grpc_entry import main_async as grpc_main
@@ -50,8 +49,15 @@ def serve_mcp(
       - warden_status     - Get Warden status
       - warden_list_frames - List validation frames
     """
+    from pathlib import Path
+    root = Path(project_root).resolve() if project_root else Path.cwd().resolve()
+    
+    if not root.exists() or not root.is_dir():
+        typer.secho(f"Error: Invalid project root: {root}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
     from warden.mcp.entry import run as mcp_run
     try:
-        mcp_run(project_root)
+        mcp_run(str(root))
     except KeyboardInterrupt:
         pass

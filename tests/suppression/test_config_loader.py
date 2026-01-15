@@ -10,7 +10,6 @@ Tests coverage:
 """
 
 import pytest
-import tempfile
 from pathlib import Path
 
 from warden.suppression.config_loader import (

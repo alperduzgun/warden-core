@@ -9,12 +9,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from warden.validation.frames.spec import (
-    Contract,
-    OperationDefinition,
-    ModelDefinition,
     PlatformType,
     PlatformRole,
-    OperationType,
 )
 from warden.validation.frames.spec.extractors.base import (
     ExtractorRegistry,
@@ -53,7 +49,7 @@ class TestExtractorRegistry:
         """Test get_extractor returns None for unknown platform."""
         with TemporaryDirectory() as tmpdir:
             # This should return None or an extractor depending on implementation
-            extractor = get_extractor(
+            get_extractor(
                 PlatformType.DJANGO,  # Might not have extractor
                 Path(tmpdir),
                 PlatformRole.PROVIDER,

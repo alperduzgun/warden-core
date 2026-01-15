@@ -18,8 +18,11 @@ class FindingVerificationService:
 
     def _get(self, obj: Any, key: str, default: Any = None) -> Any:
         """Helper to get values from Finding objects or dicts."""
-        if isinstance(obj, dict):
-            return obj.get(key, default)
+        if hasattr(obj, 'get'):
+            try:
+                return obj.get(key, default)
+            except (AttributeError, TypeError):
+                pass
         return getattr(obj, key, default)
 
     def _set(self, obj: Any, key: str, value: Any) -> None:
@@ -160,7 +163,7 @@ Return ONLY a JSON object:
             
         # 2. Type Hint check (common FP in Python/TS)
         # e.g. "Optional[str]", "List[int]"
-        if '[' in code and ']' in code and not '(' in code:
+        if '[' in code and ']' in code and '(' not in code:
             if any(t in code for t in ['Optional', 'List', 'Dict', 'Union', 'Any']):
                 return True
 
@@ -240,7 +243,7 @@ Return ONLY a JSON array of objects in the EXACT order:
             return [{
                 "is_true_positive": True, 
                 "confidence": 0.4, # Slightly lower confidence for parse errors
-                "reason": f"LLM responded but output parsing failed. Manual Review recommended.",
+                "reason": "LLM responded but output parsing failed. Manual Review recommended.",
                 "review_required": True
             } for _ in batch]
 

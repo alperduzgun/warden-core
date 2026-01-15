@@ -2,8 +2,6 @@
 Tests for warden.mcp.ports.tool_executor
 """
 
-import pytest
-from warden.mcp.ports import tool_executor
 
 def test_tool_executor_placeholder():
     """Placeholder test for tool_executor."""

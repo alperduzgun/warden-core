@@ -31,7 +31,7 @@ from warden.validation.domain.enums import (
     FramePriority,
     FrameScope,
 )
-from warden.shared.domain.project_context import ProjectContext, ModuleInfo
+from warden.shared.domain.project_context import ProjectContext
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)

@@ -11,7 +11,6 @@ from typing import List, Optional, Any
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
 from warden.validation.domain.frame import CodeFile
-from warden.llm.factory import create_client
 
 logger = structlog.get_logger()
 

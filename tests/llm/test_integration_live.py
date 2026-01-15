@@ -11,14 +11,12 @@ Usage:
 
 import pytest
 import os
-import asyncio
 from warden.llm import (
     LlmProvider,
     LlmRequest,
     LlmConfiguration,
     ProviderConfig,
     create_client,
-    AnalysisResult,
     ANALYSIS_SYSTEM_PROMPT,
     generate_analysis_request
 )
@@ -123,7 +121,7 @@ def get_user(user_id):
         for issue in issues
     )
 
-    print(f"\n✅ Code Analysis Complete:")
+    print("\n✅ Code Analysis Complete:")
     print(f"   Score: {result_data['score']}/10")
     print(f"   Confidence: {result_data['confidence']}")
     print(f"   Issues Found: {len(issues)}")

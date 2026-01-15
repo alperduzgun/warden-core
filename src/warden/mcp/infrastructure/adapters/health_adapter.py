@@ -90,7 +90,6 @@ class HealthAdapter(BaseWardenAdapter):
 
     async def _get_server_status_async(self) -> MCPToolResult:
         """Get detailed server status."""
-        import os
         import sys
 
         uptime = (datetime.now() - self._start_time).total_seconds()

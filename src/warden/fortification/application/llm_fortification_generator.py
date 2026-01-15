@@ -6,12 +6,10 @@ Generates intelligent security fixes and suggestions.
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
-    LLMPhaseConfig,
     PromptTemplates,
 )
 from warden.shared.infrastructure.logging import get_logger

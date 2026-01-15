@@ -13,7 +13,6 @@ from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.pipeline.domain.models import (
     PipelineConfig,
     FrameResult,
-    FrameRules,
     ValidationPipeline,
 )
 from warden.pipeline.domain.enums import ExecutionStrategy
@@ -432,12 +431,25 @@ class FrameExecutor:
                     
                 try:
                     # frames usually return FrameResult
-                    return await frame.execute_async(c_file)
+                    result = await frame.execute_async(c_file)
+                    
+                    if self.progress_callback:
+                        self.progress_callback("progress_update", {
+                            "increment": 1,
+                            "frame_id": frame.frame_id,
+                            "file": c_file.path
+                        })
+                    return result
                 except Exception as ex:
                     logger.error("frame_file_execution_error", 
                                 frame=frame.frame_id, 
                                 file=c_file.path, 
                                 error=str(ex))
+                    if self.progress_callback:
+                        self.progress_callback("progress_update", {
+                            "increment": 1,
+                            "error": True
+                        })
                     return None
 
             if code_files:
@@ -467,6 +479,14 @@ class FrameExecutor:
                 if cached_files > 0:
                      log_func = logger.info if len(files_to_scan) > 0 else logger.debug
                      log_func("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
+                     
+                     # Update progress for cached files
+                     if self.progress_callback:
+                         self.progress_callback("progress_update", {
+                             "increment": cached_files,
+                             "frame_id": frame.frame_id,
+                             "details": f"Skipped {cached_files} cached files"
+                         })
                 
                 if not files_to_scan:
                      logger.debug("all_files_cached_skipping_batch", frame=frame.frame_id)
@@ -493,6 +513,13 @@ class FrameExecutor:
                             for res in f_results:
                                 if res and res.findings:
                                     frame_findings.extend(res.findings)
+                            
+                            # Update progress for scanned batch
+                            if self.progress_callback:
+                                self.progress_callback("progress_update", {
+                                    "increment": files_scanned,
+                                    "frame_id": frame.frame_id
+                                })
                                     
                     except asyncio.TimeoutError:
                         logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)

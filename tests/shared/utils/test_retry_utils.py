@@ -1,7 +1,6 @@
 
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from warden.shared.utils.retry_utils import async_retry
 
 @pytest.mark.asyncio

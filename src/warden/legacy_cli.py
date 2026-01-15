@@ -18,7 +18,6 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich import print as rprint
 
 # Internal imports
 from warden.cli_bridge.bridge import WardenBridge
@@ -140,7 +139,6 @@ def scan(
     Run the full Warden pipeline on a file or directory.
     """
     # We defer import to avoid slow startup for other commands
-    from warden.shared.infrastructure.logging import get_logger
     
     # Run async scan function
     try:
@@ -155,7 +153,7 @@ def scan(
 async def _run_scan_async(path: str, frames: Optional[List[str]], verbose: bool) -> int:
     """Async implementation of scan command."""
     
-    console.print(f"[bold cyan]🛡️  Warden Scanner[/bold cyan]")
+    console.print("[bold cyan]🛡️  Warden Scanner[/bold cyan]")
     console.print(f"[dim]Scanning: {path}[/dim]\n")
 
     # Initialize bridge
@@ -225,10 +223,10 @@ async def _run_scan_async(path: str, frames: Optional[List[str]], verbose: bool)
                 console.print("\n", table)
                 
                 if res.get('status') == 'success':
-                    console.print(f"\n[bold green]✨ Scan Succeeded![/bold green]")
+                    console.print("\n[bold green]✨ Scan Succeeded![/bold green]")
                     return 0
                 else:
-                    console.print(f"\n[bold red]💥 Scan Failed![/bold red]")
+                    console.print("\n[bold red]💥 Scan Failed![/bold red]")
                     return 1
 
         return 0
@@ -319,7 +317,6 @@ async def _run_spec_analyze(
 ) -> int:
     """Async implementation of spec analyze."""
     from warden.validation.frames.spec import (
-        SpecFrame,
         GapAnalyzer,
         GapSeverity,
         PlatformConfig,
@@ -619,7 +616,7 @@ async def _run_spec_extract(
         return 1
 
     # Show results
-    console.print(f"\n[green]✓ Extraction complete[/green]")
+    console.print("\n[green]✓ Extraction complete[/green]")
     console.print(f"  Operations: [cyan]{len(contract.operations)}[/cyan]")
     console.print(f"  Models: [cyan]{len(contract.models)}[/cyan]")
     console.print(f"  Enums: [cyan]{len(contract.enums)}[/cyan]")

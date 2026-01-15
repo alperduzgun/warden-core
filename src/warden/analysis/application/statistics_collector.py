@@ -5,7 +5,7 @@ Collects statistical information about the project during PRE-ANALYSIS phase.
 """
 
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Any
+from typing import Dict, List, Optional
 import structlog
 
 from warden.analysis.domain.project_context import ProjectStatistics

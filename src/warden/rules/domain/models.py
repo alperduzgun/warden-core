@@ -6,7 +6,7 @@ All models are Panel-compatible with JSON serialization (camelCase).
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import Field, ConfigDict
+from pydantic import Field
 from warden.rules.domain.enums import RuleCategory, RuleSeverity
 from warden.shared.domain.base_model import BaseDomainModel
 

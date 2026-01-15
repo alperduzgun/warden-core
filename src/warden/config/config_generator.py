@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import yaml
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 import structlog
 

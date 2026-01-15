@@ -13,7 +13,7 @@ Version: 1.0.0
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -21,7 +21,6 @@ from warden.validation.frames.spec.models import (
     Contract,
     ContractGap,
     EnumDefinition,
-    FieldDefinition,
     GapSeverity,
     ModelDefinition,
     OperationDefinition,

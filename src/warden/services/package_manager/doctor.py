@@ -1,9 +1,7 @@
-import os
 import sys
 import shutil
-import subprocess
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import Tuple
 import yaml
 from enum import Enum, auto
 from rich.console import Console
@@ -104,7 +102,7 @@ class WardenDoctor:
                 msg = err['msg']
                 error_details.append(f"{loc}: {msg}")
             
-            return CheckStatus.ERROR, f"Configuration Schema Error:\n" + "\n".join(f"    - {d}" for d in error_details)
+            return CheckStatus.ERROR, "Configuration Schema Error:\n" + "\n".join(f"    - {d}" for d in error_details)
             
         except ImportError:
              return CheckStatus.WARNING, "Pydantic not available. Skipping schema validation."

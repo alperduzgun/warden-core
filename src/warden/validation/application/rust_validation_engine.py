@@ -19,7 +19,7 @@ except ImportError:
     RUST_AVAILABLE = False
 
 from warden.validation.domain.frame import Finding
-from warden.rules.domain.models import CustomRule, CustomRuleViolation
+from warden.rules.domain.models import CustomRule
 
 logger = structlog.get_logger(__name__)
 

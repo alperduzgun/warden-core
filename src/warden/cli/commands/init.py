@@ -2,13 +2,11 @@ import typer
 import subprocess
 import asyncio
 import json
-import os
 import sys
 import yaml
 from pathlib import Path
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
-from warden.cli.utils import get_installed_version
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 from warden.cli.commands.install import install as run_install
 from warden.cli.commands.init_helpers import configure_llm, configure_vector_db
@@ -99,7 +97,7 @@ def _setup_semantic_search(config_path: Path):
                  return
 
              try:
-                 with console.status(f"[bold green]Indexing {len(files)} files... (Ctrl+C to skip)[/bold green]") as spinner:
+                 with console.status(f"[bold green]Indexing {len(files)} files... (Ctrl+C to skip)[/bold green]"):
                     await service.index_project(Path.cwd(), files)
                  console.print(f"[green]✓ Semantic Index Ready ({len(files)} files)[/green]")
              except KeyboardInterrupt:
@@ -123,8 +121,8 @@ def _setup_semantic_search(config_path: Path):
                   else:
                       console.print("[red]Service unavailable even after install.[/red]")
                       
-              except subprocess.CalledProcessError as e:
-                   console.print(f"[red]Dependency installation failed.[/red]")
+              except subprocess.CalledProcessError:
+                   console.print("[red]Dependency installation failed.[/red]")
                    console.print("[dim]Please run manually: pip install 'warden-core[semantic]'[/dim]")
               except KeyboardInterrupt:
                    console.print("\n[yellow]⚠️  Installation skipped by user.[/yellow]")
@@ -132,7 +130,7 @@ def _setup_semantic_search(config_path: Path):
                   console.print(f"[red]Installation error: {e}[/red]")
 
     except Exception as e:
-        console.print(f"\n[red]❌ Semantic Indexing Failed[/red]")
+        console.print("\n[red]❌ Semantic Indexing Failed[/red]")
         console.print(f"[red]Error: {str(e)}[/red]")
         console.print("[yellow]💡 Suggestion: Run 'warden index' manually to see detailed errors.[/yellow]")
         console.print("[dim]The project is initialized, but AI features (Orphan/Purpose) may be limited until fixed.[/dim]")

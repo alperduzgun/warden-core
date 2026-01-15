@@ -6,9 +6,8 @@ to identify which files are impacted by changes in their dependencies.
 """
 
 from pathlib import Path
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set
 import structlog
-import asyncio
 
 from warden.analysis.domain.project_context import ProjectContext
 from warden.ast.application.provider_registry import ASTProviderRegistry

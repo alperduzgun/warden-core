@@ -228,7 +228,7 @@ def configure_agent_tools(project_root: Path) -> None:
                     data["mcpServers"] = {}
                 
                 # Check if warden exists or needs update
-                current_config = data["mcpServers"].get("warden")
+                data["mcpServers"].get("warden")
                 
                 # Update if missing or root is different (simple overwrite strategy for now)
                 # Ideally we want to support multiple projects. 

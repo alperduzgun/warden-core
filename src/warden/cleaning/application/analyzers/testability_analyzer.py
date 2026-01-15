@@ -10,9 +10,8 @@ Analyzes code testability and test coverage potential:
 """
 
 import ast
-import re
 import structlog
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
@@ -337,7 +336,6 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         issues = []
         test_count = 0
         assertion_count = 0
-        mock_usage = 0
 
         for node in ast.walk(tree):
             # Count test functions

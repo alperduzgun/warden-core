@@ -5,7 +5,6 @@ Immutable value objects for protocol values.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)

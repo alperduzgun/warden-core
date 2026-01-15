@@ -5,9 +5,6 @@ This file demonstrates architectural anti-patterns that the
 Architectural Frame should detect.
 """
 
-import os
-import json
-import requests
 
 
 # 🔴 GOD CLASS - Too many responsibilities

@@ -10,10 +10,8 @@ Logic:
 3. Entropy/Format: (Future) Check if the secret looks random enough.
 """
 
-from typing import List, Dict, Set, Any
-from pathlib import Path
+from typing import List, Dict, Any
 import os
-import math
 
 from warden.validation.domain.frame import Finding, CodeFile
 from warden.shared.infrastructure.logging import get_logger

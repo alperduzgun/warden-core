@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any, Callable, Set
 import structlog
 import hashlib
 from datetime import datetime
-from warden.analysis.application.integrity_scanner import IntegrityScanner, IntegrityIssue
+from warden.analysis.application.integrity_scanner import IntegrityScanner
 
 from warden.analysis.domain.file_context import (
     FileContext,
@@ -314,7 +314,6 @@ class PreAnalysisPhase:
         try:
             from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer
             from warden.llm.config import load_llm_config_async
-            from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
 
             # Load LLM configuration
             llm_config = await load_llm_config_async()
@@ -562,7 +561,7 @@ class PreAnalysisPhase:
             FileContextInfo for the file
         """
         # Run analysis in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
+        asyncio.get_event_loop()
         
         # Calculate content hash (PRE-ANALYSIS step)
         content_hash = self._calculate_file_hash(code_file.content, code_file.path)

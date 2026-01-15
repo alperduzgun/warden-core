@@ -8,8 +8,7 @@ with the Ink CLI.
 import asyncio
 import sys
 import os
-from pathlib import Path
-from typing import Optional, Callable, Awaitable, Any, Dict
+from typing import Optional, Any, Dict
 import signal
 
 from warden.cli_bridge.protocol import (
@@ -17,7 +16,6 @@ from warden.cli_bridge.protocol import (
     IPCResponse,
     IPCError,
     ErrorCode,
-    StreamChunk,
 )
 from warden.shared.utils.retry_utils import async_retry as retry_async
 

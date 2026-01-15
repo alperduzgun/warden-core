@@ -21,7 +21,7 @@ Version: 1.0.0
 
 import re
 from pathlib import Path
-from typing import List, Optional, Set, Dict, Tuple
+from typing import List, Optional, Set
 
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
@@ -34,7 +34,6 @@ from warden.validation.frames.spec.models import (
     FieldDefinition,
     EnumDefinition,
     PlatformType,
-    PlatformRole,
     OperationType,
 )
 from warden.ast.domain.enums import CodeLanguage

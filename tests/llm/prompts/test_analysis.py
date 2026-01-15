@@ -2,8 +2,6 @@
 Tests for warden.llm.prompts.analysis
 """
 
-import pytest
-from warden.llm.prompts import analysis
 
 def test_analysis_placeholder():
     """Placeholder test for analysis."""

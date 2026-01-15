@@ -51,7 +51,7 @@ def main():
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"Error generating gRPC code:")
+        print("Error generating gRPC code:")
         print(result.stderr)
         sys.exit(1)
 

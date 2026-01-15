@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import Field
 from enum import Enum
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional
 
 from warden.shared.domain.base_model import BaseDomainModel
 

@@ -1,6 +1,5 @@
 from pathlib import Path
 import shutil
-import shutil # duplicate import removal
 from importlib.metadata import version
 
 def get_installed_version() -> str:

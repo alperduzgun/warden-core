@@ -8,7 +8,6 @@ Tests coverage:
 - Panel JSON serialization/deserialization
 """
 
-import pytest
 from warden.suppression.models import (
     SuppressionType,
     SuppressionEntry,

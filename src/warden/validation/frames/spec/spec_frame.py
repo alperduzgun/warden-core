@@ -51,7 +51,6 @@ from warden.validation.frames.spec.models import (
     PlatformConfig,
     PlatformRole,
     ContractGap,
-    GapSeverity,
     SpecAnalysisResult,
 )
 from warden.validation.frames.spec.extractors.base import (

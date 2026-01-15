@@ -4,14 +4,14 @@ Pipeline domain models.
 Core entities for validation pipeline orchestration.
 """
 
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from uuid import uuid4
 
 from pydantic import Field
 from warden.shared.domain.base_model import BaseDomainModel
 from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy, AnalysisLevel
-from warden.validation.domain.frame import ValidationFrame, FrameResult
+from warden.validation.domain.frame import FrameResult
 from warden.rules.domain.models import CustomRule, FrameRules
 
 
