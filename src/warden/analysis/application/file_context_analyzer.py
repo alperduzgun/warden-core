@@ -7,7 +7,7 @@ for false positive prevention and context-aware analysis.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 import structlog
 
 from warden.analysis.domain.file_context import (
@@ -16,6 +16,9 @@ from warden.analysis.domain.file_context import (
     ContextWeights,
 )
 from warden.analysis.domain.project_context import ProjectContext
+
+if TYPE_CHECKING:
+    from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer
 
 logger = structlog.get_logger()
 
