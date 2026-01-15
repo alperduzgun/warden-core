@@ -3,7 +3,6 @@ TRIAGE Phase Orchestrator (Phase 0.5).
 Executes the Adaptive Hybrid Triage strategy.
 """
 
-import asyncio
 import time
 from typing import List, Dict, Any, Optional, Callable
 import structlog

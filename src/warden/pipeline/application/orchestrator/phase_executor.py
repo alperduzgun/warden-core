@@ -17,7 +17,6 @@ from warden.pipeline.application.executors.pre_analysis_executor import PreAnaly
 from warden.pipeline.application.executors.analysis_executor import AnalysisExecutor
 from warden.pipeline.application.executors.classification_executor import ClassificationExecutor
 from warden.pipeline.application.executors.fortification_executor import FortificationExecutor
-from warden.pipeline.application.executors.fortification_executor import FortificationExecutor
 from warden.pipeline.application.executors.cleaning_executor import CleaningExecutor
 from warden.analysis.application.triage_phase import TriagePhase # Phase 0.5
 

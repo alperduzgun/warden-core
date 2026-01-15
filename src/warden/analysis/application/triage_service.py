@@ -7,9 +7,8 @@ import json
 import time
 import re
 import structlog
-from typing import Optional
 
-from warden.llm.types import LlmRequest, LlmProvider
+from warden.llm.types import LlmRequest
 from warden.llm.providers.base import ILlmClient
 from warden.validation.domain.frame import CodeFile
 from warden.analysis.domain.triage_models import RiskScore, TriageLane, TriageDecision

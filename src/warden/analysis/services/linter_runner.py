@@ -11,7 +11,7 @@ import subprocess
 import json
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional, Tuple
 
 from warden.shared.infrastructure.logging import get_logger
 
