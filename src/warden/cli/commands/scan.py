@@ -132,6 +132,30 @@ def _display_llm_summary(metrics: dict):
                     console.print(f"      → {rec}")
 
 
+def _display_memory_stats(snapshot) -> None:
+    """Display memory profiling statistics."""
+    console.print("\n[bold cyan]🧠 Memory Profiling Results[/bold cyan]")
+    
+    # Get top 10 memory consumers
+    top_stats = snapshot.statistics('lineno')[:10]
+    
+    console.print("\n[bold]Top 10 Memory Allocations:[/bold]")
+    for index, stat in enumerate(top_stats, 1):
+        console.print(f"  {index}. {stat.traceback.format()[0]}")
+        console.print(f"     Size: {stat.size / 1024 / 1024:.2f} MB ({stat.count} blocks)")
+    
+    # Total memory usage
+    total = sum(stat.size for stat in snapshot.statistics('filename'))
+    console.print(f"\n[bold]Total Memory Usage:[/bold] {total / 1024 / 1024:.2f} MB")
+    
+    # Check for potential leaks (allocations > 10MB)
+    large_allocations = [s for s in top_stats if s.size > 10 * 1024 * 1024]
+    if large_allocations:
+        console.print(f"\n[yellow]⚠️  Potential Memory Leaks Detected:[/yellow]")
+        for stat in large_allocations:
+            console.print(f"  - {stat.traceback.format()[0]}: {stat.size / 1024 / 1024:.2f} MB")
+
+
 def scan_command(
     ctx: typer.Context,
     paths: List[str] = typer.Argument(None, help="Paths to scan (files or directories). Defaults to ."),
@@ -141,11 +165,18 @@ def scan_command(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Shorthand for --level basic"),
+    memory_profile: bool = typer.Option(False, "--memory-profile", help="Enable memory profiling and leak detection"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
     """
     # We defer import to avoid slow startup for other commands
+    
+    # Start memory profiling if requested
+    if memory_profile:
+        import tracemalloc
+        tracemalloc.start()
+        console.print("[dim]🧠 Memory profiling enabled[/dim]\n")
     
     # Run async scan function
     try:
@@ -157,7 +188,15 @@ def scan_command(
         if not paths:
             paths = ["."]
 
-        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level))
+        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level, memory_profile))
+        
+        # Display memory stats if profiling was enabled
+        if memory_profile:
+            import tracemalloc
+            snapshot = tracemalloc.take_snapshot()
+            _display_memory_stats(snapshot)
+            tracemalloc.stop()
+        
         if exit_code != 0:
             raise typer.Exit(exit_code)
     except KeyboardInterrupt:
@@ -165,7 +204,7 @@ def scan_command(
         raise typer.Exit(130)
 
 
-async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard") -> int:
+async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard", memory_profile: bool = False) -> int:
     """Async implementation of scan command."""
     
     display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
