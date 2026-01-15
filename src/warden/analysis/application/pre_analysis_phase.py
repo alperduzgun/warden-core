@@ -575,6 +575,9 @@ class PreAnalysisPhase:
         # Calculate content hash (PRE-ANALYSIS step)
         content_hash = self._calculate_file_hash(code_file.content, code_file.path)
         
+        # Populate CodeFile hash for downstream phases (Caching)
+        code_file.hash = content_hash
+        
         # Normalize path to relative for memory portability (CI vs Local)
         try:
             rel_path = str(Path(code_file.path).relative_to(self.project_root))
