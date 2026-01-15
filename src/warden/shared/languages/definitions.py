@@ -2,7 +2,7 @@
 Language definitions and metadata.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import List, Optional, Set
 from pydantic import BaseModel, Field
 from warden.ast.domain.enums import CodeLanguage
 

@@ -5,19 +5,13 @@ Provides a unified interface for code quality tools (Ruff, Biome, etc.).
 Designed for resilience, performance, and detailed reporting.
 """
 
-import abc
 import asyncio
-import json
-import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Union
+from typing import Any, Dict, List, Optional, Protocol
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import Finding, CodeFile
-from warden.validation.domain.enums import FindingCategory
-from warden.pipeline.domain.enums import FindingSeverity
 from warden.analysis.domain.project_context import ProjectContext
 from warden.ast.domain.enums import CodeLanguage
 
