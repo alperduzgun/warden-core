@@ -53,38 +53,41 @@ class TriagePhase:
 
         decisions = {}
         
-        # Parallel execution with Semaphore to avoid overwhelming Local LLM
-        # Default to 5 concurrent reqs (usually safe for Ollama)
-        parallel_limit = self.config.get("triage_parallel_limit", 5)
-        semaphore = asyncio.Semaphore(parallel_limit)
+        # Use Batch Processing
+        logger.info("triage_batch_processing_started", total_files=len(code_files))
         
-        async def process_file(file: CodeFile):
-            async with semaphore:
-                try:
-                    decision = await self.triage_service.assess_risk_async(file)
-                    return file.path, decision
-                except Exception as e:
-                    logger.error("triage_file_failed", file=file.path, error=str(e))
-                    # Fallback decision (Middle lane as safe default)
+        try:
+            # Batch API handles grouping internally
+            decisions_map = await self.triage_service.batch_assess_risk_async(code_files)
+            
+            # Convert to dict format expected by context
+            for path, decision in decisions_map.items():
+                decisions[str(path)] = decision.model_dump()
+                
+            # Handle any files that might have been missed (should be rare with fallback)
+            for file in code_files:
+                if str(file.path) not in decisions:
+                    logger.warning("triage_missed_file", file=file.path)
                     fallback = TriageDecision(
                         file_path=str(file.path),
                         lane=TriageLane.MIDDLE,
-                        risk_score=RiskScore(
-                            score=5, 
-                            confidence=0.0, 
-                            reasoning=f"Error fallback: {str(e)}", 
-                            category="error"
-                        ),
-                        processing_time_ms=0.0
+                        risk_score=RiskScore(score=5, confidence=0, reasoning="Missed in batch", category="error"),
+                        processing_time_ms=0
                     )
-                    return file.path, fallback
+                    decisions[str(file.path)] = fallback.model_dump()
 
-        tasks = [process_file(f) for f in code_files]
-        if tasks:
-            results = await asyncio.gather(*tasks)
-            
-            for path, decision in results:
-                decisions[str(path)] = decision.model_dump()
+        except Exception as e:
+            logger.error("triage_phase_batch_failed", error=str(e))
+            # Critical fallback for phase failure
+            for file in code_files:
+                 fallback = TriageDecision(
+                        file_path=str(file.path),
+                        lane=TriageLane.MIDDLE,
+                        risk_score=RiskScore(score=5, confidence=0, reasoning=f"Phase Error: {str(e)}", category="error"),
+                        processing_time_ms=0
+                    )
+                 decisions[str(file.path)] = fallback.model_dump()
+
         
         # Update pipeline context
         pipeline_context.triage_decisions = decisions

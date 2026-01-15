@@ -87,10 +87,15 @@ class AnalysisPhase:
         # Initialize Metrics Aggregator
         self.metrics_aggregator = MetricsAggregator(self.weights)
 
+        # Caching
+        self._cache_file = self.project_root / ".warden" / "cache" / "analysis_metrics.json"
+        self._cache_data = self._load_cache()
+
         logger.info(
             "analysis_phase_initialized",
             analyzer_count=len(self.analyzers),
             weights=self.weights,
+            cached_entries=len(self._cache_data)
         )
 
     def _get_default_config(self) -> Dict[str, Any]:
@@ -114,88 +119,135 @@ class AnalysisPhase:
             "testability": 0.10,
         }
 
+    def _load_cache(self) -> Dict[str, Any]:
+        """Load analysis cache."""
+        try:
+            if self._cache_file.exists():
+                import json
+                return json.loads(self._cache_file.read_text())
+        except Exception as e:
+            logger.warning("analysis_cache_load_failed", error=str(e))
+        return {}
+
+    def _save_cache(self):
+        """Save analysis cache."""
+        try:
+            import json
+            self._cache_file.parent.mkdir(parents=True, exist_ok=True)
+            self._cache_file.write_text(json.dumps(self._cache_data, indent=2))
+        except Exception as e:
+            logger.warning("analysis_cache_save_failed", error=str(e))
+
+    def _get_cached_result(self, code_file: CodeFile) -> Optional[Dict[str, Any]]:
+        """Retrieve cached result if valid."""
+        if not code_file.hash:
+            return None
+            
+        cached = self._cache_data.get(code_file.path)
+        if cached and cached.get("hash") == code_file.hash:
+            # Validate schema version if needed, for now trust it
+            return cached.get("result")
+        return None
+
+    def _update_cache(self, code_file: CodeFile, result: Dict[str, Any]):
+        """Update cache with new result."""
+        if not code_file.hash:
+            return
+            
+        self._cache_data[code_file.path] = {
+            "hash": code_file.hash,
+            "timestamp": time.time(),
+            "result": result
+        }
+
     async def execute_async(
         self,
         code_files: List[CodeFile],
         pipeline_context: Optional[Any] = None,
-        impacted_files: Optional[List[str]] = None,
     ) -> QualityMetrics:
         """
-        Execute analysis phase on code files.
+        Execute analysis phase.
 
         Args:
             code_files: List of code files to analyze
-            pipeline_context: Optional pipeline context with cached ASTs
-            impacted_files: Optional list of impacted files
+            pipeline_context: Pipeline context
 
         Returns:
-            QualityMetrics with comprehensive scoring
-
-        Raises:
-            ValidationError: If analysis fails
+            QualityMetrics object
         """
-        # Filter files based on ignore matcher
-        original_count = len(code_files)
+        # Filter handled files
         code_files = [
-            cf for cf in code_files 
-            if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "analysis")
+            f for f in code_files
+            if not self.ignore_matcher.is_ignored(f.path)
         ]
-        
-        if len(code_files) < original_count:
-            logger.info(
-                "analysis_phase_files_ignored",
-                ignored=original_count - len(code_files),
-                remaining=len(code_files)
-            )
 
         if not code_files:
             return QualityMetrics()
 
         start_time = time.perf_counter()
+        
+        # Check cache
+        files_to_analyze = []
+        all_results = {}
+        cached_count = 0
+        
+        for cf in code_files:
+            cached_res = self._get_cached_result(cf)
+            if cached_res:
+                all_results[cf.path] = cached_res
+                cached_count += 1
+            else:
+                files_to_analyze.append(cf)
 
         logger.info(
             "analysis_phase_started",
-            file_count=len(code_files),
+            total_files=len(code_files),
+            cached_files=cached_count,
+            files_to_analyze=len(files_to_analyze)
         )
 
         # Notify progress callback
         if self.progress_callback:
             self.progress_callback("progress_init", {
-                "total_units": len(code_files),
+                "total_units": len(files_to_analyze), # Only report work to be done
                 "phase": "ANALYSIS"
             })
 
         try:
-            # Limit concurrency to prevent system overload (340+ files * 7 analyzers = 2000+ tasks)
-            # Use CPU-bound friendly limit: min(CPUs, 8)
-            import os
-            concurrency_limit = min(os.cpu_count() or 4, 8)
-            semaphore = asyncio.Semaphore(concurrency_limit) 
-            
-            logger.info("analysis_concurrency_set", limit=concurrency_limit)
-            
-            async def analyze_with_limit(cf):
-                async with semaphore:
-                    result = await self._analyze_file_async(cf, pipeline_context)
-                    if self.progress_callback:
-                        self.progress_callback("progress_update", {
-                            "increment": 1,
-                            "phase": "ANALYSIS",
-                            "file": cf.path
-                        })
-                    return result
-
-            # Run all analyzers in parallel for all files with semi-concurrency
-            tasks = [analyze_with_limit(cf) for cf in code_files]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            all_results = {}
-            for cf, res in zip(code_files, results):
-                if isinstance(res, Exception):
-                    logger.error("file_analysis_failed", file=cf.path, error=str(res))
-                    all_results[cf.path] = {}
-                else:
-                    all_results[cf.path] = res
+            if files_to_analyze:
+                # Limit concurrency to prevent system overload (340+ files * 7 analyzers = 2000+ tasks)
+                # Use CPU-bound friendly limit: min(CPUs, 8)
+                import os
+                concurrency_limit = min(os.cpu_count() or 4, 8)
+                semaphore = asyncio.Semaphore(concurrency_limit) 
+                
+                logger.info("analysis_concurrency_set", limit=concurrency_limit)
+                
+                async def analyze_with_limit(cf):
+                    async with semaphore:
+                        result = await self._analyze_file_async(cf, pipeline_context)
+                        if self.progress_callback:
+                            self.progress_callback("progress_update", {
+                                "increment": 1,
+                                "phase": "ANALYSIS",
+                                "file": cf.path
+                            })
+                        return result
+    
+                # Run all analyzers in parallel for all files with semi-concurrency
+                tasks = [analyze_with_limit(cf) for cf in files_to_analyze]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for cf, res in zip(files_to_analyze, results):
+                    if isinstance(res, Exception):
+                        logger.error("file_analysis_failed", file=cf.path, error=str(res))
+                        all_results[cf.path] = {}
+                    else:
+                        all_results[cf.path] = res
+                        self._update_cache(cf, res)
+                
+                # Save cache after processing
+                self._save_cache()
 
             # Aggregate results using MetricsAggregator
             metrics = self.metrics_aggregator.aggregate(all_results)

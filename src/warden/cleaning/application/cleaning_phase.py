@@ -136,6 +136,9 @@ class CleaningPhase:
         all_refactorings = []
         all_suggestions = []
 
+        files_for_llm = []
+        rule_based_suggestions = {}
+
         # Analyze each file for improvements
         for code_file in code_files:
             # Skip non-production files based on context
@@ -151,7 +154,7 @@ class CleaningPhase:
                 if context_type in ["TEST", "EXAMPLE", "DOCUMENTATION"]:
                     continue
 
-            # Run specialized cleaning orchestrator
+            # Run specialized cleaning orchestrator (Rule-Based, Fast)
             res = await orchestrator.analyze_async(code_file)
             all_suggestions.extend(res.suggestions)
             
@@ -164,7 +167,6 @@ class CleaningPhase:
                 ))
 
             # Heuristic: Skip LLM cleaning if code quality is already Good/Excellent (>7.0)
-            # This saves quota on files that are already in good shape.
             skip_llm_for_quality = False
             phase_results = self.context.get("phase_results", {}) if isinstance(self.context, dict) else getattr(self.context, "phase_results", {})
             file_metrics = phase_results.get("ANALYSIS", {}).get("metrics", {}).get(code_file.path)
@@ -174,16 +176,30 @@ class CleaningPhase:
                 if overall_score >= 7.0:
                     skip_llm_for_quality = True
                     logger.info("skipping_llm_cleaning_high_quality", file=code_file.path, score=overall_score)
-
-            # Legacy rule-based/llm suggestions
+            
             if self.use_llm and not skip_llm_for_quality:
-                logger.debug("generating_llm_cleaning_suggestions", file=code_file.path)
-                suggestions = await self._generate_llm_suggestions_async(code_file)
+                files_for_llm.append(code_file)
             else:
-                if self.use_llm and skip_llm_for_quality:
-                    logger.debug("falling_back_to_rules_due_to_high_quality", file=code_file.path)
-                suggestions = await self._generate_rule_based_suggestions_async(code_file)
+                 # If skipping LLM or LLM disabled, run rule-based fallback immediately/lazily?
+                 # Actually orchestrator.analyze_async does some rule based stuff, but _generate_rule_based_suggestions_async does MORE.
+                 # Let's collecting them for batch processing to avoid confusion, or run here?
+                 # Running here is fine as it's CPU bound and fast.
+                 if not self.use_llm and skip_llm_for_quality:
+                     logger.debug("falling_back_to_rules_due_to_high_quality", file=code_file.path)
+                 
+                 sugs = await self._generate_rule_based_suggestions_async(code_file)
+                 rule_based_suggestions[code_file.path] = sugs
 
+        # Batch Process LLM Suggestions
+        llm_suggestions_map = {}
+        if files_for_llm and self.llm_generator:
+            logger.info("cleaning_batch_llm_start", count=len(files_for_llm))
+            llm_suggestions_map = await self.llm_generator.generate_batch_suggestions_async(files_for_llm)
+        
+        # Merge Results
+        for code_file in code_files:
+            suggestions = llm_suggestions_map.get(code_file.path) or rule_based_suggestions.get(code_file.path) or {}
+            
             for sug in suggestions.get("cleanings", []):
                 all_cleanings.append(Cleaning(
                     id=f"leg-clean-{len(all_cleanings)}",

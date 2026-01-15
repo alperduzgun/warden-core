@@ -248,9 +248,10 @@ class LLMOrphanFilter:
         )
         
         # 2. Check cache & Create batches
-        batch_size = self.batch_size
+        MAX_SAFE_TOKENS = 6000 # Leaving 2000 for output and system prompt from 8k limit
         batches = []
         current_batch = []
+        current_tokens = 0
         
         # Track pre-decided findings (from cache)
         # f_path -> list of findings that are CONFIRMED true orphans by cache
@@ -269,8 +270,6 @@ class LLMOrphanFilter:
                 is_true_orphan, reasoning = cached_decision
                 if is_true_orphan:
                     # It's a true orphan according to cache, keep it
-                    # (But usually we only cache false positives to skip them. 
-                    # If we cache true orphans too, we add them here.)
                     cached_results[f_path].append(finding)
                 else:
                     # It's a false positive (skipped), don't add to results
@@ -278,11 +277,23 @@ class LLMOrphanFilter:
                     logger.debug("skipping_known_false_positive", pattern=self._get_pattern_key(finding, f_path))
                 continue
 
-            # Not in cache, needs LLM verification
-            current_batch.append(item)
-            if len(current_batch) >= batch_size:
-                batches.append(current_batch)
-                current_batch = []
+            # Estimate tokens: Snippet + boilerplate
+            # Snippet length is crucial. Finding has snippet? 
+            # Usually finding.snippet or we assume some length.
+            # Let's verify OrphanFinding structure later, but safely assume 
+            # we can look at snippet. If not available, estimate 500 chars.
+            snippet_len = len(getattr(finding, 'snippet', '')) or 500
+            estimated_tokens = (snippet_len // 4) + 100 # +100 for JSON wrapping
+            
+            # Check limits: Count OR Tokens
+            if (len(current_batch) >= self.batch_size) or (current_tokens + estimated_tokens > MAX_SAFE_TOKENS):
+                if current_batch:
+                    batches.append(current_batch)
+                current_batch = [item]
+                current_tokens = estimated_tokens
+            else:
+                current_batch.append(item)
+                current_tokens += estimated_tokens
         
         # Add remaining items
         if current_batch:

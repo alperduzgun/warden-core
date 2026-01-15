@@ -108,21 +108,23 @@ class FortificationPhase:
         )
 
         # Filter validated issues based on ignore matcher
-        original_issue_count = len(validated_issues)
-        validated_issues = [
-            issue for issue in validated_issues
+        normalized_issues = []
+        for issue in validated_issues:
+            normalized = self._normalize_issue(issue)
             if not self.ignore_matcher.should_ignore_for_frame(
-                Path(issue.get("file_path", "") if isinstance(issue, dict) else getattr(issue, "file_path", "")), 
+                Path(normalized.get("file_path", "")), 
                 "fortification"
-            )
-        ]
+            ):
+                normalized_issues.append(normalized)
         
-        if len(validated_issues) < original_issue_count:
+        if len(validated_issues) > len(normalized_issues):
              logger.info(
                 "fortification_phase_issues_ignored",
-                ignored=original_issue_count - len(validated_issues),
-                remaining=len(validated_issues)
+                ignored=len(validated_issues) - len(normalized_issues),
+                remaining=len(normalized_issues)
             )
+        
+        validated_issues = normalized_issues
 
         from warden.fortification.application.orchestrator import FortificationOrchestrator
         orchestrator = FortificationOrchestrator(llm_service=self.llm_service)
@@ -417,6 +419,56 @@ class FortificationPhase:
             "issue_id": issue.get("id"),
             "confidence": 0.7,
         }
+
+    def _normalize_issue(self, issue: Any) -> Dict[str, Any]:
+        """
+        Normalize issue to standard dictionary format.
+        
+        Handles:
+        - Dictionary objects
+        - Finding objects
+        - CustomRuleViolation objects (rules/domain/models.py)
+        - Legacy objects with file_path/line_number or file/line
+        """
+        if isinstance(issue, dict):
+            return issue
+            
+        # Convert object to dict logic
+        normalized = {}
+        
+        # safely get attributes
+        def get_attr(obj, attrs, default=None):
+            for attr in attrs:
+                if hasattr(obj, attr):
+                    return getattr(obj, attr)
+            return default
+
+        # ID
+        normalized["id"] = get_attr(issue, ["id", "rule_id", "ruleId"], "unknown")
+        
+        # File Path
+        normalized["file_path"] = get_attr(issue, ["file_path", "file", "path"], "")
+        
+        # Line Number
+        normalized["line_number"] = get_attr(issue, ["line_number", "line"], 0)
+        
+        # Type/Category
+        normalized["type"] = get_attr(issue, ["type", "category", "rule_name", "ruleName"], "issue")
+        if hasattr(normalized["type"], "value"): # Handle Enum
+             normalized["type"] = normalized["type"].value
+             
+        # Severity
+        normalized["severity"] = get_attr(issue, ["severity"], "medium")
+        if hasattr(normalized["severity"], "value"): # Handle Enum
+             normalized["severity"] = normalized["severity"].value.lower()
+             
+        # Message/Description
+        normalized["message"] = get_attr(issue, ["message", "description", "detail"], "")
+        
+        # Source Object (for specialized fixing if needed)
+        # normalized["_source"] = issue 
+        
+        return normalized
 
     def _group_issues_by_type(
         self,
