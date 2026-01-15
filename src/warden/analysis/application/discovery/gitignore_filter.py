@@ -37,7 +37,7 @@ class GitignoreFilter:
             ".git/",
             ".svn/",
             ".hg/",
-            # Dependencies
+            # Dependencies & Ecosystems
             "node_modules/",
             "venv/",
             ".venv/",
@@ -48,6 +48,12 @@ class GitignoreFilter:
             "*.pyc",
             "*.pyo",
             "*.pyd",
+            "ios/Pods/",
+            "Pods/",
+            ".dart_tool/",
+            ".fvm/",
+            ".pub-cache/",
+            ".pub/",
             # Build outputs
             "dist/",
             "build/",
@@ -55,6 +61,7 @@ class GitignoreFilter:
             ".eggs/",
             "target/",
             "out/",
+            "DerivedData/",
             # IDE
             ".idea/",
             ".vscode/",

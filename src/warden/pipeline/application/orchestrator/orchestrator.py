@@ -261,6 +261,13 @@ class PhaseOrchestrator:
             if self.config.enable_pre_analysis:
                 await self.phase_executor.execute_pre_analysis_async(context, code_files)
 
+            # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
+            # Only run if LLM is enabled and level is not BASIC
+            from warden.pipeline.domain.enums import AnalysisLevel
+            if getattr(self.config, 'use_llm', True) and self.config.analysis_level != AnalysisLevel.BASIC:
+                logger.info("phase_enabled", phase="TRIAGE", enabled=True)
+                await self.phase_executor.execute_triage_async(context, code_files)
+
             # Phase 1: ANALYSIS
             if getattr(self.config, 'enable_analysis', True):
                 await self.phase_executor.execute_analysis_async(context, code_files)

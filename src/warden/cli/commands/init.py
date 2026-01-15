@@ -202,8 +202,43 @@ def init_command(
     # PSA stores build tools in context.build_tools
     meta.build_tools = [bt.value for bt in context.build_tools]
     
-    # Suggest frames logic (can be moved to helper or kept here for now)
+    # Suggest frames logic (Dynamic Discovery)
+    # 1. Base Core Frames
     meta.suggested_frames = ["security", "architecturalconsistency", "config", "orphan"]
+    
+    # 2. Dynamic Language-Specific Frames (Registry Search)
+    try:
+        from warden.services.package_manager.registry import RegistryClient
+        registry = RegistryClient()  # Use default paths
+        
+        # Sync if cache is missing (first run)
+        if not registry._catalog_cache:
+            console.print("[dim]Syncing registry for suggestions...[/dim]")
+            asyncio.run(registry.sync())
+            
+        # Get languages to check (fall back to primary if detected is empty)
+        languages_to_check = context.detected_languages or [context.primary_language]
+        
+        # Collect suggestions from all languages
+        found_frames = 0
+        all_suggestions = set()
+        
+        for lang in set(languages_to_check):
+            if not lang or lang == "unknown":
+                continue
+                
+            suggestions = registry.suggest_for_language(lang)
+            if suggestions:
+                for s in suggestions:
+                    all_suggestions.add(s)
+        
+        if all_suggestions:
+            meta.suggested_frames.extend(list(all_suggestions))
+            console.print(f"[dim]Found {len(all_suggestions)} language-specific frames for {', '.join(set(languages_to_check))}[/dim]")
+
+    except Exception as e:
+        console.print(f"[dim yellow]Warning: frame suggestion failed: {e}[/dim yellow]")
+
     if meta.project_type in ["api", "backend", "microservice"]:
          meta.suggested_frames.extend(["stress", "resilience"])
     # Helper to check for CI config files from context.config_files
@@ -215,6 +250,40 @@ def init_command(
     console.print(f"   [green]✓[/green] Language: [cyan]{meta.language}[/cyan]")
     console.print(f"   [green]✓[/green] Framework: [cyan]{', '.join(meta.frameworks) if meta.frameworks else 'None detected'}[/cyan]")
     console.print(f"   [green]✓[/green] Type: [cyan]{meta.project_type}[/cyan]")
+    
+    # Language Distribution Table
+    from rich.table import Table
+    if context.language_breakdown:
+        console.print()
+        table = Table(title="Detected Languages", box=None)
+        table.add_column("Language", style="cyan")
+        table.add_column("Distribution", justify="right", style="magenta")
+        table.add_column("Status", style="dim")
+        
+        from warden.shared.languages.registry import LanguageRegistry
+        from warden.ast.domain.enums import CodeLanguage
+        
+        sorted_stats = sorted(context.language_breakdown.items(), key=lambda x: x[1], reverse=True)
+        for lang_id, percent in sorted_stats:
+            is_included = lang_id in context.detected_languages
+            status = "[green]●[/green] Included" if is_included else "[dim]○ Ignored (<2%)[/dim]"
+            
+            # Get pretty name from registry
+            try:
+                lang_enum = CodeLanguage(lang_id)
+                defn = LanguageRegistry.get_definition(lang_enum)
+                pretty_name = defn.name if defn else lang_id.capitalize()
+            except ValueError:
+                pretty_name = lang_id.capitalize()
+
+            table.add_row(
+                pretty_name, 
+                f"{percent:.1f}%", 
+                status
+            )
+        console.print(table)
+        console.print()
+
     console.print(f"Suggested Frames: {', '.join(meta.suggested_frames)}")
     # The original code had an `except` block here, but with ProjectStructureAnalyzer,
     # we assume it either succeeds or raises an error that should propagate if not handled.

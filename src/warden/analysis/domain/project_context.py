@@ -141,6 +141,8 @@ class BuildTool(Enum):
     UNKNOWN = "unknown"
 
 
+from warden.ast.domain.enums import CodeLanguage
+
 class ProjectStatistics(BaseDomainModel):
     """
     Statistical information about the project.
@@ -156,7 +158,8 @@ class ProjectStatistics(BaseDomainModel):
     documentation_files: int = 0
 
     # Language distribution (language -> file count)
-    language_distribution: Dict[str, int] = Field(default_factory=dict)
+    language_distribution: Dict[CodeLanguage, int] = Field(default_factory=dict)
+    language_bytes: Dict[CodeLanguage, int] = Field(default_factory=dict) # byte counts (GitHub style)
 
     # Directory statistics
     max_depth: int = 0  # Maximum directory depth
@@ -223,6 +226,8 @@ class ProjectContext(BaseDomainModel):
     project_root: str = ""
     project_name: str = ""
     primary_language: str = ""  # e.g., "python", "typescript"
+    detected_languages: List[str] = Field(default_factory=list)  # e.g., ["python", "rust"]
+    language_breakdown: Dict[str, float] = Field(default_factory=dict)  # e.g., {"python": 95.5, "rust": 4.5}
     sdk_versions: Dict[str, str] = Field(default_factory=dict)  # e.g., {"python": "3.11", "node": "18.0"}
 
     # Project characteristics

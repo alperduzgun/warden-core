@@ -348,7 +348,11 @@ async def load_llm_config_async() -> LlmConfiguration:
         configured_providers.append(LlmProvider.OPENROUTER)
 
     # Configure Ollama (Local)
-    ollama_host_secret = secrets.get("OLLAMA_HOST")
+    try:
+        ollama_host_secret = secrets.get("OLLAMA_HOST")
+    except Exception:
+        ollama_host_secret = None
+
     ollama_endpoint = "http://localhost:11434"
     if ollama_host_secret and hasattr(ollama_host_secret, 'found') and ollama_host_secret.found:
         ollama_endpoint = ollama_host_secret.value or ollama_endpoint

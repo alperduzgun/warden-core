@@ -146,10 +146,34 @@ class FrameExecutor:
                 
                 if global_violations:
                     logger.info("global_rules_found_violations", count=len(global_violations))
+                    
+                    # Virtual Frame Attribution for ghost issues
+                    frame_id = "global_script_rules"
+                    frame_result = FrameResult(
+                        frame_id=frame_id,
+                        frame_name="Global Script Rules",
+                        status="failed",
+                        duration=0.5,
+                        issues_found=len(global_violations),
+                        is_blocker=any(v.is_blocker for v in global_violations),
+                        findings=global_violations,
+                        metadata={"engine": "python_rules"}
+                    )
+                    
+                    if not hasattr(context, 'frame_results') or context.frame_results is None:
+                        context.frame_results = {}
+                    
+                    context.frame_results[frame_id] = {
+                        'result': frame_result,
+                        'pre_violations': [],
+                        'post_violations': []
+                    }
+                    
                     # Add to context findings
                     context.findings.extend(global_violations)
 
             # Store results in context
+            logger.info("debug_frame_results_before_aggregation", frames=list(context.frame_results.keys()))
             self.result_aggregator.store_validation_results(context, pipeline)
 
             logger.info(
@@ -228,6 +252,34 @@ class FrameExecutor:
                     logger.info("rust_pre_filtering_found_issues", 
                               raw=total_hits, 
                               filtered=len(filtered_findings))
+                    
+                    # Virtual Frame Attribution for ghost issues
+                    frame_id = "system_security_rules"
+                    frame_result = FrameResult(
+                        frame_id=frame_id,
+                        frame_name="System Security Rules (Rust)",
+                        status="failed",
+                        duration=0.1, # Rust is fast
+                        issues_found=len(filtered_findings),
+                        is_blocker=any(f.severity == 'critical' for f in filtered_findings),
+                        findings=filtered_findings,
+                        metadata={
+                            "engine": "rust",
+                            "raw_hits": total_hits,
+                            "filtered_hits": len(filtered_findings)
+                        }
+                    )
+                    
+                    if not hasattr(context, 'frame_results') or context.frame_results is None:
+                        context.frame_results = {}
+                    
+                    context.frame_results[frame_id] = {
+                        'result': frame_result,
+                        'pre_violations': [],
+                        'post_violations': []
+                    }
+                    
+                    # Also keep in global findings for compatibility
                     context.findings.extend(filtered_findings)
                 else:
                     logger.info("alpha_judgment_filtered_all_hits", raw=total_hits)
@@ -348,6 +400,11 @@ class FrameExecutor:
                 remaining=len(files_for_frame)
             )
         
+
+        
+        # Apply Triage Routing (Adaptive Hybrid Triage)
+        files_for_frame = self._apply_triage_routing(context, frame, files_for_frame)
+
         # Use filtered files for execution
         code_files = files_for_frame
 
@@ -810,6 +867,72 @@ class FrameExecutor:
 
         # All dependencies satisfied
         return None
+
+    def _apply_triage_routing(
+        self,
+        context: PipelineContext,
+        frame: ValidationFrame,
+        code_files: List[CodeFile]
+    ) -> List[CodeFile]:
+        """
+        Filter files based on Triage Lane and Frame cost.
+        
+        Logic:
+        - Fast Lane: Skip expensive/LLM frames
+        - Middle/Deep Lane: Execute everything
+        """
+        if not hasattr(context, 'triage_decisions') or not context.triage_decisions:
+            return code_files
+            
+        # Determine if frame is expensive/LLM-based
+        is_expensive = False
+        
+        # Check config first
+        if hasattr(frame, 'config') and frame.config.get('use_llm') is True:
+            is_expensive = True
+        else:
+            # Fallback heuristic
+            expensive_keywords = ['security', 'complex', 'architecture', 'design', 'refactor', 'llm', 'deep']
+            if any(k in frame.frame_id.lower() for k in expensive_keywords):
+                is_expensive = True
+            
+        if not is_expensive:
+            return code_files # Run cheap frames on everything
+            
+        filtered = []
+        skipped_count = 0
+        
+        for cf in code_files:
+            decision_data = context.triage_decisions.get(cf.path)
+            if not decision_data:
+                filtered.append(cf) # Default to run if no decision
+                continue
+                
+            lane = decision_data.get('lane')
+            
+            # Inject Metadata for Frames to use (e.g. for Tier selection)
+            if cf.metadata is None:
+                cf.metadata = {}
+            cf.metadata['triage_lane'] = lane
+            
+            # ROUTING LOGIC:
+            # Fast Lane -> Skip Expensive Frames
+            if lane == 'fast_lane':
+                skipped_count += 1
+                continue
+                
+            # Middle/Deep -> Run Expensive Frames
+            filtered.append(cf)
+            
+        if skipped_count > 0:
+             logger.info(
+                 "triage_routing_applied", 
+                 frame=frame.frame_id, 
+                 skipped=skipped_count, 
+                 remaining=len(filtered)
+             )
+             
+        return filtered
 
     def _config_path_exists(self, config: Optional[Dict[str, Any]], path: str) -> bool:
         """

@@ -67,22 +67,17 @@ class TreeSitterProvider(IASTProvider):
 
     def __init__(self) -> None:
         """Initialize Tree-sitter provider."""
+        from warden.shared.languages.registry import LanguageRegistry
+        
         self._metadata = ASTProviderMetadata(
             name="tree-sitter",
             priority=ASTProviderPriority.TREE_SITTER,
             supported_languages=[
-                CodeLanguage.PYTHON,
-                CodeLanguage.JAVASCRIPT,
-                CodeLanguage.TYPESCRIPT,
-                CodeLanguage.JAVA,
-                CodeLanguage.C,
-                CodeLanguage.CPP,
-                CodeLanguage.GO,
-                CodeLanguage.RUST,
-                # Add more as grammars are available
+                lang for lang in LanguageRegistry.get_code_languages()
+                if LanguageRegistry.get_definition(lang) and LanguageRegistry.get_definition(lang).tree_sitter_id
             ],
-            version="1.0.0",
-            description="Universal AST parser using tree-sitter (40+ languages)",
+            version="1.1.0",
+            description="Universal AST parser using tree-sitter (Refactored)",
             author="Warden Core Team",
             requires_installation=True,
             installation_command="pip install tree-sitter",
@@ -96,55 +91,39 @@ class TreeSitterProvider(IASTProvider):
             self._initialize_languages()
 
     def _initialize_languages(self) -> None:
-        """Initialize tree-sitter language objects."""
+        """Initialize tree-sitter language objects based on Registry."""
         if not self._available:
             return
 
-        logger.debug("initializing_tree_sitter_languages")
+        from warden.shared.languages.registry import LanguageRegistry
+        logger.debug("initializing_tree_sitter_languages_from_registry")
         
-        # Dynamic import functions for each language
-        def load_javascript():
-            import tree_sitter_javascript
-            return tree_sitter.Language(tree_sitter_javascript.language())
-        
-        def load_typescript():
-            import tree_sitter_typescript
-            return tree_sitter.Language(tree_sitter_typescript.language_typescript())
-        
-        def load_tsx():
-            import tree_sitter_typescript
-            return tree_sitter.Language(tree_sitter_typescript.language_tsx())
-        
-        def load_go():
-            import tree_sitter_go
-            return tree_sitter.Language(tree_sitter_go.language())
-        
-        def load_java():
-            import tree_sitter_java
-            return tree_sitter.Language(tree_sitter_java.language())
-        
-        def load_csharp():
-            import tree_sitter_c_sharp
-            return tree_sitter.Language(tree_sitter_c_sharp.language())
-        
-        lang_init = {
-            CodeLanguage.JAVASCRIPT: load_javascript,
-            CodeLanguage.TYPESCRIPT: load_typescript,
-            CodeLanguage.TSX: load_tsx,
-            CodeLanguage.GO: load_go,
-            CodeLanguage.JAVA: load_java,
-            CodeLanguage.CSHARP: load_csharp,
-        }
-
-        for lang, init_fn in lang_init.items():
+        for lang in self._metadata.supported_languages:
+            defn = LanguageRegistry.get_definition(lang)
+            if not defn or not defn.tree_sitter_id:
+                continue
+                
+            ts_id = defn.tree_sitter_id
+            # Normalize ID for import (e.g. c_sharp -> c_sharp)
+            import_name = f"tree_sitter_{ts_id.replace('-', '_')}"
+            
             try:
-                self._language_objs[lang] = init_fn()
+                mod = __import__(import_name)
+                # Some grammars have .language(), others .language_typescript(), etc.
+                # Use a heuristic or standardized check
+                lang_fn = getattr(mod, "language", None)
+                if not lang_fn:
+                     # Try lang_id specific name (e.g. tree_sitter_typescript.language_typescript)
+                     lang_fn = getattr(mod, f"language_{ts_id.replace('-', '_')}", None)
+                
+                if lang_fn:
+                    self._language_objs[lang] = tree_sitter.Language(lang_fn())
             except ImportError:
-                logger.debug("grammar_not_installed", language=lang.value)
+                logger.debug("grammar_not_installed", language=lang.name, module=import_name)
             except Exception as e:
-                logger.warning("failed_to_load_grammar", language=lang.value, error=str(e))
+                logger.warning("failed_to_load_grammar", language=lang.name, error=str(e))
 
-        logger.info("tree_sitter_languages_loaded", languages=[l.value for l in self._language_objs.keys()])
+        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs.keys()])
 
     @property
     def metadata(self) -> ASTProviderMetadata:

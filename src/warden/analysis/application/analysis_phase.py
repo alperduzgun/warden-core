@@ -24,6 +24,8 @@ from warden.cleaning.application.analyzers.documentation_analyzer import Documen
 from warden.cleaning.application.analyzers.testability_analyzer import TestabilityAnalyzer
 from warden.cleaning.application.analyzers.lsp_diagnostics_analyzer import LSPDiagnosticsAnalyzer
 from warden.validation.domain.frame import CodeFile
+from warden.shared.utils.language_utils import get_language_from_path
+from warden.ast.domain.enums import CodeLanguage
 
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 
@@ -165,7 +167,12 @@ class AnalysisPhase:
 
         try:
             # Limit concurrency to prevent system overload (340+ files * 7 analyzers = 2000+ tasks)
-            semaphore = asyncio.Semaphore(20) # Process 20 files at a time
+            # Use CPU-bound friendly limit: min(CPUs, 8)
+            import os
+            concurrency_limit = min(os.cpu_count() or 4, 8)
+            semaphore = asyncio.Semaphore(concurrency_limit) 
+            
+            logger.info("analysis_concurrency_set", limit=concurrency_limit)
             
             async def analyze_with_limit(cf):
                 async with semaphore:
@@ -246,33 +253,52 @@ class AnalysisPhase:
         if pipeline_context and hasattr(pipeline_context, 'ast_cache'):
             ast_tree = pipeline_context.ast_cache.get(code_file.path)
 
+        # Detect language
+        language = get_language_from_path(code_file.path)
+        is_python = language == CodeLanguage.PYTHON
+
+        # Safety Check: If we have a cached AST but it's not Python-compatible (Tree-sitter node),
+        # we must discard it for standard 'ast' based analyzers to prevent crashes.
+        # PythonASTProvider stores ast.AST in raw_node.
+        import ast
+        if is_python and ast_tree is not None:
+             if not isinstance(ast_tree, ast.AST):
+                 logger.debug("incompatible_ast_cache_discarding", file=code_file.path, type=type(ast_tree).__name__)
+                 ast_tree = None
+
         # Subsetting analyzers for BASIC level to hit performance targets
         from warden.pipeline.domain.enums import AnalysisLevel
         is_basic = self.analysis_level == AnalysisLevel.BASIC
 
-        # Core analyzers for scoring
-        tasks["complexity"] = asyncio.create_task(
-            self.analyzers["complexity"].analyze_async(code_file, ast_tree=ast_tree)
-        )
+        # Core analyzers for scoring (Python-specific for now)
+        if is_python:
+            tasks["complexity"] = asyncio.create_task(
+                self.analyzers["complexity"].analyze_async(code_file, ast_tree=ast_tree)
+            )
         
-        # Skip duplication check in BASIC level (heavy)
-        if not is_basic:
-            tasks["duplication"] = asyncio.create_task(
-                self.analyzers["duplication"].analyze_async(code_file, ast_tree=ast_tree)
+            # Skip duplication check in BASIC level (heavy)
+            if not is_basic:
+                tasks["duplication"] = asyncio.create_task(
+                    self.analyzers["duplication"].analyze_async(code_file, ast_tree=ast_tree)
+                )
+                
+            tasks["maintainability"] = asyncio.create_task(
+                self.analyzers["maintainability"].analyze_async(code_file, ast_tree=ast_tree)
+            )
+            tasks["naming"] = asyncio.create_task(
+                self.analyzers["naming"].analyze_async(code_file, ast_tree=ast_tree)
+            )
+            tasks["documentation"] = asyncio.create_task(
+                self.analyzers["documentation"].analyze_async(code_file, ast_tree=ast_tree)
+            )
+            tasks["testability"] = asyncio.create_task(
+                self.analyzers["testability"].analyze_async(code_file, ast_tree=ast_tree)
             )
             
-        tasks["maintainability"] = asyncio.create_task(
-            self.analyzers["maintainability"].analyze_async(code_file, ast_tree=ast_tree)
-        )
-        tasks["naming"] = asyncio.create_task(
-            self.analyzers["naming"].analyze_async(code_file, ast_tree=ast_tree)
-        )
-        tasks["documentation"] = asyncio.create_task(
-            self.analyzers["documentation"].analyze_async(code_file, ast_tree=ast_tree)
-        )
-        tasks["testability"] = asyncio.create_task(
-            self.analyzers["testability"].analyze_async(code_file, ast_tree=ast_tree)
-        )
+            # Additional analyzer for hotspots
+            tasks["magic_numbers"] = asyncio.create_task(
+                self.analyzers["magic_numbers"].analyze_async(code_file, ast_tree=ast_tree)
+            )
         
         # Skip LSP in BASIC level (slow/external dependency)
         if not is_basic:
@@ -280,14 +306,9 @@ class AnalysisPhase:
                 self.analyzers["lsp_diagnostics"].analyze_async(code_file, ast_tree=ast_tree)
             )
 
-        # Additional analyzer for hotspots
-        tasks["magic_numbers"] = asyncio.create_task(
-            self.analyzers["magic_numbers"].analyze_async(code_file, ast_tree=ast_tree)
-        )
-
         # Wait for all analyzers with timeout
         try:
-            timeout = self.config.get("timeout", 5.0)
+            timeout = self.config.get("timeout", 15.0)
             results = await asyncio.wait_for(
                 asyncio.gather(*tasks.values(), return_exceptions=True),
                 timeout=timeout

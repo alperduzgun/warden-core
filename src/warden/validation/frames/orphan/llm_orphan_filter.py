@@ -359,7 +359,7 @@ class LLMOrphanFilter:
                 if search_results:
                     semantic_context = "\n[Global Semantic Usage Context]\n"
                     for res in search_results:
-                        semantic_context += f"- Potential usage in {res.file_path}: {res.content[:150]}...\n"
+                        semantic_context += f"- Potential usage in {res.chunk.file_path}: {res.chunk.content[:150]}...\n"
             except Exception as e:
                 logger.warning("batch_semantic_search_failed", error=str(e))
 

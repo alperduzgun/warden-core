@@ -39,6 +39,15 @@ Warden runs your code through 6 specialized "Frames":
 5.  **ArchitecturalConsistencyFrame (Medium):** Enforces SOLID principles and file limits.
 6.  **StressTestingFrame (Low):** Identifies performance bottlenecks (N+1 queries).
 
+### 🧩 Frames Concept: Not Just Plugins
+Frames in Warden are more than just plugins; they are **Intelligence Adapters**.
+*   **The Problem:** Tools like `ruff`, `mypy`, or `security-scanner-x` are dumb execution engines. They don't know your business context or architecture.
+*   **The Warden Frame:** Acts as a "Driver" that:
+    1.  **Orchestrates:** Runs the tool across all applicable phases (Pre-Check, Metrics, Validation).
+    2.  **Translates:** Converts raw JSON/CLI output into rich `Warden Findings`.
+    3.  **Contextualizes:** Decides if a finding matters based on your Project Purpose (e.g., "Ignore strict type checks in prototypes").
+    *   *Note: Frames rely on the tools being installed in your environment (e.g., via `pip` or `npm`), ensuring strictly safe, non-invasive operation.*
+
 ### 3. ✨ Warden Craftsman (New!)
 Warden doesn't just find bugs; it acts as a **Senior Software Craftsman**. The Cleaning Phase (`code-simplifier`) analyzes your code for:
 *   **Elegance:** Simplifying nested logic and removing redundant variables.

@@ -95,7 +95,7 @@ class ILlmClient(ABC):
 
         return response
 
-    async def analyze_security_async(self, code_content: str, language: str) -> dict:
+    async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:
         """
         Analyze code for security vulnerabilities using LLM.
         
@@ -138,7 +138,11 @@ class ILlmClient(ABC):
         """
         
         try:
-            response = await self.complete_async(prompt, system_prompt="You are a strict security auditor. Output valid JSON only.")
+            response = await self.complete_async(
+                prompt, 
+                system_prompt="You are a strict security auditor. Output valid JSON only.",
+                use_fast_tier=use_fast_tier
+            )
             if not response.success:
                 return {"findings": []}
                 
