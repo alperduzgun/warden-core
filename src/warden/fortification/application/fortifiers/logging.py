@@ -108,7 +108,7 @@ class LoggingFortifier(BaseFortifier):
             response = await self._llm_provider.complete_async(
                 system_prompt="You are a logging expert. Add structured logging (using structlog) to Python code. Return ONLY the modified code.",
                 user_prompt=prompt,
-                temperature=0.2,
+                temperature=0.0,  # Idempotency
                 max_tokens=3000,
             )
 

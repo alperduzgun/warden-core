@@ -104,7 +104,7 @@ class ResourceDisposalFortifier(BaseFortifier):
             response = await self._llm_provider.complete_async(
                 system_prompt="You are a resource management expert. Add context managers (with statements) to Python code for proper resource cleanup. Return ONLY the modified code.",
                 user_prompt=prompt,
-                temperature=0.2,
+                temperature=0.0,  # Idempotency
                 max_tokens=3000,
             )
 

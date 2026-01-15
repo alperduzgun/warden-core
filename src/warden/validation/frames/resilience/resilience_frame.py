@@ -130,7 +130,7 @@ class ResilienceFrame(ValidationFrame):
             request = LlmRequest(
                 system_prompt=CHAOS_SYSTEM_PROMPT,
                 user_message=generate_chaos_request(code_file.content, code_file.language, code_file.path),
-                temperature=0.2  # Slightly higher for creative scenario generation
+                temperature=0.0,  # Idempotency (deterministic scenarios)
             )
             
             response = await client.send_async(request)

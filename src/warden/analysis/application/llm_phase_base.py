@@ -35,7 +35,7 @@ class LLMPhaseConfig:
     max_retries: int = 3
     timeout: int = 120  # Increased from 30s to 120s for LLM API calls
     fallback_to_rules: bool = True
-    temperature: float = 0.3  # Lower for more deterministic outputs
+    temperature: float = 0.0  # Idempotency: fully deterministic
     max_tokens: int = 800  # Reduced to stay within context limits
     tpm_limit: int = 1000  # Default Free Tier
     rpm_limit: int = 6     # Default Free Tier

@@ -177,7 +177,7 @@ class OpenAIClient(ILlmClient):
             user_message=prompt,
             system_prompt=system_prompt,
             model=model or self._default_model,
-            temperature=0.7,
+            temperature=0.0,  # Idempotency
             max_tokens=2000,
             timeout_seconds=30.0
         )

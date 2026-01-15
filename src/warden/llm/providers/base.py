@@ -82,7 +82,7 @@ class ILlmClient(ABC):
             user_message=prompt,
             system_prompt=system_prompt,
             model=model,  # Use provider default or override
-            temperature=0.7,
+            temperature=0.0,  # Idempotency
             max_tokens=2000,
             timeout_seconds=30.0,
             use_fast_tier=use_fast_tier

@@ -331,7 +331,7 @@ Format: JSON array of objects with keys: issueLine (int), suggestion (string)"""
             response = await self._llm_provider.complete_async(
                 system_prompt="You are a code safety expert. Provide suggestions for fixing code issues. Never write code, only suggest what to do.",
                 user_prompt=prompt,
-                temperature=0.3,
+                temperature=0.0,  # Idempotency
                 max_tokens=1000,
             )
 
