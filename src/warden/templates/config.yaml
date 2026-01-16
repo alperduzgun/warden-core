@@ -1,0 +1,43 @@
+# Warden Configuration
+# https://github.com/Appnova-EU-OU/warden-hub
+
+project:
+  name: My Project
+  language: python
+  type: backend
+
+llm:
+  provider: ollama
+  model: qwen2.5-coder:7b
+  fast_model: qwen2.5-coder:0.5b
+  timeout: 300
+
+frames:
+  - security
+  - resilience
+  - orphan
+  - spec
+  - gitchanges
+
+frames_config:
+  security:
+    enabled: true
+    priority: critical
+  orphan:
+    use_llm_filter: true
+  resilience:
+    enabled: true
+
+settings:
+  mode: normal
+  fail_fast: false
+  enable_classification: true
+  min_severity: high
+
+ci:
+  enabled: false
+  output:
+    - format: markdown
+      path: .warden/reports/WARDEN_REPORT.md
+    - format: sarif
+      path: .warden/reports/warden-report.sarif

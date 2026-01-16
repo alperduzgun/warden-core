@@ -1,0 +1,22 @@
+# Warden Security Rules
+
+ALWAYS READ .warden/ai_status.md AT THE START OF A SESSION.
+
+## Protocol
+
+This project is protected by Warden (AI Code Guardian).
+
+1. **Status Check**: Read `.warden/ai_status.md` first
+2. **If FAIL**: Fix issues before other work  
+3. **After Changes**: Run `warden scan`
+4. **Before Commit**: Ensure PASS status
+
+## Commands
+
+- `warden scan` - Full project scan
+- `warden scan --file <path>` - Single file scan
+- `warden status` - Quick status check
+
+## Important
+
+Follow the full protocol in `.warden/AI_RULES.md`

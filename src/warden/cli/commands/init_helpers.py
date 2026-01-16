@@ -33,19 +33,38 @@ def configure_llm(existing_config: dict) -> tuple[dict, dict]:
     
     if provider == "azure":
         env_vars["AZURE_OPENAI_API_KEY"] = Prompt.ask("Azure API Key", password=True)
+        while not env_vars["AZURE_OPENAI_API_KEY"] or len(env_vars["AZURE_OPENAI_API_KEY"]) < 30:
+             console.print("[red]Invalid API Key length (expected ~32 chars)[/red]")
+             env_vars["AZURE_OPENAI_API_KEY"] = Prompt.ask("Azure API Key", password=True)
+
         env_vars["AZURE_OPENAI_ENDPOINT"] = Prompt.ask("Azure Endpoint")
+        while not env_vars["AZURE_OPENAI_ENDPOINT"].startswith("https://"):
+             console.print("[red]Endpoint must start with https://[/red]")
+             env_vars["AZURE_OPENAI_ENDPOINT"] = Prompt.ask("Azure Endpoint")
+
         env_vars["AZURE_OPENAI_DEPLOYMENT_NAME"] = Prompt.ask("Deployment Name")
     else:
         has_key = key_var in os.environ or any(k.endswith("_API_KEY") for k in existing_config.get('llm', {}))
         if not has_key and provider != "ollama":
-             env_vars[key_var] = Prompt.ask(f"{provider} API Key", password=True)
+             key_input = Prompt.ask(f"{provider} API Key", password=True)
+             while not key_input or len(key_input) < 10:
+                 if not key_input:
+                     console.print("[red]API Key cannot be empty[/red]")
+                 else:
+                     console.print(f"[red]API Key seems too short ({len(key_input)} chars). Please check.[/red]")
+                 key_input = Prompt.ask(f"{provider} API Key", password=True)
+             env_vars[key_var] = key_input
         elif provider == "ollama":
              # Ollama uses OLLAMA_HOST, check if user wants to change default
              default_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
              if Confirm.ask(f"Use default Ollama host ({default_host})?", default=True):
                  env_vars["OLLAMA_HOST"] = default_host
              else:
-                 env_vars["OLLAMA_HOST"] = Prompt.ask("Enter Ollama Host URL", default=default_host)
+                 host_input = Prompt.ask("Enter Ollama Host URL", default=default_host)
+                 while not host_input.startswith("http"):
+                      console.print("[red]Host URL must start with http:// or https://[/red]")
+                      host_input = Prompt.ask("Enter Ollama Host URL", default=default_host)
+                 env_vars["OLLAMA_HOST"] = host_input
 
     llm_config = {"provider": provider, "model": model, "timeout": 300}
     
@@ -93,50 +112,78 @@ def configure_agent_tools(project_root: Path) -> None:
     """
     console.print("\n[bold cyan]🤖 Configuring Agent Tools (Cursor / Claude)[/bold cyan]")
     
-    # 1. AI_RULES.md
+    # helper to read template safely
+    def read_template(name: str) -> str:
+        try:
+            import importlib.resources
+            # For Python 3.9+ compatibility
+            try:
+                # Modern 3.9+ traversal
+                return importlib.resources.files("warden.templates").joinpath(name).read_text(encoding="utf-8")
+            except AttributeError:
+                # Fallback for older 3.9 implementations if files() not found (rare but safe)
+                return importlib.resources.read_text("warden.templates", name, encoding="utf-8")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not load template {name}: {e}[/yellow]")
+            return ""
+
     warden_dir = project_root / ".warden"
     warden_dir.mkdir(exist_ok=True)
-    rules_path = warden_dir / "AI_RULES.md"
-    
-    # Built-in template
-    try:
-        # Attempt to read from package resources or relative path
-        import importlib.resources
-        template_content = importlib.resources.read_text("warden.templates", "AI_RULES.md")
-    except Exception:
-        # Fallback simplistic content if template is missing/moved
-        template_content = "# Warden Protocol\n\n1. Run `warden scan` after every edit.\n2. Fix all issues before completing tasks.\n"
 
+    # 1. AI_RULES.md
+    rules_path = warden_dir / "AI_RULES.md"
+    content = read_template("AI_RULES.md")
+    if not content:
+        content = "# Warden Protocol\n\n1. Run `warden scan` after every edit.\n"
     with open(rules_path, "w") as f:
-        f.write(template_content)
+        f.write(content)
     console.print(f"[green]✓ Created Agent Protocol: {rules_path}[/green]")
 
-    # 2. Update .cursorrules / .windsurfrules
+    # 2. ai_status.md
+    status_path = warden_dir / "ai_status.md"
+    if not status_path.exists():
+        content = read_template("ai_status.md") or "# Status: Pending\n"
+        with open(status_path, "w") as f:
+            f.write(content)
+        console.print(f"[green]✓ Created Status File: {status_path}[/green]")
+
+    # 3. CLAUDE.md (Root)
+    claude_md_path = project_root / "CLAUDE.md"
+    if not claude_md_path.exists():
+        content = read_template("CLAUDE.md")
+        if content:
+            with open(claude_md_path, "w") as f:
+                f.write(content)
+            console.print(f"[green]✓ Created CLAUDE.md[/green]")
+
+    # 4. Update .cursorrules / .windsurfrules
     rule_files = [".cursorrules", ".windsurfrules"]
+    template_rules = read_template(".cursorrules")
+    
+    # If template has content, use it as the base instruction
+    base_instruction = template_rules or f"\n\n# Warden Agent Protocol\n# IMPORTANT: You MUST follow the rules in {rules_path}\n# Run 'warden scan' to verify your work.\n"
+    
     found_rule_file = False
-    
-    instruction = f"\n\n# Warden Agent Protocol\n# IMPORTANT: You MUST follow the rules in {rules_path}\n# Run 'warden scan' to verify your work.\n"
-    
     for rf in rule_files:
         rf_path = project_root / rf
         if rf_path.exists():
             content = rf_path.read_text()
-            if "Warden Agent Protocol" not in content:
+            if "Warden" not in content:
                 with open(rf_path, "a") as f:
-                    f.write(instruction)
+                    f.write("\n" + base_instruction)
                 console.print(f"[green]✓ Injected rules into {rf}[/green]")
             else:
                 console.print(f"[dim]Rules already present in {rf}[/dim]")
             found_rule_file = True
             
     if not found_rule_file:
-        # Create .cursorrules by default if none exist
+        # Create .cursorrules by default
         default_rules = project_root / ".cursorrules"
         with open(default_rules, "w") as f:
-            f.write(instruction)
+            f.write(base_instruction)
         console.print(f"[green]✓ Created {default_rules}[/green]")
 
-    # 2.5: Create Claude Hooks (Verified Pattern)
+    # 5: Create Claude Hooks (Verified Pattern)
     claude_dir = project_root / ".claude"
     claude_dir.mkdir(exist_ok=True)
     settings_path = claude_dir / "settings.json"

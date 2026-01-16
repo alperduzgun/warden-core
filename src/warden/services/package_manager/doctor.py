@@ -51,6 +51,7 @@ class WardenDoctor:
             ("Installed Frames", self.check_frames),
             ("Custom Rules", self.check_rules),
             ("Environment & API Keys", self.check_env),
+            ("Python Dependencies", self.check_dependencies),
             ("Tooling (LSP/Git)", self.check_tools),
             ("Semantic Index", self.check_vector_db),
         ]
@@ -205,6 +206,42 @@ class WardenDoctor:
             return CheckStatus.ERROR, f"Missing rule files: {', '.join(missing_rules)}"
 
         return CheckStatus.SUCCESS, f"All {len(custom_rules)} configured rules are present."
+
+    def check_dependencies(self) -> Tuple[CheckStatus, str]:
+        """Check availability of critical and optional python dependencies."""
+        import importlib.util
+        
+        critical_packages = [
+            ("typer", "typer"),
+            ("rich", "rich"),
+            ("yaml", "pyyaml"),
+            ("pydantic", "pydantic"),
+            ("tree_sitter", "tree-sitter"),
+        ]
+        
+        optional_packages = [
+            ("sentence_transformers", "sentence-transformers"),
+            ("chromadb", "chromadb"),
+            ("openai", "openai"),
+        ]
+        
+        missing_critical = []
+        for module_name, package_name in critical_packages:
+            if not importlib.util.find_spec(module_name):
+                missing_critical.append(package_name)
+                
+        missing_optional = []
+        for module_name, package_name in optional_packages:
+            if not importlib.util.find_spec(module_name):
+                missing_optional.append(package_name)
+
+        if missing_critical:
+            return CheckStatus.ERROR, f"Missing critical dependencies: {', '.join(missing_critical)}. Run 'pip install {' '.join(missing_critical)}'."
+            
+        if missing_optional:
+            return CheckStatus.WARNING, f"Missing optional dependencies: {', '.join(missing_optional)}. AI features may be limited."
+            
+        return CheckStatus.SUCCESS, "All critical and optional dependencies are installed."
 
     def check_tools(self) -> Tuple[CheckStatus, str]:
         git_path = shutil.which("git")

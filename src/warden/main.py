@@ -11,7 +11,6 @@ from rich.console import Console
 
 # Command Logic Imports
 from warden.cli.commands.version import version_command
-from warden.cli.commands.chat import chat_command
 from warden.cli.commands.status import status_command
 from warden.cli.commands.scan import scan_command
 from warden.cli.commands.init import init_command
@@ -34,7 +33,6 @@ app.add_typer(serve_app, name="serve")
 
 # Register Top-Level Commands
 app.command(name="version")(version_command)
-app.command(name="chat")(chat_command)
 app.command(name="status")(status_command)
 app.command(name="scan")(scan_command)
 app.command(name="init")(init_command)

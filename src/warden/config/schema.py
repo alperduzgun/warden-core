@@ -12,6 +12,7 @@ class ProjectType(str, Enum):
     API = "api"
     FRONTEND = "frontend"
     FULLSTACK = "fullstack"
+    UNKNOWN = "unknown"
 
 class ProjectConfig(BaseModel):
     name: str = "project"

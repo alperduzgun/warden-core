@@ -1,0 +1,27 @@
+directories:
+  - node_modules
+  - venv
+  - .venv
+  - env
+  - __pycache__
+  - .git
+  - .idea
+  - .vscode
+  - dist
+  - build
+  - target
+  - vendor
+
+file_patterns:
+  - "*.min.js"
+  - "*.pyc"
+  - "*.pyo"
+  - "*.pyd"
+  - ".DS_Store"
+  - "poetry.lock"
+  - "package-lock.json"
+
+path_patterns:
+  - "**/test_fixtures/**"
+  - "**/migrations/**"
+  - "**/*.min.css"
