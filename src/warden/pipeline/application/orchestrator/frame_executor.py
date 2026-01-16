@@ -553,7 +553,7 @@ class FrameExecutor:
                     try:
                         f_results = await asyncio.wait_for(
                             frame.execute_batch_async(files_to_scan),
-                            timeout=self.config.frame_timeout or 300.0  # Increased timeout for batch
+                            timeout=getattr(self.config, 'frame_timeout', 300.0)
                         )
                         
                         if f_results:

@@ -192,14 +192,13 @@ class PhaseOrchestrator:
         if code_files and len(code_files) > 0:
             language = code_files[0].language or "unknown"
             if language == "unknown" and code_files[0].path:
-                # Simple fallback detection
-                ext = Path(code_files[0].path).suffix.lower()
-                if ext == ".py": language = "python"
-                elif ext in [".ts", ".tsx"]: language = "typescript"
-                elif ext in [".js", ".jsx"]: language = "javascript"
-                elif ext == ".go": language = "go"
-                elif ext == ".java": language = "java"
-                elif ext == ".cs": language = "csharp"
+                # Use Language Registry for detection
+                from warden.shared.languages.registry import LanguageRegistry
+                from warden.ast.domain.enums import CodeLanguage
+                
+                lang_enum = LanguageRegistry.get_language_from_path(code_files[0].path)
+                if lang_enum != CodeLanguage.UNKNOWN:
+                    language = lang_enum.value
 
         # Apply analysis level if provided
         if analysis_level:
@@ -693,9 +692,10 @@ class PhaseOrchestrator:
         
         actual_total = frames_passed + frames_failed + frames_skipped
         planned_total = len(getattr(context, 'selected_frames', [])) or len(self.frames)
+        executed_count = len(frame_results)
         
-        # Ensure total never shows less than what was actually processed/passed
-        total_frames = max(actual_total, planned_total)
+        # Ensure total never shows less than what was actually processed/passed or exists in results
+        total_frames = max(actual_total, planned_total, executed_count)
 
         return PipelineResult(
             pipeline_id=context.pipeline_id,

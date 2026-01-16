@@ -308,6 +308,11 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                     if format == "text":
                         # Segregate Findings (Linter vs Core)
                         all_findings = res.get('findings', [])
+                        
+                        # Fallback: Aggregate from frames if root findings is empty
+                        if not all_findings:
+                            for fr in res.get('frame_results', res.get('frameResults', [])):
+                                all_findings.extend(fr.get('findings', []))
                         linter_findings = []
                         core_findings = []
                         
@@ -339,20 +344,85 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                         table.add_row("Core Issues", str(core_count))
                         table.add_row("Critical Core Issues", f"[{'red' if core_critical > 0 else 'green'}]{core_critical}[/]")
                         
-                        # Secondary focus: Linter Issues (Style, minor errors)
+                        # Secondary focus: Linter Issues (Back in table)
                         if linter_count > 0:
-                            table.add_section()
                             style = "yellow" if linter_critical > 0 else "dim"
-                            table.add_row("Linter Issues", f"[{style}]{linter_count}[/{style}]")
-                            if linter_critical > 0:
-                                table.add_row("Linter Critical", f"[red]{linter_critical}[/red]")
+                            table.add_row("Linter & Style Issues", f"[{style}]{linter_count}[/{style}]")
                         
                         # Add Manual Review if present
                         manual_review = res.get('manual_review_findings', 0)
                         if manual_review > 0:
+                            table.add_section()
                             table.add_row("Manual Review", f"[yellow]{manual_review}[/yellow]")
                         
                         console.print("\n", table)
+                        
+                        # Hint for hidden details
+                        if linter_count > 0 and not verbose:
+                            console.print(f"[dim]ℹ️  {linter_count} style issues hidden. Use --verbose to see details.[/dim]")
+
+                        # Helper for location resolution (DRY)
+                        def _resolve_loc(f):
+                            loc = f.get('location')
+                            if not loc:
+                                fp = f.get('file_path') or f.get('path') or ""
+                                ln = f.get('line') or f.get('line_number') or ""
+                                loc = f"{Path(fp).name}:{ln}" if fp else "unknown"
+                            return loc
+
+                        # 🔍 Display FINDINGS DETAILS
+                        # 1. Core Findings
+                        if core_findings:
+                            if verbose:
+                                # Verbose: Show all details
+                                console.print("\n[bold]🔍 Core Findings Details:[/bold]")
+                                limit = 100
+                                for i, f in enumerate(core_findings):
+                                    if i >= limit:
+                                        console.print(f"  [dim]... and {len(core_findings) - limit} more (see report)[/dim]")
+                                        break
+                                        
+                                    sev = str(f.get('severity', 'low')).upper()
+                                    s_color = "red" if sev in ['CRITICAL', 'HIGH'] else "yellow" if sev == "MEDIUM" else "blue"
+                                    
+                                    msg = f.get('message', 'Issue found')
+                                    rule = f.get('rule_id') or f.get('id') or ""
+                                    loc = _resolve_loc(f)
+                                    
+                                    console.print(f"  [{s_color}]■[/] {msg} [dim]({loc}) [{rule}][/dim]")
+                            else:
+                                # Default: Grouped Summary (No change needed here as it doesn't show loc)
+                                console.print("\n[bold]🔍 Core Findings Summary:[/bold]")
+                                groups = {}
+                                for f in core_findings:
+                                    rule = f.get('rule_id') or f.get('id') or f.get('message', 'General')
+                                    if rule not in groups: groups[rule] = []
+                                    groups[rule].append(f)
+                                
+                                for rule, items in groups.items():
+                                    count = len(items)
+                                    example = items[0]
+                                    sev = str(example.get('severity', 'low')).upper()
+                                    s_color = "red" if sev in ['CRITICAL', 'HIGH'] else "yellow" if sev == "MEDIUM" else "blue"
+                                    msg = example.get('message', 'Issue found')
+                                    if len(msg) > 80: msg = msg[:77] + "..."
+                                    console.print(f"  [{s_color}]■[/] {msg} [dim]({count} occurrences)[/dim]")
+                                
+                                console.print("\n  [dim](Use --verbose to see file locations)[/dim]")
+
+                        # 2. Linter Findings (Show only if verbose)
+                        if linter_findings and verbose:
+                            console.print("\n[bold]💅 Linter Findings Details:[/bold]")
+                            limit = 50
+                            for i, f in enumerate(linter_findings):
+                                if i >= limit:
+                                    console.print(f"  [dim]... and {len(linter_findings) - limit} more (see report)[/dim]")
+                                    break
+                                sev = str(f.get('severity', 'low')).upper()
+                                s_color = "red" if sev in ['CRITICAL', 'HIGH'] else "yellow"
+                                loc = _resolve_loc(f)
+                                msg = f.get('message', '')
+                                console.print(f"  [{s_color}]•[/] {msg} [dim]({loc})[/dim]")
 
                         # 🚨 NEW: Show Missing Tool Hints (Visibility Improvement)
                         # Check all frames results (if available in result_data or we need to access them differently)

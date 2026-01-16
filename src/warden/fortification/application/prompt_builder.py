@@ -96,6 +96,18 @@ Fix must match project style.
         return prompt
 
     @staticmethod
+    def _sanitize_json_string(json_str: str) -> str:
+        """
+        Sanitize JSON string to fix common LLM formatting errors.
+        Specifically fixes invalid escape sequences (e.g. Windows paths).
+        """
+        # Fix backslashes that are not valid escape sequences
+        # Look for \ that is NOT followed by " \ / b f n r t u
+        # and NOT preceded by \
+        pattern = r'(?<!\\)\\(?!["\\/bfnrtu])'
+        return re.sub(pattern, r'\\\\', json_str)
+
+    @staticmethod
     def parse_llm_response(
         response: str,
         issues: List[Dict[str, Any]],
@@ -104,10 +116,22 @@ Fix must match project style.
         fortifications = []
 
         try:
-            # Try to extract JSON from response
-            json_match = re.search(r'\[.*\]', response, re.DOTALL)
-            if json_match:
-                fixes_data = json.loads(json_match.group())
+            # Safe JSON extraction without greedy regex
+            if not response:
+                raise ValueError("Empty response from LLM")
+
+            start_idx = response.find('[')
+            end_idx = response.rfind(']')
+
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                json_str = response[start_idx : end_idx + 1]
+                
+                try:
+                    fixes_data = json.loads(json_str)
+                except json.JSONDecodeError:
+                    # Retry with sanitization
+                    sanitized_str = FortificationPromptBuilder._sanitize_json_string(json_str)
+                    fixes_data = json.loads(sanitized_str)
 
                 for fix_data in fixes_data:
                     fortification = {
@@ -120,11 +144,15 @@ Fix must match project style.
                         "confidence": 0.85,
                     }
                     fortifications.append(fortification)
+            else:
+                 raise ValueError("No JSON list structure found in response")
 
-        except (json.JSONDecodeError, AttributeError) as e:
-            logger.error("llm_response_parsing_failed", error=str(e))
+        except (json.JSONDecodeError, ValueError, AttributeError) as e:
+            # Only log error if it's not simply "No JSON found" or empty usage which might be expected in some contexts
+            # But here failure to parse means we fallback to raw text description
+            logger.warning("llm_response_parsing_failed", error=str(e), original_response=response[:100] if response else "Empty")
 
-            # Create basic fortification from response
+            # Create basic fortification from response as fallback
             fortification = {
                 "title": f"Fix for {issues[0].get('type', 'issue')}" if issues else "Security Fix",
                 "detail": (response or "")[:500],  # First 500 chars as detail
