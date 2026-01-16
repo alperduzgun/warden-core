@@ -20,6 +20,9 @@ Slash commands provide built-in functionality for interacting with Warden.
 #### Analysis & Scanning
 - `/analyze <path>` or `/a <path>` - Run pipeline analysis on a file or directory
 - `/scan <path>` or `/s <path>` - Scan infrastructure for vulnerabilities
+    - Standard: `/scan .` (Grouped summary, less noise)
+    - Deep: `/scan . --level deep` (Architectural analysis)
+    - Verbose: `/scan . --verbose` (See file locations & linter details)
 - `/rules` or `/r` - Manage validation rules
 
 #### Information

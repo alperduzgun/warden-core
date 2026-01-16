@@ -12,6 +12,13 @@
 
 ## 🤖 Why Warden?
 
+### The AI Paradox: The "Wild Horse" Analogy 🐎
+In a world where coding is automated, developers face a new crisis: **Loss of Context.**
+> "An AI-generated project is like a **Wild Horse (Yılkı Atı)**. It is incredibly fast and powerful, capable of building weeks of work in minutes. But without a skilled handler (**Seyis**), it becomes unmanageable. It may bolt in the wrong direction, refuse to scale, or become untrained over time."
+
+Warden is that handler. It ensures you never lose the reins of your codebase, no matter how fast the AI runs.
+
+### The Problem
 AI coding assistants are powerful but prone to:
 *   **Hallucinations:** Inventing non-existent APIs or libraries.
 *   **Subtle Bugs:** Introducing edge cases that human reviewers miss.
@@ -22,6 +29,18 @@ Warden provides the **"Verify-Loop"** mechanism to ensure every AI-generated cha
 
 ---
 
+## 🌍 Universal Language Support
+Warden's **Engine** runs on Python/Rust, but it validates code in **any language**.
+
+| Category | Supported Languages (Native) |
+| :--- | :--- |
+| **Mobile** | **Flutter (Dart)**, Swift, Kotlin, React Native |
+| **Backend** | Python, **Go**, **Rust**, Node.js (TS/JS), Java |
+| **Frontend** | React, Vue, Angular, HTML/CSS |
+| **Scripting** | Shell (Bash), Lua, Perl |
+
+> **Pro Tip:** Warden can orchestrate *existing* tools. Already using `very_good_analysis` for Flutter? Warden wraps it, giving it a unified interface and fixing capabilities.
+
 ## 🚀 Core Features
 
 ### 1. 🧠 AI-Native Integration (MCP & Hooks)
@@ -30,25 +49,56 @@ Warden is built to integrate directly with your AI Agent:
 *   **Protocol Enforcement:** Instructs AI agents to follow the **Plan -> Execute -> Verify** loop.
 *   **Feedback Loop:** Provides JSON/SARIF reports that AI agents can read to self-correct.
 
-### 2. 🛡️ The 6-Frame Validation Pipeline
-Warden runs your code through 6 specialized "Frames":
-1.  **SecurityFrame (Critical):** Detects SQLi, XSS, and hardcoded secrets.
-2.  **ChaosEngineeringFrame (High):** Validates error handling and resilience patterns.
-3.  **FuzzTestingFrame (High):** Checks for type safety and edge case handling.
-4.  **PropertyTestingFrame (Medium):** Verifies idempotency and invariants.
-5.  **ArchitecturalConsistencyFrame (Medium):** Enforces SOLID principles and file limits.
-6.  **StressTestingFrame (Low):** Identifies performance bottlenecks (N+1 queries).
+### 2. ⚡ Offline-First Intelligence (New!)
+Warden is built for resilience. Unlike SaaS tools that go dark without internet:
+*   **Local Models:** Once models (e.g., Qwen) are cached, Warden works 100% offline.
+*   **Network Resilience:** Automatically detects connection timeouts and switches to local cache instantly.
+*   **Zero Latency:** No API round-trips for standard scans.
 
-### 🧩 Frames Concept: Not Just Plugins
-Frames in Warden are more than just plugins; they are **Intelligence Adapters**.
-*   **The Problem:** Tools like `ruff`, `mypy`, or `security-scanner-x` are dumb execution engines. They don't know your business context or architecture.
+### 3. 🧠 Hybrid AI Engine (Dual-Tier)
+Warden balances cost, privacy, and intelligence using a smart routing system:
+*   **Fast Tier (Local):** Uses **Qwen 2.5-Coder** (via Ollama) for high-frequency tasks (parsing, linter filtering). **Free & Private.**
+*   **Smart Tier (Cloud):** Routes only complex logic (security fixes, architecture audits) to **GPT-4o/Claude**.
+*   **Result:** 90% cost reduction compared to pure cloud agents.
+
+### 4. 🛡️ Core Validation Frames (Built-in)
+Warden ships with 6 powerful core frames:
+1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS).
+2.  **ChaosFrame:** Validates error handling and resilience logic.
+3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
+4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
+5.  **ResilienceFrame:** Checks for retry/circuit-breaker patterns.
+6.  **OrphanFrame:** Detects dead code and unreferenced assets.
+
+### 5. 🧩 Warden Hub (Marketplace)
+Need more power? Install specialized frames from the community:
+*   **Fuzz Testing:** `warden install fuzz`
+*   **Property Testing:** `warden install property`
+*   **Load Testing:** `warden install stress`
+
+### 6. 💅 Integrated Linter & Style
+Warden acts as a central hub for code quality, integrating tools like `ruff` directly into its pipeline.
+
+### 🧩 Frames Concept: Intelligence Adapters
+Frames in Warden are not just plugins; they are **Intelligence Adapters** that drive dumb tools.
+*   **The Problem:** Tools like `ruff`, `mypy`, or `dart analyze` are just execution engines. They don't know your business context.
 *   **The Warden Frame:** Acts as a "Driver" that:
-    1.  **Orchestrates:** Runs the tool across all applicable phases (Pre-Check, Metrics, Validation).
-    2.  **Translates:** Converts raw JSON/CLI output into rich `Warden Findings`.
-    3.  **Contextualizes:** Decides if a finding matters based on your Project Purpose (e.g., "Ignore strict type checks in prototypes").
-    *   *Note: Frames rely on the tools being installed in your environment (e.g., via `pip` or `npm`), ensuring strictly safe, non-invasive operation.*
+    1.  **Standardizes:** Unifies CLI arguments and JSON outputs across all tools.
+    2.  **Contextualizes:** Decides if a finding matters based on Project Purpose.
+    3.  **Elevates:** Turns a "Lint Error" into a "Security Finding" if relevant.
 
-### 3. ✨ Warden Craftsman (New!)
+> **Philosophy:** `warden install python_lint` doesn't just install Ruff; it teaches Warden *how to use* Ruff intelligently.
+
+### 🛡️ Defense-in-Depth Hierarchy
+Warden sits at the top of the quality pyramid:
+
+1.  **Linter Layer (Fastest):** `Ruff`, `Biome`, `Dart Analyze` (Syntax & Style)
+2.  **Static Analysis (Deep):** `SonarQube`, `Snyk` (Vulnerabilities)
+3.  **Warden Core (Guardian):** Context-Aware, Architectural, AI-Powered Protection.
+
+**Pre-Analysis Strategy:** Warden detects your stack (e.g., "This is a Flutter Project") *before* defining the pipeline, ensuring zero wasted resources on irrelevant checks.
+
+### 7. ✨ Warden Craftsman (New!)
 Warden doesn't just find bugs; it acts as a **Senior Software Craftsman**. The Cleaning Phase (`code-simplifier`) analyzes your code for:
 *   **Elegance:** Simplifying nested logic and removing redundant variables.
 *   **Clarity:** Reducing cognitive load and improving readability.
@@ -59,25 +109,25 @@ Warden doesn't just find bugs; it acts as a **Senior Software Craftsman**. The C
 warden scan examples/messy_code.py
 ```
 
-### 4. 🚦 False Positive Management
+### 8. 🚦 False Positive Management
 Warden gives you granular control over what to check:
 *   **Inline Suppression:** Use `# warden-ignore: rule-id` to suppress specific issues.
 *   **Global Config:** Define suppressions in `.warden/suppressions.yaml`.
 *   **File Exclusion:** Respects `.gitignore` and supports `.warden/ignore.yaml`.
 
-### 5. 🧠 Structural Intelligence & Hygiene (New!)
+### 9. 🧠 Structural Intelligence & Hygiene (New!)
 Warden goes beyond code syntax; it understands your **Project Architecture**:
 *   **Anomaly Detection:** Uses AI to identify structural flaws (e.g., redundant configuration files, orphaned directories) that static analysis misses.
 *   **Smart Hygiene:** Automatically filters noise (`__pycache__`, `node_modules`) globally, ensuring AI focuses only on relevant code.
 *   **One-Config Standard:** Enforces a single source of truth (`.warden/config.yaml`), preventing "Config Drift".
 
-### 6. 🧠 Dynamic AI-Powered Rules (New!)
+### 10. 🧠 Dynamic AI-Powered Rules (New!)
 Warden reaches beyond static analysis patterns:
 *   **Pure AI Rules:** Define rules using human language directives (e.g., "Check for race conditions in async loops"). No regex required.
 *   **Context-Aware Loading:** Rules automatically activate based on your project's framework (FastAPI, React, etc.) and project type (Microservice, Library).
 *   **Deep Logic Auditing:** Detects complex flaws like synchronization issues, circular dependencies, and resilience pattern violations.
 
-### 7. 🧠 Hallucination Prevention (Suppression System)
+### 11. 🧠 Hallucination Prevention (Suppression System)
 AI analysis can sometimes produce "hallucinations" – findings that look like issues but are actually valid code patterns (false positives). Warden provides a dedicated **Suppression Phase** to filter these out.
 
 **How it works:**
@@ -97,7 +147,7 @@ entries:
 ```
 > **Note:** Unlike `CustomRule`s which are *active* checks, Suppressions are *passive* filters that run at the very end of the pipeline.
 
-### 8. 🛡️ Hybrid Analysis (Verification Phase)
+### 12. 🛡️ Hybrid Analysis (Verification Phase)
 Warden reduces false positives by implementing a "Trust but Verify" approach:
 1.  **Fast Scan:** Static analysis (Regex/LSP) quickly identifies potential issues.
 2.  **LLM Judge:** A specialized prompt acts as a "Senior Security Engineer", reviewing the finding against the code context.
@@ -105,6 +155,14 @@ Warden reduces false positives by implementing a "Trust but Verify" approach:
     -   **True Positives:** Passed to Fortification for fixing.
     -   **False Positives:** (e.g., Type Hints mistaken for arrays) are silently filtered out BEFORE consuming tokens on auto-fix generation.
 
+
+### 13. 🎯 Intent-Driven Validation (New!)
+Warden doesn't just check *correctness*; it checks *appropriateness*.
+*   **The Concept:** A "hardcoded password" might be a critical vulnerability in a **Banking API**, but completely valid in a **Test Seeder**.
+*   **How it Works:** Warden analyzes your project structure (`package.json`, `requirements.txt`) to detect intent (e.g., "This is a Crypto Wallet" vs "This is a CLI Tool").
+*   **The Result:** Rules adjust dynamically:
+    *   *Crypto Wallet:* 🛡️ Paranoid Mode (No http, strict types)
+    *   *CLI Tool:* ⚡ Relaxed Mode (Allow print statements, rapid I/O)
 
 ---
 
