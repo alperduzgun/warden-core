@@ -2,3 +2,6 @@
 .warden/
 __pycache__/
 tests/
+Formula/
+clients/
+src/warden_rust/
