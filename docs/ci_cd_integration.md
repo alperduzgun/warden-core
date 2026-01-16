@@ -19,95 +19,103 @@ This command will:
 
 If you prefer to configure it manually or need advanced triggers, you can use the examples below.
 
-### Standard Workflow (Push & PR)
-This is the default recommended configuration. It scans on every push to main branches and every Pull Request.
+### Production-Ready Environment (GitHub Actions)
+
+This configuration mirrors the official Warden Core CI workflow. It includes:
+*   **AI Model Caching:** Caches `~/.ollama` to prevent re-downloading large models (~5min savings).
+*   **Offline-First Intelligence:** Uses local Qwen models for code understanding.
+*   **Smart Scan Strategy:**
+    *   **Baseline Scan:** Runs a full `deep` scan if no baseline exists (e.g., first run or manual trigger).
+    *   **Incremental Scan:** Scans *only changed files* on PRs/pushes for maximum speed (<2min).
 
 ```yaml
-name: Warden Security Scan
+name: Warden CI
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ main, dev ]
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ main, dev ]
+  workflow_dispatch:
 
 jobs:
-  security-scan:
+  warden-scan:
+    name: Self-Scan
     runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for incremental git diff analysis
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
-      - name: Install Warden
-        run: pip install warden-core
+          cache: 'pip'
 
-      - name: Run Scan
-        run: warden scan . --format sarif --output warden-report.sarif
-      
-      # Upload results to GitHub Security Tab
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v2
+      - name: Install Warden
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+
+      # 🧠 Cache AI Models (Crucial for Speed / Offline-First)
+      - name: Cache AI Models
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama
+          key: ollama-models-${{ runner.os }}-${{ hashFiles('.warden/config.yaml') }}
+          restore-keys: |
+            ollama-models-${{ runner.os }}-
+
+      # 🤖 Setup Local LLM (Ollama)
+      - name: Setup Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          sudo systemctl stop ollama # Stop system service to run as runner user
+          ollama serve &
+          sleep 5 # Wait for server
+          ollama pull qwen2.5-coder:0.5b # Pull or load from cache
+
+      - name: Cache Baseline Report
+        uses: actions/cache@v4
+        with:
+          path: .warden/baseline.sarif
+          key: warden-baseline-${{ github.ref_name }}
+
+      - name: Run Warden Scan
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Optional (for Deep Tier)
+          OLLAMA_HOST: http://localhost:11434
+        run: |
+          # Logic: If baseline exists, scan only changes. Else, deep scan all.
+          if [[ -f ".warden/baseline.sarif" ]]; then
+            echo "✅ Baseline found - Running INCREMENTAL SCAN"
+            # Get changed files
+            FILES=$(git diff --name-only --diff-filter=d origin/main...HEAD | grep "\.py$" || true)
+            warden scan $FILES --level standard --format sarif --output warden.sarif
+          else
+            echo "🔍 No baseline - Running FULL DEEP SCAN"
+            warden scan . --level deep --format sarif --output warden.sarif
+            cp warden.sarif .warden/baseline.sarif # Save new baseline
+          fi
+
+      - name: Archive Results
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: warden-report.sarif
+          name: warden-scan-results
+          path: warden.sarif
 ```
 
-### Advanced Trigger Examples
+### Excluding Files (.wardenignore)
+To prevent "Integrity Check Failures" (e.g., scanning binary files or languages without installed parsers), creates a `.wardenignore` file:
 
-#### 1. Scan Only on Pull Requests (No Push)
-Useful to save CI minutes if you trust that main is protected.
-
-```yaml
-on:
-  pull_request:
-    branches: [ "main" ]
+```text
+# .wardenignore
+node_modules/
+venv/
+**/*.rs      # Exclude Rust if grammar not installed
+Formula/     # Exclude brew formulas
 ```
 
-#### 2. Scheduled Nightly Scans
-Useful for checking new vulnerabilities in dependencies even if code hasn't changed.
-
-```yaml
-on:
-  schedule:
-    - cron: '0 0 * * *' # Every night at midnight
-```
-
-#### 3. Ignore Documentation Changes
-Don't trigger scan if only markdown files are changed.
-
-```yaml
-on:
-  push:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-```
-
-## 📊 Reporting Formats
-
-Warden supports multiple report formats for different CI systems:
-
-| Format | CLI Flag | Best For |
-|--------|----------|----------|
-| **SARIF** | `--format sarif` | GitHub Security, Azure DevOps, GitLab |
-| **JUnit** | `--format junit` | Jenkins, CircleCI, Bamboo (Fail/Pass tracking) |
-| **JSON** | `--format json` | Custom parsing & scripts |
-| **HTML** | `--format html` | Human-readable artifacts |
-
-### Azure DevOps Example (JUnit)
-```bash
-warden scan . --format junit --output test-results.xml
-```
-
-### GitLab CI Example (SARIF)
-```yaml
-warden-scan:
-  script:
-    - warden scan . --format sarif --output warden.sarif
-  artifacts:
-    reports:
-      sast: warden.sarif
-```

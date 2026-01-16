@@ -69,6 +69,10 @@ Warden's custom frame system allows you to create validation frames for:
 - **Company-specific rules**: Internal security policies, coding standards
 - **Framework best practices**: FastAPI, Flask, Django patterns
 
+> [!TIP]
+> **Need to check code style?**
+> Use Warden's **Integrated Linter** (Ruff) for style, formatting, and PEP8 checks instead of writing a custom frame. Custom frames are best for business logic and architectural rules.
+
 ### Frame Types
 
 1. **Built-in Frames** (Shipped with Warden)

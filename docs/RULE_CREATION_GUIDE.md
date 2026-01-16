@@ -3,7 +3,7 @@
 Warden, projenizin "Kod Anayasasını" belirlemek için güçlü bir kural motoru kullanır. Bu rehber, kendi kurallarınızı nasıl oluşturacağınızı, "Dynamic Activation" özelliğini nasıl kullanacağınızı ve farklı kural tiplerini açıklar.
 
 ## 1. Kural Dosyası Yapısı
-Kurallar YAML formatında tanımlanır. Varsayılan olarak `.warden/checks/{language}/` dizini altında bulunurlar.
+Kurallar YAML formatında tanımlanır. Varsayılan olarak `.warden/rules` dizini altında bulunurlar (örn. `.warden/rules/{language}/`).
 
 Basit bir kural örneği:
 ```yaml

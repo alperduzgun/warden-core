@@ -120,8 +120,8 @@ rules:
     description: "Ensure 80% coverage"
     type: "pattern"
     severity: "high"
-    file_pattern: "**/*.py"
-    is_blocker: false
+    filePattern: "**/*.py"
+    isBlocker: false
     pattern: "coverage.*([0-9]+)%"
     min_match_percent: 80
     message: "Test coverage below 80%"
@@ -480,8 +480,8 @@ rules:
     type: "pattern"
     pattern: "DEBUG\\s*=\\s*True"
     severity: "critical"
-    is_blocker: true
-    file_pattern: "**/*.py"
+    isBlocker: true
+    filePattern: "**/*.py"
     message: "Debug mode must be disabled in production code"
 
   # PRE: Secrets detection
@@ -490,18 +490,18 @@ rules:
     type: "pattern"
     pattern: "(api[_-]?key|secret)\\s*=\\s*['\"][^'\"]{20,}"
     severity: "critical"
-    is_blocker: true
-    file_pattern: "**/*.py"
+    isBlocker: true
+    filePattern: "**/*.py"
     message: "Hardcoded API key detected"
 
   # POST: Verify findings
   - id: "min-security-score"
     name: "Minimum Security Score"
     type: "script"
-    script_path: "./scripts/check_security_score.sh"
+    scriptPath: "./scripts/check_security_score.sh"
     severity: "high"
-    is_blocker: true
-    file_pattern: "**/*"
+    isBlocker: true
+    filePattern: "**/*"
     message: "Security score below threshold"
 
 frame_rules:
@@ -535,8 +535,8 @@ rules:
     type: "file_size"
     max_size_bytes: 1048576  # 1MB
     severity: "medium"
-    is_blocker: true
-    file_pattern: "**/*.py"
+    isBlocker: true
+    filePattern: "**/*.py"
     message: "File too large, skipping Chaos validation"
 
   # PRE: Exclude vendor files
@@ -545,8 +545,8 @@ rules:
     type: "pattern"
     pattern: "^(vendor|node_modules|venv)/"
     severity: "low"
-    is_blocker: true
-    file_pattern: "**/*"
+    isBlocker: true
+    filePattern: "**/*"
     message: "Vendor code excluded from validation"
 
 frame_rules:
@@ -571,20 +571,20 @@ rules:
   - id: "ci-env-required"
     name: "CI Environment Check"
     type: "script"
-    script_path: "./scripts/check_ci_env.sh"
+    scriptPath: "./scripts/check_ci_env.sh"
     severity: "critical"
-    is_blocker: true
-    file_pattern: "**/*"
+    isBlocker: true
+    filePattern: "**/*"
     message: "CI environment not configured"
 
   # POST: Upload results
   - id: "upload-to-ci"
     name: "Upload Results to CI"
     type: "script"
-    script_path: "./scripts/upload_results.sh"
+    scriptPath: "./scripts/upload_results.sh"
     severity: "high"
-    is_blocker: false  # Don't fail pipeline if upload fails
-    file_pattern: "**/*"
+    isBlocker: false  # Don't fail pipeline if upload fails
+    filePattern: "**/*"
     message: "Failed to upload results to CI"
 
 frame_rules:
@@ -626,20 +626,20 @@ rules:
   - id: "min-coverage-80"
     name: "80% Test Coverage Required"
     type: "script"
-    script_path: "./scripts/check_coverage.py"
+    scriptPath: "./scripts/check_coverage.py"
     severity: "high"
-    is_blocker: true
-    file_pattern: "**/*.py"
+    isBlocker: true
+    filePattern: "**/*.py"
     message: "Test coverage below 80% threshold"
 
   # POST: Coverage report
   - id: "coverage-report"
     name: "Generate Coverage Report"
     type: "script"
-    script_path: "./scripts/generate_coverage_report.sh"
+    scriptPath: "./scripts/generate_coverage_report.sh"
     severity: "medium"
-    is_blocker: false
-    file_pattern: "**/*.py"
+    isBlocker: false
+    filePattern: "**/*.py"
     message: "Coverage report generation failed"
 
 frame_rules:
@@ -868,7 +868,7 @@ Check `is_blocker` and `on_fail`:
 ```yaml
 rules:
   - id: "should-block"
-    is_blocker: false  # ❌ This is the problem!
+    isBlocker: false  # ❌ This is the problem!
     severity: "critical"
 
 frame_rules:
@@ -882,7 +882,7 @@ frame_rules:
 ```yaml
 rules:
   - id: "should-block"
-    is_blocker: true   # ✅ Enable blocking
+    isBlocker: true   # ✅ Enable blocking
     severity: "critical"
 
 frame_rules:

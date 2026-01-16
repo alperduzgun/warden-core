@@ -313,7 +313,7 @@ See `examples/custom-commands/` for:
 |---------|-------------|
 | `/help` | Show help |
 | `/analyze <path>` | Run analysis |
-| `/scan <path>` | Scan infrastructure |
+| `/scan <path>` | Scan (Flags: `--level deep`, `--verbose`) |
 | `/config` | Show config |
 | `/status` | Show status |
 | `/rules` | Manage rules |

@@ -52,15 +52,16 @@ Optimize data sharing via PyO3.
 ## 6. LLM Context & Token Management
 LLM latency is the primary bottleneck for "Smart" phases.
 - **Goal**: Minimize token waste via modular prompt construction and semantic context distillation.
-- **In-Progress**: Modularized `FortificationPromptBuilder` to isolate prompt logic and limit example count.
+- **Status**: **Completed**. Modularized `FortificationPromptBuilder` to isolate prompt logic and limit example count.
 - **Verification**:
     - [x] **Token Reduction**: Achieved **44% reduction** (441 -> 245 tokens) via `FortificationPromptBuilder` optimization (Compact Mode).
     - [x] **Context Quality**: Implemented Client-Side Re-Ranking (Score Descending) and Deduplication in `FortificationPhase` to ensure high-value context density.
 
 ## 6.1. LLM Tier Strategy (Qwen Fast Tier Optimization)
-**Status**: **Phase 1 Completed** ✅ | **Phase 2-3 In Progress** 🚧
+**Status**: **Completed** ✅
 
 Warden implements a **Hybrid LLM Architecture** to maximize cost efficiency and privacy while maintaining quality:
+
 
 ### Fast Tier (Qwen 2.5-Coder 0.5b via Ollama)
 **Philosophy**: "Privacy-First, Cost-Optimized" - Use local, free Qwen for high-frequency, low-complexity operations.
@@ -97,7 +98,7 @@ Warden implements a **Hybrid LLM Architecture** to maximize cost efficiency and 
 - [x] **Routing Logic**: Confirmed `tier=fast` logs in CI
 - [x] **Fallback Mechanism**: Tested Azure fallback when Ollama unavailable
 - [x] **Phase 1 Migration**: Analysis + Cleaning migrated to Qwen (Expected: 40-50% Qwen usage)
-- [ ] **Cost Metrics**: Measure token usage reduction in production scans
+- [x] **Cost Metrics**: Measure token usage reduction in production scans
 
 
 ## 7. Developer Experience (Noise Reduction)
