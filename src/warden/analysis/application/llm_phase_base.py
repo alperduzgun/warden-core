@@ -135,6 +135,36 @@ class LLMPhaseBase(ABC):
         # Enable LLM if service is provided
         if llm_service:
             self.config.enabled = True
+            
+            # Auto-Scale Rate Limits for Local LLM (Ollama / Local HTTP)
+            # Local models are compute-bound, not quota-bound. 
+            # Default 1000 TPM is too low and causes unnecessary waits.
+            provider_raw = getattr(llm_service, 'provider', '')
+            provider = str(provider_raw).upper()
+            
+            # Check for Local Endpoint (Generic detection for Ollama, LMStudio, LocalAI, etc.)
+            endpoint = getattr(llm_service, 'endpoint', getattr(llm_service, '_endpoint', ''))
+            str_endpoint = str(endpoint)
+            is_local = (
+                'OLLAMA' in provider or 
+                'localhost' in str_endpoint or 
+                '127.0.0.1' in str_endpoint or 
+                '::1' in str_endpoint or 
+                '0:0:0:0:0:0:0:1' in str_endpoint
+            )
+
+            if is_local:
+                 # Effectively unlimited for local
+                 self.config.tpm_limit = 1_000_000 
+                 self.config.rpm_limit = 100 
+                 
+                 # PROMPTLY UPDATE ACTIVE RATE LIMITER
+                 if self.rate_limiter and hasattr(self.rate_limiter, 'config'):
+                     self.rate_limiter.config.tpm = self.config.tpm_limit
+                     self.rate_limiter.config.rpm = self.config.rpm_limit
+                     
+                 logger.info("rate_limits_relaxed_for_local_llm", provider=provider, tpm=1000000)
+
             logger.info(
                 "llm_phase_initialized",
                 phase=self.phase_name,
@@ -198,8 +228,27 @@ class LLMPhaseBase(ABC):
 
         # Enrich context with pipeline history if available
         if pipeline_context:
-            context["pipeline_context"] = pipeline_context.get_llm_context_prompt(self.phase_name)
+            # Smart Context Truncation for Fast Tier
+            # If using Fast Tier (usually Qwen/Ollama), reduce context bloat
+            is_fast_tier = False
+            if model and ("qwen" in model.lower() or "llama" in model.lower()):
+                is_fast_tier = True
+            elif self.preferred_model_tier == "fast":
+                is_fast_tier = True
+                
+            # Get Context
+            context["pipeline_context"] = pipeline_context.get_llm_context_prompt(
+                self.phase_name, 
+                concise=is_fast_tier
+            )
             context["previous_phases"] = pipeline_context.get_context_for_phase(self.phase_name)
+
+            # Add LLM history with Tier-Aware Limits
+            history_limit = 1 if is_fast_tier else 5
+            context["previous_llm_interactions"] = [
+                h for h in pipeline_context.llm_history 
+                if h["phase"] != self.phase_name
+            ][-history_limit:]
 
         # Generate cache key
         cache_key = None

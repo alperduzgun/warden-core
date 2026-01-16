@@ -84,7 +84,7 @@ class ILlmClient(ABC):
             model=model,  # Use provider default or override
             temperature=0.0,  # Idempotency
             max_tokens=2000,
-            timeout_seconds=30.0,
+            timeout_seconds=120.0,
             use_fast_tier=use_fast_tier
         )
 

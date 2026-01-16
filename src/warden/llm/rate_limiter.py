@@ -91,6 +91,18 @@ class RateLimiter:
         Returns:
             Wait time in seconds (0.0 if immediate)
         """
+        # JUMBO REQUEST SAFETY (Deadlock Prevention)
+        # If a request exceeds the entire bucket capacity (TPM), it can NEVER be satisfied.
+        # We cap the cost at max capacity so it waits for a full bucket, then drains it entirely.
+        if self.config.tpm > 0 and estimated_tokens > self.config.tpm:
+            logger.warning(
+                "jumbo_request_capped",
+                original_cost=estimated_tokens,
+                tpm_capacity=self.config.tpm,
+                msg="Request exceeds TPM capacity. Capping cost to allow execution (full drain)."
+            )
+            estimated_tokens = int(self.config.tpm)
+
         async with self._get_lock():
             await self._refill_async()
             
