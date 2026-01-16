@@ -286,12 +286,13 @@ class PipelineContext:
 
         return context
 
-    def get_llm_context_prompt(self, phase: str) -> str:
+    def get_llm_context_prompt(self, phase: str, concise: bool = False) -> str:
         """
         Generate a context summary prompt for LLM.
 
         Args:
             phase: Current phase
+            concise: Whether to generate a concise summary (for Fast Tier/Local LLMs)
 
         Returns:
             Context summary for LLM prompt
@@ -307,34 +308,41 @@ class PipelineContext:
             else:
                 pt = self.project_type.value if self.project_type else "unknown"
                 fw = self.framework.value if self.framework else "unknown"
-            context_parts.append(
-                f"PROJECT: {pt} application using {fw}"
-            )
+            
+            if concise:
+                context_parts.append(f"PROJECT: {pt} / {fw}")
+            else:
+                context_parts.append(f"PROJECT: {pt} application using {fw}")
 
         # Add file context
         if self.file_context:
-            context_parts.append(
-                f"FILE TYPE: {self.file_context.value} ({self.language})"
-            )
+            if concise:
+                context_parts.append(f"FILE: {self.file_context.value}")
+            else:
+                context_parts.append(f"FILE TYPE: {self.file_context.value} ({self.language})")
 
         # Add quality context
         if self.quality_score_before > 0:
             context_parts.append(
-                f"QUALITY SCORE: {self.quality_score_before:.1f}/10"
+                f"QUALITY: {self.quality_score_before:.1f}/10"
             )
 
         # Add issues context
         if self.findings:
-            severity_counts = {}
-            for finding in self.findings:
-                sev = finding.get("severity", "unknown")
-                severity_counts[sev] = severity_counts.get(sev, 0) + 1
-            context_parts.append(
-                f"ISSUES FOUND: {severity_counts}"
-            )
+            if concise:
+                # Just counts for concise mode
+                crit = sum(1 for f in self.findings if str(f.get('severity')).lower() == 'critical')
+                total = len(self.findings)
+                context_parts.append(f"ISSUES: {total} ({crit} critical)")
+            else:
+                severity_counts = {}
+                for finding in self.findings:
+                    sev = finding.get("severity", "unknown")
+                    severity_counts[sev] = severity_counts.get(sev, 0) + 1
+                context_parts.append(f"ISSUES FOUND: {severity_counts}")
 
-        # Add frame selection
-        if self.selected_frames:
+        # Add frame selection (skip for concise unless relevant)
+        if self.selected_frames and not concise:
             context_parts.append(
                 f"VALIDATION FRAMES: {', '.join(self.selected_frames)}"
             )
@@ -342,20 +350,21 @@ class PipelineContext:
         # Add fixes applied
         if self.fortifications:
             context_parts.append(
-                f"FIXES GENERATED: {len(self.fortifications)}"
+                f"FIXES: {len(self.fortifications)}"
             )
 
-        # Add phase-specific context
-        phase_summaries = {
-            "ANALYSIS": "Now analyzing code quality...",
-            "CLASSIFICATION": "Now selecting validation frames...",
-            "VALIDATION": "Now running security validation...",
-            "FORTIFICATION": "Now generating security fixes...",
-            "CLEANING": "Now suggesting quality improvements...",
-        }
+        # Add phase-specific context (Skip for concise, implied by prompt)
+        if not concise:
+            phase_summaries = {
+                "ANALYSIS": "Now analyzing code quality...",
+                "CLASSIFICATION": "Now selecting validation frames...",
+                "VALIDATION": "Now running security validation...",
+                "FORTIFICATION": "Now generating security fixes...",
+                "CLEANING": "Now suggesting quality improvements...",
+            }
 
-        if phase in phase_summaries:
-            context_parts.append(phase_summaries[phase])
+            if phase in phase_summaries:
+                context_parts.append(phase_summaries[phase])
 
         return "\n".join(context_parts)
 
