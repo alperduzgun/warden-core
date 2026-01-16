@@ -150,7 +150,8 @@ class ConfigHandler(BaseHandler):
         registry = FrameRegistry()
         registry.discover_all(project_root=self.project_root)
         
-        default_ids = ["security", "resilience", "architecturalconsistency", "orphan", "fuzz", "property"]
+        # Default built-in frames that come with warden-core
+        default_ids = ["security", "resilience", "orphan", "fuzz", "property"]
         frames = []
         for fid in default_ids:
             cls = registry.registered_frames.get(fid)

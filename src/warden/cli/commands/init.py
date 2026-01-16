@@ -203,8 +203,9 @@ def init_command(
     meta.build_tools = [bt.value for bt in context.build_tools]
     
     # Suggest frames logic (Dynamic Discovery)
-    # 1. Base Core Frames
-    meta.suggested_frames = ["security", "architecturalconsistency", "config", "orphan"]
+    # 1. Base Core Frames (built-in frames that come with warden-core)
+    # Available built-in frames: security, resilience, orphan, fuzz, property, spec, gitchanges
+    meta.suggested_frames = ["security", "resilience", "orphan"]
     
     # 2. Dynamic Language-Specific Frames (Registry Search)
     try:
@@ -240,12 +241,16 @@ def init_command(
         console.print(f"[dim yellow]Warning: frame suggestion failed: {e}[/dim yellow]")
 
     if meta.project_type in ["api", "backend", "microservice"]:
-         meta.suggested_frames.extend(["stress", "resilience"])
+        # Add fuzz and property testing for API/backend projects
+        if "fuzz" not in meta.suggested_frames:
+            meta.suggested_frames.append("fuzz")
+        if "property" not in meta.suggested_frames:
+            meta.suggested_frames.append("property")
     # Helper to check for CI config files from context.config_files
     ci_files = {".github/workflows": "github-actions", ".gitlab-ci.yml": "gitlab-ci", "Jenkinsfile": "jenkins"}
     for f, p in ci_files.items():
-        if f in context.config_files: meta.ci_providers.append(p)
-    if meta.ci_providers: meta.suggested_frames.append("env-security")
+        if f in context.config_files:
+            meta.ci_providers.append(p)
 
     console.print(f"   [green]✓[/green] Language: [cyan]{meta.language}[/cyan]")
     console.print(f"   [green]✓[/green] Framework: [cyan]{', '.join(meta.frameworks) if meta.frameworks else 'None detected'}[/cyan]")
@@ -319,7 +324,9 @@ def init_command(
 
     # --- Step 3: LLM Config ---
     llm_config, new_env_vars = configure_llm(existing_config)
-    
+    provider = llm_config["provider"]
+    model = llm_config["model"]
+
     # Update .env
     env_path = Path(".env")
     if new_env_vars:
@@ -341,13 +348,10 @@ def init_command(
                     f.write("AZURE_OPENAI_API_KEY=\n")
                     f.write("AZURE_OPENAI_ENDPOINT=\n")
                     f.write("AZURE_OPENAI_DEPLOYMENT_NAME=\n")
-                else:
-                     # Generic key
-                     f.write(f"{provider.upper()}_API_KEY=\n")
+                elif provider != "none" and provider != "ollama":
+                    # Generic key
+                    f.write(f"{provider.upper()}_API_KEY=\n")
             console.print("[green]Created .env.example[/green]")
-
-    provider = llm_config["provider"]
-    model = llm_config["model"]
 
     # --- Step 4: Vector Database ---
     vector_config = configure_vector_db()
@@ -457,8 +461,20 @@ def init_command(
             console.print("[green]Merged configuration successfully.[/green]")
 
 
-    # --- Step 5: Ignore File ---
+    # --- Step 5: Ignore Files ---
     _generate_ignore_file(Path.cwd(), meta)
+
+    # Create .warden/ignore.yaml from template
+    ignore_yaml_path = warden_dir / "ignore.yaml"
+    if not ignore_yaml_path.exists():
+        try:
+            import importlib.resources
+            ignore_template = importlib.resources.read_text("warden.templates", "ignore.yaml")
+            with open(ignore_yaml_path, "w") as f:
+                f.write(ignore_template)
+            console.print(f"[green]Created ignore configuration: {ignore_yaml_path}[/green]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not create ignore.yaml: {e}[/yellow]")
 
     # --- Step 6: Example Rules ---
     rules_dir = warden_dir / "rules"
@@ -639,22 +655,31 @@ jobs:
                 f.write(content)
             console.print(f"[green]Created robust CI workflow with Local LLM support: {workflow_path}[/green]")
 
-    # --- Step 10: Install dependencies ---
-    console.print("\n[bold blue]📦 Installing Frames & Rules...[/bold blue]")
+    # --- Step 10: Verify Built-in Frames ---
+    console.print("\n[bold blue]📦 Verifying Built-in Frames...[/bold blue]")
     try:
-        from warden.cli.commands.update import update_command
-        
-        # 1. Update Registry (to know what is Core)
-        try:
-             update_command()
-        except:
-             console.print("[yellow]Warning: Could not update registry. Core frames might be outdated.[/yellow]")
-
-        # 2. Install (will pick up Core frames automatically)
-        run_install(frame_id=None)
+        from warden.validation.infrastructure.frame_registry import FrameRegistry
+        registry = FrameRegistry()
+        frames = registry.discover_all(project_root=Path.cwd())
+        frame_names = [f().name for f in frames]
+        console.print(f"[green]✓ Found {len(frames)} built-in frames: {', '.join(frame_names[:5])}{'...' if len(frames) > 5 else ''}[/green]")
     except Exception as e:
-        console.print(f"[red]Warning: Auto-install failed: {e}[/red]")
-        console.print("[dim]Run 'warden install' manually to download frames.[/dim]")
+        console.print(f"[yellow]Warning: Could not verify frames: {e}[/yellow]")
+
+    # Optional: Try to install additional frames from Hub (non-blocking)
+    if Confirm.ask("\nInstall additional frames from Warden Hub? (requires network)", default=False):
+        try:
+            from warden.cli.commands.update import update_command
+            try:
+                update_command()
+            except Exception:
+                console.print("[yellow]Warning: Could not update registry.[/yellow]")
+
+            run_install(frame_id=None)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Hub install failed: {e}[/yellow]")
+            console.print("[dim]Built-in frames are still available.[/dim]")
 
     console.print("\n[bold green]✨ Warden Initialization Complete![/bold green]")
     console.print("Run [bold cyan]warden scan[/bold cyan] to start.")
+    console.print("[dim]Available frames: security, resilience, orphan, fuzz, property[/dim]")
