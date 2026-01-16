@@ -13,6 +13,7 @@ from warden.analysis.application.llm_phase_base import (
     PromptTemplates,
 )
 from warden.shared.infrastructure.logging import get_logger
+from warden.ast.domain.enums import CodeLanguage
 
 logger = get_logger(__name__)
 
@@ -329,7 +330,7 @@ Return as JSON with:
         """SQL injection fix template."""
         original = finding.get("code_snippet", "")
 
-        if language == "python":
+        if language == CodeLanguage.PYTHON.value or language == CodeLanguage.PYTHON:
             if framework == "django":
                 suggested = """# Use Django ORM
 from myapp.models import User
@@ -350,7 +351,7 @@ cursor.execute_async(
     (username,)
 )"""
 
-        elif language == "javascript":
+        elif language == CodeLanguage.JAVASCRIPT.value or language == CodeLanguage.JAVASCRIPT or language == CodeLanguage.TYPESCRIPT.value or language == CodeLanguage.TYPESCRIPT:
             suggested = """// Use parameterized query
 const query = 'SELECT * FROM users WHERE username = ?';
 db.query(query, [username], (err, results) => {
@@ -420,7 +421,7 @@ safe_input = html.escape(user_input)"""
         """Hardcoded secret fix template."""
         original = finding.get("code_snippet", "")
 
-        if language == "python":
+        if language == CodeLanguage.PYTHON.value or language == CodeLanguage.PYTHON:
             suggested = """# Use environment variables
 import os
 from dotenv import load_dotenv
@@ -431,7 +432,7 @@ load_dotenv()
 API_KEY = os.getenv('API_KEY')
 if not API_KEY:
     raise ValueError('API_KEY environment variable not set')"""
-        elif language == "javascript":
+        elif language == CodeLanguage.JAVASCRIPT.value or language == CodeLanguage.JAVASCRIPT or language == CodeLanguage.TYPESCRIPT.value or language == CodeLanguage.TYPESCRIPT:
             suggested = """// Use environment variables
 require('dotenv').config();
 
@@ -464,7 +465,7 @@ if (!API_KEY) {
         """Path traversal fix template."""
         original = finding.get("code_snippet", "")
 
-        if language == "python":
+        if language == CodeLanguage.PYTHON.value or language == CodeLanguage.PYTHON:
             suggested = """# Validate and sanitize file paths
 import os
 from pathlib import Path
@@ -481,7 +482,7 @@ def safe_path_join(user_input):
         raise ValueError('Invalid file path')
 
     return requested_path"""
-        elif language == "javascript":
+        elif language == CodeLanguage.JAVASCRIPT.value or language == CodeLanguage.JAVASCRIPT or language == CodeLanguage.TYPESCRIPT.value or language == CodeLanguage.TYPESCRIPT:
             suggested = """// Validate and sanitize file paths
 const path = require('path');
 

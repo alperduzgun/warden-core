@@ -123,6 +123,9 @@ class PipelineContext:
     # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)
     ast_cache: Dict[str, Any] = field(default_factory=dict)
 
+    # State Tracking
+    completed_phases: set[str] = field(default_factory=set)
+
     def add_phase_result(self, phase: str, result: Dict[str, Any]) -> None:
         """
         Add results from a phase execution (thread-safe).
@@ -135,6 +138,7 @@ class PipelineContext:
             phase_key = f"phase_{phase.lower()}_result"
             self.metadata[phase_key] = result
             self.metadata[f"{phase_key}_timestamp"] = datetime.now().isoformat()
+            self.completed_phases.add(phase)
 
     def add_llm_interaction(
         self,

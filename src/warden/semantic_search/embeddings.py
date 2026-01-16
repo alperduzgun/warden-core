@@ -95,12 +95,27 @@ class EmbeddingGenerator:
             # Initialize local model
             # For Jina embeddings v2, trust_remote_code=True is required
             # Force CPU by default to avoid UI freezes on Mac (MPS issues)
-            self.client = SentenceTransformer(
-                model_name, 
-                trust_remote_code=trust_remote_code,
-                device=device
-            )
-            logger.info("local_embedding_model_loaded", model=model_name, device=device)
+            
+            # Offline-First Strategy: Try loading from local cache to avoid network latency/timeouts
+            try:
+                logger.debug("attempting_local_cache_load", model=model_name)
+                self.client = SentenceTransformer(
+                    model_name, 
+                    trust_remote_code=trust_remote_code,
+                    device=device,
+                    local_files_only=True
+                )
+                logger.info("local_embedding_model_loaded_from_cache", model=model_name, device=device)
+            except Exception as e:
+                # Fallback to online loading if not found locally or other error
+                logger.info("model_not_in_cache_downloading", model=model_name, reason=str(e))
+                self.client = SentenceTransformer(
+                    model_name, 
+                    trust_remote_code=trust_remote_code,
+                    device=device
+                    # local_files_only=False (default)
+                )
+                logger.info("local_embedding_model_loaded_online", model=model_name, device=device)
 
         else:
             raise ValueError(f"Unsupported provider: {provider}")

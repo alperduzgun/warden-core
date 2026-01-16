@@ -14,6 +14,7 @@ from warden.analysis.application.llm_phase_base import (
     PromptTemplates,
 )
 from warden.shared.infrastructure.logging import get_logger
+from warden.ast.domain.enums import CodeLanguage
 
 logger = get_logger(__name__)
 
@@ -118,7 +119,7 @@ Return suggestions as JSON."""
         """Format prompt for cleaning suggestions."""
         code = context.get("code", "")
         file_path = context.get("file_path", "")
-        language = context.get("language", "python")
+        language = context.get("language", CodeLanguage.PYTHON.value)
         quality_score = context.get("quality_score", 5.0)
         issues = context.get("issues", [])
 
@@ -203,7 +204,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
         file_path: Path,
         quality_score: float = 5.0,
         issues: Optional[List[Dict[str, Any]]] = None,
-        language: str = "python",
+        language: str = CodeLanguage.PYTHON.value,
     ) -> List[CleaningSuggestion]:
         """
         Generate cleaning suggestions for code.
@@ -264,7 +265,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
         self,
         files: List[Tuple[str, Path, float]],
         issues_by_file: Optional[Dict[Path, List[Dict[str, Any]]]] = None,
-        language: str = "python",
+        language: str = CodeLanguage.PYTHON.value,
     ) -> Dict[Path, List[CleaningSuggestion]]:
         """
         Generate suggestions for multiple files.
@@ -435,7 +436,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
         """Find functions that are too long."""
         long_functions = []
 
-        if language == "python":
+        if language == CodeLanguage.PYTHON.value or language == CodeLanguage.PYTHON:
             for i, line in enumerate(lines):
                 if line.strip().startswith("def "):
                     func_name = line.split("(")[0].replace("def ", "").strip()
@@ -462,7 +463,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
 
         short_vars = []
 
-        if language == "python":
+        if language == CodeLanguage.PYTHON.value or language == CodeLanguage.PYTHON:
             # Find variable assignments
             pattern = r"^\s*([a-z])\s*="
             for match in re.finditer(pattern, code, re.MULTILINE):
