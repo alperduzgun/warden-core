@@ -193,44 +193,44 @@ class FileDiscoverer:
             except Exception as e:
                 logger.warning("rust_discovery_failed_falling_back", error=str(e))
 
-            # Fallback to Python discovery
-            logger.debug("discovery_engine_selected", engine="python", project_root=str(self.root_path))
-            
-            for file_path in self._walk_directory(self.root_path, current_depth=0):
-                # Skip if gitignore says so (already covered by _walk_directory items, 
-                # but adding for safety if logic changes)
-                if self.gitignore_filter and self.gitignore_filter.should_ignore(file_path):
-                    continue
+        # Fallback to Python discovery
+        logger.debug("discovery_engine_selected", engine="python", project_root=str(self.root_path))
+        
+        for file_path in self._walk_directory(self.root_path, current_depth=0):
+            # Skip if gitignore says so (already covered by _walk_directory items, 
+            # but adding for safety if logic changes)
+            if self.gitignore_filter and self.gitignore_filter.should_ignore(file_path):
+                continue
 
-                # Skip non-files
-                if not file_path.is_file():
-                    continue
+            # Skip non-files
+            if not file_path.is_file():
+                continue
 
-                # Skip binary and non-code files
-                if self.classifier.should_skip(file_path):
-                    continue
+            # Skip binary and non-code files
+            if self.classifier.should_skip(file_path):
+                continue
 
-                # Classify file
-                file_type = self.classifier.classify(file_path)
+            # Classify file
+            file_type = self.classifier.classify(file_path)
 
-                # Get file size
-                try:
-                    size_bytes = file_path.stat().st_size
-                except OSError:
-                    size_bytes = 0
+            # Get file size
+            try:
+                size_bytes = file_path.stat().st_size
+            except OSError:
+                size_bytes = 0
 
-                # Create DiscoveredFile
-                relative_path = file_path.relative_to(self.root_path)
-                discovered_file = DiscoveredFile(
-                    path=str(file_path),
-                    relative_path=str(relative_path),
-                    file_type=file_type,
-                    size_bytes=size_bytes,
-                    is_analyzable=file_type.is_analyzable,
-                    metadata={"engine": "python"},
-                )
+            # Create DiscoveredFile
+            relative_path = file_path.relative_to(self.root_path)
+            discovered_file = DiscoveredFile(
+                path=str(file_path),
+                relative_path=str(relative_path),
+                file_type=file_type,
+                size_bytes=size_bytes,
+                is_analyzable=file_type.is_analyzable,
+                metadata={"engine": "python"},
+            )
 
-                discovered_files.append(discovered_file)
+            discovered_files.append(discovered_file)
 
         return discovered_files
 

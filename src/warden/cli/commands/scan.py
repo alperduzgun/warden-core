@@ -577,6 +577,10 @@ Updated: {scan_time}
             pass # Silent fail for aux file
 
         # Final exit code decision
+        if not final_result_data:
+             console.print("[bold red]❌ No scan results were produced. Check your input paths and filters.[/bold red]")
+             return 1
+
         # 1. Check pipeline status (must be valid and completed)
         status_val = final_result_data.get('status')
         pipeline_ok = final_result_data and str(status_val).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
