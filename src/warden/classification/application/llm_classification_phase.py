@@ -140,9 +140,14 @@ class LLMClassificationPhase(LLMPhaseBase):
                 results[file_path] = (selected_frames, suppression_config, 0.6)
             return results
 
-        BATCH_SIZE = 10
-        for i in range(0, len(files), BATCH_SIZE):
-            batch_files = files[i : i + BATCH_SIZE]
+        # Initial requested batch size
+        requested_batch_size = 2
+        
+        i = 0
+        while i < len(files):
+            # Dynamically adjust batch size based on system resources
+            batch_size = self._get_realtime_safe_batch_size(requested_batch_size)
+            batch_files = files[i : i + batch_size]
             
             try:
                 # Prepare Batch Prompt
@@ -150,8 +155,12 @@ class LLMClassificationPhase(LLMPhaseBase):
                     project_type, framework, batch_files, file_contexts, previous_issues
                 )
                 
-                # Call LLM
-                response = await self.llm.complete_async(prompt, self.get_system_prompt(), use_fast_tier=True)
+                # Call LLM via Base Retry Logic (Enables Complexity Routing & Rate Limiting)
+                response = await self._call_llm_with_retry_async(
+                    system_prompt=self.get_system_prompt(),
+                    user_prompt=prompt,
+                    use_fast_tier=True
+                )
                 
                 # Parse Batch Results
                 batch_results = self._parse_classification_batch_response(response.content, len(batch_files))
@@ -183,6 +192,8 @@ class LLMClassificationPhase(LLMPhaseBase):
                     selected_frames = self._rule_based_selection(project_type, framework, {file_path: file_contexts.get(file_path, {})})
                     suppression_config = self._default_suppression_config({file_path: file_contexts.get(file_path, {})})
                     results[file_path] = (selected_frames, suppression_config, 0.5)
+            # Increment by the actual size of the batch we just processed
+            i += len(batch_files)
 
         return results
 
@@ -449,6 +460,7 @@ Return patterns as JSON."""
         """
         Execute LLM-enhanced classification phase with True Batching.
         """
+        print(f"DEBUG_CLASSIFICATION: executing with {len(code_files) if code_files else 0} files")
         if not code_files:
             return self._create_default_result(["security", "chaos", "orphan"])
 

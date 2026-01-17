@@ -1,4 +1,6 @@
 import json
+import os
+import psutil
 from typing import List, Dict, Any, Optional
 from warden.shared.infrastructure.logging import get_logger
 from warden.llm.providers.base import ILlmClient
@@ -38,6 +40,18 @@ class FindingVerificationService:
         self.llm = llm_client
         self.memory_manager = memory_manager
         self.enabled = enabled
+        
+        # Detect Local LLM (Ollama / Local HTTP)
+        provider = str(getattr(llm_client, 'provider', '')).upper()
+        endpoint = str(getattr(llm_client, 'endpoint', getattr(llm_client, '_endpoint', '')))
+        self.is_local = (
+            'OLLAMA' in provider or 
+            'localhost' in endpoint or 
+            '127.0.0.1' in endpoint or 
+            '::1' in endpoint or 
+            '0:0:0:0:0:0:0:1' in endpoint
+        )
+
         self.system_prompt = """
 You are a Senior Code Auditor. Your task is to verify if a reported static analysis finding is a TRUE POSITIVE or a FALSE POSITIVE.
 
@@ -122,12 +136,15 @@ Return ONLY a JSON object:
             return verified_findings
 
         # STEP 3: Batch LLM Verification
-        # Group remaining findings into batches of 10 to reduce API calls
-        BATCH_SIZE = 10
-        logger.info("batch_verification_starting", count=len(remaining_after_cache), batches=(len(remaining_after_cache) // BATCH_SIZE) + 1)
+        requested_batch_size = 10
+        logger.info("batch_verification_starting", count=len(remaining_after_cache))
 
-        for i in range(0, len(remaining_after_cache), BATCH_SIZE):
-            batch = remaining_after_cache[i : i + BATCH_SIZE]
+        i = 0
+        while i < len(remaining_after_cache):
+            # Dynamic resource-check
+            batch_size = self._get_safe_batch_size(requested_batch_size)
+            batch = remaining_after_cache[i : i + batch_size]
+            
             try:
                 batch_results = await self._verify_batch_with_llm_async(batch, context)
                 
@@ -155,6 +172,8 @@ Return ONLY a JSON object:
                         "fallback": True
                     })
                 verified_findings.extend(batch)
+            
+            i += len(batch)
 
         logger.info("verification_summary", 
                     initial=initial_count, 
@@ -293,4 +312,20 @@ Return ONLY a JSON array of objects in the EXACT order:
                 self.memory_manager.set_llm_cache(f"verify:{key}", data)
         except Exception as e:
             logger.warning("cache_save_failed", key=key, error=str(e))
+
+    def _get_safe_batch_size(self, max_allowed: int) -> int:
+        """Adaptive batch size based on RAM/CPU."""
+        if not getattr(self, "is_local", False):
+            return max_allowed
+        try:
+            mem = psutil.virtual_memory()
+            available_gb = mem.available / (1024**3)
+            mem_limit = max(1, int(available_gb // 2.5)) # Verification is heavy, 2.5GB per item
+            
+            cpu_load = psutil.cpu_percent(interval=None)
+            cpu_limit = 1 if cpu_load > 85 else max_allowed
+            
+            return min(max_allowed, mem_limit, cpu_limit, (os.cpu_count() or 2) // 2)
+        except:
+            return 1
 

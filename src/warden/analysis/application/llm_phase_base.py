@@ -8,7 +8,9 @@ Provides caching, fallback, and batch processing capabilities.
 import asyncio
 import hashlib
 import json
+import os
 import time
+import psutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -153,8 +155,9 @@ class LLMPhaseBase(ABC):
                 '0:0:0:0:0:0:0:1' in str_endpoint
             )
 
+            self.is_local = is_local
             if is_local:
-                 # Effectively unlimited for local
+                 # Effectively unlimited for local (TPM-wise), but we will cap concurrency later
                  self.config.tpm_limit = 1_000_000 
                  self.config.rpm_limit = 100 
                  
@@ -164,6 +167,8 @@ class LLMPhaseBase(ABC):
                      self.rate_limiter.config.rpm = self.config.rpm_limit
                      
                  logger.info("rate_limits_relaxed_for_local_llm", provider=provider, tpm=1000000)
+            else:
+                 self.is_local = False
 
             logger.info(
                 "llm_phase_initialized",
@@ -199,6 +204,50 @@ class LLMPhaseBase(ABC):
     def parse_llm_response(self, response: str) -> Any:
         """Parse LLM response to phase-specific format."""
         pass
+
+    def _get_realtime_safe_batch_size(self, max_allowed: int) -> int:
+        """
+        Dynamically calculate safe batch size based on RAM and CPU load.
+        Specifically protects local Ollama instances from gridlock.
+        """
+        if not getattr(self, "is_local", False):
+            return max_allowed
+
+        try:
+            # 1. Check Available Memory (RAM)
+            # Each batch item (Ollama process thread) needs approx 1-1.5GB to be safe
+            mem = psutil.virtual_memory()
+            available_gb = mem.available / (1024**3)
+            
+            # 1.5GB per item threshold
+            mem_based_limit = max(1, int(available_gb // 1.5))
+            
+            # 2. Check CPU Load
+            # If CPU is already pegged (>80%), don't add more parallel load
+            cpu_load = psutil.cpu_percent(interval=None)
+            cpu_based_limit = 1 if cpu_load > 80 else max_allowed
+            
+            # 3. CPU Core Count (Hardware ceiling)
+            cpu_count = os.cpu_count() or 2
+            hardware_ceiling = max(1, cpu_count // 2) # Leave half for OS/Other tasks
+            
+            # Final Decision: Most restrictive constraint wins
+            final_batch_size = min(max_allowed, mem_based_limit, cpu_based_limit, hardware_ceiling)
+            
+            if final_batch_size < max_allowed:
+                 logger.debug(
+                     "adaptive_batch_size_throttled", 
+                     phase=self.phase_name,
+                     final=final_batch_size, 
+                     original=max_allowed,
+                     ram_gb=f"{available_gb:.1f}",
+                     cpu=f"{cpu_load}%"
+                 )
+            
+            return final_batch_size
+        except Exception as e:
+            logger.warning("resource_check_failed", error=str(e))
+            return 1 # Fail safe
 
     async def analyze_with_llm_async(
         self,
@@ -292,7 +341,12 @@ class LLMPhaseBase(ABC):
 
             # Call LLM with retry logic
             llm_start_time = time.time()
-            response = await self._call_llm_with_retry_async(system_prompt, user_prompt, model=model)
+            response = await self._call_llm_with_retry_async(
+                system_prompt, 
+                user_prompt, 
+                model=model,
+                use_fast_tier=is_fast_tier
+            )
             llm_duration = time.time() - llm_start_time
 
             logger.info(
@@ -370,16 +424,21 @@ class LLMPhaseBase(ABC):
         """
         results = []
 
-        # Determine batch size from config or global max_concurrency
-        batch_size = self.config.batch_size
+        # Initial batch size from config
+        requested_batch_size = self.config.batch_size
         llm_config = getattr(self.llm, 'config', None) if hasattr(self.llm, 'config') else None
         if llm_config and hasattr(llm_config, 'max_concurrency'):
-            batch_size = llm_config.max_concurrency
+            requested_batch_size = llm_config.max_concurrency
 
         # Process in batches
-        for i in range(0, len(items), batch_size):
+        i = 0
+        while i < len(items):
+            # RE-CALCULATE safe batch size BEFORE every batch starts
+            # This handles mid-scan resource spikes (e.g. CI runner doing something else)
+            batch_size = self._get_realtime_safe_batch_size(requested_batch_size)
+            
             batch = items[i : i + batch_size]
-
+            
             # Process batch concurrently
             batch_tasks = [
                 self.analyze_with_llm_async(
@@ -402,6 +461,9 @@ class LLMPhaseBase(ABC):
                     results.append(None)
                 else:
                     results.append(result)
+            
+            # Increment by the actual size of the batch we just processed
+            i += len(batch)
 
         return results
 
@@ -410,6 +472,7 @@ class LLMPhaseBase(ABC):
         system_prompt: str,
         user_prompt: str,
         model: Optional[str] = None,
+        use_fast_tier: bool = False,
     ) -> Optional[Any]:  # Returns LlmResponse
         """
         Call LLM with retry logic and PROACTIVE RATE LIMITING.
@@ -440,6 +503,26 @@ class LLMPhaseBase(ABC):
             input_text = system_prompt + user_prompt
             estimated_tokens = (len(input_text) // 4) + self.config.max_tokens + 50
         
+        # 3. Complexity-Based Smart Routing (Auto-Upgrade)
+        # If using Fast Tier (usually small 0.5b/7b model) and request is big,
+        # PROACTIVELY upgrade to Smart Tier (Cloud) to prevent context failure/timeout.
+        complexity_threshold = 2000 # Conservative limit for 0.5b model context + output
+        
+        # DEBUG: Print token stats
+        print(f"DEBUG_TOKENS: {estimated_tokens} (Threshold: {complexity_threshold}), FastTierRequested: {use_fast_tier}")
+        
+        if use_fast_tier and estimated_tokens > complexity_threshold:
+            print("DEBUG_UPGRADE: Triggering Upgrade to Smart Tier")
+            logger.info(
+                "complexity_upgrade_triggered",
+                reason="context_too_large_for_local_model",
+                tokens=estimated_tokens,
+                threshold=complexity_threshold,
+                action="upgrading_to_smart_tier"
+            )
+            use_fast_tier = False
+            model = None # Unset local model to allow Orchestrator to pick Smart Default
+
         await self.rate_limiter.acquire_async(estimated_tokens)
 
         for attempt in range(self.config.max_retries):
@@ -449,7 +532,8 @@ class LLMPhaseBase(ABC):
                     self.llm.complete_async(
                         prompt=user_prompt,
                         system_prompt=system_prompt,
-                        model=model
+                        model=model,
+                        use_fast_tier=use_fast_tier
                     ),
                     timeout=self.config.timeout,
                 )

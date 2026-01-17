@@ -266,11 +266,14 @@ Return as JSON."""
                 results[path] = (self._create_metrics_from_rules(initial, file_context), 0.6)
             return results
 
-        # Determine Batch Size (smaller than verification because of code snippets)
-        BATCH_SIZE = 5 
+        # Initial requested batch size
+        requested_batch_size = 5 
         
-        for i in range(0, len(files), BATCH_SIZE):
-            batch_items = files[i : i + BATCH_SIZE]
+        i = 0
+        while i < len(files):
+            # Dynamically adjust batch size based on system resources
+            batch_size = self._get_realtime_safe_batch_size(requested_batch_size)
+            batch_items = files[i : i + batch_size]
             
             try:
                 # Prepare Batch Prompt
@@ -314,6 +317,8 @@ Return as JSON."""
                 for _, path, file_context, _ in batch_items:
                     initial = (initial_metrics.get(path, {}) if initial_metrics else {})
                     results[path] = (self._create_metrics_from_rules(initial, file_context), 0.5)
+            # Increment by the actual size of the batch we just processed
+            i += len(batch_items)
 
         return results
 

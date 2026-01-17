@@ -86,6 +86,11 @@ def create_client(
             import structlog
             logger = structlog.get_logger(__name__)
             logger.warning("ollama_client_creation_failed", error=str(e))
+    
+    # DEBUG: Diagnosing Hybrid Setup
+    import structlog
+    debug_logger = structlog.get_logger(__name__)
+    debug_logger.warning("factory_client_status", ollama_enabled=config.ollama.enabled, fast_client_created=fast_client is not None)
 
     # Wrap in OrchestratedLlmClient for tiered execution support
     from .providers.orchestrated import OrchestratedLlmClient

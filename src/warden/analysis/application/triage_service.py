@@ -4,8 +4,10 @@ Uses Local LLM to assess file risk and complexity.
 """
 
 import json
+import os
 import time
 import re
+import psutil
 import structlog
 
 from warden.llm.types import LlmRequest
@@ -46,6 +48,17 @@ class TriageService:
 
     def __init__(self, llm_client: ILlmClient):
         self.llm = llm_client
+        
+        # Detect Local LLM (Ollama / Local HTTP)
+        provider = str(getattr(llm_client, 'provider', '')).upper()
+        endpoint = str(getattr(llm_client, 'endpoint', getattr(llm_client, '_endpoint', '')))
+        self.is_local = (
+            'OLLAMA' in provider or 
+            'localhost' in endpoint or 
+            '127.0.0.1' in endpoint or 
+            '::1' in endpoint or 
+            '0:0:0:0:0:0:0:1' in endpoint
+        )
 
     async def batch_assess_risk_async(self, code_files: list[CodeFile]) -> dict[str, TriageDecision]:
         """
@@ -68,13 +81,14 @@ class TriageService:
             return decisions
             
         # 2. Batch Processing for remaining files
-        # Estimate max files per batch based on content length
-        # Avg file (truncated) = 1500 chars ~ 400 tokens
-        # Context limit ~ 8000 (usually) -> Safe batch ~ 10-15 files
-        BATCH_SIZE = 10
-        chunks = [files_to_process[i:i + BATCH_SIZE] for i in range(0, len(files_to_process), BATCH_SIZE)]
+        requested_batch_size = 10
         
-        for chunk in chunks:
+        i = 0
+        while i < len(files_to_process):
+            # Dynamic resource-check
+            batch_size = self._get_safe_batch_size(requested_batch_size)
+            chunk = files_to_process[i : i + batch_size]
+            
             try:
                 batch_scores = await self._get_llm_batch_score_async(chunk)
                 
@@ -102,6 +116,8 @@ class TriageService:
                     decisions[cf.path] = self._create_decision(
                         cf, TriageLane.MIDDLE, 5, f"Batch error: {str(e)}", start_time
                     )
+            
+            i += len(chunk)
                     
         return decisions
 
@@ -243,6 +259,22 @@ Example:
         
         # Fallback to cleaning markdown
         return text.replace("```json", "").replace("```", "").strip()
+
+    def _get_safe_batch_size(self, max_allowed: int) -> int:
+        """Adaptive batch size based on RAM/CPU."""
+        if not getattr(self, "is_local", False):
+            return max_allowed
+        try:
+            mem = psutil.virtual_memory()
+            available_gb = mem.available / (1024**3)
+            mem_limit = max(1, int(available_gb // 2.0)) # Triage is simpler, 2GB per item
+            
+            cpu_load = psutil.cpu_percent(interval=None)
+            cpu_limit = 1 if cpu_load > 80 else max_allowed
+            
+            return min(max_allowed, mem_limit, cpu_limit, (os.cpu_count() or 2) // 2)
+        except:
+            return 1
 
     def _determine_lane(self, risk: RiskScore) -> TriageLane:
         """Routing logic based on risk score."""

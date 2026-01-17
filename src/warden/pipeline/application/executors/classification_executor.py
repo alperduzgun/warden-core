@@ -39,6 +39,7 @@ class ClassificationExecutor(BasePhaseExecutor):
         code_files: List[CodeFile],
     ) -> None:
         """Execute CLASSIFICATION phase."""
+        print(f"DEBUG_EXECUTOR: Classification execute_async called. Files: {len(code_files)}")
         logger.info("executing_phase", phase="CLASSIFICATION")
 
         if self.progress_callback:
