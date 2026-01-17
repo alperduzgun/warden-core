@@ -4,7 +4,6 @@ Setup configuration for installation
 """
 
 from setuptools import setup, find_packages
-from setuptools_rust import Binding, RustExtension
 from pathlib import Path
 
 # Read README for long description
@@ -22,14 +21,6 @@ setup(
     url="https://github.com/alperduzgun/warden-core",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
-    rust_extensions=[
-        RustExtension(
-            target="warden.warden_core_rust",
-            path="src/warden_rust/Cargo.toml",
-            binding=Binding.PyO3,
-            debug=False,
-        )
-    ],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
