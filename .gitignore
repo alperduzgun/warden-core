@@ -80,3 +80,8 @@ src/warden/_version.py
 src/.warden/
 
 # Performance Roadmap
+
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock.bak
