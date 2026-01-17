@@ -59,9 +59,9 @@ class FileIssueRepository(BaseFileRepository[WardenIssue], IIssueRepository):
         super().__init__(storage_path, "issues")
         logger.info("issue_repository_initialized", storage_path=str(storage_path))
 
-    async def get(self, id: str) -> Optional[WardenIssue]:
+    async def get_async(self, id: str) -> Optional[WardenIssue]:
         """Get issue by ID."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         entity_data = data.get("entities", {}).get(id)
 
         if entity_data is None:
@@ -69,16 +69,16 @@ class FileIssueRepository(BaseFileRepository[WardenIssue], IIssueRepository):
 
         return WardenIssue.from_json(entity_data)
 
-    async def get_all(self) -> List[WardenIssue]:
+    async def get_all_async(self) -> List[WardenIssue]:
         """Get all issues."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         entities = data.get("entities", {})
 
         return [WardenIssue.from_json(e) for e in entities.values()]
 
-    async def save(self, entity: WardenIssue) -> WardenIssue:
+    async def save_async(self, entity: WardenIssue) -> WardenIssue:
         """Save or update issue."""
-        data = await self._read_data()
+        data = await self._read_data_async()
 
         if "entities" not in data:
             data["entities"] = {}
@@ -86,60 +86,60 @@ class FileIssueRepository(BaseFileRepository[WardenIssue], IIssueRepository):
         # Serialize to JSON
         data["entities"][entity.id] = entity.to_json()
 
-        await self._write_data(data)
+        await self._write_data_async(data)
 
         logger.debug("issue_saved", issue_id=entity.id)
         return entity
 
-    async def delete(self, id: str) -> bool:
+    async def delete_async(self, id: str) -> bool:
         """Delete issue by ID."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         entities = data.get("entities", {})
 
         if id not in entities:
             return False
 
         del entities[id]
-        await self._write_data(data)
+        await self._write_data_async(data)
 
         logger.debug("issue_deleted", issue_id=id)
         return True
 
-    async def exists(self, id: str) -> bool:
+    async def exists_async(self, id: str) -> bool:
         """Check if issue exists."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         return id in data.get("entities", {})
 
-    async def count(self) -> int:
+    async def count_async(self) -> int:
         """Get total issue count."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         return len(data.get("entities", {}))
 
-    async def get_by_state(self, state: IssueState) -> List[WardenIssue]:
+    async def get_by_state_async(self, state: IssueState) -> List[WardenIssue]:
         """Get all issues by state."""
-        all_issues = await self.get_all()
+        all_issues = await self.get_all_async()
         return [i for i in all_issues if i.state == state]
 
-    async def get_by_severity(self, severity: IssueSeverity) -> List[WardenIssue]:
+    async def get_by_severity_async(self, severity: IssueSeverity) -> List[WardenIssue]:
         """Get all issues by severity."""
-        all_issues = await self.get_all()
+        all_issues = await self.get_all_async()
         return [i for i in all_issues if i.severity == severity]
 
-    async def get_by_file_path(self, file_path: str) -> List[WardenIssue]:
+    async def get_by_file_path_async(self, file_path: str) -> List[WardenIssue]:
         """Get all issues for a specific file."""
-        all_issues = await self.get_all()
+        all_issues = await self.get_all_async()
         return [i for i in all_issues if i.file_path == file_path]
 
-    async def get_history(self, issue_id: str) -> List[StateTransition]:
+    async def get_history_async(self, issue_id: str) -> List[StateTransition]:
         """Get state transition history for an issue."""
-        issue = await self.get(issue_id)
+        issue = await self.get_async(issue_id)
         if issue is None:
             return []
         return issue.state_history
 
-    async def save_all(self, issues: List[WardenIssue]) -> List[WardenIssue]:
+    async def save_all_async(self, issues: List[WardenIssue]) -> List[WardenIssue]:
         """Batch save multiple issues."""
-        data = await self._read_data()
+        data = await self._read_data_async()
 
         if "entities" not in data:
             data["entities"] = {}
@@ -147,22 +147,22 @@ class FileIssueRepository(BaseFileRepository[WardenIssue], IIssueRepository):
         for issue in issues:
             data["entities"][issue.id] = issue.to_json()
 
-        await self._write_data(data)
+        await self._write_data_async(data)
 
         logger.debug("issues_batch_saved", count=len(issues))
         return issues
 
-    async def get_open_issues(self) -> List[WardenIssue]:
+    async def get_open_issues_async(self) -> List[WardenIssue]:
         """Get all open issues."""
-        return await self.get_by_state(IssueState.OPEN)
+        return await self.get_by_state_async(IssueState.OPEN)
 
-    async def get_critical_issues(self) -> List[WardenIssue]:
+    async def get_critical_issues_async(self) -> List[WardenIssue]:
         """Get all critical severity issues."""
-        return await self.get_by_severity(IssueSeverity.CRITICAL)
+        return await self.get_by_severity_async(IssueSeverity.CRITICAL)
 
-    async def get_high_or_critical_issues(self) -> List[WardenIssue]:
+    async def get_high_or_critical_issues_async(self) -> List[WardenIssue]:
         """Get all high or critical severity issues."""
-        all_issues = await self.get_all()
+        all_issues = await self.get_all_async()
         return [
             i
             for i in all_issues

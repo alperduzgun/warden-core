@@ -59,7 +59,7 @@ class SuppressionMixin:
             self._suppressions[suppression_id] = suppression
 
             # Persist to repository
-            await self.suppression_repository.save(suppression)
+            await self.suppression_repository.save_async(suppression)
 
             return warden_pb2.AddSuppressionResponse(
                 success=True,
@@ -89,7 +89,7 @@ class SuppressionMixin:
             del self._suppressions[request.suppression_id]
 
             # Delete from repository
-            await self.suppression_repository.delete(request.suppression_id)
+            await self.suppression_repository.delete_async(request.suppression_id)
 
             return warden_pb2.RemoveSuppressionResponse(success=True)
 

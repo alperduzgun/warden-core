@@ -26,7 +26,7 @@ class DotEnvSecretProvider(ISecretProvider):
 
     Example:
         provider = DotEnvSecretProvider()
-        result = await provider.get_secret("AZURE_OPENAI_API_KEY")
+        result = await provider.get_secret_async("AZURE_OPENAI_API_KEY")
         if result.found:
             print(f"API Key from .env: {result.value}")
     """
@@ -135,7 +135,7 @@ class DotEnvSecretProvider(ISecretProvider):
 
         self._loaded = True
 
-    async def get_secret(self, key: str) -> SecretValue:
+    async def get_secret_async(self, key: str) -> SecretValue:
         """Get a secret from .env file.
 
         Args:
@@ -153,7 +153,7 @@ class DotEnvSecretProvider(ISecretProvider):
             retrieved_at=datetime.now(),
         )
 
-    async def is_available(self) -> bool:
+    async def is_available_async(self) -> bool:
         """Check if .env file exists.
 
         Returns:

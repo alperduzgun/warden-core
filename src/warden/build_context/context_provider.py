@@ -165,7 +165,7 @@ class BuildContextProvider:
         return found_files
 
 
-async def get_build_context(project_path: str) -> BuildContext:
+async def get_build_context_async(project_path: str) -> BuildContext:
     """
     Convenience function to get build context.
 
@@ -177,7 +177,7 @@ async def get_build_context(project_path: str) -> BuildContext:
 
     Example:
     ```python
-    context = await get_build_context("/path/to/project")
+    context = await get_build_context_async("/path/to/project")
     print(f"Build system: {context.build_system}")
     ```
     """

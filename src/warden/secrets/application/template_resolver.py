@@ -90,7 +90,7 @@ class TemplateResolver:
 
         result = value
         for var_name in matches:
-            secret = await self._secret_manager.get_secret(var_name)
+            secret = await self._secret_manager.get_secret_async(var_name)
             if secret.found and secret.value is not None:
                 result = result.replace(f"${{{var_name}}}", secret.value)
                 logger.debug(

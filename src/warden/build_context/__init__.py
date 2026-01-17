@@ -38,7 +38,7 @@ from warden.build_context.models import (
 )
 from warden.build_context.context_provider import (
     BuildContextProvider,
-    get_build_context,
+    get_build_context_async,
     get_build_context_sync,
 )
 
@@ -49,7 +49,7 @@ __all__ = [
     "DependencyType",
     "BuildScript",
     "BuildContextProvider",
-    "get_build_context",
+    "get_build_context_async",
     "get_build_context_sync",
     "create_empty_context",
 ]

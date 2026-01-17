@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
+from warden.shared.infrastructure.resilience import resilient
 
 
 class OpenAIClient(ILlmClient):
@@ -49,6 +50,7 @@ class OpenAIClient(ILlmClient):
         """Get cumulative token usage."""
         return self._usage.copy()
 
+    @resilient(name="openai_send", timeout_seconds=60.0, retry_max_attempts=3)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         start_time = time.time()
 

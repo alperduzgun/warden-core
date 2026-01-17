@@ -65,7 +65,7 @@ class BaseFileRepository(Generic[T]):
         self._cache_time: Optional[datetime] = None
         self._cache_ttl_seconds = cache_ttl_seconds
 
-    async def _ensure_storage_exists(self) -> None:
+    async def _ensure_storage_exists_async(self) -> None:
         """Ensure storage directory and file exist."""
         # Create parent directory
         if not self.storage_path.parent.exists():
@@ -78,7 +78,7 @@ class BaseFileRepository(Generic[T]):
 
         # Create file with empty structure
         if self._create_if_missing and not self.storage_path.exists():
-            await self._write_data(self._get_empty_structure())
+            await self._write_data_async(self._get_empty_structure())
             logger.info(
                 "storage_file_created",
                 path=str(self.storage_path),
@@ -94,9 +94,9 @@ class BaseFileRepository(Generic[T]):
             "entities": {},
         }
 
-    async def _read_data(self) -> Dict[str, Any]:
+    async def _read_data_async(self) -> Dict[str, Any]:
         """Read and parse JSON data from storage file."""
-        await self._ensure_storage_exists()
+        await self._ensure_storage_exists_async()
 
         # Check cache
         now = datetime.now()
@@ -130,7 +130,7 @@ class BaseFileRepository(Generic[T]):
         except FileNotFoundError:
             return self._get_empty_structure()
 
-    async def _write_data(self, data: Dict[str, Any]) -> None:
+    async def _write_data_async(self, data: Dict[str, Any]) -> None:
         """Write data to storage file with backup."""
         async with self._lock:
             # Create backup if file exists
@@ -172,8 +172,8 @@ class BaseFileRepository(Generic[T]):
         self._cache = None
         self._cache_time = None
 
-    async def clear_all(self) -> None:
+    async def clear_all_async(self) -> None:
         """Clear all entities from storage."""
         data = self._get_empty_structure()
-        await self._write_data(data)
+        await self._write_data_async(data)
         logger.info("storage_cleared", entity=self.entity_name)

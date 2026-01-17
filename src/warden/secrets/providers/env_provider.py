@@ -18,7 +18,7 @@ class EnvSecretProvider(ISecretProvider):
 
     Example:
         provider = EnvSecretProvider()
-        result = await provider.get_secret("AZURE_OPENAI_API_KEY")
+        result = await provider.get_secret_async("AZURE_OPENAI_API_KEY")
         if result.found:
             print(f"API Key: {result.value}")
     """
@@ -41,7 +41,7 @@ class EnvSecretProvider(ISecretProvider):
         """Return the configured priority."""
         return self._priority
 
-    async def get_secret(self, key: str) -> SecretValue:
+    async def get_secret_async(self, key: str) -> SecretValue:
         """Get a secret from environment variables.
 
         Args:
@@ -58,7 +58,7 @@ class EnvSecretProvider(ISecretProvider):
             retrieved_at=datetime.now(),
         )
 
-    async def is_available(self) -> bool:
+    async def is_available_async(self) -> bool:
         """Environment provider is always available.
 
         Returns:

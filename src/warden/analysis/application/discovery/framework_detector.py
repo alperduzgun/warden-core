@@ -236,7 +236,7 @@ class FrameworkDetector:
         return sorted_frameworks[0]
 
 
-async def detect_frameworks(project_root: Path) -> FrameworkDetectionResult:
+async def detect_frameworks_async(project_root: Path) -> FrameworkDetectionResult:
     """
     Detect frameworks in a project.
 
@@ -247,7 +247,7 @@ async def detect_frameworks(project_root: Path) -> FrameworkDetectionResult:
         FrameworkDetectionResult with detected frameworks
 
     Examples:
-        >>> result = await detect_frameworks(Path("/my/project"))
+        >>> result = await detect_frameworks_async(Path("/my/project"))
         >>> print(f"Detected: {result.primary_framework}")
         Detected: Framework.REACT
     """

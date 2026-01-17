@@ -482,7 +482,7 @@ Return strictly JSON:
 
 
 # Convenience function for standalone usage
-async def detect_service_abstractions(project_root: Path, project_context: Optional[ProjectContext] = None) -> Dict[str, ServiceAbstraction]:
+async def detect_service_abstractions_async(project_root: Path, project_context: Optional[ProjectContext] = None) -> Dict[str, ServiceAbstraction]:
     """
     Detect service abstractions in a project.
     
