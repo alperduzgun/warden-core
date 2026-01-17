@@ -7,3 +7,4 @@ clients/
 src/warden_rust/
 **/*.rs
 warden_rust/
+examples/
