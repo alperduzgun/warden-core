@@ -22,11 +22,11 @@ class ISecretProvider(ABC):
             def priority(self) -> int:
                 return 1
 
-            async def get_secret(self, key: str) -> SecretValue:
+            async def get_secret_async(self, key: str) -> SecretValue:
                 value = os.environ.get(key)
                 return SecretValue(key=key, value=value, source=self.source)
 
-            async def is_available(self) -> bool:
+            async def is_available_async(self) -> bool:
                 return True
     """
 
@@ -51,7 +51,7 @@ class ISecretProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_secret(self, key: str) -> SecretValue:
+    async def get_secret_async(self, key: str) -> SecretValue:
         """Retrieve a secret by key.
 
         Args:
@@ -63,7 +63,7 @@ class ISecretProvider(ABC):
         pass
 
     @abstractmethod
-    async def is_available(self) -> bool:
+    async def is_available_async(self) -> bool:
         """Check if this provider is configured and available.
 
         Returns:
@@ -71,7 +71,7 @@ class ISecretProvider(ABC):
         """
         pass
 
-    async def cleanup(self) -> None:  # noqa: B027
+    async def cleanup_async(self) -> None:  # noqa: B027
         """Optional cleanup (close connections, etc.).
 
         Override this method if your provider needs cleanup.

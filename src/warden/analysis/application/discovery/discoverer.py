@@ -355,7 +355,7 @@ class FileDiscoverer:
         return [Path(f.path) for f in result.get_files_by_type(file_type)]
 
 
-async def discover_project_files(
+async def discover_project_files_async(
     project_root: str | Path,
     max_depth: Optional[int] = None,
     use_gitignore: bool = True,
@@ -372,7 +372,7 @@ async def discover_project_files(
         DiscoveryResult with all discovered files
 
     Examples:
-        >>> result = await discover_project_files("/path/to/project")
+        >>> result = await discover_project_files_async("/path/to/project")
         >>> print(f"Found {result.stats.total_files} files")
         Found 123 files
     """

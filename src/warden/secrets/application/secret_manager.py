@@ -28,7 +28,7 @@ class SecretManager:
     Example:
         # Auto-configured based on environment
         manager = SecretManager()
-        result = await manager.get_secret("AZURE_OPENAI_API_KEY")
+        result = await manager.get_secret_async("AZURE_OPENAI_API_KEY")
 
         if result.found:
             print(f"Value from {result.source.value}")
@@ -92,7 +92,7 @@ class SecretManager:
 
         return sorted(providers, key=lambda p: p.priority)
 
-    async def get_secret(self, key: str) -> SecretValue:
+    async def get_secret_async(self, key: str) -> SecretValue:
         """Get a secret by key, trying all providers in order.
 
         Args:
@@ -114,10 +114,10 @@ class SecretManager:
 
         # Try each provider in priority order
         for provider in self._providers:
-            if not await provider.is_available():
+            if not await provider.is_available_async():
                 continue
 
-            result = await provider.get_secret(key)
+            result = await provider.get_secret_async(key)
             if result.found:
                 logger.debug(
                     "secret_retrieved",
@@ -136,7 +136,7 @@ class SecretManager:
             retrieved_at=datetime.now(),
         )
 
-    async def get_secrets(self, keys: list[str]) -> dict[str, SecretValue]:
+    async def get_secrets_async(self, keys: list[str]) -> dict[str, SecretValue]:
         """Get multiple secrets at once.
 
         Args:
@@ -147,17 +147,17 @@ class SecretManager:
         """
         results = {}
         for key in keys:
-            results[key] = await self.get_secret(key)
+            results[key] = await self.get_secret_async(key)
         return results
 
     def clear_cache(self) -> None:
         """Clear the secret cache."""
         self._cache.clear()
 
-    async def cleanup(self) -> None:
+    async def cleanup_async(self) -> None:
         """Cleanup all providers."""
         for provider in self._providers:
-            await provider.cleanup()
+            await provider.cleanup_async()
 
     @property
     def providers(self) -> list[ISecretProvider]:
@@ -173,7 +173,7 @@ class SecretManager:
 _manager: SecretManager | None = None
 
 
-async def get_secret(key: str) -> str | None:
+async def get_secret_async(key: str) -> str | None:
     """Get a secret value (convenience function).
 
     Uses a module-level SecretManager singleton.
@@ -185,7 +185,7 @@ async def get_secret(key: str) -> str | None:
         Secret value or None if not found.
 
     Example:
-        api_key = await get_secret("AZURE_OPENAI_API_KEY")
+        api_key = await get_secret_async("AZURE_OPENAI_API_KEY")
         if api_key:
             # Use the API key
             pass
@@ -194,7 +194,7 @@ async def get_secret(key: str) -> str | None:
     if _manager is None:
         _manager = SecretManager()
 
-    result = await _manager.get_secret(key)
+    result = await _manager.get_secret_async(key)
     return result.value if result.found else None
 
 

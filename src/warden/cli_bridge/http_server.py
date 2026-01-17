@@ -17,7 +17,7 @@ async def verify_credentials():
     
     manager = SecretManager()
     
-    secrets = await manager.get_secrets([
+    secrets = await manager.get_secrets_async([
         "AZURE_OPENAI_API_KEY",
         "AZURE_OPENAI_ENDPOINT",
     ])

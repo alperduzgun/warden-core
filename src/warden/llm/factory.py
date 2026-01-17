@@ -103,7 +103,7 @@ def create_client(
     )
 
 
-async def create_client_with_fallback(config: Optional[LlmConfiguration] = None) -> ILlmClient:
+async def create_client_with_fallback_async(config: Optional[LlmConfiguration] = None) -> ILlmClient:
     """
     Create client with automatic fallback chain.
     """
@@ -131,6 +131,6 @@ async def create_client_with_fallback(config: Optional[LlmConfiguration] = None)
 __all__ = [
     "create_client",
     "create_provider_client",
-    "create_client_with_fallback",
+    "create_client_with_fallback_async",
     "get_global_metrics_collector"
 ]

@@ -20,8 +20,8 @@ from warden.analysis.application.discovery.models import (
 )
 from warden.analysis.application.discovery.classifier import FileClassifier
 from warden.analysis.application.discovery.gitignore_filter import GitignoreFilter, create_gitignore_filter
-from warden.analysis.application.discovery.framework_detector import FrameworkDetector, detect_frameworks
-from warden.analysis.application.discovery.discoverer import FileDiscoverer, discover_project_files
+from warden.analysis.application.discovery.framework_detector import FrameworkDetector, detect_frameworks_async
+from warden.analysis.application.discovery.discoverer import FileDiscoverer, discover_project_files_async
 
 __all__ = [
     # Models
@@ -38,8 +38,8 @@ __all__ = [
     "create_gitignore_filter",
     # Framework detection
     "FrameworkDetector",
-    "detect_frameworks",
+    "detect_frameworks_async",
     # Main discoverer
     "FileDiscoverer",
-    "discover_project_files",
+    "discover_project_files_async",
 ]

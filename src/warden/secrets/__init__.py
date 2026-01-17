@@ -17,14 +17,14 @@ Usage:
     from warden.secrets import SecretManager
 
     manager = SecretManager()
-    result = await manager.get_secret("AZURE_OPENAI_API_KEY")
+    result = await manager.get_secret_async("AZURE_OPENAI_API_KEY")
     if result.found:
         print(f"Value from {result.source.value}")
 
     # Convenience function
-    from warden.secrets import get_secret
+    from warden.secrets import get_secret_async
 
-    api_key = await get_secret("AZURE_OPENAI_API_KEY")
+    api_key = await get_secret_async("AZURE_OPENAI_API_KEY")
 
     # Template resolution for config.yaml
     from warden.secrets import TemplateResolver
@@ -33,7 +33,7 @@ Usage:
     resolved_config = await resolver.resolve(raw_config)
 """
 
-from .application.secret_manager import SecretManager, get_manager, get_secret
+from .application.secret_manager import SecretManager, get_manager, get_secret_async
 from .application.template_resolver import TemplateResolver
 from .domain.enums import SecretSource
 from .domain.models import SecretProviderConfig, SecretValue
@@ -44,7 +44,7 @@ __all__ = [
     "SecretManager",
     "TemplateResolver",
     # Convenience functions
-    "get_secret",
+    "get_secret_async",
     "get_manager",
     # Domain models
     "SecretValue",

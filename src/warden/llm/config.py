@@ -258,7 +258,7 @@ async def load_llm_config_async() -> LlmConfiguration:
     configured_providers: list[LlmProvider] = []
 
     # Get all secrets at once for efficiency
-    secrets = await manager.get_secrets([
+    secrets = await manager.get_secrets_async([
         "AZURE_OPENAI_API_KEY",
         "AZURE_OPENAI_ENDPOINT",
         "AZURE_OPENAI_DEPLOYMENT_NAME",

@@ -59,19 +59,19 @@ class FileSuppressionRepository(
             "suppression_repository_initialized", storage_path=str(storage_path)
         )
 
-    async def get(self, id: str) -> Optional[Dict[str, Any]]:
+    async def get_async(self, id: str) -> Optional[Dict[str, Any]]:
         """Get suppression by ID."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         return data.get("entities", {}).get(id)
 
-    async def get_all(self) -> List[Dict[str, Any]]:
+    async def get_all_async(self) -> List[Dict[str, Any]]:
         """Get all suppressions."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         return list(data.get("entities", {}).values())
 
-    async def save(self, entity: Dict[str, Any]) -> Dict[str, Any]:
+    async def save_async(self, entity: Dict[str, Any]) -> Dict[str, Any]:
         """Save or update suppression."""
-        data = await self._read_data()
+        data = await self._read_data_async()
 
         if "entities" not in data:
             data["entities"] = {}
@@ -82,45 +82,45 @@ class FileSuppressionRepository(
 
         data["entities"][entity_id] = entity
 
-        await self._write_data(data)
+        await self._write_data_async(data)
 
         logger.debug("suppression_saved", suppression_id=entity_id)
         return entity
 
-    async def delete(self, id: str) -> bool:
+    async def delete_async(self, id: str) -> bool:
         """Delete suppression by ID."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         entities = data.get("entities", {})
 
         if id not in entities:
             return False
 
         del entities[id]
-        await self._write_data(data)
+        await self._write_data_async(data)
 
         logger.debug("suppression_deleted", suppression_id=id)
         return True
 
-    async def exists(self, id: str) -> bool:
+    async def exists_async(self, id: str) -> bool:
         """Check if suppression exists."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         return id in data.get("entities", {})
 
-    async def count(self) -> int:
+    async def count_async(self) -> int:
         """Get total suppression count."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         return len(data.get("entities", {}))
 
-    async def get_enabled(self) -> List[Dict[str, Any]]:
+    async def get_enabled_async(self) -> List[Dict[str, Any]]:
         """Get all enabled suppressions."""
-        all_suppressions = await self.get_all()
+        all_suppressions = await self.get_all_async()
         return [s for s in all_suppressions if s.get("enabled", True)]
 
-    async def get_for_file(self, file_path: str) -> List[Dict[str, Any]]:
+    async def get_for_file_async(self, file_path: str) -> List[Dict[str, Any]]:
         """Get suppressions applicable to a file path."""
         import fnmatch
 
-        all_suppressions = await self.get_all()
+        all_suppressions = await self.get_all_async()
         result = []
 
         for suppression in all_suppressions:
@@ -139,9 +139,9 @@ class FileSuppressionRepository(
 
         return result
 
-    async def get_for_rule(self, rule_id: str) -> List[Dict[str, Any]]:
+    async def get_for_rule_async(self, rule_id: str) -> List[Dict[str, Any]]:
         """Get suppressions for a specific rule."""
-        all_suppressions = await self.get_all()
+        all_suppressions = await self.get_all_async()
         result = []
 
         for suppression in all_suppressions:
@@ -157,21 +157,21 @@ class FileSuppressionRepository(
 
     # Additional methods for working with SuppressionEntry model
 
-    async def save_entry(self, entry: SuppressionEntry) -> SuppressionEntry:
+    async def save_entry_async(self, entry: SuppressionEntry) -> SuppressionEntry:
         """Save a SuppressionEntry model."""
-        await self.save(entry.to_json())
+        await self.save_async(entry.to_json())
         return entry
 
-    async def get_entry(self, id: str) -> Optional[SuppressionEntry]:
+    async def get_entry_async(self, id: str) -> Optional[SuppressionEntry]:
         """Get suppression as SuppressionEntry model."""
-        data = await self.get(id)
+        data = await self.get_async(id)
         if data is None:
             return None
         return self._dict_to_entry(data)
 
-    async def get_all_entries(self) -> List[SuppressionEntry]:
+    async def get_all_entries_async(self) -> List[SuppressionEntry]:
         """Get all suppressions as SuppressionEntry models."""
-        all_data = await self.get_all()
+        all_data = await self.get_all_async()
         return [self._dict_to_entry(d) for d in all_data]
 
     def _dict_to_entry(self, data: Dict[str, Any]) -> SuppressionEntry:

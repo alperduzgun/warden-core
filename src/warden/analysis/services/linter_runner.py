@@ -34,7 +34,7 @@ class LinterRunner:
         self.timeout = timeout_seconds
         self.max_output_size = max_output_size  # 10MB default
 
-    async def execute_json_command(
+    async def execute_json_command_async(
         self, 
         command: List[str], 
         cwd: Optional[Path] = None,

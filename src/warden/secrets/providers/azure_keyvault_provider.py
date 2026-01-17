@@ -31,7 +31,7 @@ class AzureKeyVaultProvider(ISecretProvider):
 
     Example:
         provider = AzureKeyVaultProvider()
-        result = await provider.get_secret("AZURE_OPENAI_API_KEY")
+        result = await provider.get_secret_async("AZURE_OPENAI_API_KEY")
         # Tries to get "azure-openai-api-key" from vault
     """
 
@@ -135,7 +135,7 @@ class AzureKeyVaultProvider(ISecretProvider):
         """
         return key.replace("_", "-").lower()
 
-    async def get_secret(self, key: str) -> SecretValue:
+    async def get_secret_async(self, key: str) -> SecretValue:
         """Get a secret from Azure Key Vault.
 
         Converts the key from env var format to vault format:
@@ -159,7 +159,7 @@ class AzureKeyVaultProvider(ISecretProvider):
         try:
             # Convert key format
             secret_name = self._convert_key_to_vault_name(key)
-            secret = client.get_secret(secret_name)
+            secret = client.get_secret_async(secret_name)
 
             logger.debug(
                 "azure_keyvault_secret_retrieved",
@@ -186,7 +186,7 @@ class AzureKeyVaultProvider(ISecretProvider):
                 retrieved_at=datetime.now(),
             )
 
-    async def is_available(self) -> bool:
+    async def is_available_async(self) -> bool:
         """Check if Azure Key Vault is configured and SDK is available.
 
         Returns:
@@ -203,7 +203,7 @@ class AzureKeyVaultProvider(ISecretProvider):
         self._available = self._check_sdk_available()
         return self._available
 
-    async def cleanup(self) -> None:
+    async def cleanup_async(self) -> None:
         """Close the Key Vault client connection."""
         if self._client:
             with contextlib.suppress(Exception):

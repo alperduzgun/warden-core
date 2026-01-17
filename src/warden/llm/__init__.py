@@ -33,7 +33,7 @@ from .config import (
 )
 
 from .providers.base import ILlmClient
-from .factory import create_client, create_provider_client, create_client_with_fallback
+from .factory import create_client, create_provider_client, create_client_with_fallback_async
 
 from .prompts import (
     ANALYSIS_SYSTEM_PROMPT,
@@ -46,7 +46,7 @@ __all__ = [
     # Core factory functions
     "create_client",
     "create_provider_client",
-    "create_client_with_fallback",
+    "create_client_with_fallback_async",
 
     # Types
     "LlmProvider",

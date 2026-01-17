@@ -123,15 +123,15 @@ class WardenServicerBase:
         Call this during startup to sync with persisted state.
         """
         # Load issues
-        issues = await self._issue_repo.get_all()
+        issues = await self._issue_repo.get_all_async()
         self._issues = {issue.id: issue.to_json() for issue in issues}
 
         # Load suppressions
-        suppressions = await self._suppression_repo.get_all()
+        suppressions = await self._suppression_repo.get_all_async()
         self._suppressions = {s.get("id", str(i)): s for i, s in enumerate(suppressions)}
 
         # Load recent history
-        history_events = await self._history_repo.get_all_events(limit=1000)
+        history_events = await self._history_repo.get_all_events_async(limit=1000)
         self._issue_history = history_events
 
         logger.info(
@@ -231,7 +231,7 @@ class WardenServicerBase:
             self._issues[issue_id] = issue_data
 
             # Log creation event
-            await self._history_repo.add_event(
+            await self._history_repo.add_event_async(
                 issue_id=issue_id,
                 event={
                     "event_type": "issue_created",
@@ -248,7 +248,7 @@ class WardenServicerBase:
             issue_data = existing_issue
 
             # Log occurrence event
-            await self._history_repo.add_event(
+            await self._history_repo.add_event_async(
                 issue_id=existing_issue["id"],
                 event={
                     "event_type": "issue_recurred",
@@ -272,13 +272,13 @@ class WardenServicerBase:
         Returns:
             The saved issue
         """
-        saved_issue = await self._issue_repo.save(issue)
+        saved_issue = await self._issue_repo.save_async(issue)
 
         # Update in-memory cache
         self._issues[issue.id] = issue.to_json()
 
         # Log to history
-        await self._history_repo.add_event(
+        await self._history_repo.add_event_async(
             issue_id=issue.id,
             event={"event_type": "issue_saved", "state": issue.state.name},
         )
@@ -287,22 +287,22 @@ class WardenServicerBase:
 
     async def get_issue_async(self, issue_id: str) -> Optional["WardenIssue"]:
         """Get issue by ID from repository."""
-        return await self._issue_repo.get(issue_id)
+        return await self._issue_repo.get_async(issue_id)
 
     async def get_all_issues_async(self) -> List["WardenIssue"]:
         """Get all issues from repository."""
-        return await self._issue_repo.get_all()
+        return await self._issue_repo.get_all_async()
 
     async def delete_issue_async(self, issue_id: str) -> bool:
         """Delete issue and log to history."""
-        deleted = await self._issue_repo.delete(issue_id)
+        deleted = await self._issue_repo.delete_async(issue_id)
 
         if deleted:
             # Remove from in-memory cache
             self._issues.pop(issue_id, None)
 
             # Log to history
-            await self._history_repo.add_event(
+            await self._history_repo.add_event_async(
                 issue_id=issue_id,
                 event={"event_type": "issue_deleted"},
             )

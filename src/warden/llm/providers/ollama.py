@@ -10,6 +10,7 @@ import time
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
+from warden.shared.infrastructure.resilience import resilient
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +37,7 @@ class OllamaClient(ILlmClient):
     def provider(self) -> LlmProvider:
         return LlmProvider.OLLAMA
 
+    @resilient(name="provider_send", timeout_seconds=60.0)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Send a request to the local Ollama instance.

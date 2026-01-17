@@ -66,9 +66,9 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             "events": [],
         }
 
-    async def add_event(self, issue_id: str, event: Dict[str, Any]) -> None:
+    async def add_event_async(self, issue_id: str, event: Dict[str, Any]) -> None:
         """Add an event to issue history."""
-        data = await self._read_data()
+        data = await self._read_data_async()
 
         if "events" not in data:
             data["events"] = []
@@ -86,7 +86,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
         if len(data["events"]) > self.MAX_EVENTS:
             data["events"] = data["events"][-self.MAX_EVENTS :]
 
-        await self._write_data(data)
+        await self._write_data_async(data)
 
         logger.debug(
             "history_event_added",
@@ -94,9 +94,9 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             event_type=event.get("event_type"),
         )
 
-    async def get_events(self, issue_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_events_async(self, issue_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Get events for an issue."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         events = data.get("events", [])
 
         # Filter by issue_id
@@ -109,9 +109,9 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             reverse=True,
         )
 
-    async def get_all_events(self, limit: int = 1000) -> List[Dict[str, Any]]:
+    async def get_all_events_async(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """Get all events across all issues."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         events = data.get("events", [])
 
         # Return most recent first, limited
@@ -121,11 +121,11 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             reverse=True,
         )
 
-    async def get_events_by_type(
+    async def get_events_by_type_async(
         self, event_type: str, limit: int = 100
     ) -> List[Dict[str, Any]]:
         """Get events by event type."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         events = data.get("events", [])
 
         # Filter by event_type
@@ -138,11 +138,11 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             reverse=True,
         )
 
-    async def get_events_since(
+    async def get_events_since_async(
         self, since: datetime, limit: int = 1000
     ) -> List[Dict[str, Any]]:
         """Get events since a specific datetime."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         events = data.get("events", [])
 
         since_str = since.isoformat()
@@ -157,12 +157,12 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             reverse=True,
         )
 
-    async def count_events(self) -> int:
+    async def count_events_async(self) -> int:
         """Get total event count."""
-        data = await self._read_data()
+        data = await self._read_data_async()
         return len(data.get("events", []))
 
-    async def count_events_for_issue(self, issue_id: str) -> int:
+    async def count_events_for_issue_async(self, issue_id: str) -> int:
         """Get event count for a specific issue."""
-        events = await self.get_events(issue_id, limit=self.MAX_EVENTS)
+        events = await self.get_events_async(issue_id, limit=self.MAX_EVENTS)
         return len(events)

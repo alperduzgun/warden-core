@@ -13,6 +13,7 @@ import time
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
+from warden.shared.infrastructure.resilience import resilient
 
 
 class AnthropicClient(ILlmClient):
@@ -44,6 +45,7 @@ class AnthropicClient(ILlmClient):
     def provider(self) -> LlmProvider:
         return LlmProvider.ANTHROPIC
 
+    @resilient(name="provider_send", timeout_seconds=60.0)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Send request to Anthropic API
