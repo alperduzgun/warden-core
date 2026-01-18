@@ -98,6 +98,9 @@ llm:
   ollama:
     enabled: true
     base_url: http://localhost:11434
+  fast_tier_providers:
+    - ollama
+    - groq
   max_retries: 2
   tpm_limit: 10000
   rpm_limit: 60
@@ -105,7 +108,7 @@ llm:
   model: qwen2.5-coder:0.5b
   timeout: 300
   smart_model: gpt-4o
-  fast_model: qwen2.5-coder:0.5b
+  fast_model: llama-3.1-70b-versatile
 project:
   description: Warden configuration for warden-core
   detected_at: '2025-12-24T16:35:53.922859'

@@ -1,12 +1,4 @@
-"""
-Orchestrated LLM Client
-
-A proxy client that intelligently routes requests between 
-Smart (Cloud) and Fast (Local/Ollama) providers based on 
-the LlmRequest configuration.
-"""
-
-from typing import Optional
+from typing import Optional, List
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.logging import get_logger
@@ -20,21 +12,21 @@ class OrchestratedLlmClient(ILlmClient):
     Proxy client implementing tiered LLM execution.
     
     Routes:
-    - use_fast_tier=True -> Routes to Fast Provider (e.g. Ollama)
+    - use_fast_tier=True -> Routes to Fast Providers in priority order (e.g. [Ollama, Groq])
     - use_fast_tier=False -> Routes to Smart Provider (e.g. Azure/OpenAI)
-    - Fallback -> If one tier is unavailable, falls back to the other.
+    - Fallback -> If all fast providers fail, falls back to the smart tier.
     """
 
     def __init__(
         self, 
         smart_client: ILlmClient, 
-        fast_client: Optional[ILlmClient] = None,
+        fast_clients: Optional[List[ILlmClient]] = None,
         smart_model: Optional[str] = None,
         fast_model: Optional[str] = None,
         metrics_collector = None
     ):
         self.smart_client = smart_client
-        self.fast_client = fast_client
+        self.fast_clients = fast_clients or []
         self.smart_model = smart_model
         self.fast_model = fast_model
         
@@ -47,7 +39,7 @@ class OrchestratedLlmClient(ILlmClient):
         logger.debug(
             "orchestrated_llm_client_initialized",
             smart_provider=smart_client.provider,
-            fast_provider=fast_client.provider if fast_client else "None",
+            fast_providers=[c.provider for c in self.fast_clients],
             smart_model=smart_model,
             fast_model=fast_model
         )
@@ -60,69 +52,81 @@ class OrchestratedLlmClient(ILlmClient):
     @resilient(timeout_seconds=60, retry_max_attempts=3, circuit_breaker_enabled=True)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
-        Routes request to the appropriate tier.
+        Routes request to the appropriate tier with hierarchical fallback.
         """
         import time
         
-        # 1. Determine target client and model
-        target_client = self.smart_client
+        # 1. Determine initial target tier
+        if request.use_fast_tier and self.fast_clients:
+            # Hierarchical Fast Tier Execution
+            for client in self.fast_clients:
+                target_model = request.model or self.fast_model
+                
+                logger.debug(
+                    "routing_to_fast_tier",
+                    provider=client.provider,
+                    model=target_model or "default"
+                )
+                
+                # Ensure model is set for this provider
+                original_model = request.model
+                if not request.model and self.fast_model:
+                    request.model = self.fast_model
+                
+                start_time = time.time()
+                response = await client.send_async(request)
+                duration_ms = int((time.time() - start_time) * 1000)
+                
+                # Record metrics
+                self.metrics.record_request(
+                    tier="fast",
+                    provider=client.provider.value,
+                    model=target_model or "default",
+                    success=response.success,
+                    duration_ms=duration_ms,
+                    error=response.error_message
+                )
+                
+                if response.success:
+                    return response
+                
+                # Fast tier provider failed, log and try next
+                logger.warning(
+                    "fast_tier_provider_failed",
+                    provider=client.provider,
+                    error=response.error_message
+                )
+                # Restore original model for next provider in chain
+                request.model = original_model
+                
+            # If we are here, all fast clients failed
+            logger.warning("all_fast_tier_providers_failed_falling_back_to_smart")
+
+        # 2. Smart Tier Execution (Final fallback or direct choice)
         target_model = request.model or self.smart_model
-        tier_label = "smart"
-
-        if request.use_fast_tier and self.fast_client:
-            target_client = self.fast_client
-            target_model = request.model or self.fast_model
-            tier_label = "fast"
-            
-            # Ensure model is set if we have a tiered default
-            if not request.model and self.fast_model:
-                request.model = self.fast_model
-
         logger.debug(
-            "routing_llm_request",
-            tier=tier_label,
-            provider=target_client.provider,
+            "routing_to_smart_tier",
+            provider=self.smart_client.provider,
             model=target_model or "default"
         )
+        
+        # Ensure model is set if we have a smart default
+        if not request.model and self.smart_model:
+            request.model = self.smart_model
 
-        # 2. Execute request and track time
         start_time = time.time()
-        response = await target_client.send_async(request)
+        response = await self.smart_client.send_async(request)
         duration_ms = int((time.time() - start_time) * 1000)
         
-        # Record metrics
+        # Record metrics for smart tier
         self.metrics.record_request(
-            tier=tier_label,
-            provider=target_client.provider.value,
+            tier="smart",
+            provider=self.smart_client.provider.value,
             model=target_model or "default",
             success=response.success,
             duration_ms=duration_ms,
             error=response.error_message
         )
-
-        # 3. Fallback logic: If fast tier fails, retry with smart tier
-        if not response.success and tier_label == "fast" and self.smart_client:
-            logger.warning(
-                "fast_tier_failed_falling_back",
-                error=response.error_message,
-                provider=target_client.provider
-            )
-            # Reset model to smart default
-            request.model = self.smart_model
-            
-            # Retry with smart tier and record metrics
-            start_time = time.time()
-            response = await self.smart_client.send_async(request)
-            duration_ms = int((time.time() - start_time) * 1000)
-            
-            self.metrics.record_request(
-                tier="smart",
-                provider=self.smart_client.provider.value,
-                model=self.smart_model or "default",
-                success=response.success,
-                duration_ms=duration_ms,
-                error=response.error_message
-            )
 
         return response
 

@@ -89,18 +89,20 @@ class LLMMetricsCollector:
             return None
         
         successful = [r for r in requests if r.success]
-        timeouts = [r for r in requests if not r.success and "timeout" in (r.error or "").lower()]
+        # Group by provider for clearer insights
+        providers = sorted(list(set(r.provider for r in requests)))
         
         total_time_ms = sum(r.duration_ms for r in requests)
         total_scan_time_ms = sum(r.duration_ms for r in self.requests)
         
         return {
-            "provider": requests[0].provider,
-            "model": requests[0].model,
+            "providers": providers,
+            "provider": requests[-1].provider,  # Show latest
+            "model": requests[-1].model,
             "requests": len(requests),
             "percentage": round(len(requests) / len(self.requests) * 100, 1),
             "successRate": round(len(successful) / len(requests) * 100, 1) if requests else 0,
-            "timeouts": len(timeouts),
+            "timeouts": len([r for r in requests if not r.success and "timeout" in (r.error or "").lower()]),
             "avgResponseTime": f"{sum(r.duration_ms for r in successful) / len(successful) / 1000:.1f}s" if successful else "N/A",
             "totalTime": self._format_duration(total_time_ms),
             "timePercentage": round(total_time_ms / total_scan_time_ms * 100, 1) if total_scan_time_ms > 0 else 0
@@ -157,19 +159,21 @@ class LLMMetricsCollector:
         
         fast_requests = [r for r in self.requests if r.tier == "fast"]
         if fast_requests:
-            timeouts = [r for r in fast_requests if not r.success]
-            timeout_rate = len(timeouts) / len(fast_requests)
+            failed = [r for r in fast_requests if not r.success]
+            failure_rate = len(failed) / len(fast_requests)
             
-            if timeout_rate > 0.1:  # >10% timeout rate
+            if failure_rate > 0.1:  # >10% failure rate
+                providers = list(set(r.provider for r in failed))
                 issues.append({
-                    "type": "timeout",
+                    "type": "reliability",
                     "tier": "fast",
-                    "count": len(timeouts),
+                    "count": len(failed),
                     "severity": "warning",
-                    "message": f"{len(timeouts)} Qwen requests timed out, fell back to Azure",
+                    "message": f"{len(failed)} fast tier requests ({', '.join(providers)}) failed or timed out",
                     "recommendations": [
-                        "Increase timeout from 30s to 60s",
-                        "Reduce concurrency to avoid resource exhaustion"
+                        "Check local service (Ollama) health",
+                        "Increase fast tier timeout",
+                        "Verify Groq/Cloud failover status"
                     ]
                 })
         
