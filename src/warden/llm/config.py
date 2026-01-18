@@ -96,6 +96,7 @@ class LlmConfiguration:
     # Model Tiering (Optional)
     smart_model: Optional[str] = None  # High-reasoning model (e.g. gpt-4o)
     fast_model: Optional[str] = None   # Fast/Cheap model (e.g. gpt-4o-mini)
+    fast_tier_providers: list[LlmProvider] = field(default_factory=lambda: [LlmProvider.OLLAMA])
     max_concurrency: int = 4           # Global max concurrent requests
 
     def get_provider_config(self, provider: LlmProvider) -> Optional[ProviderConfig]:
@@ -185,37 +186,12 @@ def create_default_config() -> LlmConfiguration:
     return config
 
 
-def load_llm_config() -> LlmConfiguration:
+def load_llm_config(config_override: Optional[dict] = None) -> LlmConfiguration:
     """
     Load LLM configuration using SecretManager.
-
-    Supports multiple secret sources with auto-detection:
-    - Local .env file (development)
-    - Environment variables (GitHub Actions CI/CD)
-    - Azure Key Vault (production)
-
-    Returns:
-        LlmConfiguration with configured providers based on available secrets
-
-    Secret Sources (in priority order):
-        1. Azure Key Vault (if AZURE_KEY_VAULT_URL is set)
-        2. Environment variables (if GITHUB_ACTIONS=true)
-        3. .env file (local development)
-        4. Environment variables (fallback)
-
-    Required Secrets for Azure OpenAI:
-        - AZURE_OPENAI_API_KEY
-        - AZURE_OPENAI_ENDPOINT
-        - AZURE_OPENAI_DEPLOYMENT_NAME
-        - AZURE_OPENAI_API_VERSION (optional, default: "2024-02-01")
-
-    Other provider secrets (optional):
-        - OPENAI_API_KEY
-        - ANTHROPIC_API_KEY
-        - DEEPSEEK_API_KEY
-        - QWENCODE_API_KEY
-        - GROQ_API_KEY
-        - OPENROUTER_API_KEY
+    
+    Args:
+        config_override: Optional dictionary of overrides (e.g. from config.yaml)
     """
     import asyncio
 
@@ -225,14 +201,14 @@ def load_llm_config() -> LlmConfiguration:
         # If we're already in an async context, we need to run in a new thread
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, load_llm_config_async())
+            future = pool.submit(asyncio.run, load_llm_config_async(config_override))
             return future.result()
     except RuntimeError:
         # No running loop - we can use asyncio.run directly
-        return asyncio.run(load_llm_config_async())
+        return asyncio.run(load_llm_config_async(config_override))
 
 
-async def load_llm_config_async() -> LlmConfiguration:
+async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmConfiguration:
     """
     Async version of load_llm_config using SecretManager.
 
@@ -272,6 +248,7 @@ async def load_llm_config_async() -> LlmConfiguration:
         "WARDEN_SMART_MODEL",
         "WARDEN_FAST_MODEL",
         "WARDEN_LLM_CONCURRENCY",
+        "WARDEN_FAST_TIER_PRIORITY",
         "OLLAMA_HOST",
     ])
 
@@ -283,6 +260,21 @@ async def load_llm_config_async() -> LlmConfiguration:
     fast_model_secret = secrets.get("WARDEN_FAST_MODEL")
     if fast_model_secret:
         config.fast_model = fast_model_secret.value
+
+    fast_tier_priority_secret = secrets.get("WARDEN_FAST_TIER_PRIORITY")
+    if fast_tier_priority_secret and fast_tier_priority_secret.found:
+        providers_str = fast_tier_priority_secret.value
+        if providers_str:
+            try:
+                config.fast_tier_providers = [
+                    LlmProvider(p.strip().lower()) 
+                    for p in providers_str.split(",") 
+                    if p.strip()
+                ]
+            except ValueError as e:
+                import structlog
+                logger = structlog.get_logger(__name__)
+                logger.warning("invalid_fast_tier_priority", value=providers_str, error=str(e))
     
     concurrency_secret = secrets.get("WARDEN_LLM_CONCURRENCY")
     if concurrency_secret and concurrency_secret.found:
@@ -377,5 +369,24 @@ async def load_llm_config_async() -> LlmConfiguration:
             config.openrouter,
         ]:
             provider_config.enabled = False
+
+    # Apply manual overrides if provided (from config.yaml)
+    if config_override:
+        if "fast_tier_providers" in config_override:
+            providers = config_override["fast_tier_providers"]
+            if isinstance(providers, list):
+                config.fast_tier_providers = [LlmProvider(p.strip().lower()) for p in providers if isinstance(p, str)]
+        
+        if "smart_model" in config_override:
+            config.smart_model = config_override["smart_model"]
+        
+        if "fast_model" in config_override:
+            config.fast_model = config_override["fast_model"]
+            
+        if "provider" in config_override:
+            try:
+                config.default_provider = LlmProvider(config_override["provider"])
+            except ValueError:
+                pass
 
     return config

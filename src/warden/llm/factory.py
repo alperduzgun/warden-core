@@ -76,27 +76,32 @@ def create_client(
     # Create primary (smart) client
     smart_client = create_provider_client(provider, provider_config)
     
-    # Try to create local (fast) client if enabled
-    fast_client = None
-    if config.ollama.enabled:
+    # Try to create local/fast clients if enabled in priority order
+    fast_clients = []
+    import structlog
+    logger = structlog.get_logger(__name__)
+
+    for fast_provider in getattr(config, 'fast_tier_providers', [LlmProvider.OLLAMA]):
         try:
-            fast_client = create_provider_client(LlmProvider.OLLAMA, config.ollama)
+            fast_cfg = config.get_provider_config(fast_provider)
+            if fast_cfg and fast_cfg.enabled:
+                client = create_provider_client(fast_provider, fast_cfg)
+                fast_clients.append(client)
+                logger.debug("fast_tier_client_added", provider=fast_provider.value)
         except Exception as e:
-            # Log but don't fail - orchestration will work without fast tier
-            import structlog
-            logger = structlog.get_logger(__name__)
-            logger.warning("ollama_client_creation_failed", error=str(e))
+            # Log but don't fail - orchestration will work with whatever fast tier clients are available
+            logger.warning("fast_tier_client_creation_failed", provider=fast_provider.value, error=str(e))
     
     # DEBUG: Diagnosing Hybrid Setup
-    import structlog
-    debug_logger = structlog.get_logger(__name__)
-    debug_logger.warning("factory_client_status", ollama_enabled=config.ollama.enabled, fast_client_created=fast_client is not None)
+    logger.warning("factory_client_status", 
+                fast_providers_configured=[p.value for p in getattr(config, 'fast_tier_providers', [])],
+                fast_clients_created=[c.provider for c in fast_clients])
 
     # Wrap in OrchestratedLlmClient for tiered execution support
     from .providers.orchestrated import OrchestratedLlmClient
     return OrchestratedLlmClient(
         smart_client=smart_client,
-        fast_client=fast_client,
+        fast_clients=fast_clients,
         smart_model=config.smart_model,
         fast_model=config.fast_model,
         metrics_collector=get_global_metrics_collector()

@@ -31,13 +31,23 @@ class WardenBridge:
         # Initialize basic handlers
         self.config_handler = ConfigHandler(self.project_root)
         self.tool_handler = ToolHandler()
-        
-        # Load LLM Config first for orchestrator creation
+
+        # Load LLM Config with overrides from config.yaml
         from warden.llm.config import load_llm_config
         from warden.llm.factory import create_client
+        from warden.cli_bridge.config_manager import ConfigManager
+        
+        llm_overrides = {}
         try:
-            self.llm_config = load_llm_config()
-            llm_service = create_client(self.llm_config.default_provider)
+            config_mgr = ConfigManager(self.project_root)
+            raw_config = config_mgr.read_config()
+            llm_overrides = raw_config.get("llm", {})
+        except Exception as e:
+            logger.debug("could_not_read_llm_overrides", error=str(e))
+
+        try:
+            self.llm_config = load_llm_config(llm_overrides)
+            llm_service = create_client(self.llm_config)
             if llm_service:
                 # Attach for tiering awareness
                 llm_service.config = self.llm_config
