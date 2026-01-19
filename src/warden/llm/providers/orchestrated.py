@@ -36,13 +36,18 @@ class OrchestratedLlmClient(ILlmClient):
             metrics_collector = LLMMetricsCollector()
         self.metrics = metrics_collector
         
-        logger.debug(
-            "orchestrated_llm_client_initialized",
-            smart_provider=smart_client.provider,
-            fast_providers=[c.provider for c in self.fast_clients],
-            smart_model=smart_model,
-            fast_model=fast_model
-        )
+        if not self.fast_clients:
+            logger.warning("orchestrated_client_no_fast_tier", message="Running in Smart-Only mode (slower, higher cost)")
+        else:
+            fast_providers = [c.provider.value for c in self.fast_clients]
+            logger.info(
+                "orchestrated_client_initialized",
+                mode="Hybrid Fast Tier",
+                smart_tier=smart_client.provider.value,
+                fast_tier_chain=" -> ".join(fast_providers),
+                fast_providers=fast_providers,
+                concurrency=self.metrics.max_concurrency if hasattr(self.metrics, 'max_concurrency') else "default"
+            )
 
     @property
     def provider(self) -> LlmProvider:

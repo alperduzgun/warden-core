@@ -49,7 +49,7 @@ class PipelineHandler(BaseHandler):
         # Serialization handled by bridge or helper
         return result, context
 
-    async def execute_pipeline_stream_async(self, paths: Union[str, List[str]], frames: Optional[List[str]] = None, analysis_level: str = "standard") -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream_async(self, paths: Union[str, List[str]], frames: Optional[List[str]] = None, analysis_level: str = "standard", baseline_fingerprints: Optional[set] = None) -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
@@ -102,6 +102,11 @@ class PipelineHandler(BaseHandler):
                     continue
 
             result, context = await pipeline_task
+            
+            # Apply Baseline Filtering (Delta Analysis)
+            if baseline_fingerprints:
+                result = self._filter_result(result, baseline_fingerprints)
+                
             yield {"type": "result", "result": result, "context": context}
 
         finally:
@@ -119,6 +124,19 @@ class PipelineHandler(BaseHandler):
                 logger.warning("path_not_found_skipping", path=str(root_path))
                 continue
             
+            # If it's a file, handle it directly
+            if root_path.is_file():
+                try:
+                    code_files.append(CodeFile(
+                        path=str(root_path.absolute()),
+                        content=root_path.read_text(encoding="utf-8", errors='replace'),
+                        language=self._detect_language(root_path)
+                    ))
+                    seen_paths.add(str(root_path.absolute()))
+                except Exception as e:
+                    logger.warning("file_read_error", file=str(root_path), error=str(e))
+                continue
+
             # Get discovery settings from orchestrator config if available
             discovery_config = getattr(self.orchestrator.config, "discovery_config", {}) or {}
             max_size_mb = discovery_config.get("max_size_mb")
@@ -164,3 +182,76 @@ class PipelineHandler(BaseHandler):
             '.rs': 'rust', '.java': 'java', '.cs': 'csharp'
         }
         return mapping.get(ext, 'text')
+
+    def _filter_result(self, result: Any, baseline_fingerprints: set) -> Any:
+        """Filter out findings that match the baseline fingerprints."""
+        import hashlib
+        
+        filtered_count = 0
+        
+        # Determine how to iterate based on result type
+        # Assuming result has 'frame_results' or 'findings'
+        # Since result is likely a Pydantic model or dict, access attribute or key
+        
+        frame_results = getattr(result, "frame_results", [])
+        if not frame_results and isinstance(result, dict):
+            frame_results = result.get("frame_results", [])
+            
+        for frame in frame_results:
+            findings = getattr(frame, "findings", [])
+            if not findings and isinstance(frame, dict):
+                findings = frame.get("findings", [])
+                
+            new_findings = []
+            for f in findings:
+                # Resolve attributes (Handle both Dict and Finding objects)
+                is_dict = isinstance(f, dict)
+                
+                if is_dict:
+                     rule_id = f.get("id") or f.get("rule_id") or f.get("ruleId", "unknown")
+                     location = f.get("location", "")
+                     msg = f.get("message", "")
+                     raw_path = f.get("file_path") or f.get("path") or f.get("file")
+                else:
+                     rule_id = getattr(f, "id", None) or getattr(f, "rule_id", None) or getattr(f, "ruleId", "unknown")
+                     location = getattr(f, "location", "")
+                     msg = getattr(f, "message", "")
+                     raw_path = getattr(f, "file_path", None) or getattr(f, "path", None) or getattr(f, "file", None)
+
+                # Resolve file path relative to project root
+                path_str = str(raw_path) if raw_path else ""
+                
+                # If path missing, try to extract from location
+                if not path_str and location:
+                    path_str = location.split(':')[0]
+
+                if str(self.project_root) in path_str:
+                    rel_path = path_str.replace(str(self.project_root) + "/", "")
+                else:
+                    rel_path = path_str
+                    
+                # Include code snippet to distinguish findings in same file
+                if is_dict:
+                    snippet = f.get("code_snippet") or f.get("codeSnippet") or f.get("code", "")
+                else:
+                    snippet = getattr(f, "code_snippet", None) or getattr(f, "codeSnippet", None) or getattr(f, "code", "")
+
+                composite = f"{rule_id}:{rel_path}:{msg}:{snippet}"
+                fp = hashlib.sha256(composite.encode()).hexdigest()
+                
+                if fp in baseline_fingerprints:
+                    filtered_count += 1
+                    # Skip (Filter out)
+                else:
+                    new_findings.append(f)
+            
+            # Update frame with filtered findings
+            if isinstance(frame, dict):
+                frame["findings"] = new_findings
+            else:
+                setattr(frame, "findings", new_findings)
+                
+        if filtered_count > 0:
+            logger.info("baseline_filtered_findings", count=filtered_count)
+            
+        return result

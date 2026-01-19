@@ -164,6 +164,7 @@ class AnalysisPhase:
         self,
         code_files: List[CodeFile],
         pipeline_context: Optional[Any] = None,
+        **kwargs: Any,
     ) -> QualityMetrics:
         """
         Execute analysis phase.
@@ -178,7 +179,7 @@ class AnalysisPhase:
         # Filter handled files
         code_files = [
             f for f in code_files
-            if not self.ignore_matcher.is_ignored(f.path)
+            if not self.ignore_matcher.should_ignore_file(Path(f.path))
         ]
 
         if not code_files:

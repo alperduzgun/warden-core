@@ -166,6 +166,8 @@ def scan_command(
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Shorthand for --level basic"),
     memory_profile: bool = typer.Option(False, "--memory-profile", help="Enable memory profiling and leak detection"),
+    diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
+    base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -184,11 +186,65 @@ def scan_command(
         if no_ai:
             level = "basic"
             
-        # Default to "." if no paths provided
-        if not paths:
+            
+        # Default to "." if no paths provided AND no diff mode
+        if not paths and not diff:
             paths = ["."]
 
-        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level, memory_profile))
+        # Incremental Scanning Logic
+        # Incremental Scanning Logic
+        baseline_fingerprints = None
+        
+        if diff:
+            try:
+                from warden.cli.commands.helpers.git_helper import GitHelper
+                console.print(f"[dim]🔍 Detecting changed files relative to '{base}'...[/dim]")
+                git_helper = GitHelper(Path.cwd())
+                changed_files = git_helper.get_changed_files(base_branch=base)
+                
+                if not changed_files:
+                    console.print("[yellow]⚠️  No changed files detected. Scan skipped.[/yellow]")
+                    return
+                
+                # Update paths with detected changes
+                paths = changed_files
+                console.print(f"[green]✨ Incremental Scan: Found {len(paths)} changed files.[/green]")
+                        
+            except Exception as e:
+                console.print(f"[bold red]❌ Git Error:[/bold red] {e}")
+                raise typer.Exit(1)
+
+            # Baseline Logic (Smart Autopilot)
+            from warden.cli.commands.helpers.baseline_manager import BaselineManager
+            from warden.cli_bridge.config_manager import ConfigManager
+            
+            try:
+                # Load config to check baseline settings
+                config_mgr = ConfigManager(Path.cwd())
+                raw_config = config_mgr.read_config()
+                
+                baseline_mgr = BaselineManager(Path.cwd(), raw_config)
+                baseline_fingerprints = set()
+                
+                if baseline_mgr.enabled:
+                     console.print("[dim]🔍 Checking baseline status...[/dim]")
+                     
+                     # Logic for Auto-Fetch
+                     if baseline_mgr.is_outdated() and baseline_mgr.auto_fetch:
+                          console.print("[bold cyan]🔄 Updating baseline from remote...[/bold cyan]")
+                          baseline_mgr.fetch_latest_baseline()
+                          
+                     # Load
+                     baseline_fingerprints = baseline_mgr.get_fingerprints()
+                     if baseline_fingerprints:
+                         console.print(f"[dim]📜 Loaded {len(baseline_fingerprints)} issues from baseline.[/dim]")
+                     else:
+                         console.print("[dim]⚠️  No baseline found or empty. All issues will be reported.[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Baseline Error (Skipping): {e}[/yellow]")
+                baseline_fingerprints = None
+
+        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level, memory_profile, baseline_fingerprints))
         
         # Display memory stats if profiling was enabled
         if memory_profile:
@@ -204,7 +260,7 @@ def scan_command(
         raise typer.Exit(130)
 
 
-async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard", memory_profile: bool = False) -> int:
+async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard", memory_profile: bool = False, baseline_fingerprints: Optional[set] = None) -> int:
     """Async implementation of scan command."""
     
     display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
@@ -246,7 +302,8 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                 file_path=paths,
                 frames=frames,
                 verbose=verbose,
-                analysis_level=level
+                analysis_level=level,
+                baseline_fingerprints=baseline_fingerprints
             ):
                 event_type = event.get("type")
                 

@@ -2,7 +2,6 @@ advanced:
   debug: true
   frame_timeout: 300
   max_workers: 4
-ci:
   enabled: true
   fail_on_blocker: true
   output:
@@ -155,3 +154,9 @@ settings:
 custom_rules:
   - .warden/rules/my_custom_rules.yaml
   - .warden/rules/warden_core_rules.yaml
+
+
+baseline:
+  enabled: true
+  path: .warden/baseline.json
+  auto_fetch: false

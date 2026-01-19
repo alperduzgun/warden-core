@@ -206,11 +206,50 @@ AI Agents working in a Warden project follow this strict protocol:
 | Command | Description |
 | :--- | :--- |
 | `warden scan` | Runs the full validation pipeline on the project. |
+| `warden scan --diff` | **(New!)** Incremental scan. Checks only files changed relative to main branch. |
+| `warden scan --diff --baseline` | **(New!)** Smart Autopilot. Uses baseline to hide legacy issues. |
 | `warden validate <file>` | Scans a single file for immediate feedback. |
 | `warden serve` | Starts the MCP Server for AI integration. |
 | `warden doctor` | Checks project health and configuration status. |
 | `warden install` | Installs/Updates validation frames. |
 | `warden search <query>` | Searches Warden Hub or local codebase. |
+
+### ⚡ Incremental Scanning (The Speed Force)
+Don't wait hours for a full scan. Use **Diff Mode** to check only your recent changes:
+
+```bash
+# Checks changes relative to 'main' (staged + unstaged)
+warden scan --diff
+
+# Checks changes relative to a specific branch
+warden scan --diff --base origin/develop
+```
+
+> **Result:** Scans finish in seconds, providing "Deep Scan" quality for just the code you touched.
+
+### 🤖 Smart Baseline Autopilot (Delta Analysis)
+Stop fighting legacy code. The **Smart Baseline Autopilot** ensures you only see *new* issues introduced in your current task, automatically suppressing existing "Legacy Debt".
+
+#### How it Works:
+1.  **Baseline Generation:** CI/CD generates a `baseline.json` (the "Known Good" state) on every merge to `main`.
+2.  **Auto-Fetch:** When you run a scan, Warden automatically fetches the latest baseline from your repository or cloud storage.
+3.  **Delta Filtering:** Warden compares findings against the baseline using **Semantic Hashing**. If a finding already exists in the baseline, it is hidden from the report.
+
+#### Configuration (`.warden/config.yaml`):
+```yaml
+baseline:
+  enabled: true
+  path: .warden/baseline.json
+  auto_fetch: true
+  # Vendor-agnostic fetch command (GitHub, GitLab, S3, etc.)
+  fetch_command: "gh run download -n warden-baseline" 
+```
+
+#### CLI Usage:
+```bash
+# Automatically applies baseline filtering
+warden scan --diff
+```
 
 ---
 
