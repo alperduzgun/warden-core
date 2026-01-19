@@ -194,6 +194,7 @@ def load_llm_config(config_override: Optional[dict] = None) -> LlmConfiguration:
         config_override: Optional dictionary of overrides (e.g. from config.yaml)
     """
     import asyncio
+    import httpx
 
     # Use async version internally
     try:
@@ -206,6 +207,20 @@ def load_llm_config(config_override: Optional[dict] = None) -> LlmConfiguration:
     except RuntimeError:
         # No running loop - we can use asyncio.run directly
         return asyncio.run(load_llm_config_async(config_override))
+
+
+async def _check_ollama_availability(endpoint: str) -> bool:
+    """
+    Fast check if Ollama is running using httpx.
+    Fail-fast: very short timeout to avoid slowing down startup.
+    """
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=0.5) as client:
+            response = await client.get(endpoint)
+            return response.status_code == 200
+    except Exception:
+        return False
 
 
 async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmConfiguration:
@@ -352,6 +367,28 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
     config.ollama.endpoint = ollama_endpoint
     config.ollama.enabled = True  # Enabled by default for dual-tier fallback
     configured_providers.append(LlmProvider.OLLAMA)
+
+    # --- AUTO-PILOT LOGIC ---
+    # Determine Fast Tier Chain based on available credentials and service health
+    
+    detected_fast_tier = []
+    
+    # Priority 1: Groq (Cloud Speed)
+    if LlmProvider.GROQ in configured_providers:
+        detected_fast_tier.append(LlmProvider.GROQ)
+        
+    # Priority 2: Ollama (Local/Free) - Only if service is actually running
+    # This fail-fast check prevents adding a dead service to the chain
+    if await _check_ollama_availability(ollama_endpoint):
+        detected_fast_tier.append(LlmProvider.OLLAMA)
+    
+    # Apply Auto-Detected chain if no manual override exists
+    # If WARDEN_FAST_TIER_PRIORITY was set earlier, we honor it.
+    # Otherwise, we use our smart auto-detected list.
+    if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
+        # If default, replace with auto-detected if we found anything good
+        if detected_fast_tier:
+             config.fast_tier_providers = detected_fast_tier
 
     # Set default provider and fallback chain based on what's configured
     if configured_providers:

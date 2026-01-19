@@ -94,15 +94,23 @@ jobs:
       - name: Run Warden Scan
         # continue-on-error removed to enforce quality gate
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Configuration for Hybrid Fast Tier Architecture
+          # 1. Smart Tier: Azure OpenAI
+          # 2. Fast Tier Priority: Groq (Cloud/Fast) -> Ollama (Local/Free)
+          
+          # Secrets
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
           AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
-          DEFAULT_LLM_MODEL: ${{ secrets.DEFAULT_LLM_MODEL }}
-          # Ensure Warden detects local Ollama
+          
+          # Warden Configuration
+          WARDEN_LLM_PROVIDER: "azure_openai"       # Smart Tier
+          WARDEN_FAST_TIER_PRIORITY: "groq,ollama"  # Fast Tier Chain
+          WARDEN_LLM_CONCURRENCY: "10"              # Concurrency Limit
+          
+          # Local Service Config
           OLLAMA_HOST: http://localhost:11434
         run: |
           # --- OLLAMA SETUP ---
