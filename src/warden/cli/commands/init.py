@@ -9,7 +9,14 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 from warden.cli.commands.install import install as run_install
-from warden.cli.commands.init_helpers import configure_llm, configure_vector_db
+from warden.cli.commands.init_helpers import (
+    configure_llm,
+    configure_vector_db,
+    select_ci_provider,
+    configure_ci_workflow,
+    generate_ai_tool_files,
+    configure_agent_tools,
+)
 
 
 console = Console()
@@ -546,9 +553,11 @@ custom_rules:
     _setup_semantic_search(config_path)
 
     # --- Step 9: Agent Configuration (New) ---
-    if agent or Confirm.ask("\nConfigure for AI Agents (Cursor/Claude)?", default=False):
+    if agent or Confirm.ask("\nConfigure for AI Agents (Cursor/Claude)?", default=True):
         try:
-            from warden.cli.commands.init_helpers import configure_agent_tools
+            # Generate AI tool files from templates
+            generate_ai_tool_files(Path.cwd(), llm_config)
+            # Configure MCP and hooks
             configure_agent_tools(Path.cwd())
         except Exception as e:
             console.print(f"[red]Failed to configure agent tools: {e}[/red]")
@@ -562,98 +571,21 @@ custom_rules:
         except Exception as e:
              console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
-    # --- Step 9: CI/CD (Simplified) ---
+    # --- Step 9: CI/CD (Template-Based) ---
     if ci or Confirm.ask("\nGenerate CI/CD Workflow?", default=False):
-        github_dir = Path(".github/workflows")
-        github_dir.mkdir(parents=True, exist_ok=True)
-        workflow_path = github_dir / "warden-ci.yml"
-        
-        if not workflow_path.exists():
-            # Use detected branch or default
-            branch = "main"
-            try:
-                branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
-            except: pass
-            
-            content = f"""name: Warden Scan
-on:
-  push:
-    branches: [{branch}]
-  pull_request:
-    branches: [{branch}]
+        # Use detected branch or default
+        branch = "main"
+        try:
+            branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
+        except Exception:
+            pass
 
-jobs:
-  warden:
-    name: Security & Quality Scan
-    runs-on: ubuntu-latest
-    env:
-      OLLAMA_HOST: http://localhost:11434
-      # Add other secrets here (e.g., OPENAI_API_KEY) if using cloud models
-      # OPENAI_API_KEY: ${{{{ secrets.OPENAI_API_KEY }}}}
+        # Select CI provider
+        ci_provider = select_ci_provider()
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Cache Ollama Models
-        uses: actions/cache@v4
-        with:
-          path: ~/.ollama
-          key: ollama-models-${{{{ runner.os }}}}-v1
-          restore-keys: |
-            ollama-models-${{{{ runner.os }}}}-
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Warden
-        run: pip install warden-core
-
-      - name: Run Scan
-        env: 
-          OLLAMA_HOST: http://localhost:11434
-        run: |
-          # --- OLLAMA SETUP ---
-          echo "Installing Ollama..."
-          curl -fsSL https://ollama.com/install.sh | sh
-          
-          echo "Starting Ollama Server..."
-          ollama serve &
-          
-          echo "Waiting for service..."
-          for i in {{1..30}}; do
-            if curl -s http://localhost:11434/api/tags >/dev/null; then
-              echo "Ollama is ready!"
-              break
-            fi
-            sleep 1
-          done
-          
-          echo "Pulling Qwen model..."
-          ollama pull qwen2.5-coder:0.5b
-          
-          # --- RUN SCAN ---
-          warden scan . --format sarif --output warden.sarif --level standard
-        continue-on-error: {'true' if mode_choice == '1' else 'false'}
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: warden-report
-          path: warden.sarif
-"""
-            with open(workflow_path, "w") as f:
-                f.write(content)
-            console.print(f"[green]Created robust CI workflow with Local LLM support: {workflow_path}[/green]")
+        # Generate workflow from template
+        if configure_ci_workflow(ci_provider, llm_config, Path.cwd(), branch):
+            console.print("[green]✓ CI/CD workflow configured successfully![/green]")
 
     # --- Step 10: Verify Built-in Frames ---
     console.print("\n[bold blue]📦 Verifying Built-in Frames...[/bold blue]")
