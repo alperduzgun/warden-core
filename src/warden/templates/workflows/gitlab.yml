@@ -1,0 +1,27 @@
+stages:
+  - security
+
+warden-scan:
+  stage: security
+  image: python:3.11-slim
+
+  variables:
+    CI_LLM_PROVIDER: {ci_llm_provider}
+{ci_env_vars}
+
+  before_script:
+    - pip install warden-core
+
+  script:
+    - warden scan --ci
+
+  artifacts:
+    when: always
+    paths:
+      - .warden/reports/
+    reports:
+      sast: .warden/reports/warden-report.sarif
+
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "{branch}"
