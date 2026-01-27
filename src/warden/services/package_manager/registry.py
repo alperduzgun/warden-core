@@ -21,7 +21,7 @@ class RegistryClient:
         
         # Load config if URL not set
         if not self.registry_url:
-            self.registry_url = self._load_hub_url_from_config() or "https://github.com/warden-ai/hub.git"
+            self.registry_url = self._load_hub_url_from_config() or "https://github.com/Appnova-EU-OU/warden-hub.git"
 
         # Ensure hub directory exists
         self.hub_dir.mkdir(parents=True, exist_ok=True)
