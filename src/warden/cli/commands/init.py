@@ -149,33 +149,107 @@ async def _create_baseline_async(root: Path, config_path: Path):
     """Run initial scan and save as baseline."""
     console.print("\n[bold blue]📉 Creating Baseline...[/bold blue]")
     console.print("[dim]Running initial scan to identify existing technical debt...[/dim]")
-    
+
     try:
         from warden.cli_bridge.bridge import WardenBridge
         bridge = WardenBridge(project_root=root, config_path=str(config_path))
-        
+
         # Run scan on current directory
         # We assume '.' finds all files via scan logic
         # Since execute_pipeline takes a file/dir path, we pass root string.
         result = await bridge.execute_pipeline_async(str(root))
-        
+
         # Save baseline
         baseline_path = root / ".warden" / "baseline.json"
-        
+
         # Extract issues (findings) from result
         # Result structure depends on bridge output. Usually {'success': ..., 'results': ...}
         # We simply save the whole result or a subset as baseline.
         # For now, save entire result.
-        
+
         with open(baseline_path, "w") as f:
             json.dump(result, f, indent=2)
-            
+
         issue_count = result.get("summary", {}).get("total_issues", 0)
         console.print(f"[green]Baseline created with {issue_count} existing issues.[/green]")
         console.print("[dim]Future scans will prioritize NEW issues.[/dim]")
-        
+
     except Exception as e:
         console.print(f"[red]Failed to create baseline: {e}[/red]")
+
+
+async def _generate_intelligence_async(root: Path):
+    """
+    Generate project intelligence for CI optimization.
+
+    This creates the .warden/intelligence/project.json file that CI scans
+    can use for risk-based analysis without running LLM.
+    """
+    console.print("\n[bold blue]🧠 Generating Project Intelligence...[/bold blue]")
+    console.print("[dim]Analyzing project structure for CI optimization...[/dim]")
+
+    try:
+        from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
+        from warden.analysis.services.intelligence_saver import IntelligenceSaver
+        from warden.analysis.domain.intelligence import SecurityPosture, RiskLevel
+
+        # Get all code files for analysis
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
+        files = [
+            f for f in root.rglob("*")
+            if f.is_file()
+            and f.suffix in code_extensions
+            and "node_modules" not in str(f)
+            and ".venv" not in str(f)
+            and ".git" not in str(f)
+            and "__pycache__" not in str(f)
+        ]
+
+        if not files:
+            console.print("[yellow]No code files found for intelligence generation.[/yellow]")
+            return
+
+        console.print(f"[dim]Analyzing {len(files)} files...[/dim]")
+
+        # Detect project purpose and modules
+        detector = ProjectPurposeDetector(root)
+        purpose, architecture, module_map = await detector.detect_async(files, [])
+
+        # Determine security posture based on project type
+        security_posture = SecurityPosture.STANDARD
+        if purpose:
+            purpose_lower = purpose.lower()
+            if any(kw in purpose_lower for kw in ["payment", "banking", "crypto", "auth"]):
+                security_posture = SecurityPosture.STRICT
+            elif any(kw in purpose_lower for kw in ["healthcare", "medical", "pii", "gdpr"]):
+                security_posture = SecurityPosture.PARANOID
+
+        # Save intelligence
+        saver = IntelligenceSaver(root)
+        success = saver.save(
+            purpose=purpose,
+            architecture=architecture,
+            security_posture=security_posture,
+            module_map=module_map,
+            project_name=root.name
+        )
+
+        if success:
+            # Count risk distribution
+            risk_counts = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+            for info in module_map.values():
+                risk_counts[info.risk_level.value] = risk_counts.get(info.risk_level.value, 0) + 1
+
+            console.print(f"[green]✓ Intelligence generated successfully![/green]")
+            console.print(f"[dim]   Modules: {len(module_map)} | Posture: {security_posture.value}[/dim]")
+            console.print(f"[dim]   Risk Distribution: P0={risk_counts['P0']}, P1={risk_counts['P1']}, P2={risk_counts['P2']}, P3={risk_counts['P3']}[/dim]")
+            console.print("[dim]   CI scans will use this for optimized analysis.[/dim]")
+        else:
+            console.print("[yellow]⚠️  Intelligence generation failed. CI will use default settings.[/yellow]")
+
+    except Exception as e:
+        console.print(f"[yellow]⚠️  Intelligence generation skipped: {e}[/yellow]")
+        console.print("[dim]CI scans will still work but may be slower.[/dim]")
 
 def init_command(
     ctx: typer.Context,
@@ -574,13 +648,22 @@ custom_rules:
     # --- Step 9: Baseline ---
     if Confirm.ask("\nCreate Baseline from current issues? (Recommended for existing projects)", default=True):
         try:
-             asyncio.run(_create_baseline_async(Path.cwd(), config_path))
+            asyncio.run(_create_baseline_async(Path.cwd(), config_path))
         except KeyboardInterrupt:
-             console.print("\n[yellow]⚠️  Baseline creation skipped by user.[/yellow]")
+            console.print("\n[yellow]⚠️  Baseline creation skipped by user.[/yellow]")
         except Exception as e:
-             console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
+            console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
-    # --- Step 9: CI/CD (Template-Based) ---
+    # --- Step 10: Intelligence Generation (CI Optimization) ---
+    if Confirm.ask("\nGenerate Project Intelligence for CI? (Recommended for faster CI scans)", default=True):
+        try:
+            asyncio.run(_generate_intelligence_async(Path.cwd()))
+        except KeyboardInterrupt:
+            console.print("\n[yellow]⚠️  Intelligence generation skipped by user.[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Intelligence generation failed: {e}[/yellow]")
+
+    # --- Step 11: CI/CD (Template-Based) ---
     if ci or Confirm.ask("\nGenerate CI/CD Workflow?", default=False):
         # Use detected branch or default
         branch = "main"
