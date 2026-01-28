@@ -116,6 +116,21 @@ class PreAnalysisPhase:
         from warden.analysis.services.linter_service import LinterService
         self.linter_service = LinterService()
 
+        # Intelligence Infrastructure (CI Optimization)
+        self.intelligence_loader = None
+        if self.config.get("ci_mode"):
+            try:
+                from warden.analysis.services.intelligence_loader import IntelligenceLoader
+                self.intelligence_loader = IntelligenceLoader(self.project_root)
+                if self.intelligence_loader.load():
+                    logger.info(
+                        "intelligence_loaded_for_ci",
+                        modules=len(self.intelligence_loader.get_module_map()),
+                        quality=self.intelligence_loader.get_quality_score()
+                    )
+            except Exception as e:
+                logger.debug("intelligence_load_skipped", error=str(e))
+
     async def execute_async(
         self, 
         code_files: List[CodeFile], 
@@ -531,10 +546,27 @@ class PreAnalysisPhase:
         return raw_contexts
 
     def _is_file_critical(self, file_path: str, project_context: ProjectContext) -> bool:
-        """Check if file is critical based on project context."""
-        # Determine strict project type key for map
-        p_type = "backend" # Default fallback
-        
+        """Check if file is critical based on project context and intelligence."""
+        # CI OPTIMIZATION: Check intelligence risk level first
+        if self.intelligence_loader and self.intelligence_loader.is_loaded:
+            try:
+                rel_path = str(Path(file_path).relative_to(self.project_root))
+            except ValueError:
+                rel_path = file_path
+
+            risk_level = self.intelligence_loader.get_risk_for_file(rel_path)
+            # P3 files are non-critical (utils, helpers, tests)
+            if risk_level.value == "P3":
+                logger.debug("file_marked_non_critical_by_intelligence", file=rel_path, risk="P3")
+                return False
+            # P0/P1 files are always critical
+            if risk_level.value in ("P0", "P1"):
+                logger.debug("file_marked_critical_by_intelligence", file=rel_path, risk=risk_level.value)
+                return True
+
+        # Fallback: Determine strict project type key for map
+        p_type = "backend"  # Default fallback
+
         # Check explicit type first
         if project_context.project_type.value in ["mobile", "android", "ios"]:
             p_type = "mobile"
@@ -549,10 +581,10 @@ class PreAnalysisPhase:
                 p_type = "web"
 
         patterns = CRITICALITY_MAP.get(p_type, CRITICALITY_MAP["backend"])
-        
+
         # ALWAYS check backend criticals too (safety net for hybrid repos)
         all_patterns = patterns + CRITICALITY_MAP["backend"]
-        
+
         for pattern in all_patterns:
             if fnmatch.fnmatch(file_path, pattern):
                 return True

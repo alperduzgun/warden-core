@@ -9,7 +9,14 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 from warden.cli.commands.install import install as run_install
-from warden.cli.commands.init_helpers import configure_llm, configure_vector_db
+from warden.cli.commands.init_helpers import (
+    configure_llm,
+    configure_vector_db,
+    select_ci_provider,
+    configure_ci_workflow,
+    generate_ai_tool_files,
+    configure_agent_tools,
+)
 
 
 console = Console()
@@ -104,30 +111,33 @@ def _setup_semantic_search(config_path: Path):
                  console.print("\n[yellow]⚠️  Indexing skipped by user.[/yellow]")
                  console.print("[dim]Run 'warden index' later to complete setup.[/dim]")
 
-         if service.is_available():
-             asyncio.run(run_indexing_if_files_exist_async())
-         else:
-              console.print("[yellow]Semantic service dependencies missing.[/yellow]")
-              console.print("[dim]Auto-installing required dependencies (Mandatory for AI features)...[/dim]")
-              try:
-                  with console.status("[bold green]Installing dependencies...[/bold green]"):
-                      subprocess.check_call([sys.executable, "-m", "pip", "install", "chromadb", "sentence-transformers"])
-                  console.print("[green]Dependencies installed successfully. Retrying...[/green]")
+             if service.is_available():
+                 asyncio.run(run_indexing_if_files_exist_async())
+             else:
+                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
+
+             if service.is_available():
+                 asyncio.run(run_indexing_if_files_exist_async())
+             else:
+                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
                   
-                  # Retry setup
-                  service = SemanticSearchService(ss_config)
-                  if service.is_available():
-                      asyncio.run(run_indexing_if_files_exist_async())
+                  # Use DependencyManager for robust installation
+                  from warden.services.dependencies import DependencyManager
+                  dep_manager = DependencyManager()
+                  
+                  required_pkgs = ["chromadb", "sentence-transformers"]
+                  success = asyncio.run(dep_manager.install_packages_async(required_pkgs))
+                  
+                  if success:
+                      console.print("[green]Dependencies installed successfully. Retrying setup...[/green]")
+                      # Re-instantiate service to pick up new modules
+                      service = SemanticSearchService(ss_config)
+                      if service.is_available():
+                          asyncio.run(run_indexing_if_files_exist_async())
+                      else:
+                          console.print("[red]Service unavailable even after install.[/red]")
                   else:
-                      console.print("[red]Service unavailable even after install.[/red]")
-                      
-              except subprocess.CalledProcessError:
-                   console.print("[red]Dependency installation failed.[/red]")
-                   console.print("[dim]Please run manually: pip install 'warden-core[semantic]'[/dim]")
-              except KeyboardInterrupt:
-                   console.print("\n[yellow]⚠️  Installation skipped by user.[/yellow]")
-              except Exception as e:
-                  console.print(f"[red]Installation error: {e}[/red]")
+                      console.print("[red]Semantic features will be disabled.[/red]")
 
     except Exception as e:
         console.print("\n[red]❌ Semantic Indexing Failed[/red]")
@@ -139,33 +149,107 @@ async def _create_baseline_async(root: Path, config_path: Path):
     """Run initial scan and save as baseline."""
     console.print("\n[bold blue]📉 Creating Baseline...[/bold blue]")
     console.print("[dim]Running initial scan to identify existing technical debt...[/dim]")
-    
+
     try:
         from warden.cli_bridge.bridge import WardenBridge
         bridge = WardenBridge(project_root=root, config_path=str(config_path))
-        
+
         # Run scan on current directory
         # We assume '.' finds all files via scan logic
         # Since execute_pipeline takes a file/dir path, we pass root string.
         result = await bridge.execute_pipeline_async(str(root))
-        
+
         # Save baseline
         baseline_path = root / ".warden" / "baseline.json"
-        
+
         # Extract issues (findings) from result
         # Result structure depends on bridge output. Usually {'success': ..., 'results': ...}
         # We simply save the whole result or a subset as baseline.
         # For now, save entire result.
-        
+
         with open(baseline_path, "w") as f:
             json.dump(result, f, indent=2)
-            
+
         issue_count = result.get("summary", {}).get("total_issues", 0)
         console.print(f"[green]Baseline created with {issue_count} existing issues.[/green]")
         console.print("[dim]Future scans will prioritize NEW issues.[/dim]")
-        
+
     except Exception as e:
         console.print(f"[red]Failed to create baseline: {e}[/red]")
+
+
+async def _generate_intelligence_async(root: Path):
+    """
+    Generate project intelligence for CI optimization.
+
+    This creates the .warden/intelligence/project.json file that CI scans
+    can use for risk-based analysis without running LLM.
+    """
+    console.print("\n[bold blue]🧠 Generating Project Intelligence...[/bold blue]")
+    console.print("[dim]Analyzing project structure for CI optimization...[/dim]")
+
+    try:
+        from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
+        from warden.analysis.services.intelligence_saver import IntelligenceSaver
+        from warden.analysis.domain.intelligence import SecurityPosture, RiskLevel
+
+        # Get all code files for analysis
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
+        files = [
+            f for f in root.rglob("*")
+            if f.is_file()
+            and f.suffix in code_extensions
+            and "node_modules" not in str(f)
+            and ".venv" not in str(f)
+            and ".git" not in str(f)
+            and "__pycache__" not in str(f)
+        ]
+
+        if not files:
+            console.print("[yellow]No code files found for intelligence generation.[/yellow]")
+            return
+
+        console.print(f"[dim]Analyzing {len(files)} files...[/dim]")
+
+        # Detect project purpose and modules
+        detector = ProjectPurposeDetector(root)
+        purpose, architecture, module_map = await detector.detect_async(files, [])
+
+        # Determine security posture based on project type
+        security_posture = SecurityPosture.STANDARD
+        if purpose:
+            purpose_lower = purpose.lower()
+            if any(kw in purpose_lower for kw in ["payment", "banking", "crypto", "auth"]):
+                security_posture = SecurityPosture.STRICT
+            elif any(kw in purpose_lower for kw in ["healthcare", "medical", "pii", "gdpr"]):
+                security_posture = SecurityPosture.PARANOID
+
+        # Save intelligence
+        saver = IntelligenceSaver(root)
+        success = saver.save(
+            purpose=purpose,
+            architecture=architecture,
+            security_posture=security_posture,
+            module_map=module_map,
+            project_name=root.name
+        )
+
+        if success:
+            # Count risk distribution
+            risk_counts = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+            for info in module_map.values():
+                risk_counts[info.risk_level.value] = risk_counts.get(info.risk_level.value, 0) + 1
+
+            console.print(f"[green]✓ Intelligence generated successfully![/green]")
+            console.print(f"[dim]   Modules: {len(module_map)} | Posture: {security_posture.value}[/dim]")
+            console.print(f"[dim]   Risk Distribution: P0={risk_counts['P0']}, P1={risk_counts['P1']}, P2={risk_counts['P2']}, P3={risk_counts['P3']}[/dim]")
+            console.print("[dim]   CI scans will use this for optimized analysis.[/dim]")
+        else:
+            console.print("[yellow]⚠️  Intelligence generation failed. CI will use default settings.[/yellow]")
+
+    except Exception as e:
+        console.print(f"[yellow]⚠️  Intelligence generation skipped: {e}[/yellow]")
+        console.print("[dim]CI scans will still work but may be slower.[/dim]")
 
 def init_command(
     ctx: typer.Context,
@@ -203,8 +287,9 @@ def init_command(
     meta.build_tools = [bt.value for bt in context.build_tools]
     
     # Suggest frames logic (Dynamic Discovery)
-    # 1. Base Core Frames
-    meta.suggested_frames = ["security", "architecturalconsistency", "config", "orphan"]
+    # 1. Base Core Frames (built-in frames that come with warden-core)
+    # Available built-in frames: security, resilience, orphan, fuzz, property, spec, gitchanges
+    meta.suggested_frames = ["security", "resilience", "orphan"]
     
     # 2. Dynamic Language-Specific Frames (Registry Search)
     try:
@@ -214,7 +299,7 @@ def init_command(
         # Sync if cache is missing (first run)
         if not registry._catalog_cache:
             console.print("[dim]Syncing registry for suggestions...[/dim]")
-            asyncio.run(registry.sync())
+            asyncio.run(registry.sync_async())
             
         # Get languages to check (fall back to primary if detected is empty)
         languages_to_check = context.detected_languages or [context.primary_language]
@@ -240,12 +325,16 @@ def init_command(
         console.print(f"[dim yellow]Warning: frame suggestion failed: {e}[/dim yellow]")
 
     if meta.project_type in ["api", "backend", "microservice"]:
-         meta.suggested_frames.extend(["stress", "resilience"])
+        # Add fuzz and property testing for API/backend projects
+        if "fuzz" not in meta.suggested_frames:
+            meta.suggested_frames.append("fuzz")
+        if "property" not in meta.suggested_frames:
+            meta.suggested_frames.append("property")
     # Helper to check for CI config files from context.config_files
     ci_files = {".github/workflows": "github-actions", ".gitlab-ci.yml": "gitlab-ci", "Jenkinsfile": "jenkins"}
     for f, p in ci_files.items():
-        if f in context.config_files: meta.ci_providers.append(p)
-    if meta.ci_providers: meta.suggested_frames.append("env-security")
+        if f in context.config_files:
+            meta.ci_providers.append(p)
 
     console.print(f"   [green]✓[/green] Language: [cyan]{meta.language}[/cyan]")
     console.print(f"   [green]✓[/green] Framework: [cyan]{', '.join(meta.frameworks) if meta.frameworks else 'None detected'}[/cyan]")
@@ -319,7 +408,9 @@ def init_command(
 
     # --- Step 3: LLM Config ---
     llm_config, new_env_vars = configure_llm(existing_config)
-    
+    provider = llm_config["provider"]
+    model = llm_config["model"]
+
     # Update .env
     env_path = Path(".env")
     if new_env_vars:
@@ -341,13 +432,10 @@ def init_command(
                     f.write("AZURE_OPENAI_API_KEY=\n")
                     f.write("AZURE_OPENAI_ENDPOINT=\n")
                     f.write("AZURE_OPENAI_DEPLOYMENT_NAME=\n")
-                else:
-                     # Generic key
-                     f.write(f"{provider.upper()}_API_KEY=\n")
+                elif provider != "none" and provider != "ollama":
+                    # Generic key
+                    f.write(f"{provider.upper()}_API_KEY=\n")
             console.print("[green]Created .env.example[/green]")
-
-    provider = llm_config["provider"]
-    model = llm_config["model"]
 
     # --- Step 4: Vector Database ---
     vector_config = configure_vector_db()
@@ -457,8 +545,20 @@ def init_command(
             console.print("[green]Merged configuration successfully.[/green]")
 
 
-    # --- Step 5: Ignore File ---
+    # --- Step 5: Ignore Files ---
     _generate_ignore_file(Path.cwd(), meta)
+
+    # Create .warden/ignore.yaml from template
+    ignore_yaml_path = warden_dir / "ignore.yaml"
+    if not ignore_yaml_path.exists():
+        try:
+            import importlib.resources
+            ignore_template = importlib.resources.read_text("warden.templates", "ignore.yaml")
+            with open(ignore_yaml_path, "w") as f:
+                f.write(ignore_template)
+            console.print(f"[green]Created ignore configuration: {ignore_yaml_path}[/green]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not create ignore.yaml: {e}[/yellow]")
 
     # --- Step 6: Example Rules ---
     rules_dir = warden_dir / "rules"
@@ -470,13 +570,19 @@ def init_command(
 
 rules:
   - id: "company-no-print"
+    name: "Company No Print"
     description: "Do not use print statements in production code"
+    category: "convention"
     severity: "warning"
-    patterns:
-      - "print("
-    exclude:
-      - "tests/**"
-      - "scripts/**"
+    isBlocker: false
+    enabled: true
+    type: "pattern"
+    conditions:
+      forbiddenPatterns:
+        - "print("
+      exclude:
+        - "tests/**"
+        - "scripts/**"
 """
         with open(example_rule_path, "w") as f:
             f.write(example_content)
@@ -530,9 +636,11 @@ custom_rules:
     _setup_semantic_search(config_path)
 
     # --- Step 9: Agent Configuration (New) ---
-    if agent or Confirm.ask("\nConfigure for AI Agents (Cursor/Claude)?", default=False):
+    if agent or Confirm.ask("\nConfigure for AI Agents (Cursor/Claude)?", default=True):
         try:
-            from warden.cli.commands.init_helpers import configure_agent_tools
+            # Generate AI tool files from templates
+            generate_ai_tool_files(Path.cwd(), llm_config)
+            # Configure MCP and hooks
             configure_agent_tools(Path.cwd())
         except Exception as e:
             console.print(f"[red]Failed to configure agent tools: {e}[/red]")
@@ -540,121 +648,62 @@ custom_rules:
     # --- Step 9: Baseline ---
     if Confirm.ask("\nCreate Baseline from current issues? (Recommended for existing projects)", default=True):
         try:
-             asyncio.run(_create_baseline_async(Path.cwd(), config_path))
+            asyncio.run(_create_baseline_async(Path.cwd(), config_path))
         except KeyboardInterrupt:
-             console.print("\n[yellow]⚠️  Baseline creation skipped by user.[/yellow]")
+            console.print("\n[yellow]⚠️  Baseline creation skipped by user.[/yellow]")
         except Exception as e:
-             console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
+            console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
-    # --- Step 9: CI/CD (Simplified) ---
-    if ci or Confirm.ask("\nGenerate CI/CD Workflow?", default=False):
-        github_dir = Path(".github/workflows")
-        github_dir.mkdir(parents=True, exist_ok=True)
-        workflow_path = github_dir / "warden-ci.yml"
-        
-        if not workflow_path.exists():
-            # Use detected branch or default
-            branch = "main"
-            try:
-                branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
-            except: pass
-            
-            content = f"""name: Warden Scan
-on:
-  push:
-    branches: [{branch}]
-  pull_request:
-    branches: [{branch}]
-
-jobs:
-  warden:
-    name: Security & Quality Scan
-    runs-on: ubuntu-latest
-    env:
-      OLLAMA_HOST: http://localhost:11434
-      # Add other secrets here (e.g., OPENAI_API_KEY) if using cloud models
-      # OPENAI_API_KEY: ${{{{ secrets.OPENAI_API_KEY }}}}
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Cache Ollama Models
-        uses: actions/cache@v4
-        with:
-          path: ~/.ollama
-          key: ollama-models-${{{{ runner.os }}}}-v1
-          restore-keys: |
-            ollama-models-${{{{ runner.os }}}}-
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Warden
-        run: pip install warden-core
-
-      - name: Run Scan
-        env: 
-          OLLAMA_HOST: http://localhost:11434
-        run: |
-          # --- OLLAMA SETUP ---
-          echo "Installing Ollama..."
-          curl -fsSL https://ollama.com/install.sh | sh
-          
-          echo "Starting Ollama Server..."
-          ollama serve &
-          
-          echo "Waiting for service..."
-          for i in {{1..30}}; do
-            if curl -s http://localhost:11434/api/tags >/dev/null; then
-              echo "Ollama is ready!"
-              break
-            fi
-            sleep 1
-          done
-          
-          echo "Pulling Qwen model..."
-          ollama pull qwen2.5-coder:0.5b
-          
-          # --- RUN SCAN ---
-          warden scan . --format sarif --output warden.sarif --level standard
-        continue-on-error: {'true' if mode_choice == '1' else 'false'}
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: warden-report
-          path: warden.sarif
-"""
-            with open(workflow_path, "w") as f:
-                f.write(content)
-            console.print(f"[green]Created robust CI workflow with Local LLM support: {workflow_path}[/green]")
-
-    # --- Step 10: Install dependencies ---
-    console.print("\n[bold blue]📦 Installing Frames & Rules...[/bold blue]")
-    try:
-        from warden.cli.commands.update import update_command
-        
-        # 1. Update Registry (to know what is Core)
+    # --- Step 10: Intelligence Generation (CI Optimization) ---
+    if Confirm.ask("\nGenerate Project Intelligence for CI? (Recommended for faster CI scans)", default=True):
         try:
-             update_command()
-        except:
-             console.print("[yellow]Warning: Could not update registry. Core frames might be outdated.[/yellow]")
+            asyncio.run(_generate_intelligence_async(Path.cwd()))
+        except KeyboardInterrupt:
+            console.print("\n[yellow]⚠️  Intelligence generation skipped by user.[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Intelligence generation failed: {e}[/yellow]")
 
-        # 2. Install (will pick up Core frames automatically)
-        run_install(frame_id=None)
+    # --- Step 11: CI/CD (Template-Based) ---
+    if ci or Confirm.ask("\nGenerate CI/CD Workflow?", default=False):
+        # Use detected branch or default
+        branch = "main"
+        try:
+            branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
+        except Exception:
+            pass
+
+        # Select CI provider
+        ci_provider = select_ci_provider()
+
+        # Generate workflow from template
+        if configure_ci_workflow(ci_provider, llm_config, Path.cwd(), branch):
+            console.print("[green]✓ CI/CD workflow configured successfully![/green]")
+
+    # --- Step 10: Verify Built-in Frames ---
+    console.print("\n[bold blue]📦 Verifying Built-in Frames...[/bold blue]")
+    try:
+        from warden.validation.infrastructure.frame_registry import FrameRegistry
+        registry = FrameRegistry()
+        frames = registry.discover_all(project_root=Path.cwd())
+        frame_names = [f().name for f in frames]
+        console.print(f"[green]✓ Found {len(frames)} built-in frames: {', '.join(frame_names[:5])}{'...' if len(frames) > 5 else ''}[/green]")
     except Exception as e:
-        console.print(f"[red]Warning: Auto-install failed: {e}[/red]")
-        console.print("[dim]Run 'warden install' manually to download frames.[/dim]")
+        console.print(f"[yellow]Warning: Could not verify frames: {e}[/yellow]")
+
+    # Optional: Try to install additional frames from Hub (non-blocking)
+    if Confirm.ask("\nInstall additional frames from Warden Hub? (requires network)", default=False):
+        try:
+            from warden.cli.commands.update import update_command
+            try:
+                update_command()
+            except Exception:
+                console.print("[yellow]Warning: Could not update registry.[/yellow]")
+
+            run_install(frame_id=None)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Hub install failed: {e}[/yellow]")
+            console.print("[dim]Built-in frames are still available.[/dim]")
 
     console.print("\n[bold green]✨ Warden Initialization Complete![/bold green]")
     console.print("Run [bold cyan]warden scan[/bold cyan] to start.")
+    console.print("[dim]Available frames: security, resilience, orphan, fuzz, property[/dim]")
