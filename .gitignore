@@ -80,3 +80,7 @@ src/warden/_version.py
 src/.warden/
 
 # Performance Roadmap
+
+# Rust Build Artifacts
+src/warden_rust/target/
+target/
