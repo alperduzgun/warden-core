@@ -63,28 +63,41 @@ class RegistryClient:
         logger.info("syncing_registry_catalog", url=self.registry_url)
         
         try:
+            timeout_seconds = 10 # Fail Fast principle
+            
             if not (self.hub_dir / ".git").exists():
                 # Initial clone
+                logger.info("registry_clone_started")
                 subprocess.run(
                     ["git", "clone", "--depth", "1", self.registry_url, str(self.hub_dir)],
                     check=True,
-                    capture_output=True
+                    capture_output=True,
+                    timeout=timeout_seconds
                 )
             else:
                 # Update existing
+                logger.debug("registry_pull_started")
                 subprocess.run(
                     ["git", "-C", str(self.hub_dir), "pull", "origin", "master"],
                     check=True,
-                    capture_output=True
+                    capture_output=True,
+                    timeout=timeout_seconds
                 )
             
             # Refresh cache
             self._catalog_cache = self._load_catalog()
             logger.info("registry_sync_success", frames_count=len(self._catalog_cache))
             return True
+
+        except subprocess.TimeoutExpired:
+            logger.warning("registry_sync_timeout", timeout=timeout_seconds, action="using_cached_if_available")
+            # Degraded mode: If we have cache, return True (ish) or just log
+            return bool(self._catalog_cache)
+
         except Exception as e:
-            logger.error("registry_sync_failed", error=str(e))
-            return False
+            logger.error("registry_sync_failed", error=str(e), action="using_cached_if_available")
+            # Degraded mode: If we have cache, we are 'okay'
+            return bool(self._catalog_cache)
 
     def search(self, query: Optional[str] = None) -> List[Dict[str, Any]]:
         """Search for frames matching the query."""
