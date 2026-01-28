@@ -234,6 +234,17 @@ def scan_command(
                     modules = len(intel_loader.get_module_map())
                     posture = intel_loader.get_security_posture().value
                     console.print(f"[dim]🧠 Intelligence loaded: {modules} modules, quality={quality}/100, posture={posture}[/dim]")
+
+                    # Show risk distribution for changed files in diff mode
+                    if diff and paths:
+                        risk_counts = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+                        for p in paths:
+                            risk = intel_loader.get_risk_for_file(p)
+                            risk_counts[risk.value] = risk_counts.get(risk.value, 0) + 1
+                        critical = risk_counts["P0"] + risk_counts["P1"]
+                        low_risk = risk_counts["P3"]
+                        if critical > 0:
+                            console.print(f"[dim]   ⚠️  {critical} critical (P0/P1) + {low_risk} low-risk (P3) files changed[/dim]")
                 else:
                     console.print("[yellow]⚠️  No pre-computed intelligence found. Run 'warden init' first for optimal CI performance.[/yellow]")
             except ImportError:
