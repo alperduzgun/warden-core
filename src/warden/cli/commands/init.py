@@ -126,7 +126,7 @@ def _setup_semantic_search(config_path: Path):
                   dep_manager = DependencyManager()
                   
                   required_pkgs = ["chromadb", "sentence-transformers"]
-                  success = asyncio.run(dep_manager.install_packages(required_pkgs))
+                  success = asyncio.run(dep_manager.install_packages_async(required_pkgs))
                   
                   if success:
                       console.print("[green]Dependencies installed successfully. Retrying setup...[/green]")
@@ -225,7 +225,7 @@ def init_command(
         # Sync if cache is missing (first run)
         if not registry._catalog_cache:
             console.print("[dim]Syncing registry for suggestions...[/dim]")
-            asyncio.run(registry.sync())
+            asyncio.run(registry.sync_async())
             
         # Get languages to check (fall back to primary if detected is empty)
         languages_to_check = context.detected_languages or [context.primary_language]
