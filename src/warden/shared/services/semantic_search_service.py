@@ -72,14 +72,20 @@ class SemanticSearchService:
         
         # 1. Embedding Generator
         # Distinguish between Vector Store Provider and Embedding Provider
-        # Config 'provider' might refer to vector store (e.g., qdrant)
         emb_provider = ss_config.get("embedding_provider")
         if not emb_provider:
             primary_provider = ss_config.get("provider", "openai")
-            if primary_provider in ["qdrant", "pinecone"]:
+            if primary_provider in ["qdrant", "pinecone"] and not ss_config.get("embedding_provider"):
                 emb_provider = "openai" # Default to OpenAI for Cloud DBs unless specified
+            elif primary_provider == "local":
+                emb_provider = "local"
             else:
                 emb_provider = primary_provider
+
+        # Smart Default Model based on Provider
+        default_model = "text-embedding-3-small"
+        if emb_provider == "local":
+            default_model = "BAAI/bge-small-en-v1.5" # High quality & fast local model
 
         # For now, we'll just check common env vars if missing
         api_key = ss_config.get("api_key")
@@ -89,7 +95,7 @@ class SemanticSearchService:
 
         self.embedding_gen = EmbeddingGenerator(
             provider=emb_provider,
-            model_name=ss_config.get("model", "text-embedding-3-small"),
+            model_name=ss_config.get("model", default_model),
             api_key=os.path.expandvars(str(api_key)),
             azure_endpoint=os.path.expandvars(ss_config.get("azure_endpoint", os.environ.get("AZURE_OPENAI_ENDPOINT", ""))),
             azure_deployment=os.path.expandvars(ss_config.get("azure_deployment", os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", ""))),
