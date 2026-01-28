@@ -104,3 +104,6 @@ class LinterRunner:
             process.kill()
         except ProcessLookupError:
             pass
+
+    # Alias for backwards compatibility
+    execute_json_command = execute_json_command_async
