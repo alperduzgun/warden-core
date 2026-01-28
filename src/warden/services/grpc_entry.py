@@ -8,14 +8,13 @@ Launched via: python -m warden.services.grpc_entry
 import asyncio
 import argparse
 import signal
-import sys
 from pathlib import Path
 
 # Absolute imports
 from warden.grpc.server import GrpcServer
 
 
-async def main(port: int = 50051):
+async def main_async(port: int = 50051):
     """Main entry point."""
     print(f"""
 ================================================================================
@@ -39,18 +38,18 @@ async def main(port: int = 50051):
 
     def shutdown_handler():
         print("\nShutting down gRPC server...")
-        asyncio.create_task(server.stop())
+        asyncio.create_task(server.stop_async())
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, shutdown_handler)
 
     try:
-        await server.start()
+        await server.start_async()
         print(f"Server listening on localhost:{port}")
         print("Press Ctrl+C to stop\n")
-        await server.wait_for_termination()
+        await server.wait_for_termination_async()
     except KeyboardInterrupt:
-        await server.stop()
+        await server.stop_async()
         print("Server stopped.")
 
 
@@ -59,4 +58,4 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=50051, help="Port to listen on")
     args = parser.parse_args()
 
-    asyncio.run(main(args.port))
+    asyncio.run(main_async(args.port))

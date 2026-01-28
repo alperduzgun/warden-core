@@ -126,3 +126,17 @@ class FrameApplicability(str, Enum):
     REACT = "react"
     ASPNETCORE = "aspnetcore"
     NEXTJS = "nextjs"
+
+
+class FindingCategory(str, Enum):
+    """
+    Categorization for findings.
+    """
+    SECURITY = "security"
+    QUALITY = "quality"
+    MAINTAINABILITY = "maintainability"
+    COMPLEXITY = "complexity"
+    RELIABILITY = "reliability"
+    PERFORMANCE = "performance"
+    ARCHITECTURE = "architecture"
+    OTHER = "other"

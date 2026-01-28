@@ -7,7 +7,7 @@ Usage:
     from warden.grpc import GrpcServer
 
     server = GrpcServer(port=50051)
-    await server.start()
+    await server.start_async()
 """
 
 from .server import GrpcServer

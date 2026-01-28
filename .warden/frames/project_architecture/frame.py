@@ -31,7 +31,7 @@ from warden.validation.domain.enums import (
     FramePriority,
     FrameScope,
 )
-from warden.shared.domain.project_context import ProjectContext, ModuleInfo
+from warden.shared.domain.project_context import ProjectContext
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -97,7 +97,7 @@ class ProjectArchitectureFrame(ValidationFrame):
         )
         self.strict_mode = self.config.get("strict_mode", False)
 
-    async def execute(self, project_context: ProjectContext) -> FrameResult:
+    async def execute_async(self, project_context: ProjectContext) -> FrameResult:
         """
         Execute project-level architectural validation.
 

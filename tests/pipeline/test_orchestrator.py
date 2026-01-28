@@ -29,7 +29,7 @@ async def test_orchestrator_sequential_execution():
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
 
     # Both frames should execute
     assert result.total_frames == 2
@@ -55,7 +55,7 @@ async def test_orchestrator_parallel_execution():
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
 
     # Both frames should execute in parallel
     assert result.total_frames == 2
@@ -76,7 +76,7 @@ async def test_orchestrator_fail_fast():
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
 
     # Should stop after SecurityFrame fails (it's a blocker)
     assert result.status == PipelineStatus.FAILED
@@ -108,7 +108,7 @@ def multiply_numbers(a: int, b: int) -> int:
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
 
     # Should pass all frames
     assert result.status == PipelineStatus.COMPLETED
@@ -148,7 +148,7 @@ async def test_orchestrator_multiple_files():
         ),
     ]
 
-    result, _ = await orchestrator.execute(code_files)
+    result, _ = await orchestrator.execute_async(code_files)
 
     # Should process all 3 files
     assert result.total_findings >= 2  # At least 2 issues from file1 and file2
@@ -168,7 +168,7 @@ async def test_orchestrator_result_structure():
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Test Panel JSON compatibility
     json_data = result.to_json()
@@ -208,7 +208,7 @@ response = requests.get(url)  # HIGH (missing timeout)
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
 
     # Should have findings across multiple severity levels
     assert result.total_findings > 0
@@ -232,7 +232,7 @@ async def test_orchestrator_metadata():
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Check metadata
     assert "strategy" in result.metadata
@@ -257,7 +257,7 @@ async def test_orchestrator_has_blockers_property():
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Should have blocker issues
     assert result.has_blockers is True
@@ -281,7 +281,7 @@ response = requests.get(url)  # Missing timeout (warning)
         language="python",
     )
 
-    result, _ = await orchestrator.execute([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Should not have blocker issues (ChaosFrame is not a blocker)
     assert result.has_blockers is False

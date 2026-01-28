@@ -8,7 +8,7 @@ and other characteristics for the PRE-ANALYSIS phase.
 import asyncio
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Set, Any
 import json
 import structlog
 try:
@@ -27,6 +27,7 @@ from warden.analysis.domain.project_context import (
     ProjectConventions,
 )
 from warden.llm.config import LlmConfiguration
+from warden.analysis.application.discovery.gitignore_filter import create_gitignore_filter
 
 logger = structlog.get_logger()
 
@@ -38,32 +39,51 @@ class ProjectStructureAnalyzer:
     Part of the PRE-ANALYSIS phase for context detection.
     """
 
-    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None) -> None:
+    def __init__(
+        self, 
+        project_root: Path, 
+        llm_config: Optional[LlmConfiguration] = None,
+        analysis_level: Optional[Any] = None,
+        llm_service: Optional[Any] = None
+    ) -> None:
         """
         Initialize analyzer with project root.
         
         Args:
             project_root: Root directory of the project to analyze
             llm_config: Optional LLM configuration
+            llm_service: Optional shared LLM service
         """
         self.project_root = Path(project_root)
         self.llm_config = llm_config
+        self.llm_service = llm_service
         self.config_files: Dict[str, str] = {}
         self.special_dirs: Dict[str, List[str]] = {}
         self.file_extensions: Set[str] = set()
         self.directory_structure: Dict[str, int] = {}  # dir -> file count
         self.framework = None  # Will be set during analysis
+        self.analysis_level = analysis_level
+        self._injected_files: Optional[List[Path]] = None
+        
+        # Initialize Gitignore Filter
+        self.gitignore_filter = create_gitignore_filter(self.project_root)
 
-    async def analyze_async(self, initial_context: Optional[ProjectContext] = None) -> ProjectContext:
+    async def analyze_async(
+        self, 
+        initial_context: Optional[ProjectContext] = None,
+        all_files: Optional[List[Path]] = None
+    ) -> ProjectContext:
         """
         Analyze project structure and detect characteristics.
 
         Args:
             initial_context: Optional pre-initialized context (e.g. from memory)
-
+            all_files: Optional list of pre-discovered files to avoid redundant disk walk
+            
         Returns:
             ProjectContext with detected information
         """
+        self._injected_files = all_files
         start_time = time.perf_counter()
 
         logger.info(
@@ -76,6 +96,10 @@ class ProjectStructureAnalyzer:
             project_root=str(self.project_root),
             project_name=self.project_root.name,
         )
+
+        # Ensure we have a filtered list of files to process (Respects .gitignore)
+        if self._injected_files is None:
+            self._injected_files = self.get_all_files()
 
         try:
             # Run all detection tasks in parallel
@@ -96,6 +120,16 @@ class ProjectStructureAnalyzer:
                     )
                     context.detection_warnings.append(str(result))
 
+            # Assign results to context/self early so detectors can use them
+            # results[0] -> _detect_config_files_async (None, updates self.config_files)
+            # results[1] -> _analyze_directory_structure_async (None, updates self.special_dirs)
+            # results[2] -> _collect_statistics_async (ProjectStatistics)
+            if len(results) > 2 and not isinstance(results[2], Exception):
+                context.statistics = results[2]
+            
+            context.config_files = self.config_files
+            context.special_dirs = self.special_dirs
+
             # Sequential detection based on collected data
             context.project_type = self._detect_project_type()
             context.framework = self._detect_framework()
@@ -105,20 +139,10 @@ class ProjectStructureAnalyzer:
             context.conventions = self._detect_conventions()
             
             # Detect language and SDKs
-            context.primary_language = self._detect_primary_language()
+            context.primary_language, context.detected_languages, context.language_breakdown = self._detect_languages(context.statistics)
             context.sdk_versions = self._detect_sdk_versions()
-
-            # Set collected data
-            context.config_files = self.config_files
-            context.special_dirs = self.special_dirs
-            # Update statistics (already collected in gather, but we ensure it's set)
-            if results and len(results) > 2 and not isinstance(results[2], Exception):
-                context.statistics = results[2]
-            else:
-                context.statistics = await self._collect_statistics_async()
             
-            # Detect service abstractions (context-aware pattern detection)
-            # Pass context for language-aware parsing
+            # Detect service abstractions
             context.service_abstractions = await self._detect_service_abstractions_async(context)
 
             # Calculate confidence
@@ -145,6 +169,23 @@ class ProjectStructureAnalyzer:
             context.detection_warnings.append(f"Analysis failed: {str(e)}")
             context.detection_time = time.perf_counter() - start_time
             return context
+
+    def get_all_files(self) -> List[Path]:
+        """
+        Get all files in the project, respecting gitignore rules.
+        
+        Returns:
+            List of Path objects for all valid files.
+        """
+        if self._injected_files is not None:
+            return self._injected_files
+
+        logger.warning("project_structure_analyzer_fallback_to_sync_rglob", reason="no_injected_files")
+        files = []
+        for file_path in self.project_root.rglob("*"):
+            if file_path.is_file() and not self.gitignore_filter.should_ignore(file_path):
+                files.append(file_path)
+        return files
 
     async def _detect_config_files_async(self) -> None:
         """Detect and categorize configuration files."""
@@ -180,6 +221,11 @@ class ProjectStructureAnalyzer:
             "nuxt.config.js": "javascript-nuxt",
             "angular.json": "javascript-angular",
             "vue.config.js": "javascript-vue",
+            
+            # Dart/Flutter
+            "pubspec.yaml": "dart-pub",
+            "pubspec.lock": "dart-pub-lock",
+            "analysis_options.yaml": "dart-analysis",
 
             # Build tools
             "Dockerfile": "docker",
@@ -248,84 +294,89 @@ class ProjectStructureAnalyzer:
             if found_dirs:
                 self.special_dirs[special_type] = found_dirs
 
-        # Collect file extensions
-        for file_path in self.project_root.rglob("*"):
-            if file_path.is_file():
-                ext = file_path.suffix
-                if ext:
-                    self.file_extensions.add(ext)
+        # Collect file extensions (using filtered list)
+        for file_path in self.get_all_files():
+            # Files are already filtered by get_all_files()
+            ext = file_path.suffix
+            if ext:
+                self.file_extensions.add(ext)
 
-                # Count files per directory
-                parent_dir = file_path.parent.relative_to(self.project_root)
-                dir_str = str(parent_dir) if str(parent_dir) != "." else "root"
-                self.directory_structure[dir_str] = self.directory_structure.get(dir_str, 0) + 1
+            # Count files per directory
+            parent_dir = file_path.parent.relative_to(self.project_root)
+            dir_str = str(parent_dir) if str(parent_dir) != "." else "root"
+            self.directory_structure[dir_str] = self.directory_structure.get(dir_str, 0) + 1
 
     async def _collect_statistics_async(self) -> ProjectStatistics:
         """Collect statistical information about the project."""
         from warden.analysis.application.statistics_collector import StatisticsCollector
 
         collector = StatisticsCollector(self.project_root, self.special_dirs)
-        return await collector.collect_async()
+        return await collector.collect_async(all_files=self._injected_files)
 
-    def _detect_primary_language(self) -> str:
-        """Detect the primary programming language of the project."""
-        # Use file statistics if available
-        if hasattr(self, "file_extensions") and self.file_extensions:
-            # Map extensions to languages
-            ext_map = {
-                ".py": "python",
-                ".js": "javascript",
-                ".ts": "typescript",
-                ".tsx": "typescript",
-                ".jsx": "javascript",
-                ".go": "go",
-                ".java": "java",
-                ".rs": "rust",
-                ".cs": "csharp",
-                ".dart": "dart",
-                ".kt": "kotlin",
-                ".swift": "swift",
-                ".php": "php",
-                ".rb": "ruby",
-                ".cpp": "cpp",
-                ".c": "c",
-            }
-            
-            counts = {}
-            for ext in self.file_extensions:
-                lang = ext_map.get(ext.lower())
-                if lang:
-                    # We need actual file counts to be accurate
-                    # For now, we'll use a simple heuristic if counts aren't available
-                    counts[lang] = counts.get(lang, 0) + 1
-            
-            # Prioritize Config Files if they exist
-            if "tsconfig.json" in self.config_files:
-                return "typescript"
-
-            if "pyproject.toml" in self.config_files or "setup.py" in self.config_files or "requirements.txt" in self.config_files:
-                if "package.json" not in self.config_files:
-                    return "python"
-
-            if counts:
-                return max(counts, key=counts.get)
-
-        # Check config files
+    def _detect_languages(self, stats: ProjectStatistics) -> tuple[str, List[str], Dict[str, float]]:
+        """
+        Detect all languages using pre-calculated statistics (DRY).
+        """
+        detected_languages_set = set()
+        config_detected_languages = set()
+        
+        # 1. Config Files (Intent) - Unchanged
+        if "go.mod" in self.config_files: config_detected_languages.add("go")
+        if "Cargo.toml" in self.config_files: config_detected_languages.add("rust")
+        if "pubspec.yaml" in self.config_files: config_detected_languages.add("dart")
+        if "pom.xml" in self.config_files or "build.gradle" in self.config_files: config_detected_languages.add("java")
         if "package.json" in self.config_files:
-            if "tsconfig.json" in self.config_files:
-                return "typescript"
-            return "javascript"
-        
-        if "pyproject.toml" in self.config_files or "requirements.txt" in self.config_files:
-            return "python"
-        
-        if "pom.xml" in self.config_files or "build.gradle" in self.config_files:
-            return "java"
-            
-        if "go.mod" in self.config_files:
-            return "go"
+            if "tsconfig.json" in self.config_files: config_detected_languages.add("typescript")
+            else: config_detected_languages.add("javascript")
+        if "pyproject.toml" in self.config_files or "setup.py" in self.config_files:
+            config_detected_languages.add("python")
 
-        return "unknown"
+        # 2. Percentage Calculation (Reuse StatisticsCollector data)
+        # Use Byte Counts (GitHub Style) if available, else File Counts
+        breakdown = {}
+        counts = {}
+        
+        use_bytes = bool(stats.language_bytes) # Check if we have byte data
+        source_data = stats.language_bytes if use_bytes else stats.language_distribution
+        
+        total_value = sum(source_data.values()) if source_data else 1
+        
+        for lang_enum, value in source_data.items():
+            lang_id = lang_enum.value
+            
+            # Skip if value is 0
+            if value == 0: continue
+            
+            counts[lang_id] = value
+            percent = (value / total_value) * 100
+            breakdown[lang_id] = round(percent, 1)
+
+        threshold_percent = 2.0
+        dominant_lang = max(counts, key=counts.get) if counts else None
+
+        for lang, percent in breakdown.items():
+            if percent >= threshold_percent or lang == dominant_lang:
+                detected_languages_set.add(lang)
+        
+        # Always include config-based
+        detected_languages_set.update(config_detected_languages)
+
+        # Determine Primary
+        primary_lang = "unknown"
+        if dominant_lang and dominant_lang in config_detected_languages:
+            primary_lang = dominant_lang
+        elif config_detected_languages:
+            # First valid config lang
+            order = ["dart", "go", "rust", "python", "typescript", "javascript", "java"]
+            for l in order:
+                if l in config_detected_languages:
+                    primary_lang = l
+                    break
+            if primary_lang == "unknown": primary_lang = sorted(list(config_detected_languages))[0]
+        elif dominant_lang:
+            primary_lang = dominant_lang
+
+        return primary_lang, list(detected_languages_set), breakdown
 
     def _detect_sdk_versions(self) -> Dict[str, str]:
         """Detect SDK versions from configuration files."""
@@ -382,7 +433,7 @@ class ProjectStructureAnalyzer:
                     data = json.load(f)
                     if "bin" in data:
                         return ProjectType.CLI_TOOL
-                    if data.get("private") == False:
+                    if not data.get("private"):
                         return ProjectType.LIBRARY
             except:
                 pass
@@ -637,9 +688,11 @@ class ProjectStructureAnalyzer:
             detector = ServiceAbstractionDetector(
                 self.project_root, 
                 project_context=context,
-                llm_config=self.llm_config
+                llm_config=self.llm_config,
+                analysis_level=self.analysis_level,
+                llm_service=self.llm_service
             )
-            abstractions = await detector.detect_async()
+            abstractions = await detector.detect_async(all_files=self._injected_files)
             
             # Convert to serializable dict
             result = {}

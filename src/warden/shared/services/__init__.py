@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 import asyncio
 
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.resilience import resilient
 
 logger = get_logger(__name__)
 
@@ -36,19 +37,21 @@ class LLMService:
             self.llm_available = False
             logger.warning("llm_service_unavailable", error=str(e))
 
+    @resilient(name="llm_generate_suggestion", timeout_seconds=30.0, retry_max_attempts=3, circuit_breaker_enabled=True)
     async def generate_suggestion(self, issue: Dict[str, Any]) -> Optional[str]:
         """Generate a fix suggestion for an issue."""
         if not self.enabled or not self.llm_available:
             return None
 
         try:
-            prompt = self._build_suggestion_prompt(issue)
+            self._build_suggestion_prompt(issue)
             # Simplified for now
             return f"Fix suggestion for {issue.get('message', 'issue')}"
         except Exception as e:
             logger.error("suggestion_generation_failed", error=str(e))
             return None
 
+    @resilient(name="llm_analyze_code", timeout_seconds=60.0, retry_max_attempts=3, circuit_breaker_enabled=True)
     async def analyze_code(self, code: str, context: str = "") -> Dict[str, Any]:
         """Analyze code with LLM."""
         if not self.enabled or not self.llm_available:
@@ -84,7 +87,7 @@ class SecuritySuggestionService:
         """Initialize security suggestion service."""
         self.llm_service = llm_service or LLMService()
 
-    async def generate_fortification(self, issue: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_fortification_async(self, issue: Dict[str, Any]) -> Dict[str, Any]:
         """Generate fortification for a security issue."""
         severity = issue.get("severity", "medium")
 

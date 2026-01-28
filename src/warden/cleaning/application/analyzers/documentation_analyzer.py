@@ -13,7 +13,6 @@ import ast
 import re
 import structlog
 from typing import List, Optional, Dict, Any
-from pathlib import Path
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (

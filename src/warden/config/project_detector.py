@@ -17,32 +17,17 @@ else:
         raise ImportError("tomli is required for Python < 3.11")
 
 from warden.analysis.application.discovery.framework_detector import FrameworkDetector
-from warden.analysis.application.discovery.models import FileType
 
 
 class ProjectDetector:
     """Detects project metadata (language, SDK version, framework)."""
 
-    # Language file extension mapping
-    LANGUAGE_EXTENSIONS = {
-        ".py": "python",
-        ".js": "javascript",
-        ".ts": "typescript",
-        ".jsx": "javascript",
-        ".tsx": "typescript",
-        ".java": "java",
-        ".kt": "kotlin",
-        ".cs": "csharp",
-        ".go": "go",
-        ".rs": "rust",
-        ".rb": "ruby",
-        ".php": "php",
-        ".swift": "swift",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".c": "c",
-    }
+    @property
+    def LANGUAGE_EXTENSIONS(self):
+        """Dynamic mapping from LanguageRegistry."""
+        from warden.shared.languages.registry import LanguageRegistry
+        return {ext: LanguageRegistry.get_language_from_path(ext).value 
+                for ext in LanguageRegistry.get_all_supported_extensions()}
 
     def __init__(self, project_root: Path) -> None:
         """Initialize project detector.
@@ -490,11 +475,10 @@ class ProjectDetector:
         ).exists()
 
         # Microservice frameworks
-        microservice_frameworks = {"fastapi", "express", "nest", "spring-boot"}
 
         # If has Docker + microservice framework, likely a microservice
         if has_dockerfile and any(
-            (self.project_root / f"requirements.txt").exists()
+            (self.project_root / "requirements.txt").exists()
             and fw in (self.project_root / "requirements.txt").read_text().lower()
             for fw in ["fastapi", "flask"]
         ):

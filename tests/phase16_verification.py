@@ -4,7 +4,6 @@ Verification script for Phase 16: Dependency-Aware Incremental Scanning.
 
 import asyncio
 from pathlib import Path
-import os
 import shutil
 
 # Mocking some parts for isolated testing if needed, 

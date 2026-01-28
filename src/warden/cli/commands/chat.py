@@ -1,7 +1,6 @@
 import typer
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from rich.console import Console
 

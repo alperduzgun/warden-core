@@ -16,7 +16,7 @@ Example usage:
 
     # Initialize service (auto-loads all providers)
     ast_service = ASTService()
-    await ast_service.initialize()
+    await ast_service.initialize_async()
 
     # Parse Python code (uses PythonASTProvider - highest priority)
     result = await ast_service.parse(source_code, CodeLanguage.PYTHON)

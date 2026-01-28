@@ -116,7 +116,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         ...
 
     @abstractmethod
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -133,7 +133,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         """
         ...
 
-    async def execute(
+    async def execute_async(
         self,
         tool: MCPToolDefinition,
         arguments: Dict[str, Any],
@@ -164,7 +164,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
                 adapter=self.__class__.__name__,
                 arguments=list(arguments.keys()),
             )
-            result = await self._execute_tool(tool.name, arguments)
+            result = await self._execute_tool_async(tool.name, arguments)
             logger.info(
                 "mcp_tool_completed",
                 tool=tool.name,

@@ -27,7 +27,7 @@ import sqlite3
 def get_user(user_id):
     # BAD: SQL injection vulnerability
     query = f"SELECT * FROM users WHERE id = {user_id}"
-    cursor.execute(query)
+    cursor.execute_async(query)
     return cursor.fetchone()
 '''
 
@@ -38,7 +38,7 @@ def get_user(user_id):
     )
 
     frame = SecurityFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect SQL injection
     assert result.status == "failed"  # Critical issue
@@ -72,7 +72,7 @@ def call_api():
     )
 
     frame = SecurityFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect secret
     assert result.status == "failed"
@@ -104,7 +104,7 @@ displayMessage(userInput);
     )
 
     frame = SecurityFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect XSS
     assert result.status in ["failed", "warning"]  # High severity
@@ -134,7 +134,7 @@ class DatabaseConfig:
     )
 
     frame = SecurityFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect hardcoded password
     assert result.status == "failed"
@@ -152,7 +152,7 @@ import sqlite3
 def get_user(user_id: str):
     # GOOD: Parameterized query (no SQL injection)
     query = "SELECT * FROM users WHERE id = ?"
-    cursor.execute(query, (user_id,))
+    cursor.execute_async(query, (user_id,))
     return cursor.fetchone()
 
 def get_api_key():
@@ -172,7 +172,7 @@ def display_message(message: str):
     )
 
     frame = SecurityFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should pass all checks
     assert result.status == "passed"
@@ -222,7 +222,7 @@ password = "admin123"  # Hardcoded password
     )
 
     frame = SecurityFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Test Panel JSON compatibility
     json_data = result.to_json()

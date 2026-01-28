@@ -8,8 +8,7 @@ with the Ink CLI.
 import asyncio
 import sys
 import os
-from pathlib import Path
-from typing import Optional, Callable, Awaitable, Any, Dict
+from typing import Optional, Any, Dict
 import signal
 
 from warden.cli_bridge.protocol import (
@@ -17,8 +16,8 @@ from warden.cli_bridge.protocol import (
     IPCResponse,
     IPCError,
     ErrorCode,
-    StreamChunk,
 )
+from warden.shared.utils.retry_utils import async_retry as retry_async
 
 # Optional imports - graceful degradation if Warden logging not available
 try:
@@ -77,20 +76,20 @@ class IPCServer:
 
         logger.info("ipc_server_initialized", transport=transport)
 
-    async def start(self) -> None:
+    async def start_async(self) -> None:
         """Start IPC server based on configured transport"""
         self.running = True
 
         if self.transport == "stdio":
-            await self._run_stdio()
+            await self._run_stdio_async()
         elif self.transport == "socket":
             if not self.socket_path:
                 raise ValueError("socket_path required for socket transport")
-            await self._run_socket()
+            await self._run_socket_async()
         else:
             raise ValueError(f"Invalid transport: {self.transport}")
 
-    async def stop(self) -> None:
+    async def stop_async(self) -> None:
         """Stop IPC server gracefully"""
         logger.info("ipc_server_stopping")
         self.running = False
@@ -108,14 +107,14 @@ class IPCServer:
 
         logger.info("ipc_server_stopped")
 
-    async def _run_stdio(self) -> None:
+    async def _run_stdio_async(self) -> None:
         """Run server using STDIO (for subprocess communication)"""
         logger.info("ipc_server_starting_stdio")
 
         # Set up graceful shutdown
         loop = asyncio.get_event_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop()))
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop_async()))
 
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
@@ -139,7 +138,7 @@ class IPCServer:
                     if not request_data:
                         continue
 
-                    response = await self._handle_request(request_data)
+                    response = await self._handle_request_async(request_data)
                     response_json = response.to_json() + "\n"
 
                     writer.write(response_json.encode("utf-8"))
@@ -159,15 +158,16 @@ class IPCServer:
             writer.close()
             await writer.wait_closed()
 
-    async def _run_socket(self) -> None:
-        """Run server using Unix socket"""
+    @retry_async(retries=3, initial_delay=0.5, backoff_factor=2.0)
+    async def _run_socket_async(self) -> None:
+        """Run server using Unix socket (Retries on bind failure)"""
         logger.info("ipc_server_starting_socket", socket_path=self.socket_path)
 
         # Remove existing socket file
         if self.socket_path and os.path.exists(self.socket_path):
             os.unlink(self.socket_path)
 
-        async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        async def handle_client_async(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             """Handle client connection"""
             addr = writer.get_extra_info("peername")
             logger.info("client_connected", address=addr)
@@ -184,7 +184,7 @@ class IPCServer:
                         continue
 
                     # Handle request (may be streaming or non-streaming)
-                    await self._handle_request_with_writer(request_data, writer)
+                    await self._handle_request_with_writer_async(request_data, writer)
 
             except asyncio.CancelledError:
                 logger.info("client_cancelled", address=addr)
@@ -208,7 +208,7 @@ class IPCServer:
         async with self.server:
             await self.server.serve_forever()
 
-    async def _handle_request(self, data: str) -> IPCResponse:
+    async def _handle_request_async(self, data: str) -> IPCResponse:
         """
         Handle JSON-RPC request
 
@@ -268,7 +268,7 @@ class IPCServer:
             logger.error("ipc_internal_error", error=str(e), id=request_id)
             return IPCResponse.create_error(error_obj=IPCError.from_exception(e), request_id=request_id)
 
-    async def _handle_request_with_writer(self, data: str, writer: asyncio.StreamWriter) -> None:
+    async def _handle_request_with_writer_async(self, data: str, writer: asyncio.StreamWriter) -> None:
         """
         Handle JSON-RPC request with direct access to writer (for streaming support).
 
@@ -368,7 +368,7 @@ class IPCServer:
             writer.write((response.to_json() + "\n").encode("utf-8"))
             await writer.drain()
 
-    async def _handle_streaming_method(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    async def _handle_streaming_method_async(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """
         Handle streaming method (analyze_with_llm)
 
@@ -378,13 +378,13 @@ class IPCServer:
         TODO: Implement proper streaming support
         """
         chunks = []
-        async for chunk in self.bridge.analyze_with_llm(*args, **kwargs):
+        async for chunk in self.bridge.analyze_with_llm_async(*args, **kwargs):
             chunks.append(chunk)
 
         return {"chunks": chunks, "streaming": False}
 
 
-async def run_ipc_server(
+async def run_ipc_server_async(
     transport: str = "stdio",
     socket_path: Optional[str] = None,
 ) -> None:
@@ -396,7 +396,7 @@ async def run_ipc_server(
         socket_path: Unix socket path (required if transport='socket')
     """
     server = IPCServer(transport=transport, socket_path=socket_path)
-    await server.start()
+    await server.start_async()
 
 
 if __name__ == "__main__":
@@ -419,4 +419,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(run_ipc_server(transport=args.transport, socket_path=args.socket_path))
+    asyncio.run(run_ipc_server_async(transport=args.transport, socket_path=args.socket_path))

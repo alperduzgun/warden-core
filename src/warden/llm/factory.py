@@ -8,30 +8,38 @@ from typing import Optional, Union
 from .config import LlmConfiguration, load_llm_config, ProviderConfig
 from .types import LlmProvider
 from .providers.base import ILlmClient
-from .providers.anthropic import AnthropicClient
-from .providers.deepseek import DeepSeekClient
-from .providers.qwencode import QwenCodeClient
-from .providers.openai import OpenAIClient
-from .providers.groq import GroqClient
-
+from .metrics import get_global_metrics_collector
 
 def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILlmClient:
     """Create a client for a specific provider configuration."""
-    if not config.enabled or not config.api_key:
-        raise ValueError(f"Provider {provider.value} is not configured or enabled")
+    # Ollama doesn't require an API key (local deployment)
+    if provider != LlmProvider.OLLAMA:
+        if not config.enabled or not config.api_key:
+            raise ValueError(f"Provider {provider.value} is not configured or enabled")
+    elif not config.enabled:
+        raise ValueError(f"Provider {provider.value} is not enabled")
 
     if provider == LlmProvider.ANTHROPIC:
+        from .providers.anthropic import AnthropicClient
         return AnthropicClient(config)
     elif provider == LlmProvider.DEEPSEEK:
+        # from .providers.deepseek import DeepSeekClient # Already imported at module level
         return DeepSeekClient(config)
     elif provider == LlmProvider.QWENCODE:
+        # from .providers.qwencode import QwenCodeClient # Already imported at module level
         return QwenCodeClient(config)
     elif provider == LlmProvider.OPENAI:
+        from .providers.openai import OpenAIClient
         return OpenAIClient(config, LlmProvider.OPENAI)
     elif provider == LlmProvider.AZURE_OPENAI:
+        from .providers.openai import OpenAIClient
         return OpenAIClient(config, LlmProvider.AZURE_OPENAI)
     elif provider == LlmProvider.GROQ:
+        from .providers.groq import GroqClient
         return GroqClient(config)
+    elif provider == LlmProvider.OLLAMA:
+        from .providers.ollama import OllamaClient
+        return OllamaClient(config)
     else:
         raise NotImplementedError(f"Provider {provider.value} not implemented")
 
@@ -65,7 +73,29 @@ def create_client(
     if not provider_config:
         raise ValueError(f"No configuration found for provider: {provider}")
 
-    return create_provider_client(provider, provider_config)
+    # Create primary (smart) client
+    smart_client = create_provider_client(provider, provider_config)
+    
+    # Try to create local (fast) client if enabled
+    fast_client = None
+    if config.ollama.enabled:
+        try:
+            fast_client = create_provider_client(LlmProvider.OLLAMA, config.ollama)
+        except Exception as e:
+            # Log but don't fail - orchestration will work without fast tier
+            import structlog
+            logger = structlog.get_logger(__name__)
+            logger.warning("ollama_client_creation_failed", error=str(e))
+
+    # Wrap in OrchestratedLlmClient for tiered execution support
+    from .providers.orchestrated import OrchestratedLlmClient
+    return OrchestratedLlmClient(
+        smart_client=smart_client,
+        fast_client=fast_client,
+        smart_model=config.smart_model,
+        fast_model=config.fast_model,
+        metrics_collector=get_global_metrics_collector()
+    )
 
 
 async def create_client_with_fallback(config: Optional[LlmConfiguration] = None) -> ILlmClient:
@@ -93,3 +123,9 @@ async def create_client_with_fallback(config: Optional[LlmConfiguration] = None)
 
     raise RuntimeError("No available LLM providers found.")
 
+__all__ = [
+    "create_client",
+    "create_provider_client",
+    "create_client_with_fallback",
+    "get_global_metrics_collector"
+]

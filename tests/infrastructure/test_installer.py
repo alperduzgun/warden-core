@@ -2,9 +2,7 @@
 Tests for auto-installer functionality.
 """
 
-import pytest
 from pathlib import Path
-import os
 
 from warden.infrastructure.installer import (
     AutoInstaller,

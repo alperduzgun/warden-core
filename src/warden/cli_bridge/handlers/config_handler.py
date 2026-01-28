@@ -32,7 +32,7 @@ class ConfigHandler(BaseHandler):
             return {
                 "config": self._get_default_pipeline_config(),
                 "frames": self.get_default_frames(),
-                "available_frames": self.get_available_frames(),
+                "available_frames": self.get_available_frames_async(),
                 "name": "default"
             }
 
@@ -74,6 +74,34 @@ class ConfigHandler(BaseHandler):
             self.active_config_name = config_data.get('name', 'project-config')
 
         settings = config_data.get('settings', {})
+        # Load all rules using RulesYAMLLoader
+        from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+        from warden.rules.domain.models import FrameRules
+        
+        RulesYAMLLoader() # Static methods used below
+        project_rule_config = RulesYAMLLoader.load_rules_sync(self.project_root)
+        
+        # Extract global rules as objects
+        global_rules_objects = []
+        if project_rule_config.global_rules:
+            # project_rule_config.global_rules is List[str] (IDs)
+            # Find the actual rule objects in project_rule_config.rules
+            rule_map = {r.id: r for r in project_rule_config.rules}
+            for rid in project_rule_config.global_rules:
+                if rid in rule_map:
+                    global_rules_objects.append(rule_map[rid])
+        
+        # Build frame rules (map IDs to FrameRules objects)
+        pipeline_frame_rules = {}
+        for fid, fr_data in project_rule_config.frame_rules.items():
+            pre_rules = [rule_map[rid] for rid in fr_data.pre_rules if rid in rule_map]
+            post_rules = [rule_map[rid] for rid in fr_data.post_rules if rid in rule_map]
+            pipeline_frame_rules[fid] = FrameRules(
+                pre_rules=pre_rules,
+                post_rules=post_rules,
+                on_fail=fr_data.on_fail
+            )
+
         pipeline_config = PipelineConfig(
             fail_fast=settings.get('fail_fast', True),
             timeout=settings.get('timeout', 300),
@@ -87,7 +115,12 @@ class ConfigHandler(BaseHandler):
             enable_cleaning=settings.get('enable_cleaning', True),
             pre_analysis_config=settings.get('pre_analysis_config', None),
             semantic_search_config=config_data.get('semantic_search', None),
-            use_gitignore=settings.get('use_gitignore', True)
+            llm_config=config_data.get('llm'),
+            enable_issue_validation=settings.get('enable_issue_validation', True),
+            use_gitignore=settings.get('use_gitignore', True),
+            discovery_config=settings.get('discovery_config', None),
+            global_rules=global_rules_objects,
+            frame_rules=pipeline_frame_rules
         )
 
         return {
@@ -115,9 +148,10 @@ class ConfigHandler(BaseHandler):
     def get_default_frames(self) -> List[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
-        registry.discover_all()
+        registry.discover_all(project_root=self.project_root)
         
-        default_ids = ["security", "resilience", "architecturalconsistency", "orphan", "fuzz", "property"]
+        # Default built-in frames that come with warden-core
+        default_ids = ["security", "resilience", "orphan", "fuzz", "property"]
         frames = []
         for fid in default_ids:
             cls = registry.registered_frames.get(fid)
@@ -133,10 +167,10 @@ class ConfigHandler(BaseHandler):
                     logger.warning("default_frame_init_failed", fid=fid, error=str(e))
         return frames
 
-    def get_available_frames(self) -> List[Any]:
+    def get_available_frames_async(self) -> List[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
-        registry.discover_all()
+        registry.discover_all(project_root=self.project_root)
         frames = []
         for fid, cls in registry.registered_frames.items():
             try:
@@ -148,7 +182,7 @@ class ConfigHandler(BaseHandler):
     def _instantiate_all_frames(self, frame_config: Dict[str, Any]) -> Tuple[List[Any], Dict[str, Any]]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
-        registry.discover_all()
+        registry.discover_all(project_root=self.project_root)
         
         available = []
         frame_map = {}

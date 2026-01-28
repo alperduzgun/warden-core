@@ -37,7 +37,7 @@ class LSPDiagnosticsAnalyzer:
         try:
             lsp_manager = LSPManager.get_instance()
             # Need project root for LSP. Assuming 2 levels up for now or cwd
-            client = await lsp_manager.get_client(language, str(path.cwd()))
+            client = await lsp_manager.get_client_async(language, str(path.cwd()))
             
             if not client:
                 return {"diagnostics": [], "score": 10.0}
@@ -45,7 +45,7 @@ class LSPDiagnosticsAnalyzer:
             uri = f"file://{code_file.path}"
             
             # Open file (if not already)
-            await client.send_notification("textDocument/didOpen", {
+            await client.send_notification_async("textDocument/didOpen", {
                 "textDocument": {
                     "uri": uri,
                     "languageId": language,

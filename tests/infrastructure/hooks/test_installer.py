@@ -2,11 +2,8 @@
 Tests for Git hooks installer.
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 
-from warden.infrastructure.hooks.installer import HookInstaller, HookInstallResult
+from warden.infrastructure.hooks.installer import HookInstaller
 from warden.infrastructure.hooks.pre_commit import PreCommitHook
 from warden.infrastructure.hooks.pre_push import PrePushHook
 

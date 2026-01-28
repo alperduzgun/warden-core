@@ -5,14 +5,8 @@ from rich.table import Table
 from warden.services.package_manager.registry import RegistryClient
 from warden.shared.infrastructure.logging import get_logger
 
-# Fallback for semantic search (in case deps missing)
-# Semantic Search Imports
-try:
-    from warden.semantic_search.indexer import CodeIndexer
-    from warden.shared.services.semantic_search_service import SemanticSearchService
-    SEMANTIC_AVAILABLE = True
-except ImportError:
-    SEMANTIC_AVAILABLE = False
+# Semantic Search Imports are lazy-loaded to prevent slow CLI startup
+SEMANTIC_AVAILABLE = None  # Checked at runtime
 
 logger = get_logger(__name__)
 console = Console()
@@ -21,20 +15,20 @@ console = Console()
 
 def index_command():
     """Build or update the semantic code index."""
-    if not SEMANTIC_AVAILABLE:
-        console.print("[red]Semantic Search dependencies not installed.[/red]")
+    try:
+        from warden.semantic_search.indexer import CodeIndexer
+        from warden.shared.services.semantic_search_service import SemanticSearchService
+    except ImportError:
+        console.print("[red]Semantic Search dependencies not installed (run 'pip install .[semantic]').[/red]")
         return
         
     console.print("[bold cyan]Warden Indexer[/bold cyan] - Building semantic index...")
     
     # Use the high-level service for proper initialization
-    import os
     from pathlib import Path
     
     # Load config manually for standalone command
-    import os
     import yaml
-    from pathlib import Path
     
     project_root = Path.cwd()
     legacy_config = project_root / ".warden" / "config.yaml"
@@ -73,7 +67,9 @@ def index_command():
 
 def semantic_search_command(query: str):
     """Search your local codebase semantically."""
-    if not SEMANTIC_AVAILABLE:
+    try:
+        from warden.shared.services.semantic_search_service import SemanticSearchService
+    except ImportError:
         console.print("[red]Semantic Search dependencies not installed.[/red]")
         return
         
@@ -168,4 +164,4 @@ def search_command(
         )
 
     console.print(table)
-    console.print(f"\n[dim]Use [bold white]warden install <id>[/bold white] to add a frame to your project.[/dim]")
+    console.print("\n[dim]Use [bold white]warden install <id>[/bold white] to add a frame to your project.[/dim]")

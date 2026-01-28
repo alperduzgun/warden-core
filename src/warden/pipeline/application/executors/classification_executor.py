@@ -26,8 +26,9 @@ class ClassificationExecutor(BasePhaseExecutor):
         frames: List[ValidationFrame] = None,
         available_frames: List[ValidationFrame] = None,
         semantic_search_service: Any = None,
+        rate_limiter: Any = None,
     ):
-        super().__init__(config, progress_callback, project_root, llm_service)
+        super().__init__(config, progress_callback, project_root, llm_service, rate_limiter)
         self.frames = frames or []
         self.available_frames = available_frames or self.frames
         self.semantic_search_service = semantic_search_service
@@ -48,8 +49,8 @@ class ClassificationExecutor(BasePhaseExecutor):
             })
 
         try:
-            # Use LLM version if LLM service is available
-            use_llm = self.llm_service is not None
+            # Respect global use_llm flag and LLM service availability
+            use_llm = getattr(self.config, 'use_llm', True) and self.llm_service is not None
 
             # Get context from previous phases
             phase_context = context.get_context_for_phase("CLASSIFICATION")
@@ -59,11 +60,18 @@ class ClassificationExecutor(BasePhaseExecutor):
                 from warden.analysis.application.llm_phase_base import LLMPhaseConfig
 
                 phase = ClassificationPhase(
-                    config=LLMPhaseConfig(enabled=True, fallback_to_rules=True),
+                    config=LLMPhaseConfig(
+                        enabled=True, 
+                        fallback_to_rules=True,
+                        tpm_limit=self.config.llm_config.get('tpm_limit', 1000) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'tpm_limit', 1000) if hasattr(self.config, 'llm') else 1000),
+                        rpm_limit=self.config.llm_config.get('rpm_limit', 6) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'rpm_limit', 6) if hasattr(self.config, 'llm') else 6)
+                    ),
                     llm_service=self.llm_service,
                     available_frames=self.available_frames,
                     context=phase_context,
-                    semantic_search_service=self.semantic_search_service
+                    semantic_search_service=self.semantic_search_service,
+                    memory_manager=getattr(self.config, 'memory_manager', None),
+                    rate_limiter=self.rate_limiter
                 )
                 logger.info("using_llm_classification_phase", available_frames=len(self.available_frames))
             else:
@@ -155,6 +163,7 @@ class ClassificationExecutor(BasePhaseExecutor):
             context.frame_priorities = result.frame_priorities
             context.classification_reasoning = result.reasoning
             context.learned_patterns = result.learned_patterns
+            context.advisories = getattr(result, "advisories", [])
 
             # Add phase result
             context.add_phase_result("CLASSIFICATION", {

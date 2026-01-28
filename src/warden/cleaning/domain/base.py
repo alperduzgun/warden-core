@@ -8,7 +8,7 @@ Follows Python ABC pattern (not C# interfaces).
 from abc import ABC, abstractmethod
 from typing import Optional, Any
 
-from warden.cleaning.domain.models import CleaningResult, CleaningIssueSeverity
+from warden.cleaning.domain.models import CleaningResult
 from warden.validation.domain.frame import CodeFile
 
 

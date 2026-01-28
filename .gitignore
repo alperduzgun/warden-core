@@ -77,3 +77,6 @@ coverage.xml
 warden-ink
 warden-ipc
 src/warden/_version.py
+src/.warden/
+
+# Performance Roadmap

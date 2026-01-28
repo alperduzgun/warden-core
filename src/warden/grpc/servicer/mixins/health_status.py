@@ -36,7 +36,7 @@ class HealthStatusMixin:
         }
 
         try:
-            providers = await self.bridge.get_available_providers()
+            providers = await self.bridge.get_available_providers_async()
             providers_list = (
                 providers if isinstance(providers, list)
                 else providers.get("providers", [])

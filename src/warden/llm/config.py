@@ -24,6 +24,7 @@ class ProviderConfig:
     default_model: Optional[str] = None
     api_version: Optional[str] = None  # For Azure OpenAI
     enabled: bool = True
+    concurrency: int = 4  # Max concurrent requests for this provider
 
     def validate(self, provider_name: str) -> list[str]:
         """
@@ -35,8 +36,10 @@ class ProviderConfig:
         errors = []
 
         if not self.api_key:
-            errors.append(f"{provider_name}: API key is required but not configured")
-        elif len(self.api_key) < 10:
+            # Ollama doesn't require an API key
+            if provider_name.lower() != "ollama":
+                errors.append(f"{provider_name}: API key is required but not configured")
+        elif len(self.api_key) < 10 and provider_name.lower() != "ollama":
             errors.append(f"{provider_name}: API key appears invalid (too short)")
 
         if not self.default_model:
@@ -88,6 +91,12 @@ class LlmConfiguration:
     azure_openai: ProviderConfig = field(default_factory=ProviderConfig)
     groq: ProviderConfig = field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = field(default_factory=ProviderConfig)
+    ollama: ProviderConfig = field(default_factory=ProviderConfig)
+
+    # Model Tiering (Optional)
+    smart_model: Optional[str] = None  # High-reasoning model (e.g. gpt-4o)
+    fast_model: Optional[str] = None   # Fast/Cheap model (e.g. gpt-4o-mini)
+    max_concurrency: int = 4           # Global max concurrent requests
 
     def get_provider_config(self, provider: LlmProvider) -> Optional[ProviderConfig]:
         """
@@ -106,7 +115,8 @@ class LlmConfiguration:
             LlmProvider.OPENAI: self.openai,
             LlmProvider.AZURE_OPENAI: self.azure_openai,
             LlmProvider.GROQ: self.groq,
-            LlmProvider.OPENROUTER: self.openrouter
+            LlmProvider.OPENROUTER: self.openrouter,
+            LlmProvider.OLLAMA: self.ollama
         }
         return mapping.get(provider)
 
@@ -150,7 +160,8 @@ DEFAULT_MODELS = {
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.1-70b-versatile",
-    LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet"
+    LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
+    LlmProvider.OLLAMA: "qwen2.5-coder:0.5b"
 }
 
 
@@ -258,63 +269,97 @@ async def load_llm_config_async() -> LlmConfiguration:
         "QWENCODE_API_KEY",
         "GROQ_API_KEY",
         "OPENROUTER_API_KEY",
+        "WARDEN_SMART_MODEL",
+        "WARDEN_FAST_MODEL",
+        "WARDEN_LLM_CONCURRENCY",
+        "OLLAMA_HOST",
     ])
 
-    # Configure Azure OpenAI (primary provider for Warden)
-    azure_api_key = secrets["AZURE_OPENAI_API_KEY"]
-    azure_endpoint = secrets["AZURE_OPENAI_ENDPOINT"]
-    azure_deployment = secrets["AZURE_OPENAI_DEPLOYMENT_NAME"]
-    azure_api_version = secrets["AZURE_OPENAI_API_VERSION"]
+    # Model Tiering & Concurrency
+    smart_model_secret = secrets.get("WARDEN_SMART_MODEL")
+    if smart_model_secret:
+        config.smart_model = smart_model_secret.value
+        
+    fast_model_secret = secrets.get("WARDEN_FAST_MODEL")
+    if fast_model_secret:
+        config.fast_model = fast_model_secret.value
+    
+    concurrency_secret = secrets.get("WARDEN_LLM_CONCURRENCY")
+    if concurrency_secret and concurrency_secret.found:
+        try:
+            config.max_concurrency = int(concurrency_secret.value)
+        except (ValueError, TypeError):
+            pass
 
-    if azure_api_key.found and azure_endpoint.found and azure_deployment.found:
+    # Configure Azure OpenAI (primary provider for Warden)
+    azure_api_key = secrets.get("AZURE_OPENAI_API_KEY")
+    azure_endpoint = secrets.get("AZURE_OPENAI_ENDPOINT")
+    azure_deployment = secrets.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+    azure_api_version = secrets.get("AZURE_OPENAI_API_VERSION")
+
+    if azure_api_key and azure_api_key.found and azure_endpoint and azure_endpoint.found and azure_deployment and azure_deployment.found:
         config.azure_openai.api_key = azure_api_key.value
         config.azure_openai.endpoint = azure_endpoint.value
         config.azure_openai.default_model = azure_deployment.value
-        config.azure_openai.api_version = azure_api_version.value or "2024-02-01"
+        config.azure_openai.api_version = (azure_api_version.value if azure_api_version else None) or "2024-02-01"
         config.azure_openai.enabled = True
         configured_providers.append(LlmProvider.AZURE_OPENAI)
 
     # Configure OpenAI
-    openai_secret = secrets["OPENAI_API_KEY"]
-    if openai_secret.found:
+    openai_secret = secrets.get("OPENAI_API_KEY")
+    if openai_secret and openai_secret.found:
         config.openai.api_key = openai_secret.value
         config.openai.enabled = True
         configured_providers.append(LlmProvider.OPENAI)
 
     # Configure Anthropic
-    anthropic_secret = secrets["ANTHROPIC_API_KEY"]
-    if anthropic_secret.found:
+    anthropic_secret = secrets.get("ANTHROPIC_API_KEY")
+    if anthropic_secret and anthropic_secret.found:
         config.anthropic.api_key = anthropic_secret.value
         config.anthropic.enabled = True
         configured_providers.append(LlmProvider.ANTHROPIC)
 
     # Configure DeepSeek
-    deepseek_secret = secrets["DEEPSEEK_API_KEY"]
-    if deepseek_secret.found:
+    deepseek_secret = secrets.get("DEEPSEEK_API_KEY")
+    if deepseek_secret and deepseek_secret.found:
         config.deepseek.api_key = deepseek_secret.value
         config.deepseek.enabled = True
         configured_providers.append(LlmProvider.DEEPSEEK)
 
     # Configure QwenCode
-    qwencode_secret = secrets["QWENCODE_API_KEY"]
-    if qwencode_secret.found:
+    qwencode_secret = secrets.get("QWENCODE_API_KEY")
+    if qwencode_secret and qwencode_secret.found:
         config.qwencode.api_key = qwencode_secret.value
         config.qwencode.enabled = True
         configured_providers.append(LlmProvider.QWENCODE)
 
     # Configure Groq
-    groq_secret = secrets["GROQ_API_KEY"]
-    if groq_secret.found:
+    groq_secret = secrets.get("GROQ_API_KEY")
+    if groq_secret and groq_secret.found:
         config.groq.api_key = groq_secret.value
         config.groq.enabled = True
         configured_providers.append(LlmProvider.GROQ)
 
     # Configure OpenRouter
-    openrouter_secret = secrets["OPENROUTER_API_KEY"]
-    if openrouter_secret.found:
+    openrouter_secret = secrets.get("OPENROUTER_API_KEY")
+    if openrouter_secret and openrouter_secret.found:
         config.openrouter.api_key = openrouter_secret.value
         config.openrouter.enabled = True
         configured_providers.append(LlmProvider.OPENROUTER)
+
+    # Configure Ollama (Local)
+    try:
+        ollama_host_secret = secrets.get("OLLAMA_HOST")
+    except Exception:
+        ollama_host_secret = None
+
+    ollama_endpoint = "http://localhost:11434"
+    if ollama_host_secret and hasattr(ollama_host_secret, 'found') and ollama_host_secret.found:
+        ollama_endpoint = ollama_host_secret.value or ollama_endpoint
+        
+    config.ollama.endpoint = ollama_endpoint
+    config.ollama.enabled = True  # Enabled by default for dual-tier fallback
+    configured_providers.append(LlmProvider.OLLAMA)
 
     # Set default provider and fallback chain based on what's configured
     if configured_providers:

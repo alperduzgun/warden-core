@@ -1,6 +1,6 @@
 import typer
 import yaml
-from typing import Optional, List, Tuple
+from typing import Optional
 from pathlib import Path
 from rich.console import Console
 from warden.services.package_manager.fetcher import FrameFetcher

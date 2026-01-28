@@ -12,6 +12,7 @@ from warden.shared.domain.base_model import BaseDomainModel
 
 
 class CustomRule(BaseDomainModel):
+
     """Custom validation rule definition.
 
     Represents a project-specific rule that validates code against
@@ -25,8 +26,8 @@ class CustomRule(BaseDomainModel):
         is_blocker: If True, violations block deployment
         description: Detailed rule description
         enabled: Whether the rule is active
-        type: Rule type ('security' | 'convention' | 'pattern' | 'script')
-        conditions: Rule-specific validation conditions
+        type: Rule type ('security' | 'convention' | 'pattern' | 'script' | 'ai')
+        conditions: Rule-specific validation conditions (optional for type='ai')
         examples: Optional examples of valid/invalid code
         message: Optional custom violation message
         language: Optional list of applicable languages
@@ -42,8 +43,8 @@ class CustomRule(BaseDomainModel):
     is_blocker: bool = Field(alias="isBlocker")  # Explicit alias if auto-alias fails for some reason, but auto-alias should work.
     description: str
     enabled: bool
-    type: str  # 'security' | 'convention' | 'pattern' | 'script'
-    conditions: Dict[str, Any]
+    type: str  # 'security' | 'convention' | 'pattern' | 'script' | 'ai'
+    conditions: Dict[str, Any] = Field(default_factory=dict)
     examples: Optional[Dict[str, List[str]]] = None
     message: Optional[str] = None
     language: Optional[List[str]] = None
@@ -56,6 +57,14 @@ class CustomRule(BaseDomainModel):
     file_pattern: Optional[str] = Field(None, alias="filePattern")
     excluded_paths: Optional[List[str]] = Field(None, alias="excludedPaths")
     auto_fix: Optional[Dict[str, Any]] = Field(None, alias="autoFix")
+    
+    def __hash__(self):
+        return hash(self.id)
+        
+    def __eq__(self, other):
+        if not isinstance(other, CustomRule):
+            return False
+        return self.id == other.id
 
 
 class CustomRuleViolation(BaseDomainModel):

@@ -12,8 +12,6 @@ Tests cover:
 import pytest
 from warden.validation.domain.frame import CodeFile
 
-import pytest
-from warden.validation.domain.frame import CodeFile
 import importlib.util
 import sys
 from pathlib import Path
@@ -54,7 +52,7 @@ def get_home():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect unused imports
     assert result.status == "warning"  # Orphan code is warning
@@ -94,7 +92,7 @@ def main():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect unreferenced function
     assert result.status == "warning"
@@ -136,7 +134,7 @@ def main():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect unreferenced class
     assert result.status == "warning"
@@ -171,7 +169,7 @@ def function_with_dead_code():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect dead code
     assert result.status == "warning"
@@ -209,7 +207,7 @@ def process_items():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect dead code after break
     assert result.status == "warning"
@@ -243,7 +241,7 @@ def main():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should pass - no orphan code
     assert result.status == "passed"
@@ -269,7 +267,7 @@ def public_orphan():  # Should be detected
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect public orphan but not private
     assert result.issues_found > 0
@@ -306,7 +304,7 @@ def main():
     }
 
     frame = OrphanFrame(config=config)
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect 'os' but not 'sys'
     sys_findings = [f for f in result.findings if "sys" in f.message]
@@ -333,7 +331,7 @@ function unusedFunction() {
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should skip (status="skipped")
     assert result.status == "skipped"
@@ -359,7 +357,7 @@ def test_something():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should skip test files
     assert result.status == "passed"
@@ -383,7 +381,7 @@ def broken_function(
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should handle gracefully and pass (can't analyze invalid syntax)
     assert result.status == "passed"
@@ -420,7 +418,7 @@ def orphan():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Test Panel JSON compatibility
     json_data = result.to_json()
@@ -471,7 +469,7 @@ def main():
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should detect multiple types
     assert result.status == "warning"
@@ -513,7 +511,7 @@ _ = MyClass()
     )
 
     frame = OrphanFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 
     # Should pass - special functions are ignored
     assert result.status == "passed"

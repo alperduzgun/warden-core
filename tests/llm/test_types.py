@@ -1,6 +1,5 @@
 """Test LLM types and Panel JSON compatibility"""
 
-import pytest
 from warden.llm.types import (
     LlmProvider,
     LlmRequest,

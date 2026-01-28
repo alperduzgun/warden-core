@@ -21,6 +21,7 @@ class LlmProvider(str, Enum):
     AZURE_OPENAI = "azure_openai"
     GROQ = "groq"
     OPENROUTER = "openrouter"
+    OLLAMA = "ollama"
 
 
 class LlmRequest(BaseDomainModel):
@@ -28,9 +29,10 @@ class LlmRequest(BaseDomainModel):
     system_prompt: str
     user_message: str
     model: Optional[str] = None
-    temperature: float = 0.3
+    temperature: float = 0.0  # Idempotency: deterministic outputs
     max_tokens: int = 4000
     timeout_seconds: int = 60
+    use_fast_tier: bool = False  # If True, use local/fast model if available
 
 
 class LlmResponse(BaseDomainModel):

@@ -13,7 +13,6 @@ from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.pipeline.domain.models import (
     PipelineConfig,
     FrameResult,
-    FrameRules,
     ValidationPipeline,
 )
 from warden.pipeline.domain.enums import ExecutionStrategy
@@ -26,6 +25,8 @@ from warden.shared.infrastructure.logging import get_logger
 from .frame_matcher import FrameMatcher
 from .result_aggregator import ResultAggregator
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
+import fnmatch
+from warden.validation.application.rust_validation_engine import RustValidationEngine
 
 logger = get_logger(__name__)
 
@@ -115,32 +116,64 @@ class FrameExecutor:
                     "frames_failed": 0,
                     "no_frames_reason": "no_frames_selected"
                 })
-                
-                # Emit completion event even for early return
-                if self.progress_callback:
-                    self.progress_callback("phase_completed", {
-                        "phase": "VALIDATION",
-                        "phase_name": "VALIDATION",
-                        "duration": time.perf_counter() - start_time
-                    })
-                return
 
             # Initialize results container safery for concurrency
             if not hasattr(context, 'frame_results') or context.frame_results is None:
                 context.frame_results = {}
 
+            # Phase 1: Global Rust-based Pre-filtering
+            await self._run_rust_pre_filtering_async(context, filtered_files)
+
             # Execute frames based on strategy
-            if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
-                await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
-            elif self.config.strategy == ExecutionStrategy.PARALLEL:
-                await self._execute_frames_parallel(context, filtered_files, frames_to_execute, pipeline)
-            elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
-                await self._execute_frames_fail_fast(context, filtered_files, frames_to_execute, pipeline)
-            else:
-                # Default to sequential
-                await self._execute_frames_sequential(context, filtered_files, frames_to_execute, pipeline)
+            if frames_to_execute:
+                if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
+                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.PARALLEL:
+                    await self._execute_frames_parallel_async(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
+                    await self._execute_frames_fail_fast_async(context, filtered_files, frames_to_execute, pipeline)
+                else:
+                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
+            
+
+            # Execute Global Rules (Standard Python Rules - Fallback/Legacy)
+            if self.rule_validator and self.rule_validator.rules:
+                logger.info("executing_global_rules", rule_count=len(self.rule_validator.rules))
+                global_violations = []
+                for code_file in filtered_files:
+                    file_violations = await self.rule_validator.validate_file_async(code_file.path)
+                    global_violations.extend(file_violations)
+                
+                if global_violations:
+                    logger.info("global_rules_found_violations", count=len(global_violations))
+                    
+                    # Virtual Frame Attribution for ghost issues
+                    frame_id = "global_script_rules"
+                    frame_result = FrameResult(
+                        frame_id=frame_id,
+                        frame_name="Global Script Rules",
+                        status="failed",
+                        duration=0.5,
+                        issues_found=len(global_violations),
+                        is_blocker=any(v.is_blocker for v in global_violations),
+                        findings=global_violations,
+                        metadata={"engine": "python_rules"}
+                    )
+                    
+                    if not hasattr(context, 'frame_results') or context.frame_results is None:
+                        context.frame_results = {}
+                    
+                    context.frame_results[frame_id] = {
+                        'result': frame_result,
+                        'pre_violations': [],
+                        'post_violations': []
+                    }
+                    
+                    # Add to context findings
+                    context.findings.extend(global_violations)
 
             # Store results in context
+            logger.info("debug_frame_results_before_aggregation", frames=list(context.frame_results.keys()))
             self.result_aggregator.store_validation_results(context, pipeline)
 
             logger.info(
@@ -163,7 +196,98 @@ class FrameExecutor:
             })
 
 
-    async def _execute_frames_sequential(
+    async def _run_rust_pre_filtering_async(
+        self,
+        context: PipelineContext,
+        code_files: List[CodeFile],
+    ) -> None:
+        """Run global high-performance pre-filtering using Rust engine."""
+        project_root = getattr(context, 'project_root', Path.cwd())
+        # Prepare engine
+        engine = RustValidationEngine(project_root)
+        
+        # 1. Load default global rules (System Rules)
+        import warden
+        package_root = Path(warden.__file__).parent
+        rule_paths = [
+            package_root / "rules/defaults/python/security.yaml",
+            package_root / "rules/defaults/javascript/security.yaml",
+        ]
+        
+        logger.info("debug_rule_paths", package_root=str(package_root))
+        for path in rule_paths:
+            exists = path.exists()
+            logger.info("debug_rule_path_check", path=str(path), exists=exists)
+            if exists:
+                await engine.load_rules_from_yaml_async(path)
+        
+        # 2. Add custom rules from validator (Project Rules)
+        if self.rule_validator and self.rule_validator.rules:
+            # Only add rules that have regex patterns and are not already handled or are appropriate for Rust
+            regex_rules = [r for r in self.rule_validator.rules if r.pattern and r.type != 'ai']
+            if regex_rules:
+                engine.add_custom_rules(regex_rules)
+        
+        if not engine.rust_rules:
+            logger.debug("no_global_rust_rules_and_no_custom_regex_rules_skipping_scan")
+            return
+
+        # Prepare file paths
+        file_paths = [Path(cf.path) for cf in code_files]
+        
+        # Execute scan
+        try:
+            findings = await engine.scan_project_async(file_paths)
+            if findings:
+                total_hits = len(findings)
+                logger.info("rust_scan_raw_hits", count=total_hits)
+                
+                # Alpha Judgment: Global high-speed filtering
+                from warden.validation.application.alpha_judgment import AlphaJudgment
+                alpha = AlphaJudgment(config=self.config.dict() if hasattr(self.config, 'dict') else {})
+                
+                filtered_findings = alpha.evaluate(findings, code_files)
+                
+                if filtered_findings:
+                    logger.info("rust_pre_filtering_found_issues", 
+                              raw=total_hits, 
+                              filtered=len(filtered_findings))
+                    
+                    # Virtual Frame Attribution for ghost issues
+                    frame_id = "system_security_rules"
+                    frame_result = FrameResult(
+                        frame_id=frame_id,
+                        frame_name="System Security Rules (Rust)",
+                        status="failed",
+                        duration=0.1, # Rust is fast
+                        issues_found=len(filtered_findings),
+                        is_blocker=any(f.severity == 'critical' for f in filtered_findings),
+                        findings=filtered_findings,
+                        metadata={
+                            "engine": "rust",
+                            "raw_hits": total_hits,
+                            "filtered_hits": len(filtered_findings)
+                        }
+                    )
+                    
+                    if not hasattr(context, 'frame_results') or context.frame_results is None:
+                        context.frame_results = {}
+                    
+                    context.frame_results[frame_id] = {
+                        'result': frame_result,
+                        'pre_violations': [],
+                        'post_violations': []
+                    }
+                    
+                    # Also keep in global findings for compatibility
+                    context.findings.extend(filtered_findings)
+                else:
+                    logger.info("alpha_judgment_filtered_all_hits", raw=total_hits)
+
+        except Exception as e:
+            logger.error("rust_pre_filtering_failed", error=str(e), error_type=type(e).__name__)
+
+    async def _execute_frames_sequential_async(
         self,
         context: PipelineContext,
         code_files: List[CodeFile],
@@ -178,9 +302,9 @@ class FrameExecutor:
                 logger.info("skipping_frame_fail_fast", frame_id=frame.frame_id)
                 continue
 
-            await self._execute_frame_with_rules(context, frame, code_files, pipeline)
+            await self._execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
-    async def _execute_frames_parallel(
+    async def _execute_frames_parallel_async(
         self,
         context: PipelineContext,
         code_files: List[CodeFile],
@@ -192,14 +316,14 @@ class FrameExecutor:
 
         semaphore = asyncio.Semaphore(self.config.parallel_limit or 3)
 
-        async def execute_with_semaphore(frame):
+        async def execute_with_semaphore_async(frame):
             async with semaphore:
-                await self._execute_frame_with_rules(context, frame, code_files, pipeline)
+                await self._execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
         tasks = [execute_with_semaphore(frame) for frame in frames_to_execute]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _execute_frames_fail_fast(
+    async def _execute_frames_fail_fast_async(
         self,
         context: PipelineContext,
         code_files: List[CodeFile],
@@ -210,14 +334,14 @@ class FrameExecutor:
         logger.info("executing_frames_fail_fast", count=len(frames_to_execute))
 
         for frame in frames_to_execute:
-            result = await self._execute_frame_with_rules(context, frame, code_files, pipeline)
+            result = await self._execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
             # Check if frame has blocker issues
             if result and hasattr(result, 'has_blocker_issues') and result.has_blocker_issues:
                 logger.info("stopping_on_blocker", frame_id=frame.frame_id)
                 break
 
-    async def _execute_frame_with_rules(
+    async def _execute_frame_with_rules_async(
         self,
         context: PipelineContext,
         frame: ValidationFrame,
@@ -225,6 +349,31 @@ class FrameExecutor:
         pipeline: ValidationPipeline,
     ) -> Optional[FrameResult]:
         """Execute a frame with PRE/POST rules."""
+        # Check frame dependencies before execution
+        skip_result = self._check_frame_dependencies(context, frame)
+        if skip_result:
+            logger.info(
+                "frame_skipped_dependencies",
+                frame_id=frame.frame_id,
+                reason=skip_result.metadata.get("skip_reason") if skip_result.metadata else "unknown"
+            )
+            # Store skip result and emit callback
+            context.frame_results[frame.frame_id] = {
+                'result': skip_result,
+                'pre_violations': [],
+                'post_violations': [],
+            }
+            if self.progress_callback:
+                self.progress_callback("frame_completed", {
+                    "frame_id": frame.frame_id,
+                    "frame_name": frame.name,
+                    "status": "skipped",
+                    "findings": 0,
+                    "duration": 0.0,
+                    "skip_reason": skip_result.metadata.get("skip_reason") if skip_result.metadata else None
+                })
+            return skip_result
+
         # Start timing frame execution
         frame_start_time = time.perf_counter()
 
@@ -251,6 +400,11 @@ class FrameExecutor:
                 remaining=len(files_for_frame)
             )
         
+
+        
+        # Apply Triage Routing (Adaptive Hybrid Triage)
+        files_for_frame = self._apply_triage_routing(context, frame, files_for_frame)
+
         # Use filtered files for execution
         code_files = files_for_frame
 
@@ -278,7 +432,7 @@ class FrameExecutor:
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:
             logger.info("executing_pre_rules", frame_id=frame.frame_id, rule_count=len(frame_rules.pre_rules))
-            pre_violations = await self._execute_rules(frame_rules.pre_rules, code_files)
+            pre_violations = await self._execute_rules_async(frame_rules.pre_rules, code_files)
 
             if pre_violations and self._has_blocker_violations(pre_violations):
                 if frame_rules.on_fail == "stop":
@@ -322,7 +476,7 @@ class FrameExecutor:
             execution_errors = 0
             
             # Helper to execute single file
-            async def execute_single_file(c_file: CodeFile) -> Optional[FrameResult]:
+            async def execute_single_file_async(c_file: CodeFile) -> Optional[FrameResult]:
                 # Check for caching
                 file_context = context.file_contexts.get(c_file.path)
                 if file_context and getattr(file_context, 'is_unchanged', False):
@@ -334,20 +488,35 @@ class FrameExecutor:
                     
                 try:
                     # frames usually return FrameResult
-                    return await frame.execute(c_file)
+                    result = await frame.execute_async(c_file)
+                    
+                    if self.progress_callback:
+                        self.progress_callback("progress_update", {
+                            "increment": 1,
+                            "frame_id": frame.frame_id,
+                            "file": c_file.path
+                        })
+                    return result
                 except Exception as ex:
                     logger.error("frame_file_execution_error", 
                                 frame=frame.frame_id, 
                                 file=c_file.path, 
                                 error=str(ex))
+                    if self.progress_callback:
+                        self.progress_callback("progress_update", {
+                            "increment": 1,
+                            "error": True
+                        })
                     return None
 
             if code_files:
-                logger.info(
-                    "frame_batch_execution_start",
-                    frame_id=frame.frame_id,
-                    files_to_scan=len(code_files)
-                )
+                # Optimized logging for batch start
+                if len(code_files) > 1:
+                    logger.debug(
+                        "frame_batch_execution_start",
+                        frame_id=frame.frame_id,
+                        files_to_scan=len(code_files)
+                    )
 
                 # Use batch execution if available (default impl iterates anyway)
                 # But optimized frames (like OrphanFrame) will use smart batching
@@ -365,16 +534,25 @@ class FrameExecutor:
                         files_to_scan.append(cf)
                 
                 if cached_files > 0:
-                     logger.info("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
+                     log_func = logger.info if len(files_to_scan) > 0 else logger.debug
+                     log_func("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
+                     
+                     # Update progress for cached files
+                     if self.progress_callback:
+                         self.progress_callback("progress_update", {
+                             "increment": cached_files,
+                             "frame_id": frame.frame_id,
+                             "details": f"Skipped {cached_files} cached files"
+                         })
                 
                 if not files_to_scan:
-                     logger.info("all_files_cached_skipping_batch", frame=frame.frame_id)
+                     logger.debug("all_files_cached_skipping_batch", frame=frame.frame_id)
                      # Return empty list or simulation of results
                      f_results = []
                 else:
                     try:
                         f_results = await asyncio.wait_for(
-                            frame.execute_batch(files_to_scan),
+                            frame.execute_batch_async(files_to_scan),
                             timeout=self.config.frame_timeout or 300.0  # Increased timeout for batch
                         )
                         
@@ -392,6 +570,13 @@ class FrameExecutor:
                             for res in f_results:
                                 if res and res.findings:
                                     frame_findings.extend(res.findings)
+                            
+                            # Update progress for scanned batch
+                            if self.progress_callback:
+                                self.progress_callback("progress_update", {
+                                    "increment": files_scanned,
+                                    "frame_id": frame.frame_id
+                                })
                                     
                     except asyncio.TimeoutError:
                         logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
@@ -428,6 +613,20 @@ class FrameExecutor:
             if hasattr(frame, 'batch_summary') and frame.batch_summary:
                 result_metadata["llm_filter_summary"] = frame.batch_summary
 
+            # Apply Config-Based Suppressions (Internal Findings)
+            if hasattr(frame, 'config') and frame.config and 'suppressions' in frame.config:
+                suppressions = frame.config['suppressions']
+                if suppressions and frame_findings:
+                     # Filter findings
+                     findings_before = len(frame_findings)
+                     frame_findings = self._apply_config_suppressions(frame_findings, suppressions)
+                     findings_after = len(frame_findings)
+                     
+                     if findings_before != findings_after:
+                         logger.info("suppression_applied", 
+                               frame_id=frame.frame_id, 
+                               suppressed=findings_before - findings_after)
+
             frame_result = FrameResult(
                 frame_id=frame.frame_id,
                 frame_name=frame.name,
@@ -445,10 +644,17 @@ class FrameExecutor:
             else:
                 pipeline.frames_passed += 1
 
-            logger.info("frame_executed_successfully",
-                       frame_id=frame.frame_id,
-                       files_scanned=files_scanned,
-                       findings=len(frame_result.findings))
+            # Only log successful completion at info level if there was actual work or findings
+            if files_scanned > 0 or len(frame_result.findings) > 0:
+                logger.info("frame_executed_successfully",
+                           frame_id=frame.frame_id,
+                           files_scanned=files_scanned,
+                           findings=len(frame_result.findings))
+            else:
+                logger.debug("frame_executed_successfully",
+                           frame_id=frame.frame_id,
+                           files_scanned=files_scanned,
+                           findings=0)
 
         except asyncio.TimeoutError:
             # This outer timeout technically catches only if we wrapped the whole loop in timeout
@@ -477,7 +683,7 @@ class FrameExecutor:
         # Execute POST rules
         post_violations = []
         if frame_rules and frame_rules.post_rules:
-            post_violations = await self._execute_rules(frame_rules.post_rules, code_files)
+            post_violations = await self._execute_rules_async(frame_rules.post_rules, code_files)
 
             if post_violations and self._has_blocker_violations(post_violations):
                 if frame_rules.on_fail == "stop":
@@ -534,7 +740,7 @@ class FrameExecutor:
 
         return filtered
 
-    async def _execute_rules(
+    async def _execute_rules_async(
         self,
         rules: List[CustomRule],
         code_files: List[CodeFile],
@@ -584,4 +790,275 @@ class FrameExecutor:
         clean_files = total_files - len(affected_files)
         return (clean_files / total_files) * 100
 
+    def _check_frame_dependencies(
+        self,
+        context: PipelineContext,
+        frame: ValidationFrame,
+    ) -> Optional[FrameResult]:
+        """
+        Check if frame dependencies are satisfied.
 
+        Returns FrameResult with status='skipped' if dependencies not met,
+        otherwise returns None to continue execution.
+
+        Checks:
+        1. requires_frames: Required frames must have executed
+        2. requires_config: Required config paths must be set
+        3. requires_context: Required context attributes must exist
+        """
+        # 1. Check required frames
+        required_frames = getattr(frame, 'requires_frames', [])
+        for req_frame_id in required_frames:
+            if req_frame_id not in context.frame_results:
+                return FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="skipped",
+                    duration=0.0,
+                    issues_found=0,
+                    is_blocker=False,
+                    findings=[],
+                    metadata={
+                        "skip_reason": f"Required frame '{req_frame_id}' has not been executed",
+                        "dependency_type": "frame",
+                        "missing_dependency": req_frame_id,
+                    }
+                )
+
+        # 2. Check required config paths
+        required_configs = getattr(frame, 'requires_config', [])
+        for config_path in required_configs:
+            if not self._config_path_exists(frame.config, config_path):
+                return FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="skipped",
+                    duration=0.0,
+                    issues_found=0,
+                    is_blocker=False,
+                    findings=[],
+                    metadata={
+                        "skip_reason": f"Required config '{config_path}' is not set",
+                        "dependency_type": "config",
+                        "missing_dependency": config_path,
+                        "help": f"Add '{config_path}' to .warden/config.yaml",
+                    }
+                )
+
+        # 3. Check required context attributes
+        required_context = getattr(frame, 'requires_context', [])
+        for ctx_attr in required_context:
+            if not self._context_attr_exists(context, ctx_attr):
+                return FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="skipped",
+                    duration=0.0,
+                    issues_found=0,
+                    is_blocker=False,
+                    findings=[],
+                    metadata={
+                        "skip_reason": f"Required context '{ctx_attr}' is not available",
+                        "dependency_type": "context",
+                        "missing_dependency": ctx_attr,
+                        "help": "Ensure prerequisite phases/frames have run",
+                    }
+                )
+
+        # All dependencies satisfied
+        return None
+
+    def _apply_triage_routing(
+        self,
+        context: PipelineContext,
+        frame: ValidationFrame,
+        code_files: List[CodeFile]
+    ) -> List[CodeFile]:
+        """
+        Filter files based on Triage Lane and Frame cost.
+        
+        Logic:
+        - Fast Lane: Skip expensive/LLM frames
+        - Middle/Deep Lane: Execute everything
+        """
+        if not hasattr(context, 'triage_decisions') or not context.triage_decisions:
+            return code_files
+            
+        # Determine if frame is expensive/LLM-based
+        is_expensive = False
+        
+        # Check config first
+        if hasattr(frame, 'config') and frame.config.get('use_llm') is True:
+            is_expensive = True
+        else:
+            # Fallback heuristic
+            expensive_keywords = ['security', 'complex', 'architecture', 'design', 'refactor', 'llm', 'deep']
+            if any(k in frame.frame_id.lower() for k in expensive_keywords):
+                is_expensive = True
+            
+        if not is_expensive:
+            return code_files # Run cheap frames on everything
+            
+        filtered = []
+        skipped_count = 0
+        
+        for cf in code_files:
+            decision_data = context.triage_decisions.get(cf.path)
+            if not decision_data:
+                filtered.append(cf) # Default to run if no decision
+                continue
+                
+            lane = decision_data.get('lane')
+            
+            # Inject Metadata for Frames to use (e.g. for Tier selection)
+            if cf.metadata is None:
+                cf.metadata = {}
+            cf.metadata['triage_lane'] = lane
+            
+            # ROUTING LOGIC:
+            # Fast Lane -> Skip Expensive Frames
+            if lane == 'fast_lane':
+                skipped_count += 1
+                continue
+                
+            # Middle/Deep -> Run Expensive Frames
+            filtered.append(cf)
+            
+        if skipped_count > 0:
+             logger.info(
+                 "triage_routing_applied", 
+                 frame=frame.frame_id, 
+                 skipped=skipped_count, 
+                 remaining=len(filtered)
+             )
+             
+        return filtered
+
+    def _config_path_exists(self, config: Optional[Dict[str, Any]], path: str) -> bool:
+        """
+        Check if a config path exists and has a value.
+
+        Args:
+            config: Frame configuration dictionary
+            path: Dot-separated path (e.g., "spec.platforms")
+
+        Returns:
+            True if path exists and has a non-empty value
+        """
+        if not config:
+            return False
+
+        parts = path.split(".")
+        current = config
+
+        for part in parts:
+            if not isinstance(current, dict) or part not in current:
+                return False
+            current = current[part]
+
+        # Check if value is non-empty
+        if current is None:
+            return False
+        if isinstance(current, (list, dict, str)) and len(current) == 0:
+            return False
+
+        return True
+
+    def _context_attr_exists(self, context: PipelineContext, attr: str) -> bool:
+        """
+        Check if a context attribute exists and has a value.
+
+        Args:
+            context: Pipeline context
+            attr: Attribute name (e.g., "project_context", "service_abstractions")
+
+        Returns:
+            True if attribute exists and is not None/empty
+        """
+        # Handle nested attributes (e.g., "project_type.service_abstractions")
+        parts = attr.split(".")
+        current: Any = context
+
+        for part in parts:
+            if hasattr(current, part):
+                current = getattr(current, part)
+            elif isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return False
+
+        # Check if value is non-empty
+        if current is None:
+            return False
+        if isinstance(current, (list, dict)) and len(current) == 0:
+            return False
+
+        return True
+
+
+    def _apply_config_suppressions(self, findings: List[Any], suppressions: List[Dict[str, Any]]) -> List[Any]:
+        """
+        Apply configuration-based suppression rules.
+        
+        Args:
+           findings: List of finding objects
+           suppressions: List of suppression dicts (from config.yaml)
+           
+        Returns:
+           Filtered list of findings
+        """
+        if not findings or not suppressions:
+            return findings
+
+        filtered_findings = []
+        
+        for finding in findings:
+            is_suppressed = False
+            
+            # Finding attributes
+            f_id = getattr(finding, 'id', getattr(finding, 'rule', ''))
+            
+            # Extract file path
+            f_path = ""
+            if hasattr(finding, 'file_path'):
+                f_path = finding.file_path
+            elif hasattr(finding, 'location'):
+                f_path = finding.location.split(':')[0]
+            
+            for rule_cfg in suppressions:
+                rule_pattern = rule_cfg.get('rule')
+                file_patterns = rule_cfg.get('files', [])
+                if isinstance(file_patterns, str):
+                    file_patterns = [file_patterns]
+                
+                # Check Finding ID Match (Logic: if rule is '*', match all)
+                if rule_pattern != '*' and rule_pattern != f_id:
+                    continue
+                    
+                # Check File Pattern Match
+                matched_file = False
+                if not file_patterns: 
+                    # If no files specified, global suppression for this rule? 
+                    # Let's assume explicit file listing is safer, but empty list = none
+                    continue
+                    
+                if f_path:
+                    for pattern in file_patterns:
+                        if fnmatch.fnmatch(f_path, pattern):
+                            matched_file = True
+                            break
+                            
+                if not matched_file:
+                    continue
+                        
+                # If we get here, matched
+                logger.debug("suppressing_finding_by_config", 
+                            finding=f_id, 
+                            file=f_path)
+                is_suppressed = True
+                break
+            
+            if not is_suppressed:
+                filtered_findings.append(finding)
+                
+        return filtered_findings

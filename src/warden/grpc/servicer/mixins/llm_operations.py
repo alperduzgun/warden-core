@@ -35,7 +35,7 @@ class LlmOperationsMixin:
             chunks = []
             provider_used = ""
 
-            async for chunk in self.bridge.analyze_with_llm(
+            async for chunk in self.bridge.analyze_with_llm_async(
                 code=request.code,
                 prompt=request.prompt,
                 provider=request.provider or None
@@ -114,7 +114,7 @@ class LlmOperationsMixin:
                     error_message=result.get("error", "")
                 )
 
-            async for chunk in self.bridge.analyze_with_llm(
+            async for chunk in self.bridge.analyze_with_llm_async(
                 code="print('test')",
                 prompt="Say OK",
                 provider=request.provider

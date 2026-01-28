@@ -7,12 +7,11 @@ Detects file handles, database connections, network sockets without proper dispo
 
 import structlog
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
 from warden.validation.domain.frame import CodeFile
-from warden.llm.factory import create_client
 
 logger = structlog.get_logger()
 
@@ -39,12 +38,14 @@ class ResourceDisposalFortifier(BaseFortifier):
     - Locks and semaphores
     """
 
-    def __init__(self):
-        """Initialize Resource Disposal Fortifier."""
-        try:
-            self._llm_provider = create_client()
-        except Exception:
-            self._llm_provider = None  # LLM optional
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize Resource Disposal Fortifier.
+
+        Args:
+            llm_service: Optional shared LLM service.
+        """
+        self._llm_provider = llm_service
 
     @property
     def name(self) -> str:
@@ -103,7 +104,7 @@ class ResourceDisposalFortifier(BaseFortifier):
             response = await self._llm_provider.complete_async(
                 system_prompt="You are a resource management expert. Add context managers (with statements) to Python code for proper resource cleanup. Return ONLY the modified code.",
                 user_prompt=prompt,
-                temperature=0.2,
+                temperature=0.0,  # Idempotency
                 max_tokens=3000,
             )
 

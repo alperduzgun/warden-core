@@ -18,7 +18,7 @@ from warden.semantic_search.embeddings import EmbeddingGenerator
 from warden.semantic_search.indexer import CodeIndexer
 from warden.semantic_search.searcher import SemanticSearcher
 from warden.semantic_search.context_retriever import ContextRetriever
-from warden.semantic_search.models import RetrievalContext, SearchResult, IndexStats
+from warden.semantic_search.models import RetrievalContext, SearchResult
 
 logger = structlog.get_logger()
 

@@ -1,0 +1,10 @@
+rules:
+  - id: "ai-logic-check"
+    name: "AI Logic Audit"
+    type: "ai"
+    description: "Audit the code for poor programming logic, potential race conditions, or inefficient algorithm choices that are hard to detect with regex."
+    severity: "high"
+    category: "convention"
+    isBlocker: true
+    enabled: true
+    message: "AI found potential logic flaw: {reason}"

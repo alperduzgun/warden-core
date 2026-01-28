@@ -7,8 +7,7 @@ Extends the base PipelineOrchestrator with optional pre/post-processing phases:
 - Post: Suppression filtering (removes false positives)
 """
 
-import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Any, Optional
 from pathlib import Path
 
 from warden.pipeline.application.orchestrator import PhaseOrchestrator
@@ -19,7 +18,7 @@ from warden.pipeline.domain.models import (
 from warden.validation.domain.frame import ValidationFrame, CodeFile
 from warden.analysis.application.discovery import FileDiscoverer, DiscoveredFile
 from warden.build_context import BuildContextProvider, BuildContext
-from warden.suppression import SuppressionMatcher, load_suppression_config
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,11 +42,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
        - Makes build context available to frames
        - Only runs if enable_build_context=True
 
-    3. **Suppression Phase** (Post-validation):
-       - Filters findings using suppression rules
-       - Supports inline comments and config files
-       - Removes false positives
-       - Only runs if enable_suppression=True
+
 
     All phases are optional and controlled by PipelineConfig flags.
     """
@@ -69,17 +64,17 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         # Phase tracking
         self.discovery_result: Optional[Any] = None
         self.build_context: Optional[BuildContext] = None
-        self.suppression_matcher: Optional[SuppressionMatcher] = None
+
 
         logger.info(
             "enhanced_orchestrator_initialized",
             frame_count=len(frames),
             discovery_enabled=self.config.enable_discovery,
             build_context_enabled=self.config.enable_build_context,
-            suppression_enabled=self.config.enable_suppression,
+
         )
 
-    async def execute_with_discovery(self, project_path: str) -> PipelineResult:
+    async def execute_with_discovery_async(self, project_path: str) -> PipelineResult:
         """
         Execute pipeline with automatic file discovery.
 
@@ -88,7 +83,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         2. Loads build context (if enabled)
         3. Converts discovered files to CodeFile objects
         4. Runs validation frames on all files
-        5. Applies suppression filtering (if enabled)
+
 
         Args:
             project_path: Root path of the project to analyze
@@ -98,7 +93,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
 
         Example:
             >>> orchestrator = EnhancedPipelineOrchestrator(frames=[SecurityFrame()])
-            >>> result = await orchestrator.execute_with_discovery("/path/to/project")
+            >>> result = await orchestrator.execute_with_discovery_async("/path/to/project")
             >>> print(f"Total findings: {result.total_findings}")
         """
         logger.info(
@@ -107,28 +102,27 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         )
 
         # Phase 1: Discovery (if enabled)
-        code_files = await self._discover_files_phase(project_path)
+        code_files = await self._discover_files_phase_async(project_path)
 
         # Phase 2: Build context (if enabled)
-        await self._load_build_context_phase(project_path)
+        await self._load_build_context_phase_async(project_path)
 
         # Phase 3: Run validation frames
-        result = await super().execute(code_files)
+        result = await super().execute_async(code_files)
 
-        # Phase 4: Apply suppression (if enabled)
-        result = await self._apply_suppression_phase(result)
+
 
         logger.info(
             "enhanced_pipeline_completed",
             project_path=project_path,
             total_files=len(code_files),
             total_findings=result.total_findings,
-            suppressed_findings=result.metadata.get("suppressed_count", 0),
+
         )
 
         return result
 
-    async def _discover_files_phase(self, project_path: str) -> List[CodeFile]:
+    async def _discover_files_phase_async(self, project_path: str) -> List[CodeFile]:
         """
         Phase 1: Discover files in project.
 
@@ -150,19 +144,31 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             discovery_config = self.config.discovery_config or {}
             max_depth = discovery_config.get("max_depth")
             use_gitignore = discovery_config.get("use_gitignore", True)
+            max_size_mb = discovery_config.get("max_size_mb")
+
+            # Fallback to global rules for size limit if not explicitly in discovery_config
+            if max_size_mb is None and self.config.global_rules:
+                for rule in self.config.global_rules:
+                    if rule.id == "file-size-limit" and rule.enabled:
+                        max_size_mb = rule.conditions.get("max_size_mb")
+                        if max_size_mb:
+                            logger.info("discovery_limit_extracted_from_global_rules", rule_id=rule.id, limit_mb=max_size_mb)
+                            break
 
             # Create discoverer
+            logger.info("discovery_parameters", max_size_mb=max_size_mb, use_gitignore=use_gitignore)
             discoverer = FileDiscoverer(
                 root_path=project_path,
                 max_depth=max_depth,
                 use_gitignore=use_gitignore,
+                max_size_mb=max_size_mb,
             )
 
             # Run discovery
             self.discovery_result = await discoverer.discover_async()
 
             # Convert to CodeFile objects
-            code_files = await self._convert_to_code_files(
+            code_files = await self._convert_to_code_files_async(
                 self.discovery_result.get_analyzable_files()
             )
 
@@ -184,7 +190,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             # Return empty list on error
             return []
 
-    async def _convert_to_code_files(
+    async def _convert_to_code_files_async(
         self, discovered_files: List[DiscoveredFile]
     ) -> List[CodeFile]:
         """
@@ -243,7 +249,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         # If we only have extension, we can create a dummy path
         return get_language_from_path(f"dummy{extension}").value
 
-    async def _load_build_context_phase(self, project_path: str) -> None:
+    async def _load_build_context_phase_async(self, project_path: str) -> None:
         """
         Phase 2: Load build context from project.
 
@@ -279,111 +285,9 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             # Continue without build context
             self.build_context = None
 
-    async def _apply_suppression_phase(self, result: PipelineResult) -> PipelineResult:
-        """
-        Phase 4: Apply suppression filtering to results.
 
-        Args:
-            result: Pipeline result with findings
 
-        Returns:
-            Pipeline result with suppressed findings removed
-        """
-        if not self.config.enable_suppression:
-            logger.info("suppression_phase_skipped", reason="disabled_in_config")
-            return result
 
-        logger.info(
-            "suppression_phase_started",
-            total_findings_before=result.total_findings,
-        )
-
-        try:
-            # Load suppression config
-            if not self.suppression_matcher:
-                self.suppression_matcher = await self._load_suppression_matcher()
-
-            if not self.suppression_matcher:
-                logger.warning("suppression_matcher_not_available")
-                return result
-
-            # Filter findings in each frame result
-            suppressed_count = 0
-
-            for frame_result in result.frame_results:
-                original_count = len(frame_result.findings)
-                filtered_findings = []
-
-                for finding in frame_result.findings:
-                    # Extract line number from location (format: "path:line")
-                    line_number = self._extract_line_number(finding.location)
-
-                    # Check if suppressed
-                    if not self.suppression_matcher.is_suppressed(
-                        line=line_number,
-                        rule=finding.id,
-                        code=None,  # We don't have code context here
-                        file_path=self._extract_file_path(finding.location),
-                    ):
-                        filtered_findings.append(finding)
-                    else:
-                        suppressed_count += 1
-
-                # Update findings
-                frame_result.findings = filtered_findings
-                frame_result.issues_found = len(filtered_findings)
-
-            # Update totals
-            result.total_findings -= suppressed_count
-            result.metadata["suppressed_count"] = suppressed_count
-            result.metadata["suppression_enabled"] = True
-
-            logger.info(
-                "suppression_phase_completed",
-                total_findings_after=result.total_findings,
-                suppressed_count=suppressed_count,
-            )
-
-            return result
-
-        except Exception as e:
-            logger.error(
-                "suppression_phase_failed",
-                error=str(e),
-            )
-            # Return original result on error
-            return result
-
-    async def _load_suppression_matcher(self) -> Optional[SuppressionMatcher]:
-        """
-        Load suppression matcher from configuration.
-
-        Returns:
-            SuppressionMatcher instance or None if not available
-        """
-        try:
-            # Load from config file if specified
-            if self.config.suppression_config_path:
-                config = load_suppression_config(self.config.suppression_config_path)
-            else:
-                # Try default location
-                default_path = ".warden/suppressions.yaml"
-                if Path(default_path).exists():
-                    config = load_suppression_config(default_path)
-                else:
-                    # No config file, use empty matcher
-                    from warden.suppression.models import SuppressionConfig
-
-                    config = SuppressionConfig()
-
-            return SuppressionMatcher(config)
-
-        except Exception as e:
-            logger.warning(
-                "suppression_matcher_load_failed",
-                error=str(e),
-            )
-            return None
 
     def _extract_line_number(self, location: str) -> int:
         """
@@ -437,11 +341,4 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         """
         return self.build_context
 
-    def get_suppression_matcher(self) -> Optional[SuppressionMatcher]:
-        """
-        Get the suppression matcher used in the last execution.
 
-        Returns:
-            SuppressionMatcher or None if suppression was not enabled
-        """
-        return self.suppression_matcher

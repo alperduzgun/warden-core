@@ -1,0 +1,134 @@
+{
+    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+    "version": "2.1.0",
+    "runs": [
+        {
+            "tool": {
+                "driver": {
+                    "name": "Warden",
+                    "semanticVersion": "0.1.0",
+                    "informationUri": "https://github.com/alperduzgun/warden-core",
+                    "rules": [
+                        {
+                            "id": "resilience-resilience-94",
+                            "shortDescription": {
+                                "text": "Resilience Architecture Analysis"
+                            },
+                            "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules"
+                        },
+                        {
+                            "id": "resilience-resilience-77",
+                            "shortDescription": {
+                                "text": "Resilience Architecture Analysis"
+                            },
+                            "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules"
+                        },
+                        {
+                            "id": "resilience-resilience-114",
+                            "shortDescription": {
+                                "text": "Resilience Architecture Analysis"
+                            },
+                            "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules"
+                        },
+                        {
+                            "id": "resilience-resilience-133",
+                            "shortDescription": {
+                                "text": "Resilience Architecture Analysis"
+                            },
+                            "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules"
+                        }
+                    ]
+                }
+            },
+            "results": [
+                {
+                    "ruleId": "resilience-resilience-94",
+                    "level": "error",
+                    "message": {
+                        "text": "LLM Client Dependency Failure\\n\\nDetails: The service relies heavily on the LLM client for verification. If the LLM client fails (e.g., network issues, API rate limits), the service attempts retries but lacks a fallback mechanism to handle persistent failures.\n\nSuggestion: Implement a circuit breaker pattern to prevent cascading failures and consider a fallback strategy, such as using a local heuristic or default response when LLM is unavailable."
+                    },
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "src/warden/analysis/services/finding_verifier.py"
+                                },
+                                "region": {
+                                    "startLine": 1,
+                                    "startColumn": 1
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "ruleId": "resilience-resilience-77",
+                    "level": "warning",
+                    "message": {
+                        "text": "Cache Consistency During Failures\\n\\nDetails: Cache operations are performed without explicit error handling. If the memory manager fails (e.g., disk full, permission issues), it could lead to inconsistent cache states.\n\nSuggestion: Add error handling for cache operations to ensure consistency and consider logging or alerting mechanisms for cache failures."
+                    },
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "src/warden/analysis/services/finding_verifier.py"
+                                },
+                                "region": {
+                                    "startLine": 1,
+                                    "startColumn": 1
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "ruleId": "resilience-resilience-114",
+                    "level": "warning",
+                    "message": {
+                        "text": "Lack of Circuit Breaker for LLM Calls\\n\\nDetails: The retry mechanism is in place for LLM calls, but there is no circuit breaker to prevent repeated failures from overwhelming the system.\n\nSuggestion: Introduce a circuit breaker to temporarily halt LLM calls after a certain number of failures, allowing the system to recover."
+                    },
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "src/warden/analysis/services/finding_verifier.py"
+                                },
+                                "region": {
+                                    "startLine": 1,
+                                    "startColumn": 1
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "ruleId": "resilience-resilience-133",
+                    "level": "warning",
+                    "message": {
+                        "text": "Fallback Confidence on JSON Parsing Failure\\n\\nDetails: If JSON parsing fails, the service defaults to a true positive with a fallback confidence. This may lead to incorrect verification results.\n\nSuggestion: Consider a more nuanced fallback strategy, such as flagging the finding for manual review or using historical data to inform the decision."
+                    },
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {
+                                    "uri": "src/warden/analysis/services/finding_verifier.py"
+                                },
+                                "region": {
+                                    "startLine": 1,
+                                    "startColumn": 1
+                                }
+                            }
+                        }
+                    ]
+                }
+            ],
+            "properties": {
+                "llmUsage": {
+                    "totalTokens": 6583,
+                    "promptTokens": 4757,
+                    "completionTokens": 1826
+                }
+            }
+        }
+    ]
+}

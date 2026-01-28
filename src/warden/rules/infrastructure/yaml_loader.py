@@ -22,7 +22,32 @@ class RulesYAMLLoader:
     """
 
     @staticmethod
-    async def load_from_file(file_path: Path) -> ProjectRuleConfig:
+    def load_rules_sync(project_root: Path) -> ProjectRuleConfig:
+        """Synchronously load rules from .warden/rules.yaml or .warden/rules directory."""
+        rules_path = project_root / ".warden" / "rules.yaml"
+        if not rules_path.exists():
+            rules_path = project_root / ".warden" / "rules"
+        
+        if not rules_path.exists():
+             return ProjectRuleConfig(
+                project_name="unknown",
+                language="unknown",
+                rules=[],
+                global_rules=[],
+                frame_rules={}
+            )
+
+        if rules_path.is_dir():
+            from warden.shared.utils.yaml_merger import YAMLMerger
+            merged_data = YAMLMerger.merge_directory(rules_path)
+            return RulesYAMLLoader._parse_yaml_data(merged_data, str(rules_path))
+
+        with open(rules_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        return RulesYAMLLoader._parse_yaml_data(data, str(rules_path))
+
+    @staticmethod
+    async def load_from_file_async(file_path: Path) -> ProjectRuleConfig:
         """Load rules configuration from YAML file.
 
         Args:
@@ -39,12 +64,12 @@ class RulesYAMLLoader:
             raise FileNotFoundError(f"Rules path not found: {file_path}")
 
         if file_path.is_dir():
-             return await RulesYAMLLoader._load_from_directory(file_path)
+             return await RulesYAMLLoader._load_from_directory_async(file_path)
 
-        return await RulesYAMLLoader._load_single_file(file_path)
+        return await RulesYAMLLoader._load_single_file_async(file_path)
 
     @staticmethod
-    async def _load_single_file(file_path: Path) -> ProjectRuleConfig:
+    async def _load_single_file_async(file_path: Path) -> ProjectRuleConfig:
         """Load rules configuration from a single YAML file."""
         try:
             with open(file_path, encoding="utf-8") as f:
@@ -56,7 +81,7 @@ class RulesYAMLLoader:
         return RulesYAMLLoader._parse_yaml_data(data, str(file_path))
 
     @staticmethod
-    async def _load_from_directory(dir_path: Path) -> ProjectRuleConfig:
+    async def _load_from_directory_async(dir_path: Path) -> ProjectRuleConfig:
         """Load rules from all YAML files in a directory and merge them."""
         # Use shared merger logic (DRY)
         from warden.shared.utils.yaml_merger import YAMLMerger
@@ -168,14 +193,14 @@ class RulesYAMLLoader:
             if field not in rule_data:
                 raise ValueError(f"Missing required field '{field}' in rule")
 
-        # For non-script rules, conditions is required
+        # For non-script and non-ai rules, conditions is required
         rule_type = rule_data["type"]
-        if rule_type != "script" and "conditions" not in rule_data:
-            raise ValueError(f"Missing required field 'conditions' in non-script rule")
+        if rule_type not in ("script", "ai") and "conditions" not in rule_data:
+            raise ValueError("Missing required field 'conditions' in non-script/non-ai rule")
 
         # For script rules, either 'script' or 'scriptPath' is required
         if rule_type == "script" and "script" not in rule_data and "scriptPath" not in rule_data:
-            raise ValueError(f"Script-type rule requires either 'script' or 'scriptPath' field")
+            raise ValueError("Script-type rule requires either 'script' or 'scriptPath' field")
 
         # Parse enums
         try:
@@ -206,7 +231,7 @@ class RulesYAMLLoader:
             description=rule_data["description"],
             enabled=rule_data["enabled"],
             type=rule_data["type"],
-            conditions=conditions,
+            conditions=conditions or {},
             examples=rule_data.get("examples"),
             message=rule_data.get("message"),
             language=rule_data.get("language"),

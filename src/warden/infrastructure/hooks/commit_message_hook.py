@@ -4,10 +4,7 @@ Commit Message Git hook for Warden.
 Checks commit author and message for restricted keywords.
 """
 
-import subprocess
-import sys
 from pathlib import Path
-from typing import List, Optional
 
 
 class CommitMessageHook:

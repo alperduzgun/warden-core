@@ -4,7 +4,7 @@ Metrics Aggregator
 Responsible for aggregating results from multiple analyzers into a unified QualityMetrics object.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 import structlog
 
 from warden.analysis.domain.quality_metrics import (
@@ -12,12 +12,6 @@ from warden.analysis.domain.quality_metrics import (
     CodeHotspot,
     QuickWin,
     MetricBreakdown,
-)
-from warden.cleaning.domain.models import (
-    CleaningResult,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 
 logger = structlog.get_logger()

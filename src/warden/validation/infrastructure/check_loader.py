@@ -7,12 +7,11 @@ Discovers and loads checks from:
 3. Programmatic registration (frame.register_check())
 """
 
-import os
 import sys
 import yaml
 import importlib.util
 from pathlib import Path
-from typing import List, Type, Dict, Any
+from typing import List, Type, Dict
 
 from warden.validation.domain.check import ValidationCheck
 from warden.shared.infrastructure.logging import get_logger

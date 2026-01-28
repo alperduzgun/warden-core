@@ -26,7 +26,7 @@ class ConfigurationMixin:
         logger.info("grpc_get_frames")
 
         try:
-            result = await self.bridge.get_available_frames()
+            result = await self.bridge.get_available_frames_async()
 
             frames = result if isinstance(result, list) else result.get("frames", [])
 
@@ -64,7 +64,7 @@ class ConfigurationMixin:
         logger.info("grpc_get_providers")
 
         try:
-            result = await self.bridge.get_available_providers()
+            result = await self.bridge.get_available_providers_async()
 
             if isinstance(result, list):
                 providers = result
@@ -97,9 +97,9 @@ class ConfigurationMixin:
         logger.info("grpc_get_config")
 
         try:
-            config = await self.bridge.get_config()
-            frames = await self.bridge.get_available_frames()
-            providers_result = await self.bridge.get_available_providers()
+            config = await self.bridge.get_config_async()
+            frames = await self.bridge.get_available_frames_async()
+            providers_result = await self.bridge.get_available_providers_async()
 
             response = warden_pb2.ConfigurationResponse(
                 project_root=str(self.bridge.project_root),
@@ -180,7 +180,7 @@ class ConfigurationMixin:
 
         try:
             if hasattr(self.bridge, 'update_frame_status'):
-                await self.bridge.update_frame_status(
+                await self.bridge.update_frame_status_async(
                     frame_id=request.frame_id,
                     enabled=request.enabled
                 )

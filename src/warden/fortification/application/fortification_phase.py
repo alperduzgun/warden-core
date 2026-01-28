@@ -5,7 +5,6 @@ Generates security fixes and patches for identified vulnerabilities.
 Uses LLM to create context-aware, framework-specific solutions.
 """
 
-import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,6 +13,7 @@ from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile
 from warden.fortification.domain.models import Fortification
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
+from warden.fortification.application.prompt_builder import FortificationPromptBuilder
 
 # Try to import LLMService, use None if not available
 try:
@@ -36,28 +36,19 @@ class FortificationResult:
 
 class FortificationPhase:
     """
-    Phase 4: FORTIFICATION - Generate security fixes.
+    Phase 4: FORTIFICATION - Generate security remediation guidance.
 
     Responsibilities:
     - Analyze vulnerabilities from validation
-    - Generate context-aware fixes
-    - Provide framework-specific solutions
-    - Create auto-applicable patches
+    - Generate context-aware remediation suggestions
+    - Provide framework-specific code examples
+    - Assess fixability (auto-fixable flag for reporting)
+    
+    Warden is a Read-Only tool. This phase acts as an AI Tech Lead,
+    providing advice but NEVER modifying source code directly.
     """
 
-    # Search query mapping for semantic context retrieval
-    ISSUE_SEARCH_QUERIES = {
-        "sql_injection": ["parameterized query", "prepared statement", "ORM query filter"],
-        "xss": ["escape HTML", "sanitize output", "template autoescape"],
-        "hardcoded_secret": ["environment variable", "config secret", "vault integration"],
-        "path_traversal": ["safe path join", "basename validation", "secure file path"],
-        "command_injection": ["subprocess safe", "shlex quote", "shell escape"],
-        "ssrf": ["URL validation", "allowlist domain", "request validation"],
-        "weak_crypto": ["strong encryption AES", "cryptography library", "secure hash"],
-        "insecure_deserialization": ["safe deserialization", "JSON loads validation"],
-        "xxe": ["XML parser secure", "defuse XML", "disable external entities"],
-        "secrets": ["environment variable", "dotenv", "secrets manager"],
-    }
+    # Delegated to FortificationPromptBuilder
 
 
     def __init__(
@@ -66,6 +57,7 @@ class FortificationPhase:
         context: Optional[Dict[str, Any]] = None,
         llm_service: Optional[LLMService] = None,
         semantic_search_service: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize fortification phase.
@@ -74,11 +66,13 @@ class FortificationPhase:
             config: Phase configuration
             context: Pipeline context from previous phases
             llm_service: Optional LLM service for enhanced fixes
+            rate_limiter: Optional rate limiter for LLM calls
         """
         self.config = config or {}
         self.context = context or {}
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
+        self.rate_limiter = rate_limiter
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
 
         # Initialize IgnoreMatcher
@@ -105,28 +99,35 @@ class FortificationPhase:
         """
         Execute fortification phase.
         """
-        logger.info(
+        # Use debug level for empty runs to reduce CI noise
+        log_func = logger.info if validated_issues else logger.debug
+        log_func(
             "fortification_phase_started",
             issue_count=len(validated_issues),
             use_llm=self.use_llm,
         )
 
         # Filter validated issues based on ignore matcher
-        original_issue_count = len(validated_issues)
-        validated_issues = [
-            issue for issue in validated_issues
-            if not self.ignore_matcher.should_ignore_for_frame(Path(issue.get("file_path", "")), "fortification")
-        ]
+        normalized_issues = []
+        for issue in validated_issues:
+            normalized = self._normalize_issue(issue)
+            if not self.ignore_matcher.should_ignore_for_frame(
+                Path(normalized.get("file_path", "")), 
+                "fortification"
+            ):
+                normalized_issues.append(normalized)
         
-        if len(validated_issues) < original_issue_count:
+        if len(validated_issues) > len(normalized_issues):
              logger.info(
                 "fortification_phase_issues_ignored",
-                ignored=original_issue_count - len(validated_issues),
-                remaining=len(validated_issues)
+                ignored=len(validated_issues) - len(normalized_issues),
+                remaining=len(normalized_issues)
             )
+        
+        validated_issues = normalized_issues
 
         from warden.fortification.application.orchestrator import FortificationOrchestrator
-        orchestrator = FortificationOrchestrator()
+        orchestrator = FortificationOrchestrator(llm_service=self.llm_service)
 
         all_fortifications = []
         all_actions = []
@@ -154,7 +155,10 @@ class FortificationPhase:
                     all_fortifications.append(Fortification(
                         id=f"fort-{len(all_fortifications)}",
                         title=action.type.value.replace("_", " ").title(),
-                        detail=action.description
+                        detail=action.description,
+                        severity=action.severity.lower() if hasattr(action, 'severity') else "high",
+                        auto_fixable=True,
+                        line_number=action.line_number
                     ))
 
         # Legacy rule-based/llm fixes for validated issues
@@ -166,14 +170,30 @@ class FortificationPhase:
                 fixes = await self._generate_rule_based_fixes_async(issue_type, issues)
             
             for fix in fixes:
+                # Use the finding ID from the fix or the first issue in the group
+                fid = fix.get("finding_id")
+                if not fid and issues:
+                    fid = issues[0].get("id")
+
                 all_fortifications.append(Fortification(
                     id=f"fix-{len(all_fortifications)}",
                     title=fix.get("title", "Security Fix"),
-                    detail=fix.get("detail", "")
+                    detail=fix.get("detail", ""),
+                    suggested_code=fix.get("code") or fix.get("suggested_code"),
+                    original_code=fix.get("original_code"),
+                    file_path=fix.get("file_path"),
+                    line_number=fix.get("line_number"),
+                    confidence=fix.get("confidence", 0.0),
+                    severity=fix.get("severity", "medium"),
+                    auto_fixable=fix.get("auto_fixable", False),
+                    finding_id=fid
                 ))
 
         result = FortificationResult(
-            fortifications=[f.to_json() if hasattr(f, 'to_json') else f for f in all_fortifications],
+            fortifications=[
+                f.to_json() if hasattr(f, 'to_json') else f 
+                for f in all_fortifications
+            ],
             applied_fixes=[],
             security_improvements=self._calculate_improvements(validated_issues, all_fortifications) if validated_issues else {},
         )
@@ -207,7 +227,7 @@ class FortificationPhase:
             try:
                 if self.semantic_search_service.is_available():
                     # Get search queries for this issue type
-                    queries = self.ISSUE_SEARCH_QUERIES.get(
+                    queries = FortificationPromptBuilder.ISSUE_SEARCH_QUERIES.get(
                         issue_type.lower(), 
                         [f"secure {issue_type} handling", f"safe {issue_type} pattern"]
                     )
@@ -235,19 +255,63 @@ class FortificationPhase:
                     error=str(e),
                 )
                 # Continue without semantic context
+                pass
+        
+        # Deduplicate and Re-Rank semantic context
+        # Ensure we prioritize the highest scoring examples, especially since we merged multiple queries
+        if semantic_context:
+            # unique by content to avoid dupes
+            seen = set()
+            unique_context = []
+            for item in semantic_context:
+                # content attribute or str representation
+                content = getattr(item, 'content', str(item))
+                if content not in seen:
+                    seen.add(content)
+                    unique_context.append(item)
+            
+            # Sort by score descending (if available)
+            unique_context.sort(key=lambda x: getattr(x, 'score', 0.0), reverse=True)
+            semantic_context = unique_context
 
         # Step 2: Create context-aware prompt with semantic examples
-        prompt = self._create_llm_prompt(issue_type, issues, semantic_context)
+        prompt = FortificationPromptBuilder.create_llm_prompt(
+            issue_type, issues, self.context, semantic_context
+        )
 
         try:
+            # Acquire rate limit if available
+            if self.rate_limiter:
+                # Estimate tokens: prompt chars / 4 + output limit
+                estimated_tokens = (len(prompt) // 4) + 2000
+                await self.rate_limiter.acquire_async(estimated_tokens)
+
+            # Determine model tier
+            model = None
+            llm_cfg = None
+            if self.context and hasattr(self.context, 'llm_config'):
+                llm_cfg = self.context.llm_config
+            elif isinstance(self.context, dict):
+                llm_cfg = self.context.get("llm_config")
+
+            if llm_cfg:
+                if isinstance(llm_cfg, dict):
+                    model = llm_cfg.get("smart_model")
+                else:
+                    model = getattr(llm_cfg, "smart_model", None)
+
             # Step 3: Get LLM suggestions
             response = await self.llm_service.complete_async(
                 prompt=prompt,
-                max_tokens=2000,
+                model=model
             )
 
+            if not response:
+                logger.warning("llm_security_fix_response_empty", issue_type=issue_type)
+                return await self._generate_rule_based_fixes_async(issue_type, issues)
+
             # Step 4: Parse LLM response into fortifications
-            parsed_fixes = self._parse_llm_response(response, issues)
+            parsed_fixes = FortificationPromptBuilder.parse_llm_response(response.content, issues)
             fixes.extend(parsed_fixes)
 
             logger.info(
@@ -293,157 +357,7 @@ class FortificationPhase:
 
         return fixes
 
-    def _create_llm_prompt(
-        self,
-        issue_type: str,
-        issues: List[Dict[str, Any]],
-        semantic_context: Optional[List[Any]] = None,
-    ) -> str:
-        """
-        Create LLM prompt for fix generation.
-
-        Args:
-            issue_type: Type of security issue
-            issues: List of issues
-            semantic_context: Similar secure patterns from project (from semantic search)
-
-        Returns:
-            Formatted prompt for LLM
-        """
-        # Get context information
-        project_type = self.context.get("project_type", "unknown")
-        framework = self.context.get("framework", "unknown")
-        language = self.context.get("language", "python")
-
-        # Format issues for prompt
-        issue_details = []
-        for issue in issues[:5]:  # Limit to 5 examples
-            issue_details.append(
-                f"- File: {issue.get('file_path', 'unknown')}\n"
-                f"  Line: {issue.get('line_number', 'unknown')}\n"
-                f"  Code: {issue.get('code_snippet', 'N/A')[:100]}"
-            )
-
-        # Format semantic context if available
-        semantic_section = ""
-        if semantic_context:
-            examples = []
-            total_chars = 0
-            max_chars = 2000  # Max context characters
-            
-            for i, result in enumerate(semantic_context[:3]):  # Max 3 examples
-                # Handle different result types
-                if hasattr(result, 'file_path'):
-                    file_path = result.file_path
-                    content = getattr(result, 'content', str(result))[:500]
-                    line = getattr(result, 'line_number', 'N/A')
-                elif isinstance(result, dict):
-                    file_path = result.get('file_path', 'unknown')
-                    content = result.get('content', str(result))[:500]
-                    line = result.get('line_number', 'N/A')
-                else:
-                    continue
-                
-                example = f"### Example {i+1}: {file_path}:{line}\n```{language}\n{content}\n```\n"
-                
-                if total_chars + len(example) > max_chars:
-                    break
-                    
-                examples.append(example)
-                total_chars += len(example)
-            
-            if examples:
-                semantic_section = f"""
-## SIMILAR SECURE PATTERNS FROM THIS PROJECT
-
-The following code snippets show how similar security issues 
-have been handled elsewhere in this codebase. 
-Use these as reference for style and approach:
-
-{chr(10).join(examples)}
-
-IMPORTANT: Generate fixes that follow the patterns shown above.
-Match the coding style, library usage, and conventions of this project.
-"""
-
-        prompt = f"""
-You are a security expert fixing {issue_type} vulnerabilities.
-
-PROJECT CONTEXT:
-- Type: {project_type}
-- Framework: {framework}
-- Language: {language}
-{semantic_section}
-ISSUES FOUND ({len(issues)} total):
-{chr(10).join(issue_details)}
-
-Generate secure fixes for these {issue_type} vulnerabilities.
-For each fix, provide:
-1. Title: Clear description of the fix
-2. Detail: Explanation of what the fix does
-3. Code: The actual fix code
-4. Auto-fixable: Whether this can be automatically applied (true/false)
-
-Format your response as JSON array of fixes.
-Focus on framework-specific best practices for {framework}.
-"""
-
-        return prompt
-
-
-    def _parse_llm_response(
-        self,
-        response: str,
-        issues: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
-        """
-        Parse LLM response into fortification objects.
-
-        Args:
-            response: LLM response text
-            issues: Original issues
-
-        Returns:
-            List of parsed fortifications
-        """
-        import json
-        import re
-
-        fortifications = []
-
-        try:
-            # Try to extract JSON from response
-            json_match = re.search(r'\[.*\]', response, re.DOTALL)
-            if json_match:
-                fixes_data = json.loads(json_match.group())
-
-                for fix_data in fixes_data:
-                    fortification = {
-                        "title": fix_data.get("title", "Security Fix"),
-                        "detail": fix_data.get("detail", ""),
-                        "code": fix_data.get("code", ""),
-                        "auto_fixable": fix_data.get("auto_fixable", False),
-                        "severity": issues[0].get("severity", "high") if issues else "medium",
-                        "issue_type": issues[0].get("type", "security") if issues else "unknown",
-                        "confidence": 0.85,
-                    }
-                    fortifications.append(fortification)
-
-        except (json.JSONDecodeError, AttributeError) as e:
-            logger.error("llm_response_parsing_failed", error=str(e))
-
-            # Create basic fortification from response
-            fortification = {
-                "title": f"Fix for {issues[0].get('type', 'issue')}",
-                "detail": response[:500],  # First 500 chars as detail
-                "code": "",
-                "auto_fixable": False,
-                "severity": issues[0].get("severity", "medium") if issues else "medium",
-                "confidence": 0.5,
-            }
-            fortifications.append(fortification)
-
-        return fortifications
+    # Refactored to FortificationPromptBuilder
 
     def _create_fix_for_issue(
         self,
@@ -464,7 +378,7 @@ Focus on framework-specific best practices for {framework}.
             "sql_injection": {
                 "title": "Use Parameterized Queries",
                 "detail": "Replace string concatenation with parameterized queries",
-                "code": "cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))",
+                "code": "cursor.execute_async('SELECT * FROM users WHERE id = ?', (user_id,))",
                 "auto_fixable": True,
             },
             "xss": {
@@ -506,6 +420,56 @@ Focus on framework-specific best practices for {framework}.
             "confidence": 0.7,
         }
 
+    def _normalize_issue(self, issue: Any) -> Dict[str, Any]:
+        """
+        Normalize issue to standard dictionary format.
+        
+        Handles:
+        - Dictionary objects
+        - Finding objects
+        - CustomRuleViolation objects (rules/domain/models.py)
+        - Legacy objects with file_path/line_number or file/line
+        """
+        if isinstance(issue, dict):
+            return issue
+            
+        # Convert object to dict logic
+        normalized = {}
+        
+        # safely get attributes
+        def get_attr(obj, attrs, default=None):
+            for attr in attrs:
+                if hasattr(obj, attr):
+                    return getattr(obj, attr)
+            return default
+
+        # ID
+        normalized["id"] = get_attr(issue, ["id", "rule_id", "ruleId"], "unknown")
+        
+        # File Path
+        normalized["file_path"] = get_attr(issue, ["file_path", "file", "path"], "")
+        
+        # Line Number
+        normalized["line_number"] = get_attr(issue, ["line_number", "line"], 0)
+        
+        # Type/Category
+        normalized["type"] = get_attr(issue, ["type", "category", "rule_name", "ruleName"], "issue")
+        if hasattr(normalized["type"], "value"): # Handle Enum
+             normalized["type"] = normalized["type"].value
+             
+        # Severity
+        normalized["severity"] = get_attr(issue, ["severity"], "medium")
+        if hasattr(normalized["severity"], "value"): # Handle Enum
+             normalized["severity"] = normalized["severity"].value.lower()
+             
+        # Message/Description
+        normalized["message"] = get_attr(issue, ["message", "description", "detail"], "")
+        
+        # Source Object (for specialized fixing if needed)
+        # normalized["_source"] = issue 
+        
+        return normalized
+
     def _group_issues_by_type(
         self,
         issues: List[Dict[str, Any]],
@@ -546,16 +510,17 @@ Focus on framework-specific best practices for {framework}.
         # Count issues by severity
         issue_severity_counts = {}
         for issue in issues:
-            severity = issue.get("severity", "medium")
+            severity = issue.get("severity", "medium") if isinstance(issue, dict) else getattr(issue, "severity", "medium")
             issue_severity_counts[severity] = issue_severity_counts.get(severity, 0) + 1
 
         # Count fixes by severity
         fix_severity_counts = {}
         auto_fixable_count = 0
         for fix in fortifications:
-            severity = fix.get("severity", "medium")
+            # Use attribute access since these are Fortification objects
+            severity = getattr(fix, "severity", "medium")
             fix_severity_counts[severity] = fix_severity_counts.get(severity, 0) + 1
-            if fix.get("auto_fixable", False):
+            if getattr(fix, "auto_fixable", False):
                 auto_fixable_count += 1
 
         # Calculate coverage

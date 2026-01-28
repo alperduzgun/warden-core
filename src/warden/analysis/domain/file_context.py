@@ -7,9 +7,7 @@ and context-aware weight adjustment.
 
 from pydantic import Field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple
-from typing import Dict, List, Optional, Any, Tuple
-from pathlib import Path
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 from warden.shared.domain.base_model import BaseDomainModel

@@ -21,6 +21,7 @@ class BasePhaseExecutor:
         project_root: Optional[Path] = None,
         llm_service: Optional[Any] = None,
         semantic_search_service: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize base phase executor.
@@ -30,9 +31,11 @@ class BasePhaseExecutor:
             progress_callback: Optional callback for progress updates
             project_root: Root directory of the project
             llm_service: Optional LLM service for AI-powered phases
+            rate_limiter: Optional RateLimiter instance
         """
         self.config = config or PipelineConfig()
         self.progress_callback = progress_callback
         self.project_root = project_root or Path.cwd()
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
+        self.rate_limiter = rate_limiter

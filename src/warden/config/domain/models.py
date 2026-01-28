@@ -87,6 +87,7 @@ class PipelineSettings(BaseDomainModel):
     parallel: bool = False  # Run frames in parallel
     enable_llm: bool = True  # Enable LLM-enhanced analysis (C# pattern)
     llm_provider: str = "deepseek"  # LLM provider (deepseek, openai, anthropic, etc.)
+    enable_issue_validation: bool = True  # Enable false positive reduction
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""

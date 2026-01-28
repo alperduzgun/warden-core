@@ -35,7 +35,7 @@ edges:
 ```
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pathlib import Path
 import yaml
 
@@ -48,7 +48,7 @@ from warden.config.domain.models import (
     Position,
     CustomRule,
 )
-from warden.validation.domain.frame import get_frame_by_id, get_frames_by_priority
+from warden.validation.domain.frame import get_frame_by_id
 
 
 class YAMLParseError(Exception):
@@ -137,7 +137,8 @@ def parse_simple_format(data: Dict[str, Any]) -> PipelineConfig:
     settings = PipelineSettings(
         fail_fast=settings_data.get('fail_fast', True),
         timeout=settings_data.get('timeout'),
-        parallel=settings_data.get('parallel', False)
+        parallel=settings_data.get('parallel', False),
+        enable_issue_validation=settings_data.get('enable_issue_validation', True)
     )
 
     # Generate nodes
@@ -267,7 +268,8 @@ def parse_full_format(data: Dict[str, Any]) -> PipelineConfig:
     settings = PipelineSettings(
         fail_fast=settings_data.get('fail_fast', True),
         timeout=settings_data.get('timeout'),
-        parallel=settings_data.get('parallel', False)
+        parallel=settings_data.get('parallel', False),
+        enable_issue_validation=settings_data.get('enable_issue_validation', True)
     )
 
     return PipelineConfig(

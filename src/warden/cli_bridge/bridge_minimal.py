@@ -49,7 +49,7 @@ class MinimalWardenBridge:
             },
         ]
 
-    async def execute_pipeline(self, file_path: str, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def execute_pipeline_async(self, file_path: str, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Mock pipeline execution
 
@@ -141,7 +141,7 @@ class MinimalWardenBridge:
             },
         }
 
-    async def get_config(self) -> Dict[str, Any]:
+    async def get_config_async(self) -> Dict[str, Any]:
         """
         Get mock Warden configuration
 
@@ -170,7 +170,7 @@ class MinimalWardenBridge:
             "mock_mode": True,
         }
 
-    async def ping(self) -> Dict[str, str]:
+    async def ping_async(self) -> Dict[str, str]:
         """
         Health check endpoint
 
@@ -184,7 +184,7 @@ class MinimalWardenBridge:
             "mode": "minimal",
         }
 
-    async def get_available_frames(self) -> List[Dict[str, Any]]:
+    async def get_available_frames_async(self) -> List[Dict[str, Any]]:
         """
         Get list of mock validation frames
 

@@ -7,12 +7,11 @@ Prevents malicious/invalid inputs from causing issues.
 
 import structlog
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
 from warden.validation.domain.frame import CodeFile
-from warden.llm.factory import create_client
 
 logger = structlog.get_logger()
 
@@ -39,12 +38,14 @@ class InputValidationFortifier(BaseFortifier):
     - JSON data
     """
 
-    def __init__(self):
-        """Initialize Input Validation Fortifier."""
-        try:
-            self._llm_provider = create_client()
-        except Exception:
-            self._llm_provider = None  # LLM optional
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize Input Validation Fortifier.
+
+        Args:
+            llm_service: Optional shared LLM service.
+        """
+        self._llm_provider = llm_service
 
     @property
     def name(self) -> str:
@@ -103,7 +104,7 @@ class InputValidationFortifier(BaseFortifier):
             response = await self._llm_provider.complete_async(
                 system_prompt="You are a security expert. Add input validation to Python functions. Return ONLY the modified code.",
                 user_prompt=prompt,
-                temperature=0.2,
+                temperature=0.0,  # Idempotency
                 max_tokens=3000,
             )
 
@@ -220,7 +221,7 @@ class InputValidationFortifier(BaseFortifier):
                 [
                     f"if not {param}" in line,
                     f"if {param} is None" in line,
-                    f"raise ValueError" in line and param in line,
+                    "raise ValueError" in line and param in line,
                     f"assert {param}" in line,
                 ]
             ):

@@ -18,7 +18,7 @@ except ImportError:
 from warden.grpc.converters import ProtoConverters
 
 if TYPE_CHECKING:
-    from warden.shared.domain.repository import ISuppressionRepository
+    pass
 
 try:
     from warden.shared.infrastructure.logging import get_logger

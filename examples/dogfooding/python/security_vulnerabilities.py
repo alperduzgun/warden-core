@@ -6,12 +6,10 @@ Contains intentional security issues for testing warden security frame.
 
 import os
 import subprocess
-from typing import Optional
 
 
 # 🔴 SQL Injection vulnerability
 def get_user_by_id(user_id: str) -> dict:
-    query = f"SELECT * FROM users WHERE id = '{user_id}'"  # VULNERABLE
     # execute_query(query)
     return {"id": user_id}
 

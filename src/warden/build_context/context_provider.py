@@ -7,7 +7,7 @@ Auto-detects build system and uses appropriate parser.
 
 import asyncio
 from pathlib import Path
-from typing import Optional, List, Type
+from typing import List
 
 from warden.build_context.models import BuildContext, BuildSystem, create_empty_context
 from warden.build_context.parsers import (

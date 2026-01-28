@@ -6,7 +6,7 @@ Parses .gitignore files and filters file paths accordingly.
 
 import re
 from pathlib import Path
-from typing import List, Set, Pattern
+from typing import List, Pattern
 
 
 class GitignoreFilter:
@@ -37,7 +37,7 @@ class GitignoreFilter:
             ".git/",
             ".svn/",
             ".hg/",
-            # Dependencies
+            # Dependencies & Ecosystems
             "node_modules/",
             "venv/",
             ".venv/",
@@ -48,6 +48,12 @@ class GitignoreFilter:
             "*.pyc",
             "*.pyo",
             "*.pyd",
+            "ios/Pods/",
+            "Pods/",
+            ".dart_tool/",
+            ".fvm/",
+            ".pub-cache/",
+            ".pub/",
             # Build outputs
             "dist/",
             "build/",
@@ -55,6 +61,7 @@ class GitignoreFilter:
             ".eggs/",
             "target/",
             "out/",
+            "DerivedData/",
             # IDE
             ".idea/",
             ".vscode/",
@@ -262,5 +269,9 @@ def create_gitignore_filter(project_root: Path) -> GitignoreFilter:
     # Load .gitignore from project root
     gitignore_path = project_root / ".gitignore"
     git_filter.load_gitignore(gitignore_path)
+    
+    # Load .wardenignore from project root (explicit override)
+    wardenignore_path = project_root / ".wardenignore"
+    git_filter.load_gitignore(wardenignore_path)
 
     return git_filter

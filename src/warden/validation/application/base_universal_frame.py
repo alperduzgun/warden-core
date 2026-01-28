@@ -7,7 +7,7 @@ rather than language-specific representations.
 
 import structlog
 from typing import List, Dict, Any, Optional
-from warden.validation.domain.frame import ValidationFrame, FrameResult, CodeFile
+from warden.validation.domain.frame import ValidationFrame, CodeFile
 from warden.ast.application.provider_registry import ASTProviderRegistry
 from warden.ast.domain.models import ASTNode, ParseResult
 from warden.ast.domain.enums import CodeLanguage, ParseStatus
@@ -28,7 +28,7 @@ class BaseUniversalFrame(ValidationFrame):
         # For now, we rely on the FrameExecutor to have registered providers
         # or we manually ensure they are loaded.
 
-    async def get_universal_ast(self, code_file: CodeFile) -> Optional[ASTNode]:
+    async def get_universal_ast_async(self, code_file: CodeFile) -> Optional[ASTNode]:
         """
         Retrieve the universal AST for a code file.
         """

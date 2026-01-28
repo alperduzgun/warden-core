@@ -5,7 +5,6 @@ Validates that test result models correctly serialize to Panel-compatible
 JSON format (camelCase) and match Panel TypeScript interface structure.
 """
 
-import pytest
 
 from warden.validation.domain.test_results import (
     TestAssertion,
