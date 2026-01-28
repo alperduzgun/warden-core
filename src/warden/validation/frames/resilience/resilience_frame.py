@@ -1,11 +1,14 @@
 """
-Resilience Architecture Analysis Frame (formerly Chaos Frame).
+Chaos Engineering Analysis Frame.
 
-Validates architectural resilience using:
-1. LSP-based pre-analysis (cheap, fast) - call hierarchy, error handler detection
-2. LLM-based FMEA (expensive, deep) - only for complex patterns
+Applies chaos engineering principles to code:
+1. Detect external dependencies (network, DB, files, queues)
+2. Simulate failure scenarios (timeout, error, resource exhaustion)
+3. Identify MISSING resilience patterns (not validate existing ones)
 
-Optimization: LSP first, LLM for edge cases only.
+Philosophy: "Everything will fail. The question is HOW and WHEN."
+The LLM acts as a chaos engineer, deciding what failures to simulate
+based on the code's context and dependencies.
 """
 
 import re
@@ -42,16 +45,21 @@ RESILIENCE_PATTERNS = {
 
 class ResilienceFrame(ValidationFrame):
     """
-    Validation frame for Resilience Architecture Analysis (Chaos 2.0).
-    
-    This frame uses LLMs to perform Failure Mode & Effects Analysis (FMEA),
-    identifying architectural weaknesses, critical paths, state consistency issues,
-    and graceful degradation flaws.
+    Chaos Engineering Analysis Frame.
+
+    Applies chaos engineering principles: simulate failures, find missing resilience.
+
+    APPROACH:
+    1. Detect chaos triggers (external dependencies that can fail)
+    2. Let LLM simulate failure scenarios based on context
+    3. Report MISSING resilience patterns (timeout, retry, circuit breaker, fallback)
+
+    The LLM acts as a chaos engineer - it decides what to test based on the code.
     """
-    
+
     # Metadata
-    name = "Resilience Architecture Analysis"
-    description = "LLM-driven Failure Mode & Effects Analysis (FMEA) for architectural resilience."
+    name = "Chaos Engineering Analysis"
+    description = "Chaos engineering: simulate failures, find missing resilience patterns."
     category = FrameCategory.GLOBAL
     priority = FramePriority.HIGH
     scope = FrameScope.FILE_LEVEL
@@ -95,22 +103,23 @@ class ResilienceFrame(ValidationFrame):
 
         findings: List[Finding] = []
 
-        # STEP 1: Quick pattern-based pre-analysis (free, fast)
-        pattern_findings, has_resilience_code = await self._pre_analyze_patterns(code_file)
+        # STEP 1: Quick pre-analysis - detect chaos triggers (external dependencies)
+        pattern_findings, worth_chaos_analysis = await self._pre_analyze_patterns(code_file)
         findings.extend(pattern_findings)
 
-        # STEP 2: LSP-based call hierarchy analysis (cheap, if available)
-        if has_resilience_code:
+        # STEP 2: LSP-based structural analysis (cheap, if file has dependencies)
+        if worth_chaos_analysis:
             lsp_findings = await self._analyze_with_lsp(code_file)
             findings.extend(lsp_findings)
 
-        # STEP 3: LLM deep analysis (expensive, only if needed)
-        # Skip LLM if no resilience patterns found (nothing to analyze)
-        if hasattr(self, 'llm_service') and self.llm_service and has_resilience_code:
+        # STEP 3: LLM chaos engineering analysis (AI decides what to check)
+        # CHAOS APPROACH: If file has external dependencies → LLM simulates failures
+        # LLM will decide what resilience patterns are NEEDED (not validate existing ones)
+        if hasattr(self, 'llm_service') and self.llm_service and worth_chaos_analysis:
             llm_findings = await self._analyze_with_llm(code_file)
             findings.extend(llm_findings)
-        elif not has_resilience_code:
-            logger.debug("resilience_no_patterns_found_skipping_llm", file=code_file.path)
+        elif not worth_chaos_analysis:
+            logger.debug("resilience_no_external_deps_skipping", file=code_file.path)
 
         # Determine status
         status = self._determine_status(findings)
@@ -142,27 +151,49 @@ class ResilienceFrame(ValidationFrame):
 
     async def _pre_analyze_patterns(self, code_file: CodeFile) -> tuple[List[Finding], bool]:
         """
-        Quick pattern-based pre-analysis.
+        Quick pattern-based pre-analysis for chaos engineering.
+
+        CHAOS ENGINEERING APPROACH:
+        - Don't look for "retry/timeout exists" → that's pattern validation
+        - Look for "external dependencies exist" → that needs chaos analysis
+        - LLM decides what resilience patterns are NEEDED, not what EXISTS
 
         Returns:
-            (findings, has_resilience_code): Findings and whether file has resilience patterns
+            (findings, worth_chaos_analysis): Findings and whether file needs chaos analysis
         """
         findings: List[Finding] = []
-        pattern_matches: Dict[str, int] = {}
-
         content = code_file.content
 
-        # Count resilience pattern matches
+        # CHAOS ENGINEERING TRIGGERS (external dependencies that can fail)
+        chaos_triggers = {
+            "network_calls": re.compile(r'\b(requests\.|httpx\.|aiohttp\.|urllib|fetch\(|\.get\(|\.post\()', re.IGNORECASE),
+            "database_ops": re.compile(r'\b(cursor\.|execute\(|query\(|session\.|\.commit\(|\.rollback\(|SELECT|INSERT|UPDATE|DELETE)', re.IGNORECASE),
+            "file_io": re.compile(r'\b(open\(|Path\(|\.read\(|\.write\(|os\.path|shutil\.)', re.IGNORECASE),
+            "external_process": re.compile(r'\b(subprocess\.|Popen|os\.system|run\()', re.IGNORECASE),
+            "async_operations": re.compile(r'\basync\s+def\b|\bawait\b', re.IGNORECASE),
+            "message_queues": re.compile(r'\b(kafka|rabbitmq|redis|celery|pubsub|queue)', re.IGNORECASE),
+            "cloud_services": re.compile(r'\b(boto3|azure|gcloud|s3\.|dynamodb|lambda)', re.IGNORECASE),
+        }
+
+        # Count chaos triggers (things that CAN fail)
+        trigger_counts: Dict[str, int] = {}
+        for trigger_name, pattern in chaos_triggers.items():
+            matches = pattern.findall(content)
+            if matches:
+                trigger_counts[trigger_name] = len(matches)
+
+        # File is worth chaos analysis if it has external dependencies
+        worth_chaos_analysis = bool(trigger_counts)
+
+        # Also count existing resilience patterns (for context, not gating)
+        resilience_counts: Dict[str, int] = {}
         for pattern_name, pattern in RESILIENCE_PATTERNS.items():
             matches = pattern.findall(content)
             if matches:
-                pattern_matches[pattern_name] = len(matches)
+                resilience_counts[pattern_name] = len(matches)
 
-        has_resilience_code = bool(pattern_matches)
-
-        # Quick heuristic: try without except is suspicious
+        # Quick structural findings (obvious issues)
         try_count = len(RESILIENCE_PATTERNS["try_except"].findall(content))
-        # Match except with optional exception type: except:, except Exception:, except (A, B):
         except_count = len(re.findall(r'\bexcept\b.*:', content))
 
         if try_count > 0 and except_count == 0:
@@ -175,26 +206,14 @@ class ResilienceFrame(ValidationFrame):
                 code=None
             ))
 
-        # Heuristic: async without timeout is risky
-        async_count = len(re.findall(r'\basync\s+def\b', content))
-        timeout_count = pattern_matches.get("timeout", 0)
-
-        if async_count > 3 and timeout_count == 0:
-            findings.append(Finding(
-                id=f"{self.frame_id}-missing-timeout",
-                severity="low",
-                message=f"File has {async_count} async functions but no timeout handling",
-                location=f"{code_file.path}:1",
-                detail="Consider adding timeouts to prevent hanging operations",
-                code=None
-            ))
-
         logger.debug("resilience_pre_analysis_complete",
                     file=code_file.path,
-                    patterns=pattern_matches,
+                    chaos_triggers=trigger_counts,
+                    resilience_patterns=resilience_counts,
+                    worth_analysis=worth_chaos_analysis,
                     findings=len(findings))
 
-        return findings, has_resilience_code
+        return findings, worth_chaos_analysis
 
     async def _analyze_with_lsp(self, code_file: CodeFile) -> List[Finding]:
         """
