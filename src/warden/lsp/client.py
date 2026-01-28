@@ -138,7 +138,7 @@ class LanguageServerClient:
         try:
             await self._write_message_async(request)
             # Timeout safety
-            return await asyncio.wait_for(future, timeout=10.0) # 10s default timeout
+            return await asyncio.wait_for(future, timeout=30.0)  # 30s for large projects
         except asyncio.TimeoutError:
             del self._pending_requests[req_id]
             logger.error("lsp_request_timeout", method=method, id=req_id)

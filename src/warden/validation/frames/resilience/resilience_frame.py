@@ -162,7 +162,8 @@ class ResilienceFrame(ValidationFrame):
 
         # Quick heuristic: try without except is suspicious
         try_count = len(RESILIENCE_PATTERNS["try_except"].findall(content))
-        except_count = len(re.findall(r'\bexcept\s*[:(]', content))
+        # Match except with optional exception type: except:, except Exception:, except (A, B):
+        except_count = len(re.findall(r'\bexcept\b.*:', content))
 
         if try_count > 0 and except_count == 0:
             findings.append(Finding(
