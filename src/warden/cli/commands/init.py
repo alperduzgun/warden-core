@@ -111,30 +111,33 @@ def _setup_semantic_search(config_path: Path):
                  console.print("\n[yellow]⚠️  Indexing skipped by user.[/yellow]")
                  console.print("[dim]Run 'warden index' later to complete setup.[/dim]")
 
-         if service.is_available():
-             asyncio.run(run_indexing_if_files_exist_async())
-         else:
-              console.print("[yellow]Semantic service dependencies missing.[/yellow]")
-              console.print("[dim]Auto-installing required dependencies (Mandatory for AI features)...[/dim]")
-              try:
-                  with console.status("[bold green]Installing dependencies...[/bold green]"):
-                      subprocess.check_call([sys.executable, "-m", "pip", "install", "chromadb", "sentence-transformers"])
-                  console.print("[green]Dependencies installed successfully. Retrying...[/green]")
+             if service.is_available():
+                 asyncio.run(run_indexing_if_files_exist_async())
+             else:
+                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
+
+             if service.is_available():
+                 asyncio.run(run_indexing_if_files_exist_async())
+             else:
+                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
                   
-                  # Retry setup
-                  service = SemanticSearchService(ss_config)
-                  if service.is_available():
-                      asyncio.run(run_indexing_if_files_exist_async())
+                  # Use DependencyManager for robust installation
+                  from warden.services.dependencies import DependencyManager
+                  dep_manager = DependencyManager()
+                  
+                  required_pkgs = ["chromadb", "sentence-transformers"]
+                  success = asyncio.run(dep_manager.install_packages_async(required_pkgs))
+                  
+                  if success:
+                      console.print("[green]Dependencies installed successfully. Retrying setup...[/green]")
+                      # Re-instantiate service to pick up new modules
+                      service = SemanticSearchService(ss_config)
+                      if service.is_available():
+                          asyncio.run(run_indexing_if_files_exist_async())
+                      else:
+                          console.print("[red]Service unavailable even after install.[/red]")
                   else:
-                      console.print("[red]Service unavailable even after install.[/red]")
-                      
-              except subprocess.CalledProcessError:
-                   console.print("[red]Dependency installation failed.[/red]")
-                   console.print("[dim]Please run manually: pip install 'warden-core[semantic]'[/dim]")
-              except KeyboardInterrupt:
-                   console.print("\n[yellow]⚠️  Installation skipped by user.[/yellow]")
-              except Exception as e:
-                  console.print(f"[red]Installation error: {e}[/red]")
+                      console.print("[red]Semantic features will be disabled.[/red]")
 
     except Exception as e:
         console.print("\n[red]❌ Semantic Indexing Failed[/red]")
@@ -222,7 +225,7 @@ def init_command(
         # Sync if cache is missing (first run)
         if not registry._catalog_cache:
             console.print("[dim]Syncing registry for suggestions...[/dim]")
-            asyncio.run(registry.sync())
+            asyncio.run(registry.sync_async())
             
         # Get languages to check (fall back to primary if detected is empty)
         languages_to_check = context.detected_languages or [context.primary_language]
@@ -493,13 +496,19 @@ def init_command(
 
 rules:
   - id: "company-no-print"
+    name: "Company No Print"
     description: "Do not use print statements in production code"
+    category: "convention"
     severity: "warning"
-    patterns:
-      - "print("
-    exclude:
-      - "tests/**"
-      - "scripts/**"
+    isBlocker: false
+    enabled: true
+    type: "pattern"
+    conditions:
+      forbiddenPatterns:
+        - "print("
+      exclude:
+        - "tests/**"
+        - "scripts/**"
 """
         with open(example_rule_path, "w") as f:
             f.write(example_content)

@@ -242,13 +242,19 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
         if key_prefix:
             console.print(f"[dim]Key should start with: {key_prefix}[/dim]")
 
-        api_key = Prompt.ask(f"Enter {provider_name} API Key", password=True)
-
-        # Basic validation
-        if key_prefix and not api_key.startswith(key_prefix):
-            console.print(f"[yellow]⚠️  Key doesn't start with expected prefix ({key_prefix})[/yellow]")
-            if not Confirm.ask("Continue anyway?", default=False):
-                return configure_cloud_provider(provider)
+        while True:
+            api_key = Prompt.ask(f"Enter {provider_name} API Key", password=True)
+            
+            # FAST FAIL: Check prefix
+            if key_prefix and not api_key.startswith(key_prefix):
+                 console.print(f"[yellow]⚠️  Key must start with '{key_prefix}'[/yellow]")
+                 if Confirm.ask("Use this key anyway?", default=False):
+                     break
+            # BASIC SANITY: Check length
+            elif len(api_key) < 8:
+                 console.print("[red]❌ Key looks too short.[/red]")
+            else:
+                 break
 
         env_vars[key_var] = api_key
 
