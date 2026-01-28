@@ -119,6 +119,9 @@ class EmbeddingGenerator:
             "text-embedding-3-large": 3072,
             "text-embedding-ada-002": 1536,
             "jinaai/jina-embeddings-v2-base-code": 768,
+            "BAAI/bge-small-en-v1.5": 384,
+            "sentence-transformers/all-MiniLM-L6-v2": 384,
+            "all-MiniLM-L6-v2": 384,
         }
         return dimension_map.get(model_name, 1536)
 
