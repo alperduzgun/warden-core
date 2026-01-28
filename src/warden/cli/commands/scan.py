@@ -169,6 +169,7 @@ def scan_command(
     ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
     base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
+    update_baseline: bool = typer.Option(False, "--update-baseline", help="Update baseline after scan (use for main branch or nightly)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -254,7 +255,8 @@ def scan_command(
 
         exit_code = asyncio.run(_run_scan_async(
             paths, frames, format, output, verbose, level,
-            memory_profile, ci, baseline_fingerprints, intelligence_context
+            memory_profile, ci, baseline_fingerprints, intelligence_context,
+            update_baseline=update_baseline
         ))
         
         # Display memory stats if profiling was enabled
@@ -281,7 +283,8 @@ async def _run_scan_async(
     memory_profile: bool = False,
     ci_mode: bool = False,
     baseline_fingerprints: Optional[Dict[str, str]] = None,
-    intelligence_context: Optional[Dict] = None
+    intelligence_context: Optional[Dict] = None,
+    update_baseline: bool = False
 ) -> int:
     """Async implementation of scan command."""
     
@@ -595,6 +598,55 @@ Updated: {scan_time}
                     f.write(status_content)
         except Exception:
             pass # Silent fail for aux file
+
+        # Update baseline if requested (Phase 4.2)
+        if update_baseline and final_result_data:
+            try:
+                from warden.cli.commands.helpers.baseline_manager import BaselineManager
+                console.print("\n[bold blue]📉 Updating Baseline...[/bold blue]")
+
+                baseline_mgr = BaselineManager(Path.cwd())
+
+                # Load module map from intelligence if available
+                module_map = None
+                if intelligence_context and intelligence_context.get("modules"):
+                    module_map = intelligence_context["modules"]
+
+                # Ensure we're using module-based structure
+                if not baseline_mgr.is_module_based():
+                    console.print("[dim]Migrating to module-based baseline structure...[/dim]")
+                    baseline_mgr.migrate_from_legacy(module_map)
+
+                # Update baseline with scan results
+                stats = baseline_mgr.update_baseline_for_modules(
+                    scan_results=final_result_data,
+                    module_map=module_map
+                )
+
+                # Display update statistics
+                console.print(f"[green]✓ Baseline updated![/green]")
+                console.print(f"[dim]   Modules updated: {stats['modules_updated']}[/dim]")
+
+                if stats['total_new_debt'] > 0:
+                    console.print(f"[yellow]   New debt items: {stats['total_new_debt']}[/yellow]")
+                if stats['total_resolved_debt'] > 0:
+                    console.print(f"[green]   Resolved debt: {stats['total_resolved_debt']}[/green]")
+
+                # Check for debt warnings
+                debt_report = baseline_mgr.get_debt_report()
+                for warning in debt_report.get("warnings", []):
+                    level_color = {
+                        "critical": "red",
+                        "warning": "yellow",
+                        "info": "dim"
+                    }.get(warning.get("level"), "dim")
+                    console.print(f"[{level_color}]   ⚠️  {warning['message']}[/{level_color}]")
+
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Baseline update failed: {e}[/yellow]")
+                if verbose:
+                    import traceback
+                    traceback.print_exc()
 
         # Final exit code decision
         # 1. Check pipeline status (must be valid and completed)
