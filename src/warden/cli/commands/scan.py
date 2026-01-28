@@ -1,7 +1,7 @@
 import asyncio
 import typer
 from pathlib import Path
-from typing import Optional, List
+from typing import Dict, List, Optional
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
@@ -166,6 +166,9 @@ def scan_command(
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Shorthand for --level basic"),
     memory_profile: bool = typer.Option(False, "--memory-profile", help="Enable memory profiling and leak detection"),
+    ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
+    diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
+    base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -183,12 +186,43 @@ def scan_command(
         # Handle --no-ai shorthand
         if no_ai:
             level = "basic"
-            
-        # Default to "." if no paths provided
-        if not paths:
+
+        # Default to "." if no paths provided AND no diff mode
+        if not paths and not diff:
             paths = ["."]
 
-        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level, memory_profile))
+        # Incremental Scanning Logic (--diff mode)
+        baseline_fingerprints = None
+
+        if diff:
+            try:
+                from warden.cli.commands.helpers.git_helper import GitHelper
+                console.print(f"[dim]🔍 Detecting changed files relative to '{base}'...[/dim]")
+                git_helper = GitHelper(Path.cwd())
+                changed_files = git_helper.get_changed_files(base_branch=base)
+
+                if not changed_files:
+                    console.print("[yellow]⚠️  No changed files detected. Scan skipped.[/yellow]")
+                    return
+
+                console.print(f"[green]✓ Found {len(changed_files)} changed files[/green]")
+                paths = changed_files
+            except ImportError:
+                console.print("[yellow]⚠️  Git helper not available. Running full scan.[/yellow]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Could not detect changes: {e}. Running full scan.[/yellow]")
+
+        # Load baseline fingerprints if available
+        try:
+            from warden.cli.commands.helpers.baseline_manager import BaselineManager
+            baseline_mgr = BaselineManager(Path.cwd())
+            baseline_fingerprints = baseline_mgr.get_fingerprints()
+            if baseline_fingerprints:
+                console.print(f"[dim]📊 Baseline loaded: {len(baseline_fingerprints)} known issues[/dim]")
+        except Exception:
+            pass  # Baseline is optional
+
+        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level, memory_profile, ci, baseline_fingerprints))
         
         # Display memory stats if profiling was enabled
         if memory_profile:
@@ -204,7 +238,17 @@ def scan_command(
         raise typer.Exit(130)
 
 
-async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard", memory_profile: bool = False) -> int:
+async def _run_scan_async(
+    paths: List[str],
+    frames: Optional[List[str]],
+    format: str,
+    output: Optional[str],
+    verbose: bool,
+    level: str = "standard",
+    memory_profile: bool = False,
+    ci_mode: bool = False,
+    baseline_fingerprints: Optional[Dict[str, str]] = None
+) -> int:
     """Async implementation of scan command."""
     
     display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
