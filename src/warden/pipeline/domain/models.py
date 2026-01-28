@@ -59,6 +59,7 @@ class PipelineConfig(BaseDomainModel):
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns (global)
     analysis_level: AnalysisLevel = AnalysisLevel.STANDARD  # NEW: Scannig depth level
     use_llm: bool = True  # NEW: Global LLM control flag
+    ci_mode: bool = False  # CI mode: use pre-computed intelligence, skip LLM for P3 files
 
     # Optional pre-processing phases
     enable_discovery: bool = True  # Run file discovery before validation
