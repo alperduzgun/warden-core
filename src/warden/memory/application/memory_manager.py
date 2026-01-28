@@ -282,12 +282,12 @@ class MemoryManager:
     def update_environment_hash(self, env_hash: str) -> None:
         """Update stored environment hash."""
         fact_id = "environment:global"
-        
+
         metadata = {
             "hash": env_hash,
             "updated_at": datetime.now().isoformat()
         }
-        
+
         fact = Fact(
             id=fact_id,
             category="environment_state",
@@ -298,5 +298,102 @@ class MemoryManager:
             confidence=1.0,
             metadata=metadata
         )
-        
+
         self.add_fact(fact)
+
+    def get_module_map(self) -> Optional[Dict[str, Any]]:
+        """
+        Get stored module map with risk classifications.
+
+        Returns:
+            Dictionary mapping module names to ModuleInfo-like dicts,
+            or None if not stored.
+        """
+        fact_id = "intelligence:module_map"
+        fact = self.knowledge_graph.facts.get(fact_id)
+        if fact:
+            return fact.metadata.get("modules", {})
+        return None
+
+    def update_module_map(self, module_map: Dict[str, Any]) -> None:
+        """
+        Store module map with risk classifications.
+
+        Args:
+            module_map: Dictionary mapping module names to ModuleInfo dicts.
+                        Each ModuleInfo should have: name, path, risk_level,
+                        security_focus, description.
+        """
+        fact_id = "intelligence:module_map"
+
+        # Convert ModuleInfo objects to dicts if needed
+        serialized_map = {}
+        for name, info in module_map.items():
+            if hasattr(info, "to_json"):
+                serialized_map[name] = info.to_json()
+            elif isinstance(info, dict):
+                serialized_map[name] = info
+            else:
+                logger.warning("invalid_module_info", name=name, type=type(info).__name__)
+
+        metadata = {
+            "modules": serialized_map,
+            "module_count": len(serialized_map),
+            "updated_at": datetime.now().isoformat()
+        }
+
+        fact = Fact(
+            id=fact_id,
+            category="project_intelligence",
+            subject="module_map",
+            predicate="contains",
+            object=f"{len(serialized_map)} modules",
+            source="ProjectPurposeDetector",
+            confidence=1.0,
+            metadata=metadata
+        )
+
+        self.add_fact(fact)
+        logger.debug("module_map_stored", module_count=len(serialized_map))
+
+    def get_security_posture(self) -> Optional[str]:
+        """
+        Get stored security posture for the project.
+
+        Returns:
+            Security posture string (paranoid, strict, standard, relaxed)
+            or None if not stored.
+        """
+        fact_id = "intelligence:security_posture"
+        fact = self.knowledge_graph.facts.get(fact_id)
+        if fact:
+            return fact.metadata.get("posture")
+        return None
+
+    def update_security_posture(self, posture: str) -> None:
+        """
+        Store security posture classification.
+
+        Args:
+            posture: Security posture value (paranoid, strict, standard, relaxed).
+        """
+        fact_id = "intelligence:security_posture"
+
+        metadata = {
+            "posture": posture,
+            "updated_at": datetime.now().isoformat()
+        }
+
+        fact = Fact(
+            id=fact_id,
+            category="project_intelligence",
+            subject="security_posture",
+            predicate="is",
+            object=posture,
+            source="ProjectPurposeDetector",
+            confidence=1.0,
+            metadata=metadata
+        )
+
+        self.add_fact(fact)
+        logger.debug("security_posture_stored", posture=posture)
