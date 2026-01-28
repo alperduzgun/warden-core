@@ -581,25 +581,6 @@ class BaselineManager:
 
         return report
 
-    def should_block_for_debt(self, threshold_days: int = 30) -> Tuple[bool, List[str]]:
-        """
-        Check if any module should block due to old debt.
-
-        Args:
-            threshold_days: Number of days after which debt becomes blocking.
-
-        Returns:
-            Tuple of (should_block, list of blocking modules)
-        """
-        blocking_modules = []
-
-        for module_name in self.list_modules():
-            module_baseline = self.load_module_baseline(module_name)
-            if module_baseline and module_baseline.get_oldest_debt_age_days() >= threshold_days:
-                blocking_modules.append(module_name)
-
-        return len(blocking_modules) > 0, blocking_modules
-
     # === Baseline Update Strategy (Phase 4.2) ===
 
     def update_baseline_for_modules(

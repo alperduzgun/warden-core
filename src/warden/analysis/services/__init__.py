@@ -7,7 +7,6 @@ Provides service-level components for the analysis module:
 - FindingVerificationService: Verifies findings with AST analysis
 - LinterRunner: Runs external linters
 - LinterService: Orchestrates linting operations
-- ScanMetricsCollector: Collects scan performance metrics
 """
 
 from warden.analysis.services.intelligence_loader import IntelligenceLoader
@@ -15,12 +14,6 @@ from warden.analysis.services.intelligence_saver import IntelligenceSaver
 from warden.analysis.services.finding_verifier import FindingVerificationService
 from warden.analysis.services.linter_runner import LinterRunner
 from warden.analysis.services.linter_service import LinterService
-from warden.analysis.services.scan_metrics import (
-    ScanMetricsCollector,
-    ScanStrategy,
-    get_scan_metrics,
-    reset_scan_metrics,
-)
 
 __all__ = [
     "IntelligenceLoader",
@@ -28,8 +21,4 @@ __all__ = [
     "FindingVerificationService",
     "LinterRunner",
     "LinterService",
-    "ScanMetricsCollector",
-    "ScanStrategy",
-    "get_scan_metrics",
-    "reset_scan_metrics",
 ]
