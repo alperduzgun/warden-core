@@ -142,6 +142,11 @@ class BuildTool(Enum):
 
 
 from warden.ast.domain.enums import CodeLanguage
+from warden.analysis.domain.intelligence import (
+    ModuleInfo,
+    SecurityPosture,
+    RiskLevel,
+)
 
 class ProjectStatistics(BaseDomainModel):
     """
@@ -238,6 +243,11 @@ class ProjectContext(BaseDomainModel):
     # High-level semantic discovery
     purpose: str = ""  # General purpose of the project
     architecture_description: str = ""  # High-level architectural summary
+
+    # Intelligence fields (populated by PreAnalysisPhase)
+    security_posture: SecurityPosture = SecurityPosture.STANDARD
+    module_map: Dict[str, ModuleInfo] = Field(default_factory=dict)
+    # e.g., {"auth": ModuleInfo(name="auth", risk_level=P0_CRITICAL, ...)}
 
     # Development tools
     test_framework: TestFramework = TestFramework.NONE
