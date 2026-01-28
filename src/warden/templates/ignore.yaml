@@ -33,9 +33,9 @@ ignore:
 # IDE and editors
   - .idea/
   - .vscode/
-  - *.swp
-  - *.swo
-  - *~
+  - "*.swp"
+  - "*.swo"
+  - "*~"
 
 # Build artifacts
   - "*.pyc"

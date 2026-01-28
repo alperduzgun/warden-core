@@ -29,7 +29,7 @@ class DependencyManager:
         except importlib.metadata.PackageNotFoundError:
             return False
 
-    async def install_packages_async(self, packages: List[str], timeout: int = 60) -> bool:
+    async def install_packages_async(self, packages: List[str], timeout: int = 60, allow_system_break: bool = False) -> bool:
         """
         idempotently install packages.
         Returns True if all packages are installed (either previously or just now).
@@ -39,22 +39,33 @@ class DependencyManager:
         if not missing:
             logger.debug("all_dependencies_met", packages=packages)
             return True
+        
+        # Determine if we should use --break-system-packages
+        use_break = allow_system_break and not self.is_venv
 
-        # Safety Check: PEP 668
-        if not self.is_venv:
+        # Safety Check: PEP 668 (Only block if not allowed to break)
+        if not self.is_venv and not use_break:
             logger.warning("system_python_detected", action="block_install")
             console.print("[yellow]⚠️  System detected (PEP 668). Cannot auto-install dependencies.[/yellow]")
             console.print(f"[dim]Missing: {', '.join(missing)}[/dim]")
             console.print(f"\n[bold]Please run manually:[/bold] [cyan]pip install {' '.join(missing)} --break-system-packages[/cyan]\n")
             return False
 
+        if use_break:
+            logger.info("installing_with_system_break", packages=missing)
+            
         logger.info("installing_dependencies", packages=missing)
         
         try:
+            # Prepare pip command
+            cmd = [sys.executable, "-m", "pip", "install", *missing]
+            if use_break:
+                cmd.append("--break-system-packages")
+
             # Run pip install in subprocess with timeout
             # asyncio.to_thread is not enough for subprocess timeout control, usage of asyncio.create_subprocess_exec is better
             process = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "pip", "install", *missing,
+                *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )

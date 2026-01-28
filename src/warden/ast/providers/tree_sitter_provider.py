@@ -7,7 +7,7 @@ Priority: TREE_SITTER (fallback for languages without native provider).
 
 import time
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Any, Optional, List, Tuple
 
 from warden.ast.application.provider_interface import IASTProvider
 from warden.ast.domain.models import (
@@ -86,6 +86,7 @@ class TreeSitterProvider(IASTProvider):
         self._parsers = {}  # Language -> Parser cache
         self._available = TREE_SITTER_AVAILABLE
         self._language_objs = {} # Language -> tree_sitter.Language
+        self._missing_modules = {} # Language -> module_name
         
         if self._available:
             self._initialize_languages()
@@ -120,15 +121,26 @@ class TreeSitterProvider(IASTProvider):
                     self._language_objs[lang] = tree_sitter.Language(lang_fn())
             except ImportError:
                 logger.debug("grammar_not_installed", language=lang.name, module=import_name)
+                self._missing_modules[lang] = import_name
             except Exception as e:
                 logger.warning("failed_to_load_grammar", language=lang.name, error=str(e))
 
-        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs.keys()])
+        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs.keys()], missing=len(self._missing_modules))
+
+    @property
+    def missing_grammars(self) -> List[str]:
+        """Get list of missing grammar package names."""
+        # Convert tree_sitter_swift -> tree-sitter-swift (pip package name)
+        return [mod.replace("_", "-") for mod in self._missing_modules.values()]
 
     @property
     def metadata(self) -> ASTProviderMetadata:
         """Get provider metadata."""
         return self._metadata
+
+    def _get_ts_language(self, language: CodeLanguage) -> Optional[Any]:
+        """Get tree-sitter language object if available."""
+        return self._language_objs.get(language)
 
     async def parse(
         self,

@@ -54,7 +54,7 @@ class PipelineHandler(BaseHandler):
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
 
-        # Normalize to list and sanitize
+        # 1. Normalize to list and sanitize
         try:
             if isinstance(paths, str):
                 path_list = [sanitize_path(paths, self.project_root)]
@@ -63,14 +63,20 @@ class PipelineHandler(BaseHandler):
         except ValueError as e:
             raise IPCError(ErrorCode.VALIDATION_ERROR, str(e))
 
+        # 2. Collect files first to detect languages
         code_files = await self._collect_files_async(path_list)
         if not code_files:
-            # We don't raise error if empty here, just skip to avoid breaking on partial diffs
-            # But if it's a single file request and missing, we might want to warn
-            # For now, let's just yield nothing or raise if truly empty request
-             # Log warning instead of error to allow partial valid scans
             logger.warning("no_code_files_found", paths=str(paths))
             return 
+
+        # 3. Detect required languages
+        required_languages = {cf.language.upper() for cf in code_files if cf.language}
+        
+        # 4. Check for environment dependencies (Targeted Auto-Grammar Installation)
+        try:
+            await self._ensure_dependencies_async(required_languages)
+        except Exception as e:
+            logger.warning("dependency_check_failed", error=str(e))
 
         progress_queue: asyncio.Queue = asyncio.Queue()
         asyncio.Event()
@@ -164,3 +170,52 @@ class PipelineHandler(BaseHandler):
             '.rs': 'rust', '.java': 'java', '.cs': 'csharp'
         }
         return mapping.get(ext, 'text')
+
+    async def _ensure_dependencies_async(self, target_languages: Optional[set] = None) -> None:
+        """Detect missing platform/language dependencies and attempt auto-install."""
+        from warden.ast.application.provider_registry import ASTProviderRegistry
+        from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
+        from warden.services.dependencies.dependency_manager import DependencyManager
+        
+        logger.info("checking_environment_dependencies")
+        
+        # 1. Initialize Registry and discover providers
+        registry = ASTProviderRegistry()
+        await registry.discover_providers()
+        
+        # 2. Extract missing grammars from TreeSitterProvider
+        ts_provider = registry.get_provider_by_name("tree-sitter")
+        if not ts_provider or not isinstance(ts_provider, TreeSitterProvider):
+            return
+            
+        missing_pkgs = ts_provider.missing_grammars
+        if not missing_pkgs:
+            return
+            
+        # 3. Filter missing based on project languages (Optimization)
+        # TreeSitterProvider.missing_grammars returns 'tree-sitter-lang'
+        # We need to map back or filter the languages
+        to_install = []
+        for pkg in missing_pkgs:
+            # Simple heuristic: pkg name ends with -lang, and target_languages has LANG
+            lang_part = pkg.replace("tree-sitter-", "").replace("-", "_").upper()
+            if target_languages is None or lang_part in target_languages:
+                to_install.append(pkg)
+            elif lang_part == "C_SHARP" and "CSHARP" in target_languages:
+                to_install.append(pkg)
+            elif lang_part == "BASH" and "SHELL" in target_languages:
+                to_install.append(pkg)
+
+        if not to_install:
+            return
+            
+        # 4. Use DependencyManager to install
+        dep_mgr = DependencyManager()
+        logger.info("targeted_missing_grammars_detected", packages=to_install)
+        
+        # For grammars, we explicitly allow system break as they are critical
+        success = await dep_mgr.install_packages_async(to_install, allow_system_break=True)
+        if success:
+            logger.info("missing_grammars_installed_successfully")
+        else:
+            logger.warning("some_grammars_failed_to_install")

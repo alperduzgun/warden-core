@@ -4,6 +4,7 @@ Handles interactive configuration prompts with improved UX.
 """
 
 import os
+import sys
 import subprocess
 import shutil
 import json
@@ -125,11 +126,15 @@ def select_llm_provider() -> dict:
     console.print(table)
     console.print()
 
-    choice = Prompt.ask(
-        "Select provider",
-        choices=list(LLM_PROVIDERS.keys()),
-        default="1"
-    )
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+    
+    choice = "1"
+    if is_interactive:
+        choice = Prompt.ask(
+            "Select provider",
+            choices=list(LLM_PROVIDERS.keys()),
+            default="1"
+        )
 
     return LLM_PROVIDERS[choice]
 
@@ -145,10 +150,16 @@ def configure_ollama() -> tuple[dict, dict]:
     # Check if Ollama is installed
     ollama_path = shutil.which("ollama")
 
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+    
     if not ollama_path:
         console.print("[yellow]⚠️  Ollama is not installed.[/yellow]")
 
-        if Confirm.ask("Install Ollama now?", default=True):
+        should_install = False
+        if is_interactive:
+            should_install = Confirm.ask("Install Ollama now?", default=True)
+
+        if should_install:
             console.print("[dim]Installing Ollama...[/dim]")
             try:
                 # Linux/macOS installation
@@ -180,7 +191,9 @@ def configure_ollama() -> tuple[dict, dict]:
 
     # Model selection
     default_model = "qwen2.5-coder:7b"
-    model = Prompt.ask("Select model", default=default_model)
+    model = default_model
+    if is_interactive:
+        model = Prompt.ask("Select model", default=default_model)
 
     # Check if model is available
     console.print(f"[dim]Tip: Run 'ollama pull {model}' if not already downloaded.[/dim]")
@@ -338,6 +351,8 @@ def configure_llm(existing_config: dict = None) -> tuple[dict, dict]:
     elif provider['id'] == 'azure':
         return configure_azure()
     else:
+        # For non-interactive fallback to deepseek or whatever if key exists, 
+        # but usually we want ollama for zero-config.
         return configure_cloud_provider(provider)
 
 
@@ -361,11 +376,15 @@ def select_ci_provider() -> dict:
 
     console.print()
 
-    choice = Prompt.ask(
-        "Select CI provider",
-        choices=list(CI_PROVIDERS.keys()),
-        default="3"
-    )
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+    
+    choice = "3" # Default: skip
+    if is_interactive:
+        choice = Prompt.ask(
+            "Select CI provider",
+            choices=list(CI_PROVIDERS.keys()),
+            default="3"
+        )
 
     return CI_PROVIDERS[choice]
 
@@ -575,11 +594,15 @@ def generate_ai_tool_files(project_root: Path, llm_config: dict) -> None:
             f.write(fallback_rules)
         console.print(f"[green]✓ Created {rules_path} (fallback)[/green]")
 
-
 def configure_vector_db() -> dict:
     """Configure Vector Database settings interactively."""
     console.print("\n[bold cyan]🗄️  Vector Database Configuration[/bold cyan]")
-    vector_db_choice = Prompt.ask("Select Vector Database Provider", choices=["local (chromadb)", "cloud (qdrant/pinecone)"], default="local (chromadb)")
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+    
+    vector_db_choice = "local (chromadb)"
+    if is_interactive:
+        vector_db_choice = Prompt.ask("Select Vector Database Provider", choices=["local (chromadb)", "cloud (qdrant/pinecone)"], default="local (chromadb)")
+        
     safe_name = "".join(c if c.isalnum() else "_" for c in Path.cwd().name).lower()
     collection_name = f"warden_{safe_name}"
 

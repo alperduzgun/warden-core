@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 import yaml
+import os
 from pathlib import Path
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
@@ -306,12 +307,17 @@ def init_command(
     # If specific errors need handling, they should be added here.
 
     # --- Step 2: Mode Selection ---
-    console.print("\n[bold cyan]🎚️  Select Operation Mode[/bold cyan]")
-    console.print("1. [bold green]Vibe Mode[/bold green] (Silent, Critical Only) - Best for active dev")
-    console.print("2. [bold yellow]Normal Mode[/bold yellow] (High+Critical) - Standard PR checks")
-    console.print("3. [bold red]Strict Mode[/bold red] (All Issues) - Zero tolerance / Security audit")
+    mode_map = {"vibe": "1", "normal": "2", "strict": "3"}
+    mode_choice = mode_map.get(mode.lower(), "2")
+
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
     
-    mode_choice = Prompt.ask("Select Mode", choices=["1", "2", "3"], default="2")
+    if is_interactive:
+        console.print("\n[bold cyan]🎚️  Select Operation Mode[/bold cyan]")
+        console.print("1. [bold green]Vibe Mode[/bold green] (Silent, Critical Only) - Best for active dev")
+        console.print("2. [bold yellow]Normal Mode[/bold yellow] (High+Critical) - Standard PR checks")
+        console.print("3. [bold red]Strict Mode[/bold red] (All Issues) - Zero tolerance / Security audit")
+        mode_choice = Prompt.ask("Select Mode", choices=["1", "2", "3"], default=mode_choice)
     
     mode_config = {}
     if mode_choice == "1": # Vibe
@@ -431,7 +437,7 @@ def init_command(
     else:
         # Config exists - Offer Update/Merge
         console.print(f"[yellow]Config file exists: {config_path}[/yellow]")
-        if Confirm.ask("Update configuration with detected settings? (Merges frames & mode)", default=False):
+        if force or (is_interactive and Confirm.ask("Update configuration with detected settings? (Merges frames & mode)", default=False)):
 
             
             # Update Frames - merge new suggestion into existing
@@ -562,7 +568,11 @@ custom_rules:
     _setup_semantic_search(config_path)
 
     # --- Step 9: Agent Configuration (New) ---
-    if agent or Confirm.ask("\nConfigure for AI Agents (Cursor/Claude)?", default=True):
+    should_configure_agent = agent
+    if not should_configure_agent and is_interactive:
+        should_configure_agent = Confirm.ask("\nConfigure for AI Agents (Cursor/Claude)?", default=True)
+
+    if should_configure_agent:
         try:
             # Generate AI tool files from templates
             generate_ai_tool_files(Path.cwd(), llm_config)
@@ -572,7 +582,12 @@ custom_rules:
             console.print(f"[red]Failed to configure agent tools: {e}[/red]")
 
     # --- Step 9: Baseline ---
-    if Confirm.ask("\nCreate Baseline from current issues? (Recommended for existing projects)", default=True):
+    should_create_baseline = force # Logic: if force and non-interactive, assume yes? Or just default false.
+    # Usually we want a baseline. For automation, let's default to True if not specified otherwise.
+    if is_interactive:
+        should_create_baseline = Confirm.ask("\nCreate Baseline from current issues? (Recommended for existing projects)", default=True)
+
+    if should_create_baseline:
         try:
              asyncio.run(_create_baseline_async(Path.cwd(), config_path))
         except KeyboardInterrupt:
@@ -581,7 +596,11 @@ custom_rules:
              console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
     # --- Step 9: CI/CD (Template-Based) ---
-    if ci or Confirm.ask("\nGenerate CI/CD Workflow?", default=False):
+    should_gen_ci = ci
+    if not should_gen_ci and is_interactive:
+        should_gen_ci = Confirm.ask("\nGenerate CI/CD Workflow?", default=False)
+
+    if should_gen_ci:
         # Use detected branch or default
         branch = "main"
         try:
@@ -608,7 +627,7 @@ custom_rules:
         console.print(f"[yellow]Warning: Could not verify frames: {e}[/yellow]")
 
     # Optional: Try to install additional frames from Hub (non-blocking)
-    if Confirm.ask("\nInstall additional frames from Warden Hub? (requires network)", default=False):
+    if is_interactive and Confirm.ask("\nInstall additional frames from Warden Hub? (requires network)", default=False):
         try:
             from warden.cli.commands.update import update_command
             try:
