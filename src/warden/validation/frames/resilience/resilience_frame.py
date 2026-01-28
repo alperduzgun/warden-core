@@ -198,40 +198,45 @@ class ResilienceFrame(ValidationFrame):
 
     async def _analyze_with_lsp(self, code_file: CodeFile) -> List[Finding]:
         """
-        Use LSP for structural resilience analysis.
+        Use LSP for structural resilience analysis (cheap, before LLM).
 
         Checks:
-        - Are error handlers called from critical paths?
-        - Are retry/timeout decorators properly applied?
+        1. Unused error handlers (dead code)
+        2. Fallback functions not connected
+        3. Retry/timeout decorators on wrong functions
+        4. Async functions calling external APIs without timeout (no LSP needed)
+
+        Uses 10s timeout per LSP call to fail fast.
         """
+        import asyncio
         findings: List[Finding] = []
+
+        # Check 4 doesn't need LSP - do it first (instant)
+        self._check_async_without_timeout_sync(code_file, findings)
 
         try:
             from warden.lsp import get_semantic_analyzer
 
             analyzer = get_semantic_analyzer()
 
-            # Find exception handler functions and check if they're used
-            exception_pattern = re.compile(r'def\s+(handle_\w*error|on_\w*error|_handle_exception)\s*\(')
-            for match in exception_pattern.finditer(code_file.content):
-                func_name = match.group(1)
-                line_num = code_file.content[:match.start()].count('\n')
+            # Run LSP checks with individual timeouts (fail fast)
+            lsp_timeout = 10.0  # 10s per check, not 30s
 
-                # Check if this handler is actually called
-                is_used = await analyzer.is_symbol_used_async(
-                    code_file.path, line_num, match.start(1) - match.start(),
-                    content=code_file.content
+            # Collect all checks to run
+            checks = [
+                self._check_unused_handlers(analyzer, code_file, findings),
+                self._check_unused_fallbacks(analyzer, code_file, findings),
+                self._check_decorated_functions(analyzer, code_file, findings),
+            ]
+
+            # Run with timeout - if LSP is slow, skip gracefully
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*checks, return_exceptions=True),
+                    timeout=lsp_timeout * 3  # Total timeout for all checks
                 )
-
-                if is_used is False:  # Explicitly False, not None
-                    findings.append(Finding(
-                        id=f"{self.frame_id}-unused-handler-{line_num}",
-                        severity="medium",
-                        message=f"Error handler '{func_name}' is defined but never called",
-                        location=f"{code_file.path}:{line_num + 1}",
-                        detail="Dead error handler - ensure it's connected to the error handling flow",
-                        code=func_name
-                    ))
+            except asyncio.TimeoutError:
+                logger.warning("resilience_lsp_timeout_skipping", file=code_file.path)
 
             logger.debug("resilience_lsp_analysis_complete",
                         file=code_file.path,
@@ -243,6 +248,144 @@ class ResilienceFrame(ValidationFrame):
             logger.warning("resilience_lsp_analysis_error", error=str(e))
 
         return findings
+
+    def _check_async_without_timeout_sync(self, code_file: CodeFile, findings: List[Finding]) -> None:
+        """Check async functions calling external services without timeout (no LSP needed)."""
+        # Find async functions that likely call external APIs
+        external_call_pattern = re.compile(
+            r'async\s+def\s+(\w+)\s*\([^)]*\)[^:]*:'
+            r'(?:(?!async\s+def).)*?'  # Content until next async def
+            r'(?:await\s+(?:self\.)?(?:client|http|session|request|api|fetch)\.\w+)',
+            re.DOTALL
+        )
+
+        content = code_file.content
+
+        for match in external_call_pattern.finditer(content):
+            func_name = match.group(1)
+            func_content = match.group(0)
+            line_num = content[:match.start()].count('\n')
+
+            # Check if this function has timeout wrapper
+            has_timeout = (
+                'wait_for' in func_content or
+                'timeout=' in func_content or
+                '@timeout' in content[max(0, match.start()-50):match.start()]
+            )
+
+            if not has_timeout:
+                findings.append(Finding(
+                    id=f"{self.frame_id}-async-no-timeout-{line_num}",
+                    severity="medium",
+                    message=f"Async function '{func_name}' calls external service without timeout",
+                    location=f"{code_file.path}:{line_num + 1}",
+                    detail="External API calls should have timeouts to prevent hanging",
+                    code=func_name
+                ))
+
+    async def _check_unused_handlers(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
+        """Check for error handlers that are never called."""
+        exception_pattern = re.compile(r'def\s+(handle_\w*error|on_\w*error|_handle_exception|error_callback)\s*\(')
+
+        for match in exception_pattern.finditer(code_file.content):
+            func_name = match.group(1)
+            line_num = code_file.content[:match.start()].count('\n')
+
+            is_used = await analyzer.is_symbol_used_async(
+                code_file.path, line_num, match.start(1) - match.start(),
+                content=code_file.content
+            )
+
+            if is_used is False:
+                findings.append(Finding(
+                    id=f"{self.frame_id}-unused-handler-{line_num}",
+                    severity="medium",
+                    message=f"Error handler '{func_name}' is defined but never called",
+                    location=f"{code_file.path}:{line_num + 1}",
+                    detail="Dead error handler - ensure it's connected to the error handling flow",
+                    code=func_name
+                ))
+
+    async def _check_unused_fallbacks(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
+        """Check for fallback functions that are never called."""
+        fallback_pattern = re.compile(r'def\s+(fallback_\w+|get_default_\w+|_fallback)\s*\(')
+
+        for match in fallback_pattern.finditer(code_file.content):
+            func_name = match.group(1)
+            line_num = code_file.content[:match.start()].count('\n')
+
+            is_used = await analyzer.is_symbol_used_async(
+                code_file.path, line_num, match.start(1) - match.start(),
+                content=code_file.content
+            )
+
+            if is_used is False:
+                findings.append(Finding(
+                    id=f"{self.frame_id}-unused-fallback-{line_num}",
+                    severity="medium",
+                    message=f"Fallback function '{func_name}' is defined but never used",
+                    location=f"{code_file.path}:{line_num + 1}",
+                    detail="Fallback should be called in error handling paths",
+                    code=func_name
+                ))
+
+    async def _check_decorated_functions(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
+        """Check if @retry/@timeout decorated functions are actually called."""
+        # Find functions with resilience decorators
+        decorated_pattern = re.compile(r'@(?:retry|timeout|circuit_?breaker)\s*(?:\([^)]*\))?\s*\n\s*(?:async\s+)?def\s+(\w+)')
+
+        for match in decorated_pattern.finditer(code_file.content):
+            func_name = match.group(1)
+            line_num = code_file.content[:match.end()].count('\n')
+
+            is_used = await analyzer.is_symbol_used_async(
+                code_file.path, line_num, 4,  # After 'def '
+                content=code_file.content
+            )
+
+            if is_used is False:
+                findings.append(Finding(
+                    id=f"{self.frame_id}-unused-decorated-{line_num}",
+                    severity="low",
+                    message=f"Decorated function '{func_name}' has resilience decorator but is never called",
+                    location=f"{code_file.path}:{line_num + 1}",
+                    detail="Function with @retry/@timeout/@circuit_breaker is dead code",
+                    code=func_name
+                ))
+
+    async def _check_async_without_timeout(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
+        """Check async functions that call external services without timeout."""
+        # Find async functions that likely call external APIs
+        external_call_pattern = re.compile(
+            r'async\s+def\s+(\w+)\s*\([^)]*\)[^:]*:'
+            r'(?:(?!async\s+def).)*?'  # Content until next async def
+            r'(?:await\s+(?:self\.)?(?:client|http|session|request|api|fetch)\.\w+)',
+            re.DOTALL
+        )
+
+        content = code_file.content
+
+        for match in external_call_pattern.finditer(content):
+            func_name = match.group(1)
+            func_content = match.group(0)
+            line_num = content[:match.start()].count('\n')
+
+            # Check if this function has timeout wrapper
+            has_timeout = (
+                'wait_for' in func_content or
+                'timeout=' in func_content or
+                '@timeout' in content[max(0, match.start()-50):match.start()]
+            )
+
+            if not has_timeout:
+                findings.append(Finding(
+                    id=f"{self.frame_id}-async-no-timeout-{line_num}",
+                    severity="medium",
+                    message=f"Async function '{func_name}' calls external service without timeout",
+                    location=f"{code_file.path}:{line_num + 1}",
+                    detail="External API calls should have timeouts to prevent hanging",
+                    code=func_name
+                ))
 
     async def _analyze_with_llm(self, code_file: CodeFile) -> List[Finding]:
         """
