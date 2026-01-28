@@ -3,7 +3,7 @@ import asyncio
 import json
 import os
 import structlog
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List
 
 logger = structlog.get_logger()
 
@@ -135,13 +135,122 @@ class LanguageServerClient:
     async def send_notification_async(self, method: str, params: Any):
         """Send a fire-and-forget notification."""
         if not self.process: return
-        
+
         msg = {
             "jsonrpc": "2.0",
             "method": method,
             "params": params
         }
         await self._write_message_async(msg)
+
+    # ============================================================
+    # Semantic LSP Methods (for OrphanFrame integration)
+    # ============================================================
+
+    async def open_document_async(self, file_path: str, language_id: str, content: str) -> None:
+        """
+        Open a document in the language server.
+
+        Must be called before find_references or get_symbols.
+        Idempotent: safe to call multiple times for same file.
+        """
+        uri = f"file://{file_path}"
+        await self.send_notification_async("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": language_id,
+                "version": 1,
+                "text": content
+            }
+        })
+        logger.debug("lsp_document_opened", uri=uri, language=language_id)
+
+    async def close_document_async(self, file_path: str) -> None:
+        """Close a document in the language server."""
+        uri = f"file://{file_path}"
+        await self.send_notification_async("textDocument/didClose", {
+            "textDocument": {"uri": uri}
+        })
+
+    async def find_references_async(
+        self,
+        file_path: str,
+        line: int,
+        character: int,
+        include_declaration: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Find all references to symbol at position.
+
+        Args:
+            file_path: Absolute path to file
+            line: 0-indexed line number
+            character: 0-indexed character position
+            include_declaration: Include the declaration itself
+
+        Returns:
+            List of Location objects: [{"uri": "file://...", "range": {...}}]
+        """
+        uri = f"file://{file_path}"
+        try:
+            result = await self.send_request_async("textDocument/references", {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character},
+                "context": {"includeDeclaration": include_declaration}
+            })
+            refs = result or []
+            logger.debug("lsp_references_found", uri=uri, line=line, count=len(refs))
+            return refs
+        except Exception as e:
+            logger.warning("lsp_find_references_failed", uri=uri, error=str(e))
+            return []
+
+    async def get_document_symbols_async(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        Get all symbols in a document.
+
+        Returns:
+            List of DocumentSymbol or SymbolInformation objects
+        """
+        uri = f"file://{file_path}"
+        try:
+            result = await self.send_request_async("textDocument/documentSymbol", {
+                "textDocument": {"uri": uri}
+            })
+            symbols = result or []
+            logger.debug("lsp_symbols_found", uri=uri, count=len(symbols))
+            return symbols
+        except Exception as e:
+            logger.warning("lsp_get_symbols_failed", uri=uri, error=str(e))
+            return []
+
+    async def goto_definition_async(
+        self,
+        file_path: str,
+        line: int,
+        character: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Go to definition of symbol at position.
+
+        Returns:
+            List of Location objects
+        """
+        uri = f"file://{file_path}"
+        try:
+            result = await self.send_request_async("textDocument/definition", {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character}
+            })
+            # Result can be Location, Location[], or LocationLink[]
+            if result is None:
+                return []
+            if isinstance(result, list):
+                return result
+            return [result]
+        except Exception as e:
+            logger.warning("lsp_goto_definition_failed", uri=uri, error=str(e))
+            return []
 
     def on_notification(self, method: str, handler: Callable):
         """Register a handler for a notification method."""

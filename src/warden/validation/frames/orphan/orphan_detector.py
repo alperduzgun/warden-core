@@ -4,16 +4,18 @@ Orphan Code Detector - Strategy Pattern for Multi-Language Support.
 Defines the interface for orphan detection and concrete implementations
 for supported languages.
 
-Strategies:
-1. PythonOrphanDetector (Native AST)
-2. TreeSitterOrphanDetector (Generic / Future)
+Strategies (in priority order):
+1. LSPOrphanDetector - Cross-file semantic analysis via LSP (most accurate)
+2. RustOrphanDetector - Fast single-file analysis via Rust+Tree-sitter
+3. PythonOrphanDetector - Native AST for Python
+4. UniversalOrphanDetector - Tree-sitter based for other languages
 """
 
 import abc
 import ast
 import os
 from dataclasses import dataclass
-from typing import List, Dict, Set, Tuple, Optional
+from typing import List, Dict, Set, Tuple, Optional, Any
 
 from warden.ast.domain.models import ASTNode
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
@@ -25,6 +27,14 @@ try:
     from warden import warden_core_rust
 except ImportError:
     warden_core_rust = None
+
+# LSP availability flag (checked at runtime)
+LSP_AVAILABLE = False
+try:
+    from warden.lsp.manager import LSPManager
+    LSP_AVAILABLE = True
+except ImportError:
+    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -646,40 +656,244 @@ class RustOrphanDetector(AbstractOrphanDetector):
         return name in ["main", "__init__", "__str__", "__repr__", "setup", "teardown"]
 
 
+class LSPOrphanDetector(AbstractOrphanDetector):
+    """
+    LSP-powered orphan detector for cross-file reference analysis.
+
+    Uses Language Server Protocol to find actual references across the codebase.
+    More accurate than AST-based detection but requires LSP server.
+
+    Advantages:
+        - Cross-file reference detection (not just single file)
+        - Semantic understanding (understands imports, re-exports)
+        - Works with any LSP-supported language
+
+    Limitations:
+        - Requires LSP server to be installed and running
+        - Slower than AST-based detection (needs to index project)
+    """
+
+    def __init__(
+        self,
+        code: str,
+        file_path: str,
+        lsp_client: 'LanguageServerClient',
+        language: str
+    ) -> None:
+        super().__init__(code, file_path)
+        self.lsp_client = lsp_client
+        self.language = language
+        self._symbols_cache: Optional[List[Dict]] = None
+
+    def detect_all(self) -> List[OrphanFinding]:
+        """
+        Detect orphans using LSP - requires async wrapper.
+
+        Note: This is a sync interface but LSP is async.
+        Use detect_all_async() for proper async usage.
+        """
+        # For sync interface compatibility, return empty
+        # Real detection happens in detect_all_async
+        logger.warning("lsp_orphan_detector_sync_call", hint="use detect_all_async")
+        return []
+
+    async def detect_all_async(self) -> List[OrphanFinding]:
+        """
+        Detect all orphan code using LSP references.
+
+        Strategy:
+        1. Open document in LSP
+        2. Get all symbols (functions, classes)
+        3. For each symbol, find references
+        4. If ref_count <= 1 (only definition), it's orphan
+        """
+        findings: List[OrphanFinding] = []
+
+        try:
+            # 1. Open document
+            await self.lsp_client.open_document_async(
+                self.file_path,
+                self.language,
+                self.code
+            )
+
+            # 2. Get symbols
+            symbols = await self.lsp_client.get_document_symbols_async(self.file_path)
+            if not symbols:
+                logger.debug("lsp_no_symbols_found", file=self.file_path)
+                return []
+
+            # 3. Check each symbol for references
+            for symbol in self._flatten_symbols(symbols):
+                symbol_name = symbol.get("name", "")
+                symbol_kind = symbol.get("kind", 0)
+
+                # Skip non-function/class symbols
+                if symbol_kind not in [6, 12, 5]:  # 6=Method, 12=Function, 5=Class
+                    continue
+
+                # Skip special methods
+                if self._should_skip(symbol_name):
+                    continue
+
+                # Get position from symbol
+                location = symbol.get("selectionRange") or symbol.get("location", {}).get("range", {})
+                start = location.get("start", {})
+                line = start.get("line", 0)
+                character = start.get("character", 0)
+
+                # 4. Find references
+                refs = await self.lsp_client.find_references_async(
+                    self.file_path,
+                    line,
+                    character,
+                    include_declaration=False  # Don't count definition itself
+                )
+
+                # 5. If no references (excluding declaration), it's orphan
+                if len(refs) == 0:
+                    orphan_type = self._get_orphan_type(symbol_kind)
+                    findings.append(OrphanFinding(
+                        orphan_type=orphan_type,
+                        name=symbol_name,
+                        line_number=line + 1,  # Convert to 1-indexed
+                        code_snippet=self._get_line(line + 1),
+                        reason=f"{orphan_type.replace('_', ' ').title()} '{symbol_name}' has no references in codebase"
+                    ))
+
+            logger.info(
+                "lsp_orphan_detection_complete",
+                file=self.file_path,
+                symbols_checked=len(symbols),
+                orphans_found=len(findings)
+            )
+
+        except Exception as e:
+            logger.error("lsp_orphan_detection_failed", file=self.file_path, error=str(e))
+
+        finally:
+            # Close document
+            try:
+                await self.lsp_client.close_document_async(self.file_path)
+            except Exception:
+                pass
+
+        return findings
+
+    def _flatten_symbols(self, symbols: List[Dict]) -> List[Dict]:
+        """Flatten nested DocumentSymbol structure."""
+        result = []
+        for symbol in symbols:
+            result.append(symbol)
+            # DocumentSymbol has nested children
+            children = symbol.get("children", [])
+            if children:
+                result.extend(self._flatten_symbols(children))
+        return result
+
+    def _get_orphan_type(self, symbol_kind: int) -> str:
+        """Convert LSP SymbolKind to orphan type."""
+        # LSP SymbolKind: 5=Class, 6=Method, 12=Function
+        if symbol_kind == 5:
+            return "unreferenced_class"
+        elif symbol_kind in [6, 12]:
+            return "unreferenced_function"
+        return "unreferenced_symbol"
+
+    def _should_skip(self, name: str) -> bool:
+        """Skip special methods and entry points."""
+        skip_names = {
+            "main", "__init__", "__str__", "__repr__", "__eq__", "__hash__",
+            "__enter__", "__exit__", "__aenter__", "__aexit__",
+            "setup", "teardown", "setUp", "tearDown",
+        }
+        return name in skip_names or name.startswith("test_")
+
+
+# Type hint for LSP client (avoid circular import)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from warden.lsp.client import LanguageServerClient
+
 
 class OrphanDetectorFactory:
     """
     Factory for creating the appropriate OrphanDetector strategy.
-    
-    Selection Logic:
-    1. Python Native AST (if language is Python)
-    2. Universal AST via TreeSitterProvider (for other supported languages)
-    3. None (Unsupported language)
+
+    Selection Logic (priority order):
+    1. LSP (if available) - Cross-file semantic analysis
+    2. Rust+Tree-sitter (if available) - Fast single-file analysis
+    3. Python Native AST (for Python files)
+    4. Universal AST via TreeSitterProvider (fallback)
+    5. None (Unsupported language)
+
+    Config Options:
+        use_lsp: bool - Enable LSP-based detection (default: False for speed)
+        project_root: str - Project root for LSP initialization
     """
-    
+
+    # Language to LSP language ID mapping
+    LANGUAGE_ID_MAP: Dict[str, str] = {
+        ".py": "python",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".rs": "rust",
+        ".go": "go",
+    }
+
     @staticmethod
-    async def create_detector(code: str, file_path: str) -> Optional[AbstractOrphanDetector]:
+    async def create_detector(
+        code: str,
+        file_path: str,
+        use_lsp: bool = False,
+        project_root: Optional[str] = None
+    ) -> Optional[AbstractOrphanDetector]:
         """
-        Create detector instance based on file type.
+        Create detector instance based on file type and available backends.
+
+        Args:
+            code: Source code content
+            file_path: Path to the file
+            use_lsp: Enable LSP for cross-file analysis (slower but more accurate)
+            project_root: Project root for LSP (required if use_lsp=True)
+
+        Returns:
+            Appropriate OrphanDetector or None if unsupported
         """
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
-        
+
+        # 1. Try LSP if enabled and available
+        if use_lsp and LSP_AVAILABLE and project_root:
+            lsp_detector = await OrphanDetectorFactory._try_create_lsp_detector(
+                code, file_path, ext, project_root
+            )
+            if lsp_detector:
+                return lsp_detector
+
+        # 2. Python-specific handling
         if ext == ".py":
             # Prefer Rust if available for speed
             if warden_core_rust:
                 return RustOrphanDetector(code, file_path)
             return PythonOrphanDetector(code, file_path)
-            
-        # Non-Python uses Universal AST or Rust
+
+        # 3. Non-Python uses Rust or Universal AST
         try:
             from warden.shared.languages.registry import LanguageRegistry
             language = LanguageRegistry.get_language_from_path(file_path)
 
             if language != CodeLanguage.UNKNOWN:
                 # Prefer Rust for supported languages
-                if warden_core_rust and language in [CodeLanguage.TYPESCRIPT, CodeLanguage.JAVASCRIPT, CodeLanguage.GO, CodeLanguage.JAVA]:
-                     return RustOrphanDetector(code, file_path)
+                if warden_core_rust and language in [
+                    CodeLanguage.TYPESCRIPT,
+                    CodeLanguage.JAVASCRIPT,
+                    CodeLanguage.GO,
+                    CodeLanguage.JAVA
+                ]:
+                    return RustOrphanDetector(code, file_path)
 
                 # Fallback to Universal AST
                 registry = ASTProviderRegistry()
@@ -688,7 +902,43 @@ class OrphanDetectorFactory:
                     parse_result = await provider.parse(code, language, file_path)
                     if parse_result.ast_root:
                         return UniversalOrphanDetector(code, file_path, parse_result.ast_root)
+
         except Exception as e:
             logger.warning("factory_universal_detector_failed", file=file_path, error=str(e))
-            
+
         return None
+
+    @staticmethod
+    async def _try_create_lsp_detector(
+        code: str,
+        file_path: str,
+        ext: str,
+        project_root: str
+    ) -> Optional[LSPOrphanDetector]:
+        """
+        Try to create an LSP-based detector.
+
+        Returns None if LSP is not available for the language.
+        """
+        language_id = OrphanDetectorFactory.LANGUAGE_ID_MAP.get(ext)
+        if not language_id:
+            return None
+
+        try:
+            from warden.lsp.manager import LSPManager
+
+            manager = LSPManager.get_instance()
+            if not manager.is_available(language_id):
+                logger.debug("lsp_not_available", language=language_id)
+                return None
+
+            client = await manager.get_client_async(language_id, project_root)
+            if not client:
+                return None
+
+            logger.info("lsp_orphan_detector_created", language=language_id, file=file_path)
+            return LSPOrphanDetector(code, file_path, client, language_id)
+
+        except Exception as e:
+            logger.warning("lsp_detector_creation_failed", error=str(e))
+            return None
