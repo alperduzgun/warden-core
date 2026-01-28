@@ -496,13 +496,19 @@ def init_command(
 
 rules:
   - id: "company-no-print"
+    name: "Company No Print"
     description: "Do not use print statements in production code"
+    category: "convention"
     severity: "warning"
-    patterns:
-      - "print("
-    exclude:
-      - "tests/**"
-      - "scripts/**"
+    isBlocker: false
+    enabled: true
+    type: "pattern"
+    conditions:
+      forbiddenPatterns:
+        - "print("
+      exclude:
+        - "tests/**"
+        - "scripts/**"
 """
         with open(example_rule_path, "w") as f:
             f.write(example_content)
