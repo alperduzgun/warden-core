@@ -222,7 +222,29 @@ def scan_command(
         except Exception:
             pass  # Baseline is optional
 
-        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level, memory_profile, ci, baseline_fingerprints))
+        # Load pre-computed intelligence in CI mode
+        intelligence_context = None
+        if ci:
+            try:
+                from warden.analysis.services.intelligence_loader import IntelligenceLoader
+                intel_loader = IntelligenceLoader(Path.cwd())
+                if intel_loader.load():
+                    intelligence_context = intel_loader.to_context_dict()
+                    quality = intel_loader.get_quality_score()
+                    modules = len(intel_loader.get_module_map())
+                    posture = intel_loader.get_security_posture().value
+                    console.print(f"[dim]🧠 Intelligence loaded: {modules} modules, quality={quality}/100, posture={posture}[/dim]")
+                else:
+                    console.print("[yellow]⚠️  No pre-computed intelligence found. Run 'warden init' first for optimal CI performance.[/yellow]")
+            except ImportError:
+                console.print("[dim]Intelligence loader not available[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Intelligence load failed: {e}[/yellow]")
+
+        exit_code = asyncio.run(_run_scan_async(
+            paths, frames, format, output, verbose, level,
+            memory_profile, ci, baseline_fingerprints, intelligence_context
+        ))
         
         # Display memory stats if profiling was enabled
         if memory_profile:
@@ -247,13 +269,25 @@ async def _run_scan_async(
     level: str = "standard",
     memory_profile: bool = False,
     ci_mode: bool = False,
-    baseline_fingerprints: Optional[Dict[str, str]] = None
+    baseline_fingerprints: Optional[Dict[str, str]] = None,
+    intelligence_context: Optional[Dict] = None
 ) -> int:
     """Async implementation of scan command."""
     
     display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
     console.print("[bold cyan]🛡️  Warden Scanner[/bold cyan]")
-    console.print(f"[dim]Scanning: {display_paths}[/dim]\n")
+    console.print(f"[dim]Scanning: {display_paths}[/dim]")
+
+    # Show intelligence status in CI mode
+    if ci_mode and intelligence_context:
+        if intelligence_context.get("available"):
+            quality = intelligence_context.get("quality_score", 0)
+            modules = len(intelligence_context.get("modules", {}))
+            console.print(f"[dim]🧠 Using pre-computed intelligence ({modules} modules, quality: {quality}/100)[/dim]")
+        else:
+            console.print("[yellow]⚠️  No intelligence available - consider running 'warden init'[/yellow]")
+
+    console.print()
 
     # Initialize bridge
     bridge = WardenBridge(project_root=Path.cwd())
@@ -290,7 +324,8 @@ async def _run_scan_async(
                 file_path=paths,
                 frames=frames,
                 verbose=verbose,
-                analysis_level=level
+                analysis_level=level,
+                ci_mode=ci_mode
             ):
                 event_type = event.get("type")
                 
