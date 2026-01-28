@@ -56,7 +56,7 @@ class RegistryClient:
             logger.error("catalog_load_failed", error=str(e))
             return []
 
-    async def sync(self) -> bool:
+    async def sync_async(self) -> bool:
         """Sync catalog from remote Warden Hub repository."""
         import subprocess
         

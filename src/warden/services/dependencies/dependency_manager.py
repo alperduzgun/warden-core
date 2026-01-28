@@ -29,7 +29,7 @@ class DependencyManager:
         except importlib.metadata.PackageNotFoundError:
             return False
 
-    async def install_packages(self, packages: List[str], timeout: int = 60) -> bool:
+    async def install_packages_async(self, packages: List[str], timeout: int = 60) -> bool:
         """
         idempotently install packages.
         Returns True if all packages are installed (either previously or just now).
