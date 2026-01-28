@@ -5,7 +5,6 @@ Tests that pipeline models serialize/deserialize correctly for Panel integration
 CRITICAL: Panel TypeScript types are SOURCE OF TRUTH.
 """
 
-import pytest
 from datetime import datetime
 from warden.pipeline.domain.models import (
     SubStep,
@@ -22,7 +21,6 @@ from warden.pipeline.domain.enums import (
 )
 from warden.shared.utils.panel_converter import (
     pipeline_status_to_panel,
-    frame_priority_to_panel,
     panel_status_to_pipeline,
 )
 

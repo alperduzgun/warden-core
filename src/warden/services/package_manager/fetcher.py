@@ -5,12 +5,11 @@ import yaml
 import hashlib
 import fcntl
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from warden.shared.infrastructure.logging import get_logger
 from warden.services.package_manager.exceptions import (
     LockfileCorruptionError,
     GitRefResolutionError,
-    PartialInstallError,
 )
 
 logger = get_logger(__name__)
@@ -360,7 +359,7 @@ class FrameFetcher:
 
         # 1. Install Frame code
         runtime = manifest.get("runtime", {})
-        module_name = runtime.get("module", "frame.py")
+        runtime.get("module", "frame.py")
         
         frame_dest = self.frames_dir / name
         if frame_dest.exists():

@@ -190,7 +190,7 @@ class ToolExecutorService:
         """Get the tool registry."""
         return self._registry
 
-    async def execute(
+    async def execute_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -222,19 +222,19 @@ class ToolExecutorService:
                     return MCPToolResult.error(
                         f"Adapter for {tool_name} not available"
                     ).to_dict()
-                result = await adapter.execute(tool, arguments)
+                result = await adapter.execute_async(tool, arguments)
                 return result.to_dict()
 
             # 2. Try built-in tools (no bridge required)
             if not tool.requires_bridge:
-                result = await self._execute_builtin(tool_name, arguments)
+                result = await self._execute_builtin_async(tool_name, arguments)
                 return result.to_dict()
 
             # 3. Fall back to legacy bridge adapter
             if self._bridge_adapter.supports(tool_name):
                 if not self._bridge_adapter.is_available:
                     return MCPToolResult.error("Warden bridge not available").to_dict()
-                result = await self._bridge_adapter.execute(tool, arguments)
+                result = await self._bridge_adapter.execute_async(tool, arguments)
                 return result.to_dict()
 
             # No executor found
@@ -250,7 +250,7 @@ class ToolExecutorService:
             logger.error("tool_execution_error", tool=tool_name, error=str(e))
             return MCPToolResult.error(f"Tool execution error: {e}").to_dict()
 
-    async def _execute_builtin(
+    async def _execute_builtin_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -266,13 +266,13 @@ class ToolExecutorService:
             Tool result
         """
         if tool_name == "warden_status":
-            return await self._tool_status()
+            return await self._tool_status_async()
         elif tool_name == "warden_list_reports":
-            return await self._tool_list_reports()
+            return await self._tool_list_reports_async()
         else:
             raise MCPToolExecutionError(tool_name, "Unknown built-in tool")
 
-    async def _tool_status(self) -> MCPToolResult:
+    async def _tool_status_async(self) -> MCPToolResult:
         """Get Warden status."""
         status_file = self.project_root / ".warden" / "ai_status.md"
 
@@ -284,7 +284,7 @@ class ToolExecutorService:
                 "Warden status file not found. Run 'warden scan' first."
             )
 
-    async def _tool_list_reports(self) -> MCPToolResult:
+    async def _tool_list_reports_async(self) -> MCPToolResult:
         """List all available reports."""
         reports = self._resource_repo.list_all_reports()
 

@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
-    LLMPhaseConfig,
     PromptTemplates,
 )
 from warden.shared.infrastructure.logging import get_logger
@@ -198,7 +197,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
             )
             return []
 
-    async def generate_cleaning_suggestions(
+    async def generate_cleaning_suggestions_async(
         self,
         code: str,
         file_path: Path,
@@ -228,7 +227,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
         }
 
         # Try LLM generation
-        llm_results = await self.analyze_with_llm(context)
+        llm_results = await self.analyze_with_llm_async(context)
 
         suggestions = []
         if llm_results:
@@ -261,7 +260,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
 
         return suggestions[:10]  # Limit to top 10
 
-    async def generate_batch_suggestions(
+    async def generate_batch_suggestions_async(
         self,
         files: List[Tuple[str, Path, float]],
         issues_by_file: Optional[Dict[Path, List[Dict[str, Any]]]] = None,
@@ -293,7 +292,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
             contexts.append(context)
 
         # Batch LLM processing
-        llm_results = await self.analyze_batch_with_llm(contexts)
+        llm_results = await self.analyze_batch_with_llm_async(contexts)
 
         # Process results
         for i, (code, path, quality_score) in enumerate(files):
@@ -367,7 +366,7 @@ Return top 5-10 most impactful suggestions as JSON array."""
                     file_path=str(file_path),
                     line_range=(0, 0),
                     original_code=f"def {func_name}(): # {length} lines",
-                    suggested_code=f"# Break into smaller functions",
+                    suggested_code="# Break into smaller functions",
                     estimated_improvement=0.5,
                 )
             )

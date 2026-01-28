@@ -75,7 +75,7 @@ def fetch_data(url):
     with patch.object(ResilienceFrame, '_analyze_with_llm', new_callable=AsyncMock) as mock_analyze:
         mock_analyze.return_value = mock_findings
         
-        result = await frame.execute(code_file)
+        result = await frame.execute_async(code_file)
 
         assert result.status == "warning"  # High severity = warning (if not critical blocker)
         assert result.issues_found == 1
@@ -96,7 +96,7 @@ async def test_resilience_frame_passes_on_empty_findings(ResilienceFrame):
     with patch.object(ResilienceFrame, '_analyze_with_llm', new_callable=AsyncMock) as mock_analyze:
         mock_analyze.return_value = []
         
-        result = await frame.execute(code_file)
+        result = await frame.execute_async(code_file)
 
         assert result.status == "passed"
         assert result.issues_found == 0

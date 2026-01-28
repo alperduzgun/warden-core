@@ -5,7 +5,6 @@ Validates that Fortification and FortificationResult models correctly
 serialize to Panel-compatible JSON format (camelCase).
 """
 
-import pytest
 
 from warden.fortification.domain.models import Fortification, FortificationResult
 

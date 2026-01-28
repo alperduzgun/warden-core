@@ -2,7 +2,6 @@
 Tests for generated protobuf messages.
 """
 
-import pytest
 from warden.grpc.generated import warden_pb2
 
 
@@ -192,7 +191,7 @@ class TestProtoMessages:
     def test_classify_request(self):
         """Test ClassifyRequest message."""
         request = warden_pb2.ClassifyRequest(
-            code="import asyncio\nasync def main(): pass",
+            code="import asyncio\nasync def main_async(): pass",
             file_path="src/main.py"
         )
 

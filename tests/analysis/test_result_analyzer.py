@@ -110,7 +110,7 @@ async def test_result_analyzer_first_run():
     )
 
     # Analyze
-    analysis = await analyzer.analyze(pipeline_result)
+    analysis = await analyzer.analyze_async(pipeline_result)
 
     # Check results
     assert analysis.total_issues == 5
@@ -137,11 +137,11 @@ async def test_result_analyzer_improving_trend():
 
     # First run with 10 issues
     result1 = create_test_pipeline_result(total_findings=10, critical=3, high=4, medium=2, low=1)
-    await analyzer.analyze(result1)
+    await analyzer.analyze_async(result1)
 
     # Second run with 5 issues (50% reduction = improving)
     result2 = create_test_pipeline_result(total_findings=5, critical=1, high=2, medium=1, low=1)
-    analysis = await analyzer.analyze(result2)
+    analysis = await analyzer.analyze_async(result2)
 
     # Should detect improving trend
     assert analysis.overall_trend == TrendDirection.IMPROVING
@@ -156,11 +156,11 @@ async def test_result_analyzer_degrading_trend():
 
     # First run with 5 issues
     result1 = create_test_pipeline_result(total_findings=5, critical=1, high=2, medium=1, low=1)
-    await analyzer.analyze(result1)
+    await analyzer.analyze_async(result1)
 
     # Second run with 15 issues (3x increase = degrading)
     result2 = create_test_pipeline_result(total_findings=15, critical=5, high=5, medium=3, low=2)
-    analysis = await analyzer.analyze(result2)
+    analysis = await analyzer.analyze_async(result2)
 
     # Should detect degrading trend
     assert analysis.overall_trend == TrendDirection.DEGRADING
@@ -175,11 +175,11 @@ async def test_result_analyzer_stable_trend():
 
     # First run with 10 issues
     result1 = create_test_pipeline_result(total_findings=10, critical=2, high=4, medium=2, low=2)
-    await analyzer.analyze(result1)
+    await analyzer.analyze_async(result1)
 
     # Second run with 10 issues (same = stable)
     result2 = create_test_pipeline_result(total_findings=10, critical=2, high=4, medium=2, low=2)
-    analysis = await analyzer.analyze(result2)
+    analysis = await analyzer.analyze_async(result2)
 
     # Should detect stable trend (within 5% tolerance)
     assert analysis.overall_trend == TrendDirection.STABLE
@@ -199,7 +199,7 @@ async def test_result_analyzer_quality_score():
         medium=0,
         low=0,
     )
-    analysis_perfect = await analyzer.analyze(result_perfect)
+    analysis_perfect = await analyzer.analyze_async(result_perfect)
 
     # Should have high quality score
     assert analysis_perfect.quality_score == 100.0
@@ -216,7 +216,7 @@ async def test_result_analyzer_quality_score():
     )
 
     analyzer2 = ResultAnalyzer(IssueTracker())
-    analysis_critical = await analyzer2.analyze(result_critical)
+    analysis_critical = await analyzer2.analyze_async(result_critical)
 
     # Quality score should be reduced significantly
     # 100 - (3 * 10) = 70
@@ -230,7 +230,7 @@ async def test_result_analyzer_frame_stats():
     analyzer = ResultAnalyzer(tracker)
 
     pipeline_result = create_test_pipeline_result(total_findings=5)
-    analysis = await analyzer.analyze(pipeline_result)
+    analysis = await analyzer.analyze_async(pipeline_result)
 
     # Should have frame stats
     assert len(analysis.frame_stats) == 1
@@ -250,11 +250,11 @@ async def test_result_analyzer_persistent_issues():
 
     # First run
     result1 = create_test_pipeline_result(total_findings=5)
-    await analyzer.analyze(result1)
+    await analyzer.analyze_async(result1)
 
     # Second run with same issues (persistent)
     result2 = create_test_pipeline_result(total_findings=5)
-    analysis = await analyzer.analyze(result2)
+    analysis = await analyzer.analyze_async(result2)
 
     # Issues should be persistent
     assert analysis.persistent_issues == 5
@@ -268,7 +268,7 @@ async def test_result_analyzer_metadata():
     analyzer = ResultAnalyzer(tracker)
 
     pipeline_result = create_test_pipeline_result()
-    analysis = await analyzer.analyze(
+    analysis = await analyzer.analyze_async(
         pipeline_result,
         project_id="test-project",
         branch="main",
@@ -290,7 +290,7 @@ async def test_result_analyzer_panel_json():
     analyzer = ResultAnalyzer(tracker)
 
     pipeline_result = create_test_pipeline_result()
-    analysis = await analyzer.analyze(pipeline_result)
+    analysis = await analyzer.analyze_async(pipeline_result)
 
     # Convert to JSON
     json_data = analysis.to_json()

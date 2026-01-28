@@ -1,6 +1,5 @@
 """Tests for rule validator."""
 
-import asyncio
 import os
 import pytest
 from pathlib import Path

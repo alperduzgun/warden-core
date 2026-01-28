@@ -9,6 +9,7 @@ All provider implementations must inherit from this interface
 
 from abc import ABC, abstractmethod
 import json
+from typing import Optional
 from ..types import LlmProvider, LlmRequest, LlmResponse
 
 
@@ -60,13 +61,15 @@ class ILlmClient(ABC):
         """
         pass
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None, use_fast_tier: bool = False) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
         Args:
             prompt: User prompt
             system_prompt: System prompt (optional)
+            model: Model override (optional)
+            use_fast_tier: If True, request fast (local) tier
 
         Returns:
             LlmResponse with content and token usage
@@ -78,10 +81,11 @@ class ILlmClient(ABC):
         request = LlmRequest(
             user_message=prompt,
             system_prompt=system_prompt,
-            model=None,  # Use provider default
-            temperature=0.7,
+            model=model,  # Use provider default or override
+            temperature=0.0,  # Idempotency
             max_tokens=2000,
-            timeout_seconds=30.0
+            timeout_seconds=30.0,
+            use_fast_tier=use_fast_tier
         )
 
         response = await self.send_async(request)
@@ -91,7 +95,7 @@ class ILlmClient(ABC):
 
         return response
 
-    async def analyze_security_async(self, code_content: str, language: str) -> dict:
+    async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:
         """
         Analyze code for security vulnerabilities using LLM.
         
@@ -106,7 +110,6 @@ class ILlmClient(ABC):
             Dict containing findings list
         """
         from warden.shared.utils.json_parser import parse_json_from_llm
-        from typing import Dict, Any
 
         prompt = f"""
         You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
@@ -135,12 +138,16 @@ class ILlmClient(ABC):
         """
         
         try:
-            response = await self.complete_async(prompt, system_prompt="You are a strict security auditor. Output valid JSON only.")
+            response = await self.complete_async(
+                prompt, 
+                system_prompt="You are a strict security auditor. Output valid JSON only.",
+                use_fast_tier=use_fast_tier
+            )
             if not response.success:
                 return {"findings": []}
                 
             parsed = parse_json_from_llm(response.content)
             return parsed or {"findings": []}
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
+        except (json.JSONDecodeError, ValueError, KeyError):
             # Log but don't crash - return safe default
             return {"findings": []}

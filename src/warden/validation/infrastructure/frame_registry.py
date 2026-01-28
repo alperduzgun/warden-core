@@ -10,16 +10,14 @@ Discovers and loads frames from:
 
 import os
 import sys
-import yaml
 import importlib
 import importlib.util
 from pathlib import Path
-from typing import List, Type, Dict, Any
+from typing import List, Type, Dict, Any, Optional
 from dataclasses import dataclass
 
 from warden.validation.domain.frame import ValidationFrame, ValidationFrameError
 from warden.validation.infrastructure.frame_metadata import FrameMetadata
-from warden.validation.domain.enums import FramePriority
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -63,21 +61,24 @@ class FrameRegistry:
         self.frame_metadata: Dict[str, FrameMetadata] = {}
         self._config_cache: Dict[str, Dict[str, Any]] = {}  # Cache for merged configs
 
-    def discover_all(self) -> List[Type[ValidationFrame]]:
+    def discover_all(self, project_root: Optional[Path] = None) -> List[Type[ValidationFrame]]:
         """
         Discover all available frames from all sources.
 
+        Args:
+            project_root: Optional project root for local frame discovery
+            
         Returns:
             List of ValidationFrame classes
-
+            
         Raises:
             ValidationFrameError: If frame discovery fails critically
         """
-        logger.info("frame_discovery_started")
+        logger.debug("frame_discovery_started")
 
         # 1. Discover built-in frames
         builtin_frames = self._discover_builtin_frames()
-        logger.info(
+        logger.debug(
             "builtin_frames_discovered",
             count=len(builtin_frames),
             frames=[f.__name__ for f in builtin_frames],
@@ -85,15 +86,15 @@ class FrameRegistry:
 
         # 2. Discover entry point frames (PyPI)
         entry_point_frames = self._discover_entry_point_frames()
-        logger.info(
+        logger.debug(
             "entry_point_frames_discovered",
             count=len(entry_point_frames),
             frames=[f.__name__ for f in entry_point_frames],
         )
 
         # 3. Discover local directory frames
-        local_frames = self._discover_local_frames()
-        logger.info(
+        local_frames = self._discover_local_frames(project_root)
+        logger.debug(
             "local_frames_discovered",
             count=len(local_frames),
             frames=[f.__name__ for f in local_frames],
@@ -101,7 +102,7 @@ class FrameRegistry:
 
         # 4. Discover environment variable frames
         env_frames = self._discover_env_frames()
-        logger.info(
+        logger.debug(
             "env_frames_discovered",
             count=len(env_frames),
             frames=[f.__name__ for f in env_frames],
@@ -315,25 +316,29 @@ class FrameRegistry:
 
             # Scan each subdirectory in frames/
             for frame_path in frames_dir.iterdir():
-                # Skip non-directories, __pycache__, and private directories
-                if not frame_path.is_dir() or frame_path.name.startswith("_"):
-                    continue
-
-                # Expected frame file: <frame_name>/<frame_name>_frame.py
-                frame_file = frame_path / f"{frame_path.name}_frame.py"
-
-                if not frame_file.exists() or not frame_file.is_file():
+                # Try standard Hub format first: <frame_name>/frame.py
+                hub_style_file = frame_path / "frame.py"
+                legacy_style_file = frame_path / f"{frame_path.name}_frame.py"
+                
+                module_path = None
+                
+                if hub_style_file.exists() and hub_style_file.is_file():
+                    module_path = f"warden.validation.frames.{frame_path.name}.frame"
+                    logger.debug(f"Found Hub-style frame: {frame_path.name}")
+                elif legacy_style_file.exists() and legacy_style_file.is_file():
+                    module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
+                    logger.debug(f"Found Legacy-style frame: {frame_path.name}")
+                else:
                     logger.debug(
                         "frame_file_not_found",
                         frame_name=frame_path.name,
-                        expected_file=str(frame_file),
+                        checked=[str(hub_style_file), str(legacy_style_file)],
                     )
                     continue
 
                 try:
                     # Dynamically import the frame module
-                    logger.debug(f"Attempting to import frame: {frame_path.name}")
-                    module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
+                    logger.debug(f"Attempting to import frame: {frame_path.name} from {module_path}")
                     module = importlib.import_module(module_path)
 
                     # Find ValidationFrame subclass in the module
@@ -463,28 +468,26 @@ class FrameRegistry:
 
         return frames
 
-    def _discover_local_frames(self) -> List[Type[ValidationFrame]]:
+    def _discover_local_frames(self, project_root: Optional[Path] = None) -> List[Type[ValidationFrame]]:
         """
         Discover frames from local directories.
 
         Searches in TWO locations:
         1. Global: ~/.warden/frames/ (for all projects)
-        2. Project-specific: <cwd>/.warden/frames/ (for current project only)
+        2. Project-specific: {project_root}/.warden/frames/ (for current project only)
 
-        Each frame should be in its own directory with:
-        - frame.py (contains ValidationFrame subclass)
-        - frame.yaml (metadata)
-
-        Returns:
-            List of ValidationFrame classes from local directories
+        If project_root is not provided, defaults to Path.cwd().
         """
         frames: List[Type[ValidationFrame]] = []
 
         # 1. Global frames directory (~/.warden/frames/)
         global_frames_dir = Path.home() / ".warden" / "frames"
 
-        # 2. Project-specific frames directory (<cwd>/.warden/frames/)
-        project_frames_dir = Path.cwd() / ".warden" / "frames"
+        # 2. Project-specific frames directory
+        if project_root:
+            project_frames_dir = project_root / ".warden" / "frames"
+        else:
+            project_frames_dir = Path.cwd() / ".warden" / "frames"
 
         # Scan both locations
         search_paths = [

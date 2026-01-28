@@ -6,17 +6,17 @@ Falls back to rule-based detection when LLM is unavailable.
 """
 
 import json
-import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 import structlog
 
 from warden.llm.factory import create_client
-from warden.llm.config import LlmConfiguration, load_llm_config_async
+from warden.llm.config import LlmConfiguration
 from warden.llm.types import LlmRequest, LlmResponse
+from warden.llm.rate_limiter import RateLimiter
 from warden.analysis.domain.file_context import FileContext
-from warden.analysis.domain.project_context import ProjectContext, Framework, ProjectType
+from warden.analysis.domain.project_context import Framework, ProjectType
 
 logger = structlog.get_logger()
 
@@ -47,6 +47,8 @@ class LlmContextAnalyzer:
         confidence_threshold: float = 0.7,
         batch_size: int = 10,
         cache_enabled: bool = True,
+        rate_limiter: Optional[RateLimiter] = None,
+        llm_service: Optional[Any] = None,
     ):
         """
         Initialize LLM context analyzer.
@@ -56,21 +58,34 @@ class LlmContextAnalyzer:
             confidence_threshold: Use LLM when confidence below this (default: 0.7)
             batch_size: Number of files to analyze per LLM call
             cache_enabled: Cache LLM responses for similar patterns
+            rate_limiter: Optional shared rate limiter to prevent 429s
+            llm_service: Optional shared LLM service
         """
-        try:
-            self.llm = create_client(llm_config) if llm_config else None
-        except Exception as e:
-            logger.warning(
-                "llm_client_creation_failed",
-                error=str(e),
-                fallback="no_llm",
-            )
-            self.llm = None
+        self.llm = llm_service
+        if not self.llm:
+            try:
+                self.llm = create_client(llm_config) if llm_config else None
+            except Exception as e:
+                logger.warning(
+                    "llm_client_creation_failed",
+                    error=str(e),
+                    fallback="no_llm",
+                )
+                self.llm = None
 
         self.confidence_threshold = confidence_threshold
         self.batch_size = batch_size
         self.cache_enabled = cache_enabled
         self.cache: Dict[str, LlmContextDecision] = {}
+        self.rate_limiter = rate_limiter
+
+        # Initialize tokenizer for token estimation
+        try:
+            import tiktoken
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        except (ImportError, Exception):
+            logger.debug("tiktoken_not_available_for_context_analyzer_using_fallback")
+            self.tokenizer = None
 
         logger.info(
             "llm_context_analyzer_initialized",
@@ -78,9 +93,10 @@ class LlmContextAnalyzer:
             confidence_threshold=confidence_threshold,
             batch_size=batch_size,
             cache_enabled=cache_enabled,
+            rate_limiter_enabled=rate_limiter is not None,
         )
 
-    async def analyze_file_context(
+    async def analyze_file_context_async(
         self,
         file_path: Path,
         initial_context: FileContext,
@@ -132,7 +148,7 @@ class LlmContextAnalyzer:
                     file_content = f.read()[:5000]  # Limit for LLM
 
             # Call LLM for analysis
-            decision = await self._analyze_with_llm(
+            decision = await self._analyze_with_llm_async(
                 file_path=file_path,
                 file_content=file_content,
                 initial_guess=initial_context,
@@ -164,7 +180,7 @@ class LlmContextAnalyzer:
             )
             return initial_context, initial_confidence, "rule-based-fallback"
 
-    async def analyze_project_structure(
+    async def analyze_project_structure_async(
         self,
         project_root: Path,
         file_list: List[Path],
@@ -210,7 +226,7 @@ class LlmContextAnalyzer:
             )
 
             # Call LLM for analysis
-            decision = await self._analyze_project_with_llm(
+            decision = await self._analyze_project_with_llm_async(
                 project_summary=project_summary,
                 initial_type=initial_project_type,
                 initial_framework=initial_framework,
@@ -236,7 +252,7 @@ class LlmContextAnalyzer:
             )
             return initial_project_type, initial_framework, initial_confidence
 
-    async def analyze_batch(
+    async def analyze_batch_async(
         self,
         files: List[Tuple[Path, FileContext, float]],
     ) -> List[Tuple[FileContext, float, str]]:
@@ -269,14 +285,22 @@ class LlmContextAnalyzer:
         )
 
         try:
-            # Create batch prompt
-            batch_prompt = self._create_batch_prompt(needs_llm)
+            # Internal sub-batching to avoid TPM limit deadlocks
+            SUB_BATCH_SIZE = 20
+            decisions = []
+            
+            for i in range(0, len(needs_llm), SUB_BATCH_SIZE):
+                sub_batch = needs_llm[i : i + SUB_BATCH_SIZE]
+                
+                # Create batch prompt for sub-batch
+                batch_prompt = self._create_batch_prompt(sub_batch)
 
-            # Call LLM
-            response = await self._call_llm_batch(batch_prompt)
+                # Call LLM
+                response = await self._call_llm_batch_async(batch_prompt)
 
-            # Parse batch response
-            decisions = self._parse_batch_response(response, len(needs_llm))
+                # Parse batch response
+                sub_decisions = self._parse_batch_response(response, len(sub_batch))
+                decisions.extend(sub_decisions)
 
             # Merge results
             results = []
@@ -288,6 +312,7 @@ class LlmContextAnalyzer:
                     if llm_index < len(decisions):
                         decision = decisions[llm_index]
                         try:
+                            # Use new context from LLM
                             new_ctx = FileContext(decision.context)
                             results.append((new_ctx, decision.confidence, "llm-batch"))
                         except ValueError:
@@ -305,7 +330,7 @@ class LlmContextAnalyzer:
             )
             return [(ctx, conf, "rule-based-fallback") for _, ctx, conf in files]
 
-    async def _analyze_with_llm(
+    async def _analyze_with_llm_async(
         self,
         file_path: Path,
         file_content: str,
@@ -352,10 +377,10 @@ Return JSON:
   "secondary_contexts": ["other_possible_contexts"]
 }}"""
 
-        response = await self._call_llm(prompt)
+        response = await self._call_llm_async(prompt)
         return self._parse_llm_response(response.content)
 
-    async def _analyze_project_with_llm(
+    async def _analyze_project_with_llm_async(
         self,
         project_summary: str,
         initial_type: ProjectType,
@@ -402,27 +427,53 @@ Return JSON:
   "reasoning": "Brief explanation"
 }}"""
 
-        response = await self._call_llm(prompt)
+        response = await self._call_llm_async(prompt)
         return self._parse_llm_response(response.content)
 
-    async def _call_llm(self, prompt: str) -> LlmResponse:
-        """Call LLM with prompt."""
+    async def _call_llm_async(self, prompt: str) -> LlmResponse:
+        """Call LLM with prompt and rate limiting."""
+        if self.rate_limiter:
+            # Estimate tokens for rate limiting
+            estimated_tokens = 600  # Base buffer for output
+            if self.tokenizer:
+                try:
+                    estimated_tokens += len(self.tokenizer.encode(prompt))
+                except Exception:
+                    pass
+            
+            # Acquire rate limit before sending
+            await self.rate_limiter.acquire_async(estimated_tokens)
+
         request = LlmRequest(
             system_prompt="You are an expert code analyzer specializing in understanding project structure and file contexts. Provide accurate, concise analysis.",
             user_message=prompt,
             max_tokens=500,
             temperature=0.0,  # Deterministic
+            use_fast_tier=True  # Use local Qwen for privacy and cost
         )
 
         return await self.llm.send_async(request)
 
-    async def _call_llm_batch(self, batch_prompt: str) -> LlmResponse:
-        """Call LLM for batch analysis."""
+    async def _call_llm_batch_async(self, batch_prompt: str) -> LlmResponse:
+        """Call LLM for batch analysis with rate limiting."""
+        if self.rate_limiter:
+            # Estimate tokens for rate limiting
+            estimated_tokens = 2200  # Base buffer for output
+            if self.tokenizer:
+                try:
+                    estimated_tokens += len(self.tokenizer.encode(batch_prompt))
+                except Exception:
+                    pass
+            
+            # Acquire rate limit before sending
+            await self.rate_limiter.acquire_async(estimated_tokens)
+
         request = LlmRequest(
             system_prompt="You are an expert code analyzer. Analyze multiple files efficiently and accurately.",
             user_message=batch_prompt,
             max_tokens=2000,
             temperature=0.0,
+            use_fast_tier=True  # Use local Qwen for batch analysis
         )
 
         return await self.llm.send_async(request)
@@ -460,21 +511,38 @@ Return JSON:
             )
 
     def _extract_json(self, text: str) -> str:
-        """Extract JSON from LLM response."""
+        """Extract JSON (object or array) from LLM response."""
         text = text.strip()
 
-        # Remove markdown code blocks
+        # Try to find JSON block in markdown
         if "```json" in text:
-            start = text.find("{", text.find("```json"))
-            end = text.rfind("}", 0, text.rfind("```") if "```" in text[start:] else len(text)) + 1
-        else:
-            start = text.find("{")
-            end = text.rfind("}") + 1
+            start_search = text.find("```json") + 7
+            snippet = text[start_search:]
+            markdown_end = snippet.find("```")
+            if markdown_end != -1:
+                text = snippet[:markdown_end]
+            else:
+                text = snippet
 
+        # Find first container start
+        start_obj = text.find("{")
+        start_arr = text.find("[")
+        
+        if start_obj == -1 and start_arr == -1:
+            return ""
+            
+        start = start_obj if (start_obj != -1 and (start_arr == -1 or start_obj < start_arr)) else start_arr
+        
+        # Find last container end
+        end_obj = text.rfind("}")
+        end_arr = text.rfind("]")
+        
+        end = max(end_obj, end_arr) + 1
+        
         if start != -1 and end > start:
             return text[start:end]
 
-        return ""  # Return empty string if no JSON found
+        return ""
 
     def _create_project_summary(
         self,

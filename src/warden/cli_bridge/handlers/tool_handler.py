@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 class ToolHandler(BaseHandler):
     """Handles discovery and testing of language tools (LSP, AST providers)."""
 
-    async def get_available_providers(self) -> List[Dict[str, Any]]:
+    async def get_available_providers_async(self) -> List[Dict[str, Any]]:
         """List all available AST providers and their metadata."""
         try:
             from warden.ast.application.provider_registry import ASTProviderRegistry

@@ -6,14 +6,13 @@ from directory structure, dependencies, and code samples.
 """
 
 import json
-import asyncio
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import structlog
 
 from warden.llm.factory import create_client
 from warden.llm.config import LlmConfiguration
-from warden.llm.types import LlmRequest, LlmResponse
+from warden.llm.types import LlmRequest
 
 logger = structlog.get_logger()
 
@@ -27,21 +26,28 @@ class ProjectPurposeDetector:
     redundant project-wide explanations.
     """
 
-    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None):
+    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None, llm_service: Optional[Any] = None):
         """
         Initialize the detector.
         
         Args:
             project_root: Root directory of the project.
             llm_config: Optional LLM configuration.
+            llm_service: Optional shared LLM service.
         """
-        self.project_root = Path(project_root)
-        try:
-            # We use the default client if no config is provided
-            self.llm = create_client(llm_config) if llm_config else create_client()
-        except Exception as e:
-            logger.warning("llm_client_creation_failed", error=str(e), fallback="no_llm")
-            self.llm = None
+        self.project_root = Path(project_root).resolve()
+        
+        if not self.project_root.exists():
+            logger.warning("project_root_does_not_exist", path=str(self.project_root))
+        self.llm = llm_service
+        
+        if not self.llm:
+            try:
+                # We use the default client if no config is provided
+                self.llm = create_client(llm_config) if llm_config else create_client()
+            except Exception as e:
+                logger.warning("llm_client_creation_failed", error=str(e), fallback="no_llm")
+                self.llm = None
 
     async def detect_async(self, file_list: List[Path], config_files: Dict[str, str]) -> Tuple[str, str]:
         """
@@ -61,7 +67,7 @@ class ProjectPurposeDetector:
         logger.info("project_purpose_discovery_started", root=str(self.project_root))
 
         # 1. Prepare discovery canvas (context for LLM)
-        canvas = await self._create_discovery_canvas(file_list, config_files)
+        canvas = await self._create_discovery_canvas_async(file_list, config_files)
         
         # 2. Construct LLM prompt
         prompt = f"""Analyze the following project 'Discovery Canvas' and synthesize its high-level purpose and architecture.
@@ -73,20 +79,28 @@ TASK:
 1. Identify the 'Project Purpose': What is this software primarily designed to do? (Be concise, 1-2 sentences).
 2. Summarize 'Architecture': How is the code organized? (e.g. Layered, Hexagonal, MVC, Python Package, Monorepo).
 3. Identify 'Key Modules': Group top-level directories or files into functional areas.
+4. **Structural Anomalies**: Critically evaluate the structure for logical inconsistencies, redundant configuration files, or anti-patterns (e.g. "Dual Configuration" like 'warden.yaml' AND '.warden/config.yaml' existing simultaneously). Determine the SEVERITY (low, medium, high, critical).
 
 Return strictly JSON:
 {{
   "purpose": "A concise summary of the project's intention.",
   "architecture": "Summary of the structural pattern.",
-  "module_map": {{ "module_name": "functional description" }}
+  "module_map": {{ "module_name": "functional description" }},
+  "anomalies": [
+      {{ 
+          "description": "Description of the anomaly", 
+          "severity": "high" 
+      }}
+  ]
 }}"""
 
         try:
             request = LlmRequest(
-                system_prompt="You are an expert system architect and code analyzer. Analyze project structure to provide semantic context.",
+                system_prompt="You are an expert system architect and code analyzer. Analyze project structure to provide semantic context and detect structural drift or ambiguity.",
                 user_message=prompt,
                 max_tokens=800,
-                temperature=0.0
+                temperature=0.0,
+                use_fast_tier=True  # Use local Qwen for cost optimization
             )
             
             response = await self.llm.send_async(request)
@@ -95,9 +109,29 @@ Return strictly JSON:
             purpose = data.get("purpose", "Analyzed software project")
             architecture = data.get("architecture", "Undetermined architecture")
             module_map = data.get("module_map", {})
+            anomalies = data.get("anomalies", [])
             
             if module_map:
                 logger.debug("modules_identified", count=len(module_map))
+            
+            if anomalies:
+                # Format anomalies for logging and purpose appending
+                anomaly_summaries = []
+                for anomaly in anomalies:
+                    # Handle both string (legacy/fallback) and dict formats
+                    if isinstance(anomaly, str):
+                        desc = anomaly
+                        sev = "medium"
+                    else:
+                        desc = anomaly.get("description", "Unknown anomaly")
+                        sev = anomaly.get("severity", "medium")
+                    
+                    logger.warning("structural_anomaly_detected", description=desc, severity=sev)
+                    anomaly_summaries.append(f"[{sev.upper()}] {desc}")
+
+                # Append anomalies to purpose description to ensure visibility in reports
+                if anomaly_summaries:
+                    purpose += f" [ANOMALIES: {'; '.join(anomaly_summaries)}]"
             
             logger.info("project_purpose_discovered", purpose=purpose[:60] + "...")
             return purpose, architecture
@@ -106,7 +140,7 @@ Return strictly JSON:
             logger.error("project_purpose_discovery_failed", error=str(e))
             return "Discovery failed", "Manual architectural analysis required"
 
-    async def _create_discovery_canvas(self, file_list: List[Path], config_files: Dict[str, str]) -> str:
+    async def _create_discovery_canvas_async(self, file_list: List[Path], config_files: Dict[str, str]) -> str:
         """Collect project metadata for the LLM discovery prompt."""
         # 1. Directory Structure (trimmed for token safety)
         dirs = sorted(list(set(str(f.parent.relative_to(self.project_root)) for f in file_list[:500])))
@@ -131,7 +165,12 @@ Return strictly JSON:
         for f in found_entries[:3]:
             try:
                 # Read the beginning of the file to understand its role
-                content = f.read_text(encoding='utf-8', errors='ignore')[:1500]
+                # Increased limit to 3000 chars to avoid false "incomplete file" anomalies
+                full_content = f.read_text(encoding='utf-8', errors='ignore')
+                content = full_content[:3000]
+                if len(full_content) > 3000:
+                    content += "\n...[TRUNCATED]"
+                
                 samples += f"\nFILE: {f.name}\n```\n{content}\n```\n"
             except Exception as e:
                 logger.debug("sample_read_failed", file=str(f), error=str(e))

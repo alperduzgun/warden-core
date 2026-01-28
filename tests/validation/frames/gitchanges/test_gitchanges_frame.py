@@ -10,12 +10,8 @@ Tests:
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
+from unittest.mock import Mock, patch
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
 from warden.validation.domain.frame import CodeFile, FrameResult
 import sys
 
@@ -31,7 +27,6 @@ def gitchanges_components():
     # Extract helper classes from the module where GitChangesFrame is defined
     # or from the git_diff_parser module directly (since we used absolute import)
     
-    import sys
     if "git_diff_parser" in sys.modules:
         parser_module = sys.modules["git_diff_parser"]
         return {
@@ -332,7 +327,7 @@ class TestGitChangesFrame:
 
         # Mock git diff to return empty output
         with patch.object(frame, "_get_git_diff", return_value=""):
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
         assert result.status == "passed"
         assert result.issues_found == 0
@@ -350,7 +345,7 @@ class TestGitChangesFrame:
 
         # Mock git diff to return sample diff
         with patch.object(frame, "_get_git_diff", return_value=SAMPLE_DIFF):
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
         assert result.status == "passed"
         assert result.issues_found > 0
@@ -375,7 +370,7 @@ class TestGitChangesFrame:
             "_get_git_diff",
             side_effect=subprocess.CalledProcessError(1, "git"),
         ):
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
         assert result.status == "passed"
         assert result.metadata["status"] == "git_error"
@@ -518,7 +513,7 @@ class TestGitChangesFrameIntegration:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout=SAMPLE_DIFF)
 
-            result = await frame.execute(code_file)
+            result = await frame.execute_async(code_file)
 
             # Verify result
             assert isinstance(result, FrameResult)

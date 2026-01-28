@@ -3,7 +3,7 @@ Quality Score Calculator.
 
 Centralizes the logic for calculating the project's quality/resilience score based on findings.
 """
-from typing import List, Any, Union
+from typing import List, Any
 
 def calculate_quality_score(findings: List[Any], base_score: float = 10.0) -> float:
     """

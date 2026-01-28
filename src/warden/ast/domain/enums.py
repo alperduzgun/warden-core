@@ -98,6 +98,7 @@ class CodeLanguage(str, Enum):
     CPP = "cpp"
     C = "c"
     TSX = "tsx"
+    SCALA = "scala"
     HTML = "html"
     CSS = "css"
     JSON = "json"

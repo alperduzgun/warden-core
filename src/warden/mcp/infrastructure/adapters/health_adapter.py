@@ -49,20 +49,20 @@ class HealthAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
     ) -> MCPToolResult:
         """Execute health tool."""
         if tool_name == "warden_health_check":
-            return await self._health_check()
+            return await self._health_check_async()
         elif tool_name == "warden_get_server_status":
-            return await self._get_server_status()
+            return await self._get_server_status_async()
         else:
             return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _health_check(self) -> MCPToolResult:
+    async def _health_check_async(self) -> MCPToolResult:
         """Perform health check."""
         uptime = (datetime.now() - self._start_time).total_seconds()
 
@@ -88,9 +88,8 @@ class HealthAdapter(BaseWardenAdapter):
             "timestamp": datetime.utcnow().isoformat(),
         })
 
-    async def _get_server_status(self) -> MCPToolResult:
+    async def _get_server_status_async(self) -> MCPToolResult:
         """Get detailed server status."""
-        import os
         import sys
 
         uptime = (datetime.now() - self._start_time).total_seconds()

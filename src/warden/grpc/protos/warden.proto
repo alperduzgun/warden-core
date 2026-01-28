@@ -61,6 +61,14 @@ enum FileType {
     KOTLIN = 11;
     SWIFT = 12;
     SCALA = 13;
+    DART = 14;
+    SQL = 15;
+    HTML = 16;
+    CSS = 17;
+    YAML = 18;
+    JSON = 19;
+    SHELL = 20;
+    MARKDOWN = 21;
     OTHER = 99;
 }
 

@@ -7,7 +7,7 @@ for false positive prevention and context-aware analysis.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 import structlog
 
 from warden.analysis.domain.file_context import (
@@ -16,6 +16,9 @@ from warden.analysis.domain.file_context import (
     ContextWeights,
 )
 from warden.analysis.domain.project_context import ProjectContext
+
+if TYPE_CHECKING:
+    from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer
 
 logger = structlog.get_logger()
 
@@ -58,7 +61,7 @@ class FileContextAnalyzer:
         import asyncio
         try:
             # Try to get existing event loop
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # If we're in an async context, we need a workaround
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
@@ -68,12 +71,13 @@ class FileContextAnalyzer:
             # No running loop, create one
             return asyncio.run(self.analyze_file_async(file_path))
 
-    async def analyze_file_async(self, file_path: Path) -> FileContextInfo:
+    async def analyze_file_async(self, file_path: Path, use_llm: bool = True) -> FileContextInfo:
         """
         Analyze a single file to determine its context (async version).
 
         Args:
             file_path: Path to the file to analyze
+            use_llm: Whether to use LLM for enhancement if confidence is low
 
         Returns:
             FileContextInfo with detected context and metadata
@@ -84,7 +88,7 @@ class FileContextAnalyzer:
         context, confidence, method = self._detect_context(file_path)
 
         # Use LLM if available and confidence is low
-        if self.llm_analyzer and confidence < 0.7:
+        if use_llm and self.llm_analyzer and confidence < 0.7:
             try:
                 # Read file content for LLM
                 file_content = None
@@ -97,7 +101,7 @@ class FileContextAnalyzer:
                 # Enhance with LLM
                 from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer
                 if isinstance(self.llm_analyzer, LlmContextAnalyzer):
-                    context, confidence, method = await self.llm_analyzer.analyze_file_context(
+                    context, confidence, method = await self.llm_analyzer.analyze_file_context_async(
                         file_path=file_path,
                         initial_context=context,
                         initial_confidence=confidence,
@@ -145,33 +149,65 @@ class FileContextAnalyzer:
             (context, confidence, detection_method)
         """
         # Layer 1: Path-based detection (highest priority)
-        context = self._detect_by_path(file_path)
-        if context and context[1] > 0.9:
-            return context[0], context[1], "path"
-
+        path_result = self._detect_by_path(file_path)
+        
         # Layer 2: Content-based detection
-        context = self._detect_by_content(file_path)
-        if context and context[1] > 0.8:
-            return context[0], context[1], "content"
-
+        content_result = self._detect_by_content(file_path)
+        
         # Layer 3: Import analysis
-        context = self._detect_by_imports(file_path)
-        if context and context[1] > 0.7:
-            return context[0], context[1], "imports"
-
+        import_result = self._detect_by_imports(file_path)
+        
         # Layer 4: Metadata/comments
-        context = self._detect_by_metadata(file_path)
-        if context:
-            return context[0], context[1], "metadata"
+        metadata_result = self._detect_by_metadata(file_path)
 
         # Layer 5: Project context hints
+        project_hint = None
         if self.project_context:
-            context = self._detect_by_project_context(file_path)
-            if context:
-                return context[0], context[1], "project_context"
+            project_hint = self._detect_by_project_context(file_path)
 
-        # Default to production (safest assumption)
-        return FileContext.PRODUCTION, 0.5, "default"
+        # Selection logic with Intent-Driven Boosting
+        results = [
+            (path_result, "path"),
+            (content_result, "content"),
+            (import_result, "imports"),
+            (metadata_result, "metadata"),
+            (project_hint, "project_context")
+        ]
+        
+        # Filter None and find best candidate
+        candidates = [(r[0], r[1], m) for r, m in results if r]
+        
+        if not candidates:
+            return FileContext.PRODUCTION, 0.5, "default"
+            
+        # Find candidate with highest confidence
+        best_context, best_confidence, best_method = max(candidates, key=lambda x: x[1])
+
+        # INTENT-DRIVEN BOOSTING:
+        # If project context is known, we can boost certain detections to bypass LLM
+        if self.project_context and best_confidence < 0.8:
+            boosted = False
+            
+            # Boost Test confidence if project uses a known test framework
+            if best_context == FileContext.TEST:
+                from warden.analysis.domain.project_context import TestFramework
+                if self.project_context.test_framework != TestFramework.NONE:
+                    best_confidence += 0.3
+                    boosted = True
+                    
+            # Boost Framework confidence if it's a known framework project
+            elif best_context == FileContext.FRAMEWORK:
+                from warden.analysis.domain.project_context import Framework
+                if self.project_context.framework != Framework.NONE:
+                    best_confidence += 0.2
+                    boosted = True
+
+            if boosted:
+                best_confidence = min(best_confidence, 0.95)
+                best_method = f"{best_method}+intent_boost"
+                logger.debug("intent_boost_applied", file=str(file_path), context=best_context.value, confidence=best_confidence)
+
+        return best_context, best_confidence, best_method
 
     def _compile_path_patterns(self) -> Dict[FileContext, List[re.Pattern]]:
         """Compile regex patterns for path-based detection."""
@@ -184,6 +220,9 @@ class FileContextAnalyzer:
                 r".*\.spec\.",
                 r"__tests__/",
                 r".*\.test\.",
+                r"tests/unit/",
+                r"tests/integration/",
+                r"tests/e2e/",
             ],
             FileContext.EXAMPLE: [
                 r"example[s]?/",
@@ -327,7 +366,9 @@ class FileContextAnalyzer:
         for context, patterns in self.path_patterns.items():
             for pattern in patterns:
                 if pattern.search(path_str):
-                    return (context, 0.95)
+                    # Higher confidence for clear directory patterns
+                    confidence = 0.98 if context in [FileContext.TEST, FileContext.VENDOR, FileContext.GENERATED] else 0.95
+                    return (context, confidence)
 
         return None
 

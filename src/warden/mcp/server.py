@@ -67,7 +67,7 @@ class MCPServer:
         self.protocol = MCPProtocol()
         self.resource_manager = MCPResourceManager(self.project_root)
 
-    async def start(self) -> None:
+    async def start_async(self) -> None:
         """
         Start the MCP server on STDIO.
 
@@ -78,11 +78,11 @@ class MCPServer:
         logger.info("mcp_server_starting", project_root=str(self.project_root))
 
         try:
-            await self._service.start()
+            await self._service.start_async()
         finally:
             self._running = False
 
-    async def stop(self) -> None:
+    async def stop_async(self) -> None:
         """Stop the MCP server gracefully."""
         self._running = False
         await self._transport.close()

@@ -5,7 +5,6 @@ Validates that Cleaning and CleaningResult models correctly
 serialize to Panel-compatible JSON format (camelCase).
 """
 
-import pytest
 
 from warden.cleaning.domain.models import Cleaning, CleaningResult
 

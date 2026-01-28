@@ -43,8 +43,8 @@ class HtmlReportGenerator:
         llm_usage = scan_results.get('llmUsage', {})
         # Use defaults in case keys are missing
         total_tokens = llm_usage.get('totalTokens', 0)
-        prompt_tokens = llm_usage.get('promptTokens', 0)
-        completion_tokens = llm_usage.get('completionTokens', 0)
+        llm_usage.get('promptTokens', 0)
+        llm_usage.get('completionTokens', 0)
 
         # Determine overall status
         if critical_issues > 0:

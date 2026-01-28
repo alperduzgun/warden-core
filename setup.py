@@ -4,6 +4,7 @@ Setup configuration for installation
 """
 
 from setuptools import setup, find_packages
+from setuptools_rust import Binding, RustExtension
 from pathlib import Path
 
 # Read README for long description
@@ -21,6 +22,14 @@ setup(
     url="https://github.com/alperduzgun/warden-core",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
+    rust_extensions=[
+        RustExtension(
+            target="warden.warden_core_rust",
+            path="src/warden_rust/Cargo.toml",
+            binding=Binding.PyO3,
+            debug=False,
+        )
+    ],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -49,6 +58,7 @@ setup(
         "pydantic>=2.5.0",
         "psutil>=5.9.0",
         "structlog>=24.1.0",
+        "pyright>=1.1.300",  # Python LSP for static analysis
         "grpcio>=1.59.0",
         "grpcio-tools>=1.59.0", 
         "pydantic-settings>=2.0.0",
@@ -57,6 +67,7 @@ setup(
         # Semantic Search & Local Embeddings
         "chromadb>=0.4.0",
         "sentence-transformers>=2.2.0",
+        "tiktoken>=0.5.0",  # For accurate token counting
     ],
     extras_require={
         "dev": [

@@ -95,7 +95,7 @@ class FortificationAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -113,7 +113,7 @@ class FortificationAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _execute_fix(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _execute_fix_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Execute warden_fix tool."""
         file_path = arguments.get("file_path")
         line_number = arguments.get("line_number")
@@ -122,14 +122,14 @@ class FortificationAdapter(BaseWardenAdapter):
 
         if self.bridge and hasattr(self.bridge, "request_fix"):
             try:
-                result = await self.bridge.request_fix(file_path, line_number, issue_type, context_code)
+                result = await self.bridge.request_fix_async(file_path, line_number, issue_type, context_code)
                 return MCPToolResult.json_result(result)
             except Exception as e:
                 return MCPToolResult.error(f"Fix generation failed: {e}")
         
         return MCPToolResult.error("Warden bridge available but request_fix not implemented")
 
-    async def _get_fortification_suggestions(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_fortification_suggestions_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get fortification suggestions."""
         path = arguments.get("path", str(self.project_root))
         fortifiers = arguments.get("fortifiers", [])
@@ -151,7 +151,7 @@ class FortificationAdapter(BaseWardenAdapter):
             "suggestions": suggestions,
         })
 
-    async def _apply_fortification(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _apply_fortification_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Apply fortification suggestion."""
         suggestion_id = arguments.get("suggestion_id")
         dry_run = arguments.get("dry_run", True)
@@ -172,7 +172,7 @@ class FortificationAdapter(BaseWardenAdapter):
             "Use dry_run=True to preview changes."
         )
 
-    async def _get_security_score(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_security_score_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get security score."""
         if self.bridge and hasattr(self.bridge, "get_security_score"):
             try:

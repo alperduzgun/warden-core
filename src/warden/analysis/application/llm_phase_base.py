@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from warden.llm.factory import create_client
+from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
 from warden.shared.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -35,8 +35,10 @@ class LLMPhaseConfig:
     max_retries: int = 3
     timeout: int = 120  # Increased from 30s to 120s for LLM API calls
     fallback_to_rules: bool = True
-    temperature: float = 0.3  # Lower for more deterministic outputs
+    temperature: float = 0.0  # Idempotency: fully deterministic
     max_tokens: int = 800  # Reduced to stay within context limits
+    tpm_limit: int = 1000  # Default Free Tier
+    rpm_limit: int = 6     # Default Free Tier
 
 
 @dataclass
@@ -88,6 +90,7 @@ class LLMPhaseBase(ABC):
         llm_service: Optional[Any] = None,
         project_root: Optional[Path] = None,
         use_gitignore: bool = True,
+        rate_limiter: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -98,12 +101,36 @@ class LLMPhaseBase(ABC):
             llm_service: Pre-configured LLM service/client
             project_root: Root directory of the project
             use_gitignore: Whether to use .gitignore patterns
+            rate_limiter: Optional shared RateLimiter
         """
         self.config = config or LLMPhaseConfig(enabled=False)
         self.llm = llm_service
         self.project_root = project_root
         self.use_gitignore = use_gitignore
+        self.memory_manager = kwargs.get('memory_manager')
+        self.semantic_search_service: Optional[Any] = kwargs.get('semantic_search_service')
         self.cache = LLMCache() if self.config.cache_enabled else None
+
+        
+        # Initialize Rate Limiter
+        # Use injected rate limiter if provided (preferred for shared limits)
+        if rate_limiter:
+            self.rate_limiter = rate_limiter
+        else:
+            # Fallback to local rate limiter (per-phase limits)
+            self.rate_limiter = RateLimiter(RateLimitConfig(
+                tpm=self.config.tpm_limit, 
+                rpm=self.config.rpm_limit
+            ))
+        # Initializing tokenizer (cl100k_base is used by gpt-4, gpt-3.5)
+        try:
+            import tiktoken
+            self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        except (ImportError, Exception):
+            self.tokenizer = None
+
+        # Preferred Model Tier (smart or fast)
+        self.preferred_model_tier = kwargs.get('preferred_model_tier', 'smart')
 
         # Enable LLM if service is provided
         if llm_service:
@@ -143,11 +170,12 @@ class LLMPhaseBase(ABC):
         """Parse LLM response to phase-specific format."""
         pass
 
-    async def analyze_with_llm(
+    async def analyze_with_llm_async(
         self,
         context: Dict[str, Any],
         use_cache: bool = True,
         pipeline_context: Optional['PipelineContext'] = None,
+        model: Optional[str] = None,
     ) -> Optional[Any]:
         """
         Analyze with LLM support.
@@ -163,6 +191,11 @@ class LLMPhaseBase(ABC):
         if not self.config.enabled or not self.llm:
             return None
 
+        # Determine model from pipeline context if not provided
+        if not model and pipeline_context and pipeline_context.llm_config:
+            tier_attr = f"{self.preferred_model_tier}_model"
+            model = getattr(pipeline_context.llm_config, tier_attr, None)
+
         # Enrich context with pipeline history if available
         if pipeline_context:
             context["pipeline_context"] = pipeline_context.get_llm_context_prompt(self.phase_name)
@@ -174,12 +207,22 @@ class LLMPhaseBase(ABC):
             cache_key = self._generate_cache_key(context)
             cached = self.cache.get(cache_key)
             if cached:
+                return cached
+
+        # Check persistent cache (MemoryManager)
+        if use_cache and self.memory_manager:
+            cache_key = cache_key or self._generate_cache_key(context)
+            persistent_cached = self.memory_manager.get_llm_cache(cache_key)
+            if persistent_cached:
                 logger.debug(
-                    "llm_cache_hit",
+                    "llm_persistent_cache_hit",
                     phase=self.phase_name,
                     key=cache_key[:8],
                 )
-                return cached
+                # Syced back to in-memory cache for faster next access
+                if self.cache:
+                    self.cache.set(cache_key, persistent_cached)
+                return persistent_cached
 
         try:
             # Prepare prompts with pipeline context
@@ -200,7 +243,7 @@ class LLMPhaseBase(ABC):
 
             # Call LLM with retry logic
             llm_start_time = time.time()
-            response = await self._call_llm_with_retry(system_prompt, user_prompt)
+            response = await self._call_llm_with_retry_async(system_prompt, user_prompt, model=model)
             llm_duration = time.time() - llm_start_time
 
             logger.info(
@@ -229,8 +272,13 @@ class LLMPhaseBase(ABC):
                 result = self.parse_llm_response(response.content)
 
                 # Cache result (cache the parsed result, not the raw response)
-                if cache_key and self.cache:
-                    self.cache.set(cache_key, result)
+                if cache_key:
+                    if self.cache:
+                        self.cache.set(cache_key, result)
+                    if self.memory_manager:
+                        self.memory_manager.set_llm_cache(cache_key, result)
+                        # Mark for saving later (or save now if needed)
+                        # In the pipeline, orchestrator saves memory at the end
 
                 logger.info(
                     "llm_analysis_complete",
@@ -254,10 +302,12 @@ class LLMPhaseBase(ABC):
 
         return None
 
-    async def analyze_batch_with_llm(
+    async def analyze_batch_with_llm_async(
         self,
         items: List[Dict[str, Any]],
         use_cache: bool = True,
+        pipeline_context: Optional['PipelineContext'] = None,
+        model: Optional[str] = None,
     ) -> List[Optional[Any]]:
         """
         Analyze multiple items in batches.
@@ -271,13 +321,24 @@ class LLMPhaseBase(ABC):
         """
         results = []
 
+        # Determine batch size from config or global max_concurrency
+        batch_size = self.config.batch_size
+        llm_config = getattr(self.llm, 'config', None) if hasattr(self.llm, 'config') else None
+        if llm_config and hasattr(llm_config, 'max_concurrency'):
+            batch_size = llm_config.max_concurrency
+
         # Process in batches
-        for i in range(0, len(items), self.config.batch_size):
-            batch = items[i : i + self.config.batch_size]
+        for i in range(0, len(items), batch_size):
+            batch = items[i : i + batch_size]
 
             # Process batch concurrently
             batch_tasks = [
-                self.analyze_with_llm(item, use_cache) for item in batch
+                self.analyze_with_llm_async(
+                    item, 
+                    use_cache=use_cache,
+                    pipeline_context=pipeline_context,
+                    model=model
+                ) for item in batch
             ]
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
@@ -295,13 +356,14 @@ class LLMPhaseBase(ABC):
 
         return results
 
-    async def _call_llm_with_retry(
+    async def _call_llm_with_retry_async(
         self,
         system_prompt: str,
         user_prompt: str,
+        model: Optional[str] = None,
     ) -> Optional[Any]:  # Returns LlmResponse
         """
-        Call LLM with retry logic.
+        Call LLM with retry logic and PROACTIVE RATE LIMITING.
 
         Args:
             system_prompt: System prompt
@@ -310,13 +372,35 @@ class LLMPhaseBase(ABC):
         Returns:
             LLM response or None if all retries failed
         """
+        # 1. Estimate Token Cost
+        estimated_tokens = 100 # Safety buffer 
+        if self.tokenizer:
+            try:
+                # Count input tokens
+                input_text = system_prompt + user_prompt
+                estimated_tokens += len(self.tokenizer.encode(input_text))
+                # Add estimation for max output tokens (default 800 in config)
+                estimated_tokens += self.config.max_tokens
+            except Exception:
+                pass
+        
+        # 2. Acquire Rate Limit (Waits here if needed)
+        # This prevents 429s by not sending the request until we have budget
+        if not self.tokenizer:
+            # Fallback estimation: ~4 chars per token
+            input_text = system_prompt + user_prompt
+            estimated_tokens = (len(input_text) // 4) + self.config.max_tokens + 50
+        
+        await self.rate_limiter.acquire_async(estimated_tokens)
+
         for attempt in range(self.config.max_retries):
             try:
                 # Call LLM with timeout
                 response = await asyncio.wait_for(
                     self.llm.complete_async(
                         prompt=user_prompt,
-                        system_prompt=system_prompt
+                        system_prompt=system_prompt,
+                        model=model
                     ),
                     timeout=self.config.timeout,
                 )
@@ -375,7 +459,7 @@ class LLMPhaseBase(ABC):
             and confidence < self.config.confidence_threshold
         )
 
-    async def enhance_with_llm(
+    async def enhance_with_llm_async(
         self,
         initial_result: Any,
         confidence: float,
@@ -403,7 +487,7 @@ class LLMPhaseBase(ABC):
         }
 
         # Get LLM enhancement
-        llm_result = await self.analyze_with_llm(enhanced_context)
+        llm_result = await self.analyze_with_llm_async(enhanced_context)
 
         if llm_result:
             logger.info(

@@ -116,7 +116,7 @@ class WardenServicerBase:
         """Get history repository."""
         return self._history_repo
 
-    async def load_from_repositories(self) -> None:
+    async def load_from_repositories_async(self) -> None:
         """
         Load data from repositories into in-memory cache.
 
@@ -262,7 +262,7 @@ class WardenServicerBase:
 
         return issue_data
 
-    async def save_issue(self, issue: "WardenIssue") -> "WardenIssue":
+    async def save_issue_async(self, issue: "WardenIssue") -> "WardenIssue":
         """
         Save a WardenIssue model with persistence.
 
@@ -285,15 +285,15 @@ class WardenServicerBase:
 
         return saved_issue
 
-    async def get_issue(self, issue_id: str) -> Optional["WardenIssue"]:
+    async def get_issue_async(self, issue_id: str) -> Optional["WardenIssue"]:
         """Get issue by ID from repository."""
         return await self._issue_repo.get(issue_id)
 
-    async def get_all_issues(self) -> List["WardenIssue"]:
+    async def get_all_issues_async(self) -> List["WardenIssue"]:
         """Get all issues from repository."""
         return await self._issue_repo.get_all()
 
-    async def delete_issue(self, issue_id: str) -> bool:
+    async def delete_issue_async(self, issue_id: str) -> bool:
         """Delete issue and log to history."""
         deleted = await self._issue_repo.delete(issue_id)
 

@@ -6,12 +6,11 @@ Adds structured logging (structlog) to functions and critical operations.
 
 import structlog
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
 from warden.validation.domain.frame import CodeFile
-from warden.llm.factory import create_client
 
 logger = structlog.get_logger()
 
@@ -38,12 +37,14 @@ class LoggingFortifier(BaseFortifier):
     - Database operations
     """
 
-    def __init__(self):
-        """Initialize Logging Fortifier."""
-        try:
-            self._llm_provider = create_client()
-        except Exception:
-            self._llm_provider = None  # LLM optional
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize Logging Fortifier.
+
+        Args:
+            llm_service: Optional shared LLM service.
+        """
+        self._llm_provider = llm_service
 
     @property
     def name(self) -> str:
@@ -107,7 +108,7 @@ class LoggingFortifier(BaseFortifier):
             response = await self._llm_provider.complete_async(
                 system_prompt="You are a logging expert. Add structured logging (using structlog) to Python code. Return ONLY the modified code.",
                 user_prompt=prompt,
-                temperature=0.2,
+                temperature=0.0,  # Idempotency
                 max_tokens=3000,
             )
 

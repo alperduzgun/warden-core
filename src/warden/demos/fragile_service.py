@@ -8,7 +8,7 @@ class PaymentProcessor:
         # 1. External API Call - Critical point of failure
         # Problem: No timeout specified. If the bank is down, this will hang indefinitely.
         # Problem: No retry logic. A transient network blip causes failure.
-        response = requests.post(f"https://bank-api.com/charge", json={"user": user_id, "amount": amount})
+        response = requests.post("https://bank-api.com/charge", json={"user": user_id, "amount": amount})
         
         if response.status_code == 200:
             # 2. Database Operation - State consistency
@@ -18,7 +18,7 @@ class PaymentProcessor:
             cursor = conn.cursor()
             
             # Problem: SQL Injection risk (though resilience frame focuses on architecture)
-            cursor.execute(f"INSERT INTO transactions VALUES ({user_id}, {amount}, 'SUCCESS')")
+            cursor.execute_async(f"INSERT INTO transactions VALUES ({user_id}, {amount}, 'SUCCESS')")
             conn.commit()
             
             # Problem: Connection not closed in finally block.

@@ -7,12 +7,14 @@ to enable context-aware analysis and false positive prevention.
 
 import asyncio
 import time
+import re
 from pathlib import Path
+import fnmatch
 from typing import Dict, List, Optional, Any, Callable, Set
 import structlog
 import hashlib
 from datetime import datetime
-from warden.analysis.application.integrity_scanner import IntegrityScanner, IntegrityIssue
+from warden.analysis.application.integrity_scanner import IntegrityScanner
 
 from warden.analysis.domain.file_context import (
     FileContext,
@@ -28,9 +30,34 @@ from warden.ast.application.provider_loader import ASTProviderLoader
 from warden.analysis.application.dependency_graph import DependencyGraph
 from warden.ast.domain.enums import CodeLanguage
 from warden.validation.domain.frame import CodeFile
+from warden.shared.utils.hasher import NormalizedHasher
+from warden.shared.utils.language_utils import get_language_from_path
 
 logger = structlog.get_logger()
 
+# Context-Aware Criticality Map
+# Defines which file patterns are "Critical" (must be LLM verified) for specific project types.
+# All other low-confidence files in these project types will be handled by Rust/Rule-based only.
+CRITICALITY_MAP = {
+    "mobile": [
+        "android/key.properties", "**/android/key.properties", 
+        "ios/*.plist", "**/ios/*.plist", 
+        "lib/main.dart", "lib/**/*auth*", "lib/**/*config*", "lib/**/*service*",
+        "pubspec.yaml", "**/pubspec.yaml"
+    ],
+    "web": [
+        "src/App.*", "src/main.*", "src/**/*auth*", "src/**/*config*", 
+        "vite.config.*", "next.config.*", ".env*"
+    ],
+    "backend": [
+        "settings.py", "**/settings.py", 
+        "config.py", "**/config.py", 
+        "models.py", "**/models.py", 
+        "auth.py", "**/auth.py",
+        "security.py", "**/security.py", 
+        "pyproject.toml", "poetry.lock"
+    ]
+}
 
 class PreAnalysisPhase:
     """
@@ -46,6 +73,8 @@ class PreAnalysisPhase:
         project_root: Path,
         progress_callback: Optional[Callable] = None,
         config: Optional[Dict[str, Any]] = None,
+        rate_limiter: Optional[Any] = None,
+        llm_service: Optional[Any] = None,
     ) -> None:
         """
         Initialize PRE-ANALYSIS phase.
@@ -54,13 +83,23 @@ class PreAnalysisPhase:
             project_root: Root directory of the project
             progress_callback: Optional callback for progress updates
             config: Optional configuration including LLM settings
+            rate_limiter: Optional rate limiter for LLM calls
+            llm_service: Optional shared LLM service.
         """
         self.project_root = Path(project_root)
         self.progress_callback = progress_callback
         self.config = config or {}
+        self.rate_limiter = rate_limiter
+        self.llm_service = llm_service
 
         # Initialize analyzers
-        self.project_analyzer = ProjectStructureAnalyzer(self.project_root, self.config.get("llm_config"))
+        from warden.pipeline.domain.enums import AnalysisLevel
+        self.project_analyzer = ProjectStructureAnalyzer(
+            self.project_root, 
+            llm_config=self.config.get("llm_config"),
+            analysis_level=self.config.get("analysis_level", AnalysisLevel.STANDARD),
+            llm_service=self.llm_service
+        )
         self.file_analyzer: Optional[FileContextAnalyzer] = None  # Created after project analysis
         self.llm_analyzer = None  # Will be initialized if enabled
         
@@ -72,8 +111,12 @@ class PreAnalysisPhase:
         self.ast_loader = ASTProviderLoader(self.ast_registry)
         self.dependency_graph: Optional[DependencyGraph] = None  # Initialized in execute
         self.integrity_scanner = IntegrityScanner(self.project_root, self.ast_registry, self.config.get("integrity_config"))
+        
+        # Linter Infrastructure (Phase 0 Check)
+        from warden.analysis.services.linter_service import LinterService
+        self.linter_service = LinterService()
 
-    async def execute(
+    async def execute_async(
         self, 
         code_files: List[CodeFile], 
         pipeline_context: Optional[Any] = None
@@ -104,7 +147,7 @@ class PreAnalysisPhase:
 
         try:
             # Step 1: Initialize LLM analyzer if enabled
-            await self._initialize_llm_analyzer()
+            await self._initialize_llm_analyzer_async()
             
             # Initialize memory
             await self.memory_manager.initialize_async()
@@ -125,38 +168,54 @@ class PreAnalysisPhase:
             self.trust_memory_context = is_env_valid
 
             # Analyze structure (will only discover purpose if missing after enrichment)
-            project_context = await self._analyze_project_structure(project_context)
+            all_paths = [Path(cf.path) for cf in code_files]
+            project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
 
             # Ensure AST providers are loaded for integrity check
             await self.ast_loader.load_all()
 
             # Step 2.5: Integrity Check (Fail-Fast)
             # Scan files for syntax validity and optional build verification
-            # Pass pipeline_context to enable AST caching for DRY principle
-            integrity_issues = await self.integrity_scanner.scan(code_files, project_context, pipeline_context)
-            if integrity_issues:
-                # Log issues
-                for issue in integrity_issues:
-                    logger.error("integrity_check_failure", file=issue.file_path, error=issue.message)
-                
-                # Check for critical failures (syntax errors or build failures)
-                # We consider any integrity issue as critical for now if fail_fast is enabled or by default
-                fail_fast = self.config.get("integrity_config", {}).get("fail_fast", True)
-                if fail_fast:
-                    logger.error("integrity_check_failed_aborting", issue_count=len(integrity_issues))
-                    raise RuntimeError(f"Integrity check failed with {len(integrity_issues)} issues. Fix syntax/build errors before running Warden.")
+            # Skip in BASIC level to hit performance targets
+            from warden.pipeline.domain.enums import AnalysisLevel
+            analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
+            
+            if analysis_level != AnalysisLevel.BASIC:
+                integrity_issues = await self.integrity_scanner.scan_async(code_files, project_context, pipeline_context)
+                if integrity_issues:
+                    # Log issues
+                    for issue in integrity_issues:
+                        logger.error("integrity_check_failure", file=issue.file_path, error=issue.message)
+                    
+                    # Check for critical failures (syntax errors or build failures)
+                    fail_fast = self.config.get("integrity_config", {}).get("fail_fast", True)
+                    if fail_fast:
+                        logger.error("integrity_check_failed_aborting", issue_count=len(integrity_issues))
+                        raise RuntimeError(f"Integrity check failed with {len(integrity_issues)} issues. Fix syntax/build errors before running Warden.")
+            else:
+                logger.info("skipping_integrity_check_for_basic_level")
 
             # Step 3: Dependency Awareness (Impact Analysis)
-            impacted_files = await self._identify_impacted_files(code_files, project_context)
+            # Skip in BASIC level to hit performance targets
+            if analysis_level != AnalysisLevel.BASIC:
+                impacted_files = await self._identify_impacted_files_async(code_files, project_context)
+            else:
+                logger.info("skipping_dependency_impact_analysis_for_basic_level")
+                impacted_files = set()
 
             # Step 4: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
 
             # Step 5: Analyze file contexts in parallel
-            file_contexts = await self._analyze_file_contexts(code_files, impacted_files)
+            file_contexts = await self._analyze_file_contexts_async(code_files, impacted_files)
 
             # Step 5: Calculate statistics
             statistics = self._calculate_statistics(file_contexts)
+
+            # Step 6: Tool Discovery (Pre-Flight Check)
+            # Detect available linters (Fail Fast / Degradation)
+            if self.linter_service:
+                await self.linter_service.detect_and_setup(project_context)
 
             # Create result
             result = PreAnalysisResult(
@@ -190,11 +249,11 @@ class PreAnalysisPhase:
             
 
             # Step 6: Save learning to memory
-            await self._save_context_to_memory(project_context)
+            await self._save_context_to_memory_async(project_context)
             
             # Step 7: Save file states (hashes)
             # We save this now so next run knows about these hashes
-            await self.save_file_states(file_contexts)
+            await self.save_file_states_async(file_contexts)
             
             # Step 8: Save current environment hash
             if self.memory_manager and self.memory_manager._is_loaded:
@@ -203,12 +262,16 @@ class PreAnalysisPhase:
 
             # Step 9: Trigger Semantic Indexing (Smart Incremental)
             try:
-                # Import here to avoid circular dependencies
                 from warden.shared.services.semantic_search_service import SemanticSearchService
+                from warden.pipeline.domain.enums import AnalysisLevel
+                
                 ss_config = self.config.get("semantic_search", {})
                 ss_service = SemanticSearchService(ss_config)
                 
-                if ss_service.is_available():
+                # Skip semantic indexing in BASIC level
+                analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
+                
+                if ss_service.is_available() and analysis_level != AnalysisLevel.BASIC:
                     logger.info("triggering_semantic_indexing")
                     if self.progress_callback:
                         self.progress_callback("semantic_indexing_started", {
@@ -247,13 +310,15 @@ class PreAnalysisPhase:
                 analysis_duration=time.perf_counter() - start_time,
             )
 
-    async def _initialize_llm_analyzer(self) -> None:
+    async def _initialize_llm_analyzer_async(self) -> None:
         """Initialize LLM analyzer if enabled in config."""
-        # Check for use_llm in config - it should be directly in config dict
-        use_llm = self.config.get("use_llm", True)  # Default to True if not specified
+        # Check for use_llm in config
+        from warden.pipeline.domain.enums import AnalysisLevel
+        use_llm = self.config.get("use_llm", True)
+        analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
 
-        if not use_llm:
-            logger.info("llm_disabled_for_pre_analysis")
+        if not use_llm or analysis_level == AnalysisLevel.BASIC:
+            logger.info("llm_disabled_for_pre_analysis", reason="config_or_level")
             return
 
         try:
@@ -264,9 +329,19 @@ class PreAnalysisPhase:
             llm_config = await load_llm_config_async()
 
             # Get PRE-ANALYSIS specific config
-            pre_analysis_config = self.config.get("pre_analysis", {})
+            pre_analysis_config = self.config.get("pre_analysis") or {}
             confidence_threshold = pre_analysis_config.get("llm_threshold", 0.7)
             batch_size = pre_analysis_config.get("batch_size", 10)
+            
+            # Rate limit config (default to conservative but usable limits)
+            # tpm = pre_analysis_config.get("tpm", 30000)  # 30k tokens/min
+            # rpm = pre_analysis_config.get("rpm", 100)    # 100 req/min
+
+            # Initialize shared Rate Limiter for this phase
+            # rate_limiter = RateLimiter(RateLimitConfig(tpm=tpm, rpm=rpm))
+            
+            # Use injected rate limiter or fallback (though fallback shouldn't happen with correct dependency injection)
+            rate_limiter = self.rate_limiter
 
             # Initialize LLM analyzer
             self.llm_analyzer = LlmContextAnalyzer(
@@ -274,6 +349,8 @@ class PreAnalysisPhase:
                 confidence_threshold=confidence_threshold,
                 batch_size=batch_size,
                 cache_enabled=True,
+                rate_limiter=rate_limiter,
+                llm_service=self.llm_service,
             )
 
             logger.info(
@@ -290,25 +367,40 @@ class PreAnalysisPhase:
             )
             self.llm_analyzer = None
 
-    async def _analyze_project_structure(self, initial_context: Optional[ProjectContext] = None) -> ProjectContext:
+    async def _analyze_project_structure_async(
+        self, 
+        initial_context: Optional[ProjectContext] = None,
+        all_files: Optional[List[Path]] = None
+    ) -> ProjectContext:
         """
         Analyze project structure and characteristics.
 
+        Args:
+            initial_context: Optional pre-initialized context
+            all_files: Optional list of pre-discovered files
+            
         Returns:
             ProjectContext with detected information
         """
         logger.info("analyzing_project_structure")
 
         # Run project structure analysis
-        project_context = await self.project_analyzer.analyze_async(initial_context)
+        project_context = await self.project_analyzer.analyze_async(initial_context, all_files=all_files)
 
         # Step 2.1: Semantic Discovery (Purpose and Architecture)
         # Check if we already have it in memory via enrichment (called in execute)
-        if not project_context.purpose and self.llm_analyzer:
-            detector = ProjectPurposeDetector(self.project_root, self.config.get("llm_config"))
+        from warden.pipeline.domain.enums import AnalysisLevel
+        analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
+        
+        if not project_context.purpose and self.llm_analyzer and analysis_level != AnalysisLevel.BASIC:
+            detector = ProjectPurposeDetector(
+                self.project_root, 
+                llm_config=self.config.get("llm_config"),
+                llm_service=self.llm_service
+            )
             # We need the file list for discovery canvas
-            # Convert Path objects to list
-            all_files = list(self.project_root.rglob("*"))
+            # Use analyzer's filtered list to avoid pollution (like __pycache__)
+            all_files = self.project_analyzer.get_all_files()
             purpose, arch = await detector.detect_async(
                 all_files, 
                 project_context.config_files
@@ -328,66 +420,164 @@ class PreAnalysisPhase:
 
         return project_context
 
-    async def _analyze_file_contexts(
+    async def _analyze_file_contexts_async(
         self,
         code_files: List[CodeFile],
         impacted_files: Set[str] = None
     ) -> Dict[str, Any]:
         """
-        Analyze context for each file.
+        Analyze context for each file using Rule-based pass → Semantic Spread → Batch LLM.
 
         Args:
             code_files: List of code files to analyze
+            impacted_files: Files that must be re-analyzed regardless of cache
 
         Returns:
             Dictionary mapping file paths to FileContextInfo
         """
         logger.info(
-            "analyzing_file_contexts",
+            "analyzing_file_contexts_optimized",
             file_count=len(code_files),
+            mode="batch_plus_semantic"
         )
 
-        # Create tasks for parallel analysis
+        # STEP 1: Rule-based fast pass (LLM disabled here)
         tasks = []
         for code_file in code_files:
             is_impacted = bool(impacted_files and code_file.path in impacted_files)
+            # Pass use_llm=False to force fast rule-based + memory check
             task = asyncio.create_task(
-                self._analyze_single_file(code_file, is_impacted)
+                self._analyze_single_file_async(code_file, is_impacted, use_llm=False)
             )
             tasks.append((code_file.path, task))
 
-        # Wait for all analyses to complete
-        file_contexts = {}
+        raw_contexts = {}
         for file_path, task in tasks:
             try:
-                context_info = await task
-                file_contexts[file_path] = context_info
+                raw_contexts[file_path] = await task
             except Exception as e:
-                logger.warning(
-                    "file_context_analysis_failed",
-                    file=file_path,
-                    error=str(e),
-                )
-                # Use default production context on failure
-                file_contexts[file_path] = self._get_default_context(file_path)
+                logger.warning("rule_pass_failed", file=file_path, error=str(e))
+                raw_contexts[file_path] = self._get_default_context(file_path)
 
-        return file_contexts
+        # STEP 2: Semantic Spread (Directory-based context propagation)
+        # Group by directory to spread context from clear files to ambiguous ones
+        dir_groups = {}
+        for path_str, ctx_info in raw_contexts.items():
+            dir_path = str(Path(path_str).parent)
+            if dir_path not in dir_groups:
+                dir_groups[dir_path] = []
+            dir_groups[dir_path].append(ctx_info)
 
-    async def _analyze_single_file(self, code_file: CodeFile, is_impacted: bool = False) -> Any:
+        from warden.analysis.domain.file_context import FileContext
+        
+        for dir_path, files in dir_groups.items():
+            # Find dominant high-confidence context in this directory (excluding PRODUCTION default)
+            clear_contexts = [f for f in files if f.confidence >= 0.85 and f.context != FileContext.PRODUCTION]
+            
+            if clear_contexts:
+                # Use the most frequent clear context
+                from collections import Counter
+                dominant_ctx = Counter([f.context for f in clear_contexts]).most_common(1)[0][0]
+                
+                # Spread to low confidence files in the same directory
+                for f in files:
+                    if f.confidence < 0.7:
+                        f.context = dominant_ctx
+                        f.confidence = 0.8  # Boosted by semantic spread
+                        f.detection_method += "+semantic_spread"
+                        logger.debug("semantic_context_spread", file=f.file_path, context=dominant_ctx.value)
+
+        # STEP 3: Batch LLM Analysis for remaining ambiguous files
+        if self.llm_analyzer:
+            # Collect files that still have low confidence
+            ambiguous_items = []
+            
+            # Get project context from file analyzer
+            p_ctx = self.file_analyzer.project_context if self.file_analyzer else None
+
+            for path_str, ctx_info in raw_contexts.items():
+                if ctx_info.confidence < 0.7:
+                    # CONTEXT-AWARE SNIPER:
+                    # Only send to LLM if file is critical for this project type
+                    is_critical = True
+                    if p_ctx:
+                        is_critical = self._is_file_critical(path_str, p_ctx)
+                    
+                    if is_critical:
+                        # Prepare tuple for Batch analyzer: (Path, FileContext, float)
+                        ambiguous_items.append((Path(path_str), ctx_info.context, ctx_info.confidence))
+                    else:
+                        logger.debug("skipping_llm_for_non_critical_file", file=path_str)
+
+            if ambiguous_items:
+                logger.info("batch_llm_enhancement_trigger", count=len(ambiguous_items))
+                
+                # Perform batch analysis (e.g. 10 files per LLM call)
+                # LLM analyzer already has an internal batching mechanism
+                try:
+                    batch_results = await self.llm_analyzer.analyze_batch_async(ambiguous_items)
+                    
+                    # Merge results back
+                    for i, (path, _, _) in enumerate(ambiguous_items):
+                        path_str = str(path)
+                        if i < len(batch_results):
+                            new_ctx, new_conf, method = batch_results[i]
+                            raw_contexts[path_str].context = new_ctx
+                            raw_contexts[path_str].confidence = new_conf
+                            raw_contexts[path_str].detection_method = method
+                except Exception as e:
+                    logger.warning("batch_llm_enhancement_failed", error=str(e))
+
+        return raw_contexts
+
+    def _is_file_critical(self, file_path: str, project_context: ProjectContext) -> bool:
+        """Check if file is critical based on project context."""
+        # Determine strict project type key for map
+        p_type = "backend" # Default fallback
+        
+        # Check explicit type first
+        if project_context.project_type.value in ["mobile", "android", "ios"]:
+            p_type = "mobile"
+        elif project_context.project_type.value in ["web", "frontend"]:
+            p_type = "web"
+        # Check purpose keywords if generic
+        elif project_context.purpose:
+            purpose = project_context.purpose.lower()
+            if "mobile" in purpose or "flutter" in purpose:
+                p_type = "mobile"
+            elif "frontend" in purpose or "react" in purpose:
+                p_type = "web"
+
+        patterns = CRITICALITY_MAP.get(p_type, CRITICALITY_MAP["backend"])
+        
+        # ALWAYS check backend criticals too (safety net for hybrid repos)
+        all_patterns = patterns + CRITICALITY_MAP["backend"]
+        
+        for pattern in all_patterns:
+            if fnmatch.fnmatch(file_path, pattern):
+                return True
+        return False
+
+    async def _analyze_single_file_async(self, code_file: CodeFile, is_impacted: bool = False, use_llm: bool = True) -> Any:
         """
         Analyze a single file's context.
 
         Args:
             code_file: Code file to analyze
+            is_impacted: Whether the file is impacted by a dependency change
+            use_llm: Whether to use LLM for enhancement
 
         Returns:
             FileContextInfo for the file
         """
         # Run analysis in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
+        asyncio.get_event_loop()
         
         # Calculate content hash (PRE-ANALYSIS step)
-        content_hash = self._calculate_file_hash(code_file.content)
+        content_hash = self._calculate_file_hash(code_file.content, code_file.path)
+        
+        # Populate CodeFile hash for downstream phases (Caching)
+        code_file.hash = content_hash
         
         # Normalize path to relative for memory portability (CI vs Local)
         try:
@@ -397,7 +587,7 @@ class PreAnalysisPhase:
             rel_path = code_file.path
 
         # Check memory for existing state
-        if self.trust_memory_context and self.memory_manager and self.memory_manager._is_loaded:
+        if self.config.get("trust_memory_context", True) and self.memory_manager and self.memory_manager._is_loaded:
             stored_state = self.memory_manager.get_file_state(rel_path)
             
             # If hash matches AND not impacted, mark as unchanged
@@ -426,11 +616,7 @@ class PreAnalysisPhase:
                         # Fallback to analysis on error matches
                         pass
 
-        context_info = await loop.run_in_executor(
-            None,
-            self.file_analyzer.analyze_file,
-            Path(code_file.path)
-        )
+        context_info = await self.file_analyzer.analyze_file_async(Path(code_file.path), use_llm=use_llm)
         
         # Enrich context info with hash and impact status
         context_info.content_hash = content_hash
@@ -449,8 +635,15 @@ class PreAnalysisPhase:
 
         return context_info
 
-    def _calculate_file_hash(self, content: str) -> str:
-        """Calculate SHA-256 hash of file content."""
+    def _calculate_file_hash(self, content: str, file_path: Optional[str] = None) -> str:
+        """Calculate SHA-256 hash of file content. Uses normalization if enabled."""
+        hashing_config = self.config.get("hashing", {})
+        use_normalization = hashing_config.get("normalized", True)
+        
+        if use_normalization and file_path:
+            lang = get_language_from_path(file_path)
+            return NormalizedHasher.calculate_normalized_hash(content, lang)
+            
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
     def _get_default_context(self, file_path: str) -> Any:
@@ -510,7 +703,7 @@ class PreAnalysisPhase:
             "total_suppressions": total_suppressions,
         }
 
-    async def execute_with_weights(
+    async def execute_with_weights_async(
         self,
         code_files: List[CodeFile],
         custom_weights: Optional[Dict[str, Dict[str, float]]] = None
@@ -526,7 +719,7 @@ class PreAnalysisPhase:
             PreAnalysisResult with custom weights applied
         """
         # Run standard analysis
-        result = await self.execute(code_files)
+        result = await self.execute_async(code_files)
 
         # Apply custom weights if provided
         if custom_weights:
@@ -630,7 +823,7 @@ class PreAnalysisPhase:
         if purpose_data:
             context.purpose = purpose_data.get("purpose", "")
             context.architecture_description = purpose_data.get("architecture_description", "")
-            logger.info("project_purpose_restored_from_memory")
+            logger.info("project_purpose_restored_from_memory", purpose_preview=context.purpose[:50], source="memory_manager")
 
         # Load service abstractions from memory if not detected in current run
         # (or merge with detected ones)
@@ -642,7 +835,7 @@ class PreAnalysisPhase:
                 context.service_abstractions[fact.subject] = fact.metadata
                 logger.debug("service_abstraction_restored_from_memory", service=fact.subject)
 
-    async def _save_context_to_memory(self, context: ProjectContext) -> None:
+    async def _save_context_to_memory_async(self, context: ProjectContext) -> None:
         """Save project context facts to memory."""
         # Save project purpose
         if context.purpose:
@@ -658,7 +851,7 @@ class PreAnalysisPhase:
                 
             # Persist to disk
             await self.memory_manager.save_async()
-    async def save_file_states(self, file_contexts: Dict[str, Any]) -> None:
+    async def save_file_states_async(self, file_contexts: Dict[str, Any]) -> None:
         """
         Save current file states to memory.
         """
@@ -702,8 +895,13 @@ class PreAnalysisPhase:
             p = self.project_root / cf
             if p.exists():
                 try:
-                    with open(p, "rb") as f:
-                        components.append(hashlib.md5(f.read()).hexdigest())
+                    with open(p, "r", encoding="utf-8") as f:
+                        content = f.read()
+                        # Optimization: Remove comments and whitespace to avoid invalidating cache
+                        # on non-functional changes
+                        content = re.sub(r'#.*$', '', content, flags=re.MULTILINE)
+                        content = "".join(content.split())
+                        components.append(hashlib.md5(content.encode()).hexdigest())
                 except Exception:
                     pass
         
@@ -727,7 +925,7 @@ class PreAnalysisPhase:
         stored_hash = self.memory_manager.get_environment_hash()
         return stored_hash == self.env_hash
 
-    async def _identify_impacted_files(self, code_files: List[CodeFile], project_context: ProjectContext) -> Set[str]:
+    async def _identify_impacted_files_async(self, code_files: List[CodeFile], project_context: ProjectContext) -> Set[str]:
         """
         Identify files impacted by changes in their dependencies.
         
@@ -757,7 +955,7 @@ class PreAnalysisPhase:
         # 3. Identify physically changed files
         changed_physically = []
         for cf in code_files:
-            content_hash = self._calculate_file_hash(cf.content)
+            content_hash = self._calculate_file_hash(cf.content, cf.path)
             rel_path = str(Path(cf.path).relative_to(self.project_root))
             
             # Check memory for existing state

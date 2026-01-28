@@ -8,8 +8,7 @@ This phase determines which validation frames should run based on:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import List, Dict, Any
 
 from warden.validation.domain.frame import CodeFile, ValidationFrame
 from warden.shared.infrastructure.logging import get_logger
@@ -26,6 +25,7 @@ class ClassificationResult:
     frame_priorities: Dict[str, int] = field(default_factory=dict)
     reasoning: str = ""
     learned_patterns: List[Dict[str, Any]] = field(default_factory=list)
+    advisories: List[str] = field(default_factory=list)  # AI Strategic Advice / Warnings
     confidence: float = 0.0
     duration: float = 0.0
 
@@ -85,7 +85,7 @@ class ClassificationPhase:
             hotspots = self.context.get("hotspots", [])
 
             # Default frame selection based on project type
-            result.selected_frames = await self._select_frames_for_project(
+            result.selected_frames = await self._select_frames_for_project_async(
                 project_type, framework, quality_score
             )
 
@@ -123,7 +123,7 @@ class ClassificationPhase:
 
         return result
 
-    async def _select_frames_for_project(
+    async def _select_frames_for_project_async(
         self,
         project_type: str,
         framework: str,

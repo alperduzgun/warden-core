@@ -71,7 +71,7 @@ class UniversalSecretScanner(BaseUniversalFrame):
         self.entropy_threshold = self.config.get("entropy_threshold", 4.5)
         self.min_length = self.config.get("min_length", 16)
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """Execute secret scanning on a single file."""
         start_time = time.perf_counter()
         findings: List[Finding] = []

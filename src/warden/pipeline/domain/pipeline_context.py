@@ -8,7 +8,6 @@ Thread-safe and memory-bounded implementation for production use.
 """
 
 import threading
-from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +45,7 @@ class PipelineContext:
     project_root: Optional[Path] = None  # NEW: Root directory of the project
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns
     language: str = "python"
+    llm_config: Optional[Any] = None  # NEW: Global LLM configuration for tiering
 
     # Memory limits (class variables)
     MAX_LLM_HISTORY: int = field(default=100, init=False)
@@ -61,6 +61,9 @@ class PipelineContext:
     file_context: Optional[FileContext] = None
     file_contexts: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     project_metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    # Phase 0.5: TRIAGE Results (Adaptive Hybrid Triage)
+    triage_decisions: Dict[str, Any] = field(default_factory=dict) # Key: file_path, Value: TriageDecision.model_dump()
 
     # Phase 1: ANALYSIS Results
     quality_metrics: Optional[QualityMetrics] = None
@@ -76,6 +79,7 @@ class PipelineContext:
     frame_priorities: Dict[str, str] = field(default_factory=dict)
     classification_reasoning: str = ""
     learned_patterns: List[Dict[str, Any]] = field(default_factory=list)
+    advisories: List[str] = field(default_factory=list)  # NEW: AI Strategic Warnings
 
     # Phase 3: VALIDATION Results
     findings: List[Dict[str, Any]] = field(default_factory=list)
@@ -105,11 +109,15 @@ class PipelineContext:
     total_tokens: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    request_count: int = 0
 
     # Metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    
+    # Linter Metrics (Multi-Tool)
+    linter_metrics: Dict[str, Any] = field(default_factory=dict)
 
     # Cross-Phases Cache (New)
     # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)
@@ -200,6 +208,7 @@ class PipelineContext:
             "use_gitignore": self.use_gitignore,
             "source_code": self.source_code,
             "language": self.language,
+            "llm_config": self.llm_config,
         }
 
         # PRE-ANALYSIS gets basic context
@@ -370,6 +379,7 @@ class PipelineContext:
             "fortifications_count": len(self.fortifications),
             "cleaning_suggestions_count": len(self.cleaning_suggestions),
             "llm_interactions": len(self.llm_history),
+            "llm_requests": self.request_count,
             "metadata": self.metadata,
         }
 
@@ -378,6 +388,7 @@ class PipelineContext:
         summary_parts = [
             f"Pipeline {self.pipeline_id} Summary:",
             f"File: {self.file_path}",
+            f"AI Requests: {self.request_count}",
         ]
 
         if self.project_type:

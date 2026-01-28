@@ -4,14 +4,14 @@ Pipeline domain models.
 Core entities for validation pipeline orchestration.
 """
 
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from uuid import uuid4
 
 from pydantic import Field
 from warden.shared.domain.base_model import BaseDomainModel
-from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
-from warden.validation.domain.frame import ValidationFrame, FrameResult
+from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy, AnalysisLevel
+from warden.validation.domain.frame import FrameResult
 from warden.rules.domain.models import CustomRule, FrameRules
 
 
@@ -57,6 +57,8 @@ class PipelineConfig(BaseDomainModel):
     parallel_limit: int = 4  # Max concurrent frames in parallel mode
     skip_non_blockers: bool = False  # Skip non-blocker frames if blocker fails
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns (global)
+    analysis_level: AnalysisLevel = AnalysisLevel.STANDARD  # NEW: Scannig depth level
+    use_llm: bool = True  # NEW: Global LLM control flag
 
     # Optional pre-processing phases
     enable_discovery: bool = True  # Run file discovery before validation
@@ -88,12 +90,14 @@ class PipelineConfig(BaseDomainModel):
     
     # Semantic Search configuration (NEW!)
     semantic_search_config: Optional[Dict[str, Any]] = None  # Configuration for semantic search service
+    llm_config: Optional[Dict[str, Any]] = None  # LLM configuration (tpm, rpm, etc.)
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         # Convert enum to string value
         data["strategy"] = self.strategy.value
+        data["analysisLevel"] = self.analysis_level.value
 
         # Convert custom rules
         data["globalRules"] = [rule.to_json() for rule in self.global_rules]
@@ -204,6 +208,7 @@ class PipelineResult(BaseDomainModel):
     high_findings: int
     medium_findings: int
     low_findings: int
+    manual_review_findings: int = 0
 
     # Frame results
     frame_results: List[FrameResult] = Field(default_factory=list)
@@ -245,6 +250,15 @@ class PipelineResult(BaseDomainModel):
             "completionTokens": self.completion_tokens,
         }
         
+        # Add LLM performance metrics
+        try:
+            from warden.llm.factory import get_global_metrics_collector
+            metrics_collector = get_global_metrics_collector()
+            data["llmMetrics"] = metrics_collector.get_summary()
+        except Exception:
+            # Gracefully handle if metrics not available
+            pass
+        
         data["qualityScore"] = self.quality_score
         data["artifacts"] = self.artifacts
 
@@ -259,6 +273,7 @@ class PipelineResult(BaseDomainModel):
         data["high_findings"] = self.high_findings
         data["medium_findings"] = self.medium_findings
         data["low_findings"] = self.low_findings
+        data["manual_review_findings"] = self.manual_review_findings
         data["quality_score"] = self.quality_score
 
         return data

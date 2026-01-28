@@ -3,7 +3,7 @@ Tests for gRPC server implementation.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from pathlib import Path
 
 from warden.grpc.generated import warden_pb2

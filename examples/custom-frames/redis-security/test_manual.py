@@ -118,13 +118,13 @@ async def main():
     print("\n" + "=" * 80)
     print("SUMMARY")
     print("=" * 80)
-    print(f"\nInsecure Code:")
+    print("\nInsecure Code:")
     print(f"  - Status: {insecure_result.status}")
     print(f"  - Issues: {insecure_result.issues_found}")
     print(f"  - Critical: {insecure_result.metadata.get('critical_issues', 0)}")
     print(f"  - High: {insecure_result.metadata.get('high_issues', 0)}")
 
-    print(f"\nSecure Code:")
+    print("\nSecure Code:")
     print(f"  - Status: {secure_result.status}")
     print(f"  - Issues: {secure_result.issues_found}")
 

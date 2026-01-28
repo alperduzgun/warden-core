@@ -3,7 +3,7 @@ LLM Handler for Warden Bridge.
 Handles AI-driven code analysis and streaming responses.
 """
 
-from typing import Any, Dict, List, Optional, AsyncIterator
+from typing import Any, Optional, AsyncIterator
 from warden.shared.infrastructure.logging import get_logger
 from warden.cli_bridge.protocol import IPCError, ErrorCode
 from warden.cli_bridge.handlers.base import BaseHandler
@@ -13,10 +13,11 @@ logger = get_logger(__name__)
 class LLMHandler(BaseHandler):
     """Handles LLM-powered analysis and chat streaming."""
 
-    def __init__(self, llm_config: Any):
+    def __init__(self, llm_config: Any, llm_service: Optional[Any] = None):
         self.llm_config = llm_config
+        self.llm_service = llm_service
 
-    async def analyze_with_llm(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
+    async def analyze_with_llm_async(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
         """Execute LLM analysis with streaming or full completion."""
         from warden.llm.types import LlmProvider
         from warden.llm.factory import create_client
@@ -31,12 +32,16 @@ class LLMHandler(BaseHandler):
                     raise IPCError(ErrorCode.INVALID_PARAMS, f"Invalid provider: {provider}")
 
             # Get client
-            llm_client = create_client(resolved_provider)
+            if self.llm_service and (not provider or self.llm_service.provider == resolved_provider):
+                llm_client = self.llm_service
+            else:
+                llm_client = create_client(resolved_provider)
+                
             if not llm_client:
                 raise IPCError(ErrorCode.LLM_ERROR, "No LLM provider available")
 
             if stream:
-                async for chunk in llm_client.stream_completion(prompt):
+                async for chunk in llm_client.stream_completion_async(prompt):
                     yield chunk
             else:
                 response = await llm_client.complete_async(prompt)

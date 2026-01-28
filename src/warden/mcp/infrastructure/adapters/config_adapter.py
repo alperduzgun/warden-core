@@ -5,7 +5,6 @@ MCP adapter for configuration management tools.
 Maps to gRPC ConfigurationMixin functionality.
 """
 
-from pathlib import Path
 from typing import Any, Dict, List
 
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
@@ -81,32 +80,32 @@ class ConfigAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
     ) -> MCPToolResult:
         """Execute configuration tool."""
         if tool_name == "warden_get_available_frames":
-            return await self._get_available_frames()
+            return await self._get_available_frames_async()
         elif tool_name == "warden_get_available_providers":
-            return await self._get_available_providers()
+            return await self._get_available_providers_async()
         elif tool_name == "warden_get_configuration":
-            return await self._get_configuration()
+            return await self._get_configuration_async()
         elif tool_name == "warden_update_configuration":
-            return await self._update_configuration(arguments)
+            return await self._update_configuration_async(arguments)
         elif tool_name == "warden_update_frame_status":
-            return await self._update_frame_status(arguments)
+            return await self._update_frame_status_async(arguments)
         else:
             return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _get_available_frames(self) -> MCPToolResult:
+    async def _get_available_frames_async(self) -> MCPToolResult:
         """Get available validation frames."""
         if not self.bridge:
             return MCPToolResult.error("Warden bridge not available")
 
         try:
-            frames = await self.bridge.get_available_frames()
+            frames = await self.bridge.get_available_frames_async()
             return MCPToolResult.json_result({
                 "frames": frames,
                 "total_count": len(frames),
@@ -114,13 +113,13 @@ class ConfigAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to get frames: {e}")
 
-    async def _get_available_providers(self) -> MCPToolResult:
+    async def _get_available_providers_async(self) -> MCPToolResult:
         """Get available LLM providers."""
         if not self.bridge:
             return MCPToolResult.error("Warden bridge not available")
 
         try:
-            providers = await self.bridge.get_available_providers()
+            providers = await self.bridge.get_available_providers_async()
             return MCPToolResult.json_result({
                 "providers": providers,
                 "total_count": len(providers),
@@ -128,18 +127,18 @@ class ConfigAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to get providers: {e}")
 
-    async def _get_configuration(self) -> MCPToolResult:
+    async def _get_configuration_async(self) -> MCPToolResult:
         """Get full Warden configuration."""
         if not self.bridge:
             return MCPToolResult.error("Warden bridge not available")
 
         try:
-            config = await self.bridge.get_config()
+            config = await self.bridge.get_config_async()
             return MCPToolResult.json_result(config)
         except Exception as e:
             return MCPToolResult.error(f"Failed to get configuration: {e}")
 
-    async def _update_configuration(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _update_configuration_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Update configuration settings."""
         settings = arguments.get("settings", {})
 
@@ -156,7 +155,7 @@ class ConfigAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to update configuration: {e}")
 
-    async def _update_frame_status(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _update_frame_status_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Update frame enabled status."""
         frame_id = arguments.get("frame_id")
         enabled = arguments.get("enabled")
@@ -170,7 +169,7 @@ class ConfigAdapter(BaseWardenAdapter):
             return MCPToolResult.error("Warden bridge not available")
 
         try:
-            result = await self.bridge.update_frame_status(frame_id, enabled)
+            result = await self.bridge.update_frame_status_async(frame_id, enabled)
             return MCPToolResult.json_result(result)
         except Exception as e:
             return MCPToolResult.error(f"Failed to update frame status: {e}")

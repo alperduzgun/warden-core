@@ -11,7 +11,7 @@ Calculates Maintainability Index and detects code smells:
 import ast
 import math
 import structlog
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any
 from collections import defaultdict
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority

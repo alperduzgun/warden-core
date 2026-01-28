@@ -83,7 +83,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
@@ -102,7 +102,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _analyze_results(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _analyze_results_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Analyze pipeline results."""
         run_id = arguments.get("run_id")
 
@@ -137,7 +137,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             "analysis_timestamp": datetime.utcnow().isoformat(),
         })
 
-    async def _get_trends(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_trends_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get trend data over time."""
         limit = arguments.get("limit", 10)
 
@@ -163,7 +163,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             "total_points": len(points),
         })
 
-    async def _get_frame_stats(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_frame_stats_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get per-frame statistics."""
         stats: Dict[str, Dict[str, Any]] = {}
 
@@ -183,7 +183,7 @@ class AnalysisAdapter(BaseWardenAdapter):
 
         return MCPToolResult.json_result({"stats": stats})
 
-    async def _get_severity_stats(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_severity_stats_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get severity distribution."""
         critical = self._last_result.get("critical_findings", 0)
         high = self._last_result.get("high_findings", 0)
@@ -203,7 +203,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             "weighted_score": weighted,
         })
 
-    async def _get_quality_score(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_quality_score_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Get overall quality score."""
         score = self._calculate_quality_score(self._last_result)
 

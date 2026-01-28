@@ -12,7 +12,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Any, List
+from typing import Dict, Any, List
 
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.validation.domain.enums import (
@@ -21,6 +21,23 @@ from warden.validation.domain.enums import (
     FrameCategory,
     FrameApplicability,
 )
+
+
+@dataclass
+class Remediation:
+    """
+    Suggested fix for a finding.
+    """
+    description: str
+    code: str  # The replacement code
+    unified_diff: str | None = None
+    
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "description": self.description,
+            "code": self.code,
+            "unified_diff": self.unified_diff
+        }
 
 
 @dataclass
@@ -48,6 +65,7 @@ class Finding:
     line: int = 0  # Line number (1-based)
     column: int = 0  # Column number (1-based)
     is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
+    remediation: Remediation | None = None  # 🛡️ NEW: Suggested fix
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize to Panel JSON."""
@@ -60,7 +78,9 @@ class Finding:
             "code": self.code,
             "line": self.line,
             "column": self.column,
+
             "isBlocker": self.is_blocker,  # Exposed to UI/Report
+            "remediation": self.remediation.to_json() if self.remediation else None,
         }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -151,7 +171,7 @@ class ValidationFrame(ABC):
             scope = FrameScope.FILE_LEVEL
             is_blocker = True
 
-            async def execute(self, code_file: CodeFile) -> FrameResult:
+            async def execute_async(self, code_file: CodeFile) -> FrameResult:
                 # Validation logic here
                 pass
 
@@ -179,6 +199,12 @@ class ValidationFrame(ABC):
     # Frame compatibility (for community frames)
     min_warden_version: str | None = None
     max_warden_version: str | None = None
+
+    # Frame dependencies (for conditional execution)
+    # Frame will be skipped if dependencies are not met
+    requires_frames: List[str] = []  # Frame IDs that must run before this frame
+    requires_config: List[str] = []  # Config paths that must be set (e.g., "spec.platforms")
+    requires_context: List[str] = []  # Context attributes that must exist (e.g., "project_context")
 
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         """
@@ -211,7 +237,7 @@ class ValidationFrame(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'description' attribute")
 
     @abstractmethod
-    async def execute(self, code_file: "CodeFile") -> FrameResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: "CodeFile") -> FrameResult:  # type: ignore[name-defined]
         """
         Execute validation frame on code file.
 
@@ -234,7 +260,7 @@ class ValidationFrame(ABC):
         """
         pass
 
-    async def execute_batch(self, code_files: List["CodeFile"]) -> List[FrameResult]:
+    async def execute_batch_async(self, code_files: List["CodeFile"]) -> List[FrameResult]:
         """
         Execute validation on multiple files in PARALLEL.
 
@@ -244,16 +270,18 @@ class ValidationFrame(ABC):
         concurrency = self.config.get("concurrency_limit", 50) if isinstance(self.config, dict) else 50
         semaphore = asyncio.Semaphore(concurrency)
         
-        async def execute_safe(code_file: "CodeFile") -> Any:
+        async def execute_safe_async(code_file: "CodeFile") -> Any:
             async with semaphore:
                 try:
-                    return await self.execute(code_file)
+                    return await self.execute_async(code_file)
                 except Exception as e:
-                    # Log error but don't crash batch
+                    import traceback
+                    print(f"ERROR executing frame {self.frame_id} on {code_file.path}: {e}")
+                    traceback.print_exc()
                     return None
 
         # Launch all tasks
-        tasks = [execute_safe(f) for f in code_files]
+        tasks = [execute_safe_async(f) for f in code_files]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Filter out None results and exceptions
@@ -342,10 +370,14 @@ class CodeFile:
     framework: str | None = None  # fastapi, react, flutter, etc.
     size_bytes: int = 0
     line_count: int = 0
+    hash: Optional[str] = None
+    metadata: Dict[str, Any] = None
 
     def __post_init__(self) -> None:
         """Calculate size and line count if not provided."""
-        if self.size_bytes == 0:
+        if self.metadata is None:
+            self.metadata = {}
+        if self.size_bytes == 0 and self.content:
             self.size_bytes = len(self.content.encode("utf-8"))
-        if self.line_count == 0:
+        if self.line_count == 0 and self.content:
             self.line_count = self.content.count("\n") + 1

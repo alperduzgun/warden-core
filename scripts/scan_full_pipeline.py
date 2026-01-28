@@ -187,7 +187,7 @@ async def scan_with_full_pipeline(
                 elif event_name == "classification_completed":
                     selected_frames = data.get('selected_frames', [])
                     confidence = data.get('confidence', 0)
-                    print(f"\n  🤖 AI Classification Complete:")
+                    print("\n  🤖 AI Classification Complete:")
                     print(f"     Selected Frames: {', '.join(selected_frames)}")
                     print(f"     Confidence: {confidence:.2%}")
 

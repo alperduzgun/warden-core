@@ -9,7 +9,6 @@ API Documentation: https://docs.anthropic.com/claude/reference
 
 import httpx
 import time
-from typing import Optional
 
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse

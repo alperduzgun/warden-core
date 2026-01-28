@@ -46,8 +46,8 @@ class GrpcServer:
 
     Usage:
         server = GrpcServer(port=50051)
-        await server.start()
-        await server.wait_for_termination()
+        await server.start_async()
+        await server.wait_for_termination_async()
     """
 
     def __init__(
@@ -71,7 +71,7 @@ class GrpcServer:
         self.servicer: Optional[WardenServicer] = None
         logger.info("grpc_server_init", port=port, endpoints=51)
 
-    async def start(self) -> None:
+    async def start_async(self) -> None:
         """Start the gRPC server."""
         if warden_pb2_grpc is None:
             raise RuntimeError(
@@ -105,22 +105,22 @@ class GrpcServer:
         listen_addr = f"[::]:{self.port}"
         self.server.add_insecure_port(listen_addr)
 
-        await self.server.start()
+        await self.server.start_async()
         logger.info("grpc_server_started", address=listen_addr, endpoints=51)
 
-    async def stop(self, grace: float = 5.0) -> None:
+    async def stop_async(self, grace: float = 5.0) -> None:
         """Stop the gRPC server gracefully."""
         if self.server:
-            await self.server.stop(grace)
+            await self.server.stop_async(grace)
             logger.info("grpc_server_stopped")
 
-    async def wait_for_termination(self) -> None:
+    async def wait_for_termination_async(self) -> None:
         """Wait for server termination."""
         if self.server:
-            await self.server.wait_for_termination()
+            await self.server.wait_for_termination_async()
 
 
-async def main():
+async def main_async():
     """Main entry point for standalone server."""
     import argparse
 
@@ -134,15 +134,15 @@ async def main():
         project_root=Path(args.project)
     )
 
-    await server.start()
+    await server.start_async()
     print(f"Warden gRPC Server running on port {args.port} with 51 endpoints")
     print("Press Ctrl+C to stop")
 
     try:
-        await server.wait_for_termination()
+        await server.wait_for_termination_async()
     except KeyboardInterrupt:
-        await server.stop()
+        await server.stop_async()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main_async())

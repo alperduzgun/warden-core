@@ -54,6 +54,7 @@ class CleaningPhase:
         context: Optional[Dict[str, Any]] = None,
         llm_service: Optional[LLMService] = None,
         semantic_search_service: Optional[Any] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize cleaning phase.
@@ -67,6 +68,7 @@ class CleaningPhase:
         self.context = context or {}
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
+        self.rate_limiter = rate_limiter
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
         
         # Initialize IgnoreMatcher
@@ -87,6 +89,7 @@ class CleaningPhase:
                 llm_service=llm_service,
                 context=context,
                 semantic_search_service=semantic_search_service,
+                rate_limiter=rate_limiter,
             )
         else:
             self.llm_generator = None
@@ -104,7 +107,9 @@ class CleaningPhase:
         """
         Execute cleaning phase.
         """
-        logger.info(
+        # Use debug level for phase start if no files to avoid CI noise
+        log_func = logger.info if code_files else logger.debug
+        log_func(
             "cleaning_phase_started",
             file_count=len(code_files),
             use_llm=self.use_llm,
@@ -131,6 +136,9 @@ class CleaningPhase:
         all_refactorings = []
         all_suggestions = []
 
+        files_for_llm = []
+        rule_based_suggestions = {}
+
         # Analyze each file for improvements
         for code_file in code_files:
             # Skip non-production files based on context
@@ -146,7 +154,7 @@ class CleaningPhase:
                 if context_type in ["TEST", "EXAMPLE", "DOCUMENTATION"]:
                     continue
 
-            # Run specialized cleaning orchestrator
+            # Run specialized cleaning orchestrator (Rule-Based, Fast)
             res = await orchestrator.analyze_async(code_file)
             all_suggestions.extend(res.suggestions)
             
@@ -158,12 +166,40 @@ class CleaningPhase:
                     detail=sug.suggestion
                 ))
 
-            # Legacy rule-based/llm suggestions
-            if self.use_llm:
-                suggestions = await self._generate_llm_suggestions_async(code_file)
+            # Heuristic: Skip LLM cleaning if code quality is already Good/Excellent (>7.0)
+            skip_llm_for_quality = False
+            phase_results = self.context.get("phase_results", {}) if isinstance(self.context, dict) else getattr(self.context, "phase_results", {})
+            file_metrics = phase_results.get("ANALYSIS", {}).get("metrics", {}).get(code_file.path)
+            
+            if file_metrics:
+                overall_score = file_metrics.get("overall_score", 0.0)
+                if overall_score >= 7.0:
+                    skip_llm_for_quality = True
+                    logger.info("skipping_llm_cleaning_high_quality", file=code_file.path, score=overall_score)
+            
+            if self.use_llm and not skip_llm_for_quality:
+                files_for_llm.append(code_file)
             else:
-                suggestions = await self._generate_rule_based_suggestions_async(code_file)
+                 # If skipping LLM or LLM disabled, run rule-based fallback immediately/lazily?
+                 # Actually orchestrator.analyze_async does some rule based stuff, but _generate_rule_based_suggestions_async does MORE.
+                 # Let's collecting them for batch processing to avoid confusion, or run here?
+                 # Running here is fine as it's CPU bound and fast.
+                 if not self.use_llm and skip_llm_for_quality:
+                     logger.debug("falling_back_to_rules_due_to_high_quality", file=code_file.path)
+                 
+                 sugs = await self._generate_rule_based_suggestions_async(code_file)
+                 rule_based_suggestions[code_file.path] = sugs
 
+        # Batch Process LLM Suggestions
+        llm_suggestions_map = {}
+        if files_for_llm and self.llm_generator:
+            logger.info("cleaning_batch_llm_start", count=len(files_for_llm))
+            llm_suggestions_map = await self.llm_generator.generate_batch_suggestions_async(files_for_llm)
+        
+        # Merge Results
+        for code_file in code_files:
+            suggestions = llm_suggestions_map.get(code_file.path) or rule_based_suggestions.get(code_file.path) or {}
+            
             for sug in suggestions.get("cleanings", []):
                 all_cleanings.append(Cleaning(
                     id=f"leg-clean-{len(all_cleanings)}",

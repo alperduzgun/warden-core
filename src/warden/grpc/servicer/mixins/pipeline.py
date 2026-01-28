@@ -34,7 +34,7 @@ class PipelineMixin:
         try:
             frames = list(request.frames) if request.frames else None
 
-            result = await self.bridge.execute_pipeline(
+            result = await self.bridge.execute_pipeline_async(
                 path=request.path,
                 frames=frames
             )
@@ -96,7 +96,7 @@ class PipelineMixin:
 
             frames = list(request.frames) if request.frames else None
 
-            async for event in self.bridge.execute_pipeline_stream(
+            async for event in self.bridge.execute_pipeline_stream_async(
                 path=request.path,
                 frames=frames
             ):

@@ -1,5 +1,5 @@
 advanced:
-  debug: false
+  debug: true
   frame_timeout: 300
   max_workers: 4
 ci:
@@ -19,7 +19,7 @@ frames:
 - resilience
 - fuzz
 - orphan
-- env-security
+# - env-security (Duplicate of environmentsecurity)
 - stress
 - demosecurity
 - architecturalconsistency
@@ -34,8 +34,8 @@ frames_config:
     check_hardcoded_passwords: true
     enabled: true
     severity_level: high
-  env-security:
-    enabled: true
+#  env-security:
+#    enabled: true
   environmentsecurity:
     enabled: true
   orphan:
@@ -46,14 +46,7 @@ frames_config:
     ignore_private: false
     ignore_test_files: true
     use_llm_filter: true
-  resilience:
-    checks:
-    - timeout_handling
-    - retry_logic
-    - circuit_breaker
-    - error_recovery
-    enabled: true
-    priority: high
+
   security:
     checks:
     - sql-injection
@@ -69,6 +62,30 @@ frames_config:
     - api_load_testing
     - async_performance
     enabled: true
+    suppressions:
+      # False positives for unclosed files in managed streams/Path.read_text
+      - rule: stress-unclosed_file
+        files:
+          - src/warden/cli_bridge/handlers/pipeline_handler.py
+          - src/warden/secrets/application/template_resolver.py
+          - src/warden/mcp/ports/transport.py
+          - src/warden/mcp/infrastructure/stdio_transport.py
+  resilience:
+    checks:
+      - timeout_handling
+      - retry_logic
+      - circuit_breaker
+      - error_recovery
+    enabled: true
+    priority: high
+    is_blocker: false
+    suppressions:
+      # False positives for retry implementation files
+      - rule: "*"
+        files:
+          - src/warden/shared/utils/retry_utils.py
+          - src/warden/analysis/services/finding_verifier.py
+          - src/warden/pipeline/application/orchestrator/orchestrator.py
 llm:
   azure:
     api_key: ${AZURE_OPENAI_API_KEY}
@@ -79,6 +96,8 @@ llm:
     api_key: ${GROQ_API_KEY}
     provider: groq
   max_retries: 2
+  tpm_limit: 10000
+  rpm_limit: 60
   model: gpt-4o
   provider: azure_openai
   timeout: 300
@@ -107,6 +126,8 @@ settings:
   enable_fortification: true
   enable_pre_analysis: true
   enable_validation: true
+  enable_issue_validation: true
+  enable_suppression: false
   fail_fast: false
   frame_timeout: 120
   min_severity: high
@@ -119,8 +140,6 @@ settings:
   timeout: 300
 
 # --- Custom Rules Configuration ---
-# To enable your custom rules, uncomment the following lines:
-#
-# custom_rules:
-#   - .warden/rules/my_custom_rules.yaml
-#
+custom_rules:
+  - .warden/rules/my_custom_rules.yaml
+  - .warden/rules/warden_core_rules.yaml

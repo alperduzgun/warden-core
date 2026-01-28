@@ -18,54 +18,43 @@ class ProtoConverters:
     """Utility class for converting between dict and proto messages."""
 
     @staticmethod
+    def _to_proto_enum(pb_module, enum_name: str, fallback: int) -> int:
+        """Generic dynamic enum lookup."""
+        return getattr(pb_module, enum_name.upper(), fallback)
+
+    @staticmethod
     def severity_to_proto(severity: str) -> int:
         """Convert severity string to proto enum."""
-        severity_map = {
-            "critical": warden_pb2.CRITICAL,
-            "high": warden_pb2.HIGH,
-            "medium": warden_pb2.MEDIUM,
-            "low": warden_pb2.LOW,
-            "info": warden_pb2.INFO
-        }
-        return severity_map.get(severity.lower(), warden_pb2.SEVERITY_UNSPECIFIED)
+        return ProtoConverters._to_proto_enum(warden_pb2, severity, warden_pb2.SEVERITY_UNSPECIFIED)
 
     @staticmethod
     def state_to_proto(state: str) -> int:
         """Convert issue state string to proto enum."""
-        state_map = {
-            "open": warden_pb2.OPEN,
-            "resolved": warden_pb2.RESOLVED,
-            "suppressed": warden_pb2.SUPPRESSED,
-            "reopened": warden_pb2.REOPENED
-        }
-        return state_map.get(state.lower(), warden_pb2.OPEN)
+        return ProtoConverters._to_proto_enum(warden_pb2, state, warden_pb2.OPEN)
 
     @staticmethod
     def language_to_file_type(lang: str) -> int:
         """Convert language string to proto FileType enum."""
-        type_map = {
-            "py": warden_pb2.PYTHON,
-            "python": warden_pb2.PYTHON,
-            "js": warden_pb2.JAVASCRIPT,
-            "javascript": warden_pb2.JAVASCRIPT,
-            "ts": warden_pb2.TYPESCRIPT,
-            "typescript": warden_pb2.TYPESCRIPT,
-            "java": warden_pb2.JAVA,
-            "cs": warden_pb2.CSHARP,
-            "csharp": warden_pb2.CSHARP,
-            "go": warden_pb2.GO,
-            "rs": warden_pb2.RUST,
-            "rust": warden_pb2.RUST,
-            "cpp": warden_pb2.CPP,
-            "rb": warden_pb2.RUBY,
-            "ruby": warden_pb2.RUBY,
-            "php": warden_pb2.PHP,
-            "kt": warden_pb2.KOTLIN,
-            "kotlin": warden_pb2.KOTLIN,
-            "swift": warden_pb2.SWIFT,
-            "scala": warden_pb2.SCALA
-        }
-        return type_map.get(lang.lower(), warden_pb2.OTHER)
+        from warden.shared.languages.registry import LanguageRegistry
+        from warden.ast.domain.enums import CodeLanguage
+        
+        # 1. Resolve to CodeLanguage enum
+        try:
+            if lang.startswith("."): # It's an extension
+                lang_enum = LanguageRegistry.get_language_from_path(lang)
+            else: # It's a name or id
+                lang_enum = CodeLanguage(lang.lower())
+        except ValueError:
+            # Fallback for names not exactly matching enum value
+            lang_enum = LanguageRegistry.get_language_from_path(f"dummy.{lang}")
+
+        # 2. Get Registry definition
+        defn = LanguageRegistry.get_definition(lang_enum)
+        if defn and defn.proto_type_name:
+             return getattr(warden_pb2, defn.proto_type_name.upper(), warden_pb2.OTHER)
+             
+        # 3. Fallback to name-based lookup if no definition found
+        return ProtoConverters._to_proto_enum(warden_pb2, lang_enum.value, warden_pb2.OTHER)
 
     @staticmethod
     def convert_finding(finding: Dict[str, Any]) -> "warden_pb2.Finding":
@@ -226,25 +215,7 @@ class ProtoConverters:
 
     @staticmethod
     def detect_language(path: Path) -> str:
-        """Detect language from file extension."""
-        ext_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".jsx": "javascript",
-            ".tsx": "typescript",
-            ".java": "java",
-            ".cs": "csharp",
-            ".go": "go",
-            ".rs": "rust",
-            ".cpp": "cpp",
-            ".c": "c",
-            ".h": "c",
-            ".hpp": "cpp",
-            ".rb": "ruby",
-            ".php": "php",
-            ".kt": "kotlin",
-            ".swift": "swift",
-            ".scala": "scala"
-        }
-        return ext_map.get(path.suffix.lower(), "")
+        """Detect language using central LanguageRegistry."""
+        from warden.shared.languages.registry import LanguageRegistry
+        lang_enum = LanguageRegistry.get_language_from_path(path)
+        return lang_enum.value if lang_enum != CodeLanguage.UNKNOWN else ""

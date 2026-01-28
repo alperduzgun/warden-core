@@ -5,15 +5,14 @@ Provides validation for code syntax and basic build verification.
 """
 
 import asyncio
-import shlex
 import structlog
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 
 from warden.validation.domain.frame import CodeFile
-from warden.analysis.domain.project_context import ProjectContext, ProjectType, Framework
+from warden.analysis.domain.project_context import ProjectContext, Framework
 from warden.ast.application.provider_registry import ASTProviderRegistry
 from warden.ast.domain.enums import CodeLanguage
 
@@ -47,7 +46,7 @@ class IntegrityScanner:
         self.ast_registry = ast_registry
         self.config = config or {}
 
-    async def scan(
+    async def scan_async(
         self, 
         code_files: List[CodeFile], 
         project_context: ProjectContext, 
@@ -59,7 +58,7 @@ class IntegrityScanner:
         issues = []
         
         # 1. Syntax Verification (Tree-sitter)
-        syntax_issues = await self._check_syntax(code_files, pipeline_context)
+        syntax_issues = await self._check_syntax_async(code_files, pipeline_context)
         issues.extend(syntax_issues)
         
         # If too many syntax errors, we might want to skip build check to save time
@@ -70,12 +69,12 @@ class IntegrityScanner:
         # 2. Build Verification (Optional/Configured)
         enable_build_check = self.config.get("enable_build_check", True)
         if enable_build_check:
-            build_issues = await self._verify_build(project_context)
+            build_issues = await self._verify_build_async(project_context)
             issues.extend(build_issues)
             
         return issues
 
-    async def _check_syntax(self, code_files: List[CodeFile], pipeline_context: Optional[Any] = None) -> List[IntegrityIssue]:
+    async def _check_syntax_async(self, code_files: List[CodeFile], pipeline_context: Optional[Any] = None) -> List[IntegrityIssue]:
         """Check syntax using loaded AST providers."""
         issues = []
         
@@ -127,7 +126,7 @@ class IntegrityScanner:
                     return found
         return None
 
-    async def _verify_build(self, context: ProjectContext) -> List[IntegrityIssue]:
+    async def _verify_build_async(self, context: ProjectContext) -> List[IntegrityIssue]:
         """Verify build using native tools if detected."""
         issues = []
         
@@ -212,14 +211,5 @@ class IntegrityScanner:
         return None
 
     def _guess_language(self, path: str) -> CodeLanguage:
-        ext = Path(path).suffix.lower()
-        mapping = {
-            ".py": CodeLanguage.PYTHON,
-            ".ts": CodeLanguage.TYPESCRIPT,
-            ".tsx": CodeLanguage.TSX,
-            ".js": CodeLanguage.JAVASCRIPT,
-            ".jsx": CodeLanguage.JAVASCRIPT,
-            ".go": CodeLanguage.GO,
-            ".java": CodeLanguage.JAVA,
-        }
-        return mapping.get(ext, CodeLanguage.UNKNOWN)
+        from warden.shared.languages.registry import LanguageRegistry
+        return LanguageRegistry.get_language_from_path(Path(path))

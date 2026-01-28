@@ -7,7 +7,7 @@ Based on C# OpenAIClient.cs
 import httpx
 import time
 import json
-from typing import Dict, Any, AsyncGenerator
+from typing import Dict, Any, Optional
 
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
@@ -34,9 +34,20 @@ class OpenAIClient(ILlmClient):
         else:
             self._base_url = config.endpoint or "https://api.openai.com/v1"
 
+        self._usage = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "request_count": 0
+        }
+
     @property
     def provider(self) -> LlmProvider:
         return self._provider
+
+    def get_usage(self) -> Dict[str, int]:
+        """Get cumulative token usage."""
+        return self._usage.copy()
 
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         start_time = time.time()
@@ -81,15 +92,24 @@ class OpenAIClient(ILlmClient):
                 )
 
             usage = result.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+
+            # Update cumulative usage
+            self._usage["prompt_tokens"] += prompt_tokens
+            self._usage["completion_tokens"] += completion_tokens
+            self._usage["total_tokens"] += total_tokens
+            self._usage["request_count"] += 1
 
             return LlmResponse(
                 content=result["choices"][0]["message"]["content"],
                 success=True,
                 provider=self.provider,
                 model=result.get("model"),
-                prompt_tokens=usage.get("prompt_tokens"),
-                completion_tokens=usage.get("completion_tokens"),
-                total_tokens=usage.get("total_tokens"),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
                 duration_ms=duration_ms
             )
 
@@ -138,13 +158,14 @@ class OpenAIClient(ILlmClient):
         except (ValueError, AttributeError):
             return False
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.") -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
         Args:
             prompt: User prompt
             system_prompt: System prompt (optional)
+            model: Model name override (optional)
 
         Returns:
             LlmResponse object with content and token usage
@@ -155,8 +176,8 @@ class OpenAIClient(ILlmClient):
         request = LlmRequest(
             user_message=prompt,
             system_prompt=system_prompt,
-            model=self._default_model,
-            temperature=0.7,
+            model=model or self._default_model,
+            temperature=0.0,  # Idempotency
             max_tokens=2000,
             timeout_seconds=30.0
         )
@@ -168,7 +189,7 @@ class OpenAIClient(ILlmClient):
 
         return response
 
-    async def stream_completion(self, prompt: str, system_prompt: str = "You are a helpful coding assistant."):
+    async def stream_completion_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant."):
         """
         Streaming completion method.
 

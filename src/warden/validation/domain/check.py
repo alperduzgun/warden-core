@@ -124,7 +124,7 @@ class ValidationCheck(ABC):
             name = "SQL Injection Detection"
             severity = CheckSeverity.CRITICAL
 
-            async def execute(self, code_file: CodeFile) -> CheckResult:
+            async def execute_async(self, code_file: CodeFile) -> CheckResult:
                 # Check for SQL injection patterns
                 pass
 
@@ -134,7 +134,7 @@ class ValidationCheck(ABC):
             name = "MyCompany API Key Detection"
             severity = CheckSeverity.CRITICAL
 
-            async def execute(self, code_file: CodeFile) -> CheckResult:
+            async def execute_async(self, code_file: CodeFile) -> CheckResult:
                 # Check for company-specific API key patterns
                 pass
 
@@ -177,7 +177,7 @@ class ValidationCheck(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'name' attribute")
 
     @abstractmethod
-    async def execute(self, code_file: "CodeFile") -> CheckResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: "CodeFile") -> CheckResult:  # type: ignore[name-defined]
         """
         Execute validation check on code file.
 

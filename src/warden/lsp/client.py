@@ -4,7 +4,6 @@ import json
 import os
 import structlog
 from typing import Optional, Dict, Any, Callable
-from abc import ABC, abstractmethod
 
 logger = structlog.get_logger()
 
@@ -30,7 +29,7 @@ class LanguageServerClient:
         self._reader_task: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
 
-    async def start(self):
+    async def start_async(self):
         """Start the language server subprocess."""
         try:
             full_cmd = [self.binary_path] + self.args
@@ -45,14 +44,14 @@ class LanguageServerClient:
             )
             
             # Start background reader
-            self._reader_task = asyncio.create_task(self._read_loop())
+            self._reader_task = asyncio.create_task(self._read_loop_async())
             logger.info("lsp_started", pid=self.process.pid)
             
         except Exception as e:
             logger.error("lsp_start_failed", error=str(e))
             raise
 
-    async def initialize(self, root_path: str) -> Dict[str, Any]:
+    async def initialize_async(self, root_path: str) -> Dict[str, Any]:
         """Send initialize request."""
         params = {
             "processId": os.getpid(),
@@ -70,16 +69,16 @@ class LanguageServerClient:
             },
             "initializationOptions": {}
         }
-        return await self.send_request("initialize", params)
+        return await self.send_request_async("initialize", params)
 
-    async def shutdown(self):
+    async def shutdown_async(self):
         """Graceful shutdown."""
         if not self.process: return
         
         try:
             logger.info("lsp_shutting_down")
-            await self.send_request("shutdown", {})
-            self._send_notification("exit", {})
+            await self.send_request_async("shutdown", {})
+            await self.send_notification_async("exit", {})
             
             # Cancel reader
             if self._reader_task:
@@ -101,7 +100,7 @@ class LanguageServerClient:
             if self.process and self.process.returncode is None:
                 self.process.kill()
 
-    async def send_request(self, method: str, params: Any) -> Any:
+    async def send_request_async(self, method: str, params: Any) -> Any:
         """Send a JSON-RPC request and await result."""
         if not self.process or self.process.stdin.is_closing():
             raise RuntimeError("LSP process is not running")
@@ -121,19 +120,19 @@ class LanguageServerClient:
         self._pending_requests[req_id] = future
         
         try:
-            await self._write_message(request)
+            await self._write_message_async(request)
             # Timeout safety
             return await asyncio.wait_for(future, timeout=10.0) # 10s default timeout
         except asyncio.TimeoutError:
             del self._pending_requests[req_id]
             logger.error("lsp_request_timeout", method=method, id=req_id)
             raise
-        except Exception as e:
+        except Exception:
             if req_id in self._pending_requests:
                 del self._pending_requests[req_id]
             raise
 
-    def _send_notification(self, method: str, params: Any):
+    async def send_notification_async(self, method: str, params: Any):
         """Send a fire-and-forget notification."""
         if not self.process: return
         
@@ -142,7 +141,7 @@ class LanguageServerClient:
             "method": method,
             "params": params
         }
-        asyncio.create_task(self._write_message(msg))
+        await self._write_message_async(msg)
 
     def on_notification(self, method: str, handler: Callable):
         """Register a handler for a notification method."""
@@ -158,14 +157,14 @@ class LanguageServerClient:
             except ValueError:
                 pass
 
-    async def _write_message(self, msg: Dict[str, Any]):
+    async def _write_message_async(self, msg: Dict[str, Any]):
         """Encode and write message to stdin."""
         body = json.dumps(msg)
         content = f"Content-Length: {len(body)}\r\n\r\n{body}"
         self.process.stdin.write(content.encode('utf-8'))
         await self.process.stdin.drain()
 
-    async def _read_loop(self):
+    async def _read_loop_async(self):
         """Continuous loop reading messages from stdout."""
         try:
             while True:

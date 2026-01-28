@@ -5,7 +5,7 @@ Detects project-specific service abstractions (like SecretManager, ConfigLoader)
 and their responsibilities for context-aware consistency enforcement.
 """
 
-from typing import Dict, List, Optional, Set, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -137,7 +137,9 @@ class ServiceAbstractionDetector:
         self, 
         project_root: Path, 
         project_context: Optional[ProjectContext] = None,
-        llm_config: Optional[LlmConfiguration] = None
+        llm_config: Optional[LlmConfiguration] = None,
+        analysis_level: Optional[Any] = None,
+        llm_service: Optional[Any] = None
     ) -> None:
         """
         Initialize detector.
@@ -146,21 +148,32 @@ class ServiceAbstractionDetector:
             project_root: Root directory of the project
             project_context: Optional project context for language detection
             llm_config: Optional LLM configuration for bypass synthesis
+            llm_service: Optional shared LLM service
         """
         self.project_root = Path(project_root)
         self.project_context = project_context
         self.abstractions: Dict[str, ServiceAbstraction] = {}
+        self.analysis_level = analysis_level
+        self._injected_files: Optional[List[Path]] = None
         
         # Initialize AST registry
         self.registry = ASTProviderRegistry()
         self._registry_initialized = False
         
         # Initialize LLM
-        try:
-            self.llm = create_client(llm_config) if llm_config else create_client()
-        except Exception as e:
-            logger.debug("llm_client_creation_failed_for_detector", error=str(e))
+        self.llm = llm_service
+        if not self.llm:
+            try:
+                self.llm = create_client(llm_config) if llm_config else create_client()
+            except Exception as e:
+                logger.debug("llm_client_creation_failed_for_detector", error=str(e))
+                self.llm = None
+
+        # Check analysis level - bypass LLM initialization if basic
+        from warden.pipeline.domain.enums import AnalysisLevel
+        if self.analysis_level == AnalysisLevel.BASIC:
             self.llm = None
+            logger.debug("llm_disabled_for_detector", reason="analysis_level_basic")
     
     async def _ensure_registry(self) -> None:
         """Ensure AST registry is initialized and loaded."""
@@ -168,13 +181,17 @@ class ServiceAbstractionDetector:
             await self.registry.discover_providers()
             self._registry_initialized = True
     
-    async def detect_async(self) -> Dict[str, ServiceAbstraction]:
+    async def detect_async(self, all_files: Optional[List[Path]] = None) -> Dict[str, ServiceAbstraction]:
         """
         Detect service abstractions in the project.
         
+        Args:
+            all_files: Optional list of pre-discovered files
+            
         Returns:
             Dictionary mapping class name to ServiceAbstraction
         """
+        self._injected_files = all_files
         await self._ensure_registry()
         
         logger.info("service_abstraction_detection_started", project=str(self.project_root))
@@ -233,11 +250,26 @@ class ServiceAbstractionDetector:
         ]
         
         files = []
+        
+        if self._injected_files is not None:
+            # Use pre-discovered files, filtered by extension/language and basic exclude
+            for path in self._injected_files:
+                ext = path.suffix.lower()
+                for lang in languages:
+                    if ext in lang_extensions.get(lang, []):
+                        # Basic exclude check for injected files
+                        if not any(excluded in str(path) for excluded in excluded_patterns):
+                            files.append((path, lang))
+                        break
+            return files
+
+        # Legacy fallback (Slow path)
+        logger.warning("service_abstraction_detector_fallback_to_sync_rglob", reason="no_injected_files")
         for lang in languages:
-            extensions = lang_extensions.get(lang, [])
-            for ext in extensions:
+            for ext in lang_extensions.get(lang, []):
                 for file_path in self.project_root.rglob(f"*{ext}"):
-                    if any(excl in str(file_path) for excl in excluded_patterns):
+                    # Skip excluded directories
+                    if any(excluded in str(file_path) for excluded in excluded_patterns):
                         continue
                     if "test" in file_path.name.lower() or file_path.name.startswith("test_"):
                         continue

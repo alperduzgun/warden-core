@@ -1,8 +1,7 @@
 """Report generator for Warden scan results."""
 
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import json
 
 from .html_generator import HtmlReportGenerator
@@ -109,17 +108,52 @@ class ReportGenerator:
                             "rules": []
                         }
                     },
+                    "invocations": [
+                        {
+                            "executionSuccessful": True,
+                            "toolExecutionNotifications": []
+                        }
+                    ],
                     "results": []
                 }
             ]
         }
         
-        # Add custom properties for LLM usage
+        # Inject AI Advisories from Metadata
+        metadata = scan_results.get('metadata', {})
+        advisories = metadata.get('advisories', []) 
+        # Fallback to check if it's in top-level for some reason
+        if not advisories:
+            advisories = scan_results.get('advisories', [])
+            
+        if advisories:
+            notifications = []
+            for advice in advisories:
+                notifications.append({
+                    "descriptor": {
+                        "id": "AI001", 
+                        "name": "AI Advisor Note"
+                    },
+                    "message": {
+                        "text": advice
+                    },
+                    "level": "note"
+                })
+            sarif["runs"][0]["invocations"][0]["toolExecutionNotifications"] = notifications
+        
+        # Add custom properties for LLM usage and metrics
+        properties = {}
+        
         llm_usage = scan_results.get('llmUsage', {})
         if llm_usage:
-            sarif["runs"][0]["properties"] = {
-                "llmUsage": llm_usage
-            }
+            properties["llmUsage"] = llm_usage
+        
+        llm_metrics = scan_results.get('llmMetrics', {})
+        if llm_metrics:
+            properties["llmMetrics"] = llm_metrics
+        
+        if properties:
+            sarif["runs"][0]["properties"] = properties
 
         run = sarif["runs"][0]
         rules_map = {}
@@ -177,8 +211,19 @@ class ReportGenerator:
                 }
                 
                 # Add detail if available
-                if finding.get('detail'):
-                    result["message"]["text"] += f"\\n\\nDetails: {finding['detail']}"
+                detail = finding.get('detail', '')
+                
+                # Check for manual review flag in verification metadata
+                verification = finding.get('verification_metadata', {})
+                if verification.get('review_required'):
+                    result["message"]["text"] = f"⚠️ [MANUAL REVIEW REQUIRED] {result['message']['text']}"
+                    if not detail:
+                        detail = verification.get('reason', 'LLM verification was uncertain or skipped.')
+                    else:
+                        detail = f"{verification.get('reason', 'Verification uncertain')} | {detail}"
+
+                if detail:
+                    result["message"]["text"] += f"\\n\\nDetails: {detail}"
                     
                 run["results"].append(result)
         

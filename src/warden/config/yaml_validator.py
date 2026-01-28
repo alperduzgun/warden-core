@@ -14,10 +14,10 @@ Validation checks:
 6. No orphaned nodes/edges
 """
 
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Set
 from collections import deque
 
-from warden.config.domain.models import PipelineConfig, PipelineNode
+from warden.config.domain.models import PipelineConfig
 from warden.validation.domain.frame import get_frame_by_id
 
 

@@ -32,7 +32,7 @@ def status_command(
              raise typer.Exit(1)
              
         # 3. Download Logic with Retry & Circuit Breaker
-        console.print(f"[dim]Downloading 'warden-scan-results' artifact...[/dim]")
+        console.print("[dim]Downloading 'warden-scan-results' artifact...[/dim]")
         tmp_download = warden_dir / "tmp_download"
         
         import time
@@ -61,9 +61,9 @@ def status_command(
                 import shutil
                 report_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(downloaded), str(target_local_path))
-                console.print(f"  ✅ [cyan]warden.sarif[/cyan] downloaded and updated.")
+                console.print("  ✅ [cyan]warden.sarif[/cyan] downloaded and updated.")
             else:
-                console.print(f"[yellow]Artifact downloaded but contents unexpected.[/yellow]")
+                console.print("[yellow]Artifact downloaded but contents unexpected.[/yellow]")
         else:
              console.print(f"[bold red]❌ Failed to download artifacts after {max_retries} attempts.[/bold red]")
              raise typer.Exit(1)

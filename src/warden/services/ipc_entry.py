@@ -45,7 +45,7 @@ def check_single_instance():
             sys.exit(1)
         except (ProcessLookupError, ValueError):
             # Process doesn't exist, remove stale PID file
-            logger.info(f"🧹 Cleaning stale PID file")
+            logger.info("🧹 Cleaning stale PID file")
             PID_FILE.unlink()
 
     # Create .warden directory if it doesn't exist
@@ -74,7 +74,7 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 
-async def main():
+async def main_async():
     """Start the IPC server."""
     logger.info("Starting Warden IPC Server (Service Mode)...")
 
@@ -104,11 +104,11 @@ async def main():
             logger.info(f"🎯 Loaded {len(bridge.orchestrator.frames)} validation frames")
         logger.info("Press Ctrl+C to stop")
 
-        await server.start()
+        await server.start_async()
 
     except KeyboardInterrupt:
         logger.info("\n⚠️  Shutting down server...")
-        await server.stop()
+        await server.stop_async()
         cleanup()
         logger.info("✅ Server stopped")
 
@@ -120,7 +120,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        asyncio.run(main_async())
     except KeyboardInterrupt:
         cleanup()
     except Exception as e:

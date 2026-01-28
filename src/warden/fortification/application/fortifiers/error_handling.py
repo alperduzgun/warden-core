@@ -7,18 +7,15 @@ Detects risky operations (async, file I/O, network, database) and wraps them.
 
 import structlog
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import (
     FortificationResult,
-    FortificationAction,
-    FortificationActionType,
     FortifierPriority,
     Fortification,
 )
 from warden.validation.domain.frame import CodeFile
-from warden.llm.factory import create_client
 
 logger = structlog.get_logger()
 
@@ -45,12 +42,14 @@ class ErrorHandlingFortifier(BaseFortifier):
     - External API calls
     """
 
-    def __init__(self):
-        """Initialize Error Handling Fortifier."""
-        try:
-            self._llm_provider = create_client()
-        except Exception:
-            self._llm_provider = None  # LLM optional
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize Error Handling Fortifier.
+
+        Args:
+            llm_service: Optional shared LLM service.
+        """
+        self._llm_provider = llm_service
 
     @property
     def name(self) -> str:
@@ -132,7 +131,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             )
             try:
                 # Use LLM to generate better suggestions (NOT to modify code!)
-                enhanced = await self._enhance_suggestions_with_llm(
+                enhanced = await self._enhance_suggestions_with_llm_async(
                     code_file, fortification_suggestions
                 )
                 if enhanced:
@@ -215,7 +214,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             # Detect database operations
             if any(
                 keyword in stripped_line
-                for keyword in [".execute(", ".query(", "cursor.", "session."]
+                for keyword in [".execute_async(", ".query(", "cursor.", "session."]
             ) and not self._is_inside_try_except(lines, i):
                 suggestions.append(
                     ErrorHandlingSuggestion(
@@ -290,7 +289,7 @@ class ErrorHandlingFortifier(BaseFortifier):
         snippet_lines = lines[start:end]
         return "\n".join(snippet_lines)
 
-    async def _enhance_suggestions_with_llm(
+    async def _enhance_suggestions_with_llm_async(
         self,
         code_file: CodeFile,
         suggestions: List[Fortification],
@@ -332,7 +331,7 @@ Format: JSON array of objects with keys: issueLine (int), suggestion (string)"""
             response = await self._llm_provider.complete_async(
                 system_prompt="You are a code safety expert. Provide suggestions for fixing code issues. Never write code, only suggest what to do.",
                 user_prompt=prompt,
-                temperature=0.3,
+                temperature=0.0,  # Idempotency
                 max_tokens=1000,
             )
 

@@ -33,7 +33,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 
-async def main(project_root: Optional[Path] = None) -> None:
+async def main_async(project_root: Optional[Path] = None) -> None:
     """
     Start the MCP server.
 
@@ -50,7 +50,7 @@ async def main(project_root: Optional[Path] = None) -> None:
 
     def signal_handler():
         logger.info("mcp_server_shutdown_signal")
-        asyncio.create_task(server.stop())
+        asyncio.create_task(server.stop_async())
 
     # Register signal handlers (Unix only)
     if sys.platform != "win32":
@@ -63,14 +63,14 @@ async def main(project_root: Optional[Path] = None) -> None:
             project_root=str(root),
             pid=str(os.getpid()) if "os" in dir() else "unknown",
         )
-        await server.start()
+        await server.start_async()
     except KeyboardInterrupt:
         logger.info("mcp_server_keyboard_interrupt")
     except Exception as e:
         logger.error("mcp_server_error", error=str(e))
         raise
     finally:
-        await server.stop()
+        await server.stop_async()
         logger.info("mcp_server_stopped")
 
 
@@ -81,10 +81,9 @@ def run(project_root: Optional[str] = None) -> None:
     Args:
         project_root: Project root directory path
     """
-    import os
 
     root = Path(project_root) if project_root else Path.cwd()
-    asyncio.run(main(root))
+    asyncio.run(main_async(root))
 
 
 if __name__ == "__main__":

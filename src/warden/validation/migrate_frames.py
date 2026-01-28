@@ -1,6 +1,5 @@
 from pathlib import Path
 import shutil
-import os
 
 def migrate():
     source_root = Path("src/warden/validation/frames")

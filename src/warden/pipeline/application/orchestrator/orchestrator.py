@@ -4,10 +4,9 @@ Main Phase Orchestrator for 6-phase pipeline.
 Coordinates execution of all pipeline phases with shared PipelineContext.
 """
 
-import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, List, Optional, Callable
 from uuid import uuid4
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -24,6 +23,8 @@ from warden.shared.infrastructure.logging import get_logger
 from .phase_executor import PhaseExecutor
 from .frame_executor import FrameExecutor
 from warden.shared.services.semantic_search_service import SemanticSearchService
+from warden.analysis.services.finding_verifier import FindingVerificationService
+from warden.llm.factory import create_client
 
 logger = get_logger(__name__)
 
@@ -49,6 +50,7 @@ class PhaseOrchestrator:
         project_root: Optional[Path] = None,
         llm_service: Optional[Any] = None,
         available_frames: Optional[List[ValidationFrame]] = None,
+        rate_limiter: Optional[Any] = None,
     ):
         """
         Initialize phase orchestrator.
@@ -63,6 +65,7 @@ class PhaseOrchestrator:
         """
         self.frames = frames or []
         self.available_frames = available_frames or self.frames  # Fallback to frames if not provided
+        self.rate_limiter = rate_limiter
 
         # Handle both dict and PipelineConfig for backward compatibility
         if config is None:
@@ -82,7 +85,7 @@ class PhaseOrchestrator:
         # Initialize rule validator if global rules exist
         self.rule_validator = None
         if self.config.global_rules:
-            self.rule_validator = CustomRuleValidator(self.config.global_rules)
+            self.rule_validator = CustomRuleValidator(self.config.global_rules, llm_service=self.llm_service)
 
         # Initialize Semantic Search Service if enabled in config
         self.semantic_search_service = None
@@ -100,7 +103,8 @@ class PhaseOrchestrator:
             llm_service=self.llm_service,
             # Validation logic needs all available frames for AI selection
             frames=self.available_frames,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
+            rate_limiter=self.rate_limiter
         )
 
         # Initialize frame executor
@@ -144,10 +148,11 @@ class PhaseOrchestrator:
         if self.frames:
             self.frames.sort(key=lambda f: f.priority.value if hasattr(f, 'priority') else 999)
 
-    async def execute(
+    async def execute_async(
         self,
         code_files: List[CodeFile],
         frames_to_execute: Optional[List[str]] = None,
+        analysis_level: Optional[str] = None,
     ) -> tuple[PipelineResult, PipelineContext]:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -160,7 +165,7 @@ class PhaseOrchestrator:
         Returns:
             Tuple of (PipelineResult, PipelineContext)
         """
-        context = await self.execute_pipeline_async(code_files, frames_to_execute)
+        context = await self.execute_pipeline_async(code_files, frames_to_execute, analysis_level)
 
         # Build PipelineResult from context for compatibility
         result = self._build_pipeline_result(context)
@@ -171,6 +176,7 @@ class PhaseOrchestrator:
         self,
         code_files: List[CodeFile],
         frames_to_execute: Optional[List[str]] = None,
+        analysis_level: Optional[str] = None,
     ) -> PipelineContext:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -195,6 +201,29 @@ class PhaseOrchestrator:
                 elif ext == ".java": language = "java"
                 elif ext == ".cs": language = "csharp"
 
+        # Apply analysis level if provided
+        if analysis_level:
+            from warden.pipeline.domain.enums import AnalysisLevel
+            try:
+                self.config.analysis_level = AnalysisLevel(analysis_level.lower())
+                logger.info("analysis_level_overridden", level=self.config.analysis_level.value)
+                
+                # Global overrides for BASIC level to ensure speed and local-only execution
+                if self.config.analysis_level == AnalysisLevel.BASIC:
+                    self.config.use_llm = False
+                    self.config.enable_fortification = False
+                    self.config.enable_cleaning = False
+                    self.config.enable_issue_validation = False
+                    # Classification and Analysis will fallback to rule-based automatically if use_llm is False
+                    logger.info("basic_level_overrides_applied", use_llm=False, fortification=False, cleaning=False)
+                elif self.config.analysis_level == AnalysisLevel.STANDARD:
+                    self.config.use_llm = True
+                    self.config.enable_fortification = True
+                    self.config.enable_issue_validation = True
+                    logger.info("standard_level_overrides_applied", use_llm=True, fortification=True, verification=True)
+            except ValueError:
+                logger.warning("invalid_analysis_level", provided=analysis_level, fallback=self.config.analysis_level.value)
+
         # Initialize shared context
         context = PipelineContext(
             pipeline_id=str(uuid4()),
@@ -204,6 +233,7 @@ class PhaseOrchestrator:
             use_gitignore=getattr(self.config, 'use_gitignore', True),
             source_code=code_files[0].content if code_files else "",
             language=language,
+            llm_config=getattr(self.llm_service, 'config', None) if hasattr(self.llm_service, 'config') else None
         )
 
         # Create pipeline entity
@@ -230,6 +260,13 @@ class PhaseOrchestrator:
             # Phase 0: PRE-ANALYSIS
             if self.config.enable_pre_analysis:
                 await self.phase_executor.execute_pre_analysis_async(context, code_files)
+
+            # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
+            # Only run if LLM is enabled and level is not BASIC
+            from warden.pipeline.domain.enums import AnalysisLevel
+            if getattr(self.config, 'use_llm', True) and self.config.analysis_level != AnalysisLevel.BASIC:
+                logger.info("phase_enabled", phase="TRIAGE", enabled=True)
+                await self.phase_executor.execute_triage_async(context, code_files)
 
             # Phase 1: ANALYSIS
             if getattr(self.config, 'enable_analysis', True):
@@ -267,6 +304,16 @@ class PhaseOrchestrator:
             if enable_validation:
                 logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
                 # Pass pipeline reference to frame executor
+                # Calculate work units for progress bar
+                total_work_units = self._calculate_total_work_units(context, code_files)
+                if self.progress_callback:
+                    self.progress_callback("progress_init", {
+                        "total_units": total_work_units,
+                        "phase_units": {
+                            "VALIDATION": len(context.selected_frames or []) * len(code_files) if context.selected_frames else 0,
+                        }
+                    })
+
                 await self.frame_executor.execute_validation_with_strategy_async(
                     context, code_files, self.pipeline
                 )
@@ -278,6 +325,11 @@ class PhaseOrchestrator:
                         "phase_name": "VALIDATION",
                         "reason": "disabled_in_config"
                     })
+
+            # Phase 3.5: VERIFICATION (False Positive Reduction)
+            # Must run BEFORE Fortification to avoid fixing false positives
+            if getattr(self.config, 'enable_issue_validation', False):
+                await self._execute_verification_phase_async(context)
 
             # Phase 4: FORTIFICATION
             enable_fortification = getattr(self.config, 'enable_fortification', True)
@@ -315,19 +367,28 @@ class PhaseOrchestrator:
             if has_errors:
                 logger.warning("pipeline_has_errors", count=len(context.errors), errors=context.errors[:5])
             
-            if self.pipeline.frames_failed > 0 or has_errors:
-                # Only fail if there are actual failures or blocker violations
-                if (has_errors) or (self.pipeline.frames_failed > 0) or any(
-                    fr.get('result').is_blocker for fr in getattr(context, 'frame_results', {}).values() 
-                    if fr.get('result') and fr.get('result').status == "failed"
-                ):
-                    self.pipeline.status = PipelineStatus.FAILED
-                else:
-                    self.pipeline.status = PipelineStatus.COMPLETED
+            # Check if any BLOCKER frame failed (non-blockers don't cause pipeline failure)
+            has_blocker_failures = any(
+                fr.get('result').is_blocker 
+                for fr in getattr(context, 'frame_results', {}).values() 
+                if fr.get('result') and fr.get('result').status == "failed"
+            )
+            
+            if has_errors or has_blocker_failures:
+                self.pipeline.status = PipelineStatus.FAILED
             else:
                 self.pipeline.status = PipelineStatus.COMPLETED
                 
             self.pipeline.completed_at = datetime.now()
+
+            # Capture LLM Usage if available
+            if self.llm_service and hasattr(self.llm_service, 'get_usage'):
+                usage = self.llm_service.get_usage()
+                context.total_tokens = usage.get('total_tokens', 0)
+                context.prompt_tokens = usage.get('prompt_tokens', 0)
+                context.completion_tokens = usage.get('completion_tokens', 0)
+                context.request_count = usage.get('request_count', 0)
+                logger.info("llm_usage_recorded", **usage)
 
             logger.info(
                 "pipeline_execution_completed",
@@ -361,6 +422,110 @@ class PhaseOrchestrator:
             raise
 
         return context
+
+    def _calculate_total_work_units(self, context: PipelineContext, code_files: List[CodeFile]) -> int:
+        """Calculate total work units for progress reporting."""
+        total_units = 0
+        
+        # 1. Validation units (Effective Frames * Files)
+        # If no frames selected by classification yet, use configured frames as fallback estimate
+        selected_frames = getattr(context, 'selected_frames', [])
+        effective_frames_count = len(selected_frames) if selected_frames else len(self.frames)
+        
+        total_units += effective_frames_count * len(code_files)
+        
+        # 2. Verification and Fortification will be added dynamically as we find issues
+        
+        return max(total_units, 1)
+
+    async def _execute_verification_phase_async(self, context: PipelineContext) -> None:
+        """
+        Execute Phase 3.5: Verification (LLM-based filtering).
+        Reduces false positives before expensive fortification or reporting.
+        """
+        logger.info("phase_started", phase="VERIFICATION")
+        if self.progress_callback:
+            # We don't know exact units until we scan findings
+            total_findings = len(context.findings) if hasattr(context, 'findings') else 0
+            if total_findings > 0:
+                 self.progress_callback("progress_update", {
+                     "phase": "VERIFICATION",
+                     "total_units": total_findings
+                 })
+
+        try:
+            # Initialize verifier once per phase
+            verify_llm = self.llm_service or create_client()
+            verify_mem_manager = getattr(self.config, 'memory_manager', None)
+
+            verifier = FindingVerificationService(
+                llm_client=verify_llm,
+                memory_manager=verify_mem_manager,
+                enabled=True
+            )
+
+            verified_count = 0
+            dropped_count = 0
+
+            for frame_id, frame_res in context.frame_results.items():
+                result_obj = frame_res.get('result')
+                if result_obj and result_obj.findings:
+                    # Sync findings from object to dict for verifier contract
+                    findings_to_verify = [f.to_dict() if hasattr(f, 'to_dict') else f for f in result_obj.findings]
+                    
+                    # Track metrics locally for logs
+                    total_findings = len(findings_to_verify)
+
+                    logger.info("finding_verification_started",
+                                frame_id=frame_id,
+                                findings_count=len(findings_to_verify))
+
+                    # Verify findings via LLM (Strict Async naming)
+                    verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)
+
+                    verified_ids = {f['id'] for f in verified_findings_dicts}
+
+                    # Filter original objects in-place
+                    final_findings = []
+                    cached_count = 0
+                    
+                    for f in result_obj.findings:
+                        fid = f.get('id') if isinstance(f, dict) else f.id
+                        if fid in verified_ids:
+                            final_findings.append(f)
+                            # Check if it was cached
+                            if any(vf.get('verification_metadata', {}).get('cached') for vf in verified_findings_dicts if vf['id'] == fid):
+                                cached_count += 1
+
+                    dropped = len(result_obj.findings) - len(final_findings)
+                    dropped_count += dropped
+                    verified_count += len(final_findings)
+
+                    result_obj.findings = final_findings
+                    result_obj.issues_found = len(final_findings)
+                    
+                    logger.info("finding_verification_complete", 
+                                frame_id=frame_id, 
+                                total=total_findings,
+                                verified=len(final_findings), 
+                                dropped=dropped,
+                                cached=cached_count)
+
+            # Synchronize globally in context
+            all_verified = []
+            for fr in context.frame_results.values():
+                res = fr.get('result')
+                if res and res.findings:
+                    all_verified.extend(res.findings)
+            context.findings = all_verified
+
+            logger.info("verification_phase_completed", 
+                        total_verified=verified_count, 
+                        total_dropped=dropped_count)
+
+        except Exception as e:
+            import traceback
+            logger.warning("verification_phase_failed", error=str(e), type=type(e).__name__, traceback=traceback.format_exc())
 
     def _apply_baseline(self, context: PipelineContext) -> None:
         """Filter out existing issues present in baseline."""
@@ -492,12 +657,20 @@ class PhaseOrchestrator:
             
             return str(val).lower() if val else ''
 
+        # Helper to get review_required from finding
+        def is_review_required(f: Any) -> bool:
+            if isinstance(f, dict):
+                return f.get('verification_metadata', {}).get('review_required', False)
+            v = getattr(f, 'verification_metadata', {})
+            return v.get('review_required', False) if isinstance(v, dict) else False
+
         # Calculate finding counts
         findings = context.findings if hasattr(context, 'findings') else []
         critical_findings = len([f for f in findings if get_severity(f) == 'critical'])
         high_findings = len([f for f in findings if get_severity(f) == 'high'])
         medium_findings = len([f for f in findings if get_severity(f) == 'medium'])
         low_findings = len([f for f in findings if get_severity(f) == 'low'])
+        manual_review_count = len([f for f in findings if is_review_required(f)])
         total_findings = len(findings)
 
         # Calculate quality score if not present or default
@@ -538,12 +711,14 @@ class PhaseOrchestrator:
             high_findings=high_findings,
             medium_findings=medium_findings,
             low_findings=low_findings,
+            manual_review_findings=manual_review_count,
 
             frame_results=frame_results,
             # Populate metadata
             metadata={
                 "strategy": self.config.strategy.value,
                 "fail_fast": self.config.fail_fast,
+                "advisories": getattr(context, "advisories", []),
                 "frame_executions": [
                     {
                         "frame_id": fe.frame_id,

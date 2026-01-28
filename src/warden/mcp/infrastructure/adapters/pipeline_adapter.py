@@ -5,12 +5,13 @@ MCP adapter for pipeline execution tools.
 Maps to gRPC PipelineMixin functionality.
 """
 
-from pathlib import Path
 from typing import Any, Dict, List
 
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.shared.utils.retry_utils import async_retry
+from warden.shared.utils.path_utils import sanitize_path
 
 
 class PipelineAdapter(BaseWardenAdapter):
@@ -27,6 +28,7 @@ class PipelineAdapter(BaseWardenAdapter):
         "warden_execute_pipeline_stream",
     })
     TOOL_CATEGORY = ToolCategory.PIPELINE
+
 
     def get_tool_definitions(self) -> List[MCPToolDefinition]:
         """Get pipeline tool definitions."""
@@ -68,52 +70,58 @@ class PipelineAdapter(BaseWardenAdapter):
             ),
         ]
 
-    async def _execute_tool(
+    async def _execute_tool_async(
         self,
         tool_name: str,
         arguments: Dict[str, Any],
     ) -> MCPToolResult:
         """Execute pipeline tool."""
         if tool_name == "warden_execute_pipeline":
-            return await self._execute_pipeline(arguments)
+            return await self._execute_pipeline_async(arguments)
         elif tool_name == "warden_execute_pipeline_stream":
-            return await self._execute_pipeline_stream(arguments)
+            return await self._execute_pipeline_stream_async(arguments)
         else:
             return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _execute_pipeline(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    @async_retry(retries=5, initial_delay=1.0)
+    async def _execute_pipeline_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Execute full validation pipeline."""
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")
 
         if not self.bridge:
-            return MCPToolResult.error("Warden bridge not available")
+             raise RuntimeError("Warden bridge not available")
 
         try:
-            result = await self.bridge.execute_pipeline(
-                file_path=path,
+            safe_path = sanitize_path(path, self.project_root)
+            result = await self.bridge.execute_pipeline_async(
+                file_path=str(safe_path),
                 frames=frames,
             )
             return MCPToolResult.json_result(result)
+        except ValueError as e:
+            return MCPToolResult.error(f"Path validation failed: {e}")
         except Exception as e:
             return MCPToolResult.error(f"Pipeline execution failed: {e}")
 
-    async def _execute_pipeline_stream(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    @async_retry(retries=5, initial_delay=1.0)
+    async def _execute_pipeline_stream_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
         """Execute pipeline with streaming (collect all events)."""
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")
         verbose = arguments.get("verbose", False)
 
         if not self.bridge:
-            return MCPToolResult.error("Warden bridge not available")
+            raise RuntimeError("Warden bridge not available")
 
         try:
+            safe_path = sanitize_path(path, self.project_root)
             # Collect all streaming events
             events = []
             final_result = None
 
-            async for event in self.bridge.execute_pipeline_stream(
-                file_path=path,
+            async for event in self.bridge.execute_pipeline_stream_async(
+                file_path=str(safe_path),
                 frames=frames,
                 verbose=verbose,
             ):
