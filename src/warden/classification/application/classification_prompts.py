@@ -15,7 +15,7 @@ def get_classification_system_prompt(available_frames: Optional[List[Any]] = Non
         ])
     else:
         frames_descriptions = """- SecurityFrame: Critical vulnerability detection (SQLi, XSS, Secrets).
-- ChaosFrame: Resilience testing (Retry, Timeout, Circuit Breaker).
+- ResilienceFrame: Resilience testing (Retry, Timeout, Circuit Breaker).
 - OrphanFrame: Dead code detection (Unused functions/classes).
 - ArchitecturalFrame: Design pattern and coupling analysis.
 - StressFrame: Performance/Load testing for critical paths.
@@ -56,7 +56,7 @@ Return a JSON object:
   "suppression_rules": [{{"pattern": "tests/*", "reason": "Redundant checks", "suppress": ["security"]}}],
   "priorities": {{ "security": "CRITICAL", "chaos": "HIGH" }},
   "advisories": ["Note: Fuzzing disabled due to Python runtime context", "Warn: High complexity in auth module detected"],
-  "reasoning": "Selected SecurityFrame due to sensitive dependencies (SQLAlchemy). Rejected FuzzFrame due to high noise risk in Python runtime. Enabled ChaosFrame for API resilience."
+  "reasoning": "Selected SecurityFrame due to sensitive dependencies (SQLAlchemy). Rejected FuzzFrame due to high noise risk in Python runtime. Enabled ResilienceFrame for API resilience."
 }}
 """
 

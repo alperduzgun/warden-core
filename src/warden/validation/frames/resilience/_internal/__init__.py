@@ -1,5 +1,5 @@
-"""Internal implementation details for ChaosFrame.
+"""Internal implementation details for ResilienceFrame.
 
 These check classes are implementation details and should not be imported directly.
-Use ChaosFrame instead.
+Use ResilienceFrame instead.
 """

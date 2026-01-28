@@ -11,7 +11,7 @@ from warden.pipeline import (
     ExecutionStrategy,
     PipelineStatus,
 )
-from warden.validation.frames import SecurityFrame, ChaosFrame
+from warden.validation.frames import SecurityFrame, ResilienceFrame
 from warden.validation.domain.frame import CodeFile
 from warden.rules.domain.models import CustomRule, FrameRules
 from warden.rules.domain.enums import RuleSeverity, RuleType
@@ -125,7 +125,7 @@ async def test_post_rule_blocker_detected():
 @pytest.mark.asyncio
 async def test_status_determination_with_mixed_violations():
     """Test status logic with PRE + frame findings + POST violations."""
-    frames = [ChaosFrame()]  # Non-blocker frame
+    frames = [ResilienceFrame()]  # Non-blocker frame
 
     # Non-blocker PRE rule (warning)
     pre_rule = CustomRule(
@@ -160,7 +160,7 @@ async def test_status_determination_with_mixed_violations():
     config = PipelineConfig(
         strategy=ExecutionStrategy.SEQUENTIAL,
         frame_rules={
-            ChaosFrame.frame_id: frame_rules,
+            ResilienceFrame.frame_id: frame_rules,
         },
     )
 
@@ -371,7 +371,7 @@ password = "admin123"  # Security blocker issue
 @pytest.mark.asyncio
 async def test_blocker_violations_count():
     """Test blocker_issues counter includes blocker violations."""
-    frames = [ChaosFrame()]  # Non-blocker frame
+    frames = [ResilienceFrame()]  # Non-blocker frame
 
     # Blocker PRE rule
     pre_blocker = CustomRule(
@@ -406,7 +406,7 @@ async def test_blocker_violations_count():
     config = PipelineConfig(
         strategy=ExecutionStrategy.SEQUENTIAL,
         frame_rules={
-            ChaosFrame.frame_id: frame_rules,
+            ResilienceFrame.frame_id: frame_rules,
         },
     )
 

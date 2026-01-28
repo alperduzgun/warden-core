@@ -53,15 +53,22 @@ class XSSCheck(ValidationCheck):
         (r"<[^>]*>\$\{", "Template literal in HTML (potential XSS)"),
     ]
 
+    def __init__(self, config=None) -> None:
+        """Initialize XSS check with pre-compiled patterns."""
+        super().__init__(config)
+        # Pre-compile all patterns once for performance (KISS optimization)
+        self._compiled_patterns = [
+            (re.compile(pattern_str, re.IGNORECASE), description)
+            for pattern_str, description in self.DANGEROUS_PATTERNS
+        ]
+
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute XSS detection."""
         findings: List[CheckFinding] = []
 
-        for pattern_str, description in self.DANGEROUS_PATTERNS:
-            pattern = re.compile(pattern_str, re.IGNORECASE)
-
+        for compiled_pattern, description in self._compiled_patterns:
             for line_num, line in enumerate(code_file.content.split("\n"), start=1):
-                if pattern.search(line):
+                if compiled_pattern.search(line):
                     findings.append(
                         CheckFinding(
                             check_id=self.id,

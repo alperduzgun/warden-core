@@ -87,6 +87,12 @@ class SQLInjectionCheck(ValidationCheck):
             (pattern, "Custom SQL injection pattern") for pattern in custom_patterns
         ]
 
+        # Pre-compile all patterns once for performance (KISS optimization)
+        self._compiled_patterns = [
+            (re.compile(pattern_str, re.IGNORECASE), description)
+            for pattern_str, description in self.patterns
+        ]
+
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """
         Execute SQL injection detection.
@@ -99,12 +105,10 @@ class SQLInjectionCheck(ValidationCheck):
         """
         findings: List[CheckFinding] = []
 
-        # Check each pattern
-        for pattern_str, description in self.patterns:
-            pattern = re.compile(pattern_str, re.IGNORECASE)
-
+        # Check each pre-compiled pattern
+        for compiled_pattern, description in self._compiled_patterns:
             for line_num, line in enumerate(code_file.content.split("\n"), start=1):
-                match = pattern.search(line)
+                match = compiled_pattern.search(line)
                 if match:
                     findings.append(
                         CheckFinding(

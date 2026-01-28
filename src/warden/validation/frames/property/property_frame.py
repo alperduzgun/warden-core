@@ -111,6 +111,19 @@ Output must be a valid JSON object with the following structure:
         """Initialize PropertyFrame."""
         super().__init__(config)
 
+        # Pre-compile all patterns once for performance (KISS optimization)
+        self._compiled_patterns = {
+            check_id: {
+                **check_config,
+                "compiled": re.compile(check_config["pattern"]),
+            }
+            for check_id, check_config in self.PATTERNS.items()
+        }
+
+        # Pre-compile assertion check patterns
+        self._assertion_pattern = re.compile(r'\bassert\b|Assert\.|assertThat')
+        self._function_pattern = re.compile(r'def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\(')
+
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute property testing checks on code file.
@@ -131,12 +144,12 @@ Output must be a valid JSON object with the following structure:
 
         findings = []
 
-        # Run pattern-based checks
-        for check_id, check_config in self.PATTERNS.items():
-            pattern_findings = self._check_pattern(
+        # Run pattern-based checks using pre-compiled patterns
+        for check_id, check_config in self._compiled_patterns.items():
+            pattern_findings = self._check_pattern_compiled(
                 code_file=code_file,
                 check_id=check_id,
-                pattern=check_config["pattern"],
+                compiled_pattern=check_config["compiled"],
                 severity=check_config["severity"],
                 message=check_config["message"],
                 suggestion=check_config.get("suggestion"),
@@ -180,16 +193,16 @@ Output must be a valid JSON object with the following structure:
             },
         )
 
-    def _check_pattern(
+    def _check_pattern_compiled(
         self,
         code_file: CodeFile,
         check_id: str,
-        pattern: str,
+        compiled_pattern: re.Pattern,
         severity: str,
         message: str,
         suggestion: str | None = None,
     ) -> List[Finding]:
-        """Check for pattern matches in code."""
+        """Check for pattern matches in code using pre-compiled pattern."""
         findings: List[Finding] = []
 
         try:
@@ -200,7 +213,7 @@ Output must be a valid JSON object with the following structure:
                 if line.strip().startswith(("#", "//", "/*", "*")):
                     continue
 
-                matches = re.finditer(pattern, line)
+                matches = compiled_pattern.finditer(line)
                 for _ in matches:
                     finding = Finding(
                         id=f"{self.frame_id}-{check_id}-{line_num}",
@@ -225,12 +238,9 @@ Output must be a valid JSON object with the following structure:
         """Check for missing assertions in critical code."""
         findings: List[Finding] = []
 
-        # Count assertions vs functions
-        assertion_pattern = r'\bassert\b|Assert\.|assertThat'
-        function_pattern = r'def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\('
-
-        assertion_count = len(re.findall(assertion_pattern, code_file.content))
-        function_count = len(re.findall(function_pattern, code_file.content))
+        # Count assertions vs functions using pre-compiled patterns
+        assertion_count = len(self._assertion_pattern.findall(code_file.content))
+        function_count = len(self._function_pattern.findall(code_file.content))
 
         # If many functions but no assertions, warn
         if function_count > 10 and assertion_count == 0:

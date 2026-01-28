@@ -7,7 +7,6 @@ from warden.validation.frames.gitchanges import GitChangesFrame
 from warden.validation.frames.resilience import ResilienceFrame
 from warden.validation.frames.fuzz import FuzzFrame
 from warden.validation.frames.property import PropertyFrame
-from warden.validation.frames.chaos import ChaosFrame
 
 __all__ = [
     "OrphanFrame",
@@ -17,5 +16,4 @@ __all__ = [
     "ResilienceFrame",
     "FuzzFrame",
     "PropertyFrame",
-    "ChaosFrame",
 ]

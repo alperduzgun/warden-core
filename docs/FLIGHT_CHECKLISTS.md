@@ -16,7 +16,7 @@ Hedef: **Stabilite, Genişletilebilirlik, Şeffaflık.**
 - [ ] **Stability & Memory:** 10.000 dosyalık taramada bellek sızıntısı var mı?
     - *Kontrol: `warden scan --memory-profile` ile doğrula.*
 - [ ] **Error Isolation:** Bir bileşen çökerse (örn. Thread panic), Core bunu yakalayıp rapora yansıtıyor mu (Graceful Degradation)?
-    - *Test: `ChaosFrame` veya `Example Exception` ile kasıtlı hata fırlat.*
+    - *Test: `ResilienceFrame` veya `Example Exception` ile kasıtlı hata fırlat.*
 - [ ] **Configurability:** Tüm yeni parametreler `.warden/config.yaml` üzerinden yönetilebiliyor mu? (Hardcoded değer YASAK).
 - [ ] **Telemetry:** Core'un aldığı her karar (karar ağacı) `structlog` ile yapısal JSON olarak loglanıyor mu?
 

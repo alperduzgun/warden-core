@@ -82,6 +82,12 @@ class SecretsCheck(ValidationCheck):
             (pattern, "Custom secret pattern") for pattern in custom_patterns
         ]
 
+        # Pre-compile all patterns once for performance (KISS optimization)
+        self._compiled_patterns = [
+            (re.compile(pattern_str, re.IGNORECASE), secret_type)
+            for pattern_str, secret_type in self.patterns
+        ]
+
         # Exclusions (environment variable usage is OK)
         self.allowed_patterns = self.config.get(
             "allowed_patterns",
@@ -93,6 +99,8 @@ class SecretsCheck(ValidationCheck):
                 r"Environment\.GetEnvironmentVariable\(",
             ],
         )
+        # Pre-compile allowed patterns too
+        self._compiled_allowed = [re.compile(p) for p in self.allowed_patterns]
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute secrets detection."""
@@ -100,13 +108,12 @@ class SecretsCheck(ValidationCheck):
 
         for line_num, line in enumerate(code_file.content.split("\n"), start=1):
             # Skip if line uses environment variables (safe)
-            if any(re.search(allowed, line) for allowed in self.allowed_patterns):
+            if any(compiled.search(line) for compiled in self._compiled_allowed):
                 continue
 
             # Check for secret patterns
-            for pattern_str, secret_type in self.patterns:
-                pattern = re.compile(pattern_str, re.IGNORECASE)
-                match = pattern.search(line)
+            for compiled_pattern, secret_type in self._compiled_patterns:
+                match = compiled_pattern.search(line)
 
                 if match:
                     # Mask the secret in the message
@@ -148,7 +155,6 @@ class SecretsCheck(ValidationCheck):
 
     def _mask_line(self, line: str) -> str:
         """Mask secrets in entire line."""
-        for pattern_str, _ in self.patterns:
-            pattern = re.compile(pattern_str, re.IGNORECASE)
-            line = pattern.sub("***REDACTED***", line)
+        for compiled_pattern, _ in self._compiled_patterns:
+            line = compiled_pattern.sub("***REDACTED***", line)
         return line

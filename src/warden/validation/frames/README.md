@@ -84,7 +84,7 @@ from warden.validation.frames.orphan import LLMOrphanFilter
 from warden.validation.frames import (
     OrphanFrame,
     SecurityFrame,
-    ChaosFrame,
+    ResilienceFrame,
     GitChangesFrame,
 )
 ```
@@ -105,9 +105,9 @@ from warden.validation.frames import (
 
 **Usage:**
 ```python
-from warden.validation.frames.chaos import ChaosFrame
+from warden.validation.frames.chaos import ResilienceFrame
 
-frame = ChaosFrame()
+frame = ResilienceFrame()
 result = await frame.execute(code_file)
 ```
 

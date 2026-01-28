@@ -64,7 +64,7 @@ Warden balances cost, privacy, and intelligence using a smart routing system:
 ### 4. 🛡️ Core Validation Frames (Built-in)
 Warden ships with 6 powerful core frames:
 1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS).
-2.  **ChaosFrame:** Validates error handling and resilience logic.
+2.  **ResilienceFrame:** Validates error handling and resilience logic.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
 4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
 5.  **ResilienceFrame:** Checks for retry/circuit-breaker patterns.
