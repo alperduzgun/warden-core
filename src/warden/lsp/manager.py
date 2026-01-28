@@ -2,7 +2,16 @@
 LSP Manager - Language Server Protocol client management.
 
 Provides singleton access to language servers for semantic code analysis.
-Supports: Python (pyright), TypeScript/JavaScript, Rust (rust-analyzer), Go (gopls).
+Supports 30+ languages including:
+- Primary: Python, TypeScript, JavaScript, Rust, Go
+- JVM: Java, Kotlin, Scala
+- .NET: C#, F#
+- Web: HTML, CSS, Vue
+- Scripting: Ruby, PHP, Perl, Lua
+- Systems: C, C++, Zig
+- Shell/Config: Bash, YAML, TOML, JSON
+- Functional: Haskell, Elixir, Erlang, Clojure
+- Mobile: Dart, Swift
 """
 
 import shutil
@@ -16,9 +25,11 @@ logger = structlog.get_logger()
 
 
 # LSP server configurations: language -> (binary_names, args)
+# Based on Serena's 30+ language support
 LSP_SERVER_CONFIG: Dict[str, Dict] = {
+    # --- Primary Languages ---
     "python": {
-        "binaries": ["pyright-langserver", "pylsp", "pyls"],
+        "binaries": ["pyright-langserver", "pylsp", "pyls", "jedi-language-server"],
         "args": ["--stdio"],
     },
     "typescript": {
@@ -36,6 +47,118 @@ LSP_SERVER_CONFIG: Dict[str, Dict] = {
     "go": {
         "binaries": ["gopls"],
         "args": ["serve"],
+    },
+    # --- JVM Languages ---
+    "java": {
+        "binaries": ["jdtls", "java-language-server"],
+        "args": [],  # jdtls has complex setup, may need config
+    },
+    "kotlin": {
+        "binaries": ["kotlin-language-server"],
+        "args": [],
+    },
+    "scala": {
+        "binaries": ["metals"],
+        "args": [],
+    },
+    # --- .NET Languages ---
+    "csharp": {
+        "binaries": ["OmniSharp", "omnisharp", "csharp-ls"],
+        "args": ["--languageserver"],
+    },
+    "fsharp": {
+        "binaries": ["fsautocomplete"],
+        "args": ["--background-service-enabled"],
+    },
+    # --- Web Languages ---
+    "html": {
+        "binaries": ["vscode-html-language-server", "html-languageserver"],
+        "args": ["--stdio"],
+    },
+    "css": {
+        "binaries": ["vscode-css-language-server", "css-languageserver"],
+        "args": ["--stdio"],
+    },
+    "vue": {
+        "binaries": ["vue-language-server", "vls"],
+        "args": ["--stdio"],
+    },
+    # --- Scripting Languages ---
+    "ruby": {
+        "binaries": ["solargraph", "ruby-lsp"],
+        "args": ["stdio"],
+    },
+    "php": {
+        "binaries": ["phpactor", "intelephense"],
+        "args": ["language-server"],
+    },
+    "perl": {
+        "binaries": ["perl-language-server"],
+        "args": [],
+    },
+    "lua": {
+        "binaries": ["lua-language-server"],
+        "args": [],
+    },
+    # --- Systems Languages ---
+    "cpp": {
+        "binaries": ["clangd", "ccls"],
+        "args": [],
+    },
+    "c": {
+        "binaries": ["clangd", "ccls"],
+        "args": [],
+    },
+    "zig": {
+        "binaries": ["zls"],
+        "args": [],
+    },
+    # --- Shell/Config ---
+    "bash": {
+        "binaries": ["bash-language-server"],
+        "args": ["start"],
+    },
+    "shell": {
+        "binaries": ["bash-language-server"],
+        "args": ["start"],
+    },
+    "yaml": {
+        "binaries": ["yaml-language-server"],
+        "args": ["--stdio"],
+    },
+    "toml": {
+        "binaries": ["taplo"],
+        "args": ["lsp", "stdio"],
+    },
+    "json": {
+        "binaries": ["vscode-json-language-server"],
+        "args": ["--stdio"],
+    },
+    # --- Functional Languages ---
+    "haskell": {
+        "binaries": ["haskell-language-server-wrapper", "hls"],
+        "args": ["--lsp"],
+    },
+    "elixir": {
+        "binaries": ["elixir-ls", "language_server.sh"],
+        "args": [],
+    },
+    "erlang": {
+        "binaries": ["erlang_ls"],
+        "args": [],
+    },
+    "clojure": {
+        "binaries": ["clojure-lsp"],
+        "args": [],
+    },
+    # --- Mobile ---
+    "dart": {
+        "binaries": ["dart", "dart-language-server"],
+        "args": ["language-server", "--protocol=lsp"],
+    },
+    "swift": {
+        "binaries": ["sourcekit-lsp"],
+        "args": [],
     },
 }
 

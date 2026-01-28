@@ -61,10 +61,26 @@ class LanguageServerClient:
                     "synchronization": {"dynamicRegistration": False, "willSave": False, "didSave": False},
                     "references": {"dynamicRegistration": False},
                     "publishDiagnostics": {"relatedInformation": True},
-                    "documentSymbol": {"hierarchicalDocumentSymbolSupport": True}
+                    "documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
+                    # Call Hierarchy support
+                    "callHierarchy": {"dynamicRegistration": False},
+                    # Type Hierarchy support
+                    "typeHierarchy": {"dynamicRegistration": False},
+                    # Hover support (for type info)
+                    "hover": {
+                        "dynamicRegistration": False,
+                        "contentFormat": ["markdown", "plaintext"]
+                    }
                 },
                 "workspace": {
-                    "configuration": True
+                    "configuration": True,
+                    # Workspace Symbols support
+                    "symbol": {
+                        "dynamicRegistration": False,
+                        "symbolKind": {
+                            "valueSet": list(range(1, 27))  # All symbol kinds
+                        }
+                    }
                 }
             },
             "initializationOptions": {}
@@ -251,6 +267,211 @@ class LanguageServerClient:
         except Exception as e:
             logger.warning("lsp_goto_definition_failed", uri=uri, error=str(e))
             return []
+
+    # ============================================================
+    # Call Hierarchy (who calls what, what calls who)
+    # ============================================================
+
+    async def prepare_call_hierarchy_async(
+        self,
+        file_path: str,
+        line: int,
+        character: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Prepare call hierarchy at a position.
+
+        Returns:
+            List of CallHierarchyItem objects representing the symbol
+        """
+        uri = f"file://{file_path}"
+        try:
+            result = await self.send_request_async("textDocument/prepareCallHierarchy", {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character}
+            })
+            items = result or []
+            logger.debug("lsp_call_hierarchy_prepared", uri=uri, count=len(items))
+            return items
+        except Exception as e:
+            logger.warning("lsp_prepare_call_hierarchy_failed", uri=uri, error=str(e))
+            return []
+
+    async def get_incoming_calls_async(
+        self,
+        call_hierarchy_item: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get incoming calls (who calls this function).
+
+        Args:
+            call_hierarchy_item: Item from prepare_call_hierarchy_async
+
+        Returns:
+            List of CallHierarchyIncomingCall objects
+        """
+        try:
+            result = await self.send_request_async("callHierarchy/incomingCalls", {
+                "item": call_hierarchy_item
+            })
+            calls = result or []
+            logger.debug("lsp_incoming_calls_found", count=len(calls))
+            return calls
+        except Exception as e:
+            logger.warning("lsp_incoming_calls_failed", error=str(e))
+            return []
+
+    async def get_outgoing_calls_async(
+        self,
+        call_hierarchy_item: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get outgoing calls (what does this function call).
+
+        Args:
+            call_hierarchy_item: Item from prepare_call_hierarchy_async
+
+        Returns:
+            List of CallHierarchyOutgoingCall objects
+        """
+        try:
+            result = await self.send_request_async("callHierarchy/outgoingCalls", {
+                "item": call_hierarchy_item
+            })
+            calls = result or []
+            logger.debug("lsp_outgoing_calls_found", count=len(calls))
+            return calls
+        except Exception as e:
+            logger.warning("lsp_outgoing_calls_failed", error=str(e))
+            return []
+
+    # ============================================================
+    # Type Hierarchy (class inheritance)
+    # ============================================================
+
+    async def prepare_type_hierarchy_async(
+        self,
+        file_path: str,
+        line: int,
+        character: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Prepare type hierarchy at a position.
+
+        Returns:
+            List of TypeHierarchyItem objects
+        """
+        uri = f"file://{file_path}"
+        try:
+            result = await self.send_request_async("textDocument/prepareTypeHierarchy", {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character}
+            })
+            items = result or []
+            logger.debug("lsp_type_hierarchy_prepared", uri=uri, count=len(items))
+            return items
+        except Exception as e:
+            logger.warning("lsp_prepare_type_hierarchy_failed", uri=uri, error=str(e))
+            return []
+
+    async def get_supertypes_async(
+        self,
+        type_hierarchy_item: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get supertypes (parent classes/interfaces).
+
+        Returns:
+            List of TypeHierarchyItem objects
+        """
+        try:
+            result = await self.send_request_async("typeHierarchy/supertypes", {
+                "item": type_hierarchy_item
+            })
+            types = result or []
+            logger.debug("lsp_supertypes_found", count=len(types))
+            return types
+        except Exception as e:
+            logger.warning("lsp_supertypes_failed", error=str(e))
+            return []
+
+    async def get_subtypes_async(
+        self,
+        type_hierarchy_item: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get subtypes (child classes/implementations).
+
+        Returns:
+            List of TypeHierarchyItem objects
+        """
+        try:
+            result = await self.send_request_async("typeHierarchy/subtypes", {
+                "item": type_hierarchy_item
+            })
+            types = result or []
+            logger.debug("lsp_subtypes_found", count=len(types))
+            return types
+        except Exception as e:
+            logger.warning("lsp_subtypes_failed", error=str(e))
+            return []
+
+    # ============================================================
+    # Workspace Symbols (search symbols across project)
+    # ============================================================
+
+    async def get_workspace_symbols_async(
+        self,
+        query: str = ""
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for symbols across the workspace.
+
+        Args:
+            query: Search query (empty string returns all symbols)
+
+        Returns:
+            List of SymbolInformation objects
+        """
+        try:
+            result = await self.send_request_async("workspace/symbol", {
+                "query": query
+            })
+            symbols = result or []
+            logger.debug("lsp_workspace_symbols_found", query=query, count=len(symbols))
+            return symbols
+        except Exception as e:
+            logger.warning("lsp_workspace_symbols_failed", query=query, error=str(e))
+            return []
+
+    # ============================================================
+    # Hover (type info and documentation)
+    # ============================================================
+
+    async def get_hover_async(
+        self,
+        file_path: str,
+        line: int,
+        character: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get hover information (type info, docs) at position.
+
+        Returns:
+            Hover object with contents and optional range
+        """
+        uri = f"file://{file_path}"
+        try:
+            result = await self.send_request_async("textDocument/hover", {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character}
+            })
+            if result:
+                logger.debug("lsp_hover_found", uri=uri, line=line)
+            return result
+        except Exception as e:
+            logger.warning("lsp_hover_failed", uri=uri, error=str(e))
+            return None
 
     def on_notification(self, method: str, handler: Callable):
         """Register a handler for a notification method."""
