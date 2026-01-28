@@ -85,7 +85,7 @@ class SemanticSearchService:
         # Smart Default Model based on Provider
         default_model = "text-embedding-3-small"
         if emb_provider == "local":
-            default_model = "all-MiniLM-L6-v2" # Standard lightweight local model
+            default_model = "BAAI/bge-small-en-v1.5" # High quality & fast local model
 
         # For now, we'll just check common env vars if missing
         api_key = ss_config.get("api_key")
