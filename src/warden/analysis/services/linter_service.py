@@ -110,18 +110,33 @@ class FrameLinterAdapter:
         code_files = [self._path_to_codefile(p) for p in files]
         
         start_time = asyncio.get_event_loop().time()
-        result = await self.frame.execute_async(code_files)
+        
+        # Call execute_batch_async if available (recommended for performance)
+        if hasattr(self.frame, 'execute_batch_async'):
+            results = await self.frame.execute_batch_async(code_files)
+        else:
+            # Fallback to serial execute_async for each file
+            results = []
+            for cf in code_files:
+                try:
+                    res = await self.frame.execute_async(cf)
+                    results.append(res)
+                except Exception as e:
+                    logger.warning("linter_adapter_file_failed", file=cf.path, error=str(e))
+        
         duration = asyncio.get_event_loop().time() - start_time
         
-        # Safe extraction
-        issues = result.issues_found
-        # We don't have explicit blocker count in basic result easily without iterating
-        blockers = sum(1 for f in result.findings if f.is_blocker)
+        # Aggregate metrics from all results
+        total_issues = 0
+        total_blockers = 0
+        for res in results:
+            total_issues += res.issues_found
+            total_blockers += sum(1 for f in res.findings if getattr(f, 'is_blocker', False))
         
         return LinterMetrics(
             tool=self.name,
-            total_errors=issues,
-            blocker_count=blockers,
+            total_errors=total_issues,
+            blocker_count=total_blockers,
             fixable_count=0, # Not reported yet
             scan_duration=duration,
             is_available=True
@@ -130,8 +145,22 @@ class FrameLinterAdapter:
     async def run_findings_async(self, files: List[Path]) -> List[Finding]:
         """Run frame and return findings."""
         code_files = [self._path_to_codefile(p) for p in files]
-        result = await self.frame.execute_async(code_files)
-        return result.findings
+        
+        if hasattr(self.frame, 'execute_batch_async'):
+            results = await self.frame.execute_batch_async(code_files)
+            all_findings = []
+            for res in results:
+                all_findings.extend(res.findings)
+            return all_findings
+        else:
+            all_findings = []
+            for cf in code_files:
+                try:
+                    res = await self.frame.execute_async(cf)
+                    all_findings.extend(res.findings)
+                except Exception as e:
+                    logger.warning("linter_adapter_findings_file_failed", file=cf.path, error=str(e))
+            return all_findings
 
 
 class LinterService:
