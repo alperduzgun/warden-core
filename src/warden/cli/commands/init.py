@@ -116,36 +116,28 @@ def _setup_semantic_search(config_path: Path):
              else:
                   console.print("[yellow]Semantic service dependencies missing.[/yellow]")
 
-                  # Check for Virtual Environment (PEP 668 protection)
-                  is_venv = (hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix))
-
-                  if not is_venv:
-                       console.print("[yellow]⚠️  System environment detected (PEP 668).[/yellow]")
-                       console.print("[dim]Warden cannot auto-install dependencies system-wide to prevent conflicts.[/dim]")
-                       console.print("\n[bold]Please allow Semantic features by running:[/bold]")
-                       console.print(f"  [cyan]pip install 'warden-core\[semantic\]' --break-system-packages[/cyan]")
-                       console.print("  [dim]OR run Warden inside a virtual environment (recommended).[/dim]\n")
+             if service.is_available():
+                 asyncio.run(run_indexing_if_files_exist_async())
+             else:
+                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
+                  
+                  # Use DependencyManager for robust installation
+                  from warden.services.dependencies import DependencyManager
+                  dep_manager = DependencyManager()
+                  
+                  required_pkgs = ["chromadb", "sentence-transformers"]
+                  success = asyncio.run(dep_manager.install_packages(required_pkgs))
+                  
+                  if success:
+                      console.print("[green]Dependencies installed successfully. Retrying setup...[/green]")
+                      # Re-instantiate service to pick up new modules
+                      service = SemanticSearchService(ss_config)
+                      if service.is_available():
+                          asyncio.run(run_indexing_if_files_exist_async())
+                      else:
+                          console.print("[red]Service unavailable even after install.[/red]")
                   else:
-                      console.print("[dim]Auto-installing required dependencies (Mandatory for AI features)...[/dim]")
-                      try:
-                          with console.status("[bold green]Installing dependencies...[/bold green]"):
-                              subprocess.check_call([sys.executable, "-m", "pip", "install", "chromadb", "sentence-transformers"])
-                          console.print("[green]Dependencies installed successfully. Retrying...[/green]")
-                          
-                          # Retry setup
-                          service = SemanticSearchService(ss_config)
-                          if service.is_available():
-                              asyncio.run(run_indexing_if_files_exist_async())
-                          else:
-                              console.print("[red]Service unavailable even after install.[/red]")
-                              
-                      except subprocess.CalledProcessError:
-                           console.print("[red]Dependency installation failed.[/red]")
-                           console.print("[dim]Please run manually: pip install 'warden-core[semantic]'[/dim]")
-                      except KeyboardInterrupt:
-                           console.print("\n[yellow]⚠️  Installation skipped by user.[/yellow]")
-                      except Exception as e:
-                          console.print(f"[red]Installation error: {e}[/red]")
+                      console.print("[red]Semantic features will be disabled.[/red]")
 
     except Exception as e:
         console.print("\n[red]❌ Semantic Indexing Failed[/red]")
