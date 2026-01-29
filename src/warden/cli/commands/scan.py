@@ -553,7 +553,8 @@ async def _run_scan_async(
             from warden.reports.generator import ReportGenerator
             generator = ReportGenerator()
             out_path = Path(output)
-            
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+
             console.print(f"\n[dim]Generating {format.upper()} report to {output}...[/dim]")
             
             if format == "json":
