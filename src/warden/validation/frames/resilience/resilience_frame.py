@@ -104,8 +104,10 @@ class ResilienceFrame(ValidationFrame):
         findings: List[Finding] = []
 
         # STEP 1: Quick pre-analysis - detect chaos triggers (external dependencies)
-        pattern_findings, worth_chaos_analysis = await self._pre_analyze_patterns(code_file)
+        pattern_findings, chaos_context = await self._pre_analyze_patterns(code_file)
         findings.extend(pattern_findings)
+
+        worth_chaos_analysis = bool(chaos_context.get("triggers"))
 
         # STEP 2: LSP-based structural analysis (cheap, if file has dependencies)
         if worth_chaos_analysis:
@@ -116,7 +118,7 @@ class ResilienceFrame(ValidationFrame):
         # CHAOS APPROACH: If file has external dependencies → LLM simulates failures
         # LLM will decide what resilience patterns are NEEDED (not validate existing ones)
         if hasattr(self, 'llm_service') and self.llm_service and worth_chaos_analysis:
-            llm_findings = await self._analyze_with_llm(code_file)
+            llm_findings = await self._analyze_with_llm(code_file, chaos_context)
             findings.extend(llm_findings)
         elif not worth_chaos_analysis:
             logger.debug("resilience_no_external_deps_skipping", file=code_file.path)
@@ -149,7 +151,7 @@ class ResilienceFrame(ValidationFrame):
             },
         )
 
-    async def _pre_analyze_patterns(self, code_file: CodeFile) -> tuple[List[Finding], bool]:
+    async def _pre_analyze_patterns(self, code_file: CodeFile) -> tuple[List[Finding], Dict[str, Any]]:
         """
         Quick pattern-based pre-analysis for chaos engineering.
 
@@ -159,7 +161,7 @@ class ResilienceFrame(ValidationFrame):
         - LLM decides what resilience patterns are NEEDED, not what EXISTS
 
         Returns:
-            (findings, worth_chaos_analysis): Findings and whether file needs chaos analysis
+            (findings, chaos_context): Findings and context for LLM (triggers, existing patterns)
         """
         findings: List[Finding] = []
         content = code_file.content
@@ -182,9 +184,6 @@ class ResilienceFrame(ValidationFrame):
             if matches:
                 trigger_counts[trigger_name] = len(matches)
 
-        # File is worth chaos analysis if it has external dependencies
-        worth_chaos_analysis = bool(trigger_counts)
-
         # Also count existing resilience patterns (for context, not gating)
         resilience_counts: Dict[str, int] = {}
         for pattern_name, pattern in RESILIENCE_PATTERNS.items():
@@ -206,14 +205,20 @@ class ResilienceFrame(ValidationFrame):
                 code=None
             ))
 
+        # Build chaos context for LLM
+        chaos_context: Dict[str, Any] = {
+            "triggers": trigger_counts,  # What can fail
+            "existing_patterns": resilience_counts,  # What protection exists
+            "dependencies": list(trigger_counts.keys()),  # For LLM prompt
+        }
+
         logger.debug("resilience_pre_analysis_complete",
                     file=code_file.path,
                     chaos_triggers=trigger_counts,
                     resilience_patterns=resilience_counts,
-                    worth_analysis=worth_chaos_analysis,
                     findings=len(findings))
 
-        return findings, worth_chaos_analysis
+        return findings, chaos_context
 
     async def _analyze_with_lsp(self, code_file: CodeFile) -> List[Finding]:
         """
@@ -406,22 +411,34 @@ class ResilienceFrame(ValidationFrame):
                     code=func_name
                 ))
 
-    async def _analyze_with_llm(self, code_file: CodeFile) -> List[Finding]:
+    async def _analyze_with_llm(self, code_file: CodeFile, chaos_context: Optional[Dict[str, Any]] = None) -> List[Finding]:
         """
-        Analyze code using LLM for Resilience FMEA (expensive, deep analysis).
+        Analyze code using LLM for chaos engineering (expensive, context-aware).
+
+        Args:
+            code_file: Code to analyze
+            chaos_context: Detected triggers and existing patterns from pre-analysis
         """
         from warden.llm.prompts.resilience import CHAOS_SYSTEM_PROMPT, generate_chaos_request
         from warden.llm.types import LlmRequest, AnalysisResult
-        
+
         findings: List[Finding] = []
         try:
-            logger.info("resilience_llm_analysis_started", file=code_file.path)
-            
+            logger.info("resilience_llm_analysis_started",
+                       file=code_file.path,
+                       triggers=chaos_context.get("triggers") if chaos_context else None)
+
             client: ILlmClient = self.llm_service
-            
+
+            # Pass chaos context to LLM so it knows what dependencies to focus on
             request = LlmRequest(
                 system_prompt=CHAOS_SYSTEM_PROMPT,
-                user_message=generate_chaos_request(code_file.content, code_file.language, code_file.path),
+                user_message=generate_chaos_request(
+                    code_file.content,
+                    code_file.language,
+                    code_file.path,
+                    context=chaos_context
+                ),
                 temperature=0.0,  # Idempotency (deterministic scenarios)
             )
             

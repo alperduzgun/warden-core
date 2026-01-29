@@ -15,7 +15,7 @@ def get_classification_system_prompt(available_frames: Optional[List[Any]] = Non
         ])
     else:
         frames_descriptions = """- SecurityFrame: Critical vulnerability detection (SQLi, XSS, Secrets).
-- ResilienceFrame: Resilience testing (Retry, Timeout, Circuit Breaker).
+- ResilienceFrame: Chaos engineering - simulate failures, find missing resilience patterns (timeout, retry, circuit breaker).
 - OrphanFrame: Dead code detection (Unused functions/classes).
 - ArchitecturalFrame: Design pattern and coupling analysis.
 - StressFrame: Performance/Load testing for critical paths.
