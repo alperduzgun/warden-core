@@ -508,9 +508,6 @@ class LLMPhaseBase(ABC):
         # PROACTIVELY upgrade to Smart Tier (Cloud) to prevent context failure/timeout.
         complexity_threshold = 2000 # Conservative limit for 0.5b model context + output
         
-        # DEBUG: Print token stats
-        print(f"DEBUG_TOKENS: {estimated_tokens} (Threshold: {complexity_threshold}), FastTierRequested: {use_fast_tier}")
-        
         if use_fast_tier and estimated_tokens > complexity_threshold:
             print("DEBUG_UPGRADE: Triggering Upgrade to Smart Tier")
             logger.info(

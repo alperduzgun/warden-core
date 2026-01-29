@@ -176,7 +176,7 @@ class BaselineManager:
             return None
             
         try:
-            with open(self.baseline_path, 'r') as f:
+            with open(self.baseline_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return data
         except Exception as e:
@@ -269,7 +269,7 @@ class BaselineManager:
             return None
 
         try:
-            with open(self.meta_path, "r") as f:
+            with open(self.meta_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return BaselineMeta(data)
         except Exception as e:
@@ -280,7 +280,7 @@ class BaselineManager:
         """Save baseline metadata."""
         try:
             self.baseline_dir.mkdir(parents=True, exist_ok=True)
-            with open(self.meta_path, "w") as f:
+            with open(self.meta_path, "w", encoding="utf-8") as f:
                 json.dump(meta.to_dict(), f, indent=2)
             return True
         except Exception as e:
@@ -294,7 +294,7 @@ class BaselineManager:
             return None
 
         try:
-            with open(module_path, "r") as f:
+            with open(module_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return ModuleBaseline(module_name, data)
         except Exception as e:
@@ -313,7 +313,7 @@ class BaselineManager:
                 module_baseline.created_at = now
             module_baseline.updated_at = now
 
-            with open(module_path, "w") as f:
+            with open(module_path, "w", encoding="utf-8") as f:
                 json.dump(module_baseline.to_dict(), f, indent=2)
             return True
         except Exception as e:

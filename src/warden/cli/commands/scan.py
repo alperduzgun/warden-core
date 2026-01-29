@@ -573,12 +573,12 @@ async def _run_scan_async(
         # Save lightweight AI status file (Token-optimized)
         try:
             warden_dir = Path(".warden")
-            if warden_dir.exists():
+            if warden_dir.exists() and final_result_data:
                 status_file = warden_dir / "ai_status.md"
-                
-                # Status check (COMPLETED=2)
+
+                # Status check (COMPLETED=2) - must match other status checks in this file
                 status_raw = final_result_data.get('status')
-                is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED"]
+                is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
                 status_icon = "✅ PASS" if is_success else "❌ FAIL"
                 critical_count = final_result_data.get('critical_findings', 0)
                 total_count = final_result_data.get('total_findings', 0)

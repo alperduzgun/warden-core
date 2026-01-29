@@ -320,7 +320,7 @@ class FrameExecutor:
             async with semaphore:
                 await self._execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
-        tasks = [execute_with_semaphore(frame) for frame in frames_to_execute]
+        tasks = [execute_with_semaphore_async(frame) for frame in frames_to_execute]
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _execute_frames_fail_fast_async(

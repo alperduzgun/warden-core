@@ -274,7 +274,6 @@ class PhaseOrchestrator:
                 context.quality_score_after = context.quality_score_before
 
             # Phase 2: CLASSIFICATION
-            print(f"DEBUG_ORCH: Starting Classification Block. FramesOverride: {frames_to_execute}")
             # If frames override is provided, use it and skip AI classification
             if frames_to_execute:
                 context.selected_frames = frames_to_execute
