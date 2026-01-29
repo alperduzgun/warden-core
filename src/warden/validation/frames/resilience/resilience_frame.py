@@ -1,19 +1,21 @@
 """
 Chaos Engineering Analysis Frame.
 
-Applies chaos engineering principles to code:
-1. Detect external dependencies (network, DB, files, queues)
-2. Simulate failure scenarios (timeout, error, resource exhaustion)
-3. Identify MISSING resilience patterns (not validate existing ones)
-
 Philosophy: "Everything will fail. The question is HOW and WHEN."
-The LLM acts as a chaos engineer, deciding what failures to simulate
-based on the code's context and dependencies.
+
+Architecture (Universal, Language-Agnostic):
+1. Tree-sitter → Extract structure (imports, function calls)
+2. LSP → Enrich with cross-file context (callers, callees)
+3. LLM → Decide what's external, simulate failures, find missing patterns
+
+Principles: KISS, DRY, SOLID, YAGNI, Fail-Fast, Idempotency
 """
 
 import re
 import time
-from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional, Set
+from enum import Enum
 
 from warden.validation.domain.frame import (
     ValidationFrame,
@@ -32,251 +34,728 @@ from warden.llm.providers.base import ILlmClient
 
 logger = get_logger(__name__)
 
+
 # =============================================================================
-# LANGUAGE-SPECIFIC PATTERNS
+# PRE-COMPILED PATTERNS (Performance: compile once, use many times)
 # =============================================================================
 
-# Chaos triggers by language (external dependencies that can fail)
-CHAOS_TRIGGERS_BY_LANGUAGE: Dict[str, Dict[str, re.Pattern]] = {
-    "python": {
-        "network_calls": re.compile(r'\b(requests\.|httpx\.|aiohttp\.|urllib|grpc\.|ClientSession)', re.IGNORECASE),
-        "database_ops": re.compile(r'\b(cursor\.|execute\(|query\(|session\.|\.commit\(|\.rollback\(|sqlalchemy|asyncpg|psycopg)', re.IGNORECASE),
-        "file_io": re.compile(r'\b(open\(|Path\(|\.read\(|\.write\(|os\.path|shutil\.|aiofiles)', re.IGNORECASE),
-        "external_process": re.compile(r'\b(subprocess\.|Popen|os\.system|asyncio\.create_subprocess)', re.IGNORECASE),
-        "async_operations": re.compile(r'\basync\s+def\b|\bawait\b', re.IGNORECASE),
-        "message_queues": re.compile(r'\b(kafka|rabbitmq|redis|celery|pubsub|pika|aiokafka|aioredis)', re.IGNORECASE),
-        "cloud_services": re.compile(r'\b(boto3|azure|gcloud|s3\.|dynamodb|lambda_client)', re.IGNORECASE),
-    },
-    "typescript": {
-        "network_calls": re.compile(r'\b(fetch\(|axios\.|HttpClient|got\(|request\(|ky\.|superagent)', re.IGNORECASE),
-        "database_ops": re.compile(r'\b(query\(|execute\(|prisma\.|typeorm|sequelize|knex|mongoose)', re.IGNORECASE),
-        "file_io": re.compile(r'\b(readFile|writeFile|fs\.|createReadStream|createWriteStream)', re.IGNORECASE),
-        "external_process": re.compile(r'\b(spawn\(|exec\(|execSync|child_process|execa)', re.IGNORECASE),
-        "async_operations": re.compile(r'\basync\s+function|\basync\s*\(|\bawait\b|\.then\(|Promise\.\w+', re.IGNORECASE),
-        "message_queues": re.compile(r'\b(kafka|rabbitmq|redis|bull|amqplib|ioredis|pubsub)', re.IGNORECASE),
-        "cloud_services": re.compile(r'\b(AWS\.|S3Client|DynamoDB|@aws-sdk|@azure|@google-cloud)', re.IGNORECASE),
-    },
-    "javascript": {
-        "network_calls": re.compile(r'\b(fetch\(|axios\.|HttpClient|got\(|request\(|XMLHttpRequest)', re.IGNORECASE),
-        "database_ops": re.compile(r'\b(query\(|execute\(|mongoose|sequelize|knex|mongodb)', re.IGNORECASE),
-        "file_io": re.compile(r'\b(readFile|writeFile|fs\.|createReadStream|createWriteStream)', re.IGNORECASE),
-        "external_process": re.compile(r'\b(spawn\(|exec\(|execSync|child_process)', re.IGNORECASE),
-        "async_operations": re.compile(r'\basync\s+function|\basync\s*\(|\bawait\b|\.then\(|Promise\.\w+', re.IGNORECASE),
-        "message_queues": re.compile(r'\b(kafka|rabbitmq|redis|bull|amqplib)', re.IGNORECASE),
-        "cloud_services": re.compile(r'\b(AWS\.|S3|DynamoDB|aws-sdk|azure|gcloud)', re.IGNORECASE),
-    },
-    "go": {
-        "network_calls": re.compile(r'\b(http\.Get|http\.Post|http\.Client|grpc\.|net\.Dial|resty\.)', re.IGNORECASE),
-        "database_ops": re.compile(r'\b(sql\.Open|db\.Query|db\.Exec|gorm\.|sqlx\.|pgx\.)', re.IGNORECASE),
-        "file_io": re.compile(r'\b(os\.Open|os\.Create|ioutil\.|bufio\.|io\.Read|io\.Write)', re.IGNORECASE),
-        "external_process": re.compile(r'\b(exec\.Command|os\.StartProcess)', re.IGNORECASE),
-        "async_operations": re.compile(r'\bgo\s+func|\bgo\s+\w+\(|<-\s*chan|\bchan\b', re.IGNORECASE),
-        "message_queues": re.compile(r'\b(kafka|rabbitmq|redis|nats|amqp)', re.IGNORECASE),
-        "cloud_services": re.compile(r'\b(aws\.|s3\.Client|dynamodb|lambda|azure|gcloud)', re.IGNORECASE),
-    },
-    "java": {
-        "network_calls": re.compile(r'\b(HttpClient|RestTemplate|WebClient|OkHttp|Feign|HttpURLConnection)', re.IGNORECASE),
-        "database_ops": re.compile(r'\b(JdbcTemplate|EntityManager|Session\.|PreparedStatement|ResultSet|JPA|Hibernate)', re.IGNORECASE),
-        "file_io": re.compile(r'\b(FileInputStream|FileOutputStream|Files\.|BufferedReader|BufferedWriter|Path\.)', re.IGNORECASE),
-        "external_process": re.compile(r'\b(ProcessBuilder|Runtime\.exec|Process\b)', re.IGNORECASE),
-        "async_operations": re.compile(r'\b(CompletableFuture|@Async|ExecutorService|Future<|Mono<|Flux<)', re.IGNORECASE),
-        "message_queues": re.compile(r'\b(KafkaTemplate|RabbitTemplate|JmsTemplate|RedisTemplate|@KafkaListener)', re.IGNORECASE),
-        "cloud_services": re.compile(r'\b(AmazonS3|DynamoDB|S3Client|AWSLambda|AzureStorage)', re.IGNORECASE),
-    },
-    "rust": {
-        "network_calls": re.compile(r'\b(reqwest::|hyper::|surf::|Client::new|HttpClient|tonic::)', re.IGNORECASE),
-        "database_ops": re.compile(r'\b(sqlx::|diesel::|rusqlite::|tokio_postgres|mongodb::)', re.IGNORECASE),
-        "file_io": re.compile(r'\b(File::open|File::create|std::fs::|tokio::fs::)', re.IGNORECASE),
-        "external_process": re.compile(r'\b(Command::new|std::process::)', re.IGNORECASE),
-        "async_operations": re.compile(r'\basync\s+fn|\bawait\b|\.await|tokio::|async_std::', re.IGNORECASE),
-        "message_queues": re.compile(r'\b(kafka|rdkafka|lapin|redis::)', re.IGNORECASE),
-        "cloud_services": re.compile(r'\b(aws_sdk|rusoto|s3::|dynamodb::)', re.IGNORECASE),
-    },
-    "csharp": {
-        "network_calls": re.compile(r'\b(HttpClient|WebClient|RestClient|HttpWebRequest|Refit)', re.IGNORECASE),
-        "database_ops": re.compile(r'\b(SqlConnection|DbContext|IDbConnection|Dapper|EntityFramework)', re.IGNORECASE),
-        "file_io": re.compile(r'\b(File\.|StreamReader|StreamWriter|FileStream|Path\.)', re.IGNORECASE),
-        "external_process": re.compile(r'\b(Process\.Start|ProcessStartInfo)', re.IGNORECASE),
-        "async_operations": re.compile(r'\basync\s+Task|\bawait\b|Task<|ValueTask<', re.IGNORECASE),
-        "message_queues": re.compile(r'\b(IServiceBus|RabbitMQ|MassTransit|NServiceBus|StackExchange\.Redis)', re.IGNORECASE),
-        "cloud_services": re.compile(r'\b(AmazonS3|IAmazonDynamoDB|BlobClient|Azure\.)', re.IGNORECASE),
-    },
+# Universal import patterns (work across languages)
+_IMPORT_PATTERNS = [
+    re.compile(r'^\s*import\s+(.+)', re.IGNORECASE),
+    re.compile(r'^\s*from\s+(\S+)\s+import', re.IGNORECASE),
+    re.compile(r'^\s*require\s*\(\s*[\'"]([^\'"]+)', re.IGNORECASE),
+    re.compile(r'^\s*use\s+(\S+)', re.IGNORECASE),
+    re.compile(r'^\s*using\s+(\S+)', re.IGNORECASE),
+    re.compile(r'^\s*#include\s*[<"]([^>"]+)', re.IGNORECASE),
+]
+
+# Function call pattern
+_CALL_PATTERN = re.compile(r'\b(\w+(?:\.\w+)*)\s*\(', re.MULTILINE)
+
+# Async function pattern
+_ASYNC_PATTERN = re.compile(r'\basync\s+(?:def|function|fn)\s+(\w+)', re.MULTILINE)
+
+# Error handler pattern
+_ERROR_HANDLER_PATTERN = re.compile(r'\b(try|catch|except|rescue|recover)\b', re.IGNORECASE)
+
+# Keywords to filter from function calls
+_CALL_KEYWORDS = frozenset({'if', 'for', 'while', 'switch', 'catch', 'function', 'def', 'class'})
+
+
+# =============================================================================
+# DOMAIN MODELS (Strict Types, Immutable)
+# =============================================================================
+
+class DependencyType(Enum):
+    """Types of external dependencies that can fail."""
+    NETWORK = "network"
+    DATABASE = "database"
+    FILE_SYSTEM = "file_system"
+    MESSAGE_QUEUE = "message_queue"
+    CLOUD_SERVICE = "cloud_service"
+    EXTERNAL_PROCESS = "external_process"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class ExtractedCall:
+    """A function/method call extracted from code."""
+    name: str
+    line: int
+    module: Optional[str] = None
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.line, self.module))
+
+
+@dataclass(frozen=True)
+class ExtractedImport:
+    """An import statement extracted from code."""
+    module: str
+    line: int
+    alias: Optional[str] = None
+
+
+@dataclass
+class ChaosContext:
+    """
+    Context for chaos engineering analysis.
+
+    Collected incrementally through analysis pipeline.
+    Passed to LLM for intelligent decision making.
+    """
+    # From Tree-sitter (structural)
+    imports: List[ExtractedImport] = field(default_factory=list)
+    function_calls: List[ExtractedCall] = field(default_factory=list)
+    async_functions: List[str] = field(default_factory=list)
+    error_handlers: int = 0
+
+    # From LSP (semantic)
+    callers: List[Dict[str, str]] = field(default_factory=list)
+    callees: List[Dict[str, str]] = field(default_factory=list)
+
+    # From LLM (intelligent)
+    external_deps: List[str] = field(default_factory=list)
+    dep_types: Dict[str, DependencyType] = field(default_factory=dict)
+
+    # Limits for LLM context (prevent token explosion)
+    MAX_IMPORTS_IN_CONTEXT: int = 10
+    MAX_CALLS_IN_CONTEXT: int = 10
+    MAX_ASYNC_IN_CONTEXT: int = 5
+    MAX_CALLERS_IN_CONTEXT: int = 3
+    MAX_CALLEES_IN_CONTEXT: int = 3
+
+    @property
+    def has_potential_externals(self) -> bool:
+        """Quick check if analysis is worth doing."""
+        # If we have imports or function calls, worth analyzing
+        return bool(self.imports) or bool(self.function_calls)
+
+    def to_llm_context(self) -> str:
+        """Format context for LLM prompt."""
+        lines = []
+
+        if self.imports:
+            import_list = [f"{i.module}" for i in self.imports[:self.MAX_IMPORTS_IN_CONTEXT]]
+            lines.append(f"Imports: {', '.join(import_list)}")
+
+        if self.function_calls:
+            call_list = list(set(c.name for c in self.function_calls))[:self.MAX_CALLS_IN_CONTEXT]
+            lines.append(f"Function calls: {', '.join(call_list)}")
+
+        if self.async_functions:
+            lines.append(f"Async functions: {', '.join(self.async_functions[:self.MAX_ASYNC_IN_CONTEXT])}")
+
+        if self.callers:
+            caller_list = [f"{c['name']} ({c.get('file', '?')})" for c in self.callers[:self.MAX_CALLERS_IN_CONTEXT]]
+            lines.append(f"Called by (blast radius): {', '.join(caller_list)}")
+
+        if self.callees:
+            callee_list = [f"{c['name']} ({c.get('file', '?')})" for c in self.callees[:self.MAX_CALLEES_IN_CONTEXT]]
+            lines.append(f"Calls to (failure sources): {', '.join(callee_list)}")
+
+        return "\n".join(lines) if lines else "No structural context available"
+
+
+# =============================================================================
+# CHAOS SYSTEM PROMPT (Single Source of Truth)
+# =============================================================================
+
+CHAOS_SYSTEM_PROMPT = """You are a Chaos Engineer. Your mindset: "Everything will fail. The question is HOW and WHEN."
+
+## YOUR TASK
+
+Given code and its structural context (imports, function calls, cross-file dependencies):
+
+1. **IDENTIFY** external dependencies from the imports and calls
+   - Network: HTTP clients, gRPC, WebSocket
+   - Database: SQL, NoSQL, ORM
+   - File System: read/write operations
+   - Message Queues: Kafka, RabbitMQ, Redis
+   - Cloud: AWS, Azure, GCP services
+   - External Process: subprocess, exec
+
+2. **SIMULATE** failure scenarios for each external dependency:
+   - Network: timeout, connection refused, 5xx errors, rate limiting
+   - Database: connection lost, deadlock, slow query, constraint violation
+   - File: permission denied, disk full, file locked
+   - Queue: broker down, message lost, duplicate delivery
+   - Cloud: service unavailable, throttling, eventual consistency
+
+3. **EVALUATE** existing resilience patterns:
+   - Timeout: Does code give up or wait forever?
+   - Retry: Exponential backoff? Jitter? Max attempts?
+   - Circuit Breaker: Fail-fast when dependency is down?
+   - Fallback: Graceful degradation or crash?
+   - Cleanup: Resources released on failure?
+
+4. **REPORT** only MISSING resilience patterns (not existing ones)
+
+## OUTPUT FORMAT (JSON)
+
+{
+    "external_dependencies": [
+        {"name": "httpx.AsyncClient", "type": "network", "line": 15},
+        {"name": "sqlalchemy.Session", "type": "database", "line": 42}
+    ],
+    "issues": [
+        {
+            "severity": "high",
+            "title": "HTTP call without timeout",
+            "description": "client.get() at line 20 has no timeout. If server is slow, this will hang forever.",
+            "line": 20,
+            "suggestion": "Add timeout=10.0 or use asyncio.wait_for()"
+        }
+    ],
+    "score": 4,
+    "confidence": 0.85
 }
 
-# Resilience patterns by language
-RESILIENCE_PATTERNS_BY_LANGUAGE: Dict[str, Dict[str, re.Pattern]] = {
-    "python": {
-        "try_except": re.compile(r'\btry\s*:', re.MULTILINE),
-        "retry": re.compile(r'@retry|tenacity|backoff|retrying|with_retry', re.IGNORECASE),
-        "timeout": re.compile(r'timeout=|@timeout|asyncio\.wait_for|async_timeout', re.IGNORECASE),
-        "circuit_breaker": re.compile(r'circuit.?breaker|pybreaker|CircuitBreaker', re.IGNORECASE),
-        "fallback": re.compile(r'\bfallback|@fallback|\.get\([^,]+,\s*[^)]+\)|or\s+default', re.IGNORECASE),
-        "health_check": re.compile(r'health.?check|liveness|readiness|/health', re.IGNORECASE),
-    },
-    "typescript": {
-        "try_catch": re.compile(r'\btry\s*\{', re.MULTILINE),
-        "retry": re.compile(r'retry\(|p-retry|async-retry|axios-retry|got\.retry', re.IGNORECASE),
-        "timeout": re.compile(r'timeout:|AbortController|Promise\.race|setTimeout', re.IGNORECASE),
-        "circuit_breaker": re.compile(r'circuit.?breaker|opossum|cockatiel', re.IGNORECASE),
-        "fallback": re.compile(r'\.catch\(|fallback|default:|Promise\.resolve|\?\?', re.IGNORECASE),
-        "health_check": re.compile(r'health.?check|liveness|readiness|/health', re.IGNORECASE),
-    },
-    "javascript": {
-        "try_catch": re.compile(r'\btry\s*\{', re.MULTILINE),
-        "retry": re.compile(r'retry\(|p-retry|async-retry|axios-retry', re.IGNORECASE),
-        "timeout": re.compile(r'timeout:|AbortController|Promise\.race|setTimeout', re.IGNORECASE),
-        "circuit_breaker": re.compile(r'circuit.?breaker|opossum', re.IGNORECASE),
-        "fallback": re.compile(r'\.catch\(|fallback|default:|Promise\.resolve', re.IGNORECASE),
-        "health_check": re.compile(r'health.?check|liveness|readiness|/health', re.IGNORECASE),
-    },
-    "go": {
-        "recover": re.compile(r'\brecover\(\)|\bdefer\b', re.MULTILINE),
-        "retry": re.compile(r'retry\.|Retry\(|backoff\.|avast/retry', re.IGNORECASE),
-        "timeout": re.compile(r'context\.WithTimeout|time\.After|ctx\.Done', re.IGNORECASE),
-        "circuit_breaker": re.compile(r'circuit.?breaker|gobreaker|hystrix', re.IGNORECASE),
-        "fallback": re.compile(r'fallback|default\s*:', re.IGNORECASE),
-        "health_check": re.compile(r'health.?check|liveness|readiness|/health', re.IGNORECASE),
-    },
-    "java": {
-        "try_catch": re.compile(r'\btry\s*\{', re.MULTILINE),
-        "retry": re.compile(r'@Retry|@Retryable|RetryTemplate|resilience4j\.retry', re.IGNORECASE),
-        "timeout": re.compile(r'@Timeout|\.timeout\(|CompletableFuture\.orTimeout|Duration\.of', re.IGNORECASE),
-        "circuit_breaker": re.compile(r'@CircuitBreaker|CircuitBreakerRegistry|Resilience4j|Hystrix', re.IGNORECASE),
-        "fallback": re.compile(r'@Fallback|fallbackMethod|\.onErrorResume', re.IGNORECASE),
-        "health_check": re.compile(r'@HealthIndicator|HealthCheck|/actuator/health', re.IGNORECASE),
-    },
-    "rust": {
-        "result_handling": re.compile(r'\?;|\.unwrap\(|\.expect\(|match\s+.*\{.*Err', re.MULTILINE),
-        "retry": re.compile(r'retry::|tokio-retry|backoff::', re.IGNORECASE),
-        "timeout": re.compile(r'timeout\(|tokio::time::timeout|async_std::future::timeout', re.IGNORECASE),
-        "circuit_breaker": re.compile(r'circuit.?breaker|failsafe-rs', re.IGNORECASE),
-        "fallback": re.compile(r'\.unwrap_or|\.unwrap_or_else|\.unwrap_or_default', re.IGNORECASE),
-        "health_check": re.compile(r'health.?check|liveness|readiness|/health', re.IGNORECASE),
-    },
-    "csharp": {
-        "try_catch": re.compile(r'\btry\s*\{', re.MULTILINE),
-        "retry": re.compile(r'Polly\.Retry|\.WaitAndRetry|IAsyncPolicy|RetryPolicy', re.IGNORECASE),
-        "timeout": re.compile(r'\.Timeout\(|CancellationToken|TimeSpan\.From', re.IGNORECASE),
-        "circuit_breaker": re.compile(r'CircuitBreaker|Polly\.CircuitBreaker|\.AdvancedCircuitBreaker', re.IGNORECASE),
-        "fallback": re.compile(r'\.Fallback|FallbackPolicy|\?\?\s*=|default\(', re.IGNORECASE),
-        "health_check": re.compile(r'IHealthCheck|AddHealthChecks|/health', re.IGNORECASE),
-    },
-}
+## SEVERITY GUIDE
+- critical: Data loss, security breach, cascading failure
+- high: Service unavailability, stuck process, resource leak
+- medium: Poor UX, slow recovery, partial failure
+- low: Suboptimal but functional
+"""
 
-# Fallback patterns (language-agnostic)
-CHAOS_TRIGGERS_GENERIC = {
-    "network_calls": re.compile(r'\b(http|https|fetch|request|client|api|endpoint)', re.IGNORECASE),
-    "database_ops": re.compile(r'\b(query|execute|select|insert|update|delete|database|db)', re.IGNORECASE),
-    "file_io": re.compile(r'\b(read|write|file|open|close|stream)', re.IGNORECASE),
-    "async_operations": re.compile(r'\b(async|await|promise|future|concurrent|parallel)', re.IGNORECASE),
-    "message_queues": re.compile(r'\b(queue|kafka|rabbit|redis|pubsub|message)', re.IGNORECASE),
-    "cloud_services": re.compile(r'\b(aws|azure|gcp|s3|blob|lambda|cloud)', re.IGNORECASE),
-}
 
-RESILIENCE_PATTERNS_GENERIC = {
-    "error_handling": re.compile(r'\b(try|catch|except|error|exception|throw|raise)', re.IGNORECASE),
-    "retry": re.compile(r'\b(retry|retries|backoff|exponential)', re.IGNORECASE),
-    "timeout": re.compile(r'\b(timeout|deadline|cancel|abort)', re.IGNORECASE),
-    "circuit_breaker": re.compile(r'\b(circuit|breaker|bulkhead|rate.?limit)', re.IGNORECASE),
-    "fallback": re.compile(r'\b(fallback|default|backup|failover)', re.IGNORECASE),
-}
-
+# =============================================================================
+# RESILIENCE FRAME (Main Class)
+# =============================================================================
 
 class ResilienceFrame(ValidationFrame):
     """
     Chaos Engineering Analysis Frame.
 
-    Applies chaos engineering principles: simulate failures, find missing resilience.
+    Universal, language-agnostic approach:
+    1. Tree-sitter extracts structure (imports, calls)
+    2. LSP adds semantic context (cross-file)
+    3. LLM decides what's external and what's missing
 
-    APPROACH:
-    1. Detect chaos triggers (external dependencies that can fail)
-    2. Let LLM simulate failure scenarios based on context
-    3. Report MISSING resilience patterns (timeout, retry, circuit breaker, fallback)
-
-    The LLM acts as a chaos engineer - it decides what to test based on the code.
+    Follows: KISS, DRY, SOLID, YAGNI
+    Safety: Fail-fast, timeouts on all external calls, idempotent analysis
     """
 
     # Metadata
     name = "Chaos Engineering Analysis"
-    description = "Chaos engineering: simulate failures, find missing resilience patterns."
+    description = "Simulate failures, find missing resilience patterns (timeout, retry, circuit breaker)."
     category = FrameCategory.GLOBAL
     priority = FramePriority.HIGH
     scope = FrameScope.FILE_LEVEL
-    is_blocker = False  # Not blocking for now as it's advisory
-    version = "2.0.0"
+    is_blocker = False
+    version = "3.0.0"  # Major version: universal approach
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
 
+    # Configuration (fail-fast defaults)
+    DEFAULT_TIMEOUT_SECONDS: float = 30.0
+    MAX_IMPORTS_TO_ANALYZE: int = 20
+    MAX_CALLS_TO_ANALYZE: int = 50
+    MAX_LSP_FUNCTIONS_TO_CHECK: int = 3
+    LSP_CALL_TIMEOUT: float = 5.0
+
+    # Circuit breaker settings (prevent cascading failures)
+    CIRCUIT_BREAKER_THRESHOLD: int = 3  # failures before opening
+    CIRCUIT_BREAKER_RESET_SECONDS: float = 60.0
+
+    # Class-level circuit breaker state (shared across instances)
+    _llm_failure_count: int = 0
+    _llm_circuit_opened_at: Optional[float] = None
+
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
-        """Initialize Resilience Frame."""
+        """Initialize with optional config. Fail-fast on invalid config."""
         super().__init__(config)
-        
-        # Load System Prompt
-        try:
-            from warden.llm.prompts.resilience import CHAOS_SYSTEM_PROMPT
-            self.system_prompt = CHAOS_SYSTEM_PROMPT
-        except ImportError:
-            logger.warning("resilience_prompt_import_failed")
-            self.system_prompt = "You are a Resilience Engineer."
+
+        # Validate config early (fail-fast)
+        self._timeout = float(self.config.get("timeout", self.DEFAULT_TIMEOUT_SECONDS))
+        if self._timeout <= 0:
+            raise ValueError(f"timeout must be positive, got {self._timeout}")
+
+        logger.debug("resilience_frame_initialized",
+                    timeout=self._timeout,
+                    version=self.version)
 
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
-        Execute resilience analysis on code file.
+        Execute chaos engineering analysis.
 
-        Strategy: LSP pre-analysis (cheap) → LLM deep analysis (expensive, only if needed)
+        Pipeline:
+        1. Extract structure (tree-sitter) - O(n), instant
+        2. Enrich context (LSP) - O(1), with timeout
+        3. Analyze with LLM (if worth it) - expensive, with timeout
 
-        Args:
-            code_file: Code file to validate
-
-        Returns:
-            FrameResult with findings
+        Idempotent: Same input → same output (temperature=0)
         """
         start_time = time.perf_counter()
 
-        logger.info(
-            "resilience_analysis_started",
-            file_path=code_file.path,
-            language=code_file.language,
-            has_llm_service=hasattr(self, 'llm_service'),
-        )
+        logger.info("chaos_analysis_started",
+                   file=code_file.path,
+                   language=code_file.language,
+                   size_bytes=code_file.size_bytes)
+
+        findings: List[Finding] = []
+        context = ChaosContext()
+
+        try:
+            # STEP 1: Extract structure (fast, no external deps)
+            context = await self._extract_structure(code_file)
+
+            # Early exit if nothing to analyze (YAGNI)
+            if not context.has_potential_externals:
+                logger.debug("chaos_no_externals_skipping", file=code_file.path)
+                return self._create_result(code_file, findings, context, start_time)
+
+            # STEP 2: Enrich with LSP (cheap, with timeout)
+            await self._enrich_with_lsp(code_file, context)
+
+            # STEP 3: LLM analysis (expensive, only if LLM available)
+            if self._has_llm_service():
+                llm_findings = await self._analyze_with_llm(code_file, context)
+                findings.extend(llm_findings)
+            else:
+                # Fallback: basic pattern detection without LLM
+                basic_findings = self._basic_analysis(code_file, context)
+                findings.extend(basic_findings)
+
+        except Exception as e:
+            # Fail-fast but graceful: log and return partial result
+            logger.error("chaos_analysis_failed",
+                        file=code_file.path,
+                        error=str(e),
+                        error_type=type(e).__name__)
+            findings.append(Finding(
+                id=f"{self.frame_id}-error",
+                severity="low",
+                message=f"Analysis incomplete: {type(e).__name__}",
+                location=code_file.path,
+                detail=str(e),
+                code=None
+            ))
+
+        return self._create_result(code_file, findings, context, start_time)
+
+    # =========================================================================
+    # STEP 1: Structure Extraction (Tree-sitter / Regex fallback)
+    # =========================================================================
+
+    async def _extract_structure(self, code_file: CodeFile) -> ChaosContext:
+        """
+        Extract structural information from code.
+
+        Tries tree-sitter first (universal), falls back to basic regex.
+        No external dependencies, always succeeds.
+        """
+        context = ChaosContext()
+
+        try:
+            # Try tree-sitter first
+            context = await self._extract_with_tree_sitter(code_file)
+            logger.debug("structure_extracted_tree_sitter",
+                        imports=len(context.imports),
+                        calls=len(context.function_calls))
+        except Exception as e:
+            # Fallback to regex (always works)
+            logger.debug("tree_sitter_fallback_to_regex", reason=str(e))
+            context = self._extract_with_regex(code_file)
+
+        return context
+
+    async def _extract_with_tree_sitter(self, code_file: CodeFile) -> ChaosContext:
+        """Extract using tree-sitter AST."""
+        from warden.ast.application.provider_registry import ASTProviderRegistry
+        from warden.ast.domain.enums import CodeLanguage
+
+        context = ChaosContext()
+
+        # Get language enum
+        try:
+            lang = CodeLanguage(code_file.language.lower())
+        except ValueError:
+            raise ValueError(f"Unsupported language: {code_file.language}")
+
+        # Get AST provider
+        registry = ASTProviderRegistry()
+        provider = registry.get_provider(lang)
+
+        if not provider:
+            raise ValueError(f"No AST provider for {lang}")
+
+        # Parse
+        result = provider.parse(code_file.content, lang)
+
+        if not result.ast:
+            raise ValueError("AST parsing returned no result")
+
+        # Extract imports and calls from AST
+        self._walk_ast_node(result.ast, context, code_file.content)
+
+        return context
+
+    def _walk_ast_node(self, node: Any, context: ChaosContext, source: str) -> None:
+        """
+        Walk AST and extract relevant information.
+
+        Universal patterns across languages:
+        - Import statements
+        - Function/method calls
+        - Async function definitions
+        - Try/catch blocks
+        """
+        if node is None:
+            return
+
+        node_type = getattr(node, 'type', '') or getattr(node, 'node_type', '')
+
+        # Import detection (universal patterns)
+        if node_type in ('import_statement', 'import_declaration', 'import_from_statement',
+                         'use_declaration', 'using_directive'):
+            line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+            # Get the import text
+            if hasattr(node, 'text'):
+                module = node.text.decode() if isinstance(node.text, bytes) else str(node.text)
+            else:
+                module = str(node)
+            context.imports.append(ExtractedImport(module=module[:100], line=line))
+
+        # Function call detection
+        if node_type in ('call_expression', 'call', 'method_invocation', 'invocation_expression'):
+            line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+            # Get function name
+            name = self._extract_call_name(node)
+            if name and len(context.function_calls) < self.MAX_CALLS_TO_ANALYZE:
+                context.function_calls.append(ExtractedCall(name=name[:50], line=line))
+
+        # Async function detection
+        if node_type in ('async_function_definition', 'async_function_declaration',
+                         'async_method_definition'):
+            name = self._extract_function_name(node)
+            if name:
+                context.async_functions.append(name[:50])
+
+        # Error handler detection
+        if node_type in ('try_statement', 'try_expression', 'catch_clause'):
+            context.error_handlers += 1
+
+        # Recurse into children
+        children = getattr(node, 'children', []) or []
+        for child in children:
+            self._walk_ast_node(child, context, source)
+
+    def _extract_call_name(self, node: Any) -> Optional[str]:
+        """Extract function name from call node."""
+        # Try common patterns
+        for attr in ('function', 'callee', 'name', 'method'):
+            child = getattr(node, attr, None)
+            if child:
+                if hasattr(child, 'text'):
+                    return child.text.decode() if isinstance(child.text, bytes) else str(child.text)
+                if hasattr(child, 'name'):
+                    return str(child.name)
+        return None
+
+    def _extract_function_name(self, node: Any) -> Optional[str]:
+        """Extract function name from definition node."""
+        name_node = getattr(node, 'name', None)
+        if name_node:
+            if hasattr(name_node, 'text'):
+                return name_node.text.decode() if isinstance(name_node.text, bytes) else str(name_node.text)
+            return str(name_node)
+        return None
+
+    def _extract_with_regex(self, code_file: CodeFile) -> ChaosContext:
+        """
+        Fallback regex extraction (universal patterns).
+
+        Works for any language, less accurate than tree-sitter.
+        Uses pre-compiled patterns for performance.
+        """
+        context = ChaosContext()
+        content = code_file.content
+        lines = content.split('\n')
+
+        # Extract imports (limit lines scanned for performance)
+        for i, line in enumerate(lines[:200]):
+            for pattern in _IMPORT_PATTERNS:
+                match = pattern.search(line)
+                if match and len(context.imports) < self.MAX_IMPORTS_TO_ANALYZE:
+                    context.imports.append(ExtractedImport(
+                        module=match.group(1)[:100],
+                        line=i
+                    ))
+                    break
+
+        # Extract function calls
+        for i, line in enumerate(lines):
+            for match in _CALL_PATTERN.finditer(line):
+                if len(context.function_calls) < self.MAX_CALLS_TO_ANALYZE:
+                    name = match.group(1)
+                    # Filter out common keywords
+                    if name.lower() not in _CALL_KEYWORDS:
+                        context.function_calls.append(ExtractedCall(name=name[:50], line=i))
+
+        # Async detection
+        for match in _ASYNC_PATTERN.finditer(content):
+            context.async_functions.append(match.group(1))
+
+        # Error handler count
+        context.error_handlers = len(_ERROR_HANDLER_PATTERN.findall(content))
+
+        return context
+
+    # =========================================================================
+    # STEP 2: LSP Enrichment
+    # =========================================================================
+
+    async def _enrich_with_lsp(self, code_file: CodeFile, context: ChaosContext) -> None:
+        """
+        Enrich context with LSP semantic information.
+
+        Adds: callers (blast radius), callees (failure sources)
+        Timeout protected, failures are logged and ignored.
+        """
+        import asyncio
+
+        try:
+            from warden.lsp import get_semantic_analyzer
+            analyzer = get_semantic_analyzer()
+
+            # Get callers/callees for first few async functions (rate limited)
+            for func_name in context.async_functions[:self.MAX_LSP_FUNCTIONS_TO_CHECK]:
+                try:
+                    # Find function in code
+                    match = re.search(rf'\b{re.escape(func_name)}\s*\(', code_file.content)
+                    if not match:
+                        continue
+
+                    line = code_file.content[:match.start()].count('\n')
+
+                    # Get callers with timeout
+                    callers = await asyncio.wait_for(
+                        analyzer.get_callers_async(code_file.path, line, 4, content=code_file.content),
+                        timeout=self.LSP_CALL_TIMEOUT
+                    )
+                    if callers:
+                        context.callers.extend([
+                            {"name": c.name, "file": c.location} for c in callers[:context.MAX_CALLERS_IN_CONTEXT]
+                        ])
+
+                    # Get callees with timeout
+                    callees = await asyncio.wait_for(
+                        analyzer.get_callees_async(code_file.path, line, 4, content=code_file.content),
+                        timeout=self.LSP_CALL_TIMEOUT
+                    )
+                    if callees:
+                        context.callees.extend([
+                            {"name": c.name, "file": c.location} for c in callees[:context.MAX_CALLEES_IN_CONTEXT]
+                        ])
+
+                except asyncio.TimeoutError:
+                    logger.debug("lsp_timeout", func=func_name, timeout=self.LSP_CALL_TIMEOUT)
+                    continue
+
+        except ImportError:
+            logger.debug("lsp_not_available")
+        except Exception as e:
+            logger.debug("lsp_enrichment_failed", error=str(e))
+
+    # =========================================================================
+    # STEP 3: LLM Analysis
+    # =========================================================================
+
+    def _has_llm_service(self) -> bool:
+        """
+        Check if LLM service is available and circuit breaker allows.
+
+        Circuit breaker pattern: after N failures, stop trying for M seconds.
+        Prevents cascading delays when LLM is down.
+        """
+        try:
+            # Check if service exists
+            if not hasattr(self, 'llm_service') or self.llm_service is None:
+                return False
+
+            # Check circuit breaker
+            if ResilienceFrame._llm_circuit_opened_at is not None:
+                elapsed = time.perf_counter() - ResilienceFrame._llm_circuit_opened_at
+                if elapsed < self.CIRCUIT_BREAKER_RESET_SECONDS:
+                    logger.debug("llm_circuit_open",
+                                seconds_remaining=self.CIRCUIT_BREAKER_RESET_SECONDS - elapsed)
+                    return False
+                # Reset circuit breaker
+                logger.info("llm_circuit_reset")
+                ResilienceFrame._llm_circuit_opened_at = None
+                ResilienceFrame._llm_failure_count = 0
+
+            return True
+        except Exception:
+            # Any error checking service = no service
+            return False
+
+    async def _analyze_with_llm(self, code_file: CodeFile, context: ChaosContext) -> List[Finding]:
+        """
+        Analyze with LLM for intelligent chaos engineering.
+
+        The LLM decides:
+        - Which imports/calls are external dependencies
+        - What failure scenarios are relevant
+        - What resilience patterns are missing
+        """
+        import asyncio
+        from warden.llm.types import LlmRequest
 
         findings: List[Finding] = []
 
-        # STEP 1: Quick pre-analysis - detect chaos triggers (external dependencies)
-        pattern_findings, chaos_context = await self._pre_analyze_patterns(code_file)
-        findings.extend(pattern_findings)
+        try:
+            # Build prompt with context
+            user_prompt = f"""Analyze this code for chaos engineering:
 
-        worth_chaos_analysis = bool(chaos_context.get("triggers"))
+File: {code_file.path}
+Language: {code_file.language}
 
-        # STEP 2: LSP-based structural analysis (cheap, if file has dependencies)
-        if worth_chaos_analysis:
-            # Enrich context with cross-file info (callers, callees)
-            await self._enrich_context_with_cross_file(code_file, chaos_context)
+Context:
+{context.to_llm_context()}
 
-            lsp_findings = await self._analyze_with_lsp(code_file)
-            findings.extend(lsp_findings)
+Code:
+```{code_file.language}
+{code_file.content[:8000]}
+```
 
-        # STEP 3: LLM chaos engineering analysis (AI decides what to check)
-        # CHAOS APPROACH: If file has external dependencies → LLM simulates failures
-        # LLM will decide what resilience patterns are NEEDED (not validate existing ones)
-        if hasattr(self, 'llm_service') and self.llm_service and worth_chaos_analysis:
-            llm_findings = await self._analyze_with_llm(code_file, chaos_context)
-            findings.extend(llm_findings)
-        elif not worth_chaos_analysis:
-            logger.debug("resilience_no_external_deps_skipping", file=code_file.path)
+Identify external dependencies and missing resilience patterns. Return JSON."""
 
-        # Determine status
-        status = self._determine_status(findings)
+            request = LlmRequest(
+                system_prompt=CHAOS_SYSTEM_PROMPT,
+                user_message=user_prompt,
+                temperature=0.0,  # Idempotent
+            )
 
+            # Call LLM with timeout
+            response = await asyncio.wait_for(
+                self.llm_service.send_async(request),
+                timeout=self._timeout
+            )
+
+            if response.success and response.content:
+                findings = self._parse_llm_response(response.content, code_file.path)
+                logger.info("chaos_llm_analysis_complete", findings=len(findings))
+                # Success - reset failure count
+                ResilienceFrame._llm_failure_count = 0
+            else:
+                logger.warning("chaos_llm_failed", error=response.error_message)
+                self._record_llm_failure()
+
+        except asyncio.TimeoutError:
+            logger.warning("chaos_llm_timeout", timeout=self._timeout)
+            self._record_llm_failure()
+        except Exception as e:
+            logger.error("chaos_llm_error", error=str(e))
+            self._record_llm_failure()
+
+        return findings
+
+    def _record_llm_failure(self) -> None:
+        """Record LLM failure and open circuit if threshold reached."""
+        ResilienceFrame._llm_failure_count += 1
+        if ResilienceFrame._llm_failure_count >= self.CIRCUIT_BREAKER_THRESHOLD:
+            ResilienceFrame._llm_circuit_opened_at = time.perf_counter()
+            logger.warning("llm_circuit_opened",
+                          failures=ResilienceFrame._llm_failure_count,
+                          reset_seconds=self.CIRCUIT_BREAKER_RESET_SECONDS)
+
+    def _parse_llm_response(self, content: str, file_path: str) -> List[Finding]:
+        """Parse LLM JSON response into findings."""
+        from warden.shared.utils.json_parser import parse_json_from_llm
+
+        findings: List[Finding] = []
+
+        try:
+            data = parse_json_from_llm(content)
+            if not data:
+                return findings
+
+            for issue in data.get("issues", []):
+                findings.append(Finding(
+                    id=f"{self.frame_id}-{issue.get('line', 0)}",
+                    severity=issue.get("severity", "medium"),
+                    message=issue.get("title", "Resilience issue"),
+                    location=f"{file_path}:{issue.get('line', 1)}",
+                    detail=f"{issue.get('description', '')}\n\nSuggestion: {issue.get('suggestion', '')}",
+                    code=None
+                ))
+
+        except Exception as e:
+            logger.warning("chaos_parse_error", error=str(e))
+
+        return findings
+
+    # =========================================================================
+    # Fallback: Basic Analysis (No LLM)
+    # =========================================================================
+
+    def _basic_analysis(self, code_file: CodeFile, context: ChaosContext) -> List[Finding]:
+        """
+        Basic analysis without LLM.
+
+        Simple heuristics for common issues:
+        - Async functions without try/catch
+        - Many external calls, few error handlers
+        """
+        findings: List[Finding] = []
+
+        # Heuristic: async functions should have error handling
+        if context.async_functions and context.error_handlers == 0:
+            findings.append(Finding(
+                id=f"{self.frame_id}-no-error-handling",
+                severity="medium",
+                message=f"{len(context.async_functions)} async functions with no error handling",
+                location=f"{code_file.path}:1",
+                detail="Async operations should have try/catch for resilience",
+                code=None
+            ))
+
+        # Heuristic: many calls, few handlers = risky
+        call_count = len(context.function_calls)
+        if call_count > 10 and context.error_handlers < 2:
+            findings.append(Finding(
+                id=f"{self.frame_id}-insufficient-handlers",
+                severity="low",
+                message=f"{call_count} function calls with only {context.error_handlers} error handlers",
+                location=f"{code_file.path}:1",
+                detail="Consider adding more error handling for external calls",
+                code=None
+            ))
+
+        return findings
+
+    # =========================================================================
+    # Result Creation
+    # =========================================================================
+
+    def _create_result(
+        self,
+        code_file: CodeFile,
+        findings: List[Finding],
+        context: ChaosContext,
+        start_time: float
+    ) -> FrameResult:
+        """Create FrameResult with metadata."""
         duration = time.perf_counter() - start_time
 
-        logger.info(
-            "resilience_analysis_completed",
-            file_path=code_file.path,
-            status=status,
-            total_findings=len(findings),
-            duration=f"{duration:.2f}s",
-        )
+        # Determine status
+        critical = sum(1 for f in findings if f.severity == "critical")
+        high = sum(1 for f in findings if f.severity == "high")
+
+        if critical > 0:
+            status = "failed"
+        elif high > 0:
+            status = "warning"
+        else:
+            status = "passed"
+
+        logger.info("chaos_analysis_complete",
+                   file=code_file.path,
+                   status=status,
+                   findings=len(findings),
+                   duration_ms=int(duration * 1000))
 
         return FrameResult(
             frame_id=self.frame_id,
@@ -287,529 +766,11 @@ class ResilienceFrame(ValidationFrame):
             is_blocker=self.is_blocker,
             findings=findings,
             metadata={
-                "method": "chaos_engineering",
-                "file_size": code_file.size_bytes,
-                "line_count": code_file.line_count,
-                "chaos_triggers": chaos_context.get("triggers", {}),
-                "existing_patterns": chaos_context.get("existing_patterns", {}),
-            },
-        )
-
-    def _get_patterns_for_language(self, language: str) -> tuple[Dict[str, re.Pattern], Dict[str, re.Pattern]]:
-        """Get chaos triggers and resilience patterns for a specific language."""
-        # Normalize language name
-        lang_map = {
-            "python": "python",
-            "py": "python",
-            "typescript": "typescript",
-            "ts": "typescript",
-            "javascript": "javascript",
-            "js": "javascript",
-            "go": "go",
-            "golang": "go",
-            "java": "java",
-            "rust": "rust",
-            "rs": "rust",
-            "csharp": "csharp",
-            "cs": "csharp",
-            "c#": "csharp",
-        }
-        normalized = lang_map.get(language.lower(), language.lower())
-
-        # Get language-specific patterns or fall back to generic
-        chaos_patterns = CHAOS_TRIGGERS_BY_LANGUAGE.get(normalized, CHAOS_TRIGGERS_GENERIC)
-        resilience_patterns = RESILIENCE_PATTERNS_BY_LANGUAGE.get(normalized, RESILIENCE_PATTERNS_GENERIC)
-
-        return chaos_patterns, resilience_patterns
-
-    async def _pre_analyze_patterns(self, code_file: CodeFile) -> tuple[List[Finding], Dict[str, Any]]:
-        """
-        Quick pattern-based pre-analysis for chaos engineering.
-
-        CHAOS ENGINEERING APPROACH:
-        - Don't look for "retry/timeout exists" → that's pattern validation
-        - Look for "external dependencies exist" → that needs chaos analysis
-        - LLM decides what resilience patterns are NEEDED, not what EXISTS
-
-        Supports: Python, TypeScript, JavaScript, Go, Java, Rust, C#
-
-        Returns:
-            (findings, chaos_context): Findings and context for LLM (triggers, existing patterns)
-        """
-        findings: List[Finding] = []
-        content = code_file.content
-
-        # Get language-specific patterns
-        chaos_patterns, resilience_patterns = self._get_patterns_for_language(code_file.language)
-
-        # Count chaos triggers (things that CAN fail)
-        trigger_counts: Dict[str, int] = {}
-        for trigger_name, pattern in chaos_patterns.items():
-            matches = pattern.findall(content)
-            if matches:
-                trigger_counts[trigger_name] = len(matches)
-
-        # Also count existing resilience patterns (for context, not gating)
-        resilience_counts: Dict[str, int] = {}
-        for pattern_name, pattern in resilience_patterns.items():
-            matches = pattern.findall(content)
-            if matches:
-                resilience_counts[pattern_name] = len(matches)
-
-        # Quick structural findings (language-aware)
-        lang = code_file.language.lower()
-
-        # Check for try without catch/except based on language
-        if lang in ("python", "py"):
-            try_count = len(re.findall(r'\btry\s*:', content))
-            except_count = len(re.findall(r'\bexcept\b.*:', content))
-        elif lang in ("typescript", "ts", "javascript", "js", "java", "csharp", "cs", "c#"):
-            try_count = len(re.findall(r'\btry\s*\{', content))
-            except_count = len(re.findall(r'\bcatch\s*\(', content))
-        elif lang in ("go", "golang"):
-            # Go uses explicit error checking, not try/catch
-            try_count = 0
-            except_count = 0
-        elif lang in ("rust", "rs"):
-            # Rust uses Result/Option, check for unhandled ?
-            try_count = len(re.findall(r'\?;', content))
-            except_count = len(re.findall(r'match\s+.*\{.*Err|\.unwrap_or|\.expect\(', content, re.DOTALL))
-        else:
-            # Generic fallback
-            try_count = len(re.findall(r'\btry\b', content, re.IGNORECASE))
-            except_count = len(re.findall(r'\b(catch|except|rescue)\b', content, re.IGNORECASE))
-
-        if try_count > 0 and except_count == 0:
-            findings.append(Finding(
-                id=f"{self.frame_id}-bare-try",
-                severity="medium",
-                message="Error handling structure without proper catch/recovery detected",
-                location=f"{code_file.path}:1",
-                detail="Consider adding proper error handling for resilience",
-                code=None
-            ))
-
-        # Build chaos context for LLM
-        chaos_context: Dict[str, Any] = {
-            "triggers": trigger_counts,  # What can fail
-            "existing_patterns": resilience_counts,  # What protection exists
-            "dependencies": list(trigger_counts.keys()),  # For LLM prompt
-            "cross_file": {},  # Will be enriched by LSP
-        }
-
-        logger.debug("resilience_pre_analysis_complete",
-                    file=code_file.path,
-                    chaos_triggers=trigger_counts,
-                    resilience_patterns=resilience_counts,
-                    findings=len(findings))
-
-        return findings, chaos_context
-
-    async def _enrich_context_with_cross_file(self, code_file: CodeFile, chaos_context: Dict[str, Any]) -> None:
-        """
-        Enrich chaos context with cross-file information using LSP.
-
-        Adds:
-        - callers: Files/functions that call into this file (blast radius)
-        - callees: External files this code depends on (failure sources)
-        """
-        try:
-            from warden.lsp import get_semantic_analyzer
-            import asyncio
-
-            analyzer = get_semantic_analyzer()
-
-            # Find exported functions (public API of this file) - language-aware
-            lang = code_file.language.lower()
-            if lang in ("python", "py"):
-                func_pattern = re.compile(r'^(?:async\s+)?def\s+([a-z_][a-z0-9_]*)\s*\(', re.MULTILINE)
-            elif lang in ("typescript", "ts", "javascript", "js"):
-                func_pattern = re.compile(r'(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(|(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(', re.MULTILINE)
-            elif lang in ("go", "golang"):
-                func_pattern = re.compile(r'^func\s+(\w+)\s*\(', re.MULTILINE)
-            elif lang in ("java", "csharp", "cs", "c#"):
-                func_pattern = re.compile(r'(?:public|protected)\s+(?:async\s+)?(?:static\s+)?\w+\s+(\w+)\s*\(', re.MULTILINE)
-            elif lang in ("rust", "rs"):
-                func_pattern = re.compile(r'^pub\s+(?:async\s+)?fn\s+(\w+)', re.MULTILINE)
-            else:
-                func_pattern = re.compile(r'\bfunction\s+(\w+)\s*\(|\bdef\s+(\w+)\s*\(', re.MULTILINE)
-
-            matches = func_pattern.finditer(code_file.content)
-            public_funcs = []
-            for m in matches:
-                # Get the first non-None group
-                func_name = next((g for g in m.groups() if g), None)
-                if func_name and not func_name.startswith('_'):
-                    public_funcs.append(func_name)
-
-            callers_info = []
-            callees_info = []
-
-            # Sample up to 3 public functions (avoid slow analysis)
-            for func_name in public_funcs[:3]:
-                # Find the function line
-                match = re.search(rf'^(?:async\s+)?def\s+{func_name}\s*\(', code_file.content, re.MULTILINE)
-                if match:
-                    line_num = code_file.content[:match.start()].count('\n')
-
-                    try:
-                        # Get callers (who depends on this function?)
-                        callers = await asyncio.wait_for(
-                            analyzer.get_callers_async(code_file.path, line_num, 4, content=code_file.content),
-                            timeout=5.0
-                        )
-                        if callers:
-                            callers_info.extend([
-                                {"func": func_name, "caller": c.name, "file": c.location}
-                                for c in callers[:3]  # Limit
-                            ])
-
-                        # Get callees (what does this function call?)
-                        callees = await asyncio.wait_for(
-                            analyzer.get_callees_async(code_file.path, line_num, 4, content=code_file.content),
-                            timeout=5.0
-                        )
-                        if callees:
-                            callees_info.extend([
-                                {"func": func_name, "callee": c.name, "file": c.location}
-                                for c in callees[:3]  # Limit
-                            ])
-                    except asyncio.TimeoutError:
-                        continue
-
-            chaos_context["cross_file"] = {
-                "callers": callers_info,  # Blast radius
-                "callees": callees_info,  # Failure sources
-                "public_functions": public_funcs[:5],
+                "method": "chaos_engineering_v3",
+                "imports_found": len(context.imports),
+                "calls_found": len(context.function_calls),
+                "async_functions": len(context.async_functions),
+                "error_handlers": context.error_handlers,
+                "has_lsp_context": bool(context.callers or context.callees),
             }
-
-            logger.debug("resilience_cross_file_enriched",
-                        file=code_file.path,
-                        callers=len(callers_info),
-                        callees=len(callees_info))
-
-        except ImportError:
-            logger.debug("resilience_lsp_not_available_for_enrichment")
-        except Exception as e:
-            logger.warning("resilience_cross_file_enrichment_failed", error=str(e))
-
-    async def _analyze_with_lsp(self, code_file: CodeFile) -> List[Finding]:
-        """
-        Use LSP for structural resilience analysis (cheap, before LLM).
-
-        Checks:
-        1. Unused error handlers (dead code)
-        2. Fallback functions not connected
-        3. Retry/timeout decorators on wrong functions
-        4. Async functions calling external APIs without timeout (no LSP needed)
-
-        Uses 10s timeout per LSP call to fail fast.
-        """
-        import asyncio
-        findings: List[Finding] = []
-
-        # Check 4 doesn't need LSP - do it first (instant)
-        self._check_async_without_timeout_sync(code_file, findings)
-
-        try:
-            from warden.lsp import get_semantic_analyzer
-
-            analyzer = get_semantic_analyzer()
-
-            # Run LSP checks with individual timeouts (fail fast)
-            lsp_timeout = 10.0  # 10s per check, not 30s
-
-            # Collect all checks to run
-            checks = [
-                self._check_unused_handlers(analyzer, code_file, findings),
-                self._check_unused_fallbacks(analyzer, code_file, findings),
-                self._check_decorated_functions(analyzer, code_file, findings),
-            ]
-
-            # Run with timeout - if LSP is slow, skip gracefully
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(*checks, return_exceptions=True),
-                    timeout=lsp_timeout * 3  # Total timeout for all checks
-                )
-            except asyncio.TimeoutError:
-                logger.warning("resilience_lsp_timeout_skipping", file=code_file.path)
-
-            logger.debug("resilience_lsp_analysis_complete",
-                        file=code_file.path,
-                        findings=len(findings))
-
-        except ImportError:
-            logger.debug("resilience_lsp_not_available")
-        except Exception as e:
-            logger.warning("resilience_lsp_analysis_error", error=str(e))
-
-        return findings
-
-    def _check_async_without_timeout_sync(self, code_file: CodeFile, findings: List[Finding]) -> None:
-        """Check async functions calling external services without timeout (multi-language)."""
-        content = code_file.content
-        lang = code_file.language.lower()
-
-        # Language-specific patterns for async functions with external calls
-        if lang in ("python", "py"):
-            pattern = re.compile(
-                r'async\s+def\s+(\w+)\s*\([^)]*\)[^:]*:'
-                r'(?:(?!async\s+def).)*?'
-                r'(?:await\s+(?:self\.)?(?:client|http|session|request|api|fetch)\.\w+)',
-                re.DOTALL
-            )
-            timeout_indicators = ['wait_for', 'timeout=', '@timeout', 'async_timeout']
-        elif lang in ("typescript", "ts", "javascript", "js"):
-            pattern = re.compile(
-                r'async\s+(?:function\s+)?(\w+)\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{'
-                r'(?:(?!async\s+function|async\s+\w+\s*=).)*?'
-                r'(?:await\s+(?:fetch|axios|got|request|http)\b)',
-                re.DOTALL
-            )
-            timeout_indicators = ['AbortController', 'timeout:', 'Promise.race', 'signal:']
-        elif lang in ("go", "golang"):
-            pattern = re.compile(
-                r'func\s+(\w+)\s*\([^)]*\)[^{]*\{'
-                r'(?:(?!func\s+).)*?'
-                r'(?:http\.(?:Get|Post|Do)|\.(?:Get|Post)\()',
-                re.DOTALL
-            )
-            timeout_indicators = ['context.WithTimeout', 'context.WithDeadline', 'time.After', 'ctx.Done']
-        elif lang in ("java",):
-            pattern = re.compile(
-                r'(?:public|private|protected)\s+(?:async\s+)?\w+\s+(\w+)\s*\([^)]*\)[^{]*\{'
-                r'(?:(?!(?:public|private|protected)\s+).)*?'
-                r'(?:HttpClient|RestTemplate|WebClient)',
-                re.DOTALL
-            )
-            timeout_indicators = ['.timeout(', 'Duration.of', '@Timeout', 'CompletableFuture.orTimeout']
-        elif lang in ("rust", "rs"):
-            pattern = re.compile(
-                r'(?:pub\s+)?async\s+fn\s+(\w+)[^{]*\{'
-                r'(?:(?!async\s+fn).)*?'
-                r'(?:reqwest::|hyper::|\.get\(|\.post\()',
-                re.DOTALL
-            )
-            timeout_indicators = ['timeout(', 'tokio::time::timeout']
-        elif lang in ("csharp", "cs", "c#"):
-            pattern = re.compile(
-                r'(?:public|private|protected)\s+async\s+Task[^(]*\s+(\w+)\s*\([^)]*\)[^{]*\{'
-                r'(?:(?!(?:public|private|protected)\s+).)*?'
-                r'(?:HttpClient|WebClient)',
-                re.DOTALL
-            )
-            timeout_indicators = ['.Timeout', 'CancellationToken', 'TimeSpan']
-        else:
-            # Skip for unsupported languages
-            return
-
-        for match in pattern.finditer(content):
-            func_name = match.group(1)
-            func_content = match.group(0)
-            line_num = content[:match.start()].count('\n')
-
-            # Check if this function has timeout
-            has_timeout = any(indicator in func_content for indicator in timeout_indicators)
-            # Also check decorators/attributes before function
-            prefix = content[max(0, match.start()-100):match.start()]
-            has_timeout = has_timeout or any(indicator in prefix for indicator in timeout_indicators)
-
-            if not has_timeout:
-                findings.append(Finding(
-                    id=f"{self.frame_id}-async-no-timeout-{line_num}",
-                    severity="medium",
-                    message=f"Async function '{func_name}' calls external service without timeout",
-                    location=f"{code_file.path}:{line_num + 1}",
-                    detail="External API calls should have timeouts to prevent hanging",
-                    code=func_name
-                ))
-
-    async def _check_unused_handlers(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
-        """Check for error handlers that are never called."""
-        exception_pattern = re.compile(r'def\s+(handle_\w*error|on_\w*error|_handle_exception|error_callback)\s*\(')
-
-        for match in exception_pattern.finditer(code_file.content):
-            func_name = match.group(1)
-            line_num = code_file.content[:match.start()].count('\n')
-
-            is_used = await analyzer.is_symbol_used_async(
-                code_file.path, line_num, match.start(1) - match.start(),
-                content=code_file.content
-            )
-
-            if is_used is False:
-                findings.append(Finding(
-                    id=f"{self.frame_id}-unused-handler-{line_num}",
-                    severity="medium",
-                    message=f"Error handler '{func_name}' is defined but never called",
-                    location=f"{code_file.path}:{line_num + 1}",
-                    detail="Dead error handler - ensure it's connected to the error handling flow",
-                    code=func_name
-                ))
-
-    async def _check_unused_fallbacks(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
-        """Check for fallback functions that are never called."""
-        fallback_pattern = re.compile(r'def\s+(fallback_\w+|get_default_\w+|_fallback)\s*\(')
-
-        for match in fallback_pattern.finditer(code_file.content):
-            func_name = match.group(1)
-            line_num = code_file.content[:match.start()].count('\n')
-
-            is_used = await analyzer.is_symbol_used_async(
-                code_file.path, line_num, match.start(1) - match.start(),
-                content=code_file.content
-            )
-
-            if is_used is False:
-                findings.append(Finding(
-                    id=f"{self.frame_id}-unused-fallback-{line_num}",
-                    severity="medium",
-                    message=f"Fallback function '{func_name}' is defined but never used",
-                    location=f"{code_file.path}:{line_num + 1}",
-                    detail="Fallback should be called in error handling paths",
-                    code=func_name
-                ))
-
-    async def _check_decorated_functions(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
-        """Check if @retry/@timeout decorated functions are actually called."""
-        # Find functions with resilience decorators
-        decorated_pattern = re.compile(r'@(?:retry|timeout|circuit_?breaker)\s*(?:\([^)]*\))?\s*\n\s*(?:async\s+)?def\s+(\w+)')
-
-        for match in decorated_pattern.finditer(code_file.content):
-            func_name = match.group(1)
-            line_num = code_file.content[:match.end()].count('\n')
-
-            is_used = await analyzer.is_symbol_used_async(
-                code_file.path, line_num, 4,  # After 'def '
-                content=code_file.content
-            )
-
-            if is_used is False:
-                findings.append(Finding(
-                    id=f"{self.frame_id}-unused-decorated-{line_num}",
-                    severity="low",
-                    message=f"Decorated function '{func_name}' has resilience decorator but is never called",
-                    location=f"{code_file.path}:{line_num + 1}",
-                    detail="Function with @retry/@timeout/@circuit_breaker is dead code",
-                    code=func_name
-                ))
-
-    async def _check_async_without_timeout(self, analyzer, code_file: CodeFile, findings: List[Finding]) -> None:
-        """Check async functions that call external services without timeout."""
-        # Find async functions that likely call external APIs
-        external_call_pattern = re.compile(
-            r'async\s+def\s+(\w+)\s*\([^)]*\)[^:]*:'
-            r'(?:(?!async\s+def).)*?'  # Content until next async def
-            r'(?:await\s+(?:self\.)?(?:client|http|session|request|api|fetch)\.\w+)',
-            re.DOTALL
         )
-
-        content = code_file.content
-
-        for match in external_call_pattern.finditer(content):
-            func_name = match.group(1)
-            func_content = match.group(0)
-            line_num = content[:match.start()].count('\n')
-
-            # Check if this function has timeout wrapper
-            has_timeout = (
-                'wait_for' in func_content or
-                'timeout=' in func_content or
-                '@timeout' in content[max(0, match.start()-50):match.start()]
-            )
-
-            if not has_timeout:
-                findings.append(Finding(
-                    id=f"{self.frame_id}-async-no-timeout-{line_num}",
-                    severity="medium",
-                    message=f"Async function '{func_name}' calls external service without timeout",
-                    location=f"{code_file.path}:{line_num + 1}",
-                    detail="External API calls should have timeouts to prevent hanging",
-                    code=func_name
-                ))
-
-    async def _analyze_with_llm(self, code_file: CodeFile, chaos_context: Optional[Dict[str, Any]] = None) -> List[Finding]:
-        """
-        Analyze code using LLM for chaos engineering (expensive, context-aware).
-
-        Args:
-            code_file: Code to analyze
-            chaos_context: Detected triggers and existing patterns from pre-analysis
-        """
-        from warden.llm.prompts.resilience import CHAOS_SYSTEM_PROMPT, generate_chaos_request
-        from warden.llm.types import LlmRequest, AnalysisResult
-
-        findings: List[Finding] = []
-        try:
-            logger.info("resilience_llm_analysis_started",
-                       file=code_file.path,
-                       triggers=chaos_context.get("triggers") if chaos_context else None)
-
-            client: ILlmClient = self.llm_service
-
-            # Pass chaos context to LLM so it knows what dependencies to focus on
-            request = LlmRequest(
-                system_prompt=CHAOS_SYSTEM_PROMPT,
-                user_message=generate_chaos_request(
-                    code_file.content,
-                    code_file.language,
-                    code_file.path,
-                    context=chaos_context
-                ),
-                temperature=0.0,  # Idempotency (deterministic scenarios)
-            )
-            
-            response = await client.send_async(request)
-            
-            if response.success and response.content:
-                # Use robust shared JSON parser
-                from warden.shared.utils.json_parser import parse_json_from_llm
-                json_data = parse_json_from_llm(response.content)
-                
-                if json_data:
-                    try:
-                        # Parse result with Pydantic
-                        result = AnalysisResult.from_json(json_data)
-                        
-                        for issue in result.issues:
-                            findings.append(Finding(
-                                id=f"{self.frame_id}-resilience-{issue.line}",
-                                severity=issue.severity,
-                                message=issue.title,
-                                location=f"{code_file.path}:{issue.line}",
-                                detail=f"{issue.description}\n\nSuggestion: {issue.suggestion}",
-                                code=issue.evidence_quote
-                            ))
-                        
-                        logger.info("resilience_llm_analysis_completed", 
-                                  findings=len(findings), 
-                                  confidence=result.confidence,
-                                  resilience_score=result.score)
-                                  
-                    except (ValueError, TypeError, KeyError) as e:
-                        logger.warning("resilience_llm_parsing_failed", error=str(e), content_preview=response.content[:100])
-                else:
-                    logger.warning("resilience_llm_response_not_json", content_preview=response.content[:100])
-            else:
-                 logger.warning("resilience_llm_request_failed", error=response.error_message)
-
-        except (RuntimeError, AttributeError, ValueError) as e:
-            logger.error("resilience_llm_error", error=str(e))
-            
-        return findings
-
-    def _determine_status(self, findings: List[Finding]) -> str:
-        """Determine frame status based on findings."""
-        if not findings:
-            return "passed"
-
-        critical_count = sum(1 for f in findings if f.severity == "critical")
-        high_count = sum(1 for f in findings if f.severity == "high")
-
-        if critical_count > 0:
-            return "failed"
-        elif high_count > 0:
-            return "warning"
-        
-        return "passed"
