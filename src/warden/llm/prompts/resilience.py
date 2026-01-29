@@ -84,6 +84,7 @@ def generate_chaos_request(code: str, language: str, file_path: Optional[str] = 
     if context:
         deps = context.get("dependencies", [])
         existing = context.get("existing_patterns", {})
+        cross_file = context.get("cross_file", {})
 
         if deps:
             context_info += f"\nDetected dependencies: {', '.join(deps)}"
@@ -91,6 +92,19 @@ def generate_chaos_request(code: str, language: str, file_path: Optional[str] = 
         if existing:
             existing_list = [f"{k}({v})" for k, v in existing.items()]
             context_info += f"\nExisting resilience patterns: {', '.join(existing_list)}"
+
+        # Cross-file context (blast radius and failure sources)
+        if cross_file:
+            callers = cross_file.get("callers", [])
+            callees = cross_file.get("callees", [])
+
+            if callers:
+                caller_list = [f"{c['caller']} ({c['file']})" for c in callers[:3]]
+                context_info += f"\nCallers (blast radius): {', '.join(caller_list)}"
+
+            if callees:
+                callee_list = [f"{c['callee']} ({c['file']})" for c in callees[:3]]
+                context_info += f"\nCallees (failure sources): {', '.join(callee_list)}"
 
     return f"""Apply chaos engineering principles to this code:{file_info}{context_info}
 

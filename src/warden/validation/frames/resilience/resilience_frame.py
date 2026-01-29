@@ -122,6 +122,9 @@ class ResilienceFrame(ValidationFrame):
 
         # STEP 2: LSP-based structural analysis (cheap, if file has dependencies)
         if worth_chaos_analysis:
+            # Enrich context with cross-file info (callers, callees)
+            await self._enrich_context_with_cross_file(code_file, chaos_context)
+
             lsp_findings = await self._analyze_with_lsp(code_file)
             findings.extend(lsp_findings)
 
@@ -212,6 +215,7 @@ class ResilienceFrame(ValidationFrame):
             "triggers": trigger_counts,  # What can fail
             "existing_patterns": resilience_counts,  # What protection exists
             "dependencies": list(trigger_counts.keys()),  # For LLM prompt
+            "cross_file": {},  # Will be enriched by LSP
         }
 
         logger.debug("resilience_pre_analysis_complete",
@@ -221,6 +225,76 @@ class ResilienceFrame(ValidationFrame):
                     findings=len(findings))
 
         return findings, chaos_context
+
+    async def _enrich_context_with_cross_file(self, code_file: CodeFile, chaos_context: Dict[str, Any]) -> None:
+        """
+        Enrich chaos context with cross-file information using LSP.
+
+        Adds:
+        - callers: Files/functions that call into this file (blast radius)
+        - callees: External files this code depends on (failure sources)
+        """
+        try:
+            from warden.lsp import get_semantic_analyzer
+            import asyncio
+
+            analyzer = get_semantic_analyzer()
+
+            # Find exported functions (public API of this file)
+            func_pattern = re.compile(r'^(?:async\s+)?def\s+([a-z_][a-z0-9_]*)\s*\(', re.MULTILINE)
+            public_funcs = [m.group(1) for m in func_pattern.finditer(code_file.content)
+                           if not m.group(1).startswith('_')]
+
+            callers_info = []
+            callees_info = []
+
+            # Sample up to 3 public functions (avoid slow analysis)
+            for func_name in public_funcs[:3]:
+                # Find the function line
+                match = re.search(rf'^(?:async\s+)?def\s+{func_name}\s*\(', code_file.content, re.MULTILINE)
+                if match:
+                    line_num = code_file.content[:match.start()].count('\n')
+
+                    try:
+                        # Get callers (who depends on this function?)
+                        callers = await asyncio.wait_for(
+                            analyzer.get_callers_async(code_file.path, line_num, 4, content=code_file.content),
+                            timeout=5.0
+                        )
+                        if callers:
+                            callers_info.extend([
+                                {"func": func_name, "caller": c.name, "file": c.location}
+                                for c in callers[:3]  # Limit
+                            ])
+
+                        # Get callees (what does this function call?)
+                        callees = await asyncio.wait_for(
+                            analyzer.get_callees_async(code_file.path, line_num, 4, content=code_file.content),
+                            timeout=5.0
+                        )
+                        if callees:
+                            callees_info.extend([
+                                {"func": func_name, "callee": c.name, "file": c.location}
+                                for c in callees[:3]  # Limit
+                            ])
+                    except asyncio.TimeoutError:
+                        continue
+
+            chaos_context["cross_file"] = {
+                "callers": callers_info,  # Blast radius
+                "callees": callees_info,  # Failure sources
+                "public_functions": public_funcs[:5],
+            }
+
+            logger.debug("resilience_cross_file_enriched",
+                        file=code_file.path,
+                        callers=len(callers_info),
+                        callees=len(callees_info))
+
+        except ImportError:
+            logger.debug("resilience_lsp_not_available_for_enrichment")
+        except Exception as e:
+            logger.warning("resilience_cross_file_enrichment_failed", error=str(e))
 
     async def _analyze_with_lsp(self, code_file: CodeFile) -> List[Finding]:
         """
