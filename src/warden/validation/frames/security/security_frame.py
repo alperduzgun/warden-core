@@ -8,9 +8,12 @@ Built-in checks:
 - Hardcoded passwords detection
 
 Enhanced with:
+- Tree-sitter AST analysis (structural vulnerability detection)
 - LSP data flow analysis (taint tracking)
 - Semantic search cross-file context
 - LLM-powered deep analysis
+
+Pipeline: Pattern → Tree-sitter → LSP → VectorDB → LLM
 
 Priority: CRITICAL (blocker)
 """
@@ -60,7 +63,7 @@ class SecurityFrame(ValidationFrame):
     priority = FramePriority.CRITICAL
     scope = FrameScope.FILE_LEVEL
     is_blocker = True  # Block PR if critical security issues found
-    version = "2.0.0"  # v2: Added LSP data flow analysis for taint tracking
+    version = "2.1.0"  # v2.1: Added Tree-sitter AST + LSP data flow for full pipeline
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]  # Applies to all languages
 
@@ -143,6 +146,168 @@ class SecurityFrame(ValidationFrame):
                     check=check_class.__name__ if hasattr(check_class, '__name__') else "unknown",
                     error=str(e),
                 )
+
+    # =========================================================================
+    # Tree-sitter AST Analysis (Structural Vulnerability Detection)
+    # =========================================================================
+
+    async def _extract_ast_context(self, code_file: CodeFile) -> Dict[str, Any]:
+        """
+        Extract AST context using Tree-sitter for structural analysis.
+
+        Detects:
+        - Function calls with string concatenation (potential injection)
+        - Dangerous function usage (eval, exec, subprocess)
+        - Unvalidated input flows
+
+        Returns:
+            Dict with AST-extracted security context
+        """
+        ast_context: Dict[str, Any] = {
+            "dangerous_calls": [],
+            "string_concatenations": [],
+            "input_sources": [],
+            "sql_queries": [],
+        }
+
+        try:
+            from warden.ast.application.provider_registry import ASTProviderRegistry
+            from warden.ast.domain.enums import CodeLanguage
+
+            # Get language enum
+            try:
+                lang = CodeLanguage(code_file.language.lower())
+            except ValueError:
+                logger.debug("ast_unsupported_language", language=code_file.language)
+                return ast_context
+
+            # Get AST provider
+            registry = ASTProviderRegistry()
+            provider = registry.get_provider(lang)
+
+            if not provider:
+                logger.debug("ast_no_provider", language=lang)
+                return ast_context
+
+            # Ensure grammar is available (auto-install if needed)
+            if hasattr(provider, 'ensure_grammar'):
+                await provider.ensure_grammar(lang)
+
+            # Parse with timeout
+            result = await asyncio.wait_for(
+                provider.parse(code_file.content, lang),
+                timeout=5.0
+            )
+
+            if not result.ast_root:
+                return ast_context
+
+            # Walk AST and extract security-relevant nodes
+            self._walk_ast_for_security(result.ast_root, ast_context, code_file.content)
+
+            logger.debug(
+                "ast_security_context_extracted",
+                dangerous_calls=len(ast_context["dangerous_calls"]),
+                sql_queries=len(ast_context["sql_queries"]),
+                input_sources=len(ast_context["input_sources"])
+            )
+
+        except asyncio.TimeoutError:
+            logger.debug("ast_extraction_timeout", file=code_file.path)
+        except Exception as e:
+            logger.debug("ast_extraction_failed", error=str(e))
+
+        return ast_context
+
+    def _walk_ast_for_security(self, node: Any, context: Dict[str, Any], source: str) -> None:
+        """Walk AST and extract security-relevant patterns."""
+        if node is None:
+            return
+
+        node_type = getattr(node, 'type', '') or ''
+
+        # Detect dangerous function calls
+        if node_type in ('call_expression', 'call'):
+            call_name = self._get_call_name(node)
+            if call_name:
+                # Check for dangerous functions
+                dangerous_funcs = {'eval', 'exec', 'compile', 'subprocess', 'shell',
+                                   'system', 'popen', 'spawn', 'execfile'}
+                if any(d in call_name.lower() for d in dangerous_funcs):
+                    line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+                    context["dangerous_calls"].append({
+                        "function": call_name,
+                        "line": line,
+                        "risk": "high"
+                    })
+
+                # Check for SQL-related calls
+                sql_funcs = {'execute', 'executemany', 'raw', 'query', 'cursor'}
+                if any(s in call_name.lower() for s in sql_funcs):
+                    line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+                    context["sql_queries"].append({
+                        "function": call_name,
+                        "line": line
+                    })
+
+        # Detect string concatenation in potentially dangerous contexts
+        if node_type in ('binary_expression', 'binary_operator'):
+            if hasattr(node, 'text'):
+                text = node.text.decode() if isinstance(node.text, bytes) else str(node.text)
+                if '+' in text and ('"' in text or "'" in text):
+                    line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+                    context["string_concatenations"].append({
+                        "line": line,
+                        "snippet": text[:100]
+                    })
+
+        # Detect input sources
+        if node_type in ('call_expression', 'call', 'attribute'):
+            call_name = self._get_call_name(node) or ''
+            input_patterns = {'request', 'input', 'argv', 'stdin', 'getenv', 'form', 'params'}
+            if any(p in call_name.lower() for p in input_patterns):
+                line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+                context["input_sources"].append({
+                    "source": call_name,
+                    "line": line
+                })
+
+        # Recurse into children
+        children = getattr(node, 'children', []) or []
+        for child in children:
+            self._walk_ast_for_security(child, context, source)
+
+    def _get_call_name(self, node: Any) -> Optional[str]:
+        """Extract function/method name from call node."""
+        for attr in ('function', 'callee', 'name', 'method'):
+            child = getattr(node, attr, None)
+            if child:
+                if hasattr(child, 'text'):
+                    return child.text.decode() if isinstance(child.text, bytes) else str(child.text)
+                if hasattr(child, 'name'):
+                    return str(child.name)
+        return None
+
+    def _format_ast_context(self, ast_context: Dict[str, Any]) -> str:
+        """Format AST context for LLM prompt."""
+        lines = []
+
+        if ast_context.get("dangerous_calls"):
+            lines.append("[Dangerous Function Calls (AST)]:")
+            for call in ast_context["dangerous_calls"][:5]:
+                lines.append(f"  - {call['function']} at line {call['line']} (risk: {call['risk']})")
+
+        if ast_context.get("sql_queries"):
+            lines.append("\n[SQL Query Locations (AST)]:")
+            for q in ast_context["sql_queries"][:5]:
+                lines.append(f"  - {q['function']} at line {q['line']}")
+
+        if ast_context.get("input_sources"):
+            lines.append("\n[Input Sources (AST)]:")
+            for src in ast_context["input_sources"][:5]:
+                lines.append(f"  - {src['source']} at line {src['line']}")
+
+        return "\n".join(lines) if lines else ""
 
     # =========================================================================
     # LSP Data Flow Analysis (Taint Tracking)
@@ -357,7 +522,14 @@ class SecurityFrame(ValidationFrame):
                 )
                 # Continue with other checks even if one fails
 
-        # LSP Data Flow Analysis (Taint Tracking)
+        # STEP 2: Tree-sitter AST Analysis (Structural Vulnerability Detection)
+        ast_context: Dict[str, Any] = {}
+        try:
+            ast_context = await self._extract_ast_context(code_file)
+        except Exception as e:
+            logger.debug("ast_extraction_failed", error=str(e))
+
+        # STEP 3: LSP Data Flow Analysis (Taint Tracking)
         data_flow_context: Dict[str, Any] = {}
         if check_results:  # Only analyze if we have findings
             try:
@@ -385,6 +557,16 @@ class SecurityFrame(ValidationFrame):
                                     semantic_context += f"- File: {res.chunk.file_path}\n  Code: {res.chunk.content[:200]}...\n"
                     except Exception as e:
                         logger.warning("security_semantic_search_failed", error=str(e))
+
+                # Add Tree-sitter AST Context
+                ast_str = ""
+                if ast_context:
+                    ast_str = self._format_ast_context(ast_context)
+                    if ast_str:
+                        semantic_context += f"\n\n{ast_str}"
+                        logger.debug("ast_context_added_to_llm",
+                                    dangerous_calls=len(ast_context.get("dangerous_calls", [])),
+                                    sql_queries=len(ast_context.get("sql_queries", [])))
 
                 # Add LSP Data Flow Context (Taint Analysis)
                 data_flow_str = ""
@@ -469,6 +651,14 @@ class SecurityFrame(ValidationFrame):
             "checks_failed": sum(1 for r in check_results if not r.passed),
             "check_results": [r.to_json() for r in check_results],
         }
+
+        # Add AST analysis results if available
+        if ast_context:
+            metadata["ast_analysis"] = {
+                "dangerous_calls_found": len(ast_context.get("dangerous_calls", [])),
+                "sql_queries_found": len(ast_context.get("sql_queries", [])),
+                "input_sources_found": len(ast_context.get("input_sources", [])),
+            }
 
         # Add data flow analysis results if available
         if data_flow_context:

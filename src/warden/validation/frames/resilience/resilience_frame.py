@@ -6,7 +6,10 @@ Philosophy: "Everything will fail. The question is HOW and WHEN."
 Architecture (Universal, Language-Agnostic):
 1. Tree-sitter → Extract structure (imports, function calls)
 2. LSP → Enrich with cross-file context (callers, callees)
-3. LLM → Decide what's external, simulate failures, find missing patterns
+3. VectorDB → Search related resilience patterns in codebase
+4. LLM → Decide what's external, simulate failures, find missing patterns
+
+Pipeline: Tree-sitter → LSP → VectorDB → LLM
 
 Principles: KISS, DRY, SOLID, YAGNI, Fail-Fast, Idempotency
 """
@@ -243,7 +246,7 @@ class ResilienceFrame(ValidationFrame):
     priority = FramePriority.HIGH
     scope = FrameScope.FILE_LEVEL
     is_blocker = False
-    version = "3.0.0"  # Major version: universal approach
+    version = "3.1.0"  # v3.1: Added VectorDB semantic search for related patterns
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
 
@@ -282,7 +285,8 @@ class ResilienceFrame(ValidationFrame):
         Pipeline:
         1. Extract structure (tree-sitter) - O(n), instant
         2. Enrich context (LSP) - O(1), with timeout
-        3. Analyze with LLM (if worth it) - expensive, with timeout
+        3. Search related patterns (VectorDB) - O(1), with timeout
+        4. Analyze with LLM (if worth it) - expensive, with timeout
 
         Idempotent: Same input → same output (temperature=0)
         """
@@ -308,9 +312,12 @@ class ResilienceFrame(ValidationFrame):
             # STEP 2: Enrich with LSP (cheap, with timeout)
             await self._enrich_with_lsp(code_file, context)
 
-            # STEP 3: LLM analysis (expensive, only if LLM available)
+            # STEP 3: Search related resilience patterns (VectorDB)
+            related_patterns = await self._search_related_patterns(code_file, context)
+
+            # STEP 4: LLM analysis (expensive, only if LLM available)
             if self._has_llm_service():
-                llm_findings = await self._analyze_with_llm(code_file, context)
+                llm_findings = await self._analyze_with_llm(code_file, context, related_patterns)
                 findings.extend(llm_findings)
             else:
                 # Fallback: basic pattern detection without LLM
@@ -563,7 +570,112 @@ class ResilienceFrame(ValidationFrame):
             logger.debug("lsp_enrichment_failed", error=str(e))
 
     # =========================================================================
-    # STEP 3: LLM Analysis
+    # STEP 3: Semantic Search (VectorDB)
+    # =========================================================================
+
+    async def _search_related_patterns(
+        self,
+        code_file: CodeFile,
+        context: ChaosContext
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for related resilience patterns using VectorDB.
+
+        Finds:
+        - Similar code with resilience patterns (timeout, retry, circuit breaker)
+        - Related error handling in the codebase
+        - Existing resilience implementations to learn from
+
+        Returns:
+            List of related code snippets with resilience patterns
+        """
+        related_patterns: List[Dict[str, Any]] = []
+
+        # Check if semantic search service is available
+        if not hasattr(self, 'semantic_search_service') or not self.semantic_search_service:
+            logger.debug("semantic_search_not_available")
+            return related_patterns
+
+        if not self.semantic_search_service.is_available():
+            logger.debug("semantic_search_index_not_ready")
+            return related_patterns
+
+        try:
+            # Build search query from context
+            search_terms = []
+
+            # Add external dependency names
+            if context.imports:
+                import_names = [i.module.split('.')[-1] for i in context.imports[:3]]
+                search_terms.extend(import_names)
+
+            # Add async function names (likely need resilience)
+            if context.async_functions:
+                search_terms.extend(context.async_functions[:2])
+
+            # Always search for resilience patterns
+            search_terms.extend(["timeout", "retry", "circuit_breaker", "error_handling"])
+
+            query = f"resilience patterns for {' '.join(search_terms[:5])}"
+
+            # Search with timeout
+            import asyncio
+            search_results = await asyncio.wait_for(
+                self.semantic_search_service.search(query=query, limit=3),
+                timeout=5.0
+            )
+
+            if search_results:
+                for result in search_results:
+                    # Skip if same file
+                    if result.chunk.file_path == code_file.path:
+                        continue
+
+                    related_patterns.append({
+                        "file": result.chunk.file_path,
+                        "content": result.chunk.content[:300],
+                        "score": result.score if hasattr(result, 'score') else 0.0,
+                        "has_timeout": "timeout" in result.chunk.content.lower(),
+                        "has_retry": "retry" in result.chunk.content.lower(),
+                        "has_circuit_breaker": "circuit" in result.chunk.content.lower(),
+                    })
+
+                logger.debug(
+                    "semantic_search_complete",
+                    query=query[:50],
+                    results_found=len(related_patterns)
+                )
+
+        except asyncio.TimeoutError:
+            logger.debug("semantic_search_timeout")
+        except Exception as e:
+            logger.debug("semantic_search_failed", error=str(e))
+
+        return related_patterns
+
+    def _format_related_patterns(self, patterns: List[Dict[str, Any]]) -> str:
+        """Format related patterns for LLM context."""
+        if not patterns:
+            return ""
+
+        lines = ["[Related Resilience Patterns in Codebase]:"]
+        for p in patterns[:3]:
+            features = []
+            if p.get("has_timeout"):
+                features.append("timeout")
+            if p.get("has_retry"):
+                features.append("retry")
+            if p.get("has_circuit_breaker"):
+                features.append("circuit_breaker")
+
+            feature_str = f" ({', '.join(features)})" if features else ""
+            lines.append(f"  - {p['file']}{feature_str}")
+            lines.append(f"    ```\n    {p['content'][:200]}...\n    ```")
+
+        return "\n".join(lines)
+
+    # =========================================================================
+    # STEP 4: LLM Analysis
     # =========================================================================
 
     def _has_llm_service(self) -> bool:
@@ -595,7 +707,12 @@ class ResilienceFrame(ValidationFrame):
             # Any error checking service = no service
             return False
 
-    async def _analyze_with_llm(self, code_file: CodeFile, context: ChaosContext) -> List[Finding]:
+    async def _analyze_with_llm(
+        self,
+        code_file: CodeFile,
+        context: ChaosContext,
+        related_patterns: Optional[List[Dict[str, Any]]] = None
+    ) -> List[Finding]:
         """
         Analyze with LLM for intelligent chaos engineering.
 
@@ -610,6 +727,11 @@ class ResilienceFrame(ValidationFrame):
         findings: List[Finding] = []
 
         try:
+            # Format related patterns context
+            related_context = ""
+            if related_patterns:
+                related_context = self._format_related_patterns(related_patterns)
+
             # Build prompt with context
             user_prompt = f"""Analyze this code for chaos engineering:
 
@@ -618,6 +740,8 @@ Language: {code_file.language}
 
 Context:
 {context.to_llm_context()}
+
+{related_context}
 
 Code:
 ```{code_file.language}
