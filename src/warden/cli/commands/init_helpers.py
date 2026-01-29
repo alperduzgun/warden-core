@@ -425,7 +425,15 @@ def configure_ci_workflow(
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
           ollama serve &
-          sleep 5
+          echo "Waiting for Ollama to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Ollama not ready yet..."
+            sleep 1
+          done
           ollama pull qwen2.5-coder:0.5b
 
 """
