@@ -114,7 +114,11 @@ jobs:
       run: |
         git config --global user.name "Warden Bot"
         git config --global user.email "bot@warden.ai"
-        # Add SARIF report and module-based baseline directory
-        git add .warden/baseline.sarif .warden/baseline/
+        # Add SARIF report (always exists after scan)
+        git add .warden/baseline.sarif
+        # Add module-based baseline directory if it exists
+        if [ -d ".warden/baseline" ]; then
+          git add .warden/baseline/
+        fi
         git commit -m "chore: update warden baseline [skip ci]" || echo "No changes to baseline"
         git push

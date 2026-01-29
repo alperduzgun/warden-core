@@ -95,11 +95,11 @@ def _setup_semantic_search(config_path: Path):
          SemanticSearchService._instance = None
          service = SemanticSearchService(ss_config)
          
-         # Inner function to perform indexing to avoid DRY violation
+         # Inner function to perform indexing
          async def run_indexing_if_files_exist_async():
              code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
              files = [f for f in Path.cwd().rglob("*") if f.is_file() and f.suffix in code_extensions and "node_modules" not in str(f) and ".venv" not in str(f) and ".git" not in str(f)]
-             
+
              if not files:
                  console.print("[yellow]No code files found to index.[/yellow]")
                  return
@@ -112,33 +112,29 @@ def _setup_semantic_search(config_path: Path):
                  console.print("\n[yellow]⚠️  Indexing skipped by user.[/yellow]")
                  console.print("[dim]Run 'warden index' later to complete setup.[/dim]")
 
-             if service.is_available():
-                 asyncio.run(run_indexing_if_files_exist_async())
-             else:
-                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
+         # Check service availability and run indexing
+         if service.is_available():
+             asyncio.run(run_indexing_if_files_exist_async())
+         else:
+             console.print("[yellow]Semantic service dependencies missing.[/yellow]")
 
-             if service.is_available():
-                 asyncio.run(run_indexing_if_files_exist_async())
+             # Use DependencyManager for robust installation
+             from warden.services.dependencies import DependencyManager
+             dep_manager = DependencyManager()
+
+             required_pkgs = ["chromadb", "sentence-transformers"]
+             success = asyncio.run(dep_manager.install_packages_async(required_pkgs))
+
+             if success:
+                 console.print("[green]Dependencies installed successfully. Retrying setup...[/green]")
+                 # Re-instantiate service to pick up new modules
+                 service = SemanticSearchService(ss_config)
+                 if service.is_available():
+                     asyncio.run(run_indexing_if_files_exist_async())
+                 else:
+                     console.print("[red]Service unavailable even after install.[/red]")
              else:
-                  console.print("[yellow]Semantic service dependencies missing.[/yellow]")
-                  
-                  # Use DependencyManager for robust installation
-                  from warden.services.dependencies import DependencyManager
-                  dep_manager = DependencyManager()
-                  
-                  required_pkgs = ["chromadb", "sentence-transformers"]
-                  success = asyncio.run(dep_manager.install_packages_async(required_pkgs))
-                  
-                  if success:
-                      console.print("[green]Dependencies installed successfully. Retrying setup...[/green]")
-                      # Re-instantiate service to pick up new modules
-                      service = SemanticSearchService(ss_config)
-                      if service.is_available():
-                          asyncio.run(run_indexing_if_files_exist_async())
-                      else:
-                          console.print("[red]Service unavailable even after install.[/red]")
-                  else:
-                      console.print("[red]Semantic features will be disabled.[/red]")
+                 console.print("[red]Semantic features will be disabled.[/red]")
 
     except Exception as e:
         console.print("\n[red]❌ Semantic Indexing Failed[/red]")

@@ -33,7 +33,9 @@ jobs:
         run: warden refresh --force
 
       - name: Run Full Scan and Update Baseline
-        run: warden scan --update-baseline
+        run: |
+          mkdir -p .warden/reports
+          warden scan --update-baseline --format sarif --output .warden/reports/warden-report.sarif
 
       - name: Check Technical Debt
         run: warden baseline debt
@@ -43,7 +45,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .warden/baseline/ .warden/intelligence/
+          git add .warden/baseline/ .warden/intelligence/ .warden/reports/
           git diff --cached --quiet || git commit -m "chore(warden): update baseline and intelligence [skip ci]"
           git push
 

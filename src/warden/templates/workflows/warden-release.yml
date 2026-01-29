@@ -39,7 +39,8 @@ jobs:
       - name: Run Strict Security Audit
         run: |
           # Full scan with strict settings for release
-          warden scan --level deep
+          mkdir -p .warden/reports
+          warden scan --level deep --format sarif --output .warden/reports/warden-report.sarif
 
       - name: Check Technical Debt
         run: |

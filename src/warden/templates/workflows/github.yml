@@ -30,13 +30,16 @@ jobs:
 
 {ollama_setup}
       - name: Run Warden Scan
-        run: warden scan --ci
+        run: |
+          mkdir -p .warden/reports
+          warden scan --ci --format sarif --output .warden/reports/warden-report.sarif
 
       - name: Upload SARIF Report
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: .warden/reports/warden-report.sarif
+        continue-on-error: true
 
       - name: Upload Reports
         if: always()
