@@ -253,13 +253,10 @@ def scan_command(
             except Exception as e:
                 console.print(f"[yellow]⚠️  Intelligence load failed: {e}[/yellow]")
 
-        # CI mode disables baseline updates (read-only for PRs)
-        effective_update_baseline = update_baseline and not ci
-
         exit_code = asyncio.run(_run_scan_async(
             paths, frames, format, output, verbose, level,
             memory_profile, ci, baseline_fingerprints, intelligence_context,
-            update_baseline=effective_update_baseline
+            update_baseline=update_baseline
         ))
         
         # Display memory stats if profiling was enabled
