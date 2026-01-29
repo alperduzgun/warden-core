@@ -79,12 +79,18 @@ def generate_chaos_request(code: str, language: str, file_path: Optional[str] = 
     """
     file_info = f"\nFile: {file_path}" if file_path else ""
 
-    # Add detected dependencies if available (helps LLM focus)
+    # Add detected context (helps LLM focus on what's missing)
     context_info = ""
     if context:
         deps = context.get("dependencies", [])
+        existing = context.get("existing_patterns", {})
+
         if deps:
-            context_info = f"\nDetected dependencies: {', '.join(deps)}"
+            context_info += f"\nDetected dependencies: {', '.join(deps)}"
+
+        if existing:
+            existing_list = [f"{k}({v})" for k, v in existing.items()]
+            context_info += f"\nExisting resilience patterns: {', '.join(existing_list)}"
 
     return f"""Apply chaos engineering principles to this code:{file_info}{context_info}
 

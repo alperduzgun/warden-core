@@ -42,6 +42,17 @@ RESILIENCE_PATTERNS = {
     "health_check": re.compile(r'health.?check|liveness|readiness|/health', re.IGNORECASE),
 }
 
+# Pre-compiled chaos triggers (external dependencies that can fail)
+CHAOS_TRIGGERS = {
+    "network_calls": re.compile(r'\b(requests\.|httpx\.|aiohttp\.|urllib|fetch\(|\.get\(|\.post\()', re.IGNORECASE),
+    "database_ops": re.compile(r'\b(cursor\.|execute\(|query\(|session\.|\.commit\(|\.rollback\(|SELECT|INSERT|UPDATE|DELETE)', re.IGNORECASE),
+    "file_io": re.compile(r'\b(open\(|Path\(|\.read\(|\.write\(|os\.path|shutil\.)', re.IGNORECASE),
+    "external_process": re.compile(r'\b(subprocess\.|Popen|os\.system|run\()', re.IGNORECASE),
+    "async_operations": re.compile(r'\basync\s+def\b|\bawait\b', re.IGNORECASE),
+    "message_queues": re.compile(r'\b(kafka|rabbitmq|redis|celery|pubsub|queue)', re.IGNORECASE),
+    "cloud_services": re.compile(r'\b(boto3|azure|gcloud|s3\.|dynamodb|lambda)', re.IGNORECASE),
+}
+
 
 class ResilienceFrame(ValidationFrame):
     """
@@ -145,9 +156,11 @@ class ResilienceFrame(ValidationFrame):
             is_blocker=self.is_blocker,
             findings=findings,
             metadata={
-                "method": "llm_fmea",
+                "method": "chaos_engineering",
                 "file_size": code_file.size_bytes,
                 "line_count": code_file.line_count,
+                "chaos_triggers": chaos_context.get("triggers", {}),
+                "existing_patterns": chaos_context.get("existing_patterns", {}),
             },
         )
 
@@ -166,20 +179,9 @@ class ResilienceFrame(ValidationFrame):
         findings: List[Finding] = []
         content = code_file.content
 
-        # CHAOS ENGINEERING TRIGGERS (external dependencies that can fail)
-        chaos_triggers = {
-            "network_calls": re.compile(r'\b(requests\.|httpx\.|aiohttp\.|urllib|fetch\(|\.get\(|\.post\()', re.IGNORECASE),
-            "database_ops": re.compile(r'\b(cursor\.|execute\(|query\(|session\.|\.commit\(|\.rollback\(|SELECT|INSERT|UPDATE|DELETE)', re.IGNORECASE),
-            "file_io": re.compile(r'\b(open\(|Path\(|\.read\(|\.write\(|os\.path|shutil\.)', re.IGNORECASE),
-            "external_process": re.compile(r'\b(subprocess\.|Popen|os\.system|run\()', re.IGNORECASE),
-            "async_operations": re.compile(r'\basync\s+def\b|\bawait\b', re.IGNORECASE),
-            "message_queues": re.compile(r'\b(kafka|rabbitmq|redis|celery|pubsub|queue)', re.IGNORECASE),
-            "cloud_services": re.compile(r'\b(boto3|azure|gcloud|s3\.|dynamodb|lambda)', re.IGNORECASE),
-        }
-
-        # Count chaos triggers (things that CAN fail)
+        # Count chaos triggers (things that CAN fail) - uses pre-compiled CHAOS_TRIGGERS
         trigger_counts: Dict[str, int] = {}
-        for trigger_name, pattern in chaos_triggers.items():
+        for trigger_name, pattern in CHAOS_TRIGGERS.items():
             matches = pattern.findall(content)
             if matches:
                 trigger_counts[trigger_name] = len(matches)
