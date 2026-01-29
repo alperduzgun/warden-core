@@ -14,13 +14,15 @@ def get_classification_system_prompt(available_frames: Optional[List[Any]] = Non
             for f in available_frames
         ])
     else:
-        frames_descriptions = """- SecurityFrame: Critical vulnerability detection (SQLi, XSS, Secrets).
+        frames_descriptions = """- SecurityFrame: Critical vulnerability detection (SQLi, XSS, Secrets). Uses LSP data flow for taint tracking.
 - ResilienceFrame: Chaos engineering - simulate failures, find missing resilience patterns (timeout, retry, circuit breaker).
 - OrphanFrame: Dead code detection (Unused functions/classes).
 - ArchitecturalFrame: Design pattern and coupling analysis.
 - StressFrame: Performance/Load testing for critical paths.
 - PropertyFrame: Invariant and API contract validation.
-- FuzzFrame: [EXPERIMENTAL/HIGH NOISE] Aggressive boundary testing. Use only if requested or for complex parsing logic.
+- FuzzFrame: Boundary testing for parsers and validators.
+  HIGH VALUE for: protocol parsers, file format handlers, input validators, codecs, deserializers, binary readers.
+  SKIP for: simple CRUD, config loaders, standard REST endpoints. Only use if code handles untrusted structured input.
 - DemoSecurityFrame: [DEMO ONLY] Example security rules for training."""
 
     return f"""You are the Lead Software Architect and Technical Advisor for this project.
@@ -33,13 +35,15 @@ Your goal is to design a high-value, low-noise validation strategy tailored to t
 
 2. **Noise Intolerance (Precision > Recall)**:
    - Identify frames that rely on mechanisms mismatching the language runtime (e.g., static array bounds checks in Python).
-   - **AGGRESSIVELY SUPPRESS** frames like 'FuzzFrame' or 'DemoSecurityFrame' for production code unless specific signal justifies them (e.g., historical bugs).
+   - **FuzzFrame Selection**: Enable for parser/validator code (JSON, XML, binary, protocol handlers, input validators). Skip for standard business logic.
+   - **SUPPRESS** 'DemoSecurityFrame' for production code (training only).
    - If a frame is known to be noisy, only select it if the ROI (Return on Investment) is high.
 
 3. **Dependency-Awareness**:
    - Trigger specialized frames based on libraries found in 'STATS'.
    - *Example*: Detect `sqlalchemy` -> Enable SQL-focused Security rules.
    - *Example*: Detect `react` -> Enable Frontend Performance rules.
+   - *Example*: Detect `struct`, `protobuf`, `msgpack`, `xml.etree` -> Enable FuzzFrame for parser validation.
 
 ### TASK:
 1. Analyze the `TYPE`, `FRAMEWORK`, `STATS` (dependencies), and `HISTORY`.

@@ -361,7 +361,7 @@ class ResilienceFrame(ValidationFrame):
         return context
 
     async def _extract_with_tree_sitter(self, code_file: CodeFile) -> ChaosContext:
-        """Extract using tree-sitter AST."""
+        """Extract using tree-sitter AST with auto-install."""
         from warden.ast.application.provider_registry import ASTProviderRegistry
         from warden.ast.domain.enums import CodeLanguage
 
@@ -380,14 +380,18 @@ class ResilienceFrame(ValidationFrame):
         if not provider:
             raise ValueError(f"No AST provider for {lang}")
 
-        # Parse
-        result = provider.parse(code_file.content, lang)
+        # Try to ensure grammar is available (auto-install if needed)
+        if hasattr(provider, 'ensure_grammar'):
+            await provider.ensure_grammar(lang)
 
-        if not result.ast:
+        # Parse (this will also try auto-install as fallback)
+        result = await provider.parse(code_file.content, lang)
+
+        if not result.ast_root:
             raise ValueError("AST parsing returned no result")
 
         # Extract imports and calls from AST
-        self._walk_ast_node(result.ast, context, code_file.content)
+        self._walk_ast_node(result.ast_root, context, code_file.content)
 
         return context
 
