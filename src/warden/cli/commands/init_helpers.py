@@ -396,28 +396,23 @@ def configure_ci_workflow(
     branch: str = "main"
 ) -> bool:
     """
-    Generate CI workflow file from template.
-    Returns True if workflow was created.
+    Generate CI workflow files from templates.
+
+    Creates three specialized workflows for GitHub Actions:
+    - warden-pr.yml: PR scans (--ci --diff)
+    - warden-nightly.yml: Nightly full scans (--update-baseline)
+    - warden-release.yml: Release audits (--level deep)
+
+    For GitLab, creates a single .gitlab-ci.yml with all stages.
+
+    Returns True if workflows were created.
     """
     if ci_provider['id'] == 'skip':
         console.print("[dim]CI/CD configuration skipped. Run 'warden init --ci' later.[/dim]")
         return False
 
-    console.print(f"\n[bold cyan]📝 Generating {ci_provider['name']} Workflow[/bold cyan]")
-
-    template_name = ci_provider['template']
-    target_path = project_root / ci_provider['target_path']
-
-    # Load template
-    try:
-        import importlib.resources
-        template_content = importlib.resources.read_text(
-            "warden.templates.workflows",
-            template_name
-        )
-    except Exception as e:
-        console.print(f"[red]Failed to load template: {e}[/red]")
-        return False
+    console.print(f"\n[bold cyan]📝 Generating {ci_provider['name']} Workflows[/bold cyan]")
+    console.print("[dim]Creating PR, Nightly, and Release workflows...[/dim]")
 
     # Prepare template variables
     provider_id = llm_config.get('provider', 'ollama')
@@ -446,22 +441,54 @@ def configure_ci_workflow(
 
         ollama_setup = ""
 
-    # Apply template substitutions
-    content = template_content.format(
-        branch=branch,
-        ci_llm_provider=provider_id,
-        ci_env_vars=ci_env_vars,
-        ollama_setup=ollama_setup
-    )
+    # Define workflows to generate based on CI provider
+    if ci_provider['id'] == 'github':
+        workflows = [
+            ("warden-pr.yml", ".github/workflows/warden-pr.yml"),
+            ("warden-nightly.yml", ".github/workflows/warden-nightly.yml"),
+            ("warden-release.yml", ".github/workflows/warden-release.yml"),
+        ]
+    elif ci_provider['id'] == 'gitlab':
+        # GitLab uses single .gitlab-ci.yml with stages
+        workflows = [
+            ("gitlab.yml", ".gitlab-ci.yml"),
+        ]
+    else:
+        workflows = []
 
-    # Create target directory if needed
-    target_path.parent.mkdir(parents=True, exist_ok=True)
+    import importlib.resources
+    created_count = 0
 
-    # Write workflow file
-    with open(target_path, 'w') as f:
-        f.write(content)
+    for template_name, target_rel_path in workflows:
+        target_path = project_root / target_rel_path
 
-    console.print(f"[green]✓ Created {target_path}[/green]")
+        # Load template
+        try:
+            template_content = importlib.resources.read_text(
+                "warden.templates.workflows",
+                template_name
+            )
+        except Exception as e:
+            console.print(f"[yellow]Warning: Template {template_name} not found: {e}[/yellow]")
+            continue
+
+        # Apply template substitutions
+        content = template_content.format(
+            branch=branch,
+            ci_llm_provider=provider_id,
+            ci_env_vars=ci_env_vars,
+            ollama_setup=ollama_setup
+        )
+
+        # Create target directory if needed
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write workflow file
+        with open(target_path, 'w') as f:
+            f.write(content)
+
+        console.print(f"[green]✓ Created {target_path}[/green]")
+        created_count += 1
 
     # Show secret configuration hint
     if provider_id != 'ollama':
@@ -476,7 +503,14 @@ def configure_ci_workflow(
                     console.print(f"   - {p.get('key_var', 'API_KEY')}")
                     break
 
-    return True
+    # Show workflow summary for GitHub
+    if ci_provider['id'] == 'github' and created_count > 0:
+        console.print(f"\n[bold green]✓ Created {created_count} CI workflow(s):[/bold green]")
+        console.print("   [cyan]warden-pr.yml[/cyan]      → PR scans (--ci --diff)")
+        console.print("   [cyan]warden-nightly.yml[/cyan] → Nightly baseline updates")
+        console.print("   [cyan]warden-release.yml[/cyan] → Release security audits")
+
+    return created_count > 0
 
 
 # =============================================================================
