@@ -2,6 +2,8 @@ import typer
 import asyncio
 import json
 import shutil
+import tempfile
+import os
 from pathlib import Path
 from typing import Optional
 from warden.services.ipc_entry import main_async as ipc_main
@@ -159,20 +161,32 @@ def mcp_register(
 
         try:
             # Read existing config or create new
+            data = {}
             if config_path.exists():
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
-                    data = json.loads(content) if content else {}
-            else:
-                data = {}
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if content:
+                            parsed = json.loads(content)
+                            # Type safety: ensure we got a dict
+                            data = parsed if isinstance(parsed, dict) else {}
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    # Backup corrupted file before overwriting
+                    backup_path = config_path.with_suffix('.json.backup')
+                    try:
+                        shutil.copy2(config_path, backup_path)
+                        console.print(f"  [yellow]! {tool_name}: Backed up corrupted config to {backup_path.name}[/yellow]")
+                    except OSError:
+                        pass
+                    data = {}
 
-            # Ensure mcpServers key exists
-            if "mcpServers" not in data:
+            # Ensure mcpServers key exists and is a dict
+            if "mcpServers" not in data or not isinstance(data.get("mcpServers"), dict):
                 data["mcpServers"] = {}
 
-            # Check if already registered with same config
+            # Check if already registered with same config (type-safe)
             existing = data["mcpServers"].get("warden")
-            if existing and existing.get("command") == warden_path:
+            if isinstance(existing, dict) and existing.get("command") == warden_path:
                 console.print(f"  [dim]• {tool_name}: Already registered[/dim]")
                 skipped_count += 1
                 continue
@@ -180,17 +194,33 @@ def mcp_register(
             # Register Warden
             data["mcpServers"]["warden"] = mcp_global_config
 
-            # Write config
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
+            # Atomic write: write to temp file, then rename
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            fd, temp_path = tempfile.mkstemp(
+                dir=config_path.parent,
+                prefix='.mcp_',
+                suffix='.tmp'
+            )
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2)
+                # Atomic rename (on POSIX systems)
+                os.replace(temp_path, config_path)
+            except Exception:
+                # Clean up temp file on failure
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise
 
             console.print(f"  [green]✓ {tool_name}[/green]: {config_path}")
             registered_count += 1
 
         except PermissionError:
             console.print(f"  [red]✗ {tool_name}[/red]: Permission denied")
-        except json.JSONDecodeError:
-            console.print(f"  [yellow]! {tool_name}[/yellow]: Invalid JSON, skipped")
+        except OSError as e:
+            console.print(f"  [red]✗ {tool_name}[/red]: OS error - {e}")
         except Exception as e:
             console.print(f"  [red]✗ {tool_name}[/red]: {e}")
 

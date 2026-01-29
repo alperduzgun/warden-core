@@ -203,20 +203,33 @@ class HealthAdapter(BaseWardenAdapter):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = yaml.safe_load(f) or {}
 
-                llm_config = config.get("llm", {})
-                provider = llm_config.get("provider")
-
-                if provider and provider != "none":
-                    setup_status["llm_configured"] = True
+                # Type-safe access: llm might not be a dict
+                llm_config = config.get("llm") if isinstance(config, dict) else None
+                if isinstance(llm_config, dict):
+                    provider = llm_config.get("provider")
+                    if provider and provider != "none":
+                        setup_status["llm_configured"] = True
+                    else:
+                        setup_status["missing_steps"].append({
+                            "step": "llm_config",
+                            "description": "LLM provider not configured (needed for AI-powered analysis)",
+                            "command": "warden init --reconfigure",
+                            "priority": 2,
+                        })
                 else:
                     setup_status["missing_steps"].append({
                         "step": "llm_config",
-                        "description": "LLM provider not configured (needed for AI-powered analysis)",
+                        "description": "LLM configuration is invalid or missing",
                         "command": "warden init --reconfigure",
                         "priority": 2,
                     })
-            except Exception:
-                pass
+            except (yaml.YAMLError, OSError, UnicodeDecodeError) as e:
+                setup_status["missing_steps"].append({
+                    "step": "config_error",
+                    "description": f"Config file is corrupted: {type(e).__name__}",
+                    "command": "warden init --reconfigure",
+                    "priority": 1,
+                })
 
         # Check 3: AI tool files exist (CLAUDE.md, .cursorrules)
         ai_files_status = {
@@ -255,10 +268,12 @@ class HealthAdapter(BaseWardenAdapter):
         ai_status_path = warden_dir / "ai_status.md"
         if ai_status_path.exists():
             try:
-                content = ai_status_path.read_text(encoding='utf-8')
-                if "PASS" in content:
+                content = ai_status_path.read_text(encoding='utf-8', errors='replace')
+                # Use upper() for case-insensitive matching
+                content_upper = content.upper()
+                if "PASS" in content_upper:
                     setup_status["last_scan_status"] = "PASS"
-                elif "FAIL" in content:
+                elif "FAIL" in content_upper:
                     setup_status["last_scan_status"] = "FAIL"
                     setup_status["missing_steps"].append({
                         "step": "fix_issues",
@@ -268,8 +283,9 @@ class HealthAdapter(BaseWardenAdapter):
                     })
                 else:
                     setup_status["last_scan_status"] = "PENDING"
-            except Exception:
-                setup_status["last_scan_status"] = "UNKNOWN"
+            except (OSError, PermissionError) as e:
+                setup_status["last_scan_status"] = "READ_ERROR"
+                setup_status["status_error"] = str(e)
 
         # Determine overall readiness
         setup_status["ready_for_use"] = (
@@ -278,9 +294,12 @@ class HealthAdapter(BaseWardenAdapter):
             setup_status["baseline_exists"]
         )
 
-        # Set next action based on priority
+        # Set next action based on priority (default priority 99 if missing)
         if setup_status["missing_steps"]:
-            sorted_steps = sorted(setup_status["missing_steps"], key=lambda x: x["priority"])
+            sorted_steps = sorted(
+                setup_status["missing_steps"],
+                key=lambda x: x.get("priority", 99)
+            )
             setup_status["next_action"] = sorted_steps[0]
         else:
             setup_status["next_action"] = {
