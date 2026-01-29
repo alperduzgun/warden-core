@@ -169,7 +169,7 @@ def scan_command(
     ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
     base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
-    update_baseline: bool = typer.Option(False, "--update-baseline", help="Update baseline after scan (use for main branch or nightly)"),
+    update_baseline: bool = typer.Option(True, "--update-baseline/--no-update-baseline", help="Update baseline after scan (default: enabled, use --no-update-baseline for CI/PR)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -253,10 +253,13 @@ def scan_command(
             except Exception as e:
                 console.print(f"[yellow]⚠️  Intelligence load failed: {e}[/yellow]")
 
+        # CI mode disables baseline updates (read-only for PRs)
+        effective_update_baseline = update_baseline and not ci
+
         exit_code = asyncio.run(_run_scan_async(
             paths, frames, format, output, verbose, level,
             memory_profile, ci, baseline_fingerprints, intelligence_context,
-            update_baseline=update_baseline
+            update_baseline=effective_update_baseline
         ))
         
         # Display memory stats if profiling was enabled
