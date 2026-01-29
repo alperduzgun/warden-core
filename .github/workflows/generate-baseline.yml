@@ -63,7 +63,14 @@ jobs:
         curl -fsSL https://ollama.com/install.sh | sh
         ollama serve &
         echo "Waiting for Ollama to be ready..."
-        sleep 10
+        for i in {1..30}; do
+          if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+            echo "Ollama is ready!"
+            break
+          fi
+          echo "Attempt $i/30: Ollama not ready yet..."
+          sleep 1
+        done
         
     - name: Pull Local Model (Fast Tier Backup)
       run: |
@@ -84,17 +91,21 @@ jobs:
         # Enforce Optimized Chain
         WARDEN_LLM_PROVIDER: "azure_openai"      # Smart Tier (Last Resort)
         WARDEN_FAST_TIER_PRIORITY: "groq,ollama" # Fast Tier: Groq -> Ollama
-        WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency }}
+        WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency || '10' }}
       run: |
-        echo "Running Baseline Scan with: Level=${{ inputs.level }}"
+        # Use input values or defaults for scheduled runs
+        SCAN_LEVEL="${{ inputs.level }}"
+        SCAN_LEVEL="${SCAN_LEVEL:-deep}"
+
+        echo "Running Baseline Scan with: Level=${SCAN_LEVEL}"
         echo "Strategy: Groq (Primary) -> Ollama (Backup) -> Azure (Complex)"
-        
-        # Run scan and ensure baseline.json is generated/updated
-        warden scan --level ${{ inputs.level }} --format json --output .warden/baseline.json
-        
+
+        # Run scan and ensure baseline.sarif is generated/updated
+        warden scan --level ${SCAN_LEVEL} --format sarif --output .warden/baseline.sarif
+
         # Verify baseline exists
-        if [ ! -f .warden/baseline.json ]; then
-            echo "Error: baseline.json not found!"
+        if [ ! -f .warden/baseline.sarif ]; then
+            echo "Error: baseline.sarif not found!"
             exit 1
         fi
 
@@ -102,6 +113,6 @@ jobs:
       run: |
         git config --global user.name "Warden Bot"
         git config --global user.email "bot@warden.ai"
-        git add .warden/baseline.json
+        git add .warden/baseline.sarif
         git commit -m "chore: update warden baseline [skip ci]" || echo "No changes to baseline"
         git push
