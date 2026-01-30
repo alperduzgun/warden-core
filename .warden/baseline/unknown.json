@@ -2,6 +2,97 @@
   "module": "unknown",
   "findings": [
     {
+      "id": "architecturalconsistency-max_function_lines-0",
+      "severity": "low",
+      "message": "Function 'mcp_register' is 83 lines - should be \u2264 50 lines",
+      "location": "/home/user/warden-core/src/warden/cli/commands/serve.py:90",
+      "detail": "**Rule:** max_function_lines\n\n**Expected:** \u2264 50 lines\n\n**Actual:** 83 lines\n\n",
+      "code": null,
+      "line": 90,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "e45d0f9171ca6297ea7476bfa4a67effcdd173e91571d8ef587a85993167ddd8"
+    },
+    {
+      "id": "architecturalconsistency-max_function_lines-1",
+      "severity": "low",
+      "message": "Function '_register_mcp_for_tool' is 78 lines - should be \u2264 50 lines",
+      "location": "/home/user/warden-core/src/warden/cli/commands/serve.py:202",
+      "detail": "**Rule:** max_function_lines\n\n**Expected:** \u2264 50 lines\n\n**Actual:** 78 lines\n\n",
+      "code": null,
+      "line": 202,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "bf12b5bbb88e9ead89558947d99311f88ee7fbd4aedd71f027c3db0c33e7557a"
+    },
+    {
+      "id": "architecturalconsistency-max_function_lines-2",
+      "severity": "low",
+      "message": "Function 'mcp_status' is 52 lines - should be \u2264 50 lines",
+      "location": "/home/user/warden-core/src/warden/cli/commands/serve.py:380",
+      "detail": "**Rule:** max_function_lines\n\n**Expected:** \u2264 50 lines\n\n**Actual:** 52 lines\n\n",
+      "code": null,
+      "line": 380,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "a11cd299b6af60ba422a39fdc557999f34db391c346da5fa2f482ea04dd8a85c"
+    },
+    {
+      "id": "architecturalconsistency-custom_no-print-3",
+      "severity": "low",
+      "message": "Use 'logger.info' instead of 'print()' for production logging",
+      "location": "/home/user/warden-core/src/warden/cli/commands/serve.py:1",
+      "detail": "**Rule:** custom_no-print\n\n**Expected:** Not match 'print\\('\n\n**Actual:** Pattern found\n\n",
+      "code": null,
+      "line": 1,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "b5c427dbb5d613d355d9d37fefb0cedbdd4c7e2df3d270835534861d5c3a0915"
+    },
+    {
+      "id": "architecturalconsistency-no-empty-except-4",
+      "severity": "medium",
+      "message": "Empty except block detected!\n\nProblem: 'except: pass' swallows errors without logging.\nSolution: Catch specific exceptions and log them using the logger.\n",
+      "location": "/home/user/warden-core/src/warden/cli/commands/serve.py:1",
+      "detail": "**Rule:** no-empty-except\n\n**Expected:** Not match 'except.*:\\s+pass'\n\n**Actual:** Pattern matched in file\n\n",
+      "code": null,
+      "line": 1,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "e6a2ed6f925be366fac3b61c87c7e8cde424fb5bfe96328cf197b692c6dd66a0"
+    },
+    {
+      "id": "architecturalconsistency-test_mirror_structure-0",
+      "severity": "low",
+      "message": "No corresponding test file found",
+      "location": "/home/user/warden-core/src/warden/mcp/infrastructure/mcp_config_paths.py:1",
+      "detail": "**Rule:** test_mirror_structure\n\n**Expected:** /home/user/warden-core/tests/mcp/infrastructure/test_mcp_config_paths.py\n\n**Actual:** Test file missing\n\n",
+      "code": null,
+      "line": 1,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "075851d668afacce98086d0949abd2ffa045fee101625d469598482f4965debf"
+    },
+    {
+      "id": "architecturalconsistency-mandatory_logger_init-1",
+      "severity": "low",
+      "message": "Missing logger initialization (logger = get_logger(__name__))",
+      "location": "/home/user/warden-core/src/warden/mcp/infrastructure/mcp_config_paths.py:1",
+      "detail": "**Rule:** mandatory_logger_init\n\n**Expected:** logger = get_logger(__name__)\n\n**Actual:** No logger found\n\n",
+      "code": null,
+      "line": 1,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "e92e61ff58acb2975788e006459e2928c76ac77fd642bb769a7ea0f2337425b3"
+    },
+    {
       "id": "architecturalconsistency-mandatory_logger_init-0",
       "severity": "low",
       "message": "Missing logger initialization (logger = get_logger(__name__))",
@@ -44,10 +135,66 @@
       "file_path": null,
       "message": "Empty except block detected!\n\nProblem: 'except: pass' swallows errors without logging.\nSolution: Catch specific exceptions and log them using the logger.\n",
       "severity": "medium"
+    },
+    {
+      "fingerprint": "e45d0f9171ca6297ea7476bfa4a67effcdd173e91571d8ef587a85993167ddd8",
+      "first_seen": "2026-01-30T14:28:51.815449+00:00",
+      "rule_id": "architecturalconsistency-max_function_lines-0",
+      "file_path": null,
+      "message": "Function 'mcp_register' is 83 lines - should be \u2264 50 lines",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "bf12b5bbb88e9ead89558947d99311f88ee7fbd4aedd71f027c3db0c33e7557a",
+      "first_seen": "2026-01-30T14:28:51.815449+00:00",
+      "rule_id": "architecturalconsistency-max_function_lines-1",
+      "file_path": null,
+      "message": "Function '_register_mcp_for_tool' is 78 lines - should be \u2264 50 lines",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "a11cd299b6af60ba422a39fdc557999f34db391c346da5fa2f482ea04dd8a85c",
+      "first_seen": "2026-01-30T14:28:51.815449+00:00",
+      "rule_id": "architecturalconsistency-max_function_lines-2",
+      "file_path": null,
+      "message": "Function 'mcp_status' is 52 lines - should be \u2264 50 lines",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "b5c427dbb5d613d355d9d37fefb0cedbdd4c7e2df3d270835534861d5c3a0915",
+      "first_seen": "2026-01-30T14:28:51.815449+00:00",
+      "rule_id": "architecturalconsistency-custom_no-print-3",
+      "file_path": null,
+      "message": "Use 'logger.info' instead of 'print()' for production logging",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "e6a2ed6f925be366fac3b61c87c7e8cde424fb5bfe96328cf197b692c6dd66a0",
+      "first_seen": "2026-01-30T14:28:51.815449+00:00",
+      "rule_id": "architecturalconsistency-no-empty-except-4",
+      "file_path": null,
+      "message": "Empty except block detected!\n\nProblem: 'except: pass' swallows errors without logging.\nSolution: Catch specific exceptions and log them using the logger.\n",
+      "severity": "medium"
+    },
+    {
+      "fingerprint": "075851d668afacce98086d0949abd2ffa045fee101625d469598482f4965debf",
+      "first_seen": "2026-01-30T14:28:51.815449+00:00",
+      "rule_id": "architecturalconsistency-test_mirror_structure-0",
+      "file_path": null,
+      "message": "No corresponding test file found",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "e92e61ff58acb2975788e006459e2928c76ac77fd642bb769a7ea0f2337425b3",
+      "first_seen": "2026-01-30T14:28:51.815449+00:00",
+      "rule_id": "architecturalconsistency-mandatory_logger_init-1",
+      "file_path": null,
+      "message": "Missing logger initialization (logger = get_logger(__name__))",
+      "severity": "low"
     }
   ],
   "created_at": "2026-01-29T20:17:02.528947+00:00",
-  "updated_at": "2026-01-30T10:20:25.409869+00:00",
-  "debt_count": 2,
+  "updated_at": "2026-01-30T14:28:51.815759+00:00",
+  "debt_count": 9,
   "oldest_debt_age_days": 0
 }

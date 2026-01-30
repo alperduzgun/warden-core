@@ -39,10 +39,14 @@ def get_mcp_config_paths_list() -> List[Path]:
 
 
 # Directories that are safe to create if missing
+# These are standard user config directories across platforms
 SAFE_CONFIG_DIR_PATTERNS = frozenset({
-    ".config",
-    "Application Support",
-    "AppData",
+    ".config",           # Linux/Unix standard
+    "Application Support",  # macOS
+    "AppData",           # Windows
+    ".cursor",           # Cursor IDE
+    ".windsurf",         # Windsurf IDE
+    ".gemini",           # Google Gemini
 })
 
 
