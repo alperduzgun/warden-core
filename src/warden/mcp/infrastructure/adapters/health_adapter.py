@@ -398,26 +398,23 @@ class HealthAdapter(BaseWardenAdapter):
     def _check_mcp_registration(self) -> bool:
         """Check if Warden is registered in any known MCP config."""
         import json
+        from warden.mcp.infrastructure.mcp_config_paths import get_mcp_config_paths_list
 
-        # Known MCP config paths
-        config_paths = [
-            Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
-            Path.home() / ".config" / "Claude" / "claude_desktop_config.json",
-            Path.home() / ".config" / "claude-code" / "mcp_settings.json",
-            Path.home() / ".cursor" / "mcp.json",
-            Path.home() / ".windsurf" / "mcp.json",
-        ]
+        # Use centralized config paths (DRY principle)
+        config_paths = get_mcp_config_paths_list()
 
         for config_path in config_paths:
             if config_path.exists():
                 try:
                     with open(config_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
+                    # Type-safe check
                     if isinstance(data, dict):
-                        mcp_servers = data.get("mcpServers", {})
+                        mcp_servers = data.get("mcpServers")
                         if isinstance(mcp_servers, dict) and "warden" in mcp_servers:
                             return True
                 except (json.JSONDecodeError, OSError, PermissionError):
+                    # Fail gracefully - continue checking other paths
                     continue
 
         return False

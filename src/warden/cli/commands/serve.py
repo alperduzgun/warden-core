@@ -6,8 +6,12 @@ import tempfile
 import os
 from pathlib import Path
 from typing import Optional
+
 from warden.services.ipc_entry import main_async as ipc_main
 from warden.services.grpc_entry import main_async as grpc_main
+from warden.shared.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 serve_app = typer.Typer(name="serve", help="Start Warden backend services")
 mcp_app = typer.Typer(name="mcp", help="MCP (Model Context Protocol) commands", invoke_without_command=True)
@@ -83,14 +87,7 @@ def serve_mcp(
 
 
 @mcp_app.command("register")
-def mcp_register(
-    global_only: bool = typer.Option(
-        False,
-        "--global",
-        "-g",
-        help="Only register globally (skip project-specific registration)",
-    ),
-):
+def mcp_register():
     """
     Register Warden MCP server with AI tools (Claude, Cursor, Gemini, etc.).
 
@@ -100,142 +97,283 @@ def mcp_register(
     Run this after installing Warden to enable AI assistant integration.
 
     Supported tools:
-      - Claude Desktop (macOS/Windows)
+      - Claude Desktop (macOS/Windows/Linux)
       - Claude Code CLI
       - Cursor
       - Windsurf
       - Gemini (Antigravity)
     """
     from rich.console import Console
+    from warden.mcp.infrastructure.mcp_config_paths import (
+        get_mcp_config_paths,
+        is_safe_to_create_dir,
+    )
+
     console = Console()
+    logger.info("mcp_register_started")
 
     console.print("\n[bold cyan]🔗 Registering Warden MCP Server[/bold cyan]\n")
 
-    # Find warden executable path
-    warden_path = shutil.which("warden")
-    if not warden_path:
-        # Try common installation paths
-        common_paths = [
-            Path("/opt/homebrew/bin/warden"),
-            Path("/usr/local/bin/warden"),
-            Path.home() / ".local" / "bin" / "warden",
-            Path.home() / ".cargo" / "bin" / "warden",
-        ]
-        for p in common_paths:
-            if p.exists():
-                warden_path = str(p)
-                break
-
+    # Find warden executable path (fail fast if not found)
+    warden_path = _find_warden_executable()
     if not warden_path:
         warden_path = "warden"
+        logger.warning("mcp_register_warden_not_in_path", fallback="warden")
         console.print("[yellow]Warning: Could not find warden in PATH. Using 'warden' as command.[/yellow]")
 
-    # MCP config entry (global - no project root)
+    # MCP config entry (idempotent - same config every time)
     mcp_global_config = {
         "command": warden_path,
         "args": ["serve", "mcp", "start"],
     }
 
-    # AI tool config file locations
-    config_locations = {
-        "Claude Desktop (macOS)": Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
-        "Claude Desktop (Windows)": Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json",
-        "Claude Desktop (Linux)": Path.home() / ".config" / "Claude" / "claude_desktop_config.json",
-        "Claude Code CLI": Path.home() / ".config" / "claude-code" / "mcp_settings.json",
-        "Cursor": Path.home() / ".cursor" / "mcp.json",
-        "Windsurf": Path.home() / ".windsurf" / "mcp.json",
-        "Gemini (Antigravity)": Path.home() / ".gemini" / "antigravity" / "mcp_config.json",
-    }
+    # Get config locations from centralized source (DRY)
+    config_locations = get_mcp_config_paths()
 
     registered_count = 0
     skipped_count = 0
+    error_count = 0
 
     for tool_name, config_path in config_locations.items():
-        # Create parent directory if it doesn't exist
-        if not config_path.parent.exists():
-            # Only create if this is a reasonable location (user config dirs)
-            if ".config" in str(config_path) or "Application Support" in str(config_path) or "AppData" in str(config_path):
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-            else:
-                continue
+        result = _register_mcp_for_tool(
+            tool_name=tool_name,
+            config_path=config_path,
+            mcp_config=mcp_global_config,
+            warden_path=warden_path,
+            console=console,
+        )
 
-        try:
-            # Read existing config or create new
-            data = {}
-            if config_path.exists():
-                try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
-                        content = f.read().strip()
-                        if content:
-                            parsed = json.loads(content)
-                            # Type safety: ensure we got a dict
-                            data = parsed if isinstance(parsed, dict) else {}
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    # Backup corrupted file before overwriting
-                    backup_path = config_path.with_suffix('.json.backup')
-                    try:
-                        shutil.copy2(config_path, backup_path)
-                        console.print(f"  [yellow]! {tool_name}: Backed up corrupted config to {backup_path.name}[/yellow]")
-                    except OSError:
-                        pass
-                    data = {}
-
-            # Ensure mcpServers key exists and is a dict
-            if "mcpServers" not in data or not isinstance(data.get("mcpServers"), dict):
-                data["mcpServers"] = {}
-
-            # Check if already registered with same config (type-safe)
-            existing = data["mcpServers"].get("warden")
-            if isinstance(existing, dict) and existing.get("command") == warden_path:
-                console.print(f"  [dim]• {tool_name}: Already registered[/dim]")
-                skipped_count += 1
-                continue
-
-            # Register Warden
-            data["mcpServers"]["warden"] = mcp_global_config
-
-            # Atomic write: write to temp file, then rename
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            fd, temp_path = tempfile.mkstemp(
-                dir=config_path.parent,
-                prefix='.mcp_',
-                suffix='.tmp'
-            )
-            try:
-                with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, indent=2)
-                # Atomic rename (on POSIX systems)
-                os.replace(temp_path, config_path)
-            except Exception:
-                # Clean up temp file on failure
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
-                raise
-
-            console.print(f"  [green]✓ {tool_name}[/green]: {config_path}")
+        if result == "registered":
             registered_count += 1
+        elif result == "skipped":
+            skipped_count += 1
+        else:
+            error_count += 1
 
-        except PermissionError:
-            console.print(f"  [red]✗ {tool_name}[/red]: Permission denied")
-        except OSError as e:
-            console.print(f"  [red]✗ {tool_name}[/red]: OS error - {e}")
-        except Exception as e:
-            console.print(f"  [red]✗ {tool_name}[/red]: {e}")
+    # Summary with structural logging
+    logger.info(
+        "mcp_register_completed",
+        registered=registered_count,
+        skipped=skipped_count,
+        errors=error_count,
+    )
 
-    # Summary
     console.print()
     if registered_count > 0:
         console.print(f"[bold green]✨ Registered with {registered_count} AI tool(s)[/bold green]")
     if skipped_count > 0:
         console.print(f"[dim]Skipped {skipped_count} (already configured)[/dim]")
+    if error_count > 0:
+        console.print(f"[yellow]Failed: {error_count} (check logs for details)[/yellow]")
 
     console.print("\n[bold]Next steps:[/bold]")
     console.print("  1. Restart your AI coding tool (Claude, Cursor, etc.)")
     console.print("  2. The AI will now have access to Warden via MCP")
     console.print("  3. Run 'warden init' in your project for full integration")
     console.print()
+
+
+def _find_warden_executable() -> Optional[str]:
+    """
+    Find the warden executable path.
+
+    Returns:
+        Absolute path to warden executable, or None if not found.
+    """
+    # First try PATH
+    warden_path = shutil.which("warden")
+    if warden_path:
+        return warden_path
+
+    # Try common installation paths
+    common_paths = [
+        Path("/opt/homebrew/bin/warden"),
+        Path("/usr/local/bin/warden"),
+        Path.home() / ".local" / "bin" / "warden",
+        Path.home() / ".cargo" / "bin" / "warden",
+    ]
+    for p in common_paths:
+        if p.exists():
+            return str(p)
+
+    return None
+
+
+def _register_mcp_for_tool(
+    tool_name: str,
+    config_path: Path,
+    mcp_config: dict,
+    warden_path: str,
+    console,
+) -> str:
+    """
+    Register Warden MCP for a single AI tool.
+
+    Args:
+        tool_name: Display name of the tool
+        config_path: Path to the tool's MCP config file
+        mcp_config: MCP configuration dict to register
+        warden_path: Path to warden executable
+        console: Rich console for output
+
+    Returns:
+        "registered", "skipped", or "error"
+    """
+    from warden.mcp.infrastructure.mcp_config_paths import is_safe_to_create_dir
+
+    # Create parent directory if safe
+    if not config_path.parent.exists():
+        if is_safe_to_create_dir(config_path.parent):
+            try:
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                logger.debug("mcp_register_dir_created", path=str(config_path.parent))
+            except OSError as e:
+                logger.error("mcp_register_dir_create_failed", tool=tool_name, error=str(e))
+                console.print(f"  [red]✗ {tool_name}[/red]: Cannot create directory")
+                return "error"
+        else:
+            logger.debug("mcp_register_skip_unsafe_dir", tool=tool_name, path=str(config_path))
+            return "skipped"
+
+    try:
+        # Read existing config (idempotent - handles missing file)
+        data = _read_mcp_config_safe(config_path, tool_name, console)
+
+        # Ensure mcpServers key exists and is a dict
+        if "mcpServers" not in data or not isinstance(data.get("mcpServers"), dict):
+            data["mcpServers"] = {}
+
+        # Idempotency check: skip if already registered with same config
+        existing = data["mcpServers"].get("warden")
+        if isinstance(existing, dict) and existing.get("command") == warden_path:
+            logger.debug("mcp_register_already_registered", tool=tool_name)
+            console.print(f"  [dim]• {tool_name}: Already registered[/dim]")
+            return "skipped"
+
+        # Register Warden
+        data["mcpServers"]["warden"] = mcp_config
+
+        # Atomic write with verification
+        _write_mcp_config_atomic(config_path, data)
+
+        # Verify write succeeded (self-healing check)
+        if not _verify_mcp_registration(config_path, warden_path):
+            logger.error("mcp_register_verify_failed", tool=tool_name)
+            console.print(f"  [red]✗ {tool_name}[/red]: Write verification failed")
+            return "error"
+
+        logger.info("mcp_register_success", tool=tool_name, path=str(config_path))
+        console.print(f"  [green]✓ {tool_name}[/green]: {config_path}")
+        return "registered"
+
+    except PermissionError:
+        logger.error("mcp_register_permission_denied", tool=tool_name, path=str(config_path))
+        console.print(f"  [red]✗ {tool_name}[/red]: Permission denied")
+        return "error"
+    except OSError as e:
+        logger.error("mcp_register_os_error", tool=tool_name, error=str(e))
+        console.print(f"  [red]✗ {tool_name}[/red]: OS error - {e}")
+        return "error"
+    except Exception as e:
+        logger.exception("mcp_register_unexpected_error", tool=tool_name, error=str(e))
+        console.print(f"  [red]✗ {tool_name}[/red]: {e}")
+        return "error"
+
+
+def _read_mcp_config_safe(config_path: Path, tool_name: str, console) -> dict:
+    """
+    Safely read MCP config file with backup on corruption.
+
+    Args:
+        config_path: Path to config file
+        tool_name: Tool name for logging
+        console: Rich console for output
+
+    Returns:
+        Parsed config dict (empty dict if file doesn't exist or is corrupt)
+    """
+    if not config_path.exists():
+        return {}
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                return {}
+            parsed = json.loads(content)
+            # Type safety: ensure we got a dict
+            return parsed if isinstance(parsed, dict) else {}
+
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        # Backup corrupted file (self-healing)
+        backup_path = config_path.parent / f"{config_path.stem}.backup{config_path.suffix}"
+        try:
+            shutil.copy2(config_path, backup_path)
+            logger.warning(
+                "mcp_register_corrupted_config_backed_up",
+                tool=tool_name,
+                backup=str(backup_path),
+                error=str(e),
+            )
+            console.print(f"  [yellow]! {tool_name}: Backed up corrupted config to {backup_path.name}[/yellow]")
+        except OSError:
+            logger.warning("mcp_register_backup_failed", tool=tool_name)
+        return {}
+
+
+def _write_mcp_config_atomic(config_path: Path, data: dict) -> None:
+    """
+    Atomically write MCP config file.
+
+    Uses temp file + rename pattern for crash safety.
+
+    Args:
+        config_path: Target config file path
+        data: Config data to write
+
+    Raises:
+        OSError: If write fails
+    """
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, temp_path = tempfile.mkstemp(
+        dir=config_path.parent,
+        prefix='.mcp_',
+        suffix='.tmp'
+    )
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        # Atomic rename (POSIX compliant)
+        os.replace(temp_path, config_path)
+        logger.debug("mcp_config_written", path=str(config_path))
+    except Exception:
+        # Clean up temp file on failure (dispose properly)
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _verify_mcp_registration(config_path: Path, expected_command: str) -> bool:
+    """
+    Verify MCP registration was successful.
+
+    Args:
+        config_path: Config file to verify
+        expected_command: Expected warden command path
+
+    Returns:
+        True if verification passes, False otherwise
+    """
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        warden_config = data.get("mcpServers", {}).get("warden", {})
+        return warden_config.get("command") == expected_command
+    except Exception:
+        return False
 
 
 @mcp_app.command("status")
@@ -245,23 +383,23 @@ def mcp_status():
     """
     from rich.console import Console
     from rich.table import Table
+    from warden.mcp.infrastructure.mcp_config_paths import get_mcp_config_paths
+
     console = Console()
+    logger.info("mcp_status_check_started")
 
     console.print("\n[bold cyan]🔍 Warden MCP Registration Status[/bold cyan]\n")
 
-    config_locations = {
-        "Claude Desktop (macOS)": Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
-        "Claude Desktop (Linux)": Path.home() / ".config" / "Claude" / "claude_desktop_config.json",
-        "Claude Code CLI": Path.home() / ".config" / "claude-code" / "mcp_settings.json",
-        "Cursor": Path.home() / ".cursor" / "mcp.json",
-        "Windsurf": Path.home() / ".windsurf" / "mcp.json",
-        "Gemini": Path.home() / ".gemini" / "antigravity" / "mcp_config.json",
-    }
+    # Use centralized config paths (DRY)
+    config_locations = get_mcp_config_paths()
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("AI Tool")
     table.add_column("Status")
     table.add_column("Config Path")
+
+    registered_count = 0
+    not_registered_count = 0
 
     for tool_name, config_path in config_locations.items():
         if not config_path.exists():
@@ -272,12 +410,23 @@ def mcp_status():
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-            if "mcpServers" in data and "warden" in data["mcpServers"]:
+            # Type-safe check
+            mcp_servers = data.get("mcpServers") if isinstance(data, dict) else None
+            if isinstance(mcp_servers, dict) and "warden" in mcp_servers:
                 table.add_row(tool_name, "[green]✓ Registered[/green]", str(config_path))
+                registered_count += 1
             else:
                 table.add_row(tool_name, "[yellow]Not registered[/yellow]", str(config_path))
-        except Exception:
-            table.add_row(tool_name, "[red]Error reading[/red]", str(config_path))
+                not_registered_count += 1
+
+        except json.JSONDecodeError as e:
+            logger.warning("mcp_status_json_error", tool=tool_name, error=str(e))
+            table.add_row(tool_name, "[red]Invalid JSON[/red]", str(config_path))
+        except OSError as e:
+            logger.warning("mcp_status_read_error", tool=tool_name, error=str(e))
+            table.add_row(tool_name, "[red]Read error[/red]", str(config_path))
+
+    logger.info("mcp_status_check_completed", registered=registered_count, not_registered=not_registered_count)
 
     console.print(table)
     console.print("\n[dim]Run 'warden serve mcp register' to register Warden with AI tools.[/dim]\n")
