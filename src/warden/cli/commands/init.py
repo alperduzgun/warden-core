@@ -416,10 +416,10 @@ def init_command(
     # Update .env
     env_path = Path(".env")
     if new_env_vars:
-        mode = "a" if env_path.exists() else "w"
+        write_mode = "a" if env_path.exists() else "w"
         current_env = env_path.read_text() if env_path.exists() else ""
-        with open(env_path, mode) as f:
-            if mode == "a": f.write("\n")
+        with open(env_path, write_mode) as f:
+            if write_mode == "a": f.write("\n")
             for k, v in new_env_vars.items():
                 if k not in current_env:
                     f.write(f"{k}={v}\n")
@@ -442,8 +442,7 @@ def init_command(
     # --- Step 4: Vector Database ---
     vector_config = configure_vector_db()
 
-
-    # --- Step 4: Generate Config ---
+    # --- Step 5: Generate Config ---
     if not config_path.exists():
 
         
@@ -547,7 +546,7 @@ def init_command(
             console.print("[green]Merged configuration successfully.[/green]")
 
 
-    # --- Step 5: Ignore Files ---
+    # --- Step 6: Ignore Files ---
     _generate_ignore_file(Path.cwd(), meta)
 
     # Create .warden/ignore.yaml from template
@@ -562,7 +561,7 @@ def init_command(
         except Exception as e:
             console.print(f"[yellow]Warning: Could not create ignore.yaml: {e}[/yellow]")
 
-    # --- Step 6: Example Rules ---
+    # --- Step 7: Example Rules ---
     rules_dir = warden_dir / "rules"
     rules_dir.mkdir(exist_ok=True)
     example_rule_path = rules_dir / "my_custom_rules.yaml"
@@ -590,7 +589,7 @@ rules:
             f.write(example_content)
         console.print(f"[green]Created example rules: {example_rule_path}[/green]")
 
-    # --- Step 7: Update Config with Comments ---
+    # --- Step 8: Update Config with Comments ---
     # We re-read the just created/merged config to append comments if needed
     # Or ensures generation includes it.
     
@@ -634,10 +633,10 @@ custom_rules:
 
         console.print("[green]Added configuration examples (Rules, Semantic Search, CI)[/green]")
 
-    # --- Step 8: Semantic Indexing ---
+    # --- Step 9: Semantic Indexing ---
     _setup_semantic_search(config_path)
 
-    # --- Step 9: Agent & MCP Configuration (Always enabled) ---
+    # --- Step 10: Agent & MCP Configuration (Always enabled) ---
     console.print("\n[bold blue]🤖 Configuring AI Agent Integration...[/bold blue]")
     try:
         # Generate AI tool files from templates (CLAUDE.md, .cursorrules, etc.)
@@ -651,7 +650,7 @@ custom_rules:
     except Exception as e:
         console.print(f"[red]Failed to configure agent tools: {e}[/red]")
 
-    # --- Step 9: Baseline ---
+    # --- Step 11: Baseline ---
     should_create_baseline = force # Logic: if force and non-interactive, assume yes? Or just default false.
     # Usually we want a baseline. For automation, let's default to True if not specified otherwise.
     if is_interactive:
@@ -665,7 +664,7 @@ custom_rules:
         except Exception as e:
             console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
-    # --- Step 10: Intelligence Generation (CI Optimization) ---
+    # --- Step 12: Intelligence Generation (CI Optimization) ---
     should_gen_intel = force  # Generate if --force
     if not should_gen_intel and is_interactive:
         should_gen_intel = Confirm.ask("\nGenerate Project Intelligence for CI? (Recommended for faster CI scans)", default=True)
@@ -678,7 +677,7 @@ custom_rules:
         except Exception as e:
             console.print(f"[yellow]Warning: Intelligence generation failed: {e}[/yellow]")
 
-    # --- Step 11: CI/CD (Template-Based) ---
+    # --- Step 13: CI/CD (Template-Based) ---
     should_gen_ci = ci
     if not should_gen_ci and is_interactive:
         should_gen_ci = Confirm.ask("\nGenerate CI/CD Workflow?", default=False)
@@ -698,7 +697,7 @@ custom_rules:
         if configure_ci_workflow(ci_provider, llm_config, Path.cwd(), branch):
             console.print("[green]✓ CI/CD workflow configured successfully![/green]")
 
-    # --- Step 10: Verify Built-in Frames ---
+    # --- Step 14: Verify Built-in Frames ---
     console.print("\n[bold blue]📦 Verifying Built-in Frames...[/bold blue]")
     try:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
