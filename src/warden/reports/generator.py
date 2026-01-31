@@ -38,47 +38,50 @@ class ReportGenerator:
 
     def _sanitize_paths(self, data: Any, base_path: Optional[Path] = None) -> None:
         """
-        Recursively convert absolute paths to relative paths in dictionary/list.
+        Recursively convert absolute paths to relative paths using strict pathlib logic.
         
         Args:
             data: Data to sanitize
             base_path: Base path to relativize against (default: Path.cwd())
         """
-        # Resolving allow generic usage
-        root = str(base_path.resolve()) if base_path else str(Path.cwd().resolve())
-        root_path_obj = base_path.resolve() if base_path else Path.cwd().resolve()
+        # Resolving allow generic usage (Fail Fast logic: base_path must be valid if provided)
+        root_path = base_path.resolve() if base_path else Path.cwd().resolve()
         
         if isinstance(data, dict):
             for key, value in data.items():
                 if isinstance(value, (dict, list)):
                     self._sanitize_paths(value, base_path)
                 elif isinstance(value, str):
-                    if root in value:
-                        try:
-                            # Try to treat as pure path first
-                            path_val = Path(value)
-                            if path_val.is_absolute() and str(path_val.resolve()).startswith(root):
-                                data[key] = str(path_val.resolve().relative_to(root_path_obj))
-                            else:
-                                # Fallback for sentences containing the path
-                                data[key] = value.replace(root, ".")
-                        except Exception:
-                             # If Path() fails or other error, just replace string
-                             data[key] = value.replace(root, ".")
+                    # Only attempt sanitization if it looks like a path (e.g. contains separators)
+                    # and contains the root path string to avoid wasting cycles
+                    if str(root_path) in value:
+                        data[key] = self._relativize_string(value, root_path)
+
         elif isinstance(data, list):
             for i, item in enumerate(data):
                 if isinstance(item, (dict, list)):
                     self._sanitize_paths(item, base_path)
                 elif isinstance(item, str):
-                     if root in item:
-                        try:
-                            path_item = Path(item)
-                            if path_item.is_absolute() and str(path_item.resolve()).startswith(root):
-                                data[i] = str(path_item.resolve().relative_to(root_path_obj))
-                            else:
-                                data[i] = item.replace(root, ".")
-                        except Exception:
-                            data[i] = item.replace(root, ".")
+                    if str(root_path) in item:
+                        data[i] = self._relativize_string(item, root_path)
+
+    def _relativize_string(self, text: str, root_path: Path) -> str:
+        """Helper to safely relativize path strings."""
+        try:
+            # Case 1: The string IS the path
+            path_obj = Path(text)
+            if path_obj.is_absolute():
+                # Strict check: Is it actually inside the root?
+                if path_obj.resolve().is_relative_to(root_path):
+                    return str(path_obj.resolve().relative_to(root_path))
+            
+            # Case 2: String contains the path (e.g. "File found at /users/...")
+            # This uses string replacement but constrained by the known root path
+            return text.replace(str(root_path), ".")
+            
+        except (ValueError, OSError):
+             # On failure, return original (Fail Safe) or attempt minimal replacement
+             return text.replace(str(root_path), ".")
 
     def generate_sarif_report(
         self,

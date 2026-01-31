@@ -207,76 +207,48 @@ def _register_mcp_for_tool(
     console,
 ) -> str:
     """
-    Register Warden MCP for a single AI tool.
-
+    Register Warden MCP for a single AI tool using the domain service.
+    
     Args:
         tool_name: Display name of the tool
         config_path: Path to the tool's MCP config file
-        mcp_config: MCP configuration dict to register
+        mcp_config: MCP configuration dict (unused here, kept for signature compat if needed, 
+                   but service constructs its own)
         warden_path: Path to warden executable
         console: Rich console for output
 
     Returns:
         "registered", "skipped", or "error"
     """
-    from warden.mcp.infrastructure.mcp_config_paths import is_safe_to_create_dir
-
-    # Create parent directory if safe
-    if not config_path.parent.exists():
-        if is_safe_to_create_dir(config_path.parent):
-            try:
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-                logger.debug("mcp_register_dir_created", path=str(config_path.parent))
-            except OSError as e:
-                logger.error("mcp_register_dir_create_failed", tool=tool_name, error=str(e))
-                console.print(f"  [red]✗ {tool_name}[/red]: Cannot create directory")
-                return "error"
-        else:
-            logger.debug("mcp_register_skip_unsafe_dir", tool=tool_name, path=str(config_path))
-            return "skipped"
-
-    try:
-        # Read existing config (idempotent - handles missing file)
-        data = _read_mcp_config_safe(config_path, tool_name, console)
-
-        # Ensure mcpServers key exists and is a dict
-        if "mcpServers" not in data or not isinstance(data.get("mcpServers"), dict):
-            data["mcpServers"] = {}
-
-        # Idempotency check: skip if already registered with same config
-        existing = data["mcpServers"].get("warden")
-        if isinstance(existing, dict) and existing.get("command") == warden_path:
-            logger.debug("mcp_register_already_registered", tool=tool_name)
-            console.print(f"  [dim]• {tool_name}: Already registered[/dim]")
-            return "skipped"
-
-        # Register Warden
-        data["mcpServers"]["warden"] = mcp_config
-
-        # Atomic write with verification
-        _write_mcp_config_atomic(config_path, data)
-
-        # Verify write succeeded (self-healing check)
-        if not _verify_mcp_registration(config_path, warden_path):
-            logger.error("mcp_register_verify_failed", tool=tool_name)
-            console.print(f"  [red]✗ {tool_name}[/red]: Write verification failed")
-            return "error"
-
+    from warden.mcp.domain.services.mcp_registration_service import MCPRegistrationService
+    
+    # Initialize service
+    service = MCPRegistrationService(warden_path)
+    
+    # Call service to register single tool (service method needs to be exposed or we use register_all)
+    # Since existing architecture iterates, we expose the single registration logic via the service
+    # or better, refactor the caller.
+    # For minimum friction, we'll use the service's internal method if accessible, 
+    # or instantiate the service and call the public method for this specific tool.
+    
+    # Actually, the loop is in the caller `mcp_register`. 
+    # Let's adapt this function to use the service.
+    
+    result = service._register_single_tool(tool_name, config_path, mcp_config)
+    
+    if result.status == "registered":
         logger.info("mcp_register_success", tool=tool_name, path=str(config_path))
         console.print(f"  [green]✓ {tool_name}[/green]: {config_path}")
         return "registered"
-
-    except PermissionError:
-        logger.error("mcp_register_permission_denied", tool=tool_name, path=str(config_path))
-        console.print(f"  [red]✗ {tool_name}[/red]: Permission denied")
-        return "error"
-    except OSError as e:
-        logger.error("mcp_register_os_error", tool=tool_name, error=str(e))
-        console.print(f"  [red]✗ {tool_name}[/red]: OS error - {e}")
-        return "error"
-    except Exception as e:
-        logger.exception("mcp_register_unexpected_error", tool=tool_name, error=str(e))
-        console.print(f"  [red]✗ {tool_name}[/red]: {e}")
+        
+    elif result.status == "skipped":
+        logger.debug("mcp_register_skipped", tool=tool_name, reason=result.message)
+        console.print(f"  [dim]• {tool_name}: {result.message}[/dim]")
+        return "skipped"
+        
+    else: # error
+        logger.error("mcp_register_failed", tool=tool_name, error=result.message)
+        console.print(f"  [red]✗ {tool_name}[/red]: {result.message}")
         return "error"
 
 

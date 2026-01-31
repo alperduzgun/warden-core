@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Dict
 
+from warden.shared.domain.exceptions import InstallError
+from warden.shared.infrastructure.logging import get_logger
+
 
 @dataclass
 class InstallConfig:
@@ -74,14 +77,30 @@ class AutoInstaller:
     @staticmethod
     def install(config: InstallConfig) -> InstallResult:
         """
-        Install Warden.
+        Install Warden with fail-fast logic and structural logging.
 
         Args:
             config: Installation configuration
 
         Returns:
-            Installation result
+            Installation result (success)
+            
+        Raises:
+            InstallError: If installation fails
         """
+        logger = get_logger(__name__)
+        logger.info("install_started", config=config)
+
+        # 1. Idempotency Check
+        current_version = AutoInstaller._get_installed_version()
+        if current_version and config.version and current_version == config.version:
+             logger.info("install_skipped_idempotent", version=current_version)
+             return InstallResult(
+                 success=True,
+                 message="Already installed",
+                 version=current_version
+             )
+
         # Build pip install command
         if config.version:
             package = f"warden-core=={config.version}"
@@ -94,25 +113,19 @@ class AutoInstaller:
             cmd.extend(["--target", str(config.install_path)])
 
         try:
-            # Run pip install
-            result = subprocess.run(
+            # Run pip install with check=True for Fail Fast
+            subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                check=False,
+                check=True,  # Raises CalledProcessError on non-zero exit
             )
-
-            if result.returncode != 0:
-                return InstallResult(
-                    success=False,
-                    message=f"Installation failed: {result.stderr}",
-                )
 
             # Verify installation
             if config.verify_install:
                 verify_result = AutoInstaller._verify_install()
                 if not verify_result.success:
-                    return verify_result
+                    raise InstallError(f"Verification failed: {verify_result.message}")
 
             # Discover config
             config_discovered = False
@@ -129,26 +142,33 @@ class AutoInstaller:
                 hook_results = HookInstaller.install_hooks()
                 hooks_ok = all(r.installed for r in hook_results)
                 if not hooks_ok:
-                    return InstallResult(
-                        success=False,
-                        message="Hooks installation failed",
-                    )
+                    raise InstallError("Hooks installation failed")
 
             version = AutoInstaller._get_installed_version()
 
-            return InstallResult(
+            result = InstallResult(
                 success=True,
                 message="Warden installed successfully",
                 version=version,
                 install_path=str(config.install_path) if config.install_path else None,
                 config_discovered=config_discovered,
             )
+            
+            logger.info("install_success", result=result)
+            return result
+
+        except subprocess.CalledProcessError as e:
+            logger.error("install_failed_subprocess", stderr=e.stderr, cmd=e.cmd)
+            raise InstallError(f"Pip install failed: {e.stderr}") from e
+            
+        except ImportError as e:
+            logger.error("install_failed_import", error=str(e))
+            raise InstallError(f"Dependency missing: {e}") from e
 
         except Exception as e:
-            return InstallResult(
-                success=False,
-                message=f"Installation error: {str(e)}",
-            )
+            # Catch-all for unexpected errors, but log structure
+            logger.exception("install_failed_unexpected", error=str(e))
+            raise InstallError(f"Installation error: {str(e)}") from e
 
     @staticmethod
     def _verify_install() -> InstallResult:
@@ -158,25 +178,16 @@ class AutoInstaller:
                 ["warden", "--version"],
                 capture_output=True,
                 text=True,
-                check=False,
+                check=True, # Fail fast
             )
+            return InstallResult(success=True, message="Verification successful")
 
-            if result.returncode != 0:
-                return InstallResult(
-                    success=False,
-                    message="Warden command not found after installation",
-                )
-
-            return InstallResult(
-                success=True,
-                message="Verification successful",
-            )
-
+        except subprocess.CalledProcessError as e:
+             return InstallResult(success=False, message=f"Verification cmd failed: {e.stderr}")
+        except FileNotFoundError:
+             return InstallResult(success=False, message="Warden binary not found in PATH")
         except Exception as e:
-            return InstallResult(
-                success=False,
-                message=f"Verification failed: {str(e)}",
-            )
+             return InstallResult(success=False, message=f"Verification exception: {str(e)}")
 
     @staticmethod
     def _get_installed_version() -> Optional[str]:
@@ -186,18 +197,13 @@ class AutoInstaller:
                 ["warden", "--version"],
                 capture_output=True,
                 text=True,
-                check=False,
+                check=True,
             )
-
-            if result.returncode == 0:
-                # Extract version from output
-                version_line = result.stdout.strip()
-                # Format: "warden, version 1.0.0"
-                if "version" in version_line:
-                    return version_line.split("version")[-1].strip()
-
+            # Extract version from output
+            version_line = result.stdout.strip()
+            if "version" in version_line:
+                return version_line.split("version")[-1].strip()
             return None
-
         except Exception:
             return None
 

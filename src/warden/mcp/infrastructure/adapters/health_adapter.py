@@ -9,6 +9,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+try:
+    from dotenv import dotenv_values
+except ImportError:
+    dotenv_values = None
+
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
@@ -375,25 +380,26 @@ class HealthAdapter(BaseWardenAdapter):
         if provider.lower() in ("ollama", "local", "none"):
             return True  # Local providers don't need API keys
 
+        # Use python-dotenv for robust parsing (imported at module level)
+        
         env_name = self._get_api_key_env_name(provider)
-        api_key = os.environ.get(env_name, "")
+        
+        # Check OS environment first
+        if os.environ.get(env_name):
+            return True
 
-        # Also check .env file in project root
-        if not api_key:
-            env_file = self.project_root / ".env"
-            if env_file.exists():
-                try:
-                    content = env_file.read_text(encoding='utf-8', errors='replace')
-                    for line in content.splitlines():
-                        line = line.strip()
-                        if line.startswith(f"{env_name}=") and not line.startswith("#"):
-                            value = line.split("=", 1)[1].strip().strip('"').strip("'")
-                            if value and value not in ("", "your_key", "YOUR_API_KEY"):
-                                return True
-                except (OSError, PermissionError):
-                    pass
+        # Check .env file using robust parser
+        env_file = self.project_root / ".env"
+        if env_file.exists() and dotenv_values:
+            try:
+                # dotenv_values handles quotes, spaces, comments, and exports automatically
+                config = dotenv_values(env_file)
+                if config.get(env_name):
+                    return True
+            except Exception:
+                pass
 
-        return bool(api_key)
+        return False
 
     def _check_mcp_registration(self) -> bool:
         """Check if Warden is registered in any known MCP config."""
