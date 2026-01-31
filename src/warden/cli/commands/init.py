@@ -19,9 +19,7 @@ from warden.cli.commands.init_helpers import (
     configure_agent_tools,
 )
 
-
 console = Console()
-
 
 def _generate_ignore_file(root: Path, meta):
     """Generate .wardenignore based on project type."""
@@ -62,12 +60,12 @@ def _generate_ignore_file(root: Path, meta):
         "",
         "# Language Specific"
     ]
-    
+
     if meta.language == "python":
         content.extend(["__pycache__/", "*.pyc", "*.pyo", ".pytest_cache/", ".mypy_cache/", "htmlcov/"])
     elif meta.language in ["javascript", "typescript"]:
         content.extend([".next/", ".nuxt/", "coverage/", ".turbo/"])
-    
+
     with open(ignore_path, "w") as f:
         f.write("\n".join(content))
     console.print("[green]Created .wardenignore (Smart Defaults)[/green]")
@@ -84,17 +82,17 @@ def _setup_semantic_search(config_path: Path):
          # Load config
          with open(config_path) as f:
              final_config = yaml.safe_load(f)
-             
+
          ss_config = final_config.get('semantic_search', {})
          if not ss_config.get('enabled'):
              return
 
          from warden.shared.services.semantic_search_service import SemanticSearchService
-         
+
          # Reset singleton
          SemanticSearchService._instance = None
          service = SemanticSearchService(ss_config)
-         
+
          # Inner function to perform indexing
          async def run_indexing_if_files_exist_async():
              code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
@@ -173,7 +171,6 @@ async def _create_baseline_async(root: Path, config_path: Path):
 
     except Exception as e:
         console.print(f"[red]Failed to create baseline: {e}[/red]")
-
 
 async def _generate_intelligence_async(root: Path):
     """
@@ -262,15 +259,15 @@ def init_command(
 
     warden_dir = Path(".warden")
     warden_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # --- Step 1: Detect Project ---
     console.print("[bold blue]🔍 Detecting project environment...[/bold blue]")
-    
+
     # Use Core Analyzer
     analyzer = ProjectStructureAnalyzer(Path.cwd())
     # Run async analysis synchronously
     context = asyncio.run(analyzer.analyze_async())
-    
+
     # Map ProjectContext to metadata expected by init
     # We create a simple object to hold the data compatible with previous logic
     class MetaAdapter:
@@ -282,38 +279,37 @@ def init_command(
     meta.ci_providers = [] # Core analyzer detects this but stores in config_files/special_dirs differently?
     # PSA stores build tools in context.build_tools
     meta.build_tools = [bt.value for bt in context.build_tools]
-    
+
     # Suggest frames logic (Dynamic Discovery)
     # 1. Base Core Frames (built-in frames that come with warden-core)
     # Available built-in frames: security, resilience, orphan, fuzz, property, spec, gitchanges
     meta.suggested_frames = ["security", "resilience", "orphan"]
-    
+
     # 2. Dynamic Language-Specific Frames (Registry Search)
     try:
         from warden.services.package_manager.registry import RegistryClient
         registry = RegistryClient()  # Use default paths
-        
+
         # Sync if cache is missing (first run)
         if not registry._catalog_cache:
             console.print("[dim]Syncing registry for suggestions...[/dim]")
             asyncio.run(registry.sync_async())
-            
+
         # Get languages to check (fall back to primary if detected is empty)
         languages_to_check = context.detected_languages or [context.primary_language]
-        
+
         # Collect suggestions from all languages
-        found_frames = 0
         all_suggestions = set()
-        
+
         for lang in set(languages_to_check):
             if not lang or lang == "unknown":
                 continue
-                
+
             suggestions = registry.suggest_for_language(lang)
             if suggestions:
                 for s in suggestions:
                     all_suggestions.add(s)
-        
+
         if all_suggestions:
             meta.suggested_frames.extend(list(all_suggestions))
             console.print(f"[dim]Found {len(all_suggestions)} language-specific frames for {', '.join(set(languages_to_check))}[/dim]")
@@ -336,7 +332,7 @@ def init_command(
     console.print(f"   [green]✓[/green] Language: [cyan]{meta.language}[/cyan]")
     console.print(f"   [green]✓[/green] Framework: [cyan]{', '.join(meta.frameworks) if meta.frameworks else 'None detected'}[/cyan]")
     console.print(f"   [green]✓[/green] Type: [cyan]{meta.project_type}[/cyan]")
-    
+
     # Language Distribution Table
     from rich.table import Table
     if context.language_breakdown:
@@ -345,15 +341,15 @@ def init_command(
         table.add_column("Language", style="cyan")
         table.add_column("Distribution", justify="right", style="magenta")
         table.add_column("Status", style="dim")
-        
+
         from warden.shared.languages.registry import LanguageRegistry
         from warden.ast.domain.enums import CodeLanguage
-        
+
         sorted_stats = sorted(context.language_breakdown.items(), key=lambda x: x[1], reverse=True)
         for lang_id, percent in sorted_stats:
             is_included = lang_id in context.detected_languages
             status = "[green]●[/green] Included" if is_included else "[dim]○ Ignored (<2%)[/dim]"
-            
+
             # Get pretty name from registry
             try:
                 lang_enum = CodeLanguage(lang_id)
@@ -363,8 +359,8 @@ def init_command(
                 pretty_name = lang_id.capitalize()
 
             table.add_row(
-                pretty_name, 
-                f"{percent:.1f}%", 
+                pretty_name,
+                f"{percent:.1f}%",
                 status
             )
         console.print(table)
@@ -381,14 +377,14 @@ def init_command(
     mode_choice = mode_map.get(mode.lower(), "2")
 
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
-    
+
     if is_interactive:
         console.print("\n[bold cyan]🎚️  Select Operation Mode[/bold cyan]")
         console.print("1. [bold green]Vibe Mode[/bold green] (Silent, Critical Only) - Best for active dev")
         console.print("2. [bold yellow]Normal Mode[/bold yellow] (High+Critical) - Standard PR checks")
         console.print("3. [bold red]Strict Mode[/bold red] (All Issues) - Zero tolerance / Security audit")
         mode_choice = Prompt.ask("Select Mode", choices=["1", "2", "3"], default=mode_choice)
-    
+
     mode_config = {}
     if mode_choice == "1": # Vibe
         mode_config = {"fail_fast": False, "min_severity": "critical", "quiet": True}
@@ -445,17 +441,16 @@ def init_command(
     # --- Step 5: Generate Config ---
     if not config_path.exists():
 
-        
         # Build frames_config based on detection
         frames_config = {}
         for frame in meta.suggested_frames:
             frames_config[frame] = {"enabled": True}
-        
+
         # Apply mode settings
         if mode_choice == "1": # Vibe
             for f in frames_config:
                  frames_config[f]["severity_threshold"] = "critical"
-        
+
         config_data = {
             "version": "1.0.0",
             "project": {
@@ -494,57 +489,55 @@ def init_command(
                 "deployment_name": "${AZURE_OPENAI_DEPLOYMENT_NAME}",
                 "api_version": "2024-02-15-preview"
             }
-        
+
         # New root manifest (Standardized to .warden/config.yaml)
         root_config_path = warden_dir / "config.yaml"
         with open(root_config_path, "w") as f:
             yaml.dump(config_data, f, default_flow_style=False)
         console.print(f"[green]Created project configuration: [bold]{root_config_path}[/bold][/green]")
-        
-        config_path = root_config_path 
+
+        config_path = root_config_path
 
     else:
         # Config exists - Offer Update/Merge
         console.print(f"[yellow]Config file exists: {config_path}[/yellow]")
         if force or (is_interactive and Confirm.ask("Update configuration with detected settings? (Merges frames & mode)", default=False)):
 
-            
             # Update Frames - merge new suggestion into existing
             existing_frames = set(existing_config.get('frames', []))
             new_frames = set(meta.suggested_frames)
             merged_frames = list(existing_frames.union(new_frames))
             existing_config['frames'] = merged_frames
-            
+
             # Update Frames Config - enable new frames
             if 'frames_config' not in existing_config:
                 existing_config['frames_config'] = {}
-            
+
             for frame in meta.suggested_frames:
                 if frame not in existing_config['frames_config']:
                     existing_config['frames_config'][frame] = {"enabled": True}
                     if mode_choice == "1":
                         existing_config['frames_config'][frame]["severity_threshold"] = "critical"
-            
+
             # Update Project Metadata
             existing_config['project']['language'] = meta.language
             existing_config['project']['type'] = meta.project_type
             existing_config['project']['frameworks'] = meta.frameworks
-            
+
             # Update Settings based on Mode
             if 'settings' not in existing_config: existing_config['settings'] = {}
             existing_config['settings']['fail_fast'] = mode_config["fail_fast"]
             existing_config['settings']['mode'] = ["vibe", "normal", "strict"][int(mode_choice)-1]
             if "min_severity" in mode_config:
                  existing_config['settings']['min_severity'] = mode_config["min_severity"]
-                 
+
             # Ensure Semantic Search is present
             existing_config["semantic_search"] = vector_config
-            
+
             # Save
             with open(config_path, "w") as f:
                 yaml.dump(existing_config, f, default_flow_style=False)
             console.print("[green]Merged configuration successfully.[/green]")
-
 
     # --- Step 6: Ignore Files ---
     _generate_ignore_file(Path.cwd(), meta)
@@ -592,11 +585,11 @@ rules:
     # --- Step 8: Update Config with Comments ---
     # We re-read the just created/merged config to append comments if needed
     # Or ensures generation includes it.
-    
-    # If we created a new config in Step 4, we likely used yaml.dump.
+
+    # If we created a new config in Step 5, we likely used yaml.dump.
     # yaml.dump removes comments. We need to append the example usage at the end manually
     # or handle it better.
-    
+
     # Let's read the file as text and check if the comment exists, if not, append it.
     if config_path.exists():
         current_content = config_path.read_text()
@@ -613,7 +606,7 @@ custom_rules:
             console.print("[green]Added custom rules configuration[/green]")
 
         # Semantic Search is now AUTO-ADDED, so no hint needed.
-        
+
         # HINT: CI Output Formats
         if "ci:" not in current_content and "output:" not in current_content:
             ci_hint = """
