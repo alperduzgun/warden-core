@@ -4,3 +4,48 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "src/warden/_version.py"
+
+# ============================================================
+# Ruff - Fast Python linter and formatter
+# ============================================================
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+# Phase 1: Start with critical errors only (gradual adoption)
+# Enable more rules over time as codebase improves
+select = [
+    "E9",     # Runtime errors only (most critical)
+    "F63",    # Invalid print syntax
+    "F7",     # Syntax errors
+    "F82",    # Undefined names
+]
+ignore = []
+# TODO: Gradually enable these rules:
+# Phase 2: "E", "W" (pycodestyle)
+# Phase 3: "I" (isort), "UP" (pyupgrade)
+# Phase 4: "B" (bugbear), "C4", "SIM"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B", "SIM"]
+"__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+# ============================================================
+# Pytest configuration
+# ============================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
