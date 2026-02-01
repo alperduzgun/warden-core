@@ -69,6 +69,9 @@ class PipelineHandler(BaseHandler):
             logger.warning("no_code_files_found", paths=str(paths))
             return 
 
+        # Emit discovery info immediately
+        yield {"type": "progress", "event": "discovery_complete", "data": {"total_files": len(code_files)}}
+
         # 3. Detect required languages
         required_languages = {cf.language.upper() for cf in code_files if cf.language}
         

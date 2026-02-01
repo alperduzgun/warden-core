@@ -50,7 +50,7 @@ async def _refresh_intelligence_async(
                 return False
 
     # Get all code files for analysis
-    code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
+    code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.dart'}
     all_files = [
         f for f in root.rglob("*")
         if f.is_file()
@@ -58,6 +58,7 @@ async def _refresh_intelligence_async(
         and "node_modules" not in str(f)
         and ".venv" not in str(f)
         and ".git" not in str(f)
+        and ".warden" not in str(f)
         and "__pycache__" not in str(f)
     ]
 
@@ -113,7 +114,7 @@ async def _refresh_intelligence_async(
 
     # Detect project purpose and modules for the filtered files
     detector = ProjectPurposeDetector(root)
-    purpose, architecture, new_module_map = await detector.detect_async(files, [])
+    purpose, architecture, new_module_map = await detector.detect_async(files, {})
 
     # For module-specific or quick refresh, merge with existing modules
     old_modules_dict = {name: info.risk_level.value for name, info in old_modules.items()}

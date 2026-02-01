@@ -191,7 +191,7 @@ class SemanticSearchService:
             language=language
         )
 
-    async def index_project(self, project_path: Path, file_paths: List[Path]):
+    async def index_project(self, project_path: Path, file_paths: List[Path], progress_callback: Optional[callable] = None):
         """Index project files in parallel."""
         if not self.is_available():
             return
@@ -207,7 +207,6 @@ class SemanticSearchService:
             str_paths.append(str(p))
             
         # Control concurrency at both file and chunk level
-        # Control concurrency at both file and chunk level
         # Use configurable concurrency if provided
         max_concurrency = self.config.get("max_indexing_concurrency", 2)
-        return await self.indexer.index_files(str_paths, languages, max_concurrency=max_concurrency)
+        return await self.indexer.index_files(str_paths, languages, max_concurrency=max_concurrency, progress_callback=progress_callback)

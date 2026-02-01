@@ -82,6 +82,10 @@ class ProjectPurposeDetector:
             logger.debug("llm_skipped_project_purpose_detection", reason="no_client")
             return "Warden-initialized project", "Default architectural pattern", {}
 
+        if not isinstance(config_files, dict):
+            logger.warning("invalid_config_files_type", expected="dict", actual=type(config_files).__name__)
+            config_files = {}
+
         logger.info("project_purpose_discovery_started", root=str(self.project_root))
 
         # 1. Prepare discovery canvas (context for LLM)

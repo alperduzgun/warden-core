@@ -9,6 +9,7 @@ import time
 import re
 import psutil
 import structlog
+from pathlib import Path
 
 from warden.llm.types import LlmRequest
 from warden.llm.providers.base import ILlmClient

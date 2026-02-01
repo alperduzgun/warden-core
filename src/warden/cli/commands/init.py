@@ -59,9 +59,7 @@ def _generate_ignore_file(root: Path, meta):
         ".svn/",
         "",
         # Warden
-        ".warden/reports/",
-        ".warden/memory/",
-        ".warden/embeddings/",
+        ".warden/",
         "",
         # Dependencies
         "node_modules/",
@@ -164,8 +162,17 @@ def _setup_semantic_search(config_path: Path):
                  return
 
              try:
-                 with console.status(f"[bold green]Indexing {len(files)} files... (Ctrl+C to skip)[/bold green]"):
-                    await service.index_project(Path.cwd(), files)
+                 with console.status(f"[bold green]Indexing {len(files)} files...[/bold green]", spinner="dots") as status:
+                    processed = 0
+                    total = len(files)
+                    
+                    async def progress_cb(count):
+                        nonlocal processed
+                        processed += count
+                        status.update(f"[bold green]Indexing {total} files... ({processed}/{total})[/bold green]")
+                        
+                    await service.index_project(Path.cwd(), files, progress_callback=progress_cb)
+                    
                  console.print(f"[green]✓ Semantic Index Ready ({len(files)} files)[/green]")
              except KeyboardInterrupt:
                  console.print("\n[yellow]⚠️  Indexing skipped by user.[/yellow]")
@@ -210,9 +217,65 @@ async def _create_baseline_async(root: Path, config_path: Path):
         from warden.cli_bridge.bridge import WardenBridge
         bridge = WardenBridge(project_root=root, config_path=str(config_path))
 
-        # Run scan on current directory
-        # We use scan_async which handles directory traversal via execute_pipeline_stream_async
-        result = await bridge.scan_async(str(root))
+        # Run scan on current directory with streaming progress
+        # We use execute_pipeline_stream_async to get live updates
+        all_issues = []
+        last_summary = {}
+        processed_count = 0 
+        total_files = 0
+        
+        with console.status("[bold blue]🚀 Starting Analysis...[/bold blue]", spinner="dots") as status:
+            async for event in bridge.execute_pipeline_stream_async(str(root)):
+                etype = event.get("type")
+                
+                if etype == "progress":
+                    evt = event.get("event")
+                    data = event.get("data", {})
+                    
+                    if evt == "discovery_complete":
+                        files_found = data.get("total_files", 0)
+                        status.update(f"[bold blue]🔍 Analyzable Files: {files_found}[/bold blue]")
+                    
+                    elif evt == "pipeline_started":
+                        # Initial guess based on file count
+                        files_found = data.get("file_count") or files_found
+                        status.update(f"[bold blue]🛡️ Starting Scan on {files_found} files...[/bold blue]")
+
+                    elif evt == "progress_init":
+                        # More accurate total work units (files * frames)
+                        total_files = data.get("total_units", 0)
+                        processed_count = 0
+                        status.update(f"[bold blue]🛡️ Scanning... (0/{total_files})[/bold blue]")
+
+                    elif evt == "progress_update":
+                        increment = data.get("increment", 0)
+                        processed_count += increment
+                        # Only update status if total is known to avoid confusion
+                        if total_files > 0:
+                            status.update(f"[bold blue]🛡️ Scanning... ({processed_count}/{total_files})[/bold blue]")
+
+                elif etype == "result":
+                    res = event.get("data")
+                    if res:
+                        last_summary = res.get("summary", {})
+                        
+                        # Flatten issues for legacy baseline format
+                        for fr in res.get("frame_results", []):
+                            for f in fr.get("findings", []):
+                                all_issues.append({
+                                    "filePath": f.get("file_path") or f.get("file", ""),
+                                    "severity": f.get("severity", "medium"),
+                                    "message": f.get("message", ""),
+                                    "line": f.get("line_number") or f.get("line", 0),
+                                    "frame": fr.get("frame_id")
+                                })
+
+        # Construct final result for baseline
+        result = {
+            "success": True, 
+            "issues": all_issues,
+            "summary": last_summary
+        }
 
         # Save baseline
         baseline_path = root / ".warden" / "baseline.json"
@@ -232,7 +295,7 @@ async def _create_baseline_async(root: Path, config_path: Path):
     except Exception as e:
         console.print(f"[red]Failed to create baseline: {e}[/red]")
 
-async def _generate_intelligence_async(root: Path):
+async def _generate_intelligence_async(root: Path, config_files: dict = None):
     """
     Generate project intelligence for CI optimization.
 
@@ -248,7 +311,7 @@ async def _generate_intelligence_async(root: Path):
         from warden.analysis.domain.intelligence import SecurityPosture, RiskLevel
 
         # Get all code files for analysis
-        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h'}
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.dart'}
         files = [
             f for f in root.rglob("*")
             if f.is_file()
@@ -256,6 +319,7 @@ async def _generate_intelligence_async(root: Path):
             and "node_modules" not in str(f)
             and ".venv" not in str(f)
             and ".git" not in str(f)
+            and ".warden" not in str(f)
             and "__pycache__" not in str(f)
         ]
 
@@ -267,7 +331,7 @@ async def _generate_intelligence_async(root: Path):
 
         # Detect project purpose and modules
         detector = ProjectPurposeDetector(root)
-        purpose, architecture, module_map = await detector.detect_async(files, [])
+        purpose, architecture, module_map = await detector.detect_async(files, config_files or {})
 
         # Determine security posture based on project type
         security_posture = SecurityPosture.STANDARD
@@ -724,7 +788,7 @@ custom_rules:
 
     if should_gen_intel:
         try:
-            asyncio.run(_generate_intelligence_async(Path.cwd()))
+            asyncio.run(_generate_intelligence_async(Path.cwd(), context.config_files))
         except KeyboardInterrupt:
             console.print("\n[yellow]⚠️  Intelligence generation skipped by user.[/yellow]")
         except Exception as e:
