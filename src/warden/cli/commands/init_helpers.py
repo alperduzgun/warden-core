@@ -77,6 +77,15 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "DEEPSEEK_API_KEY",
         "default_model": "deepseek-coder"
+    },
+    "7": {
+        "id": "gemini",
+        "name": "Google Gemini",
+        "description": "High performance, large context window",
+        "emoji": "✨",
+        "requires_key": True,
+        "key_var": "GEMINI_API_KEY",
+        "default_model": "gemini-1.5-flash"
     }
 }
 
@@ -217,11 +226,11 @@ def _fallback_to_cloud_provider() -> tuple[dict, dict]:
     """Fallback when Ollama setup fails."""
     console.print("\n[bold yellow]Selecting alternative cloud provider...[/bold yellow]")
     # Show only cloud options
-    for key in ["2", "3", "4"]:
+    for key in ["2", "3", "4", "7"]:
         p = LLM_PROVIDERS[key]
         console.print(f"  [{key}] {p['emoji']} {p['name']} - {p['description']}")
 
-    choice = Prompt.ask("Select cloud provider", choices=["2", "3", "4"], default="4")
+    choice = Prompt.ask("Select cloud provider", choices=["2", "3", "4", "7"], default="7")
     provider = LLM_PROVIDERS[choice]
     return configure_cloud_provider(provider)
 
@@ -539,18 +548,37 @@ def generate_ai_tool_files(project_root: Path, llm_config: dict) -> None:
     import importlib.resources
 
     # 1. Create CLAUDE.md in project root
+    # 1. Create/Update CLAUDE.md in project root
     try:
-        claude_md_template = importlib.resources.read_text("warden.templates", "CLAUDE.md")
         claude_md_path = project_root / "CLAUDE.md"
+        
+        # Post-Setup Content: How to USE Warden
+        claude_content = """# Role: Warden Security Expert
 
-        if not claude_md_path.exists():
-            with open(claude_md_path, 'w') as f:
-                f.write(claude_md_template)
-            console.print(f"[green]✓ Created {claude_md_path}[/green]")
-        else:
-            console.print(f"[dim]CLAUDE.md already exists, skipping.[/dim]")
+## 🛡️ SYSTEM STATUS: ACTIVE
+**Warden is configured and running.**
+
+## 🤖 YOUR PRIMARY DIRECTIVE
+You are responsible for the security and code quality of this project.
+
+**OPERATIONAL PROTOCOL:**
+1. **Analyze**: Run `warden scan` after significant code changes.
+2. **Consult**: Read `.warden/reports/warden_report.json` to see current findings.
+3. **Fix**: When fixing issues, verify them by running `warden scan --file <path>`.
+
+**COMMANDS:**
+- `/scan`: `warden scan`
+- `/status`: `warden status`
+- `/help`: `warden --help`
+
+**Do not ask for setup instructions.** The system is already online.
+"""
+        with open(claude_md_path, 'w') as f:
+            f.write(claude_content)
+        console.print(f"[green]✓ Updated {claude_md_path} (Security Protocols Active)[/green]")
+
     except Exception as e:
-        console.print(f"[yellow]Warning: Could not create CLAUDE.md: {e}[/yellow]")
+        console.print(f"[yellow]Warning: Could not update CLAUDE.md: {e}[/yellow]")
 
     # 2. Create/Update .cursorrules
     try:
@@ -682,7 +710,19 @@ def configure_agent_tools(project_root: Path) -> None:
         template_content = importlib.resources.read_text("warden.templates", "AI_RULES.md")
     except Exception:
         # Fallback simplistic content if template is missing/moved
-        template_content = "# Warden Protocol\n\n1. Run `warden scan` after every edit.\n2. Fix all issues before completing tasks.\n"
+        template_content = """# Warden Agent Protocol
+
+## 🚀 Setup Assistance
+**IF** the user is asking for help setting up Warden:
+1. READ `warden://setup/guide` immediately.
+2. Follow the interview protocol defined there.
+3. Use `warden_configure` to apply settings.
+
+## 🛡️ Development Workflow
+1. Run `warden scan` after every edit.
+2. Fix all issues before completing tasks.
+3. Use `warden_status` to check health.
+"""
 
     with open(rules_path, "w") as f:
         f.write(template_content)

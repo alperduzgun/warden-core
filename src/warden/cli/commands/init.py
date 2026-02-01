@@ -39,8 +39,8 @@ def _generate_ignore_file(root: Path, meta):
                     line = line.strip()
                     if line and not line.startswith("#"):
                         gitignore_patterns.add(line)
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"[dim yellow]Warning: could not read .gitignore for deduplication: {e}[/dim yellow]")
 
     # Filter out patterns already in .gitignore
     final_content = []
@@ -211,9 +211,8 @@ async def _create_baseline_async(root: Path, config_path: Path):
         bridge = WardenBridge(project_root=root, config_path=str(config_path))
 
         # Run scan on current directory
-        # We assume '.' finds all files via scan logic
-        # Since execute_pipeline takes a file/dir path, we pass root string.
-        result = await bridge.execute_pipeline_async(str(root))
+        # We use scan_async which handles directory traversal via execute_pipeline_stream_async
+        result = await bridge.scan_async(str(root))
 
         # Save baseline
         baseline_path = root / ".warden" / "baseline.json"

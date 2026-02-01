@@ -9,7 +9,11 @@ from typing import Any, Dict, List
 
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from pathlib import Path
+import yaml
+import os
 
 
 class ConfigAdapter(BaseWardenAdapter):
@@ -29,7 +33,10 @@ class ConfigAdapter(BaseWardenAdapter):
         "warden_get_available_providers",
         "warden_get_configuration",
         "warden_update_configuration",
+        "warden_get_configuration",
+        "warden_update_configuration",
         "warden_update_frame_status",
+        "warden_configure",
     })
     TOOL_CATEGORY = ToolCategory.CONFIG
 
@@ -78,6 +85,30 @@ class ConfigAdapter(BaseWardenAdapter):
                 },
                 required=["frame_id", "enabled"],
             ),
+            self._create_tool_definition(
+                name="warden_configure",
+                description="Configure Warden settings (Provider, API Key, Model) idempotently. Safe for Agents.",
+                properties={
+                    "provider": {
+                        "type": "string",
+                        "description": "LLM Provider (ollama, openai, anthropic, gemini, azure_openai, deepseek, groq, openrouter)",
+                    },
+                    "api_key": {
+                        "type": "string",
+                        "description": "API Key for the provider (required for cloud providers)",
+                    },
+                    "model": {
+                        "type": "string",
+                        "description": "Smart model name (e.g., claude-3-5-sonnet-latest, gemini-1.5-pro)",
+                    },
+                    "vector_db": {
+                        "type": "string",
+                        "description": "Vector Database provider (local, qdrant, pinecone)",
+                        "default": "local"
+                    }
+                },
+                required=["provider"],
+            ),
         ]
 
     async def _execute_tool_async(
@@ -96,6 +127,8 @@ class ConfigAdapter(BaseWardenAdapter):
             return await self._update_configuration_async(arguments)
         elif tool_name == "warden_update_frame_status":
             return await self._update_frame_status_async(arguments)
+        elif tool_name == "warden_configure":
+            return await self._configure_warden_async(arguments)
         else:
             return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
@@ -173,3 +206,139 @@ class ConfigAdapter(BaseWardenAdapter):
             return MCPToolResult.json_result(result)
         except Exception as e:
             return MCPToolResult.error(f"Failed to update frame status: {e}")
+
+    async def _configure_warden_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+        """
+        Configure Warden settings safely (Atomic & Idempotent).
+        
+        Args:
+            arguments: Tool arguments
+            
+        Returns:
+            MCPToolResult: Success or failure
+        """
+        provider = arguments.get("provider", "").lower()
+        api_key = arguments.get("api_key")
+        model = arguments.get("model")
+        vector_db = arguments.get("vector_db", "local")
+
+        valid_providers = {
+            "ollama", "openai", "anthropic", "gemini", 
+            "azure_openai", "deepseek", "groq", "openrouter"
+        }
+
+        if provider not in valid_providers:
+            return MCPToolResult.error(f"Invalid provider: {provider}. Must be one of: {', '.join(valid_providers)}")
+
+        # 1. Update .env (Atomic-ish)
+        # We read lines, update/append, and write back. 
+        # Ideally this should use a proper parser but for minimal deps this is standard.
+        env_updates = {}
+        if api_key:
+            key_map = {
+                "openai": "OPENAI_API_KEY",
+                "anthropic": "ANTHROPIC_API_KEY",
+                "gemini": "GEMINI_API_KEY",
+                "azure_openai": "AZURE_OPENAI_API_KEY",
+                "deepseek": "DEEPSEEK_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "openrouter": "OPENROUTER_API_KEY"
+            }
+            if provider in key_map:
+                env_updates[key_map[provider]] = api_key
+        
+        if env_updates:
+            try:
+                env_path = self.project_root / ".env"
+                current_lines = []
+                if env_path.exists():
+                    with open(env_path, "r") as f:
+                        current_lines = f.readlines()
+                
+                new_lines = []
+                processed_keys = set()
+                
+                for line in current_lines:
+                    # simplistic parsing
+                    parts = line.split('=')
+                    if len(parts) > 0:
+                        key = parts[0].strip()
+                        if key in env_updates:
+                            new_lines.append(f"{key}={env_updates[key]}\n")
+                            processed_keys.add(key)
+                            continue
+                    new_lines.append(line)
+                
+                for key, val in env_updates.items():
+                    if key not in processed_keys:
+                        if new_lines and not new_lines[-1].endswith('\n'):
+                            new_lines.append('\n')
+                        new_lines.append(f"{key}={val}\n")
+                        
+                with open(env_path, "w") as f:
+                    f.writelines(new_lines)
+                    
+            except Exception as e:
+                return MCPToolResult.error(f"Failed to update .env: {e}")
+
+        # 2. Update config.yaml (Atomic-ish)
+        # We use the bridge to reload/update if possible, but also ensure file on disk is correct.
+        warden_dir = self.project_root / ".warden"
+        if not warden_dir.exists():
+            try:
+                warden_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                return MCPToolResult.error(f"Failed to create .warden directory: {e}")
+
+        config_path = warden_dir / "config.yaml"
+        
+        config_data = {}
+        if config_path.exists():
+            try:
+                with open(config_path, "r") as f:
+                    config_data = yaml.safe_load(f) or {}
+            except Exception:
+                config_data = {} # Fail safe, overwrite if corrupt
+        
+        # Ensure section exists
+        if "llm" not in config_data:
+            config_data["llm"] = {}
+        
+        config_data["llm"]["provider"] = provider
+        if model:
+            config_data["llm"]["smart_model"] = model
+            # For simplicity, set fast model to same if not defined, or smart defaults
+            if "fast_model" not in config_data["llm"]:
+                 config_data["llm"]["fast_model"] = model # simplified
+        
+        config_data["vector_db"] = {"provider": vector_db}
+
+        try:
+             with open(config_path, "w") as f:
+                 yaml.safe_dump(config_data, f)
+        except Exception as e:
+            return MCPToolResult.error(f"Failed to write config.yaml: {e}")
+
+        # 3. Update Artifacts (CLAUDE.md, etc.) to Usage Mode
+        try:
+            from warden.cli.commands.init_helpers import generate_ai_tool_files
+            # Simplified mock config for generation
+            gen_config = {
+                "provider": provider,
+                "model": model, 
+                "vector_db": vector_db
+            }
+            generate_ai_tool_files(self.project_root, gen_config)
+        except Exception as e:
+            # Non-critical failure, but log it for observability
+            # Assuming logger is available via self.logger or get_logger
+            from warden.shared.infrastructure.logging import get_logger
+            logger = get_logger(__name__)
+            logger.warning("artifact_generation_failed_in_adapter", error=str(e))
+
+        return MCPToolResult.json_result({
+            "status": "configured",
+            "provider": provider,
+            "config_path": str(config_path),
+            "updated_env": list(env_updates.keys())
+        })
