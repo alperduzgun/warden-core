@@ -27,6 +27,22 @@ frames_config:
   architecturalconsistency:
     enabled: true
     priority: low
+    suppressions:
+      # False positive: console.print() is Rich library, not built-in print()
+      - rule: custom_no-print
+        files:
+          - src/warden/cli/commands/serve.py
+        reason: "Uses Rich console.print() for CLI output, not built-in print()"
+      # False positive: KeyboardInterrupt:pass is standard graceful shutdown pattern
+      - rule: no-empty-except
+        files:
+          - src/warden/cli/commands/serve.py
+        reason: "KeyboardInterrupt:pass is intentional for graceful CLI shutdown"
+      # False positive: Simple utility/constants modules don't need logging
+      - rule: mandatory_logger_init
+        files:
+          - src/warden/mcp/infrastructure/mcp_config_paths.py
+        reason: "Constants-only module with no runtime logic requiring logging"
   config:
     enabled: true
   demosecurity:
