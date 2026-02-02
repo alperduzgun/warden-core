@@ -551,10 +551,30 @@ class FrameExecutor:
                      f_results = []
                 else:
                     try:
-                        f_results = await asyncio.wait_for(
-                            frame.execute_batch_async(files_to_scan),
-                            timeout=getattr(self.config, 'frame_timeout', 300.0)
-                        )
+                        # Revert to per-file execution if batch is not explicitly handled or for better granularity
+                        # Note: Most frames use batching for performance, but we need to report per-file for UX
+                        f_results = []
+                        total_files_to_scan = len(files_to_scan)
+                        
+                        # If frame handles batch natively and efficiently, we call it in smaller chunks
+                        # to maintain both performance and progress visibility
+                        CHUNK_SIZE = 5 # Small chunk for better responsiveness
+                        
+                        for i in range(0, total_files_to_scan, CHUNK_SIZE):
+                            chunk = files_to_scan[i:i+CHUNK_SIZE]
+                            chunk_results = await asyncio.wait_for(
+                                frame.execute_batch_async(chunk),
+                                timeout=getattr(self.config, 'frame_timeout', 300.0)
+                            )
+                            if chunk_results:
+                                f_results.extend(chunk_results)
+                                # Update progress per group
+                                if self.progress_callback:
+                                    self.progress_callback("progress_update", {
+                                        "increment": len(chunk_results),
+                                        "frame_id": frame.frame_id,
+                                        "phase": f"Validating {frame.name}"
+                                    })
                         
                         if f_results:
                             files_scanned = len(f_results)
@@ -570,13 +590,6 @@ class FrameExecutor:
                             for res in f_results:
                                 if res and res.findings:
                                     frame_findings.extend(res.findings)
-                            
-                            # Update progress for scanned batch
-                            if self.progress_callback:
-                                self.progress_callback("progress_update", {
-                                    "increment": files_scanned,
-                                    "frame_id": frame.frame_id
-                                })
                                     
                     except asyncio.TimeoutError:
                         logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)

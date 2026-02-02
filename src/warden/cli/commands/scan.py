@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 
 # Internal imports
 from warden.cli_bridge.bridge import WardenBridge
@@ -316,23 +315,12 @@ async def _run_scan_async(
 
     final_result_data = None
 
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(bar_width=40),
-        "[progress.percentage]{task.percentage:>3.0f}%",
-        "•",
-        TextColumn("[dim]{task.fields[status]}"),
-        TimeElapsedColumn(),
-        console=console,
-        transient=True
-    )
-
-    overall_task = None
-    current_phase_task = None
+    processed_units = 0
+    total_units = 0
+    current_phase = "Initializing..."
 
     try:
-        with progress:
+        with console.status(f"[bold blue]🛡️  Scanning...[/bold blue]", spinner="dots") as status:
             # Execute pipeline with streaming
             async for event in bridge.execute_pipeline_stream_async(
                 file_path=paths,
@@ -347,48 +335,72 @@ async def _run_scan_async(
                     evt = event['event']
                     data = event.get('data', {})
 
-                    if evt == "progress_init":
-                        overall_task = progress.add_task("Overall Progress", total=data['total_units'], status="Initializing...")
+                    if verbose:
+                        console.print(f"[dim]Progress Event: {evt} - {data}[/dim]")
+
+                    if evt == "discovery_complete":
+                        total_units = data.get('total_files', 0)
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})")
                     
-                    elif evt == "progress_update" and overall_task is not None:
+                    elif evt == "pipeline_started":
+                        # Use file_count as baseline if total_units not yet initialized
+                        if total_units <= 0:
+                            total_units = data.get('file_count', 0)
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Starting pipeline...[/dim] (0/{total_units})")
+
+                    elif evt == "progress_init":
+                        new_total = data.get('total_units', 0)
+                        if new_total > 0:
+                            total_units = new_total
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    
+                    elif evt == "progress_update":
                         increment = data.get('increment', 0)
-                        status = data.get('status', data.get('phase', 'Processing...'))
-                        progress.update(overall_task, advance=increment, status=status)
+                        processed_units += increment
                         
-                        # Handle dynamic unit addition (e.g. Analysis/Verification finding counts)
+                        # If frame_id is present but no increment, count it as 1 to be safe
+                        if increment == 0 and "frame_id" in data:
+                             processed_units += 1
+
                         if "total_units" in data:
-                            # Safe task retrieval to avoid IndexError
-                            task = next((t for t in progress.tasks if t.id == overall_task), None)
-                            if task:
-                                progress.update(overall_task, total=task.total + data['total_units'])
-
-                    if format == "text":
-                        if evt == "phase_started":
-                            phase_name = data.get('phase')
-                            if not verbose:
-                                if current_phase_task is not None:
-                                    progress.remove_task(current_phase_task)
-                                current_phase_task = progress.add_task(f"Phase: {phase_name}", total=None, status="In Progress")
-                            else:
-                                console.print(f"[bold blue]▶ Phase:[/bold blue] {phase_name}")
+                            # Only update total if it's explicitly provided and larger
+                            new_total = data['total_units']
+                            if new_total > total_units:
+                                total_units = new_total
                         
-                        elif evt == "frame_completed":
-                            stats["total"] += 1
-                            name = data.get('frame_name', data.get('frame_id'))
-                            status = data.get('status', 'unknown')
-                            icon = "✅" if status == "passed" else "❌" if status == "failed" else "⚠️" 
-                            style = "green" if status == "passed" else "red" if status == "failed" else "yellow"
-                            findings_count = data.get('findings', data.get('issues_found', 0))
+                        # Update current phase/status
+                        new_status = data.get('status', data.get('phase'))
+                        if new_status:
+                            current_phase = new_status
+                        
+                        # Update the sticky status line
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    
+                    elif evt == "phase_started":
+                        current_phase = data.get('phase', current_phase)
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                        if verbose:
+                            console.print(f"[bold blue]▶ Phase:[/bold blue] {current_phase}")
 
-                            if status == "passed":
-                                stats["passed"] += 1
-                            elif status == "failed":
-                                stats["failed"] += 1
-                            else:
-                                stats["skipped"] += 1
-                                
-                            if verbose:
-                                console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
+                    elif evt == "frame_completed":
+                        # Fallback: if we didn't get a progress_update for this frame, increment here
+                        # But be careful not to double count. Most frames send progress_update.
+                        stats["total"] += 1
+                        name = data.get('frame_name', data.get('frame_id'))
+                        frame_status = data.get('status', 'unknown')
+                        icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️" 
+                        style = "green" if frame_status == "passed" else "red" if frame_status == "failed" else "yellow"
+                        findings_count = data.get('findings', data.get('issues_found', 0))
+
+                        if frame_status == "passed":
+                            stats["passed"] += 1
+                        elif frame_status == "failed":
+                            stats["failed"] += 1
+                        else:
+                            stats["skipped"] += 1
+                            
+                        if verbose:
+                            console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
 
                 elif event_type == "result":
                     # Final results

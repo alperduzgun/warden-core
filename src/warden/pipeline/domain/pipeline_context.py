@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import Framework, ProjectType
 from warden.analysis.domain.quality_metrics import QualityMetrics
+from warden.shared.utils.finding_utils import get_finding_attribute, get_finding_severity
 
 
 @dataclass
@@ -331,13 +332,13 @@ class PipelineContext:
         if self.findings:
             if concise:
                 # Just counts for concise mode
-                crit = sum(1 for f in self.findings if str(f.get('severity')).lower() == 'critical')
+                crit = sum(1 for f in self.findings if get_finding_severity(f) == 'critical')
                 total = len(self.findings)
                 context_parts.append(f"ISSUES: {total} ({crit} critical)")
             else:
                 severity_counts = {}
                 for finding in self.findings:
-                    sev = finding.get("severity", "unknown")
+                    sev = get_finding_severity(finding)
                     severity_counts[sev] = severity_counts.get(sev, 0) + 1
                 context_parts.append(f"ISSUES FOUND: {severity_counts}")
 

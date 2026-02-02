@@ -6,6 +6,7 @@ from warden.shared.infrastructure.logging import get_logger
 from warden.llm.providers.base import ILlmClient
 from warden.memory.application.memory_manager import MemoryManager
 from warden.shared.utils.retry_utils import async_retry
+from warden.shared.utils.finding_utils import get_finding_attribute
 
 logger = get_logger(__name__)
 
@@ -19,17 +20,13 @@ class FindingVerificationService:
     FALLBACK_CONFIDENCE = 0.5
 
     def _get(self, obj: Any, key: str, default: Any = None) -> Any:
-        """Helper to get values from Finding objects or dicts."""
-        if isinstance(obj, dict):
-            return obj.get(key, default)
-        return getattr(obj, key, default)
+        """Helper to get values from Finding objects or dicts (Deprecated: Use finding_utils)."""
+        return get_finding_attribute(obj, key, default)
 
     def _set(self, obj: Any, key: str, value: Any) -> None:
-        """Helper to set values on Finding objects or dicts."""
-        if isinstance(obj, dict):
-            obj[key] = value
-        else:
-            setattr(obj, key, value)
+        """Helper to set values on Finding objects or dicts (Deprecated: Use finding_utils)."""
+        from warden.shared.utils.finding_utils import set_finding_attribute
+        set_finding_attribute(obj, key, value)
 
     def __init__(
         self, 
