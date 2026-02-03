@@ -28,16 +28,12 @@ def calculate_quality_score(findings: List[Any], base_score: float = 10.0) -> fl
     if not findings:
         return base_score
 
-    # Helper to safe-get severity
-    def get_severity(f: Any) -> str:
-        if isinstance(f, dict):
-            return str(f.get('severity', '')).lower()
-        return str(getattr(f, 'severity', '')).lower()
-
-    critical = sum(1 for f in findings if get_severity(f) == 'critical')
-    high = sum(1 for f in findings if get_severity(f) == 'high')
-    medium = sum(1 for f in findings if get_severity(f) == 'medium')
-    low = sum(1 for f in findings if get_severity(f) == 'low')
+    from warden.shared.utils.finding_utils import get_finding_severity
+    
+    critical = sum(1 for f in findings if get_finding_severity(f) == 'critical')
+    high = sum(1 for f in findings if get_finding_severity(f) == 'high')
+    medium = sum(1 for f in findings if get_finding_severity(f) == 'medium')
+    low = sum(1 for f in findings if get_finding_severity(f) == 'low')
 
     penalty = (critical * 3.0) + (high * 1.5) + (medium * 0.5) + (low * 0.1)
     
