@@ -6,16 +6,34 @@ Provides commands for managing CI/CD workflow files:
 - warden ci update: Update workflows from templates
 - warden ci sync: Sync with current configuration
 - warden ci status: Show CI workflow status
+
+Chaos Engineering Principles:
+- Fail Fast: Validate inputs early, clear error messages
+- Idempotent: Safe to run multiple times
+- Observable: Structured output, JSON support
+- Defensive: Handle all error cases gracefully
 """
 
-import typer
+from __future__ import annotations
+
+import sys
+import json
 from pathlib import Path
+from typing import Optional
+
+import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from typing import Optional
 
-from warden.services.ci_manager import CIManager, CIProvider, CURRENT_TEMPLATE_VERSION
+from warden.services.ci_manager import (
+    CIManager,
+    CIProvider,
+    CURRENT_TEMPLATE_VERSION,
+    CIManagerError,
+    ValidationError,
+    SecurityError,
+)
 
 console = Console()
 
@@ -27,14 +45,74 @@ ci_app = typer.Typer(
 )
 
 
-def _get_ci_manager() -> CIManager:
-    """Get CI manager instance for current directory."""
-    return CIManager(project_root=Path.cwd())
+# =============================================================================
+# Helper Functions
+# =============================================================================
 
+def _get_ci_manager() -> CIManager:
+    """
+    Get CI manager instance for current directory.
+
+    Raises:
+        typer.Exit: If initialization fails
+    """
+    try:
+        return CIManager(project_root=Path.cwd())
+    except ValidationError as e:
+        console.print(f"[red]Validation Error:[/red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Failed to initialize CI Manager:[/red] {e}")
+        raise typer.Exit(1)
+
+
+def _parse_provider(provider: Optional[str]) -> Optional[CIProvider]:
+    """
+    Parse and validate provider string.
+
+    Returns:
+        CIProvider if valid, None if empty
+    Raises:
+        typer.Exit: If provider is invalid
+    """
+    if not provider:
+        return None
+
+    try:
+        return CIProvider.from_string(provider)
+    except ValidationError as e:
+        console.print(f"[red]Invalid provider:[/red] {e}")
+        console.print("[dim]Valid options: github, gitlab[/dim]")
+        raise typer.Exit(1)
+
+
+def _print_secrets_hint(llm_provider: str) -> None:
+    """Print reminder about CI secrets if using cloud provider."""
+    if llm_provider == "ollama":
+        return
+
+    key_map = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "azure": "AZURE_OPENAI_API_KEY",
+        "azure_openai": "AZURE_OPENAI_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+    }
+
+    if llm_provider in key_map:
+        console.print(f"\n[yellow]Remember to add secrets to your CI:[/yellow]")
+        console.print(f"  - {key_map[llm_provider]}")
+
+
+# =============================================================================
+# Commands
+# =============================================================================
 
 @ci_app.command("init")
 def ci_init(
-    provider: str = typer.Option(
+    provider: Optional[str] = typer.Option(
         None,
         "--provider", "-p",
         help="CI provider: github or gitlab"
@@ -54,73 +132,83 @@ def ci_init(
     Initialize CI/CD workflows from templates.
 
     Creates workflow files for GitHub Actions or GitLab CI.
+    Idempotent: existing files are skipped unless --force is used.
 
     Examples:
         warden ci init --provider github
         warden ci init -p gitlab -b main
-        warden ci init --force  (overwrites existing)
+        warden ci init --force
     """
     console.print("\n[bold cyan]Initializing CI/CD Workflows[/bold cyan]")
 
     manager = _get_ci_manager()
 
     # Auto-detect or prompt for provider
-    if not provider:
+    ci_provider = _parse_provider(provider)
+
+    if not ci_provider:
         detected = manager._detect_provider()
         if detected:
-            provider = detected.value
-            console.print(f"[dim]Detected provider: {provider}[/dim]")
+            ci_provider = detected
+            console.print(f"[dim]Detected provider: {ci_provider.value}[/dim]")
         else:
-            # Interactive selection
-            console.print("\n[bold]Select CI Provider:[/bold]")
-            console.print("  [1] GitHub Actions")
-            console.print("  [2] GitLab CI")
+            # Interactive selection only if stdin is a tty
+            if sys.stdin.isatty():
+                console.print("\n[bold]Select CI Provider:[/bold]")
+                console.print("  [1] GitHub Actions")
+                console.print("  [2] GitLab CI")
 
-            choice = typer.prompt("Choice", default="1")
-
-            if choice == "1":
-                provider = "github"
-            elif choice == "2":
-                provider = "gitlab"
+                try:
+                    choice = typer.prompt("Choice", default="1")
+                    if choice == "1":
+                        ci_provider = CIProvider.GITHUB
+                    elif choice == "2":
+                        ci_provider = CIProvider.GITLAB
+                    else:
+                        console.print("[red]Invalid choice. Use 1 or 2.[/red]")
+                        raise typer.Exit(1)
+                except (KeyboardInterrupt, EOFError):
+                    console.print("\n[yellow]Cancelled.[/yellow]")
+                    raise typer.Exit(0)
             else:
-                console.print("[red]Invalid choice[/red]")
+                console.print("[red]No provider specified and no existing CI detected.[/red]")
+                console.print("[dim]Use --provider github or --provider gitlab[/dim]")
                 raise typer.Exit(1)
 
-    # Validate provider
+    # Initialize
     try:
-        ci_provider = CIProvider(provider.lower())
-    except ValueError:
-        console.print(f"[red]Invalid provider: {provider}[/red]")
-        console.print("[dim]Valid options: github, gitlab[/dim]")
+        result = manager.init(
+            provider=ci_provider,
+            branch=branch,
+            force=force,
+        )
+    except (ValidationError, SecurityError) as e:
+        console.print(f"\n[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    except CIManagerError as e:
+        console.print(f"\n[red]CI Manager Error:[/red] {e}")
         raise typer.Exit(1)
 
-    # Initialize
-    result = manager.init(
-        provider=ci_provider,
-        branch=branch,
-        force=force,
-    )
-
     # Display results
-    if result["created"]:
+    if result.get("created"):
         console.print(f"\n[bold green]Created {len(result['created'])} workflow(s):[/bold green]")
         for path in result["created"]:
             console.print(f"  [green]+[/green] {path}")
 
-    if result["skipped"]:
+    if result.get("skipped"):
         console.print(f"\n[yellow]Skipped {len(result['skipped'])} existing file(s):[/yellow]")
         for path in result["skipped"]:
             console.print(f"  [dim]-[/dim] {path}")
         console.print("[dim]Use --force to overwrite[/dim]")
 
-    if result["errors"]:
-        console.print(f"\n[red]Errors:[/red]")
+    if result.get("errors"):
+        console.print(f"\n[red]Errors ({len(result['errors'])}):[/red]")
         for error in result["errors"]:
             console.print(f"  [red]![/red] {error}")
         raise typer.Exit(1)
 
     # Show workflow summary for GitHub
-    if ci_provider == CIProvider.GITHUB and result["created"]:
+    if ci_provider == CIProvider.GITHUB and result.get("created"):
         console.print("\n[bold]Workflow Summary:[/bold]")
         console.print("  [cyan]warden-pr.yml[/cyan]      - PR scans (--ci --diff)")
         console.print("  [cyan]warden-nightly.yml[/cyan] - Nightly baseline updates")
@@ -129,17 +217,7 @@ def ci_init(
 
     # Show secrets hint
     llm_provider = manager._get_llm_config().get("provider", "ollama")
-    if llm_provider != "ollama":
-        console.print(f"\n[yellow]Remember to add secrets to your CI:[/yellow]")
-        key_map = {
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "groq": "GROQ_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-            "azure": "AZURE_OPENAI_API_KEY",
-        }
-        if llm_provider in key_map:
-            console.print(f"  - {key_map[llm_provider]}")
+    _print_secrets_hint(str(llm_provider))
 
     console.print("\n[bold green]CI/CD initialization complete![/bold green]")
 
@@ -161,6 +239,7 @@ def ci_update(
     Update CI workflows from latest templates.
 
     Preserves custom sections marked with WARDEN-CUSTOM comments.
+    Use --dry-run to preview changes without applying them.
 
     Examples:
         warden ci update
@@ -173,10 +252,15 @@ def ci_update(
         console.print("[dim](Dry run - no changes will be made)[/dim]")
 
     manager = _get_ci_manager()
-    result = manager.update(
-        preserve_custom=preserve_custom,
-        dry_run=dry_run,
-    )
+
+    try:
+        result = manager.update(
+            preserve_custom=preserve_custom,
+            dry_run=dry_run,
+        )
+    except CIManagerError as e:
+        console.print(f"\n[red]Error:[/red] {e}")
+        raise typer.Exit(1)
 
     if not result.get("success", False) and "error" in result:
         console.print(f"\n[red]{result['error']}[/red]")
@@ -188,7 +272,7 @@ def ci_update(
         console.print(f"\n[bold green]{action} {len(result['updated'])} workflow(s):[/bold green]")
         for update in result["updated"]:
             path = update["path"]
-            old_ver = update.get("old_version", "?")
+            old_ver = update.get("old_version") or "?"
             new_ver = update.get("new_version", CURRENT_TEMPLATE_VERSION)
             preserved = update.get("preserved_custom", False)
 
@@ -204,7 +288,7 @@ def ci_update(
             console.print(f"  [dim]-[/dim] {path}")
 
     if result.get("errors"):
-        console.print(f"\n[red]Errors:[/red]")
+        console.print(f"\n[red]Errors ({len(result['errors'])}):[/red]")
         for error in result["errors"]:
             console.print(f"  [red]![/red] {error}")
         raise typer.Exit(1)
@@ -227,7 +311,12 @@ def ci_sync() -> None:
     console.print("\n[bold cyan]Syncing CI/CD Workflows[/bold cyan]")
 
     manager = _get_ci_manager()
-    result = manager.sync()
+
+    try:
+        result = manager.sync()
+    except CIManagerError as e:
+        console.print(f"\n[red]Error:[/red] {e}")
+        raise typer.Exit(1)
 
     if not result.get("success", False) and "error" in result:
         console.print(f"\n[red]{result['error']}[/red]")
@@ -239,7 +328,7 @@ def ci_sync() -> None:
             console.print(f"  [green]+[/green] {path}")
 
     if result.get("errors"):
-        console.print(f"\n[red]Errors:[/red]")
+        console.print(f"\n[red]Errors ({len(result['errors'])}):[/red]")
         for error in result["errors"]:
             console.print(f"  [red]![/red] {error}")
         raise typer.Exit(1)
@@ -271,10 +360,17 @@ def ci_status(
         warden ci status --json
     """
     manager = _get_ci_manager()
-    status_data = manager.to_dict()
+
+    try:
+        status_data = manager.to_dict()
+    except CIManagerError as e:
+        if json_output:
+            console.print(json.dumps({"error": str(e)}, indent=2))
+        else:
+            console.print(f"\n[red]Error:[/red] {e}")
+        raise typer.Exit(1)
 
     if json_output:
-        import json
         console.print(json.dumps(status_data, indent=2))
         return
 
@@ -318,14 +414,16 @@ def ci_status(
     workflows = status_data.get("workflows", {})
 
     for name, wf in workflows.items():
-        if not wf.get("exists"):
+        if wf.get("error"):
+            status_icon = f"[red]Error: {wf['error']}[/red]"
+        elif not wf.get("exists"):
             status_icon = "[red]Missing[/red]"
         elif wf.get("is_outdated"):
             status_icon = "[yellow]Outdated[/yellow]"
         else:
             status_icon = "[green]Current[/green]"
 
-        version = f"v{wf.get('version', '?')}" if wf.get("version") else "[dim]none[/dim]"
+        version = f"v{wf.get('version')}" if wf.get("version") else "[dim]none[/dim]"
 
         custom = ""
         if wf.get("has_custom_sections"):
@@ -342,6 +440,7 @@ def ci_status(
     # Show last modified for most recent
     most_recent = None
     most_recent_time = None
+
     for name, wf in workflows.items():
         if wf.get("last_modified"):
             from datetime import datetime
@@ -350,14 +449,8 @@ def ci_status(
                 if most_recent_time is None or dt > most_recent_time:
                     most_recent_time = dt
                     most_recent = wf.get("path")
-            except Exception:
+            except (ValueError, TypeError):
                 pass
 
-    if most_recent_time:
+    if most_recent_time and most_recent:
         console.print(f"\n[dim]Last modified: {most_recent} ({most_recent_time.strftime('%Y-%m-%d %H:%M')})[/dim]")
-
-
-# Legacy command for backwards compatibility
-def ci_command() -> None:
-    """Entry point for 'warden ci' command."""
-    ci_app()
