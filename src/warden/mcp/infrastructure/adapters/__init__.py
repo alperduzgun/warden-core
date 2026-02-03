@@ -37,6 +37,9 @@ from warden.mcp.infrastructure.adapters.report_adapter import ReportAdapter
 from warden.mcp.infrastructure.adapters.cleanup_adapter import CleanupAdapter
 from warden.mcp.infrastructure.adapters.fortification_adapter import FortificationAdapter
 
+# CI/CD adapter
+from warden.mcp.infrastructure.adapters.ci_adapter import CIAdapter
+
 __all__ = [
     # Base
     "BaseWardenAdapter",
@@ -57,4 +60,6 @@ __all__ = [
     "ReportAdapter",
     "CleanupAdapter",
     "FortificationAdapter",
+    # CI/CD (4 tools)
+    "CIAdapter",
 ]
