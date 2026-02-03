@@ -23,6 +23,7 @@ frames:
 - demosecurity
 - architecturalconsistency
 - property
+- antipattern  # Detects bare except, god class, singleton, generic exception
 frames_config:
   architecturalconsistency:
     enabled: true
@@ -101,6 +102,24 @@ frames_config:
           - src/warden/shared/utils/retry_utils.py
           - src/warden/analysis/services/finding_verifier.py
           - src/warden/pipeline/application/orchestrator/orchestrator.py
+  antipattern:
+    enabled: true
+    priority: high
+    is_blocker: true
+    # Detection toggles
+    check_bare_except: true
+    check_god_class: true
+    check_singleton: true
+    check_generic_exception: true
+    check_debug_print: true
+    check_todo_fixme: true
+    check_builtin_shadow: true
+    check_missing_await: true
+    # Thresholds
+    max_class_lines: 500
+    max_function_lines: 100
+    # Filtering
+    ignore_test_files: true
 llm:
   azure:
     api_key: ${AZURE_OPENAI_API_KEY}
@@ -170,6 +189,7 @@ settings:
 custom_rules:
   - .warden/rules/my_custom_rules.yaml
   - .warden/rules/warden_core_rules.yaml
+  - .warden/rules/self_awareness.yaml  # Warden self-scan rules
 
 
 baseline:
