@@ -75,8 +75,29 @@ class HardcodedPasswordCheck(ValidationCheck):
         custom_keywords = self.config.get("custom_keywords", [])
         self.keywords = self.PASSWORD_KEYWORDS + custom_keywords
 
-        # Build patterns
+        # Build and pre-compile patterns (KISS optimization)
         self.patterns = self._build_patterns()
+        self._compiled_patterns = [
+            (re.compile(pattern_str, re.IGNORECASE), description)
+            for pattern_str, description in self.patterns
+        ]
+
+        # Pre-compile safe patterns
+        self._safe_patterns = [
+            re.compile(r"os\.getenv\("),
+            re.compile(r"os\.environ\["),
+            re.compile(r"process\.env\."),
+            re.compile(r"System\.getenv\("),
+            re.compile(r"Environment\.GetEnvironmentVariable\("),
+            re.compile(r"input\("),  # User input (not hardcoded)
+            re.compile(r"getpass\("),  # Password prompt
+        ]
+
+        # Pre-compile weak password patterns
+        self._compiled_weak_patterns = [
+            (re.compile(rf'["\']({weak_password})["\']', re.IGNORECASE), weak_password)
+            for weak_password in self.COMMON_PASSWORDS
+        ]
 
     def _build_patterns(self) -> List[tuple[str, str]]:
         """Build regex patterns for password detection."""
@@ -110,10 +131,9 @@ class HardcodedPasswordCheck(ValidationCheck):
             if self._is_safe_pattern(line):
                 continue
 
-            # Check each pattern
-            for pattern_str, description in self.patterns:
-                pattern = re.compile(pattern_str, re.IGNORECASE)
-                match = pattern.search(line)
+            # Check each pre-compiled pattern
+            for compiled_pattern, description in self._compiled_patterns:
+                match = compiled_pattern.search(line)
 
                 if match and self._is_likely_password(match.group(0)):
                     findings.append(
@@ -147,17 +167,7 @@ class HardcodedPasswordCheck(ValidationCheck):
 
     def _is_safe_pattern(self, line: str) -> bool:
         """Check if line uses safe patterns (env vars, etc.)."""
-        safe_patterns = [
-            r"os\.getenv\(",
-            r"os\.environ\[",
-            r"process\.env\.",
-            r"System\.getenv\(",
-            r"Environment\.GetEnvironmentVariable\(",
-            r"input\(",  # User input (not hardcoded)
-            r"getpass\(",  # Password prompt
-        ]
-
-        return any(re.search(pattern, line) for pattern in safe_patterns)
+        return any(compiled.search(line) for compiled in self._safe_patterns)
 
     def _is_likely_password(self, matched_text: str) -> bool:
         """
@@ -205,10 +215,8 @@ class HardcodedPasswordCheck(ValidationCheck):
         findings: List[CheckFinding] = []
 
         for line_num, line in enumerate(code_file.content.split("\n"), start=1):
-            for weak_password in self.COMMON_PASSWORDS:
-                # Look for quoted weak passwords
-                pattern = rf'["\']({weak_password})["\']'
-                match = re.search(pattern, line, re.IGNORECASE)
+            for compiled_pattern, weak_password in self._compiled_weak_patterns:
+                match = compiled_pattern.search(line)
 
                 if match:
                     findings.append(

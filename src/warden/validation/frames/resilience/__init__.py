@@ -1,13 +1,18 @@
 """
-Resilience Architecture Analysis Frame
+Chaos Engineering Analysis Frame
 
-Tests code resilience, fault tolerance, and graceful degradation using LLM-based FMEA.
+Applies chaos engineering principles to code:
+- Detects external dependencies (network, DB, files, queues, cloud)
+- LLM simulates failure scenarios (timeout, error, resource exhaustion)
+- Reports MISSING resilience patterns (not validates existing ones)
+
+Philosophy: "Everything will fail. The question is HOW and WHEN."
 
 Usage:
     from . import ResilienceFrame
 
     frame = ResilienceFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 """
 
 from warden.validation.frames.resilience.resilience_frame import ResilienceFrame

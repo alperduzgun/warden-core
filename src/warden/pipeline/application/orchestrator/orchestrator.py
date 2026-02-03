@@ -25,6 +25,7 @@ from .frame_executor import FrameExecutor
 from warden.shared.services.semantic_search_service import SemanticSearchService
 from warden.analysis.services.finding_verifier import FindingVerificationService
 from warden.llm.factory import create_client
+from warden.shared.utils.finding_utils import get_finding_attribute, get_finding_severity
 
 logger = get_logger(__name__)
 
@@ -274,7 +275,6 @@ class PhaseOrchestrator:
                 context.quality_score_after = context.quality_score_before
 
             # Phase 2: CLASSIFICATION
-            print(f"DEBUG_ORCH: Starting Classification Block. FramesOverride: {frames_to_execute}")
             # If frames override is provided, use it and skip AI classification
             if frames_to_execute:
                 context.selected_frames = frames_to_execute
@@ -551,8 +551,8 @@ class PhaseOrchestrator:
             for frame_res in baseline_data.get('frame_results', []):
                 for finding in frame_res.get('findings', []):
                     # Robust identification: rule_id + file (relative to root)
-                    rid = finding.get('rule_id') if isinstance(finding, dict) else getattr(finding, 'rule_id', None)
-                    fpath = finding.get('file_path') if isinstance(finding, dict) else getattr(finding, 'path', finding.get('path'))
+                    rid = get_finding_attribute(finding, 'rule_id')
+                    fpath = get_finding_attribute(finding, 'file_path') or get_finding_attribute(finding, 'path')
                     
                     if not fpath: continue
                     
@@ -647,15 +647,7 @@ class PhaseOrchestrator:
 
         # Helper to get severity from finding (object or dict)
         def get_severity(f: Any) -> str:
-            val = None
-            if isinstance(f, dict):
-                val = f.get('severity')
-            else:
-                val = getattr(f, 'severity', None)
-            
-            
-            
-            return str(val).lower() if val else ''
+            return get_finding_severity(f)
 
         # Helper to get review_required from finding
         def is_review_required(f: Any) -> bool:

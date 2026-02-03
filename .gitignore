@@ -81,7 +81,8 @@ src/.warden/
 
 # Performance Roadmap
 
-# Rust
+# Rust Build Artifacts
+src/warden_rust/target/
 target/
 **/*.rs.bk
 Cargo.lock.bak

@@ -7,7 +7,7 @@ Priority: TREE_SITTER (fallback for languages without native provider).
 
 import time
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Any, Optional, List, Tuple
 
 from warden.ast.application.provider_interface import IASTProvider
 from warden.ast.domain.models import (
@@ -86,6 +86,7 @@ class TreeSitterProvider(IASTProvider):
         self._parsers = {}  # Language -> Parser cache
         self._available = TREE_SITTER_AVAILABLE
         self._language_objs = {} # Language -> tree_sitter.Language
+        self._missing_modules = {} # Language -> module_name
         
         if self._available:
             self._initialize_languages()
@@ -120,15 +121,108 @@ class TreeSitterProvider(IASTProvider):
                     self._language_objs[lang] = tree_sitter.Language(lang_fn())
             except ImportError:
                 logger.debug("grammar_not_installed", language=lang.name, module=import_name)
+                self._missing_modules[lang] = import_name
             except Exception as e:
                 logger.warning("failed_to_load_grammar", language=lang.name, error=str(e))
 
-        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs.keys()])
+        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs.keys()], missing=len(self._missing_modules))
+
+    @property
+    def missing_grammars(self) -> List[str]:
+        """Get list of missing grammar package names."""
+        # Convert tree_sitter_swift -> tree-sitter-swift (pip package name)
+        return [mod.replace("_", "-") for mod in self._missing_modules.values()]
+
+    async def auto_install_grammar(self, language: CodeLanguage) -> bool:
+        """
+        Auto-install missing grammar for a language.
+
+        Silently installs missing tree-sitter grammar without bothering the user.
+
+        Args:
+            language: Language to install grammar for
+
+        Returns:
+            True if installed successfully, False otherwise
+        """
+        if language not in self._missing_modules:
+            return True  # Already available
+
+        module_name = self._missing_modules[language]
+        package_name = module_name.replace("_", "-")
+
+        logger.info("auto_installing_grammar", language=language.value, package=package_name)
+
+        try:
+            import subprocess
+            import sys
+
+            # Use pip to install silently
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--quiet", package_name],
+                capture_output=True,
+                text=True,
+                timeout=60  # 60 second timeout
+            )
+
+            if result.returncode != 0:
+                logger.debug("grammar_install_failed", package=package_name, stderr=result.stderr)
+                return False
+
+            # Re-import the module
+            try:
+                mod = __import__(module_name)
+                lang_fn = getattr(mod, "language", None)
+                if not lang_fn:
+                    lang_fn = getattr(mod, f"language_{module_name.replace('tree_sitter_', '')}", None)
+
+                if lang_fn:
+                    self._language_objs[language] = tree_sitter.Language(lang_fn())
+                    del self._missing_modules[language]
+                    logger.info("grammar_auto_installed", language=language.value, package=package_name)
+                    return True
+            except Exception as e:
+                logger.debug("grammar_reload_failed", error=str(e))
+                return False
+
+        except subprocess.TimeoutExpired:
+            logger.debug("grammar_install_timeout", package=package_name)
+            return False
+        except Exception as e:
+            logger.debug("grammar_install_error", package=package_name, error=str(e))
+            return False
+
+        return False
+
+    async def ensure_grammar(self, language: CodeLanguage) -> bool:
+        """
+        Ensure grammar is available for a language, auto-installing if needed.
+
+        Args:
+            language: Language to ensure grammar for
+
+        Returns:
+            True if grammar is available (or was installed), False otherwise
+        """
+        # Already available
+        if language in self._language_objs:
+            return True
+
+        # Not in missing list means we can't install it
+        if language not in self._missing_modules:
+            return False
+
+        # Try to auto-install
+        return await self.auto_install_grammar(language)
 
     @property
     def metadata(self) -> ASTProviderMetadata:
         """Get provider metadata."""
         return self._metadata
+
+    def _get_ts_language(self, language: CodeLanguage) -> Optional[Any]:
+        """Get tree-sitter language object if available."""
+        return self._language_objs.get(language)
 
     async def parse(
         self,
@@ -188,18 +282,25 @@ class TreeSitterProvider(IASTProvider):
         try:
             language_obj = self._language_objs.get(language)
             if not language_obj:
-                 logger.debug("no_grammar_loaded", language=language.value)
-                 return ParseResult(
-                    status=ParseStatus.FAILED,
-                    language=language,
-                    provider_name=self.metadata.name,
-                    ast_root=None,
-                    errors=[ParseError(message=f"No grammar loaded for {language.value}", severity="error")],
-                    warnings=[],
-                    parse_time_ms=0,
-                    file_path=file_path,
-                    timestamp=datetime.now()
-                )
+                # Try auto-install if grammar is missing
+                if language in self._missing_modules:
+                    installed = await self.auto_install_grammar(language)
+                    if installed:
+                        language_obj = self._language_objs.get(language)
+
+                if not language_obj:
+                    logger.debug("no_grammar_loaded", language=language.value)
+                    return ParseResult(
+                        status=ParseStatus.FAILED,
+                        language=language,
+                        provider_name=self.metadata.name,
+                        ast_root=None,
+                        errors=[ParseError(message=f"No grammar loaded for {language.value}", severity="error")],
+                        warnings=[],
+                        parse_time_ms=0,
+                        file_path=file_path,
+                        timestamp=datetime.now()
+                    )
 
             parser = tree_sitter.Parser(language_obj)
             

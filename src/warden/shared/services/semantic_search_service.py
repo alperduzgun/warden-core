@@ -19,7 +19,6 @@ from warden.semantic_search.indexer import CodeIndexer
 from warden.semantic_search.searcher import SemanticSearcher
 from warden.semantic_search.context_retriever import ContextRetriever
 from warden.semantic_search.models import RetrievalContext, SearchResult
-from warden.secrets.application import secret_manager
 
 logger = structlog.get_logger()
 
@@ -53,54 +52,53 @@ class SemanticSearchService:
         self.indexer: Optional[CodeIndexer] = None
         self.searcher: Optional[SemanticSearcher] = None
         self.context_retriever: Optional[ContextRetriever] = None
-
-        self._components_initialized = False
+        
+        if self.enabled:
+            try:
+                self._initialize_components()
+            except Exception as e:
+                logger.error("semantic_search_init_failed", error=str(e))
+                self.enabled = False
         
         self._initialized = True
         logger.info("semantic_search_service_ready", enabled=self.enabled)
 
-    async def _ensure_initialized_async(self):
-        """Ensure components are initialized (lazy initialization)."""
-        if self.enabled and not self._components_initialized:
-            try:
-                await self._initialize_components_async()
-                self._components_initialized = True
-            except Exception as e:
-                logger.error("semantic_search_init_failed", error=str(e))
-                self.enabled = False
-
-    async def _initialize_components_async(self):
+    def _initialize_components(self):
         """Initialize underlying semantic search components."""
+        import os
         from warden.semantic_search.adapters import ChromaDBAdapter, QdrantAdapter
         
         ss_config = self.config
         
         # 1. Embedding Generator
         # Distinguish between Vector Store Provider and Embedding Provider
-        # Config 'provider' might refer to vector store (e.g., qdrant)
         emb_provider = ss_config.get("embedding_provider")
         if not emb_provider:
             primary_provider = ss_config.get("provider", "openai")
-            if primary_provider in ["qdrant", "pinecone"]:
+            if primary_provider in ["qdrant", "pinecone"] and not ss_config.get("embedding_provider"):
                 emb_provider = "openai" # Default to OpenAI for Cloud DBs unless specified
+            elif primary_provider == "local":
+                emb_provider = "local"
             else:
                 emb_provider = primary_provider
 
-        # Use SecretManager for API keys
+        # Smart Default Model based on Provider
+        default_model = "text-embedding-3-small"
+        if emb_provider == "local":
+            default_model = "BAAI/bge-small-en-v1.5" # High quality & fast local model
+
+        # For now, we'll just check common env vars if missing
         api_key = ss_config.get("api_key")
         if not api_key:
              # Try to get from global env if not explicitly provided in ss_config
-             api_key = await secret_manager.get_secret_async("OPENAI_API_KEY") or await secret_manager.get_secret_async("AZURE_OPENAI_API_KEY")
-        
-        # Ensure it's a string
-        api_key_str = str(api_key) if api_key else ""
+             api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY", "")
 
         self.embedding_gen = EmbeddingGenerator(
             provider=emb_provider,
-            model_name=ss_config.get("model", "text-embedding-3-small"),
-            api_key=api_key_str,
-            azure_endpoint=ss_config.get("azure_endpoint", await secret_manager.get_secret_async("AZURE_OPENAI_ENDPOINT") or ""),
-            azure_deployment=ss_config.get("azure_deployment", await secret_manager.get_secret_async("AZURE_OPENAI_DEPLOYMENT_NAME") or ""),
+            model_name=ss_config.get("model", default_model),
+            api_key=os.path.expandvars(str(api_key)),
+            azure_endpoint=os.path.expandvars(ss_config.get("azure_endpoint", os.environ.get("AZURE_OPENAI_ENDPOINT", ""))),
+            azure_deployment=os.path.expandvars(ss_config.get("azure_deployment", os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", ""))),
             device=ss_config.get("device", "cpu"),
         )
         
@@ -126,11 +124,11 @@ class SemanticSearchService:
                 # But here we simply fallback to generic 'api_key' if provided.
                 config_qdrant_key = ss_config.get("api_key")
 
-            api_key = config_qdrant_key or ""
+            api_key = os.path.expandvars(config_qdrant_key or "")
             
-            # Fallback to secret manager if config was empty
-            if not url: url = await secret_manager.get_secret_async("QDRANT_URL") or "http://localhost:6333"
-            if not api_key: api_key = await secret_manager.get_secret_async("QDRANT_API_KEY") or ""
+            # Fallback to env vars if config expansion failed or was empty
+            if not url: url = os.environ.get("QDRANT_URL", "http://localhost:6333")
+            if not api_key: api_key = os.environ.get("QDRANT_API_KEY", "")
             
             # Determine vector size from embedding generator
             vector_size = self.embedding_gen.dimensions if self.embedding_gen else 1536
@@ -174,7 +172,6 @@ class SemanticSearchService:
 
     async def search(self, query: str, language: Optional[str] = None, limit: int = 5) -> List[SearchResult]:
         """Perform semantic search."""
-        await self._ensure_initialized_async()
         if not self.is_available():
             return []
         
@@ -186,7 +183,6 @@ class SemanticSearchService:
 
     async def get_context(self, query: str, language: Optional[str] = None) -> Optional[RetrievalContext]:
         """Retrieve relevant code context for LLM."""
-        await self._ensure_initialized_async()
         if not self.is_available():
             return None
             
@@ -195,9 +191,8 @@ class SemanticSearchService:
             language=language
         )
 
-    async def index_project(self, project_path: Path, file_paths: List[Path]):
+    async def index_project(self, project_path: Path, file_paths: List[Path], progress_callback: Optional[callable] = None):
         """Index project files in parallel."""
-        await self._ensure_initialized_async()
         if not self.is_available():
             return
             
@@ -212,7 +207,6 @@ class SemanticSearchService:
             str_paths.append(str(p))
             
         # Control concurrency at both file and chunk level
-        # Control concurrency at both file and chunk level
         # Use configurable concurrency if provided
         max_concurrency = self.config.get("max_indexing_concurrency", 2)
-        return await self.indexer.index_files(str_paths, languages, max_concurrency=max_concurrency)
+        return await self.indexer.index_files(str_paths, languages, max_concurrency=max_concurrency, progress_callback=progress_callback)

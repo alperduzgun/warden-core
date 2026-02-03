@@ -6,18 +6,22 @@ Detects unused and unreachable code (orphan code):
 - Unreferenced functions and classes
 - Dead code (unreachable statements)
 
-NEW in v2.0: LLM-powered intelligent filtering to reduce false positives.
+Detection Strategies (priority order):
+1. LSPOrphanDetector - Cross-file semantic analysis via LSP (most accurate)
+2. RustOrphanDetector - Fast single-file via Rust+Tree-sitter
+3. PythonOrphanDetector - Native AST for Python
+4. UniversalOrphanDetector - Tree-sitter based fallback
 
-Components:
-- OrphanFrame: Main frame orchestrator
-- OrphanDetector: AST-based detection (fast, simple rules)
-- LLMOrphanFilter: LLM-based filtering (smart, context-aware)
+LLM-powered intelligent filtering available to reduce false positives.
 
 Usage:
     from . import OrphanFrame
 
+    # Standard mode (fast, single-file)
     frame = OrphanFrame(config={"use_llm_filter": True})
     result = await frame.execute(code_file)
+
+    # LSP mode (slower, cross-file) - set via OrphanDetectorFactory
 """
 
 from warden.validation.frames.orphan.orphan_frame import OrphanFrame
@@ -25,8 +29,11 @@ from warden.validation.frames.orphan.orphan_detector import (
     AbstractOrphanDetector,
     PythonOrphanDetector,
     TreeSitterOrphanDetector,
+    RustOrphanDetector,
+    LSPOrphanDetector,
     OrphanDetectorFactory,
     OrphanFinding,
+    LSP_AVAILABLE,
 )
 from warden.validation.frames.orphan.llm_orphan_filter import (
     LLMOrphanFilter,
@@ -38,8 +45,11 @@ __all__ = [
     "AbstractOrphanDetector",
     "PythonOrphanDetector",
     "TreeSitterOrphanDetector",
+    "RustOrphanDetector",
+    "LSPOrphanDetector",
     "OrphanDetectorFactory",
     "OrphanFinding",
     "LLMOrphanFilter",
     "FilterDecision",
+    "LSP_AVAILABLE",
 ]

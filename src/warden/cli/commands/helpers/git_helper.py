@@ -86,12 +86,13 @@ class GitHelper:
             # We NEED to also check uncommitted changes.
             
             changed_files = set()
-            
-            # A. Committed changes diff
-            if "HEAD" not in cmd: # If we fell back to HEAD comparison above
-                 result = subprocess.run(cmd, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
-                 for line in result.stdout.splitlines():
-                     if line.strip(): changed_files.add(line.strip())
+
+            # A. Committed changes diff (base...HEAD comparison)
+            # Only run if we have a proper base comparison (contains "...")
+            if any("..." in arg for arg in cmd):
+                result = subprocess.run(cmd, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
+                for line in result.stdout.splitlines():
+                    if line.strip(): changed_files.add(line.strip())
 
             # B. Unstaged/Staged changes (Current working tree vs HEAD)
             cmd_dirty = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", "HEAD"]

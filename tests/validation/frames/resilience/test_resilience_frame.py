@@ -26,7 +26,7 @@ async def test_resilience_frame_metadata(ResilienceFrame):
     """Test ResilienceFrame has correct metadata."""
     frame = ResilienceFrame()
 
-    assert frame.name == "Resilience Architecture Analysis"
+    assert frame.name == "Chaos Engineering Analysis"
     assert frame.frame_id == "resilience"
     assert frame.is_blocker is False  # Advisory
     assert frame.priority == FramePriority.HIGH

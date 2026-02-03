@@ -68,6 +68,7 @@ setup(
         "chromadb>=0.4.0",
         "sentence-transformers>=2.2.0",
         "tiktoken>=0.5.0",  # For accurate token counting
+        "python-dotenv>=1.0.0",  # Robust .env file parsing
     ],
     extras_require={
         "dev": [

@@ -2,9 +2,14 @@
 Framework Detection Module.
 
 Detects the main framework used in the project during PRE-ANALYSIS phase.
+
+.. deprecated::
+    This module is deprecated. Use `warden.analysis.application.discovery.framework_detector`
+    for the newer async implementation with confidence scores and multiple framework detection.
 """
 
 import json
+import warnings
 from pathlib import Path
 from typing import Dict
 import structlog
@@ -28,7 +33,16 @@ class FrameworkDetector:
         Args:
             project_root: Root directory of the project
             config_files: Detected configuration files
+
+        .. deprecated::
+            Use `warden.analysis.application.discovery.framework_detector.FrameworkDetector` instead.
         """
+        warnings.warn(
+            "This FrameworkDetector is deprecated. "
+            "Use warden.analysis.application.discovery.framework_detector.FrameworkDetector instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.project_root = project_root
         self.config_files = config_files
 

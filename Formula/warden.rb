@@ -5,8 +5,8 @@ class Warden < Formula
   homepage "https://github.com/alperduzgun/warden-core"
   
   # Stable Release (Update this section when releasing a new version)
-  url "https://github.com/alperduzgun/warden-core/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "REPLACE_WITH_ACTUAL_SHA256"
+  url "https://github.com/alperduzgun/warden-core/archive/refs/tags/v1.8.2.tar.gz"
+  sha256 "38b634b4357f5ea23b3d1f4562ca0d0fa065fa78a5f56a1e0c3ea90ec2317391"
   
   # Development Head
   head "https://github.com/alperduzgun/warden-core.git", branch: "main"

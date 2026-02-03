@@ -64,7 +64,7 @@ Warden balances cost, privacy, and intelligence using a smart routing system:
 ### 4. 🛡️ Core Validation Frames (Built-in)
 Warden ships with 6 powerful core frames:
 1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS).
-2.  **ChaosFrame:** Validates error handling and resilience logic.
+2.  **ResilienceFrame:** Validates error handling and resilience logic.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
 4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
 5.  **ResilienceFrame:** Checks for retry/circuit-breaker patterns.
@@ -155,14 +155,20 @@ Warden reduces false positives by implementing a "Trust but Verify" approach:
     -   **True Positives:** Passed to Fortification for fixing.
     -   **False Positives:** (e.g., Type Hints mistaken for arrays) are silently filtered out BEFORE consuming tokens on auto-fix generation.
 
-
-### 13. 🎯 Intent-Driven Validation (New!)
+### 13. 🎯 Intent-Driven Validation
 Warden doesn't just check *correctness*; it checks *appropriateness*.
 *   **The Concept:** A "hardcoded password" might be a critical vulnerability in a **Banking API**, but completely valid in a **Test Seeder**.
 *   **How it Works:** Warden analyzes your project structure (`package.json`, `requirements.txt`) to detect intent (e.g., "This is a Crypto Wallet" vs "This is a CLI Tool").
 *   **The Result:** Rules adjust dynamically:
     *   *Crypto Wallet:* 🛡️ Paranoid Mode (No http, strict types)
     *   *CLI Tool:* ⚡ Relaxed Mode (Allow print statements, rapid I/O)
+
+### 14. 🧠 Project Intelligence & CI Optimization (New!)
+Warden now features a **"Discovery Canvas"** that creates a semantic map of your project to optimize CI performance.
+*   **Semantic Mapping:** Automatically identifies modules (e.g., "Payment Service", "Auth Module") and assigns them **Risk Levels (P0-P3)**.
+*   **Context-Aware CI:** During a PR scan, Warden uses this intelligence to decide which files need a "Deep LLM Audit" and which ones can be handled by fast, local rules.
+*   **Zero Noise:** Automatically ignores Warden's internal meta-files and project artifacts, focusing purely on your business logic.
+*   **One-Command Refresh:** Keep your project's "Intelligence" up to date with `warden refresh`.
 
 ---
 

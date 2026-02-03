@@ -22,6 +22,7 @@ class LlmProvider(str, Enum):
     GROQ = "groq"
     OPENROUTER = "openrouter"
     OLLAMA = "ollama"
+    GEMINI = "gemini"
 
 
 class LlmRequest(BaseDomainModel):

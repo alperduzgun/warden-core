@@ -40,6 +40,9 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
     elif provider == LlmProvider.OLLAMA:
         from .providers.ollama import OllamaClient
         return OllamaClient(config)
+    elif provider == LlmProvider.GEMINI:
+        from .providers.gemini import GeminiClient
+        return GeminiClient(config)
     else:
         raise NotImplementedError(f"Provider {provider.value} not implemented")
 

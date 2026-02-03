@@ -460,7 +460,6 @@ Return patterns as JSON."""
         """
         Execute LLM-enhanced classification phase with True Batching.
         """
-        print(f"DEBUG_CLASSIFICATION: executing with {len(code_files) if code_files else 0} files")
         if not code_files:
             return self._create_default_result(["security", "chaos", "orphan"])
 

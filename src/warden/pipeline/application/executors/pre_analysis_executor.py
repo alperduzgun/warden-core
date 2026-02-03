@@ -40,7 +40,8 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 "integrity_config": getattr(self.config, 'integrity_config', {}) if hasattr(self.config, 'integrity_config') else {},
                 "analysis_level": getattr(self.config, 'analysis_level', None),
                 "use_llm": getattr(self.config, 'use_llm', True) if hasattr(self.config, 'use_llm') else True,
-                "llm_config": getattr(self.config, 'llm_config', None)
+                "llm_config": getattr(self.config, 'llm_config', None),
+                "ci_mode": getattr(self.config, 'ci_mode', False),
             }
 
             phase = PreAnalysisPhase(

@@ -1,0 +1,51 @@
+name: Warden PR Security Scan
+
+on:
+  pull_request:
+    branches: [{branch}]
+
+jobs:
+  warden:
+    name: PR Security Scan
+    runs-on: ubuntu-latest
+
+    env:
+      CI_LLM_PROVIDER: {ci_llm_provider}
+{ci_env_vars}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for diff
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Warden
+        run: pip install warden-core
+
+{ollama_setup}
+      - name: Run Warden PR Scan
+        run: |
+          # CI mode with diff - only scan changed files
+          # Output SARIF for GitHub Code Scanning integration
+          mkdir -p .warden/reports
+          warden scan --ci --diff --base ${{ github.base_ref }} --format sarif --output .warden/reports/warden-report.sarif
+
+      - name: Upload SARIF Report
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .warden/reports/warden-report.sarif
+        continue-on-error: true
+
+      - name: Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-pr-reports
+          path: .warden/reports/

@@ -11,14 +11,14 @@ from warden.pipeline import (
     ExecutionStrategy,
     PipelineStatus,
 )
-from warden.validation.frames import SecurityFrame, ChaosFrame
+from warden.validation.frames import SecurityFrame, ResilienceFrame
 from warden.validation.domain.frame import CodeFile
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_sequential_execution():
     """Test sequential execution of frames."""
-    frames = [SecurityFrame(), ChaosFrame()]
+    frames = [SecurityFrame(), ResilienceFrame()]
     config = PipelineConfig(strategy=ExecutionStrategy.SEQUENTIAL, fail_fast=False)
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
@@ -40,7 +40,7 @@ async def test_orchestrator_sequential_execution():
 @pytest.mark.asyncio
 async def test_orchestrator_parallel_execution():
     """Test parallel execution of frames."""
-    frames = [SecurityFrame(), ChaosFrame()]
+    frames = [SecurityFrame(), ResilienceFrame()]
     config = PipelineConfig(
         strategy=ExecutionStrategy.PARALLEL,
         parallel_limit=2,
@@ -65,7 +65,7 @@ async def test_orchestrator_parallel_execution():
 @pytest.mark.asyncio
 async def test_orchestrator_fail_fast():
     """Test fail-fast execution stops on blocker failure."""
-    frames = [SecurityFrame(), ChaosFrame()]
+    frames = [SecurityFrame(), ResilienceFrame()]
     config = PipelineConfig(strategy=ExecutionStrategy.FAIL_FAST)
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
@@ -81,14 +81,14 @@ async def test_orchestrator_fail_fast():
     # Should stop after SecurityFrame fails (it's a blocker)
     assert result.status == PipelineStatus.FAILED
     assert result.frames_failed >= 1
-    # ChaosFrame may be skipped if SecurityFrame is blocker and failed
+    # ResilienceFrame may be skipped if SecurityFrame is blocker and failed
     assert result.frames_skipped >= 0
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_passes_clean_code():
     """Test orchestrator passes clean code."""
-    frames = [SecurityFrame(), ChaosFrame()]
+    frames = [SecurityFrame(), ResilienceFrame()]
     config = PipelineConfig(strategy=ExecutionStrategy.SEQUENTIAL, fail_fast=False)
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
@@ -119,8 +119,8 @@ def multiply_numbers(a: int, b: int) -> int:
 @pytest.mark.asyncio
 async def test_orchestrator_frame_priority_sorting():
     """Test frames are sorted by priority."""
-    # ChaosFrame has priority HIGH, SecurityFrame has CRITICAL
-    frames = [ChaosFrame(), SecurityFrame()]  # Wrong order
+    # ResilienceFrame has priority HIGH, SecurityFrame has CRITICAL
+    frames = [ResilienceFrame(), SecurityFrame()]  # Wrong order
     config = PipelineConfig(strategy=ExecutionStrategy.SEQUENTIAL, fail_fast=False)
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
@@ -191,7 +191,7 @@ async def test_orchestrator_result_structure():
 @pytest.mark.asyncio
 async def test_orchestrator_severity_counts():
     """Test orchestrator correctly counts findings by severity."""
-    frames = [SecurityFrame(), ChaosFrame()]
+    frames = [SecurityFrame(), ResilienceFrame()]
     config = PipelineConfig(strategy=ExecutionStrategy.SEQUENTIAL, fail_fast=False)
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
@@ -266,7 +266,7 @@ async def test_orchestrator_has_blockers_property():
 @pytest.mark.asyncio
 async def test_orchestrator_no_blockers():
     """Test has_blockers is False when only warnings."""
-    frames = [ChaosFrame()]  # Non-blocker frame
+    frames = [ResilienceFrame()]  # Non-blocker frame
     config = PipelineConfig(strategy=ExecutionStrategy.SEQUENTIAL, fail_fast=False)
 
     orchestrator = PipelineOrchestrator(frames=frames, config=config)
@@ -283,5 +283,5 @@ response = requests.get(url)  # Missing timeout (warning)
 
     result, _ = await orchestrator.execute_async([code_file])
 
-    # Should not have blocker issues (ChaosFrame is not a blocker)
+    # Should not have blocker issues (ResilienceFrame is not a blocker)
     assert result.has_blockers is False

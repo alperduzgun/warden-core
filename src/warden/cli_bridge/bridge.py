@@ -31,25 +31,13 @@ class WardenBridge:
         # Initialize basic handlers
         self.config_handler = ConfigHandler(self.project_root)
         self.tool_handler = ToolHandler()
-
-        # Load LLM Config using Auto-Pilot (auto-detects keys/services)
+        
+        # Load LLM Config first for orchestrator creation
         from warden.llm.config import load_llm_config
         from warden.llm.factory import create_client
-        
-        # Check for optional config.yaml overrides (advanced use only)
-        # Most users will rely on zero-config ENV variable detection
-        from warden.cli_bridge.config_manager import ConfigManager
-        llm_overrides = {}
         try:
-            config_mgr = ConfigManager(self.project_root)
-            raw_config = config_mgr.read_config()
-            llm_overrides = raw_config.get("llm", {})
-        except Exception:
-            pass # Fail silently, use defaults
-
-        try:
-            self.llm_config = load_llm_config(llm_overrides)
-            llm_service = create_client(self.llm_config)
+            self.llm_config = load_llm_config()
+            llm_service = create_client(self.llm_config.default_provider)
             if llm_service:
                 # Attach for tiering awareness
                 llm_service.config = self.llm_config
@@ -153,9 +141,13 @@ class WardenBridge:
         serialized["context_summary"] = context.get_summary()
         return serialized
 
-    async def execute_pipeline_stream_async(self, file_path: Union[str, List[str]], frames: Optional[List[str]] = None, verbose: bool = False, analysis_level: str = "standard", baseline_fingerprints: Optional[set] = None) -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream_async(self, file_path: Union[str, List[str]], frames: Optional[List[str]] = None, verbose: bool = False, analysis_level: str = "standard", ci_mode: bool = False) -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
-        async for event in self.pipeline_handler.execute_pipeline_stream_async(file_path, frames, analysis_level, baseline_fingerprints):
+        # Set CI mode on orchestrator config
+        if ci_mode:
+            self.orchestrator.config.ci_mode = True
+
+        async for event in self.pipeline_handler.execute_pipeline_stream_async(file_path, frames, analysis_level):
             if event.get("type") == "result":
                 result = event["result"]
                 context = event["context"]

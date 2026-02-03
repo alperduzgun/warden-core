@@ -65,6 +65,11 @@ class MCPService:
         self.resource_provider = ResourceProviderService(self.project_root)
         self._tool_registry = ToolRegistry()
         
+        # Register Setup Resource Adapter
+        # This provides the Agentry Protocol
+        from warden.mcp.infrastructure.adapters.setup_resource_adapter import SetupResourceAdapter
+        self._setup_adapter = SetupResourceAdapter(self.project_root)
+        
         # Background tasks
         self._watcher_task: Optional[asyncio.Task] = None
 
@@ -186,7 +191,12 @@ class MCPService:
     ) -> Dict:
         """Handle resources/list request."""
         resources = await self.resource_provider.list_resources()
-        return {"resources": [r.to_mcp_format() for r in resources]}
+        
+        # Merge Protocol Resources
+        protocol_resources = self._setup_adapter.list_resources()
+        
+        all_resources = [r.to_mcp_format() for r in resources] + [r.to_mcp_format() for r in protocol_resources]
+        return {"resources": all_resources}
 
     async def _handle_resources_read_async(
         self, params: Optional[Dict], session: MCPSession
@@ -195,6 +205,12 @@ class MCPService:
         if not params or "uri" not in params:
             raise MCPProtocolError("Missing required parameter: uri")
         uri = params["uri"]
+        
+        # Check Protocol Resources first
+        protocol_content = self._setup_adapter.read_resource(uri)
+        if protocol_content:
+             return {"contents": [{"uri": uri, "mimeType": "text/markdown", "text": protocol_content}]}
+
         content = await self.resource_provider.read_resource(uri)
         return {"contents": [content]}
 

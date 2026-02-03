@@ -178,7 +178,11 @@ class CodeIndexer:
         return indexed_count
 
     async def index_files(
-        self, file_paths: str | List[str], languages: dict[str, str], max_concurrency: int = 5
+        self, 
+        file_paths: str | List[str], 
+        languages: dict[str, str], 
+        max_concurrency: int = 5,
+        progress_callback: Optional[callable] = None
     ) -> IndexStats:
         """
         Index multiple files in parallel.
@@ -187,6 +191,7 @@ class CodeIndexer:
             file_paths: List of absolute file paths or single path
             languages: Mapping of file path to language
             max_concurrency: Maximum number of concurrent files being processed
+            progress_callback: Async callable(count) to report progress
         """
         import asyncio
         if isinstance(file_paths, str):
@@ -203,13 +208,18 @@ class CodeIndexer:
             async with semaphore:
                 language = languages.get(file_path, "unknown")
                 try:
-                    return await self.index_file(file_path, language), language
+                    res = await self.index_file(file_path, language)
+                    if progress_callback:
+                        await progress_callback(1)
+                    return res, language
                 except Exception as e:
                     logger.error(
                         "file_indexing_failed",
                         file_path=file_path,
                         error=str(e),
                     )
+                    if progress_callback:
+                        await progress_callback(1)
                     return 0, language
 
         # Run in parallel

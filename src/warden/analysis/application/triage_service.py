@@ -9,6 +9,7 @@ import time
 import re
 import psutil
 import structlog
+from pathlib import Path
 
 from warden.llm.types import LlmRequest
 from warden.llm.providers.base import ILlmClient
@@ -81,7 +82,8 @@ class TriageService:
             return decisions
             
         # 2. Batch Processing for remaining files
-        requested_batch_size = 10
+        # Reduced from 10 to 5 for stability on smaller local models (e.g. Qwen 0.5b)
+        requested_batch_size = 5
         
         i = 0
         while i < len(files_to_process):
@@ -92,11 +94,24 @@ class TriageService:
             try:
                 batch_scores = await self._get_llm_batch_score_async(chunk)
                 
+                # Check for flat fallback (common on small models)
+                flat_fallback = batch_scores.get("_flat_fallback_")
+                
                 for cf in chunk:
-                    # Match score or fallback
+                    # 1. Try exact path match
                     risk = batch_scores.get(cf.path)
+                    
+                    # 2. Try just the filename match (sometimes LLM trims paths)
                     if not risk:
-                        # Fallback
+                        filename = Path(cf.path).name
+                        risk = next((v for k, v in batch_scores.items() if k.endswith(filename)), None)
+                    
+                    # 3. Use flat fallback if available
+                    if not risk and flat_fallback:
+                        risk = flat_fallback
+
+                    if not risk:
+                        # Fallback to middle lane
                         logger.warning("triage_batch_missing_file", file=cf.path)
                         decisions[cf.path] = self._create_decision(
                             cf, TriageLane.MIDDLE, 5, "Batch fallback: Missing from LLM response", start_time
@@ -126,31 +141,25 @@ class TriageService:
         # Prepare batch prompt
         files_context = []
         for cf in code_files:
-            # Truncate content specifically for triage context (imports usually enough for risk)
-            # 1500 chars is plenty for triage
-            content_snippet = cf.content[:1500].replace("```", "'''") 
-            files_context.append(f"FILE: {cf.path}\nCODE:\n```{cf.language}\n{content_snippet}\n```\n---")
+            # Shortened snippet for triage to save context tokens
+            content_snippet = cf.content[:1000].replace("```", "'''") 
+            files_context.append(f"FILE: {cf.path}\nCODE:\n{content_snippet}\n---")
             
         context_str = "\n".join(files_context)
         
-        prompt = f"""Analyze the following {len(code_files)} files.
-        
-FILES_TO_ANALYZE:
-{context_str}
+        prompt = f"""Analyze {len(code_files)} files. 
+Output a COMPACT JSON map (no extra whitespace) where keys are file paths.
+Reasoning MUST be 1 short sentence max.
 
-Respond with a JSON map where keys are file paths and values are risk objects.
-Example:
-{{
-  "path/to/file.py": {{ "score": 3.0, "confidence": 0.9, "category": "DTO", "reasoning": "Simple data class" }},
-  ...
-}}
+FILES:
+{context_str}
 """
         request = LlmRequest(
-            system_prompt=self.SYSTEM_PROMPT + "\nIMPORTANT: Output a JSON MAP of file paths to risk objects.",
+            system_prompt=self.SYSTEM_PROMPT + "\nIMPORTANT: Output ONLY a compact JSON map. No markdown blocks.",
             user_message=prompt,
             use_fast_tier=True,
-            temperature=0.1,
-            max_tokens=2000 # Increased for batch output
+            temperature=0.01,
+            max_tokens=1500
         )
         
         response = await self.llm.send_async(request)
@@ -166,15 +175,28 @@ Example:
             json_str = self._extract_json(content)
             data = json.loads(json_str)
             
+            # Case 1: Model returned a flat object instead of a map (common on very small models)
+            # If "score" is a top-level key, it's a flat object.
+            if "score" in data and ("reasoning" in data or "category" in data):
+                logger.warning("triage_batch_flat_object_detected", content=content[:100])
+                # We can't safely map it to a specific file if there were multiple, 
+                # but we can return it as a partial result or let the loop handle it
+                # if we have a way to match it. But here we just return it.
+                # The caller will handle missing files via fallback.
+                return {"_flat_fallback_": RiskScore(**data)}
+
             results = {}
             for path, score_data in data.items():
                 try:
+                    # Skip non-dict items (like the flattened fields if the model mixed them)
+                    if not isinstance(score_data, dict):
+                        continue
+                        
                     # Normalize keys if needed (LLM might lowercase them)
                     if "risk_score" in score_data: score_data = score_data["risk_score"]
                     results[path] = RiskScore(**score_data)
                 except Exception as e:
                     logger.warning("triage_batch_item_parse_failed", path=path, error=str(e))
-                    results[path] = RiskScore(score=5, confidence=0, reasoning="Parse Error", category="error")
             
             return results
         except Exception as e:

@@ -79,6 +79,7 @@ class GitignoreFilter:
             ".pytest_cache/",
             ".mypy_cache/",
             ".ruff_cache/",
+            ".warden/",
         ]
 
         for pattern in default_patterns:

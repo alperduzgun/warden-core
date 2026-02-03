@@ -6,6 +6,7 @@ from warden.shared.infrastructure.logging import get_logger
 from warden.llm.providers.base import ILlmClient
 from warden.memory.application.memory_manager import MemoryManager
 from warden.shared.utils.retry_utils import async_retry
+from warden.shared.utils.finding_utils import get_finding_attribute
 
 logger = get_logger(__name__)
 
@@ -19,17 +20,13 @@ class FindingVerificationService:
     FALLBACK_CONFIDENCE = 0.5
 
     def _get(self, obj: Any, key: str, default: Any = None) -> Any:
-        """Helper to get values from Finding objects or dicts."""
-        if isinstance(obj, dict):
-            return obj.get(key, default)
-        return getattr(obj, key, default)
+        """Helper to get values from Finding objects or dicts (Deprecated: Use finding_utils)."""
+        return get_finding_attribute(obj, key, default)
 
     def _set(self, obj: Any, key: str, value: Any) -> None:
-        """Helper to set values on Finding objects or dicts."""
-        if isinstance(obj, dict):
-            obj[key] = value
-        else:
-            setattr(obj, key, value)
+        """Helper to set values on Finding objects or dicts (Deprecated: Use finding_utils)."""
+        from warden.shared.utils.finding_utils import set_finding_attribute
+        set_finding_attribute(obj, key, value)
 
     def __init__(
         self, 
@@ -124,8 +121,9 @@ Return ONLY a JSON object:
             cached_result = self._check_cache(cache_key)
             
             if cached_result:
-                cached_result['cached'] = True
-                if cached_result.get('is_true_positive', True):
+                # SAFE ACCESS: cached_result might be a dict or potentially an object from older cache
+                self._set(cached_result, 'cached', True)
+                if self._get(cached_result, 'is_true_positive', True):
                     self._set(finding, 'verification_metadata', cached_result)
                     verified_findings.append(finding)
                 continue
@@ -153,13 +151,16 @@ Return ONLY a JSON object:
                     cache_key = self._generate_key(finding)
                     self._save_cache(cache_key, result)
 
-                    if result.get('is_true_positive'):
+                    # SAFE ACCESS: result might be a dict or object depending on LLM response/mock
+                    is_tp = self._get(result, 'is_true_positive', True)
+                    
+                    if is_tp:
                         self._set(finding, 'verification_metadata', result)
                         verified_findings.append(finding)
                     else:
                         logger.info("batch_verification_rejected_finding", 
                                     finding_id=self._get(finding, 'id'), 
-                                    reason=result.get('reason'))
+                                    reason=self._get(result, 'reason', 'Rejected by LLM'))
             except Exception as e:
                 logger.error("batch_verification_failed_manual_review_needed", error=str(e))
                 # Fallback: Mark for manual review instead of failing open blindly
@@ -216,9 +217,6 @@ Return ONLY a JSON object:
         for i, f in enumerate(batch):
             try:
                 # SAFE ACCESS: Use internal helper to handle dict vs object
-                # Ensure we handle cases where f itself might be None or weird
-                if not f: continue
-                
                 f_id = self._get(f, 'id', 'unknown')
                 f_rule = self._get(f, 'rule_id', 'unknown')
                 f_msg = self._get(f, 'message', 'unknown')
@@ -232,8 +230,8 @@ FINDING #{i}:
 - Code: `{f_code}`
 """
             except Exception as e:
-                # CHAOS: Log and skip malformed findings instead of crashing batch
-                logger.warning("skipping_malformed_finding_in_batch", error=str(e))
+                import traceback
+                logger.error("VERIFIER_BATCH_ITEM_PROCESSING_FAILED", error=str(e), trace=traceback.format_exc())
                 continue
 
         prompt = f"""

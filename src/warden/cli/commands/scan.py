@@ -1,11 +1,10 @@
 import asyncio
 import typer
 from pathlib import Path
-from typing import Optional, List
+from typing import Dict, List, Optional
 from datetime import datetime
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 
 # Internal imports
 from warden.cli_bridge.bridge import WardenBridge
@@ -166,8 +165,10 @@ def scan_command(
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Shorthand for --level basic"),
     memory_profile: bool = typer.Option(False, "--memory-profile", help="Enable memory profiling and leak detection"),
+    ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
     base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
+    update_baseline: bool = typer.Option(True, "--update-baseline/--no-update-baseline", help="Update baseline after scan (default: enabled, use --no-update-baseline for CI/PR)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -185,66 +186,77 @@ def scan_command(
         # Handle --no-ai shorthand
         if no_ai:
             level = "basic"
-            
-            
+
         # Default to "." if no paths provided AND no diff mode
         if not paths and not diff:
             paths = ["."]
 
-        # Incremental Scanning Logic
-        # Incremental Scanning Logic
+        # Incremental Scanning Logic (--diff mode)
         baseline_fingerprints = None
-        
+
         if diff:
             try:
                 from warden.cli.commands.helpers.git_helper import GitHelper
                 console.print(f"[dim]🔍 Detecting changed files relative to '{base}'...[/dim]")
                 git_helper = GitHelper(Path.cwd())
                 changed_files = git_helper.get_changed_files(base_branch=base)
-                
+
                 if not changed_files:
                     console.print("[yellow]⚠️  No changed files detected. Scan skipped.[/yellow]")
                     return
-                
-                # Update paths with detected changes
+
+                console.print(f"[green]✓ Found {len(changed_files)} changed files[/green]")
                 paths = changed_files
-                console.print(f"[green]✨ Incremental Scan: Found {len(paths)} changed files.[/green]")
-                        
+            except ImportError:
+                console.print("[yellow]⚠️  Git helper not available. Running full scan.[/yellow]")
             except Exception as e:
-                console.print(f"[bold red]❌ Git Error:[/bold red] {e}")
-                raise typer.Exit(1)
+                console.print(f"[yellow]⚠️  Could not detect changes: {e}. Running full scan.[/yellow]")
 
-            # Baseline Logic (Smart Autopilot)
+        # Load baseline fingerprints if available
+        try:
             from warden.cli.commands.helpers.baseline_manager import BaselineManager
-            from warden.cli_bridge.config_manager import ConfigManager
-            
-            try:
-                # Load config to check baseline settings
-                config_mgr = ConfigManager(Path.cwd())
-                raw_config = config_mgr.read_config()
-                
-                baseline_mgr = BaselineManager(Path.cwd(), raw_config)
-                baseline_fingerprints = set()
-                
-                if baseline_mgr.enabled:
-                     console.print("[dim]🔍 Checking baseline status...[/dim]")
-                     
-                     # Logic for Auto-Fetch
-                     if baseline_mgr.is_outdated() and baseline_mgr.auto_fetch:
-                          console.print("[bold cyan]🔄 Updating baseline from remote...[/bold cyan]")
-                          baseline_mgr.fetch_latest_baseline()
-                          
-                     # Load
-                     baseline_fingerprints = baseline_mgr.get_fingerprints()
-                     if baseline_fingerprints:
-                         console.print(f"[dim]📜 Loaded {len(baseline_fingerprints)} issues from baseline.[/dim]")
-                     else:
-                         console.print("[dim]⚠️  No baseline found or empty. All issues will be reported.[/dim]")
-            except Exception as e:
-                console.print(f"[yellow]⚠️  Baseline Error (Skipping): {e}[/yellow]")
-                baseline_fingerprints = None
+            baseline_mgr = BaselineManager(Path.cwd())
+            baseline_fingerprints = baseline_mgr.get_fingerprints()
+            if baseline_fingerprints:
+                console.print(f"[dim]📊 Baseline loaded: {len(baseline_fingerprints)} known issues[/dim]")
+        except Exception:
+            pass  # Baseline is optional
 
-        exit_code = asyncio.run(_run_scan_async(paths, frames, format, output, verbose, level, memory_profile, baseline_fingerprints))
+        # Load pre-computed intelligence in CI mode
+        intelligence_context = None
+        if ci:
+            try:
+                from warden.analysis.services.intelligence_loader import IntelligenceLoader
+                intel_loader = IntelligenceLoader(Path.cwd())
+                if intel_loader.load():
+                    intelligence_context = intel_loader.to_context_dict()
+                    quality = intel_loader.get_quality_score()
+                    modules = len(intel_loader.get_module_map())
+                    posture = intel_loader.get_security_posture().value
+                    console.print(f"[dim]🧠 Intelligence loaded: {modules} modules, quality={quality}/100, posture={posture}[/dim]")
+
+                    # Show risk distribution for changed files in diff mode
+                    if diff and paths:
+                        risk_counts = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
+                        for p in paths:
+                            risk = intel_loader.get_risk_for_file(p)
+                            risk_counts[risk.value] = risk_counts.get(risk.value, 0) + 1
+                        critical = risk_counts["P0"] + risk_counts["P1"]
+                        low_risk = risk_counts["P3"]
+                        if critical > 0:
+                            console.print(f"[dim]   ⚠️  {critical} critical (P0/P1) + {low_risk} low-risk (P3) files changed[/dim]")
+                else:
+                    console.print("[yellow]⚠️  No pre-computed intelligence found. Run 'warden init' first for optimal CI performance.[/yellow]")
+            except ImportError:
+                console.print("[dim]Intelligence loader not available[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Intelligence load failed: {e}[/yellow]")
+
+        exit_code = asyncio.run(_run_scan_async(
+            paths, frames, format, output, verbose, level,
+            memory_profile, ci, baseline_fingerprints, intelligence_context,
+            update_baseline=update_baseline
+        ))
         
         # Display memory stats if profiling was enabled
         if memory_profile:
@@ -260,12 +272,35 @@ def scan_command(
         raise typer.Exit(130)
 
 
-async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format: str, output: Optional[str], verbose: bool, level: str = "standard", memory_profile: bool = False, baseline_fingerprints: Optional[set] = None) -> int:
+async def _run_scan_async(
+    paths: List[str],
+    frames: Optional[List[str]],
+    format: str,
+    output: Optional[str],
+    verbose: bool,
+    level: str = "standard",
+    memory_profile: bool = False,
+    ci_mode: bool = False,
+    baseline_fingerprints: Optional[Dict[str, str]] = None,
+    intelligence_context: Optional[Dict] = None,
+    update_baseline: bool = False
+) -> int:
     """Async implementation of scan command."""
     
     display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
     console.print("[bold cyan]🛡️  Warden Scanner[/bold cyan]")
-    console.print(f"[dim]Scanning: {display_paths}[/dim]\n")
+    console.print(f"[dim]Scanning: {display_paths}[/dim]")
+
+    # Show intelligence status in CI mode
+    if ci_mode and intelligence_context:
+        if intelligence_context.get("available"):
+            quality = intelligence_context.get("quality_score", 0)
+            modules = len(intelligence_context.get("modules", {}))
+            console.print(f"[dim]🧠 Using pre-computed intelligence ({modules} modules, quality: {quality}/100)[/dim]")
+        else:
+            console.print("[yellow]⚠️  No intelligence available - consider running 'warden init'[/yellow]")
+
+    console.print()
 
     # Initialize bridge
     bridge = WardenBridge(project_root=Path.cwd())
@@ -280,30 +315,19 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
 
     final_result_data = None
 
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(bar_width=40),
-        "[progress.percentage]{task.percentage:>3.0f}%",
-        "•",
-        TextColumn("[dim]{task.fields[status]}"),
-        TimeElapsedColumn(),
-        console=console,
-        transient=True
-    )
-
-    overall_task = None
-    current_phase_task = None
+    processed_units = 0
+    total_units = 0
+    current_phase = "Initializing..."
 
     try:
-        with progress:
+        with console.status(f"[bold blue]🛡️  Scanning...[/bold blue]", spinner="dots") as status:
             # Execute pipeline with streaming
             async for event in bridge.execute_pipeline_stream_async(
                 file_path=paths,
                 frames=frames,
                 verbose=verbose,
                 analysis_level=level,
-                baseline_fingerprints=baseline_fingerprints
+                ci_mode=ci_mode
             ):
                 event_type = event.get("type")
                 
@@ -311,48 +335,72 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                     evt = event['event']
                     data = event.get('data', {})
 
-                    if evt == "progress_init":
-                        overall_task = progress.add_task("Overall Progress", total=data['total_units'], status="Initializing...")
+                    if verbose:
+                        console.print(f"[dim]Progress Event: {evt} - {data}[/dim]")
+
+                    if evt == "discovery_complete":
+                        total_units = data.get('total_files', 0)
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})")
                     
-                    elif evt == "progress_update" and overall_task is not None:
+                    elif evt == "pipeline_started":
+                        # Use file_count as baseline if total_units not yet initialized
+                        if total_units <= 0:
+                            total_units = data.get('file_count', 0)
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Starting pipeline...[/dim] (0/{total_units})")
+
+                    elif evt == "progress_init":
+                        new_total = data.get('total_units', 0)
+                        if new_total > 0:
+                            total_units = new_total
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    
+                    elif evt == "progress_update":
                         increment = data.get('increment', 0)
-                        status = data.get('status', data.get('phase', 'Processing...'))
-                        progress.update(overall_task, advance=increment, status=status)
+                        processed_units += increment
                         
-                        # Handle dynamic unit addition (e.g. Analysis/Verification finding counts)
+                        # If frame_id is present but no increment, count it as 1 to be safe
+                        if increment == 0 and "frame_id" in data:
+                             processed_units += 1
+
                         if "total_units" in data:
-                            # Safe task retrieval to avoid IndexError
-                            task = next((t for t in progress.tasks if t.id == overall_task), None)
-                            if task:
-                                progress.update(overall_task, total=task.total + data['total_units'])
-
-                    if format == "text":
-                        if evt == "phase_started":
-                            phase_name = data.get('phase')
-                            if not verbose:
-                                if current_phase_task is not None:
-                                    progress.remove_task(current_phase_task)
-                                current_phase_task = progress.add_task(f"Phase: {phase_name}", total=None, status="In Progress")
-                            else:
-                                console.print(f"[bold blue]▶ Phase:[/bold blue] {phase_name}")
+                            # Only update total if it's explicitly provided and larger
+                            new_total = data['total_units']
+                            if new_total > total_units:
+                                total_units = new_total
                         
-                        elif evt == "frame_completed":
-                            stats["total"] += 1
-                            name = data.get('frame_name', data.get('frame_id'))
-                            status = data.get('status', 'unknown')
-                            icon = "✅" if status == "passed" else "❌" if status == "failed" else "⚠️" 
-                            style = "green" if status == "passed" else "red" if status == "failed" else "yellow"
-                            findings_count = data.get('findings', data.get('issues_found', 0))
+                        # Update current phase/status
+                        new_status = data.get('status', data.get('phase'))
+                        if new_status:
+                            current_phase = new_status
+                        
+                        # Update the sticky status line
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    
+                    elif evt == "phase_started":
+                        current_phase = data.get('phase', current_phase)
+                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                        if verbose:
+                            console.print(f"[bold blue]▶ Phase:[/bold blue] {current_phase}")
 
-                            if status == "passed":
-                                stats["passed"] += 1
-                            elif status == "failed":
-                                stats["failed"] += 1
-                            else:
-                                stats["skipped"] += 1
-                                
-                            if verbose:
-                                console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
+                    elif evt == "frame_completed":
+                        # Fallback: if we didn't get a progress_update for this frame, increment here
+                        # But be careful not to double count. Most frames send progress_update.
+                        stats["total"] += 1
+                        name = data.get('frame_name', data.get('frame_id'))
+                        frame_status = data.get('status', 'unknown')
+                        icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️" 
+                        style = "green" if frame_status == "passed" else "red" if frame_status == "failed" else "yellow"
+                        findings_count = data.get('findings', data.get('issues_found', 0))
+
+                        if frame_status == "passed":
+                            stats["passed"] += 1
+                        elif frame_status == "failed":
+                            stats["failed"] += 1
+                        else:
+                            stats["skipped"] += 1
+                            
+                        if verbose:
+                            console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
 
                 elif event_type == "result":
                     # Final results
@@ -365,11 +413,6 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                     if format == "text":
                         # Segregate Findings (Linter vs Core)
                         all_findings = res.get('findings', [])
-                        
-                        # Fallback: Aggregate from frames if root findings is empty
-                        if not all_findings:
-                            for fr in res.get('frame_results', res.get('frameResults', [])):
-                                all_findings.extend(fr.get('findings', []))
                         linter_findings = []
                         core_findings = []
                         
@@ -401,85 +444,20 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
                         table.add_row("Core Issues", str(core_count))
                         table.add_row("Critical Core Issues", f"[{'red' if core_critical > 0 else 'green'}]{core_critical}[/]")
                         
-                        # Secondary focus: Linter Issues (Back in table)
+                        # Secondary focus: Linter Issues (Style, minor errors)
                         if linter_count > 0:
+                            table.add_section()
                             style = "yellow" if linter_critical > 0 else "dim"
-                            table.add_row("Linter & Style Issues", f"[{style}]{linter_count}[/{style}]")
+                            table.add_row("Linter Issues", f"[{style}]{linter_count}[/{style}]")
+                            if linter_critical > 0:
+                                table.add_row("Linter Critical", f"[red]{linter_critical}[/red]")
                         
                         # Add Manual Review if present
                         manual_review = res.get('manual_review_findings', 0)
                         if manual_review > 0:
-                            table.add_section()
                             table.add_row("Manual Review", f"[yellow]{manual_review}[/yellow]")
                         
                         console.print("\n", table)
-                        
-                        # Hint for hidden details
-                        if linter_count > 0 and not verbose:
-                            console.print(f"[dim]ℹ️  {linter_count} style issues hidden. Use --verbose to see details.[/dim]")
-
-                        # Helper for location resolution (DRY)
-                        def _resolve_loc(f):
-                            loc = f.get('location')
-                            if not loc:
-                                fp = f.get('file_path') or f.get('path') or ""
-                                ln = f.get('line') or f.get('line_number') or ""
-                                loc = f"{Path(fp).name}:{ln}" if fp else "unknown"
-                            return loc
-
-                        # 🔍 Display FINDINGS DETAILS
-                        # 1. Core Findings
-                        if core_findings:
-                            if verbose:
-                                # Verbose: Show all details
-                                console.print("\n[bold]🔍 Core Findings Details:[/bold]")
-                                limit = 100
-                                for i, f in enumerate(core_findings):
-                                    if i >= limit:
-                                        console.print(f"  [dim]... and {len(core_findings) - limit} more (see report)[/dim]")
-                                        break
-                                        
-                                    sev = str(f.get('severity', 'low')).upper()
-                                    s_color = "red" if sev in ['CRITICAL', 'HIGH'] else "yellow" if sev == "MEDIUM" else "blue"
-                                    
-                                    msg = f.get('message', 'Issue found')
-                                    rule = f.get('rule_id') or f.get('id') or ""
-                                    loc = _resolve_loc(f)
-                                    
-                                    console.print(f"  [{s_color}]■[/] {msg} [dim]({loc}) [{rule}][/dim]")
-                            else:
-                                # Default: Grouped Summary (No change needed here as it doesn't show loc)
-                                console.print("\n[bold]🔍 Core Findings Summary:[/bold]")
-                                groups = {}
-                                for f in core_findings:
-                                    rule = f.get('rule_id') or f.get('id') or f.get('message', 'General')
-                                    if rule not in groups: groups[rule] = []
-                                    groups[rule].append(f)
-                                
-                                for rule, items in groups.items():
-                                    count = len(items)
-                                    example = items[0]
-                                    sev = str(example.get('severity', 'low')).upper()
-                                    s_color = "red" if sev in ['CRITICAL', 'HIGH'] else "yellow" if sev == "MEDIUM" else "blue"
-                                    msg = example.get('message', 'Issue found')
-                                    if len(msg) > 80: msg = msg[:77] + "..."
-                                    console.print(f"  [{s_color}]■[/] {msg} [dim]({count} occurrences)[/dim]")
-                                
-                                console.print("\n  [dim](Use --verbose to see file locations)[/dim]")
-
-                        # 2. Linter Findings (Show only if verbose)
-                        if linter_findings and verbose:
-                            console.print("\n[bold]💅 Linter Findings Details:[/bold]")
-                            limit = 50
-                            for i, f in enumerate(linter_findings):
-                                if i >= limit:
-                                    console.print(f"  [dim]... and {len(linter_findings) - limit} more (see report)[/dim]")
-                                    break
-                                sev = str(f.get('severity', 'low')).upper()
-                                s_color = "red" if sev in ['CRITICAL', 'HIGH'] else "yellow"
-                                loc = _resolve_loc(f)
-                                msg = f.get('message', '')
-                                console.print(f"  [{s_color}]•[/] {msg} [dim]({loc})[/dim]")
 
                         # 🚨 NEW: Show Missing Tool Hints (Visibility Improvement)
                         # Check all frames results (if available in result_data or we need to access them differently)
@@ -587,7 +565,8 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
             from warden.reports.generator import ReportGenerator
             generator = ReportGenerator()
             out_path = Path(output)
-            
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+
             console.print(f"\n[dim]Generating {format.upper()} report to {output}...[/dim]")
             
             if format == "json":
@@ -606,12 +585,12 @@ async def _run_scan_async(paths: List[str], frames: Optional[List[str]], format:
         # Save lightweight AI status file (Token-optimized)
         try:
             warden_dir = Path(".warden")
-            if warden_dir.exists():
+            if warden_dir.exists() and final_result_data:
                 status_file = warden_dir / "ai_status.md"
-                
-                # Status check (COMPLETED=2)
+
+                # Status check (COMPLETED=2) - must match other status checks in this file
                 status_raw = final_result_data.get('status')
-                is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED"]
+                is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
                 status_icon = "✅ PASS" if is_success else "❌ FAIL"
                 critical_count = final_result_data.get('critical_findings', 0)
                 total_count = final_result_data.get('total_findings', 0)
@@ -633,11 +612,56 @@ Updated: {scan_time}
         except Exception:
             pass # Silent fail for aux file
 
-        # Final exit code decision
-        if not final_result_data:
-             console.print("[bold red]❌ No scan results were produced. Check your input paths and filters.[/bold red]")
-             return 1
+        # Update baseline if requested (Phase 4.2)
+        if update_baseline and final_result_data:
+            try:
+                from warden.cli.commands.helpers.baseline_manager import BaselineManager
+                console.print("\n[bold blue]📉 Updating Baseline...[/bold blue]")
 
+                baseline_mgr = BaselineManager(Path.cwd())
+
+                # Load module map from intelligence if available
+                module_map = None
+                if intelligence_context and intelligence_context.get("modules"):
+                    module_map = intelligence_context["modules"]
+
+                # Ensure we're using module-based structure
+                if not baseline_mgr.is_module_based():
+                    console.print("[dim]Migrating to module-based baseline structure...[/dim]")
+                    baseline_mgr.migrate_from_legacy(module_map)
+
+                # Update baseline with scan results
+                stats = baseline_mgr.update_baseline_for_modules(
+                    scan_results=final_result_data,
+                    module_map=module_map
+                )
+
+                # Display update statistics
+                console.print(f"[green]✓ Baseline updated![/green]")
+                console.print(f"[dim]   Modules updated: {stats['modules_updated']}[/dim]")
+
+                if stats['total_new_debt'] > 0:
+                    console.print(f"[yellow]   New debt items: {stats['total_new_debt']}[/yellow]")
+                if stats['total_resolved_debt'] > 0:
+                    console.print(f"[green]   Resolved debt: {stats['total_resolved_debt']}[/green]")
+
+                # Check for debt warnings
+                debt_report = baseline_mgr.get_debt_report()
+                for warning in debt_report.get("warnings", []):
+                    level_color = {
+                        "critical": "red",
+                        "warning": "yellow",
+                        "info": "dim"
+                    }.get(warning.get("level"), "dim")
+                    console.print(f"[{level_color}]   ⚠️  {warning['message']}[/{level_color}]")
+
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Baseline update failed: {e}[/yellow]")
+                if verbose:
+                    import traceback
+                    traceback.print_exc()
+
+        # Final exit code decision
         # 1. Check pipeline status (must be valid and completed)
         status_val = final_result_data.get('status')
         pipeline_ok = final_result_data and str(status_val).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]

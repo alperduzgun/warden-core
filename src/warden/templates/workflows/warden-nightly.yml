@@ -1,0 +1,64 @@
+name: Warden Nightly Scan
+
+on:
+  schedule:
+    # Run at 2 AM UTC every day
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  warden:
+    name: Nightly Full Scan
+    runs-on: ubuntu-latest
+
+    env:
+      CI_LLM_PROVIDER: {ci_llm_provider}
+{ci_env_vars}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Warden
+        run: pip install warden-core
+
+{ollama_setup}
+      - name: Refresh Intelligence
+        run: warden refresh --force
+
+      - name: Run Full Scan and Update Baseline
+        run: |
+          mkdir -p .warden/reports
+          warden scan --update-baseline --format sarif --output .warden/reports/warden-report.sarif
+
+      - name: Check Technical Debt
+        run: warden baseline debt
+
+      - name: Commit Baseline Updates
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .warden/baseline/ .warden/intelligence/ .warden/reports/
+          git diff --cached --quiet || git commit -m "chore(warden): update baseline and intelligence [skip ci]"
+          git push
+
+      - name: Upload SARIF Report
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .warden/reports/warden-report.sarif
+        continue-on-error: true
+
+      - name: Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-nightly-reports
+          path: .warden/reports/
