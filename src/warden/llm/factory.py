@@ -23,10 +23,10 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
         from .providers.anthropic import AnthropicClient
         return AnthropicClient(config)
     elif provider == LlmProvider.DEEPSEEK:
-        # from .providers.deepseek import DeepSeekClient # Already imported at module level
+        from .providers.deepseek import DeepSeekClient
         return DeepSeekClient(config)
     elif provider == LlmProvider.QWENCODE:
-        # from .providers.qwencode import QwenCodeClient # Already imported at module level
+        from .providers.qwencode import QwenCodeClient
         return QwenCodeClient(config)
     elif provider == LlmProvider.OPENAI:
         from .providers.openai import OpenAIClient

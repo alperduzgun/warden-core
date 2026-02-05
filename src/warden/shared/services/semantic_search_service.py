@@ -10,6 +10,7 @@ Provides a unified interface for semantic search operations including:
 
 from __future__ import annotations
 
+import threading
 from typing import Dict, Any, List, Optional
 import structlog
 from pathlib import Path
@@ -25,18 +26,27 @@ logger = structlog.get_logger()
 class SemanticSearchService:
     """
     Singleton service for semantic search operations.
-    
+
     Handles lazy initialization and graceful degradation if
     semantic search is disabled or unavailable.
+
+    Thread Safety: Thread-safe via double-checked locking pattern.
     """
-    
+
     _instance: Optional[SemanticSearchService] = None
-    
+    _lock: threading.Lock = threading.Lock()
+
     def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(SemanticSearchService, cls).__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+        # Fast path: instance already exists
+        if cls._instance is not None:
+            return cls._instance
+
+        # Slow path: acquire lock and create instance
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(SemanticSearchService, cls).__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
 
     def __init__(self, config: Dict[str, Any] | None = None):
         """
