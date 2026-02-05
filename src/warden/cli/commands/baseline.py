@@ -174,7 +174,7 @@ def migrate_command(
                 for name, info in intel_loader.get_module_map().items()
             }
             console.print(f"[dim]Using intelligence module map ({len(module_map)} modules)[/dim]")
-    except Exception:
+    except (ValueError, TypeError, KeyError):  # Graceful CLI degradation
         pass
 
     # Perform migration

@@ -221,7 +221,7 @@ class FileDiscoveryMixin:
                             lines_by_language[lang] = (
                                 lines_by_language.get(lang, 0) + line_count
                             )
-                        except Exception:
+                        except (OSError, IOError, ValueError):  # File discovery is best-effort
                             pass
 
             stats = warden_pb2.ProjectStats(

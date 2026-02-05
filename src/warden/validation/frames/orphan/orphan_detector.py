@@ -775,7 +775,7 @@ class LSPOrphanDetector(AbstractOrphanDetector):
             # Close document
             try:
                 await self.lsp_client.close_document_async(self.file_path)
-            except Exception:
+            except (ValueError, TypeError, AttributeError):  # AST operation may fail
                 pass
 
         return findings

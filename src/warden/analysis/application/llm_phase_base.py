@@ -493,7 +493,7 @@ class LLMPhaseBase(ABC):
                 estimated_tokens += len(self.tokenizer.encode(input_text))
                 # Add estimation for max output tokens (default 800 in config)
                 estimated_tokens += self.config.max_tokens
-            except Exception:
+            except (ValueError, KeyError, TypeError):  # Stats collection is non-critical
                 pass
         
         # 2. Acquire Rate Limit (Waits here if needed)

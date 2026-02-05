@@ -116,7 +116,7 @@ class HealthAdapter(BaseWardenAdapter):
             memory_mb = rusage.ru_maxrss / 1024  # Convert to MB on macOS
             if sys.platform == "linux":
                 memory_mb = rusage.ru_maxrss / 1024  # Already in KB on Linux
-        except Exception:
+        except (OSError, IOError, ValueError):  # Health check non-critical
             pass
 
         # Get Python info
@@ -396,7 +396,7 @@ class HealthAdapter(BaseWardenAdapter):
                 config = dotenv_values(env_file)
                 if config.get(env_name):
                     return True
-            except Exception:
+            except (OSError, IOError, ValueError):  # Health check non-critical
                 pass
 
         return False

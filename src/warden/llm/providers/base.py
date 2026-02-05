@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 import json
 from typing import Optional
 from ..types import LlmProvider, LlmRequest, LlmResponse
+from warden.shared.infrastructure.exceptions import ExternalServiceError
 
 
 class ILlmClient(ABC):
@@ -91,7 +92,7 @@ class ILlmClient(ABC):
         response = await self.send_async(request)
 
         if not response.success:
-            raise Exception(f"LLM request failed: {response.error_message}")
+            raise ExternalServiceError(f"LLM request failed: {response.error_message}")
 
         return response
 

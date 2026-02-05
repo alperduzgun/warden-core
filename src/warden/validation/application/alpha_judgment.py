@@ -167,7 +167,7 @@ class AlphaJudgment:
                     # If match starts after the marker, it's commented out
                     if (finding.column - 1) > marker_idx:
                         return True
-            except Exception:
+            except (ValueError, TypeError, KeyError):  # Judgment extraction
                 pass
 
         return False

@@ -146,7 +146,7 @@ class ProjectDetector:
                         match = re.search(r"(\d+\.\d+)", requires_python)
                         if match:
                             return match.group(1)
-            except (Exception, KeyError):
+            except (KeyError, ValueError, TypeError):
                 pass
 
         # Check .python-version (pyenv)
@@ -280,7 +280,7 @@ class ProjectDetector:
                 channel = data.get("toolchain", {}).get("channel")
                 if channel and channel != "stable":
                     return channel
-            except (Exception, OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError, ValueError):
                 pass
 
         # Check rust-toolchain (plain text)
@@ -407,7 +407,7 @@ class ProjectDetector:
                     and "packages" in data["tool"]["poetry"]
                 ):
                     return True
-            except (Exception, OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError, ValueError):
                 pass
 
         # Multiple package.json or pyproject.toml in subdirectories
@@ -429,7 +429,7 @@ class ProjectDetector:
                 classifiers = data.get("project", {}).get("classifiers", [])
                 if any("Library" in c for c in classifiers):
                     return True
-            except (Exception, OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError, ValueError):
                 pass
 
         # JavaScript library indicators
@@ -511,7 +511,7 @@ class ProjectDetector:
                     return data["project"]["name"]
                 if "tool" in data and "poetry" in data["tool"]:
                     return data["tool"]["poetry"]["name"]
-            except (Exception, OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError, ValueError):
                 pass
 
         # Try Cargo.toml
@@ -521,7 +521,7 @@ class ProjectDetector:
                 data = tomllib.loads(cargo.read_text())
                 if "package" in data and "name" in data["package"]:
                     return data["package"]["name"]
-            except (Exception, OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError, ValueError):
                 pass
 
         # Fallback to directory name

@@ -67,6 +67,6 @@ class LSPSymbolGraph:
         return graph
 
     def print_graph(self, graph: Dict[str, List[Any]]):
-        """Debug helper to print graph."""
+        """Debug helper to log graph structure."""
         import json
-        print(json.dumps(graph, indent=2))
+        logger.debug("symbol_graph_dump", graph=json.dumps(graph, indent=2))
