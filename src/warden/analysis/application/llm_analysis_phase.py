@@ -369,7 +369,8 @@ FILES TO ANALYZE:
                 return []
 
             return json.loads(json_str)
-        except:
+        except (json.JSONDecodeError, ValueError, IndexError, KeyError):
+            # JSON parsing failed - return empty list for graceful degradation
             return []
 
     def _detect_language(self, file_path: Path) -> str:

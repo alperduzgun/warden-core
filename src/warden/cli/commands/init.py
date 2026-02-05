@@ -526,7 +526,8 @@ def init_command(
         try:
             with open(config_path) as f:
                 existing_config = yaml.safe_load(f) or {}
-        except: pass
+        except (FileNotFoundError, PermissionError, yaml.YAMLError):
+            pass  # Use empty config as default
 
     # --- Step 3: LLM Config ---
     llm_config, new_env_vars = configure_llm(existing_config)

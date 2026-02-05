@@ -151,8 +151,8 @@ class IntegrityScanner:
             except asyncio.TimeoutError:
                 try:
                     proc.kill()
-                except: 
-                    pass
+                except (ProcessLookupError, OSError):
+                    pass  # Process already terminated
                 return [IntegrityIssue(
                     file_path="BUILD",
                     message=f"Build command '{command}' timed out after 30s.",

@@ -95,8 +95,8 @@ class FileContextAnalyzer:
                 try:
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                         file_content = f.read()[:5000]
-                except:
-                    pass
+                except (FileNotFoundError, PermissionError, IOError):
+                    pass  # File unreadable - continue without content
 
                 # Enhance with LLM
                 from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer

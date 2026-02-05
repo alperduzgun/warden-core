@@ -49,7 +49,8 @@ class StatisticsCollector:
         if lang_enum != CodeLanguage.UNKNOWN:
             try:
                 size = file_path.stat().st_size
-            except: size = 0
+            except (FileNotFoundError, PermissionError, OSError):
+                size = 0
             
             stats.language_distribution[lang_enum] = stats.language_distribution.get(lang_enum, 0) + 1
             stats.language_bytes[lang_enum] = stats.language_bytes.get(lang_enum, 0) + size
@@ -112,8 +113,8 @@ class StatisticsCollector:
                     if file_size < 200000:  # < 200KB
                         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                             stats.total_lines += sum(1 for _ in f)
-                except:
-                    pass
+                except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+                    pass  # Skip unreadable files
 
         # Calculate directory depth
         stats.max_depth = self._calculate_max_depth()
@@ -141,7 +142,8 @@ class StatisticsCollector:
                 # relative_to can fail if path is outside root (unlikely here)
                 depth = len(path.parent.relative_to(self.project_root).parts)
                 max_depth = max(max_depth, depth)
-            except:
+            except ValueError:
+                # Path not relative to project root - skip
                 continue
 
         return max_depth

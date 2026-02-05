@@ -290,12 +290,13 @@ FILES:
             mem = psutil.virtual_memory()
             available_gb = mem.available / (1024**3)
             mem_limit = max(1, int(available_gb // 2.0)) # Triage is simpler, 2GB per item
-            
+
             cpu_load = psutil.cpu_percent(interval=None)
             cpu_limit = 1 if cpu_load > 80 else max_allowed
-            
+
             return min(max_allowed, mem_limit, cpu_limit, (os.cpu_count() or 2) // 2)
-        except:
+        except (AttributeError, psutil.Error, OSError):
+            # psutil unavailable or error - default to safe value
             return 1
 
     def _determine_lane(self, risk: RiskScore) -> TriageLane:

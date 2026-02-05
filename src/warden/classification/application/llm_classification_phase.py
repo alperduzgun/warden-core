@@ -230,7 +230,8 @@ FILES TO ANALYZE:
             if isinstance(result, dict):
                  return [result]
             return []
-        except:
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+            # LLM response parsing failed - return empty list for graceful degradation
             return []
 
     async def generate_suppression_rules_async(

@@ -149,5 +149,15 @@ class AnthropicClient(ILlmClient):
             response = await self.send_async(test_request)
             return response.success
 
-        except:
+        except httpx.TimeoutException:
+            # Network timeout - provider may be slow or unreachable
+            return False
+        except httpx.ConnectError:
+            # Connection failed - provider endpoint unreachable
+            return False
+        except httpx.HTTPStatusError:
+            # HTTP error (4xx/5xx) - auth or server issue
+            return False
+        except ValueError:
+            # Configuration or validation error
             return False

@@ -105,5 +105,11 @@ class QwenCodeClient(ILlmClient):
             )
             response = await self.send_async(test_request)
             return response.success
-        except:
+        except httpx.TimeoutException:
+            return False
+        except httpx.ConnectError:
+            return False
+        except httpx.HTTPStatusError:
+            return False
+        except ValueError:
             return False

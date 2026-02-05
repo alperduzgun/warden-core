@@ -16,6 +16,7 @@ Supports 30+ languages including:
 
 import shutil
 import structlog
+import threading
 from pathlib import Path
 from typing import Dict, Optional, List
 
@@ -170,10 +171,11 @@ class LSPManager:
     Singleton service providing LSP clients for semantic code analysis.
     Used by OrphanFrame for cross-file reference detection.
 
-    Thread Safety: Not thread-safe. Use from single async context.
+    Thread Safety: Thread-safe via double-checked locking pattern.
     """
 
     _instance: Optional['LSPManager'] = None
+    _lock: threading.Lock = threading.Lock()
 
     def __init__(self) -> None:
         self._clients: Dict[str, LanguageServerClient] = {}
@@ -183,17 +185,30 @@ class LSPManager:
 
     @classmethod
     def get_instance(cls) -> 'LSPManager':
-        """Get singleton instance."""
-        if not cls._instance:
-            cls._instance = LSPManager()
-        return cls._instance
+        """
+        Get singleton instance (thread-safe).
+
+        Uses double-checked locking for performance - lock only acquired
+        on first access when instance is None.
+        """
+        # Fast path: instance already exists (no lock needed)
+        if cls._instance is not None:
+            return cls._instance
+
+        # Slow path: acquire lock and create instance
+        with cls._lock:
+            # Double-check after acquiring lock
+            if cls._instance is None:
+                cls._instance = LSPManager()
+            return cls._instance
 
     @classmethod
     def reset_instance(cls) -> None:
         """Reset singleton (for testing)."""
-        if cls._instance:
-            # Don't await here - caller should call shutdown_all_async first
-            cls._instance = None
+        with cls._lock:
+            if cls._instance is not None:
+                # Don't await here - caller should call shutdown_all_async first
+                cls._instance = None
 
     def _discover_binaries(self) -> None:
         """

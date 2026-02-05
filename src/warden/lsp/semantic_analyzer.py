@@ -24,6 +24,7 @@ Usage:
 """
 
 import structlog
+import threading
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 from pathlib import Path
@@ -86,9 +87,12 @@ class SemanticAnalyzer:
 
     Provides structural analysis that's 10-100x cheaper than LLM.
     Falls back gracefully if LSP is unavailable.
+
+    Thread Safety: Thread-safe via double-checked locking pattern.
     """
 
     _instance: Optional['SemanticAnalyzer'] = None
+    _lock: threading.Lock = threading.Lock()
 
     # File extension to language mapping
     EXTENSION_MAP: Dict[str, str] = {
@@ -139,10 +143,20 @@ class SemanticAnalyzer:
 
     @classmethod
     def get_instance(cls) -> 'SemanticAnalyzer':
-        """Get singleton instance."""
-        if not cls._instance:
-            cls._instance = SemanticAnalyzer()
-        return cls._instance
+        """
+        Get singleton instance (thread-safe).
+
+        Uses double-checked locking for performance.
+        """
+        # Fast path: instance already exists
+        if cls._instance is not None:
+            return cls._instance
+
+        # Slow path: acquire lock and create instance
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = SemanticAnalyzer()
+            return cls._instance
 
     def _get_language(self, file_path: str) -> Optional[str]:
         """Get language from file extension."""

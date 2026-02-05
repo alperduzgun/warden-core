@@ -388,19 +388,19 @@ class ProjectStructureAnalyzer:
                 with open(self.project_root / "pyproject.toml", "rb") as f:
                     data = tomllib.load(f)
                     # Support both [tool.poetry] and [project] (PEP 621)
-                    python_req = (data.get("tool", {}).get("poetry", {}).get("dependencies", {}).get("python") or 
+                    python_req = (data.get("tool", {}).get("poetry", {}).get("dependencies", {}).get("python") or
                                  data.get("project", {}).get("requires-python"))
                     if python_req:
                         versions["python"] = python_req
-            except:
-                pass
-        
+            except (FileNotFoundError, PermissionError, tomllib.TOMLDecodeError, KeyError):
+                pass  # Graceful degradation - version detection is optional
+
         if ".python-version" in self.config_files:
             try:
                 with open(self.project_root / ".python-version") as f:
                     versions["python"] = f.read().strip()
-            except:
-                pass
+            except (FileNotFoundError, PermissionError, IOError):
+                pass  # Graceful degradation
 
         # Node.js version
         if "package.json" in self.config_files:
@@ -409,15 +409,15 @@ class ProjectStructureAnalyzer:
                     data = json.load(f)
                     if "engines" in data and "node" in data["engines"]:
                         versions["node"] = data["engines"]["node"]
-            except:
-                pass
+            except (FileNotFoundError, PermissionError, json.JSONDecodeError, KeyError):
+                pass  # Graceful degradation
 
         if ".nvmrc" in self.config_files:
             try:
                 with open(self.project_root / ".nvmrc") as f:
                     versions["node"] = f.read().strip()
-            except:
-                pass
+            except (FileNotFoundError, PermissionError, IOError):
+                pass  # Graceful degradation
                 
         # TODO: Add more SDKs (Java, Go, etc.) as needed
 
@@ -435,8 +435,8 @@ class ProjectStructureAnalyzer:
                         return ProjectType.CLI_TOOL
                     if not data.get("private"):
                         return ProjectType.LIBRARY
-            except:
-                pass
+            except (FileNotFoundError, PermissionError, json.JSONDecodeError, KeyError):
+                pass  # Fall through to other detection methods
 
         if "setup.py" in self.config_files or "pyproject.toml" in self.config_files:
             # Check if it's a library
@@ -550,8 +550,8 @@ class ProjectStructureAnalyzer:
                         return TestFramework.JASMINE
                     if "vitest" in deps:
                         return TestFramework.VITEST
-            except:
-                pass
+            except (FileNotFoundError, PermissionError, json.JSONDecodeError, KeyError):
+                pass  # Fall through to other detection methods
 
         # Check for test directories
         if "test" in self.special_dirs or "tests" in self.special_dirs:
@@ -577,8 +577,8 @@ class ProjectStructureAnalyzer:
                         tools.append(BuildTool.POETRY)
                     elif "project" in data:
                         tools.append(BuildTool.PIP)
-            except:
-                pass
+            except (FileNotFoundError, PermissionError, tomllib.TOMLDecodeError, KeyError):
+                pass  # Graceful degradation - continue with other tool detection
 
         if "requirements.txt" in self.config_files:
             tools.append(BuildTool.PIP)
