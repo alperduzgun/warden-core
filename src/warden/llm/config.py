@@ -401,13 +401,26 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
 
     # Configure Claude Code (Local CLI/SDK)
     # Check if CLAUDE_CODE_ENABLED is set, or auto-detect if claude CLI is available
+    # Valid modes: cli (default), sdk
+    _valid_claude_modes = {"cli", "sdk"}
     claude_code_enabled = secrets.get("CLAUDE_CODE_ENABLED")
     if claude_code_enabled and claude_code_enabled.found and claude_code_enabled.value.lower() in ("true", "1", "yes"):
         config.claude_code.enabled = True
-        # endpoint can be: cli, sdk, or mcp (default: cli)
         claude_code_mode = secrets.get("CLAUDE_CODE_MODE")
         if claude_code_mode and claude_code_mode.found:
-            config.claude_code.endpoint = claude_code_mode.value
+            mode = claude_code_mode.value.lower().strip()
+            # Validate mode (fail-fast)
+            if mode not in _valid_claude_modes:
+                import structlog
+                _logger = structlog.get_logger(__name__)
+                _logger.warning(
+                    "invalid_claude_code_mode",
+                    mode=mode,
+                    valid_modes=list(_valid_claude_modes),
+                    fallback="cli",
+                )
+                mode = "cli"
+            config.claude_code.endpoint = mode
         else:
             config.claude_code.endpoint = "cli"
         configured_providers.append(LlmProvider.CLAUDE_CODE)
