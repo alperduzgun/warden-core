@@ -7,14 +7,24 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
-class TimeoutError(Exception):
-    """Raised when an operation times out."""
+
+class OperationTimeoutError(Exception):
+    """
+    Raised when a Warden operation times out.
+
+    Named to avoid shadowing Python's built-in asyncio.TimeoutError.
+    Use this for Warden-specific timeout handling.
+    """
     def __init__(self, operation: str, timeout_seconds: float):
         self.operation = operation
         self.timeout_seconds = timeout_seconds
         super().__init__(
             f"Operation '{operation}' timed out after {timeout_seconds}s"
         )
+
+
+# Backwards compatibility alias (deprecated)
+TimeoutError = OperationTimeoutError
 
 async def with_timeout_async(
     coro,
@@ -30,7 +40,7 @@ async def with_timeout_async(
             operation=operation_name,
             timeout=timeout_seconds,
         )
-        raise TimeoutError(operation_name, timeout_seconds)
+        raise OperationTimeoutError(operation_name, timeout_seconds)
 
 def timeout(seconds: float, operation_name: Optional[str] = None):
     """Decorator to add timeout to async functions."""

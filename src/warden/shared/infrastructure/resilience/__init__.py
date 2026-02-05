@@ -9,7 +9,7 @@ Provides common fault-tolerance patterns:
 - Resilient Operation
 """
 
-from .timeout import TimeoutError, with_timeout_async, timeout
+from .timeout import OperationTimeoutError, TimeoutError, with_timeout_async, timeout
 from .retry import RetryConfig, RetryExhausted, with_retry_async, retry
 from .circuit_breaker import (
     CircuitState,
@@ -27,7 +27,8 @@ with_timeout = with_timeout_async
 with_retry = with_retry_async
 
 __all__ = [
-    "TimeoutError",
+    "OperationTimeoutError",
+    "TimeoutError",  # Deprecated alias for backwards compatibility
     "with_timeout_async",
     "with_timeout",
     "timeout",

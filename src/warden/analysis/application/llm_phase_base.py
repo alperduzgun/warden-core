@@ -509,7 +509,6 @@ class LLMPhaseBase(ABC):
         complexity_threshold = 2000 # Conservative limit for 0.5b model context + output
         
         if use_fast_tier and estimated_tokens > complexity_threshold:
-            print("DEBUG_UPGRADE: Triggering Upgrade to Smart Tier")
             logger.info(
                 "complexity_upgrade_triggered",
                 reason="context_too_large_for_local_model",

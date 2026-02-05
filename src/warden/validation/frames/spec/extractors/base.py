@@ -31,7 +31,7 @@ from warden.shared.infrastructure.resilience import (
     Bulkhead,
     BulkheadConfig,
     RetryConfig,
-    TimeoutError as ResilienceTimeoutError,
+    OperationTimeoutError,
     CircuitBreakerOpen,
 )
 
@@ -202,7 +202,7 @@ class BaseContractExtractor(ABC):
                     max_attempts=self.resilience_config.retry_max_attempts,
                     initial_delay=self.resilience_config.retry_initial_delay,
                     max_delay=self.resilience_config.retry_max_delay,
-                    retryable_exceptions=(IOError, OSError, ResilienceTimeoutError),
+                    retryable_exceptions=(IOError, OSError, OperationTimeoutError),
                 )
 
                 return await with_retry(
@@ -211,7 +211,7 @@ class BaseContractExtractor(ABC):
                     f"parse_{file_path.name}",
                 )
 
-        except ResilienceTimeoutError:
+        except OperationTimeoutError:
             self._stats["timeouts"] += 1
             logger.warning(
                 "parse_timeout",

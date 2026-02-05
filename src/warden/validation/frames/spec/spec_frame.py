@@ -61,7 +61,7 @@ from warden.validation.frames.spec.analyzer import GapAnalyzer, GapAnalyzerConfi
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import (
     with_timeout,
-    TimeoutError as ResilienceTimeoutError,
+    OperationTimeoutError,
 )
 
 logger = get_logger(__name__)
@@ -403,7 +403,7 @@ class SpecFrame(ValidationFrame):
 
             return contract
 
-        except ResilienceTimeoutError:
+        except OperationTimeoutError:
             logger.error(
                 "contract_extraction_timeout",
                 platform=platform.name,
