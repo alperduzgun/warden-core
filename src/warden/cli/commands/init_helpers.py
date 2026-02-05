@@ -86,6 +86,14 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "GEMINI_API_KEY",
         "default_model": "gemini-1.5-flash"
+    },
+    "8": {
+        "id": "claude_code",
+        "name": "Claude Code (Local)",
+        "description": "Use your Claude Code subscription locally",
+        "emoji": "🖥️",
+        "requires_key": False,
+        "default_model": "claude-sonnet-4-20250514"
     }
 }
 
@@ -217,6 +225,79 @@ def configure_ollama() -> tuple[dict, dict]:
 
     env_vars = {
         "OLLAMA_HOST": ollama_host
+    }
+
+    return llm_config, env_vars
+
+
+def configure_claude_code() -> tuple[dict, dict]:
+    """
+    Configure Claude Code (local Claude Code CLI).
+    Checks if Claude Code is installed and authenticated.
+    Returns (llm_config, env_vars).
+    """
+    console.print("\n[bold cyan]🖥️  Configuring Claude Code (Local)[/bold cyan]")
+
+    # Check if Claude Code is installed
+    claude_path = shutil.which("claude")
+
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+
+    if not claude_path:
+        console.print("[yellow]⚠️  Claude Code CLI is not installed.[/yellow]")
+        console.print("[dim]Install it from: https://docs.anthropic.com/en/docs/claude-code[/dim]")
+        console.print("[dim]Or run: npm install -g @anthropic-ai/claude-code[/dim]")
+
+        if is_interactive:
+            if Confirm.ask("Try a different provider?", default=True):
+                return _fallback_to_cloud_provider()
+
+        # Non-interactive: return with disabled config
+        return {"provider": "claude_code", "enabled": False}, {}
+
+    console.print(f"[green]✓ Claude Code found at: {claude_path}[/green]")
+
+    # Verify authentication
+    console.print("[dim]Checking authentication...[/dim]")
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip()
+            console.print(f"[green]✓ Claude Code version: {version}[/green]")
+        else:
+            console.print("[yellow]⚠️  Claude Code may not be authenticated.[/yellow]")
+            console.print("[dim]Run 'claude' to authenticate.[/dim]")
+    except (subprocess.TimeoutExpired, Exception) as e:
+        console.print(f"[yellow]⚠️  Could not verify Claude Code: {e}[/yellow]")
+
+    # Select mode
+    mode = "cli"
+    if is_interactive:
+        console.print("\n[bold]Select Claude Code mode:[/bold]")
+        console.print("  [1] CLI - Use Claude Code CLI (default, most compatible)")
+        console.print("  [2] SDK - Use Claude Agent SDK (requires claude-code-sdk package)")
+
+        mode_choice = Prompt.ask("Select mode", choices=["1", "2"], default="1")
+        mode = "cli" if mode_choice == "1" else "sdk"
+
+    console.print(f"\n[green]✓ Claude Code configured with mode: {mode}[/green]")
+
+    llm_config = {
+        "provider": "claude_code",
+        "mode": mode,
+        "model": "claude-sonnet-4-20250514",
+        "timeout": 300,
+        "use_local_llm": True
+    }
+
+    env_vars = {
+        "CLAUDE_CODE_ENABLED": "true",
+        "CLAUDE_CODE_MODE": mode
     }
 
     return llm_config, env_vars
@@ -359,8 +440,10 @@ def configure_llm(existing_config: dict = None) -> tuple[dict, dict]:
         return configure_ollama()
     elif provider['id'] == 'azure':
         return configure_azure()
+    elif provider['id'] == 'claude_code':
+        return configure_claude_code()
     else:
-        # For non-interactive fallback to deepseek or whatever if key exists, 
+        # For non-interactive fallback to deepseek or whatever if key exists,
         # but usually we want ollama for zero-config.
         return configure_cloud_provider(provider)
 

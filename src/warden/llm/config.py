@@ -36,10 +36,11 @@ class ProviderConfig:
         errors = []
 
         if not self.api_key:
-            # Ollama doesn't require an API key
-            if provider_name.lower() != "ollama":
+            # Local providers don't require an API key
+            local_providers = {"ollama", "claude_code"}
+            if provider_name.lower() not in local_providers:
                 errors.append(f"{provider_name}: API key is required but not configured")
-        elif len(self.api_key) < 10 and provider_name.lower() != "ollama":
+        elif len(self.api_key) < 10 and provider_name.lower() not in {"ollama", "claude_code"}:
             errors.append(f"{provider_name}: API key appears invalid (too short)")
 
         if not self.default_model:
@@ -92,6 +93,7 @@ class LlmConfiguration:
     groq: ProviderConfig = field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = field(default_factory=ProviderConfig)
     ollama: ProviderConfig = field(default_factory=ProviderConfig)
+    claude_code: ProviderConfig = field(default_factory=ProviderConfig)  # Local Claude Code CLI/SDK
 
     # Model Tiering (Optional)
     smart_model: Optional[str] = None  # High-reasoning model (e.g. gpt-4o)
@@ -117,7 +119,8 @@ class LlmConfiguration:
             LlmProvider.AZURE_OPENAI: self.azure_openai,
             LlmProvider.GROQ: self.groq,
             LlmProvider.OPENROUTER: self.openrouter,
-            LlmProvider.OLLAMA: self.ollama
+            LlmProvider.OLLAMA: self.ollama,
+            LlmProvider.CLAUDE_CODE: self.claude_code,
         }
         return mapping.get(provider)
 
@@ -162,7 +165,8 @@ DEFAULT_MODELS = {
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.1-70b-versatile",
     LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
-    LlmProvider.OLLAMA: "qwen2.5-coder:0.5b"
+    LlmProvider.OLLAMA: "qwen2.5-coder:0.5b",
+    LlmProvider.CLAUDE_CODE: "claude-sonnet-4-20250514",  # Uses local Claude Code CLI
 }
 
 
@@ -223,6 +227,31 @@ async def _check_ollama_availability(endpoint: str) -> bool:
         return False
 
 
+async def _check_claude_code_availability() -> bool:
+    """
+    Fast check if Claude Code CLI is installed and accessible.
+    Fail-fast: very short timeout to avoid slowing down startup.
+    """
+    import asyncio
+    import shutil
+
+    # First check if claude command exists in PATH
+    if not shutil.which("claude"):
+        return False
+
+    try:
+        # Run claude --version to verify it's working
+        process = await asyncio.create_subprocess_exec(
+            "claude", "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(process.communicate(), timeout=2.0)
+        return process.returncode == 0
+    except (asyncio.TimeoutError, Exception):
+        return False
+
+
 async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmConfiguration:
     """
     Async version of load_llm_config using SecretManager.
@@ -265,6 +294,8 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
         "WARDEN_LLM_CONCURRENCY",
         "WARDEN_FAST_TIER_PRIORITY",
         "OLLAMA_HOST",
+        "CLAUDE_CODE_ENABLED",
+        "CLAUDE_CODE_MODE",
     ])
 
     # Model Tiering & Concurrency
@@ -367,6 +398,24 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
     config.ollama.endpoint = ollama_endpoint
     config.ollama.enabled = True  # Enabled by default for dual-tier fallback
     configured_providers.append(LlmProvider.OLLAMA)
+
+    # Configure Claude Code (Local CLI/SDK)
+    # Check if CLAUDE_CODE_ENABLED is set, or auto-detect if claude CLI is available
+    claude_code_enabled = secrets.get("CLAUDE_CODE_ENABLED")
+    if claude_code_enabled and claude_code_enabled.found and claude_code_enabled.value.lower() in ("true", "1", "yes"):
+        config.claude_code.enabled = True
+        # endpoint can be: cli, sdk, or mcp (default: cli)
+        claude_code_mode = secrets.get("CLAUDE_CODE_MODE")
+        if claude_code_mode and claude_code_mode.found:
+            config.claude_code.endpoint = claude_code_mode.value
+        else:
+            config.claude_code.endpoint = "cli"
+        configured_providers.append(LlmProvider.CLAUDE_CODE)
+    elif await _check_claude_code_availability():
+        # Auto-detected: Claude Code CLI is installed
+        config.claude_code.enabled = True
+        config.claude_code.endpoint = "cli"
+        configured_providers.append(LlmProvider.CLAUDE_CODE)
 
     # --- AUTO-PILOT LOGIC ---
     # Determine Fast Tier Chain based on available credentials and service health
