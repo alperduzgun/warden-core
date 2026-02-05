@@ -493,8 +493,8 @@ class AntiPatternFrame(ValidationFrame):
                         is_blocker=True,
                     ))
 
-                # Check for bare catch (catches everything)
-                if self._is_bare_catch(node, original_type, language):
+                # Check for bare catch (catches everything without proper handling)
+                if self._is_bare_catch(node, original_type, language, lines):
                     line = node.location.start_line if node.location else 0
                     violations.append(AntiPatternViolation(
                         pattern_id="bare-catch",
@@ -544,39 +544,74 @@ class AntiPatternFrame(ValidationFrame):
         return False
 
     def _is_bare_catch(
-        self, node: ASTNode, original_type: str, language: CodeLanguage
+        self, node: ASTNode, original_type: str, language: CodeLanguage, lines: List[str]
     ) -> bool:
-        """Check if catch block catches all exceptions."""
+        """Check if catch block catches all exceptions without proper handling."""
         if original_type not in {"except_clause", "catch_clause", "rescue"}:
             return False
 
-        # Look for exception type parameter
-        exception_type = None
-        for child in node.children:
-            child_type = child.attributes.get("original_type", "")
-            if child_type in {"type", "type_identifier", "identifier", "scoped_identifier"}:
-                exception_type = child.name
-                break
+        if not node.location:
+            return False
 
-        # No exception type = bare catch
-        if exception_type is None:
+        # Get the except line from source code (more reliable than AST names)
+        line_num = node.location.start_line
+        if line_num < 1 or line_num > len(lines):
+            return False
+
+        except_line = lines[line_num - 1].strip()
+
+        # Check for bare except (no exception type at all)
+        # Python: "except:" or "except :"
+        if re.match(r'^except\s*:', except_line):
             return True
 
-        # Check for overly broad exception types
-        broad_types = {
-            # Python
-            "BaseException", "Exception",
-            # Java/Kotlin
-            "Throwable", "Exception",
-            # C#
-            "Exception", "System.Exception",
-            # Ruby
-            "Exception", "StandardError",
-            # PHP
-            "Throwable", "Exception",
-        }
+        # Check for tuple of exceptions - this is always intentional/specific
+        # Python: "except (ValueError, KeyError):" or "except (A, B, C) as e:"
+        if re.search(r'except\s*\([^)]+,[^)]+\)', except_line):
+            return False  # Multiple exceptions = specific handling
 
-        return exception_type in broad_types
+        # Check for overly broad single exception types
+        broad_patterns = [
+            r'except\s+Exception\s*:',           # except Exception:
+            r'except\s+Exception\s+as\s+\w+:',   # except Exception as e:
+            r'except\s+BaseException\s*:',       # except BaseException:
+            r'except\s+BaseException\s+as\s+\w+:', # except BaseException as e:
+        ]
+
+        is_broad = any(re.search(p, except_line) for p in broad_patterns)
+
+        if not is_broad:
+            return False  # Specific exception type = OK
+
+        # Broad exception - check if properly handled
+        start_line = line_num
+        end_line = node.location.end_line or start_line + 10
+
+        # Check the exception handler body for proper handling patterns
+        handler_lines = lines[start_line - 1:min(end_line, len(lines))]
+        handler_text = "\n".join(handler_lines).lower()
+
+        # Proper handling patterns - if any exist, don't flag
+        proper_handling_patterns = [
+            "logger.", "logging.", "log.",  # Logging
+            "raise",  # Re-raising
+            "traceback",  # Traceback handling
+            "print(",  # Even print is better than silent
+            "sys.exc_info",  # Exception info access
+            "exc_info=true",  # Logging with exc_info
+            "exc_info=",  # Any exc_info usage
+        ]
+
+        for pattern in proper_handling_patterns:
+            if pattern in handler_text:
+                return False  # Has proper handling, not a bare catch
+
+        # Check for return with meaningful value (not just "return" or "return None")
+        if re.search(r'return\s+[^N\s]', handler_text) or re.search(r'return\s+\S+[^None]', handler_text):
+            return False
+
+        # No proper handling found = bare/dangerous catch
+        return True
 
     def _detect_god_class_ast(
         self,
