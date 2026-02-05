@@ -562,8 +562,9 @@ class PhaseOrchestrator:
                         if not abs_path.is_absolute():
                             abs_path = self.project_root / fpath
                         rel_path = str(abs_path.resolve().relative_to(self.project_root.resolve()))
-                    except: 
-                        rel_path = str(fpath) # Fallback
+                    except (ValueError, OSError):
+                        # Path resolution failed - use original path as fallback
+                        rel_path = str(fpath)
                     
                     if rid:
                         known_issues.add(f"{rid}:{rel_path}")
@@ -598,7 +599,8 @@ class PhaseOrchestrator:
                         if not abs_path.is_absolute():
                             abs_path = self.project_root / fpath
                         rel_path = str(abs_path.resolve().relative_to(self.project_root.resolve()))
-                    except:
+                    except (ValueError, OSError):
+                        # Path resolution failed - use original path as fallback
                         rel_path = str(fpath)
 
                     key = f"{rid}:{rel_path}"

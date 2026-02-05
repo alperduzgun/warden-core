@@ -146,5 +146,11 @@ class GeminiClient(ILlmClient):
             test_req = LlmRequest(system_prompt="hi", user_message="hi", max_tokens=10)
             resp = await self.send_async(test_req)
             return resp.success
-        except:
+        except httpx.TimeoutException:
+            return False
+        except httpx.ConnectError:
+            return False
+        except httpx.HTTPStatusError:
+            return False
+        except ValueError:
             return False

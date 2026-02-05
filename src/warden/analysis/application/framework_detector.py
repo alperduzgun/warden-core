@@ -106,21 +106,21 @@ class FrameworkDetector:
             try:
                 content = req_file.read_text(encoding='utf-8', errors='ignore').lower()
                 if "fastapi" in content: return True
-            except: pass
+            except (FileNotFoundError, PermissionError, IOError): pass
             
         # Check pyproject.toml
         if "pyproject.toml" in self.config_files:
             try:
                 content = (self.project_root / "pyproject.toml").read_text(encoding='utf-8', errors='ignore').lower()
                 if "fastapi" in content: return True
-            except: pass
+            except (FileNotFoundError, PermissionError, IOError): pass
 
         # Check setup.py
         if "setup.py" in self.config_files:
             try:
                 content = (self.project_root / "setup.py").read_text(encoding='utf-8', errors='ignore').lower()
                 if "fastapi" in content: return True
-            except: pass
+            except (FileNotFoundError, PermissionError, IOError): pass
 
         return False
 
@@ -132,7 +132,7 @@ class FrameworkDetector:
             try:
                 content = req_file.read_text(encoding='utf-8', errors='ignore').lower()
                 if "flask" in content: return True
-            except: pass
+            except (FileNotFoundError, PermissionError, IOError): pass
             
         # Check pyproject.toml/setup.py
         for f in ["pyproject.toml", "setup.py"]:
@@ -140,7 +140,7 @@ class FrameworkDetector:
                 try:
                     content = (self.project_root / f).read_text(encoding='utf-8', errors='ignore').lower()
                     if "flask" in content: return True
-                except: pass
+                except (FileNotFoundError, PermissionError, IOError): pass
 
         return False
 
