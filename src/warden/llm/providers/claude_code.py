@@ -15,15 +15,21 @@ Chaos Engineering Considerations:
 - Structured logging for all failure modes
 - Input sanitization (no shell injection)
 - Graceful degradation (SDK -> CLI fallback)
+- Circuit breaker for repeated failures
+- Concurrency limiting (prevent resource exhaustion)
+- Health check caching (reduce overhead)
 """
 
 import asyncio
+import atexit
 import json
 import shutil
 import time
 import uuid
+import weakref
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import ClassVar, Optional, Set
 
 from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
@@ -40,12 +46,139 @@ class ClaudeCodeMode(str, Enum):
     SDK = "sdk"
 
 
-# Constants for fail-fast validation
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
 _VALID_MODES = {m.value for m in ClaudeCodeMode}
 _DEFAULT_TIMEOUT_SECONDS = 120
 _AVAILABILITY_CHECK_TIMEOUT = 5.0
-_MAX_PROMPT_LENGTH = 100_000  # Prevent memory issues with huge prompts
+_MAX_PROMPT_LENGTH = 100_000  # Prevent memory issues
+_MAX_CONCURRENT_REQUESTS = 3  # Limit parallel Claude Code processes
+_CIRCUIT_BREAKER_THRESHOLD = 5  # Consecutive failures before opening circuit
+_CIRCUIT_BREAKER_RESET_SECONDS = 60  # Time before attempting to close circuit
+_HEALTH_CHECK_CACHE_TTL = 30.0  # Cache availability check for 30 seconds
 
+
+# =============================================================================
+# CIRCUIT BREAKER STATE
+# =============================================================================
+
+@dataclass
+class CircuitBreakerState:
+    """Thread-safe circuit breaker state."""
+    consecutive_failures: int = 0
+    last_failure_time: float = 0.0
+    is_open: bool = False
+
+    def record_success(self) -> None:
+        """Reset on success."""
+        self.consecutive_failures = 0
+        self.is_open = False
+
+    def record_failure(self) -> None:
+        """Record failure and potentially open circuit."""
+        self.consecutive_failures += 1
+        self.last_failure_time = time.monotonic()
+        if self.consecutive_failures >= _CIRCUIT_BREAKER_THRESHOLD:
+            self.is_open = True
+            logger.warning(
+                "circuit_breaker_opened",
+                consecutive_failures=self.consecutive_failures,
+                threshold=_CIRCUIT_BREAKER_THRESHOLD,
+            )
+
+    def should_allow_request(self) -> bool:
+        """Check if request should be allowed."""
+        if not self.is_open:
+            return True
+
+        # Check if enough time has passed to try again (half-open state)
+        elapsed = time.monotonic() - self.last_failure_time
+        if elapsed >= _CIRCUIT_BREAKER_RESET_SECONDS:
+            logger.info(
+                "circuit_breaker_half_open",
+                elapsed_seconds=elapsed,
+                reset_threshold=_CIRCUIT_BREAKER_RESET_SECONDS,
+            )
+            return True
+
+        return False
+
+
+# =============================================================================
+# HEALTH CHECK CACHE
+# =============================================================================
+
+@dataclass
+class HealthCheckCache:
+    """Cached health check result."""
+    is_available: bool = False
+    checked_at: float = 0.0
+    version: str = ""
+
+    def is_valid(self) -> bool:
+        """Check if cache is still valid."""
+        if self.checked_at == 0.0:
+            return False
+        elapsed = time.monotonic() - self.checked_at
+        return elapsed < _HEALTH_CHECK_CACHE_TTL
+
+
+# =============================================================================
+# PROCESS REGISTRY (for graceful shutdown)
+# =============================================================================
+
+class ProcessRegistry:
+    """Track active processes for cleanup on shutdown."""
+
+    _instance: ClassVar[Optional["ProcessRegistry"]] = None
+    _processes: Set[asyncio.subprocess.Process]
+    _lock: asyncio.Lock
+
+    def __new__(cls) -> "ProcessRegistry":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._processes = set()
+            cls._instance._lock = asyncio.Lock()
+            # Register cleanup on interpreter shutdown
+            atexit.register(cls._instance._sync_cleanup)
+        return cls._instance
+
+    async def register(self, process: asyncio.subprocess.Process) -> None:
+        """Register a process for tracking."""
+        async with self._lock:
+            self._processes.add(process)
+
+    async def unregister(self, process: asyncio.subprocess.Process) -> None:
+        """Unregister a completed process."""
+        async with self._lock:
+            self._processes.discard(process)
+
+    async def cleanup_all(self) -> None:
+        """Kill all tracked processes."""
+        async with self._lock:
+            for process in list(self._processes):
+                try:
+                    process.kill()
+                    await process.wait()
+                except ProcessLookupError:
+                    pass
+            self._processes.clear()
+            logger.info("process_registry_cleanup_completed")
+
+    def _sync_cleanup(self) -> None:
+        """Synchronous cleanup for atexit."""
+        for process in list(self._processes):
+            try:
+                process.kill()
+            except (ProcessLookupError, OSError):
+                pass
+
+
+# =============================================================================
+# CLAUDE CODE CLIENT
+# =============================================================================
 
 class ClaudeCodeClient(ILlmClient):
     """
@@ -57,9 +190,15 @@ class ClaudeCodeClient(ILlmClient):
     - Logs all failure modes with context (observability)
     - Handles empty/malformed responses gracefully
     - Idempotent operations (safe to retry)
+    - Circuit breaker prevents cascade failures
+    - Semaphore limits concurrent requests
+    - Health check caching reduces overhead
     """
 
-    __slots__ = ("_mode", "_default_model", "_cli_path", "_timeout")
+    __slots__ = (
+        "_mode", "_default_model", "_cli_path", "_timeout",
+        "_semaphore", "_circuit_breaker", "_health_cache", "_process_registry"
+    )
 
     def __init__(self, config: ProviderConfig):
         """
@@ -84,12 +223,25 @@ class ClaudeCodeClient(ILlmClient):
         self._cli_path = shutil.which("claude") or "claude"
         self._timeout = _DEFAULT_TIMEOUT_SECONDS
 
+        # Concurrency control
+        self._semaphore = asyncio.Semaphore(_MAX_CONCURRENT_REQUESTS)
+
+        # Circuit breaker
+        self._circuit_breaker = CircuitBreakerState()
+
+        # Health check cache
+        self._health_cache = HealthCheckCache()
+
+        # Process registry for cleanup
+        self._process_registry = ProcessRegistry()
+
         logger.info(
             "claude_code_client_initialized",
             mode=self._mode.value,
             default_model=self._default_model,
             cli_path=self._cli_path,
             timeout=self._timeout,
+            max_concurrent=_MAX_CONCURRENT_REQUESTS,
         )
 
     @property
@@ -101,17 +253,32 @@ class ClaudeCodeClient(ILlmClient):
         """
         Send a request to Claude Code.
 
-        Routes to appropriate implementation based on configured mode.
-        Decorated with @resilient for timeout and retry handling.
+        Features:
+        - Circuit breaker prevents cascade failures
+        - Semaphore limits concurrent requests
+        - Request ID tracking for observability
         """
         request_id = str(uuid.uuid4())[:8]
+        start_time = time.perf_counter()
+
+        # Circuit breaker check (fail-fast)
+        if not self._circuit_breaker.should_allow_request():
+            logger.warning(
+                "claude_code_circuit_breaker_open",
+                request_id=request_id,
+                consecutive_failures=self._circuit_breaker.consecutive_failures,
+            )
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message="Circuit breaker open - too many recent failures",
+                provider=self.provider,
+                duration_ms=0,
+            )
 
         # Input validation (fail-fast)
         if not request.user_message:
-            logger.warning(
-                "claude_code_empty_request",
-                request_id=request_id,
-            )
+            logger.warning("claude_code_empty_request", request_id=request_id)
             return LlmResponse(
                 content="",
                 success=False,
@@ -120,7 +287,7 @@ class ClaudeCodeClient(ILlmClient):
                 duration_ms=0,
             )
 
-        # Prevent memory issues with huge prompts
+        # Prompt size check
         total_length = len(request.system_prompt or "") + len(request.user_message)
         if total_length > _MAX_PROMPT_LENGTH:
             logger.warning(
@@ -137,18 +304,48 @@ class ClaudeCodeClient(ILlmClient):
                 duration_ms=0,
             )
 
-        logger.debug(
-            "claude_code_request_started",
-            request_id=request_id,
-            mode=self._mode.value,
-            prompt_length=total_length,
-            model=request.model or self._default_model,
-        )
+        # Acquire semaphore (concurrency limit)
+        try:
+            async with asyncio.timeout(5.0):
+                await self._semaphore.acquire()
+        except asyncio.TimeoutError:
+            logger.warning(
+                "claude_code_semaphore_timeout",
+                request_id=request_id,
+                max_concurrent=_MAX_CONCURRENT_REQUESTS,
+            )
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message="Too many concurrent requests",
+                provider=self.provider,
+                duration_ms=self._calc_duration_ms(start_time),
+            )
 
-        if self._mode == ClaudeCodeMode.SDK:
-            return await self._send_via_sdk(request, request_id)
-        else:
-            return await self._send_via_cli(request, request_id)
+        try:
+            logger.debug(
+                "claude_code_request_started",
+                request_id=request_id,
+                mode=self._mode.value,
+                prompt_length=total_length,
+                model=request.model or self._default_model,
+            )
+
+            if self._mode == ClaudeCodeMode.SDK:
+                response = await self._send_via_sdk(request, request_id)
+            else:
+                response = await self._send_via_cli(request, request_id)
+
+            # Update circuit breaker
+            if response.success:
+                self._circuit_breaker.record_success()
+            else:
+                self._circuit_breaker.record_failure()
+
+            return response
+
+        finally:
+            self._semaphore.release()
 
     async def _send_via_cli(self, request: LlmRequest, request_id: str) -> LlmResponse:
         """
@@ -162,10 +359,8 @@ class ClaudeCodeClient(ILlmClient):
         process: Optional[asyncio.subprocess.Process] = None
 
         try:
-            # Build prompt (no shell injection - args are passed as list)
             full_prompt = f"{request.system_prompt}\n\n{request.user_message}"
 
-            # Create subprocess with explicit arguments (safe from injection)
             process = await asyncio.create_subprocess_exec(
                 self._cli_path,
                 "--print",
@@ -176,11 +371,17 @@ class ClaudeCodeClient(ILlmClient):
                 stderr=asyncio.subprocess.PIPE,
             )
 
+            # Register for cleanup
+            await self._process_registry.register(process)
+
             timeout = request.timeout_seconds or self._timeout
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(),
                 timeout=timeout
             )
+
+            # Unregister after completion
+            await self._process_registry.unregister(process)
 
             duration_ms = self._calc_duration_ms(start_time)
 
@@ -190,7 +391,7 @@ class ClaudeCodeClient(ILlmClient):
                     "claude_code_cli_failed",
                     request_id=request_id,
                     returncode=process.returncode,
-                    error=error_msg[:500],  # Truncate for logging
+                    error=error_msg[:500],
                     duration_ms=duration_ms,
                     model=model,
                 )
@@ -203,27 +404,25 @@ class ClaudeCodeClient(ILlmClient):
                     duration_ms=duration_ms,
                 )
 
-            # Parse response with graceful handling
-            return self._parse_cli_response(
-                stdout, request_id, model, duration_ms
-            )
+            return self._parse_cli_response(stdout, request_id, model, duration_ms)
 
         except asyncio.TimeoutError:
             duration_ms = self._calc_duration_ms(start_time)
             timeout = request.timeout_seconds or self._timeout
 
-            # CRITICAL: Kill the process to prevent zombies
+            # Kill process to prevent zombies
             if process is not None:
                 try:
                     process.kill()
                     await process.wait()
+                    await self._process_registry.unregister(process)
                     logger.debug(
                         "claude_code_process_killed",
                         request_id=request_id,
                         pid=process.pid,
                     )
                 except ProcessLookupError:
-                    pass  # Already dead
+                    pass
 
             logger.error(
                 "claude_code_cli_timeout",
@@ -244,10 +443,10 @@ class ClaudeCodeClient(ILlmClient):
         except Exception as e:
             duration_ms = self._calc_duration_ms(start_time)
 
-            # Cleanup on unexpected error
             if process is not None:
                 try:
                     process.kill()
+                    await self._process_registry.unregister(process)
                 except ProcessLookupError:
                     pass
 
@@ -271,17 +470,9 @@ class ClaudeCodeClient(ILlmClient):
     def _parse_cli_response(
         self, stdout: bytes, request_id: str, model: str, duration_ms: int
     ) -> LlmResponse:
-        """
-        Parse CLI response with graceful error handling.
-
-        Handles:
-        - Empty response
-        - Malformed JSON
-        - Missing fields
-        """
+        """Parse CLI response with graceful error handling."""
         output = self._safe_decode(stdout)
 
-        # Handle empty response
         if not output:
             logger.warning(
                 "claude_code_empty_response",
@@ -297,12 +488,10 @@ class ClaudeCodeClient(ILlmClient):
                 duration_ms=duration_ms,
             )
 
-        # Try to parse as JSON
         try:
             result = json.loads(output)
             content = result.get("result") or result.get("content") or ""
 
-            # Validate content is string
             if not isinstance(content, str):
                 content = str(content) if content else ""
 
@@ -332,7 +521,6 @@ class ClaudeCodeClient(ILlmClient):
             )
 
         except json.JSONDecodeError as e:
-            # Non-JSON output - use raw (could be plain text response)
             logger.debug(
                 "claude_code_non_json_response",
                 request_id=request_id,
@@ -351,11 +539,7 @@ class ClaudeCodeClient(ILlmClient):
             )
 
     async def _send_via_sdk(self, request: LlmRequest, request_id: str) -> LlmResponse:
-        """
-        Execute request via Claude Agent SDK.
-
-        Graceful degradation: Falls back to CLI if SDK not installed.
-        """
+        """Execute request via Claude Agent SDK with graceful degradation."""
         start_time = time.perf_counter()
         model = request.model or self._default_model
 
@@ -367,10 +551,7 @@ class ClaudeCodeClient(ILlmClient):
             response_parts: list[str] = []
             async for message in query(
                 prompt=full_prompt,
-                options=ClaudeCodeOptions(
-                    max_turns=1,
-                    model=model,
-                )
+                options=ClaudeCodeOptions(max_turns=1, model=model)
             ):
                 if hasattr(message, "content") and message.content:
                     response_parts.append(str(message.content))
@@ -388,7 +569,7 @@ class ClaudeCodeClient(ILlmClient):
 
             return LlmResponse(
                 content=content,
-                success=bool(content),  # Empty = failure
+                success=bool(content),
                 error_message=None if content else "Empty response from SDK",
                 provider=self.provider,
                 model=model,
@@ -429,10 +610,24 @@ class ClaudeCodeClient(ILlmClient):
         """
         Check if Claude Code CLI is installed and accessible.
 
-        Fail-fast: Returns False on any error within timeout.
+        Uses caching to reduce overhead from repeated checks.
         """
+        # Return cached result if valid
+        if self._health_cache.is_valid():
+            logger.debug(
+                "claude_code_health_cache_hit",
+                is_available=self._health_cache.is_available,
+                version=self._health_cache.version,
+            )
+            return self._health_cache.is_available
+
+        # Perform actual check
         try:
             if not shutil.which("claude"):
+                self._health_cache = HealthCheckCache(
+                    is_available=False,
+                    checked_at=time.monotonic(),
+                )
                 logger.debug("claude_code_cli_not_in_path")
                 return False
 
@@ -450,9 +645,18 @@ class ClaudeCodeClient(ILlmClient):
 
             if process.returncode == 0:
                 version = self._safe_decode(stdout)
+                self._health_cache = HealthCheckCache(
+                    is_available=True,
+                    checked_at=time.monotonic(),
+                    version=version,
+                )
                 logger.debug("claude_code_available", version=version)
                 return True
 
+            self._health_cache = HealthCheckCache(
+                is_available=False,
+                checked_at=time.monotonic(),
+            )
             logger.debug(
                 "claude_code_version_check_failed",
                 returncode=process.returncode,
@@ -460,9 +664,17 @@ class ClaudeCodeClient(ILlmClient):
             return False
 
         except asyncio.TimeoutError:
+            self._health_cache = HealthCheckCache(
+                is_available=False,
+                checked_at=time.monotonic(),
+            )
             logger.debug("claude_code_availability_timeout")
             return False
         except Exception as e:
+            self._health_cache = HealthCheckCache(
+                is_available=False,
+                checked_at=time.monotonic(),
+            )
             logger.debug(
                 "claude_code_availability_error",
                 error=str(e),
@@ -471,7 +683,7 @@ class ClaudeCodeClient(ILlmClient):
             return False
 
     # =========================================================================
-    # HELPER METHODS (DRY)
+    # HELPER METHODS
     # =========================================================================
 
     @staticmethod
@@ -489,6 +701,10 @@ class ClaudeCodeClient(ILlmClient):
         except Exception:
             return ""
 
+
+# =============================================================================
+# PUBLIC API
+# =============================================================================
 
 async def detect_claude_code() -> bool:
     """
