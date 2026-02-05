@@ -137,7 +137,7 @@ class FortificationExecutor(BasePhaseExecutor):
                                  lineterm=''
                              )
                              remediation.unified_diff = '\n'.join(list(diff))
-                         except Exception:
+                         except (ValueError, TypeError, RuntimeError):  # Fortification isolated
                              pass
                     
                     # Assign to finding

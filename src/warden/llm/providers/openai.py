@@ -13,6 +13,7 @@ from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.resilience import resilient
+from warden.shared.infrastructure.exceptions import ExternalServiceError
 
 
 class OpenAIClient(ILlmClient):
@@ -187,7 +188,7 @@ class OpenAIClient(ILlmClient):
         response = await self.send_async(request)
 
         if not response.success:
-            raise Exception(f"LLM request failed: {response.error_message}")
+            raise ExternalServiceError(f"LLM request failed: {response.error_message}")
 
         return response
 

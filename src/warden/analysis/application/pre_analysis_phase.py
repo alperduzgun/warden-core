@@ -934,7 +934,7 @@ class PreAnalysisPhase:
                         content = re.sub(r'#.*$', '', content, flags=re.MULTILINE)
                         content = "".join(content.split())
                         components.append(hashlib.md5(content.encode()).hexdigest())
-                except Exception:
+                except (ValueError, TypeError, AttributeError):  # Non-critical metrics
                     pass
         
         # Add internal config dict hash (if passed via CLI args etc)

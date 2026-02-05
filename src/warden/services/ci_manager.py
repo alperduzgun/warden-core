@@ -571,7 +571,7 @@ class CIManager:
             if temp_path and temp_path.exists():
                 try:
                     temp_path.unlink()
-                except Exception:
+                except (OSError, IOError, ValueError):  # CI operation best-effort
                     pass
 
     def _safe_read_file(self, path: Path) -> Optional[str]:
@@ -699,7 +699,7 @@ class CIManager:
                     try:
                         stat = wf_path.stat()
                         wf_status.last_modified = datetime.fromtimestamp(stat.st_mtime)
-                    except Exception:
+                    except (OSError, IOError, ValueError):  # CI operation best-effort
                         pass
 
                     if wf_status.is_outdated:

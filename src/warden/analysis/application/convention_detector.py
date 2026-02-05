@@ -170,7 +170,7 @@ class ConventionDetector:
                     content = f.read()
                     if "[tool.black]" in content or "[tool.ruff]" in content:
                         return True
-            except Exception:
+            except (FileNotFoundError, PermissionError, IOError, UnicodeDecodeError):
                 pass
 
         return False

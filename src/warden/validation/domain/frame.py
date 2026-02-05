@@ -15,6 +15,9 @@ from dataclasses import dataclass
 from typing import Dict, Any, List
 
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
+from warden.shared.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 from warden.validation.domain.enums import (
     FramePriority,
     FrameScope,
@@ -275,9 +278,13 @@ class ValidationFrame(ABC):
                 try:
                     return await self.execute_async(code_file)
                 except Exception as e:
-                    import traceback
-                    print(f"ERROR executing frame {self.frame_id} on {code_file.path}: {e}")
-                    traceback.print_exc()
+                    logger.error(
+                        "frame_execution_error",
+                        frame_id=self.frame_id,
+                        file_path=code_file.path,
+                        error=str(e),
+                        exc_info=True,
+                    )
                     return None
 
         # Launch all tasks

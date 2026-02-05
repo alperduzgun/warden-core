@@ -805,7 +805,7 @@ custom_rules:
         branch = "main"
         try:
             branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
-        except Exception:
+        except (OSError, IOError, PermissionError):  # Cleanup is best-effort
             pass
 
         # Select CI provider

@@ -438,7 +438,7 @@ Return JSON:
             if self.tokenizer:
                 try:
                     estimated_tokens += len(self.tokenizer.encode(prompt))
-                except Exception:
+                except (ValueError, KeyError, TypeError):  # Graceful fallback for context extraction
                     pass
             
             # Acquire rate limit before sending
@@ -462,7 +462,7 @@ Return JSON:
             if self.tokenizer:
                 try:
                     estimated_tokens += len(self.tokenizer.encode(batch_prompt))
-                except Exception:
+                except (ValueError, KeyError, TypeError):  # Graceful fallback for context extraction
                     pass
             
             # Acquire rate limit before sending

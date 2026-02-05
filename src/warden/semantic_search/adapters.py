@@ -100,7 +100,7 @@ class ChromaDBAdapter(VectorStoreAdapter):
             )
             if results and results["metadatas"]:
                 return results["metadatas"][0].get("file_hash")
-        except Exception:
+        except (ValueError, TypeError, RuntimeError):  # Vector store operation
             pass
         return None
 
@@ -217,6 +217,6 @@ class QdrantAdapter(VectorStoreAdapter):
             points, _ = scroll_result
             if points:
                 return points[0].payload.get("file_hash")
-        except Exception:
+        except (ValueError, TypeError, RuntimeError):  # Vector store operation
             pass
         return None

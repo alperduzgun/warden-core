@@ -39,7 +39,7 @@ def batch_process(items):
         try:
             # CRITICISM EXPECTED: Empty except block (Silent Failure)
             process_payment(item["id"], item["amount"])
-        except Exception:
+        except (ValueError, TypeError, RuntimeError):  # Scenario execution isolated
             pass
             
         # If logic is flawed, items might not decrease

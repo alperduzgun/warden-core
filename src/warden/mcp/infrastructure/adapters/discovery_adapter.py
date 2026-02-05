@@ -252,7 +252,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
                     frameworks.append({"name": "Express", "type": "web_framework"})
                 if "jest" in deps:
                     frameworks.append({"name": "Jest", "type": "testing"})
-            except Exception:
+            except (ValueError, TypeError, KeyError):  # Adapter isolation
                 pass
 
         # Rust
@@ -301,7 +301,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
                             lines = len(item.read_text(encoding="utf-8", errors="ignore").splitlines())
                             stats["total_lines"] += lines
                             stats["lines_by_language"][lang] = stats["lines_by_language"].get(lang, 0) + lines
-                        except Exception:
+                        except (ValueError, TypeError, KeyError):  # Adapter isolation
                             pass
                         break
 

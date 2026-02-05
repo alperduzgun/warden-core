@@ -440,7 +440,7 @@ Return strictly JSON:
             end = content.rfind("}") + 1
             if start != -1 and end > start:
                 return json.loads(content[start:end])
-        except Exception:
+        except (ValueError, TypeError, AttributeError):  # Pattern matching may fail
             pass
         return {}
 
