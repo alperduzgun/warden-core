@@ -46,11 +46,25 @@ When refactoring god classes:
 | File | Lines | Notes |
 |------|-------|-------|
 | grpc/generated/warden_pb2_grpc.py | 2529 | Auto-generated |
-| validation/frames/antipattern/antipattern_frame.py | 1142 | Multi-language support |
 | pipeline/application/orchestrator/frame_executor.py | 1078 | See god class above |
 | services/ci_manager.py | 1046 | CI integration complexity |
 | analysis/application/pre_analysis_phase.py | 1023 | See god class above |
 | validation/frames/orphan/llm_orphan_filter.py | 1003 | LLM integration complexity |
+
+---
+
+## Recently Resolved
+
+| Item | Resolution | Date |
+|------|------------|------|
+| `AntiPatternFrame` (1142 lines) | Split into modular detectors | 2026-02-05 |
+
+**Details:** AntiPatternFrame was refactored into focused modules:
+- `antipattern_frame.py` (394 lines) - Main orchestrator
+- `detectors/exception_detector.py` (367 lines) - Exception handling detection
+- `detectors/class_size_detector.py` (129 lines) - God class detection
+- `detectors/debug_detector.py` (176 lines) - Debug output detection
+- `detectors/todo_detector.py` (74 lines) - TODO/FIXME detection
 
 ---
 
