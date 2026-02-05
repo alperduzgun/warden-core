@@ -16,8 +16,9 @@ Detections:
 
 Architecture:
 1. ASTProviderRegistry -> Best provider for language
-2. Universal AST queries -> Language-agnostic detection
-3. Regex fallback -> When AST unavailable
+2. Modular detectors -> Focused detection classes
+3. Universal AST queries -> Language-agnostic detection
+4. Regex fallback -> When AST unavailable
 
 Usage:
     from warden.validation.frames.antipattern import AntiPatternFrame
@@ -26,8 +27,8 @@ Usage:
     result = await frame.execute_async(code_file)
 """
 
-from warden.validation.frames.antipattern.antipattern_frame import (
-    AntiPatternFrame,
+from warden.validation.frames.antipattern.antipattern_frame import AntiPatternFrame
+from warden.validation.frames.antipattern.types import (
     AntiPatternSeverity,
     AntiPatternViolation,
 )
