@@ -36,6 +36,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+RUN useradd -m -u 1000 warden
+
 WORKDIR /app
 
 # Copy installed python packages from builder
@@ -45,9 +48,15 @@ COPY --from=builder /usr/local/bin/warden /usr/local/bin/warden
 # Copy the CLI source code (needed for the 'warden chat' command to locate the Node project)
 COPY --from=builder /app/cli /app/cli
 
+# Set ownership of /app to warden user
+RUN chown -R warden:warden /app
+
 # Set environment variables
 ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
+
+# Switch to non-root user for security
+USER warden
 
 # Default entrypoint
 ENTRYPOINT ["warden"]

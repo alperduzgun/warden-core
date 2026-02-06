@@ -196,7 +196,7 @@ class PhaseOrchestrator:
                 # Use Language Registry for detection
                 from warden.shared.languages.registry import LanguageRegistry
                 from warden.ast.domain.enums import CodeLanguage
-                
+
                 lang_enum = LanguageRegistry.get_language_from_path(code_files[0].path)
                 if lang_enum != CodeLanguage.UNKNOWN:
                     language = lang_enum.value
@@ -207,7 +207,7 @@ class PhaseOrchestrator:
             try:
                 self.config.analysis_level = AnalysisLevel(analysis_level.lower())
                 logger.info("analysis_level_overridden", level=self.config.analysis_level.value)
-                
+
                 # Global overrides for BASIC level to ensure speed and local-only execution
                 if self.config.analysis_level == AnalysisLevel.BASIC:
                     self.config.use_llm = False
@@ -404,7 +404,7 @@ class PhaseOrchestrator:
                 # Add a dummy result so CLI can show it
                 return context
             raise e
-            
+
         except Exception as e:
             # Global pipeline failure handler - ensures status is updated and error is traced.
             # While generic, this is necessary at the top orchestration level to catch any phase failure.
@@ -420,6 +420,11 @@ class PhaseOrchestrator:
             )
             context.errors.append(f"Pipeline failed: {str(e)}")
             raise
+
+        finally:
+            # Cleanup and state consistency - always run regardless of success/failure
+            await self._cleanup_on_completion_async(context)
+            self._ensure_state_consistency(context)
 
         return context
 
@@ -635,6 +640,83 @@ class PhaseOrchestrator:
 
         except Exception as e:
             logger.warning("baseline_application_failed", error=str(e))
+
+    async def _cleanup_on_completion_async(self, context: PipelineContext) -> None:
+        """
+        Cleanup resources after pipeline execution (success or failure).
+        Always called in finally block to ensure cleanup happens.
+        """
+        try:
+            # Close semantic search service if open
+            if self.semantic_search_service and hasattr(self.semantic_search_service, 'close'):
+                try:
+                    await self.semantic_search_service.close()
+                except Exception as e:
+                    logger.warning("semantic_search_cleanup_failed", error=str(e))
+
+            # Shutdown LSP servers if running
+            if hasattr(self.phase_executor, 'lsp_diagnostics') and self.phase_executor.lsp_diagnostics:
+                try:
+                    if hasattr(self.phase_executor.lsp_diagnostics, 'shutdown'):
+                        await self.phase_executor.lsp_diagnostics.shutdown()
+                except Exception as e:
+                    logger.warning("lsp_shutdown_failed", error=str(e))
+
+            # Close frame executor resources
+            if hasattr(self.frame_executor, 'cleanup'):
+                try:
+                    await self.frame_executor.cleanup()
+                except Exception as e:
+                    logger.warning("frame_executor_cleanup_failed", error=str(e))
+
+            logger.info("pipeline_cleanup_completed", pipeline_id=context.pipeline_id)
+
+        except Exception as e:
+            logger.error("cleanup_failed", pipeline_id=context.pipeline_id, error=str(e))
+
+    def _ensure_state_consistency(self, context: PipelineContext) -> None:
+        """
+        Ensure pipeline context is in consistent state before returning.
+        Fixes: Lying state machine (incomplete phases marked as complete).
+        """
+        try:
+            # Verify pipeline status reflects actual execution
+            if not self.pipeline.completed_at:
+                self.pipeline.completed_at = datetime.now()
+
+            # Check for partial failures
+            frame_results = getattr(context, 'frame_results', {})
+            failed_frames = [fr for fr in frame_results.values() if fr.get('result', {}).get('status') == 'failed']
+
+            # If some frames failed but pipeline marked COMPLETED, fix it
+            if failed_frames and self.pipeline.status == PipelineStatus.COMPLETED:
+                logger.warning(
+                    "state_inconsistency_detected",
+                    expected_status="COMPLETED_WITH_FAILURES",
+                    actual_status=self.pipeline.status,
+                    failed_frames=len(failed_frames)
+                )
+                # Mark with failures if failures exist
+                self.pipeline.status = PipelineStatus.FAILED
+
+            # Verify context has errors recorded for failed state
+            if self.pipeline.status == PipelineStatus.FAILED and not context.errors:
+                context.errors.append("Pipeline marked FAILED but no errors recorded")
+
+            # Sync pipeline counts to context
+            self.pipeline.frames_passed = len([fr for fr in frame_results.values() if fr.get('result', {}).get('status') == 'passed'])
+            self.pipeline.frames_failed = len(failed_frames)
+
+            logger.info(
+                "state_consistency_verified",
+                pipeline_id=context.pipeline_id,
+                status=self.pipeline.status.value,
+                frames_passed=self.pipeline.frames_passed,
+                frames_failed=self.pipeline.frames_failed
+            )
+
+        except Exception as e:
+            logger.error("state_consistency_check_failed", error=str(e))
 
     def _build_pipeline_result(self, context: PipelineContext) -> PipelineResult:
         """Build PipelineResult from context for compatibility."""
