@@ -1,0 +1,44 @@
+<svg width="300" height="100" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg"
+     data-warden-score="10.0"
+     data-warden-timestamp="1770416769"
+     data-warden-signature="ae4a4f1d7ee112f628754c8da37de0a5aaefee07862c6ab9e3f3d7f927613885">
+    <a href="https://warden.ai/verify?score=10.0&amp;sig=ae4a4f1d7ee112f628754c8da37de0a5aaefee07862c6ab9e3f3d7f927613885&amp;ts=1770416769" target="_blank">
+        <!-- Drop Shadow Filter -->
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+            </filter>
+            <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#1e1e2e"/>
+                <stop offset="100%" stop-color="#2a2a3c"/>
+            </linearGradient>
+            <linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#10B981"/>
+                <stop offset="100%" stop-color="#059669"/>
+            </linearGradient>
+        </defs>
+
+        <!-- Background Card -->
+        <rect x="2" y="2" width="296" height="96" rx="16" fill="url(#cardGrad)" stroke="#3b3b4f" stroke-width="1" filter="url(#shadow)"/>
+        
+        <!-- Header -->
+        <text x="24" y="32" fill="#a1a1aa" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="11" font-weight="600" letter-spacing="1.5" style="text-transform: uppercase;">WARDEN QUALITY</text>
+        
+        <!-- Score Display (Improved Alignment) -->
+        <text x="24" y="72" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-weight="700">
+            <tspan font-size="36">10.0</tspan>
+            <tspan font-size="18" fill="#71717a" font-weight="400" dx="2">/ 10</tspan>
+        </text>
+
+        <!-- Status Badge (Right Aligned) -->
+        <rect x="184" y="20" width="92" height="24" rx="6" fill="#10B981" fill-opacity="0.15" stroke="#10B981" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="230" y="36" fill="#10B981" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.5">EXCELLENT</text>
+
+        <!-- Progress Bar Section -->
+        <line x1="184" y1="64" x2="276" y2="64" stroke="#3f3f46" stroke-width="4" stroke-linecap="round" stroke-opacity="0.5"/>
+        <line x1="184" y1="64" x2="276.0" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
+
+        <!-- Footer Meta -->
+        <text x="276" y="84" fill="#52525b" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="9" text-anchor="end" letter-spacing="0.5">AI-NATIVE GUARDIAN</text>
+    </a>
+</svg>

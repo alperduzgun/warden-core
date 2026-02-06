@@ -398,7 +398,121 @@ class ReportGenerator:
                 # Last resort: just the filename to avoid "uri must be relative" error
                 return path_obj.name
             except Exception:
-                return "unknown_file"
+                raise
+
+    def generate_svg_badge(
+        self,
+        scan_results: Dict[str, Any],
+        output_path: Path,
+        base_path: Optional[Path] = None
+    ) -> None:
+        """
+        Generate a premium, standalone SVG badge for the project quality.
+        """
+        from warden.shared.utils.quality_calculator import calculate_quality_score
+        
+        # Extract findings
+        all_findings = []
+        frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
+        for frame in frame_results:
+            all_findings.extend(frame.get('findings', []))
+        manual = scan_results.get('manual_review_findings_list', [])
+        all_findings.extend(manual)
+
+        score = calculate_quality_score(all_findings, 10.0)
+        
+        # Determine Color Gradient
+        if score >= 9.0:
+            gradient_start, gradient_end = "#10B981", "#059669" # Emerald
+            status_text = "EXCELLENT"
+        elif score >= 7.5:
+            gradient_start, gradient_end = "#3B82F6", "#2563EB" # Blue
+            status_text = "GOOD" 
+        elif score >= 5.0:
+            gradient_start, gradient_end = "#F59E0B", "#D97706" # Amber
+            status_text = "WARNING"
+        elif score >= 2.5:
+            gradient_start, gradient_end = "#F97316", "#EA580C" # Orange
+            status_text = "RISK"
+        else:
+            gradient_start, gradient_end = "#EF4444", "#DC2626" # Red
+            status_text = "CRITICAL"
+
+        # Calculate progress circle (circumference = 2 * pi * r)
+        # r=16 -> circ ≈ 100
+        progress = (score / 10.0) * 100.0
+        dash_array = f"{progress}, 100"
+
+        # Calculate HMAC Signature (Simple MVP)
+        import hmac
+        import hashlib
+        import time
+        
+        timestamp = int(time.time())
+        secret_key = b"warden-local-secret"  # TODO: Move to config for real verification
+        payload = f"{score:.1f}|{timestamp}|WARDEN_QUALITY".encode('utf-8')
+        signature = hmac.new(secret_key, payload, hashlib.sha256).hexdigest()
+
+        # Generate SVG with Link and Metadata
+        svg_content = f"""<svg width="300" height="100" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg"
+     data-warden-score="{score:.1f}"
+     data-warden-timestamp="{timestamp}"
+     data-warden-signature="{signature}">
+    <a href="https://warden.ai/verify?score={score:.1f}&amp;sig={signature}&amp;ts={timestamp}" target="_blank">
+        <!-- Drop Shadow Filter -->
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+            </filter>
+            <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#1e1e2e"/>
+                <stop offset="100%" stop-color="#2a2a3c"/>
+            </linearGradient>
+            <linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="{gradient_start}"/>
+                <stop offset="100%" stop-color="{gradient_end}"/>
+            </linearGradient>
+        </defs>
+
+        <!-- Background Card -->
+        <rect x="2" y="2" width="296" height="96" rx="16" fill="url(#cardGrad)" stroke="#3b3b4f" stroke-width="1" filter="url(#shadow)"/>
+        
+        <!-- Header -->
+        <text x="24" y="32" fill="#a1a1aa" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="11" font-weight="600" letter-spacing="1.5" style="text-transform: uppercase;">WARDEN QUALITY</text>
+        
+        <!-- Score Display (Improved Alignment) -->
+        <text x="24" y="72" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-weight="700">
+            <tspan font-size="36">{score:.1f}</tspan>
+            <tspan font-size="18" fill="#71717a" font-weight="400" dx="2">/ 10</tspan>
+        </text>
+
+        <!-- Status Badge (Right Aligned) -->
+        <rect x="184" y="20" width="92" height="24" rx="6" fill="{gradient_start}" fill-opacity="0.15" stroke="{gradient_start}" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="230" y="36" fill="{gradient_start}" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.5">{status_text}</text>
+
+        <!-- Progress Bar Section -->
+        <line x1="184" y1="64" x2="276" y2="64" stroke="#3f3f46" stroke-width="4" stroke-linecap="round" stroke-opacity="0.5"/>
+        <line x1="184" y1="64" x2="{184 + (92 * (score/10.0))}" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
+
+        <!-- Footer Meta -->
+        <text x="276" y="84" fill="#52525b" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="9" text-anchor="end" letter-spacing="0.5">AI-NATIVE GUARDIAN</text>
+    </a>
+</svg>"""
+
+        # Atomic write
+        lock_path = output_path.parent / f".{output_path.name}.lock"
+        with file_lock(lock_path):
+            temp_fd, temp_path = tempfile.mkstemp(suffix='.svg', dir=output_path.parent, prefix='.tmp_badge_')
+            try:
+                with os.fdopen(temp_fd, 'w') as f:
+                    f.write(svg_content)
+                os.replace(temp_path, output_path)
+            except Exception:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise
 
     def generate_junit_report(
         self,
@@ -517,6 +631,16 @@ class ReportGenerator:
         Raises:
             RuntimeError: If WeasyPrint is not installed
         """
+        from warden.shared.infrastructure.logging import get_logger
+        logger = get_logger(__name__)
+
+        # OBSERVABILITY: Log PDF generation start
+        logger.info(
+            "pdf_generation_started",
+            output_path=str(output_path),
+            findings_count=scan_results.get('total_findings', 0)
+        )
+
         # Use inplace=False to create a copy for sanitization
         sanitized_results = self._sanitize_paths(scan_results, base_path, inplace=False)
 
@@ -527,6 +651,7 @@ class ReportGenerator:
             # Try to use WeasyPrint if available
             from weasyprint import HTML, CSS
         except ImportError:
+            logger.error("pdf_generation_failed", reason="weasyprint_not_installed")
             raise RuntimeError(
                 "PDF generation requires WeasyPrint. Install with: pip install weasyprint"
             )
@@ -545,10 +670,26 @@ class ReportGenerator:
                 stylesheets=[CSS(string=self.html_generator.get_pdf_styles())]
             )
             os.replace(temp_path, output_path)  # Atomic on Unix/Linux
-        except Exception:
+
+            # OBSERVABILITY: Log successful PDF generation
+            logger.info(
+                "pdf_generated",
+                output_path=str(output_path),
+                file_size_kb=round(output_path.stat().st_size / 1024, 2)
+            )
+        except Exception as e:
             # Clean up temp file on failure
             try:
                 os.unlink(temp_path)
             except OSError:
                 pass
-            raise
+
+            # OBSERVABILITY: Log failure with context
+            logger.error(
+                "pdf_generation_failed",
+                output_path=str(output_path),
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            # Re-raise with more context
+            raise RuntimeError(f"PDF generation failed: {str(e)}") from e
