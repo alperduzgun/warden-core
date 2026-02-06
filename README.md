@@ -483,6 +483,16 @@ Warden stands out by being a **Hybrid Architecture Guardian**. Unlike cloud-only
 
 1.  **Project Purpose Detector (Intent Analysis):**
     Typical cloud bots deduce intent from Jira/Linear tickets. Warden deduces it **directly from your code**. It analyzes your codebase to understand if it's a "Crypto Wallet" or "E-Commerce API" and adjusts its rules accordingly.
+## 🔮 Roadmap & Vision
+
+We are transforming Warden from a local tool into a global **Standard of Trust**.
+
+*   Phase 1: Local Trust (MVP) ✅
+*   Phase 2: Signed Badges & Verification 🏗️
+*   Phase 3: Warden Cloud Registry ☁️
+*   Phase 4: Enterprise Compliance 🏢
+
+[See full usage plan in ROADMAP.md](./ROADMAP.md)
 
 2.  **Architectural Frames:**
     We don't just look for bugs. We look for **Architectural Crimes**.
