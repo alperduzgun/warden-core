@@ -139,25 +139,12 @@ class ASTProviderRegistry:
         if preferred_priority is not None:
             for provider in providers:
                 if provider.metadata.priority == preferred_priority:
-                    logger.debug(
-                        "provider_selected",
-                        provider_name=provider.metadata.name,
-                        language=language.value,
-                        priority=preferred_priority.value,
-                        selection="preferred",
-                    )
+                    # Silently return preferred provider (reduces log spam)
                     return provider
 
         # Return highest priority (first in sorted list)
-        selected = providers[0]
-        logger.debug(
-            "provider_selected",
-            provider_name=selected.metadata.name,
-            language=language.value,
-            priority=selected.metadata.priority.value,
-            selection="auto",
-        )
-        return selected
+        # Silently select (provider_registered already logged on registration)
+        return providers[0]
 
     def get_all_providers(self, language: CodeLanguage) -> List[IASTProvider]:
         """

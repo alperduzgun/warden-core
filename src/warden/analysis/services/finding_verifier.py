@@ -157,10 +157,7 @@ Return ONLY a JSON object:
                     if is_tp:
                         self._set(finding, 'verification_metadata', result)
                         verified_findings.append(finding)
-                    else:
-                        logger.info("batch_verification_rejected_finding", 
-                                    finding_id=self._get(finding, 'id'), 
-                                    reason=self._get(result, 'reason', 'Rejected by LLM'))
+                    # Rejected findings logged in verification_summary below
             except Exception as e:
                 logger.error("batch_verification_failed_manual_review_needed", error=str(e))
                 # Fallback: Mark for manual review instead of failing open blindly

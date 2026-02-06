@@ -5,9 +5,10 @@ Detects code duplication:
 - Duplicate code blocks
 - Similar functions
 - Repeated patterns
+
+Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-import ast
 import structlog
 from typing import List, Optional, Tuple, Any
 from difflib import SequenceMatcher
@@ -21,6 +22,7 @@ from warden.cleaning.domain.models import (
     CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
+from warden.ast.domain.models import ASTNode
 
 logger = structlog.get_logger()
 
@@ -38,6 +40,8 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
     - Duplicate code blocks
     - Similar functions
     - Repeated patterns
+
+    Universal multi-language support via tree-sitter AST.
     """
 
     @property
@@ -50,6 +54,11 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
         """Execution priority."""
         return CleaningAnalyzerPriority.HIGH
 
+    @property
+    def supported_languages(self) -> set:
+        """Languages supported by this analyzer (universal - all languages)."""
+        return set()  # Empty set = universal support (all languages)
+
     async def analyze_async(
         self,
         code_file: CodeFile,
@@ -57,11 +66,12 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
         ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
-        Analyze code for duplication.
+        Analyze code for duplication using Universal AST.
 
         Args:
             code_file: The code file to analyze
             cancellation_token: Optional cancellation token
+            ast_tree: Optional pre-parsed Universal AST tree
 
         Returns:
             CleaningResult with duplication issues
@@ -76,14 +86,36 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
             )
 
         try:
-            issues = self._analyze_duplication(code_file.content, ast_tree)
+            lines = code_file.content.split("\n")
+            issues = []
+
+            # Check for duplicate code blocks (line-based, no AST needed)
+            duplicate_blocks = self._find_duplicate_blocks(lines)
+            for block1_start, block2_start, length in duplicate_blocks:
+                issues.append(
+                    CleaningIssue(
+                        issue_type=CleaningIssueType.CODE_DUPLICATION,
+                        description=f"Duplicate code block of {length} lines (also at line {block2_start})",
+                        line_number=block1_start,
+                        severity=CleaningIssueSeverity.HIGH if length > 5 else CleaningIssueSeverity.MEDIUM,
+                    )
+                )
+
+            # Check for similar functions using Universal AST
+            ast_root = await self._get_ast_root(code_file, ast_tree)
+            if ast_root:
+                similar_functions = self._find_similar_functions_universal(ast_root, code_file.content)
+                for func1_name, func2_name, line_number, similarity in similar_functions:
+                    issues.append(
+                        CleaningIssue(
+                            issue_type=CleaningIssueType.CODE_DUPLICATION,
+                            description=f"Function '{func1_name}' is {int(similarity*100)}% similar to '{func2_name}'",
+                            line_number=line_number,
+                            severity=CleaningIssueSeverity.MEDIUM,
+                        )
+                    )
 
             if not issues:
-                logger.info(
-                    "no_duplication_issues",
-                    file_path=code_file.path,
-                    analyzer=self.name,
-                )
                 return CleaningResult(
                     success=True,
                     file_path=code_file.path,
@@ -94,17 +126,11 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
                     analyzer_name=self.name,
                 )
 
-            logger.info(
-                "duplication_issues_found",
-                count=len(issues),
-                file_path=code_file.path,
-            )
-
             # Convert issues to suggestions
             suggestions = [self._create_suggestion(issue, code_file.content) for issue in issues]
 
             # Calculate score
-            total_lines = len(code_file.content.split("\n"))
+            total_lines = len(lines)
             cleanup_score = self._calculate_cleanup_score(len(issues), total_lines)
 
             return CleaningResult(
@@ -116,11 +142,8 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
                 summary=f"Found {len(issues)} code duplication issues",
                 analyzer_name=self.name,
                 metrics={
-                    "duplicate_blocks": len(issues),
-                    "total_duplicated_lines": sum(
-                        int(i.description.split("lines")[0].split()[-1])
-                        for i in issues if "lines" in i.description
-                    ) if issues else 0,
+                    "duplicate_blocks": len(duplicate_blocks),
+                    "similar_functions": len(similar_functions) if ast_root else 0,
                 },
             )
 
@@ -138,53 +161,9 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_duplication(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
-        """
-        Analyze code for duplication.
-
-        Args:
-            code: Source code to analyze
-            ast_tree: Optional pre-parsed AST
-
-        Returns:
-            List of duplication issues
-        """
-        issues = []
-        lines = code.split("\n")
-
-        # Check for duplicate code blocks
-        duplicate_blocks = self._find_duplicate_blocks(lines)
-        for block1_start, block2_start, length in duplicate_blocks:
-            issues.append(
-                CleaningIssue(
-                    issue_type=CleaningIssueType.CODE_DUPLICATION,
-                    description=f"Duplicate code block of {length} lines (also at line {block2_start})",
-                    line_number=block1_start,
-                    severity=CleaningIssueSeverity.HIGH if length > 5 else CleaningIssueSeverity.MEDIUM,
-                )
-            )
-
-        # Check for similar functions using AST
-        try:
-            tree = ast_tree if ast_tree else ast.parse(code)
-            similar_functions = self._find_similar_functions(tree, code)
-            for func1_name, func2_name, line_number, similarity in similar_functions:
-                issues.append(
-                    CleaningIssue(
-                        issue_type=CleaningIssueType.CODE_DUPLICATION,
-                        description=f"Function '{func1_name}' is {int(similarity*100)}% similar to '{func2_name}'",
-                        line_number=line_number,
-                        severity=CleaningIssueSeverity.MEDIUM,
-                    )
-                )
-        except SyntaxError:
-            logger.warning("syntax_error_in_duplication_analysis")
-
-        return issues
-
     def _find_duplicate_blocks(self, lines: List[str]) -> List[Tuple[int, int, int]]:
         """
-        Find duplicate code blocks.
+        Find duplicate code blocks (line-based, language-agnostic).
 
         Args:
             lines: Code lines
@@ -218,7 +197,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
 
     def _lines_similar(self, line1: str, line2: str) -> bool:
         """
-        Check if two lines are similar.
+        Check if two lines are similar (language-agnostic).
 
         Args:
             line1: First line
@@ -231,66 +210,71 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
         l1 = line1.strip()
         l2 = line2.strip()
 
-        # Ignore blank lines and comments
-        if not l1 or not l2 or l1.startswith("#") or l2.startswith("#"):
+        # Ignore blank lines and comments (#, //)
+        if not l1 or not l2:
+            return False
+        if l1.startswith(("#", "//")) or l2.startswith(("#", "//")):
             return False
 
         # Use sequence matcher for similarity
         similarity = SequenceMatcher(None, l1, l2).ratio()
         return similarity >= SIMILARITY_THRESHOLD
 
-    def _find_similar_functions(
+    def _find_similar_functions_universal(
         self,
-        tree: ast.AST,
+        ast_root: ASTNode,
         code: str
     ) -> List[Tuple[str, str, int, float]]:
         """
-        Find similar functions using AST.
+        Find similar functions using Universal AST.
+
+        Works for all languages (Python, Swift, Dart, Go, JS, etc.)
 
         Args:
-            tree: AST tree
+            ast_root: Universal AST root node
             code: Source code
 
         Returns:
             List of (func1_name, func2_name, line_number, similarity)
         """
         similar_functions = []
-        functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+        lines = code.split("\n")
+
+        # Get all functions/methods using base class helper
+        functions = self._get_functions_and_methods(ast_root)
 
         # Compare each pair of functions
         for i, func1 in enumerate(functions):
             for func2 in functions[i + 1:]:
-                similarity = self._calculate_function_similarity(func1, func2, code)
+                similarity = self._calculate_function_similarity_universal(func1, func2, lines)
                 if similarity >= SIMILARITY_THRESHOLD:
+                    line_number = func1.location.start_line if func1.location else 0
                     similar_functions.append(
-                        (func1.name, func2.name, func1.lineno, similarity)
+                        (func1.name or "<anonymous>", func2.name or "<anonymous>", line_number, similarity)
                     )
 
         return similar_functions
 
-    def _calculate_function_similarity(
+    def _calculate_function_similarity_universal(
         self,
-        func1: ast.FunctionDef,
-        func2: ast.FunctionDef,
-        code: str
+        func1: ASTNode,
+        func2: ASTNode,
+        lines: List[str]
     ) -> float:
         """
-        Calculate similarity between two functions.
+        Calculate similarity between two functions using Universal AST.
 
         Args:
-            func1: First function AST node
-            func2: Second function AST node
-            code: Source code
+            func1: First function node
+            func2: Second function node
+            lines: Source code lines
 
         Returns:
             Similarity score (0.0 to 1.0)
         """
-        # Extract function bodies
-        lines = code.split("\n")
-
-        # Get function body lines
-        func1_lines = self._get_function_body_lines(func1, lines)
-        func2_lines = self._get_function_body_lines(func2, lines)
+        # Extract function body lines from locations
+        func1_lines = self._get_function_body_lines_universal(func1, lines)
+        func2_lines = self._get_function_body_lines_universal(func2, lines)
 
         if not func1_lines or not func2_lines:
             return 0.0
@@ -301,27 +285,35 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
 
         return SequenceMatcher(None, func1_body, func2_body).ratio()
 
-    def _get_function_body_lines(
+    def _get_function_body_lines_universal(
         self,
-        func: ast.FunctionDef,
+        func: ASTNode,
         lines: List[str]
     ) -> List[str]:
         """
-        Extract function body lines.
+        Extract function body lines from Universal AST node.
 
         Args:
-            func: Function AST node
+            func: Universal AST function/method node
             lines: All code lines
 
         Returns:
             Function body lines
         """
-        start_line = func.lineno - 1
+        if not func.location:
+            return []
 
-        # Find end line (simplified - just take next 20 lines or until blank)
-        end_line = min(start_line + 20, len(lines))
+        start_line = func.location.start_line - 1
+        end_line = func.location.end_line
 
-        return [line.strip() for line in lines[start_line:end_line] if line.strip()]
+        # Extract and clean lines
+        body_lines = []
+        for i in range(start_line, min(end_line, len(lines))):
+            line = lines[i].strip()
+            if line and not line.startswith(("#", "//")):
+                body_lines.append(line)
+
+        return body_lines
 
     def _create_suggestion(self, issue: CleaningIssue, code: str) -> CleaningSuggestion:
         """Create a cleanup suggestion from an issue."""

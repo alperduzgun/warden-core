@@ -23,7 +23,7 @@ rules:
 
   - id: bare-except-clause
     name: Bare Except Clause Detection
-    category: exception-handling
+    category: convention
     severity: critical
     isBlocker: true
     description: |
@@ -87,7 +87,7 @@ rules:
 
   - id: except-pass-antipattern
     name: Silent Exception Swallowing
-    category: exception-handling
+    category: convention
     severity: critical
     isBlocker: true
     description: |
@@ -128,7 +128,7 @@ rules:
 
   - id: generic-exception-raise
     name: Generic Exception Raising
-    category: exception-handling
+    category: convention
     severity: high
     isBlocker: false
     description: |
@@ -168,7 +168,7 @@ rules:
 
   - id: thread-unsafe-singleton
     name: Thread-Unsafe Singleton Pattern
-    category: design-patterns
+    category: architectural
     severity: critical
     isBlocker: true
     description: |
@@ -234,7 +234,7 @@ rules:
 
   - id: god-class-detection
     name: God Class Detection (1000+ lines)
-    category: design-patterns
+    category: architectural
     severity: high
     isBlocker: false
     description: |
@@ -266,7 +266,7 @@ rules:
 
   - id: debug-print-statements
     name: Debug Print Statements in Production
-    category: code-hygiene
+    category: convention
     severity: medium
     isBlocker: false
     description: |
@@ -276,10 +276,10 @@ rules:
     type: pattern
     conditions:
       patterns:
-        - 'print\s*\(\s*["\']DEBUG'
-        - 'print\s*\(\s*["\']debug'
-        - 'print\s*\(\s*f?["\'].*DEBUG.*["\']'
-        - 'print\s*\(\s*f?["\'].*\{.*\}.*["\']'  # print(f"...{var}...") - likely debug
+        - "print\\s*\\(\\s*[\"']DEBUG"
+        - "print\\s*\\(\\s*[\"']debug"
+        - "print\\s*\\(\\s*f?[\"'].*DEBUG.*[\"']"
+        - "print\\s*\\(\\s*f?[\"'].*\\{.*\\}.*[\"']"  # print(f"...{var}...") - likely debug
     examples:
       invalid:
         - 'print("DEBUG: value =", value)'
@@ -306,7 +306,7 @@ rules:
 
   - id: todo-fixme-comments
     name: TODO/FIXME Comments Detection
-    category: code-hygiene
+    category: convention
     severity: low
     isBlocker: false
     description: |
@@ -342,7 +342,7 @@ rules:
 
   - id: commented-out-code
     name: Commented Out Code Detection
-    category: code-hygiene
+    category: convention
     severity: low
     isBlocker: false
     description: |
@@ -382,7 +382,7 @@ rules:
 
   - id: builtin-shadowing
     name: Built-in Name Shadowing
-    category: naming
+    category: convention
     severity: high
     isBlocker: false
     description: |
@@ -447,7 +447,7 @@ rules:
 
   - id: duplicate-exception-hierarchy
     name: Duplicate Exception Class Detection
-    category: design-patterns
+    category: architectural
     severity: medium
     isBlocker: false
     description: |
@@ -486,7 +486,7 @@ rules:
 
   - id: missing-await
     name: Missing Await on Coroutine
-    category: async-patterns
+    category: convention
     severity: critical
     isBlocker: true
     description: |
@@ -529,7 +529,7 @@ rules:
 
   - id: wildcard-import
     name: Wildcard Import Detection
-    category: code-hygiene
+    category: convention
     severity: medium
     isBlocker: false
     description: |

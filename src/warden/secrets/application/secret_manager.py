@@ -128,7 +128,7 @@ class SecretManager:
                     self._cache[key] = result
                 return result
 
-        logger.debug("secret_not_found", key=key)
+        # Silently return NOT_FOUND (summary logged by caller if needed)
         return SecretValue(
             key=key,
             value=None,

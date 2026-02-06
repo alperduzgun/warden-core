@@ -65,15 +65,26 @@ class FrameRegistry:
         """
         Discover all available frames from all sources.
 
+        Uses caching to avoid redundant discovery on subsequent calls.
+
         Args:
             project_root: Optional project root for local frame discovery
-            
+
         Returns:
             List of ValidationFrame classes
-            
+
         Raises:
             ValidationFrameError: If frame discovery fails critically
         """
+        # Return cached frames if already discovered
+        if self.registered_frames:
+            logger.debug(
+                "using_cached_frames",
+                count=len(self.registered_frames),
+                frames=[f.__name__ for f in self.registered_frames.values()],
+            )
+            return list(self.registered_frames.values())
+
         logger.debug("frame_discovery_started")
 
         # 1. Discover built-in frames
@@ -147,7 +158,7 @@ class FrameRegistry:
             return
 
         self.registered_frames[frame_id] = frame_class
-        logger.debug("frame_registered", frame_id=frame_id, frame=frame_class.__name__)
+        # Silently register (summary logged in frame_discovery_complete)
 
     def get(self, frame_id: str) -> Type[ValidationFrame] | None:
         """
@@ -324,10 +335,8 @@ class FrameRegistry:
                 
                 if hub_style_file.exists() and hub_style_file.is_file():
                     module_path = f"warden.validation.frames.{frame_path.name}.frame"
-                    logger.debug(f"Found Hub-style frame: {frame_path.name}")
                 elif legacy_style_file.exists() and legacy_style_file.is_file():
                     module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
-                    logger.debug(f"Found Legacy-style frame: {frame_path.name}")
                 else:
                     logger.debug(
                         "frame_file_not_found",
@@ -337,8 +346,7 @@ class FrameRegistry:
                     continue
 
                 try:
-                    # Dynamically import the frame module
-                    logger.debug(f"Attempting to import frame: {frame_path.name} from {module_path}")
+                    # Dynamically import the frame module (silently)
                     module = importlib.import_module(module_path)
 
                     # Find ValidationFrame subclass in the module
@@ -357,12 +365,7 @@ class FrameRegistry:
 
                     if frame_class:
                         frames.append(frame_class)
-                        logger.debug(f"Discovered built-in frame: {frame_path.name}")
-                        logger.debug(
-                            "builtin_frame_discovered",
-                            frame_name=frame_path.name,
-                            frame_class=frame_class.__name__,
-                        )
+                        # Silently add (summary logged below)
                     else:
                         logger.debug(f"No class found in frame: {frame_path.name}")
                         logger.warning(

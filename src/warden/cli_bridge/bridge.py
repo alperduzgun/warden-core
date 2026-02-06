@@ -31,12 +31,18 @@ class WardenBridge:
         # Initialize basic handlers
         self.config_handler = ConfigHandler(self.project_root)
         self.tool_handler = ToolHandler()
-        
-        # Load LLM Config first for orchestrator creation
+
+        # Load pipeline configuration first to get LLM override settings
+        config_data = self.config_handler.load_pipeline_config(config_path)
+        self.active_config_name = config_data["name"]
+
+        # Load LLM Config with overrides from config.yaml
         from warden.llm.config import load_llm_config
         from warden.llm.factory import create_client
         try:
-            self.llm_config = load_llm_config()
+            # Extract LLM config override from config.yaml
+            llm_override = config_data.get("config", {}).get("llm", {})
+            self.llm_config = load_llm_config(config_override=llm_override)
             llm_service = create_client(self.llm_config.default_provider)
             if llm_service:
                 # Attach for tiering awareness
@@ -47,10 +53,6 @@ class WardenBridge:
             self.llm_config = None
             self.llm_handler = None
             llm_service = None
-
-        # Load pipeline configuration and frames
-        config_data = self.config_handler.load_pipeline_config(config_path)
-        self.active_config_name = config_data["name"]
 
         # Initialize Rate Limiter (Centralized to prevent Event Loop issues)
         from warden.llm.rate_limiter import RateLimiter, RateLimitConfig

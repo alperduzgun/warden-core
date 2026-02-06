@@ -6,9 +6,10 @@ Detects complex and long methods:
 - Functions with high cyclomatic complexity
 - Deeply nested code
 - Too many parameters
+
+Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-import ast
 import structlog
 from typing import List, Optional, Any
 
@@ -21,6 +22,7 @@ from warden.cleaning.domain.models import (
     CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
+from warden.ast.domain.models import ASTNode
 
 logger = structlog.get_logger()
 
@@ -40,6 +42,9 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
     - Functions with too many parameters (> 5)
     - Deeply nested code (> 4 levels)
     - High cyclomatic complexity
+
+    Universal multi-language support via tree-sitter AST.
+    Uses BaseCleaningAnalyzer helper methods for AST operations.
     """
 
     @property
@@ -52,6 +57,11 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
         """Execution priority."""
         return CleaningAnalyzerPriority.HIGH
 
+    @property
+    def supported_languages(self) -> set:
+        """Languages supported by this analyzer (universal - all languages)."""
+        return set()  # Empty set = universal support (all languages)
+
     async def analyze_async(
         self,
         code_file: CodeFile,
@@ -59,11 +69,12 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
         ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
-        Analyze code for complexity issues.
+        Analyze code for complexity issues using Universal AST.
 
         Args:
             code_file: The code file to analyze
             cancellation_token: Optional cancellation token
+            ast_tree: Optional pre-parsed Universal AST tree
 
         Returns:
             CleaningResult with complexity issues
@@ -78,14 +89,25 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
             )
 
         try:
-            issues = self._analyze_complexity(code_file.content, ast_tree)
+            # Use base class helper to get AST root (handles all parsing)
+            ast_root = await self._get_ast_root(code_file, ast_tree)
+
+            if not ast_root:
+                # No AST provider available or parsing failed (already logged by base class)
+                return CleaningResult(
+                    success=True,
+                    file_path=code_file.path,
+                    issues_found=0,
+                    suggestions=[],
+                    cleanup_score=100.0,
+                    summary="AST parsing not available for this language",
+                    analyzer_name=self.name,
+                )
+
+            # Analyze complexity using Universal AST
+            issues = self._analyze_complexity_universal(ast_root, code_file.content)
 
             if not issues:
-                logger.info(
-                    "no_complexity_issues",
-                    file_path=code_file.path,
-                    analyzer=self.name,
-                )
                 return CleaningResult(
                     success=True,
                     file_path=code_file.path,
@@ -95,12 +117,6 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
                     summary="No complexity issues found",
                     analyzer_name=self.name,
                 )
-
-            logger.info(
-                "complexity_issues_found",
-                count=len(issues),
-                file_path=code_file.path,
-            )
 
             # Convert issues to suggestions
             suggestions = [self._create_suggestion(issue, code_file.content) for issue in issues]
@@ -137,13 +153,13 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_complexity(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
+    def _analyze_complexity_universal(self, ast_root: ASTNode, code: str) -> List[CleaningIssue]:
         """
-        Analyze code for complexity issues using AST.
+        Analyze code for complexity issues using Universal AST.
 
         Args:
+            ast_root: Universal AST root node
             code: Source code to analyze
-            ast_tree: Optional pre-parsed AST
 
         Returns:
             List of complexity issues
@@ -151,174 +167,87 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
         issues = []
         lines = code.split("\n")
 
-        try:
-            tree = ast_tree if ast_tree else ast.parse(code)
-        except SyntaxError as e:
-            logger.warning("syntax_error_in_code", error=str(e))
-            return issues
+        # Use base class helper to find all functions/methods
+        all_callables = self._get_functions_and_methods(ast_root)
 
-        # Analyze all function definitions
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                issues.extend(self._check_function_complexity(node, lines))
+        # Analyze each callable
+        for func_node in all_callables:
+            issues.extend(self._check_function_complexity_universal(func_node, lines))
 
         return issues
 
-    def _check_function_complexity(
+    def _check_function_complexity_universal(
         self,
-        node: ast.FunctionDef,
+        node: ASTNode,
         lines: List[str]
     ) -> List[CleaningIssue]:
         """
-        Check a function for complexity issues.
+        Check a function for complexity issues using Universal AST.
+
+        Uses base class helper methods for calculations.
 
         Args:
-            node: Function definition AST node
-            code: Source code
+            node: Universal AST function/method node
+            lines: Source code lines
 
         Returns:
             List of complexity issues
         """
         issues = []
-        func_name = node.name
+        func_name = node.name or "<anonymous>"
 
-        # Check function length
-        func_lines = self._count_function_lines(node, lines)
+        # Get line number from location
+        line_number = node.location.start_line if node.location else 0
+
+        # Check function length (use base class helper)
+        func_lines = self._count_function_lines_universal(node, lines)
         if func_lines > MAX_FUNCTION_LINES:
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.LONG_METHOD,
                     description=f"Function '{func_name}' is too long ({func_lines} lines, max {MAX_FUNCTION_LINES})",
-                    line_number=node.lineno,
+                    line_number=line_number,
                     severity=CleaningIssueSeverity.HIGH,
                 )
             )
 
-        # Check parameter count
-        param_count = len(node.args.args)
+        # Check parameter count (use base class helper)
+        param_count = self._count_parameters_universal(node)
         if param_count > MAX_PARAMETERS:
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.COMPLEX_METHOD,
                     description=f"Function '{func_name}' has too many parameters ({param_count}, max {MAX_PARAMETERS})",
-                    line_number=node.lineno,
+                    line_number=line_number,
                     severity=CleaningIssueSeverity.MEDIUM,
                 )
             )
 
-        # Check nesting depth
-        max_depth = self._calculate_nesting_depth(node)
+        # Check nesting depth (use base class helper)
+        max_depth = self._calculate_nesting_depth_universal(node)
         if max_depth > MAX_NESTING_DEPTH:
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.COMPLEX_METHOD,
                     description=f"Function '{func_name}' has deep nesting (depth {max_depth}, max {MAX_NESTING_DEPTH})",
-                    line_number=node.lineno,
+                    line_number=line_number,
                     severity=CleaningIssueSeverity.HIGH,
                 )
             )
 
-        # Check cyclomatic complexity
-        complexity = self._calculate_cyclomatic_complexity(node)
+        # Check cyclomatic complexity (use base class helper)
+        complexity = self._calculate_cyclomatic_complexity_universal(node)
         if complexity > MAX_CYCLOMATIC_COMPLEXITY:
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.COMPLEX_METHOD,
                     description=f"Function '{func_name}' has high cyclomatic complexity ({complexity}, max {MAX_CYCLOMATIC_COMPLEXITY})",
-                    line_number=node.lineno,
+                    line_number=line_number,
                     severity=CleaningIssueSeverity.HIGH,
                 )
             )
 
         return issues
-
-    def _count_function_lines(self, node: ast.FunctionDef, lines: List[str]) -> int:
-        """
-        Count non-empty lines in a function.
-
-        Args:
-            node: Function definition AST node
-            lines: Source code split into lines
-
-        Returns:
-            Number of non-empty lines
-        """
-        start_line = node.lineno - 1
-
-        # Find end line by looking at the body
-        if node.body:
-            end_line = max(
-                getattr(child, 'end_lineno', node.lineno)
-                for child in ast.walk(node)
-                if hasattr(child, 'lineno')
-            )
-        else:
-            end_line = node.lineno
-
-        # Count non-empty, non-comment lines
-        count = 0
-        for i in range(start_line, min(end_line, len(lines))):
-            line = lines[i].strip()
-            if line and not line.startswith("#"):
-                count += 1
-
-        return count
-
-    def _calculate_nesting_depth(self, node: ast.FunctionDef) -> int:
-        """
-        Calculate maximum nesting depth in a function.
-
-        Args:
-            node: Function definition AST node
-
-        Returns:
-            Maximum nesting depth
-        """
-        def get_depth(node: ast.AST, current_depth: int = 0) -> int:
-            """Recursively calculate depth."""
-            max_depth = current_depth
-
-            for child in ast.iter_child_nodes(node):
-                # Increase depth for control structures
-                if isinstance(child, (ast.If, ast.For, ast.While, ast.With, ast.Try)):
-                    child_depth = get_depth(child, current_depth + 1)
-                    max_depth = max(max_depth, child_depth)
-                else:
-                    child_depth = get_depth(child, current_depth)
-                    max_depth = max(max_depth, child_depth)
-
-            return max_depth
-
-        return get_depth(node, 0)
-
-    def _calculate_cyclomatic_complexity(self, node: ast.FunctionDef) -> int:
-        """
-        Calculate cyclomatic complexity of a function.
-
-        Cyclomatic complexity = number of decision points + 1
-
-        Args:
-            node: Function definition AST node
-
-        Returns:
-            Cyclomatic complexity
-        """
-        complexity = 1  # Base complexity
-
-        for child in ast.walk(node):
-            # Count decision points
-            if isinstance(child, (ast.If, ast.While, ast.For)):
-                complexity += 1
-            elif isinstance(child, ast.BoolOp):
-                # Each 'and' or 'or' adds complexity
-                complexity += len(child.values) - 1
-            elif isinstance(child, ast.ExceptHandler):
-                complexity += 1
-            elif isinstance(child, ast.comprehension):
-                # List/dict comprehensions with conditions
-                complexity += len(child.ifs)
-
-        return complexity
 
     def _create_suggestion(self, issue: CleaningIssue, code: str) -> CleaningSuggestion:
         """Create a cleanup suggestion from an issue."""

@@ -249,9 +249,15 @@ async def _create_baseline_async(root: Path, config_path: Path):
 
                     elif evt == "progress_update":
                         increment = data.get("increment", 0)
-                        processed_count += increment
-                        # Only update status if total is known to avoid confusion
+
+                        # Only increment if we have a valid increment value
+                        if increment > 0:
+                            processed_count += increment
+
+                        # Clamp to never exceed total
                         if total_files > 0:
+                            if processed_count > total_files:
+                                processed_count = total_files
                             status.update(f"[bold blue]🛡️ Scanning... ({processed_count}/{total_files})[/bold blue]")
 
                 elif etype == "result":
@@ -825,6 +831,64 @@ custom_rules:
         console.print(f"[green]✓ Found {len(frames)} built-in frames: {', '.join(frame_names[:5])}{'...' if len(frames) > 5 else ''}[/green]")
     except Exception as e:
         console.print(f"[yellow]Warning: Could not verify frames: {e}[/yellow]")
+
+    # --- Step 15: Install Tree-Sitter Grammars ---
+    console.print("\n[bold blue]🌳 Installing Tree-Sitter Grammars...[/bold blue]")
+    console.print("[dim]Auto-installing parsers for detected languages...[/dim]")
+
+    try:
+        from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
+        from warden.ast.domain.enums import CodeLanguage
+
+        provider = TreeSitterProvider()
+
+        # Convert detected languages to CodeLanguage enums
+        detected_code_langs = []
+        for lang_id in context.detected_languages:
+            try:
+                detected_code_langs.append(CodeLanguage(lang_id))
+            except ValueError:
+                console.print(f"[dim yellow]Warning: Unknown language '{lang_id}', skipping[/dim yellow]")
+
+        if not detected_code_langs:
+            console.print("[dim]No languages detected, skipping tree-sitter setup.[/dim]")
+        else:
+            # Filter to only missing grammars
+            missing_grammars = []
+            for lang in detected_code_langs:
+                if lang in provider._missing_modules:
+                    missing_grammars.append(lang)
+
+            if not missing_grammars:
+                console.print(f"[green]✓ All grammars already installed for: {', '.join([l.value for l in detected_code_langs])}[/green]")
+            else:
+                console.print(f"[dim]Installing {len(missing_grammars)} missing grammar(s)...[/dim]")
+
+                installed_count = 0
+                failed_langs = []
+
+                for lang in missing_grammars:
+                    package_name = provider._missing_modules[lang].replace("_", "-")
+
+                    with console.status(f"[bold cyan]Installing {package_name}...[/bold cyan]", spinner="dots"):
+                        success = asyncio.run(provider.auto_install_grammar(lang))
+
+                    if success:
+                        installed_count += 1
+                        console.print(f"[green]✓ Installed {package_name}[/green]")
+                    else:
+                        failed_langs.append(lang.value)
+                        console.print(f"[yellow]⚠️  Failed to install {package_name}[/yellow]")
+
+                if installed_count > 0:
+                    console.print(f"\n[green]✓ Installed {installed_count}/{len(missing_grammars)} tree-sitter grammar(s)[/green]")
+
+                if failed_langs:
+                    console.print(f"[dim]Failed: {', '.join(failed_langs)}. Install manually with 'pip install tree-sitter-<lang>'[/dim]")
+
+    except Exception as e:
+        console.print(f"[yellow]Warning: Tree-sitter setup failed: {e}[/yellow]")
+        console.print("[dim]Parsers can be installed manually later.[/dim]")
 
     # Optional: Try to install additional frames from Hub (non-blocking)
     if is_interactive and Confirm.ask("\nInstall additional frames from Warden Hub? (requires network)", default=False):

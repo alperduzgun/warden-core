@@ -82,7 +82,7 @@ class CleaningOrchestrator:
         """
         if code_file is None:
             raise ValueError("Code file cannot be None")
-        
+
         if not code_file.content:
             logger.info("skipping_empty_file", file_path=code_file.path)
             return CleaningResult(
@@ -95,39 +95,30 @@ class CleaningOrchestrator:
                 analyzer_name="CleaningOrchestrator"
             )
 
-        logger.info(
-            "cleanup_analysis_started",
-            file_path=code_file.path,
-            analyzer_count=len(self._analyzers),
-        )
-
         all_suggestions: List[CleaningSuggestion] = []
         failed_analyzers: List[str] = []
+        skipped_analyzers: List[str] = []
         total_issues = 0
         analyzer_metrics = {}
 
+        # Determine file language for compatibility check
+        file_language = code_file.language.lower() if code_file.language else "unknown"
+
         # Run each analyzer
         for analyzer in self._analyzers:
+            # Check language compatibility
+            supported_langs = analyzer.supported_languages
+            if supported_langs and file_language not in supported_langs and "unknown" not in supported_langs:
+                # Silent skip - logged in final summary
+                skipped_analyzers.append(analyzer.name)
+                continue
             try:
-                logger.debug(
-                    "running_analyzer",
-                    analyzer=analyzer.name,
-                    priority=analyzer.priority,
-                )
-
                 result = await analyzer.analyze_async(code_file, cancellation_token)
 
                 if result.success:
                     all_suggestions.extend(result.suggestions)
                     total_issues += result.issues_found
                     analyzer_metrics[analyzer.name] = result.metrics
-
-                    logger.info(
-                        "analyzer_completed",
-                        analyzer=analyzer.name,
-                        issues_found=result.issues_found,
-                        summary=result.summary,
-                    )
                 else:
                     failed_analyzers.append(analyzer.name)
                     logger.warning(
@@ -151,13 +142,16 @@ class CleaningOrchestrator:
         # Build summary
         summary = self._build_summary(total_issues, failed_analyzers)
 
-        logger.info(
-            "cleanup_analysis_completed",
-            total_issues=total_issues,
-            suggestions_count=len(all_suggestions),
-            cleanup_score=cleanup_score,
-            failed_analyzers=failed_analyzers,
-        )
+        # Only log if there are issues or failures
+        if total_issues > 0 or failed_analyzers or cleanup_score < 90.0:
+            logger.info(
+                "cleanup_analysis_completed",
+                total_issues=total_issues,
+                suggestions_count=len(all_suggestions),
+                cleanup_score=cleanup_score,
+                failed_analyzers=failed_analyzers,
+                skipped_analyzers=skipped_analyzers if skipped_analyzers else None,
+            )
 
         return CleaningResult(
             success=len(failed_analyzers) == 0,
@@ -174,8 +168,9 @@ class CleaningOrchestrator:
             analyzer_name="CleaningOrchestrator",
             metrics={
                 "total_analyzers": len(self._analyzers),
-                "successful_analyzers": len(self._analyzers) - len(failed_analyzers),
+                "successful_analyzers": len(self._analyzers) - len(failed_analyzers) - len(skipped_analyzers),
                 "failed_analyzers": len(failed_analyzers),
+                "skipped_analyzers": len(skipped_analyzers),
                 "analyzer_metrics": analyzer_metrics,
             },
         )

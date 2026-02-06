@@ -193,12 +193,25 @@ def create_default_config() -> LlmConfiguration:
 def load_llm_config(config_override: Optional[dict] = None) -> LlmConfiguration:
     """
     Load LLM configuration using SecretManager.
-    
+
     Args:
         config_override: Optional dictionary of overrides (e.g. from config.yaml)
     """
     import asyncio
     import httpx
+    from pathlib import Path
+    import yaml
+
+    # Auto-load from .warden/config.yaml if no override provided
+    if config_override is None:
+        config_yaml_path = Path.cwd() / ".warden" / "config.yaml"
+        if config_yaml_path.exists():
+            try:
+                with open(config_yaml_path, "r") as f:
+                    project_config = yaml.safe_load(f)
+                    config_override = project_config.get("llm", {})
+            except Exception:
+                pass  # Fall back to default behavior
 
     # Use async version internally
     try:
@@ -258,9 +271,18 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
 
     Use this in async contexts for better performance.
     """
-    from warden.secrets import SecretManager
+    from warden.secrets import get_manager
 
-    manager = SecretManager()
+    # Use singleton manager to avoid redundant provider initialization
+    manager = get_manager()
+
+    # Check if explicit provider override exists - we'll prioritize it
+    explicit_provider_override = None
+    if config_override and "provider" in config_override:
+        try:
+            explicit_provider_override = LlmProvider(config_override["provider"])
+        except ValueError:
+            pass
 
     # Create base configuration
     config = LlmConfiguration(
@@ -277,7 +299,7 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
     # Track which providers are configured
     configured_providers: list[LlmProvider] = []
 
-    # Get all secrets at once for efficiency
+    # Get all secrets at once for efficiency (uses SecretManager cache)
     secrets = await manager.get_secrets_async([
         "AZURE_OPENAI_API_KEY",
         "AZURE_OPENAI_ENDPOINT",
@@ -297,6 +319,13 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
         "CLAUDE_CODE_ENABLED",
         "CLAUDE_CODE_MODE",
     ])
+
+    # Summary log instead of individual secret_not_found logs
+    found_keys = [k for k, v in secrets.items() if v.found]
+    import structlog
+    logger = structlog.get_logger(__name__)
+    if found_keys:
+        logger.debug("secrets_loaded", count=len(found_keys), keys=found_keys)
 
     # Model Tiering & Concurrency
     smart_model_secret = secrets.get("WARDEN_SMART_MODEL")
@@ -452,6 +481,20 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
         if detected_fast_tier:
              config.fast_tier_providers = detected_fast_tier
 
+    # Prioritize explicit provider override from config.yaml
+    if explicit_provider_override:
+        # Ensure the explicit provider is enabled
+        provider_cfg = config.get_provider_config(explicit_provider_override)
+        if provider_cfg and not provider_cfg.enabled:
+            provider_cfg.enabled = True
+
+        # Remove from configured_providers if already there (to avoid duplicates)
+        if explicit_provider_override in configured_providers:
+            configured_providers.remove(explicit_provider_override)
+
+        # Add to the front of the list
+        configured_providers.insert(0, explicit_provider_override)
+
     # Set default provider and fallback chain based on what's configured
     if configured_providers:
         config.default_provider = configured_providers[0]
@@ -475,17 +518,11 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
             providers = config_override["fast_tier_providers"]
             if isinstance(providers, list):
                 config.fast_tier_providers = [LlmProvider(p.strip().lower()) for p in providers if isinstance(p, str)]
-        
+
         if "smart_model" in config_override:
             config.smart_model = config_override["smart_model"]
-        
+
         if "fast_model" in config_override:
             config.fast_model = config_override["fast_model"]
-            
-        if "provider" in config_override:
-            try:
-                config.default_provider = LlmProvider(config_override["provider"])
-            except ValueError:
-                pass
 
     return config

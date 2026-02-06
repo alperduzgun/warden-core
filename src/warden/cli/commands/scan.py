@@ -356,23 +356,23 @@ async def _run_scan_async(
                     
                     elif evt == "progress_update":
                         increment = data.get('increment', 0)
-                        processed_units += increment
-                        
-                        # If frame_id is present but no increment, count it as 1 to be safe
-                        if increment == 0 and "frame_id" in data:
-                             processed_units += 1
 
-                        if "total_units" in data:
-                            # Only update total if it's explicitly provided and larger
-                            new_total = data['total_units']
-                            if new_total > total_units:
-                                total_units = new_total
-                        
+                        # Only increment if we have a valid increment value
+                        if increment > 0:
+                            processed_units += increment
+                        elif "frame_id" in data:
+                            # If no increment but frame_id present, count as 1 unit
+                            processed_units += 1
+
                         # Update current phase/status
                         new_status = data.get('status', data.get('phase'))
                         if new_status:
                             current_phase = new_status
-                        
+
+                        # Clamp processed_units to never exceed total_units
+                        if total_units > 0 and processed_units > total_units:
+                            processed_units = total_units
+
                         # Update the sticky status line
                         status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
                     
