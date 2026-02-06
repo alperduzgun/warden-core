@@ -416,12 +416,15 @@ class PreAnalysisPhase:
             # We need the file list for discovery canvas
             # Use analyzer's filtered list to avoid pollution (like __pycache__)
             all_files = self.project_analyzer.get_all_files()
-            purpose, arch = await detector.detect_async(
-                all_files, 
+            purpose, arch, modules = await detector.detect_async(
+                all_files,
                 project_context.config_files
             )
             project_context.purpose = purpose
             project_context.architecture_description = arch
+            # Store module map in project context if available
+            if modules and hasattr(project_context, 'modules'):
+                project_context.modules = modules
             logger.info("semantic_discovery_completed", purpose=purpose[:50] + "...")
 
         logger.info(

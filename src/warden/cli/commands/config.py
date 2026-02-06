@@ -347,6 +347,11 @@ def config_set(
     # Set the new value
     _set_nested_value(config, key, validated_value)
 
+    # SMART UPDATE: If provider changed, update models too
+    if key == "llm.provider":
+        _update_provider_models(config, validated_value)
+        console.print(f"[dim]→ Updated model fields for {validated_value}[/dim]")
+
     # Save config
     _save_config(config, config_path)
 
@@ -363,12 +368,47 @@ def config_set(
         _print_provider_hint(validated_value)
 
 
+def _update_provider_models(config: dict, provider: str) -> None:
+    """
+    Update model fields when provider changes.
+
+    Args:
+        config: Configuration dictionary
+        provider: New provider name
+    """
+    # Import here to avoid circular dependency
+    from warden.llm.config import DEFAULT_MODELS
+    from warden.llm.types import LlmProvider
+
+    try:
+        provider_enum = LlmProvider(provider)
+        default_model = DEFAULT_MODELS.get(provider_enum)
+
+        if default_model and "llm" in config:
+            config["llm"]["model"] = default_model
+            config["llm"]["smart_model"] = default_model
+
+            # Fast model logic
+            if provider == "ollama":
+                config["llm"]["fast_model"] = "qwen2.5-coder:0.5b"
+            elif provider == "claude_code":
+                # Claude Code: placeholder model (actual model set in claude config)
+                config["llm"]["fast_model"] = "claude-code-default"
+            else:
+                # Other providers: use ollama for fast tier if available
+                config["llm"]["fast_model"] = "qwen2.5-coder:0.5b"
+    except (ValueError, KeyError):
+        # Invalid provider or missing config - skip update
+        pass
+
+
 def _print_provider_hint(provider: str) -> None:
     """Print helpful hints after changing provider."""
     hints = {
         "claude_code": (
             "[dim]💡 Claude Code uses your local Claude subscription.\n"
-            "   Ensure 'claude' CLI is installed and authenticated.[/dim]"
+            "   - Ensure 'claude' CLI is installed and authenticated\n"
+            "   - Model selection: Run 'claude config' to choose Sonnet/Opus/Haiku[/dim]"
         ),
         "ollama": (
             "[dim]💡 Ollama runs locally. Ensure Ollama is running:\n"

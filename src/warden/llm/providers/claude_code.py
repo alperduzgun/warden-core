@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 # =============================================================================
 
 DEFAULT_TIMEOUT_SECONDS = 120
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-code-default"  # Placeholder - actual model set in `claude config`
 MAX_PROMPT_LENGTH = 100_000
 
 
@@ -53,6 +53,11 @@ class ClaudeCodeClient(ILlmClient):
 
         Args:
             config: Provider configuration
+
+        Note:
+            The model field is a placeholder ("claude-code-default").
+            Actual model selection (Sonnet 4.5 / Opus 4.1 / Haiku 4.5)
+            is controlled via `claude config` command.
         """
         self._default_model = config.default_model or DEFAULT_MODEL
         self._timeout = DEFAULT_TIMEOUT_SECONDS

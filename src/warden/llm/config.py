@@ -166,7 +166,7 @@ DEFAULT_MODELS = {
     LlmProvider.GROQ: "llama-3.1-70b-versatile",
     LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
     LlmProvider.OLLAMA: "qwen2.5-coder:0.5b",
-    LlmProvider.CLAUDE_CODE: "claude-sonnet-4-20250514",  # Uses local Claude Code CLI
+    LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
 }
 
 
