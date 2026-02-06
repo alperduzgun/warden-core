@@ -91,7 +91,7 @@ path_patterns:
 frames:
   security:
     # Intentional security examples for demo/training
-    - "examples/**"
+    # - "examples/**"
     - "test_fixtures/**"
     - "docs/**"
     - "tests/**"

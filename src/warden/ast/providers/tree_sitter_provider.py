@@ -107,20 +107,27 @@ class TreeSitterProvider(IASTProvider):
             ts_id = defn.tree_sitter_id
             # Normalize ID for import (e.g. c_sharp -> c_sharp)
             import_name = f"tree_sitter_{ts_id.replace('-', '_')}"
-            
+
+            # Special import name overrides for non-standard packages
+            IMPORT_NAME_OVERRIDES = {
+                "tree_sitter_dart": "tree_sitter_dart_orchard",  # Dart uses orchard fork
+            }
+
+            actual_import_name = IMPORT_NAME_OVERRIDES.get(import_name, import_name)
+
             try:
-                mod = __import__(import_name)
+                mod = __import__(actual_import_name)
                 # Some grammars have .language(), others .language_typescript(), etc.
                 # Use a heuristic or standardized check
                 lang_fn = getattr(mod, "language", None)
                 if not lang_fn:
                      # Try lang_id specific name (e.g. tree_sitter_typescript.language_typescript)
                      lang_fn = getattr(mod, f"language_{ts_id.replace('-', '_')}", None)
-                
+
                 if lang_fn:
                     self._language_objs[lang] = tree_sitter.Language(lang_fn())
             except ImportError:
-                logger.debug("grammar_not_installed", language=lang.name, module=import_name)
+                # Silently track missing grammars (summary logged below)
                 self._missing_modules[lang] = import_name
             except Exception as e:
                 logger.warning("failed_to_load_grammar", language=lang.name, error=str(e))
@@ -151,6 +158,13 @@ class TreeSitterProvider(IASTProvider):
         module_name = self._missing_modules[language]
         package_name = module_name.replace("_", "-")
 
+        # Special package name mappings for non-standard PyPI packages
+        PACKAGE_NAME_OVERRIDES = {
+            "tree-sitter-dart": "tree-sitter-dart-orchard",  # Dart uses orchard fork
+        }
+
+        package_name = PACKAGE_NAME_OVERRIDES.get(package_name, package_name)
+
         logger.info("auto_installing_grammar", language=language.value, package=package_name)
 
         try:
@@ -158,8 +172,9 @@ class TreeSitterProvider(IASTProvider):
             import sys
 
             # Use pip to install silently
+            # Add --break-system-packages for macOS externally-managed-environment
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--quiet", package_name],
+                [sys.executable, "-m", "pip", "install", "--quiet", "--break-system-packages", package_name],
                 capture_output=True,
                 text=True,
                 timeout=60  # 60 second timeout
@@ -171,10 +186,16 @@ class TreeSitterProvider(IASTProvider):
 
             # Re-import the module
             try:
-                mod = __import__(module_name)
+                # Use override mapping for actual import name
+                IMPORT_NAME_OVERRIDES = {
+                    "tree_sitter_dart": "tree_sitter_dart_orchard",
+                }
+                actual_module_name = IMPORT_NAME_OVERRIDES.get(module_name, module_name)
+
+                mod = __import__(actual_module_name)
                 lang_fn = getattr(mod, "language", None)
                 if not lang_fn:
-                    lang_fn = getattr(mod, f"language_{module_name.replace('tree_sitter_', '')}", None)
+                    lang_fn = getattr(mod, f"language_{actual_module_name.replace('tree_sitter_', '').replace('_orchard', '')}", None)
 
                 if lang_fn:
                     self._language_objs[language] = tree_sitter.Language(lang_fn())
@@ -478,35 +499,53 @@ class TreeSitterProvider(IASTProvider):
         mappings = {
             "program": ASTNodeType.MODULE,
             "source_file": ASTNodeType.MODULE,
-            
+
             # Classes & Interfaces
             "class_declaration": ASTNodeType.CLASS,
             "class": ASTNodeType.CLASS,
             "interface_declaration": ASTNodeType.INTERFACE,
             "type_alias_declaration": ASTNodeType.INTERFACE, # Often used as interface in TS
-            
+
             # Functions & Methods
             "function_declaration": ASTNodeType.FUNCTION,
             "method_definition": ASTNodeType.METHOD,
             "method_declaration": ASTNodeType.METHOD,
             "arrow_function": ASTNodeType.FUNCTION,
-            
+
+            # Control Flow - Universal
+            "if_statement": ASTNodeType.IF_STATEMENT,
+            "if_expression": ASTNodeType.IF_STATEMENT,
+            "for_statement": ASTNodeType.LOOP_STATEMENT,
+            "while_statement": ASTNodeType.LOOP_STATEMENT,
+            "for_in_loop": ASTNodeType.LOOP_STATEMENT,
+            "for_each_statement": ASTNodeType.LOOP_STATEMENT,
+            "do_statement": ASTNodeType.LOOP_STATEMENT,
+            "try_statement": ASTNodeType.TRY_CATCH,
+            "try_expression": ASTNodeType.TRY_CATCH,
+            "catch_clause": ASTNodeType.TRY_CATCH,
+            "guard_statement": ASTNodeType.IF_STATEMENT,  # Swift guard
+
             # Imports
             "import_statement": ASTNodeType.IMPORT,
             "import_declaration": ASTNodeType.IMPORT,
-            
+
             # Literals
             "string": ASTNodeType.LITERAL,
             "number": ASTNodeType.LITERAL,
+            "integer_literal": ASTNodeType.LITERAL,
+            "float_literal": ASTNodeType.LITERAL,
+            "boolean_literal": ASTNodeType.LITERAL,
             "true": ASTNodeType.LITERAL,
             "false": ASTNodeType.LITERAL,
             "null": ASTNodeType.LITERAL,
-            
+            "nil": ASTNodeType.LITERAL,
+
             # Expressions
             "call_expression": ASTNodeType.CALL_EXPRESSION,
             "member_expression": ASTNodeType.MEMBER_ACCESS,
+            "binary_expression": ASTNodeType.BINARY_EXPRESSION,
             "identifier": ASTNodeType.IDENTIFIER,
-            
+
             # C# Specifics
             "using_directive": ASTNodeType.IMPORT,
             "namespace_declaration": ASTNodeType.MODULE,

@@ -157,7 +157,14 @@ fn get_file_stats(paths: Vec<String>) -> PyResult<Vec<FileStats>> {
         if let Ok(mut file) = File::open(path) {
             // Read first 1024 bytes for binary check
             let mut buffer = [0; 1024];
-            let bytes_read = file.read(&mut buffer).unwrap_or(0);
+            // FIX ID 34: Avoid .unwrap(), use unwrap_or with error logging
+            let bytes_read = match file.read(&mut buffer) {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("[RUST ERROR] Failed to read file {}: {}", path.display(), e);
+                    0
+                }
+            };
             stats.is_binary = inspect(&buffer[..bytes_read]) == ContentType::BINARY;
 
             if !stats.is_binary {
@@ -272,8 +279,29 @@ fn get_ast_metadata(content: String, language: String) -> PyResult<AstMetadata> 
         });
     }
 
-    parser.set_language(lang_parser.unwrap()).unwrap();
-    let tree = parser.parse(&content, None).unwrap();
+    // FIX ID 34: Replace .unwrap() with proper error handling
+    if let Err(_) = parser.set_language(lang_parser.unwrap()) {
+        eprintln!("[RUST ERROR] Failed to set language parser for: {}", language);
+        return Ok(AstMetadata {
+            functions: vec![],
+            classes: vec![],
+            imports: vec![],
+            references: vec![],
+        });
+    }
+
+    let tree = match parser.parse(&content, None) {
+        Some(t) => t,
+        None => {
+            eprintln!("[RUST ERROR] Failed to parse content for language: {}", language);
+            return Ok(AstMetadata {
+                functions: vec![],
+                classes: vec![],
+                imports: vec![],
+                references: vec![],
+            });
+        }
+    };
     let root_node = tree.root_node();
     
     let (func_q, class_q, imp_q, ref_q) = get_queries(&language);
@@ -281,8 +309,14 @@ fn get_ast_metadata(content: String, language: String) -> PyResult<AstMetadata> 
     let process_query = |query_str: &str| -> Vec<AstNodeInfo> {
         let mut results = Vec::new();
         if query_str.is_empty() { return results; }
-        
-        if let Ok(query) = tree_sitter::Query::new(lang_parser.unwrap(), query_str) {
+
+        // FIX ID 35: Safe unwrap with early return on error
+        let lang = match lang_parser {
+            Some(l) => l,
+            None => return results,
+        };
+
+        if let Ok(query) = tree_sitter::Query::new(lang, query_str) {
             let mut cursor = tree_sitter::QueryCursor::new();
             for m in cursor.matches(&query, root_node, content.as_bytes()) {
                 for capture in m.captures {
@@ -293,7 +327,7 @@ fn get_ast_metadata(content: String, language: String) -> PyResult<AstMetadata> 
                             .and_then(|p| p.utf8_text(content.as_bytes()).ok())
                             .unwrap_or(text)
                             .lines().next().unwrap_or(text).to_string(); // First line only
-                        
+
                         let snippet = if snippet.len() > 200 { snippet[..200].to_string() + "..." } else { snippet.to_string() };
 
                         results.push(AstNodeInfo {
@@ -311,7 +345,18 @@ fn get_ast_metadata(content: String, language: String) -> PyResult<AstMetadata> 
     // Process references separately (simple string list)
     let mut references = Vec::new();
     if !ref_q.is_empty() {
-        if let Ok(query) = tree_sitter::Query::new(lang_parser.unwrap(), ref_q) {
+        // FIX ID 35: Safe unwrap with early return on error
+        let lang = match lang_parser {
+            Some(l) => l,
+            None => return Ok(AstMetadata {
+                functions: vec![],
+                classes: vec![],
+                imports: vec![],
+                references: vec![],
+            }),
+        };
+
+        if let Ok(query) = tree_sitter::Query::new(lang, ref_q) {
              let mut cursor = tree_sitter::QueryCursor::new();
              for m in cursor.matches(&query, root_node, content.as_bytes()) {
                 for capture in m.captures {

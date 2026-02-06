@@ -123,7 +123,16 @@ class OrphanFrame(ValidationFrame):
                 continue
                 
             try:
-                detector = await OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
+                # Check if LSP should be used from config
+                use_lsp = self.config.get("use_lsp", False)
+                project_root = getattr(self, 'project_root', None)
+
+                detector = await OrphanDetectorFactory.create_detector(
+                    code_file.content,
+                    code_file.path,
+                    use_lsp=use_lsp,
+                    project_root=str(project_root) if project_root else None
+                )
                 if not detector:
                     # Language not supported
                     results.append(FrameResult(
@@ -137,8 +146,14 @@ class OrphanFrame(ValidationFrame):
                         metadata={"reason": "unsupported_language"}
                     ))
                     continue
-                    
-                orphan_findings = detector.detect_all()
+
+                # Call appropriate detection method (async for LSP, sync for others)
+                from orphan_detector import LSPOrphanDetector
+                if isinstance(detector, LSPOrphanDetector):
+                    orphan_findings = await detector.detect_all_async()
+                else:
+                    orphan_findings = detector.detect_all()
+
                 if orphan_findings:
                     findings_map[code_file.path] = orphan_findings
                     valid_files_map[code_file.path] = code_file
@@ -304,8 +319,17 @@ class OrphanFrame(ValidationFrame):
         # Run orphan detection
         try:
             # STAGE 1: AST-based detection (fast, language-specific)
-            detector = await OrphanDetectorFactory.create_detector(code_file.content, code_file.path)
-            
+            # Check if LSP should be used from config
+            use_lsp = self.config.get("use_lsp", False)
+            project_root = getattr(self, 'project_root', None)
+
+            detector = await OrphanDetectorFactory.create_detector(
+                code_file.content,
+                code_file.path,
+                use_lsp=use_lsp,
+                project_root=str(project_root) if project_root else None
+            )
+
             if not detector:
                 logger.info(
                     "orphan_frame_skipped",
@@ -322,8 +346,13 @@ class OrphanFrame(ValidationFrame):
                     findings=[],
                     metadata={"reason": "unsupported_language", "skipped": True}
                 )
-            
-            orphan_findings = detector.detect_all()
+
+            # Call appropriate detection method (async for LSP, sync for others)
+            from orphan_detector import LSPOrphanDetector
+            if isinstance(detector, LSPOrphanDetector):
+                orphan_findings = await detector.detect_all_async()
+            else:
+                orphan_findings = detector.detect_all()
 
             logger.debug(
                 "ast_detection_complete",

@@ -1,14 +1,45 @@
+import os
+import sys
 
-def process_data(data):
-    result = []
-    if data:
-        if len(data) > 0:
-            for item in data:
-                if item.get('active'):
-                    if item.get('value') is not None:
-                        if item.get('value') > 10:
-                            temp_val = item['value'] * 2
-                            result.append(temp_val)
-                        else:
-                            pass
-    return result
+# This is a messy file with lots of issues.
+
+def very_long_function_name_that_is_hard_to_read_and_understand(a, b, c, d, e, f, g, h):
+    # This function is way too long and has too many arguments.
+    if a > b:
+        if c > d:
+            if e > f:
+                if g > h:
+                    return "a > b and c > d and e > f and g > h"
+    return "something else"
+
+def another_function():
+    # This function has a mix of tabs and spaces.
+	# It also has some commented out code.
+    # x = 1
+    # y = 2
+    return 1+2
+
+class MyClass:
+    def __init__(self):
+        self.my_variable = 1
+        self.another_variable = "hello"
+
+    def my_method(self):
+        # This method is also too long.
+        # It has a lot of nested if statements.
+        if self.my_variable > 0:
+            if self.another_variable == "hello":
+                if self.my_variable < 10:
+                    if self.another_variable != "world":
+                        return True
+        return False
+
+def function_with_magic_numbers():
+    return 3.14159 * 5 * 5
+
+# Inconsistent spacing
+x=1
+y  =  2
+z =3
+
+# Benchmark cache invalidation comment

@@ -86,6 +86,14 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "GEMINI_API_KEY",
         "default_model": "gemini-1.5-flash"
+    },
+    "8": {
+        "id": "claude_code",
+        "name": "Claude Code (Local)",
+        "description": "Use your Claude Code subscription locally",
+        "emoji": "🖥️",
+        "requires_key": False,
+        "default_model": "claude-sonnet-4-20250514"
     }
 }
 
@@ -113,22 +121,47 @@ CI_PROVIDERS = {
 
 def select_llm_provider() -> dict:
     """
-    Display 6-option LLM provider selection UI.
+    Display LLM provider selection UI with smart default detection.
     Returns selected provider info.
     """
     console.print("\n[bold cyan]🧠 Step 1: Select LLM Provider[/bold cyan]")
     console.print("[dim]Warden requires an LLM for AI-powered analysis.[/dim]\n")
 
-    # Build selection table
+    # SMART DEFAULT: Detect available local providers
+    default_choice = "1"  # Ollama
+    detected_providers = {}
+
+    # Check Claude Code availability
+    claude_path = shutil.which("claude")
+    if claude_path:
+        try:
+            result = subprocess.run(
+                ["claude", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            if result.returncode == 0:
+                default_choice = "8"  # Claude Code detected!
+                detected_providers["8"] = " [green](Detected ✓)[/green]"
+        except (subprocess.TimeoutExpired, Exception):
+            pass
+
+    # Check Ollama availability
+    if shutil.which("ollama"):
+        detected_providers["1"] = " [dim](Available)[/dim]"
+
+    # Build selection table with detection status
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column("Option", style="bold cyan", width=3)
-    table.add_column("Provider", style="bold white", width=20)
+    table.add_column("Provider", style="bold white", width=30)
     table.add_column("Description", style="dim")
 
     for key, provider in LLM_PROVIDERS.items():
+        detected = detected_providers.get(key, "")
         table.add_row(
             f"[{key}]",
-            f"{provider['emoji']} {provider['name']}",
+            f"{provider['emoji']} {provider['name']}{detected}",
             provider['description']
         )
 
@@ -136,13 +169,13 @@ def select_llm_provider() -> dict:
     console.print()
 
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
-    
-    choice = "1"
+
+    choice = default_choice  # Smart default based on detection
     if is_interactive:
         choice = Prompt.ask(
             "Select provider",
             choices=list(LLM_PROVIDERS.keys()),
-            default="1"
+            default=default_choice
         )
 
     return LLM_PROVIDERS[choice]
@@ -218,6 +251,80 @@ def configure_ollama() -> tuple[dict, dict]:
     env_vars = {
         "OLLAMA_HOST": ollama_host
     }
+
+    return llm_config, env_vars
+
+
+def configure_claude_code() -> tuple[dict, dict]:
+    """
+    Configure Claude Code (local Claude Code CLI).
+    Checks if Claude Code is installed and authenticated.
+    Returns (llm_config, env_vars).
+    """
+    console.print("\n[bold cyan]🖥️  Configuring Claude Code (Local)[/bold cyan]")
+
+    # Check if Claude Code is installed
+    claude_path = shutil.which("claude")
+
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+
+    if not claude_path:
+        console.print("[yellow]⚠️  Claude Code CLI is not installed.[/yellow]")
+        console.print("[dim]Install it from: https://docs.anthropic.com/en/docs/claude-code[/dim]")
+        console.print("[dim]Or run: npm install -g @anthropic-ai/claude-code[/dim]")
+
+        if is_interactive:
+            if Confirm.ask("Try a different provider?", default=True):
+                return _fallback_to_cloud_provider()
+
+        # Non-interactive: return with disabled config
+        return {"provider": "claude_code", "enabled": False}, {}
+
+    console.print(f"[green]✓ Claude Code found at: {claude_path}[/green]")
+
+    # Verify authentication
+    console.print("[dim]Checking authentication...[/dim]")
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip()
+            console.print(f"[green]✓ Claude Code version: {version}[/green]")
+        else:
+            console.print("[yellow]⚠️  Claude Code may not be authenticated.[/yellow]")
+            console.print("[dim]Run 'claude' to authenticate.[/dim]")
+    except (subprocess.TimeoutExpired, Exception) as e:
+        console.print(f"[yellow]⚠️  Could not verify Claude Code: {e}[/yellow]")
+
+    # Select mode
+    mode = "cli"
+    if is_interactive:
+        console.print("\n[bold]Select Claude Code mode:[/bold]")
+        console.print("  [1] CLI - Use Claude Code CLI (default, most compatible)")
+        console.print("  [2] SDK - Use Claude Agent SDK (requires claude-code-sdk package)")
+
+        mode_choice = Prompt.ask("Select mode", choices=["1", "2"], default="1")
+        mode = "cli" if mode_choice == "1" else "sdk"
+
+    console.print(f"\n[green]✓ Claude Code configured with mode: {mode}[/green]")
+    console.print("[dim]💡 Model selection is controlled by `claude config`[/dim]")
+
+    llm_config = {
+        "provider": "claude_code",
+        "mode": mode,
+        "model": "claude-code-default",  # Placeholder - actual model set in claude config
+        "smart_model": "claude-code-default",
+        "fast_model": "claude-code-default",
+        "timeout": 300,
+        "use_local_llm": False  # Claude Code is not the same as Ollama
+    }
+
+    # No env vars needed - auto-detection handles everything
+    env_vars = {}
 
     return llm_config, env_vars
 
@@ -359,8 +466,10 @@ def configure_llm(existing_config: dict = None) -> tuple[dict, dict]:
         return configure_ollama()
     elif provider['id'] == 'azure':
         return configure_azure()
+    elif provider['id'] == 'claude_code':
+        return configure_claude_code()
     else:
-        # For non-interactive fallback to deepseek or whatever if key exists, 
+        # For non-interactive fallback to deepseek or whatever if key exists,
         # but usually we want ollama for zero-config.
         return configure_cloud_provider(provider)
 

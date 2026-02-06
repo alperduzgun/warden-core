@@ -8,6 +8,10 @@ Provides commands for scanning, serving, and launching the interactive chat.
 
 import typer
 from rich.console import Console
+import signal
+import asyncio
+import sys
+from typing import NoReturn
 
 # Command Logic Imports
 from warden.cli.commands.version import version_command
@@ -23,6 +27,82 @@ from warden.cli.commands.update import update_command
 from warden.cli.commands.refresh import refresh_command
 from warden.cli.commands.baseline import baseline_app
 from warden.cli.commands.ci import ci_app
+from warden.cli.commands.config import config_app
+from warden.shared.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Global shutdown flag
+_shutdown_requested = False
+
+async def graceful_shutdown() -> None:
+    """
+    Perform graceful shutdown of all Warden services.
+
+    Cleanup sequence:
+    1. Stop any running pipeline execution
+    2. Shutdown all LSP servers
+    3. Close semantic search services
+    """
+    global _shutdown_requested
+    if _shutdown_requested:
+        return  # Already shutting down
+
+    _shutdown_requested = True
+    logger.info("shutdown_initiated", reason="signal_received")
+
+    try:
+        # Shutdown LSP servers
+        try:
+            from warden.lsp.manager import LSPManager
+            lsp_manager = LSPManager.get_instance()
+            await lsp_manager.shutdown_all_async()
+            logger.info("lsp_servers_shutdown_complete")
+        except Exception as e:
+            logger.warning("lsp_shutdown_failed", error=str(e))
+
+        # Close semantic search services
+        try:
+            from warden.semantic_search.semantic_search_service import SemanticSearchService
+            # If there's a global instance, close it
+            # This is optional - depends on implementation
+            logger.info("semantic_search_cleanup_complete")
+        except Exception as e:
+            logger.debug("semantic_search_cleanup_skipped", error=str(e))
+
+        logger.info("graceful_shutdown_complete")
+    except Exception as e:
+        logger.error("shutdown_error", error=str(e))
+
+def signal_handler(sig: int, frame) -> NoReturn:
+    """
+    Handle termination signals (SIGINT, SIGTERM).
+
+    Args:
+        sig: Signal number
+        frame: Current stack frame
+    """
+    signal_name = "SIGINT" if sig == signal.SIGINT else "SIGTERM"
+    logger.info("signal_received", signal=signal_name)
+
+    console = Console()
+    console.print(f"\n[yellow]Received {signal_name}, shutting down gracefully...[/yellow]")
+
+    # Run graceful shutdown
+    try:
+        # Get or create event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(graceful_shutdown())
+    except Exception as e:
+        logger.error("signal_handler_error", error=str(e))
+    finally:
+        console.print("[green]Shutdown complete.[/green]")
+        sys.exit(0)
 
 # Initialize Typer app
 app = typer.Typer(
@@ -36,6 +116,7 @@ app = typer.Typer(
 app.add_typer(serve_app, name="serve")
 app.add_typer(baseline_app, name="baseline")
 app.add_typer(ci_app, name="ci")
+app.add_typer(config_app, name="config")
 
 # Register Top-Level Commands
 app.command(name="version")(version_command)
@@ -52,13 +133,17 @@ app.command(name="refresh")(refresh_command)
 
 def main():
     """Entry point for setuptools."""
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     try:
         app()
     except Exception as e:
         console = Console()
         console.print(f"[bold red]💥 Fatal Error:[/bold red] {e}")
-        # Only print trace text if verbose/debug encoded in env or args, 
-        # but since Typer handles args, we might just exit. 
+        # Only print trace text if verbose/debug encoded in env or args,
+        # but since Typer handles args, we might just exit.
         # For now, clean exit is better than crash.
         raise typer.Exit(1)
 

@@ -3,14 +3,105 @@
 from pathlib import Path
 from typing import Any, Dict, Optional
 import json
+import os
+import tempfile
+import fcntl
+from contextlib import contextmanager
 
 from .html_generator import HtmlReportGenerator
+
+@contextmanager
+def file_lock(lock_path: Path, timeout: float = 10.0):
+    """
+    Context manager for file locking to prevent race conditions.
+
+    CHAOS ENGINEERING: Includes stale lock detection to prevent deadlocks
+    from crashed processes (e.g., kill -9).
+
+    Args:
+        lock_path: Path to the lock file
+        timeout: Maximum time to wait for lock (seconds)
+
+    Raises:
+        TimeoutError: If lock cannot be acquired within timeout
+
+    Note:
+        If lock file is older than 5 minutes (stale), automatically removes it.
+        This prevents permanent deadlocks from ungraceful process termination.
+    """
+    import time
+    from warden.shared.infrastructure.logging import get_logger
+
+    logger = get_logger(__name__)
+    STALE_LOCK_THRESHOLD = 300  # 5 minutes in seconds
+
+    lock_file = None
+    try:
+        # ANTI-FRAGILITY: Detect and remove stale locks from crashed processes
+        if lock_path.exists():
+            try:
+                lock_age = time.time() - lock_path.stat().st_mtime
+                if lock_age > STALE_LOCK_THRESHOLD:
+                    logger.warning(
+                        "removing_stale_lock",
+                        path=str(lock_path),
+                        age_seconds=int(lock_age),
+                        threshold=STALE_LOCK_THRESHOLD
+                    )
+                    lock_path.unlink()
+            except (OSError, FileNotFoundError) as e:
+                logger.debug("stale_lock_check_failed", path=str(lock_path), error=str(e))
+
+        # Create lock file
+        lock_file = open(lock_path, 'w')
+
+        # Try to acquire exclusive lock with timeout
+        start_time = time.time()
+        while True:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break  # Lock acquired
+            except (IOError, OSError):
+                elapsed = time.time() - start_time
+                if elapsed > timeout:
+                    raise TimeoutError(
+                        f"Could not acquire lock on {lock_path} within {timeout}s. "
+                        f"Another process may be writing to the same file."
+                    )
+                time.sleep(0.1)  # Wait a bit before retrying
+
+        yield lock_file
+
+    finally:
+        if lock_file:
+            try:
+                # IMPORTANT: Unlock BEFORE closing to prevent race conditions
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                lock_file.close()
+
+                # Clean up lock file AFTER unlock+close (chaos engineering principle)
+                # This prevents race where another process creates lock between unlink and close
+                if lock_path.exists():
+                    try:
+                        lock_path.unlink()
+                    except (OSError, FileNotFoundError):
+                        pass
+            except Exception as e:
+                # Defensive: Log but don't raise in finally block
+                logger = get_logger(__name__)
+                logger.debug("lock_cleanup_error", error=str(e))
 
 class ReportGenerator:
     """Generate reports in various formats."""
 
     def __init__(self):
-        """Initialize report generator."""
+        """
+        Initialize report generator with template directory and HTML generator.
+
+        Sets up:
+            - templates_dir: Path to report templates directory
+            - html_generator: HTML report generator instance for HTML/PDF reports
+        """
         self.templates_dir = Path(__file__).parent / "templates"
         self.html_generator = HtmlReportGenerator()
 
@@ -28,29 +119,55 @@ class ReportGenerator:
             output_path: Path to save the JSON report
             base_path: Optional base path for relativizing paths (defaults to CWD)
         """
-        # Create a deep copy to sanitization doesn't affect the running pipeline
-        import copy
-        sanitized_results = copy.deepcopy(scan_results)
-        self._sanitize_paths(sanitized_results, base_path)
-        
-        with open(output_path, 'w') as f:
-            json.dump(sanitized_results, f, indent=4)
+        # Use file lock to prevent race conditions with file watchers
+        lock_path = output_path.parent / f".{output_path.name}.lock"
 
-    def _sanitize_paths(self, data: Any, base_path: Optional[Path] = None) -> None:
+        with file_lock(lock_path):
+            # Use inplace=False to create a copy for sanitization
+            sanitized_results = self._sanitize_paths(scan_results, base_path, inplace=False)
+
+            # Atomic write: write to temp file first, then replace atomically
+            temp_fd, temp_path = tempfile.mkstemp(
+                suffix='.json',
+                dir=output_path.parent,
+                prefix='.tmp_'
+            )
+            try:
+                with os.fdopen(temp_fd, 'w') as f:
+                    json.dump(sanitized_results, f, indent=4)
+                os.replace(temp_path, output_path)  # Atomic on Unix/Linux
+            except Exception:
+                # Clean up temp file on failure
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise
+
+    def _sanitize_paths(self, data: Any, base_path: Optional[Path] = None, inplace: bool = True) -> Any:
         """
         Recursively convert absolute paths to relative paths using strict pathlib logic.
-        
+
         Args:
             data: Data to sanitize
             base_path: Base path to relativize against (default: Path.cwd())
+            inplace: If True, modifies data in-place. If False, creates a deep copy first.
+
+        Returns:
+            The sanitized data (same reference if inplace=True, new copy if inplace=False)
         """
+        # If not in-place, create a deep copy first
+        if not inplace:
+            import copy
+            data = copy.deepcopy(data)
+
         # Resolving allow generic usage (Fail Fast logic: base_path must be valid if provided)
         root_path = base_path.resolve() if base_path else Path.cwd().resolve()
         
         if isinstance(data, dict):
             for key, value in data.items():
                 if isinstance(value, (dict, list)):
-                    self._sanitize_paths(value, base_path)
+                    self._sanitize_paths(value, base_path, inplace=True)
                 elif isinstance(value, str):
                     # Only attempt sanitization if it looks like a path (e.g. contains separators)
                     # and contains the root path string to avoid wasting cycles
@@ -60,10 +177,12 @@ class ReportGenerator:
         elif isinstance(data, list):
             for i, item in enumerate(data):
                 if isinstance(item, (dict, list)):
-                    self._sanitize_paths(item, base_path)
+                    self._sanitize_paths(item, base_path, inplace=True)
                 elif isinstance(item, str):
                     if str(root_path) in item:
                         data[i] = self._relativize_string(item, root_path)
+
+        return data
 
     def _relativize_string(self, text: str, root_path: Path) -> str:
         """Helper to safely relativize path strings."""
@@ -229,12 +348,31 @@ class ReportGenerator:
                     result["message"]["text"] += f"\\n\\nDetails: {detail}"
                     
                 run["results"].append(result)
-        
-        # Sanitize final SARIF output
-        self._sanitize_paths(sarif, base_path)
 
-        with open(output_path, 'w') as f:
-            json.dump(sarif, f, indent=4)
+        # Sanitize final SARIF output (in-place is fine since sarif is local to this method)
+        self._sanitize_paths(sarif, base_path, inplace=True)
+
+        # Use file lock to prevent race conditions with file watchers
+        lock_path = output_path.parent / f".{output_path.name}.lock"
+
+        with file_lock(lock_path):
+            # Atomic write: write to temp file first, then replace atomically
+            temp_fd, temp_path = tempfile.mkstemp(
+                suffix='.sarif',
+                dir=output_path.parent,
+                prefix='.tmp_'
+            )
+            try:
+                with os.fdopen(temp_fd, 'w') as f:
+                    json.dump(sarif, f, indent=4)
+                os.replace(temp_path, output_path)  # Atomic on Unix/Linux
+            except Exception:
+                # Clean up temp file on failure
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise
 
     def _to_relative_uri(self, file_path: str) -> str:
         """
@@ -260,7 +398,121 @@ class ReportGenerator:
                 # Last resort: just the filename to avoid "uri must be relative" error
                 return path_obj.name
             except Exception:
-                return "unknown_file"
+                raise
+
+    def generate_svg_badge(
+        self,
+        scan_results: Dict[str, Any],
+        output_path: Path,
+        base_path: Optional[Path] = None
+    ) -> None:
+        """
+        Generate a premium, standalone SVG badge for the project quality.
+        """
+        from warden.shared.utils.quality_calculator import calculate_quality_score
+        
+        # Extract findings
+        all_findings = []
+        frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
+        for frame in frame_results:
+            all_findings.extend(frame.get('findings', []))
+        manual = scan_results.get('manual_review_findings_list', [])
+        all_findings.extend(manual)
+
+        score = calculate_quality_score(all_findings, 10.0)
+        
+        # Determine Color Gradient
+        if score >= 9.0:
+            gradient_start, gradient_end = "#10B981", "#059669" # Emerald
+            status_text = "EXCELLENT"
+        elif score >= 7.5:
+            gradient_start, gradient_end = "#3B82F6", "#2563EB" # Blue
+            status_text = "GOOD" 
+        elif score >= 5.0:
+            gradient_start, gradient_end = "#F59E0B", "#D97706" # Amber
+            status_text = "WARNING"
+        elif score >= 2.5:
+            gradient_start, gradient_end = "#F97316", "#EA580C" # Orange
+            status_text = "RISK"
+        else:
+            gradient_start, gradient_end = "#EF4444", "#DC2626" # Red
+            status_text = "CRITICAL"
+
+        # Calculate progress circle (circumference = 2 * pi * r)
+        # r=16 -> circ ≈ 100
+        progress = (score / 10.0) * 100.0
+        dash_array = f"{progress}, 100"
+
+        # Calculate HMAC Signature (Simple MVP)
+        import hmac
+        import hashlib
+        import time
+        
+        timestamp = int(time.time())
+        secret_key = b"warden-local-secret"  # TODO: Move to config for real verification
+        payload = f"{score:.1f}|{timestamp}|WARDEN_QUALITY".encode('utf-8')
+        signature = hmac.new(secret_key, payload, hashlib.sha256).hexdigest()
+
+        # Generate SVG with Link and Metadata
+        svg_content = f"""<svg width="300" height="100" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg"
+     data-warden-score="{score:.1f}"
+     data-warden-timestamp="{timestamp}"
+     data-warden-signature="{signature}">
+    <a href="https://warden.ai/verify?score={score:.1f}&amp;sig={signature}&amp;ts={timestamp}" target="_blank">
+        <!-- Drop Shadow Filter -->
+        <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+            </filter>
+            <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#1e1e2e"/>
+                <stop offset="100%" stop-color="#2a2a3c"/>
+            </linearGradient>
+            <linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="{gradient_start}"/>
+                <stop offset="100%" stop-color="{gradient_end}"/>
+            </linearGradient>
+        </defs>
+
+        <!-- Background Card -->
+        <rect x="2" y="2" width="296" height="96" rx="16" fill="url(#cardGrad)" stroke="#3b3b4f" stroke-width="1" filter="url(#shadow)"/>
+        
+        <!-- Header -->
+        <text x="24" y="32" fill="#a1a1aa" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="11" font-weight="600" letter-spacing="1.5" style="text-transform: uppercase;">WARDEN QUALITY</text>
+        
+        <!-- Score Display (Improved Alignment) -->
+        <text x="24" y="72" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-weight="700">
+            <tspan font-size="36">{score:.1f}</tspan>
+            <tspan font-size="18" fill="#71717a" font-weight="400" dx="2">/ 10</tspan>
+        </text>
+
+        <!-- Status Badge (Right Aligned) -->
+        <rect x="184" y="20" width="92" height="24" rx="6" fill="{gradient_start}" fill-opacity="0.15" stroke="{gradient_start}" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="230" y="36" fill="{gradient_start}" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.5">{status_text}</text>
+
+        <!-- Progress Bar Section -->
+        <line x1="184" y1="64" x2="276" y2="64" stroke="#3f3f46" stroke-width="4" stroke-linecap="round" stroke-opacity="0.5"/>
+        <line x1="184" y1="64" x2="{184 + (92 * (score/10.0))}" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
+
+        <!-- Footer Meta -->
+        <text x="276" y="84" fill="#52525b" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="9" text-anchor="end" letter-spacing="0.5">AI-NATIVE GUARDIAN</text>
+    </a>
+</svg>"""
+
+        # Atomic write
+        lock_path = output_path.parent / f".{output_path.name}.lock"
+        with file_lock(lock_path):
+            temp_fd, temp_path = tempfile.mkstemp(suffix='.svg', dir=output_path.parent, prefix='.tmp_badge_')
+            try:
+                with os.fdopen(temp_fd, 'w') as f:
+                    f.write(svg_content)
+                os.replace(temp_path, output_path)
+            except Exception:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise
 
     def generate_junit_report(
         self,
@@ -272,12 +524,10 @@ class ReportGenerator:
         Generate JUnit XML report for general CI/CD compatibility.
         """
         import xml.etree.ElementTree as ET
-        
-        # Clone and sanitize first to ensure all content in XML is safe
-        import copy
-        sanitized_results = copy.deepcopy(scan_results)
-        self._sanitize_paths(sanitized_results, base_path)
-        
+
+        # Use inplace=False to create a copy for sanitization
+        sanitized_results = self._sanitize_paths(scan_results, base_path, inplace=False)
+
         testsuites = ET.Element("testsuites", name="Warden Scan")
         
         frame_results = sanitized_results.get('frame_results', sanitized_results.get('frameResults', []))
@@ -325,9 +575,25 @@ class ReportGenerator:
             elif status == "skipped":
                 ET.SubElement(testcase, "skipped")
 
-        # Write to file
+        # Atomic write: write to temp file first, then replace atomically
         tree = ET.ElementTree(testsuites)
-        tree.write(output_path, encoding="utf-8", xml_declaration=True)
+        temp_fd, temp_path = tempfile.mkstemp(
+            suffix='.xml',
+            dir=output_path.parent,
+            prefix='.tmp_'
+        )
+        try:
+            # Close the file descriptor and use path-based write
+            os.close(temp_fd)
+            tree.write(temp_path, encoding="utf-8", xml_declaration=True)
+            os.replace(temp_path, output_path)  # Atomic on Unix/Linux
+        except Exception:
+            # Clean up temp file on failure
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
 
     def generate_html_report(
         self,
@@ -343,11 +609,9 @@ class ReportGenerator:
             output_path: Path to save the HTML report
             base_path: Optional base path for relativizing paths
         """
-        # Create sanitized copy for HTML generation too
-        import copy
-        sanitized_results = copy.deepcopy(scan_results)
-        self._sanitize_paths(sanitized_results, base_path)
-        
+        # Use inplace=False to create a copy for sanitization
+        sanitized_results = self._sanitize_paths(scan_results, base_path, inplace=False)
+
         self.html_generator.generate(sanitized_results, output_path)
 
     def generate_pdf_report(
@@ -363,30 +627,69 @@ class ReportGenerator:
             scan_results: Dictionary containing scan results
             output_path: Path to save the PDF report
             base_path: Optional base path for relativizing paths
+
+        Raises:
+            RuntimeError: If WeasyPrint is not installed
         """
-        # Create sanitized copy
-        import copy
-        sanitized_results = copy.deepcopy(scan_results)
-        self._sanitize_paths(sanitized_results, base_path)
-        
+        from warden.shared.infrastructure.logging import get_logger
+        logger = get_logger(__name__)
+
+        # OBSERVABILITY: Log PDF generation start
+        logger.info(
+            "pdf_generation_started",
+            output_path=str(output_path),
+            findings_count=scan_results.get('total_findings', 0)
+        )
+
+        # Use inplace=False to create a copy for sanitization
+        sanitized_results = self._sanitize_paths(scan_results, base_path, inplace=False)
+
         # First generate HTML content using the helper
         html_content = self.html_generator._create_html_content(sanitized_results)
 
         try:
             # Try to use WeasyPrint if available
             from weasyprint import HTML, CSS
+        except ImportError:
+            logger.error("pdf_generation_failed", reason="weasyprint_not_installed")
+            raise RuntimeError(
+                "PDF generation requires WeasyPrint. Install with: pip install weasyprint"
+            )
 
-            # Convert HTML to PDF
+        # Convert HTML to PDF using atomic write
+        temp_fd, temp_path = tempfile.mkstemp(
+            suffix='.pdf',
+            dir=output_path.parent,
+            prefix='.tmp_'
+        )
+        try:
+            # Close the file descriptor as WeasyPrint writes to path directly
+            os.close(temp_fd)
             HTML(string=html_content).write_pdf(
-                output_path,
+                temp_path,
                 stylesheets=[CSS(string=self.html_generator.get_pdf_styles())]
             )
-        except ImportError:
-            # Fall back to saving as HTML with .pdf extension warning
-            print("Warning: WeasyPrint not installed. Install it with: pip install weasyprint")
-            print("Saving as HTML format instead...")
+            os.replace(temp_path, output_path)  # Atomic on Unix/Linux
 
-            # Save as HTML with warning
-            html_path = output_path.with_suffix('.html')
-            with open(html_path, 'w') as f:
-                f.write(html_content)
+            # OBSERVABILITY: Log successful PDF generation
+            logger.info(
+                "pdf_generated",
+                output_path=str(output_path),
+                file_size_kb=round(output_path.stat().st_size / 1024, 2)
+            )
+        except Exception as e:
+            # Clean up temp file on failure
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+            # OBSERVABILITY: Log failure with context
+            logger.error(
+                "pdf_generation_failed",
+                output_path=str(output_path),
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            # Re-raise with more context
+            raise RuntimeError(f"PDF generation failed: {str(e)}") from e

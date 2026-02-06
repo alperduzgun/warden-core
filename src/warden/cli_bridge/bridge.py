@@ -16,6 +16,8 @@ from warden.cli_bridge.handlers.llm_handler import LLMHandler
 from warden.cli_bridge.handlers.tool_handler import ToolHandler
 from warden.cli_bridge.utils import serialize_pipeline_result
 from warden.shared.utils.path_utils import sanitize_path
+from warden.pipeline.validators.input_validator import CodeFileInput, FrameExecutionInput, PipelineInput
+from pydantic import ValidationError
 
 logger = get_logger(__name__)
 
@@ -26,17 +28,33 @@ class WardenBridge:
     """
 
     def __init__(self, project_root: Optional[Path] = None, config_path: Optional[str] = None) -> None:
+        """
+        Initialize Warden Bridge with configuration and handlers.
+
+        Args:
+            project_root: Root directory of the project to analyze
+            config_path: Optional path to custom configuration file
+
+        Raises:
+            Exception: If critical initialization fails (logged as warning)
+        """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         
         # Initialize basic handlers
         self.config_handler = ConfigHandler(self.project_root)
         self.tool_handler = ToolHandler()
-        
-        # Load LLM Config first for orchestrator creation
+
+        # Load pipeline configuration first to get LLM override settings
+        config_data = self.config_handler.load_pipeline_config(config_path)
+        self.active_config_name = config_data["name"]
+
+        # Load LLM Config with overrides from config.yaml
         from warden.llm.config import load_llm_config
         from warden.llm.factory import create_client
         try:
-            self.llm_config = load_llm_config()
+            # Extract LLM config override from config.yaml
+            llm_override = config_data.get("config", {}).get("llm", {})
+            self.llm_config = load_llm_config(config_override=llm_override)
             llm_service = create_client(self.llm_config.default_provider)
             if llm_service:
                 # Attach for tiering awareness
@@ -48,19 +66,41 @@ class WardenBridge:
             self.llm_handler = None
             llm_service = None
 
-        # Load pipeline configuration and frames
-        config_data = self.config_handler.load_pipeline_config(config_path)
-        self.active_config_name = config_data["name"]
-
         # Initialize Rate Limiter (Centralized to prevent Event Loop issues)
         from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
         import os
-        
+
+        # FAIL-SAFE: Parse env vars with fallback (chaos engineering principle)
+        def _parse_env_int(key: str, default: int) -> int:
+            """Parse environment variable as positive integer with fallback."""
+            try:
+                value = os.getenv(key, str(default))
+                parsed = int(value)
+                if parsed <= 0:
+                    logger.warning(
+                        "invalid_env_var_value",
+                        key=key,
+                        value=value,
+                        reason="must be positive",
+                        using_default=default
+                    )
+                    return default
+                return parsed
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    "invalid_env_var_format",
+                    key=key,
+                    value=os.getenv(key),
+                    error=str(e),
+                    using_default=default
+                )
+                return default
+
         # Load limits from env or use defaults
-        tpm = int(os.getenv("WARDEN_LIMIT_TPM", "5000"))
-        rpm = int(os.getenv("WARDEN_LIMIT_RPM", "10"))
-        burst = int(os.getenv("WARDEN_LIMIT_BURST", "1"))
-        
+        tpm = _parse_env_int("WARDEN_LIMIT_TPM", 5000)
+        rpm = _parse_env_int("WARDEN_LIMIT_RPM", 10)
+        burst = _parse_env_int("WARDEN_LIMIT_BURST", 1)
+
         self.rate_limiter = RateLimiter(RateLimitConfig(tpm=tpm, rpm=rpm, burst=burst))
 
         # Initialize Orchestrator
@@ -84,11 +124,35 @@ class WardenBridge:
     # --- Semantic Fixes ---
 
     async def request_fix_async(self, file_path: str, line_number: int, issue_type: str, context_code: str = "") -> Dict[str, Any]:
-        """Request a semantic fix for a vulnerability."""
+        """
+        Request a semantic fix for a vulnerability.
+
+        Args:
+            file_path: Path to file containing the issue
+            line_number: Line number of the issue
+            issue_type: Type of security issue
+            context_code: Code context around the issue
+
+        Returns:
+            Dict with fix details or error message
+
+        Raises:
+            RuntimeError: If LLM service is unavailable (initialization failed)
+            ValueError: If file path is invalid or inaccessible
+        """
+        # FAIL-FAST: Check LLM service availability (chaos engineering principle)
+        if self.llm_service is None:
+            raise RuntimeError(
+                "LLM service unavailable - initialization failed. "
+                "Check LLM configuration and provider credentials."
+            )
+
         from warden.fortification.application.fortification_phase import FortificationPhase
-        
-        # Sanitize path
+
+        # Sanitize and validate path
         safe_path = sanitize_path(file_path, self.project_root)
+        if safe_path is None or not safe_path.exists():
+            raise ValueError(f"Invalid or inaccessible file path: {file_path}")
         
         # Create minimal context for fortification
         context = {
@@ -136,6 +200,14 @@ class WardenBridge:
 
     async def execute_pipeline_async(self, file_path: str, frames: Optional[List[str]] = None, analysis_level: str = "standard") -> Dict[str, Any]:
         """Execute validation pipeline on a file."""
+        # Validate inputs
+        try:
+            if frames:
+                FrameExecutionInput(frame_ids=frames, analysis_level=analysis_level)
+        except ValidationError as e:
+            logger.error("pipeline_input_validation_failed", error=str(e))
+            return {"error": f"Invalid input: {e}", "status": "failed"}
+
         result, context = await self.pipeline_handler.execute_pipeline_async(file_path, frames, analysis_level)
         serialized = serialize_pipeline_result(result)
         serialized["context_summary"] = context.get_summary()
@@ -143,6 +215,15 @@ class WardenBridge:
 
     async def execute_pipeline_stream_async(self, file_path: Union[str, List[str]], frames: Optional[List[str]] = None, verbose: bool = False, analysis_level: str = "standard", ci_mode: bool = False) -> AsyncIterator[Dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
+        # Validate inputs
+        try:
+            if frames:
+                FrameExecutionInput(frame_ids=frames, analysis_level=analysis_level)
+        except ValidationError as e:
+            logger.error("pipeline_stream_validation_failed", error=str(e))
+            yield {"type": "error", "error": f"Invalid input: {e}"}
+            return
+
         # Set CI mode on orchestrator config
         if ci_mode:
             self.orchestrator.config.ci_mode = True
@@ -239,7 +320,27 @@ class WardenBridge:
     # --- LLM Analysis ---
 
     async def analyze_with_llm_async(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
-        """Stream LLM analysis response."""
+        """
+        Stream LLM analysis response.
+
+        Args:
+            prompt: Analysis prompt for the LLM
+            provider: Optional specific provider to use
+            stream: Whether to stream response (default: True)
+
+        Yields:
+            str: Response chunks from LLM
+
+        Raises:
+            RuntimeError: If LLM handler is unavailable (initialization failed)
+        """
+        # FAIL-FAST: Check LLM handler availability
+        if self.llm_handler is None:
+            raise RuntimeError(
+                "LLM handler unavailable - initialization failed. "
+                "Check LLM configuration in config.yaml"
+            )
+
         async for chunk in self.llm_handler.analyze_with_llm_async(prompt, provider, stream):
             yield chunk
 

@@ -12,7 +12,7 @@ class PipelineStatus(Enum):
     Pipeline execution status.
 
     Maps to Panel pipeline states.
-    Panel expects integer values (0, 1, 2, 3, 4).
+    Panel expects integer values (0, 1, 2, 3, 4, 5).
     """
 
     PENDING = 0  # Pipeline created, not started
@@ -20,6 +20,7 @@ class PipelineStatus(Enum):
     COMPLETED = 2  # All frames completed successfully
     FAILED = 3  # At least one blocker frame failed
     CANCELLED = 4  # Execution cancelled by user
+    COMPLETED_WITH_FAILURES = 5  # Completed but with non-blocker failures (ID 3)
 
 
 class ExecutionStrategy(Enum):

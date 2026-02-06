@@ -12,8 +12,9 @@ from .metrics import get_global_metrics_collector
 
 def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILlmClient:
     """Create a client for a specific provider configuration."""
-    # Ollama doesn't require an API key (local deployment)
-    if provider != LlmProvider.OLLAMA:
+    # Local providers don't require an API key
+    local_providers = {LlmProvider.OLLAMA, LlmProvider.CLAUDE_CODE}
+    if provider not in local_providers:
         if not config.enabled or not config.api_key:
             raise ValueError(f"Provider {provider.value} is not configured or enabled")
     elif not config.enabled:
@@ -43,6 +44,9 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
     elif provider == LlmProvider.GEMINI:
         from .providers.gemini import GeminiClient
         return GeminiClient(config)
+    elif provider == LlmProvider.CLAUDE_CODE:
+        from .providers.claude_code import ClaudeCodeClient
+        return ClaudeCodeClient(config)
     else:
         raise NotImplementedError(f"Provider {provider.value} not implemented")
 

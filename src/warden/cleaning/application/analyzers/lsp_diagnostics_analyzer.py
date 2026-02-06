@@ -16,21 +16,21 @@ class LSPDiagnosticsAnalyzer:
         pass
 
     async def analyze_async(
-        self, 
-        code_file: CodeFile, 
+        self,
+        code_file: CodeFile,
         ast_tree: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Analyze file using LSP for diagnostics.
         """
         path = Path(code_file.path)
-        
+
         # Determine language
         language = None
         if path.suffix == ".py": language = "python"
         elif path.suffix in [".ts", ".tsx"]: language = "typescript"
         elif path.suffix in [".js", ".jsx"]: language = "javascript"
-        
+
         if not language:
             return {"diagnostics": [], "score": 10.0}
 
@@ -38,48 +38,47 @@ class LSPDiagnosticsAnalyzer:
             lsp_manager = LSPManager.get_instance()
             # Need project root for LSP. Assuming 2 levels up for now or cwd
             client = await lsp_manager.get_client_async(language, str(path.cwd()))
-            
+
             if not client:
                 return {"diagnostics": [], "score": 10.0}
 
             uri = f"file://{code_file.path}"
-            
-            # Open file (if not already)
-            await client.send_notification_async("textDocument/didOpen", {
-                "textDocument": {
-                    "uri": uri,
-                    "languageId": language,
-                    "version": 1,
-                    "text": path.read_text() # TODO: Pass content from CodeFile if in memory
-                }
-            })
-            
-            # Wait for diagnostics notification
-            # Diagnostics come asynchronously via textDocument/publishDiagnostics
-            # We need a way to capturing them.
-            # Client has `on_notification`. We need to subscribe.
-            
+
+            # Setup event to wait for diagnostics
+            import asyncio
             diagnostics = []
-            
+            diagnostics_received = asyncio.Event()
+
             def handle_diagnostics(params):
                 if params and params['uri'] == uri:
                     diagnostics.extend(params['diagnostics'])
-            
+                    diagnostics_received.set()
+
             client.on_notification("textDocument/publishDiagnostics", handle_diagnostics)
-            
+
             try:
-                # Wait a bit? Or trigger a change?
-                # Usually didOpen triggers diagnostics.
-                # We might need to wait a small amount of time.
-                # This is tricky in async 'one-shot' mode.
-                # For now, simplistic wait.
-                import asyncio
-                await asyncio.sleep(0.5) 
-                
+                # Open file (if not already)
+                await client.send_notification_async("textDocument/didOpen", {
+                    "textDocument": {
+                        "uri": uri,
+                        "languageId": language,
+                        "version": 1,
+                        "text": path.read_text() # TODO: Pass content from CodeFile if in memory
+                    }
+                })
+
+                # Wait for diagnostics notification with timeout
+                # LSP servers typically send diagnostics within 1-2 seconds
+                try:
+                    await asyncio.wait_for(diagnostics_received.wait(), timeout=3.0)
+                except asyncio.TimeoutError:
+                    logger.debug("lsp_diagnostics_timeout", file=code_file.path, language=language)
+                    # Continue with empty diagnostics if no response
+
                 # Calculate score based on errors
                 error_count = len([d for d in diagnostics if d.get('severity') == 1])
                 warning_count = len([d for d in diagnostics if d.get('severity') == 2])
-                
+
                 # Simple scoring: Start at 10, deduct for errors
                 score = max(0.0, 10.0 - (error_count * 2.0) - (warning_count * 0.5))
 

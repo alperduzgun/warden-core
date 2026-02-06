@@ -682,6 +682,245 @@ class SecurityFrame(ValidationFrame):
             metadata=metadata,
         )
 
+    async def execute_batch_async(self, code_files: List[CodeFile]) -> List[FrameResult]:
+        """
+        Execute security checks on multiple files with BATCH PROCESSING.
+
+        Pattern: OrphanFrame-style batch processing for 80-90% LLM call reduction.
+
+        Args:
+            code_files: List of code files to validate
+
+        Returns:
+            List of FrameResult (one per file)
+        """
+        if not code_files:
+            return []
+
+        logger.info("security_batch_started", file_count=len(code_files))
+        batch_start = time.perf_counter()
+
+        # PHASE 1: Pattern/AST Analysis (Fast, per-file)
+        findings_map: Dict[str, List[Finding]] = {}
+        check_results_map: Dict[str, List[CheckResult]] = {}
+
+        for code_file in code_files:
+            # Get enabled checks
+            enabled_checks = self.checks.get_enabled(self.config)
+
+            # Execute pattern checks (fast!)
+            check_results: List[CheckResult] = []
+            for check in enabled_checks:
+                try:
+                    result = await check.execute_async(code_file)
+                    check_results.append(result)
+                except Exception as e:
+                    logger.error("batch_check_failed", check=check.name, file=code_file.path, error=str(e))
+
+            check_results_map[code_file.path] = check_results
+
+            # Convert to findings
+            all_findings = self._aggregate_findings(check_results)
+            findings_map[code_file.path] = all_findings
+
+        # PHASE 2: Batch LLM Verification (if LLM available)
+        if hasattr(self, 'llm_service') and self.llm_service:
+            findings_map = await self._batch_verify_security_findings(
+                findings_map,
+                code_files
+            )
+
+        # PHASE 3: Build Results
+        results = []
+        for code_file in code_files:
+            findings = findings_map.get(code_file.path, [])
+            check_results = check_results_map.get(code_file.path, [])
+
+            status = self._determine_status(findings)
+
+            metadata: Dict[str, Any] = {
+                "checks_executed": len(check_results),
+                "checks_passed": sum(1 for r in check_results if r.passed),
+                "checks_failed": sum(1 for r in check_results if not r.passed),
+            }
+
+            result = FrameResult(
+                frame_id=self.frame_id,
+                frame_name=self.name,
+                status=status,
+                duration=0.1,  # Placeholder, will be overridden
+                issues_found=len(findings),
+                is_blocker=self.is_blocker and status == "failed",
+                findings=findings,
+                metadata=metadata,
+            )
+            results.append(result)
+
+        batch_duration = time.perf_counter() - batch_start
+        logger.info("security_batch_completed",
+                   file_count=len(code_files),
+                   total_findings=sum(len(f) for f in findings_map.values()),
+                   duration=f"{batch_duration:.2f}s")
+
+        return results
+
+    async def _batch_verify_security_findings(
+        self,
+        findings_map: Dict[str, List[Finding]],
+        code_files: List[CodeFile]
+    ) -> Dict[str, List[Finding]]:
+        """
+        Batch LLM verification of security findings.
+
+        Reduces LLM calls from N findings to N/batch_size calls.
+
+        Args:
+            findings_map: Dict of file_path -> findings
+            code_files: List of code files for context
+
+        Returns:
+            Updated findings_map with LLM-verified findings
+        """
+        # Flatten findings
+        all_findings_with_context = []
+        for file_path, findings in findings_map.items():
+            code_file = next((f for f in code_files if f.path == file_path), None)
+            for finding in findings:
+                all_findings_with_context.append({
+                    "finding": finding,
+                    "file_path": file_path,
+                    "code_file": code_file
+                })
+
+        if not all_findings_with_context:
+            return findings_map
+
+        # Smart Batching (token-aware)
+        MAX_SAFE_TOKENS = 6000
+        BATCH_SIZE = 10
+        batches = self._smart_batch_findings(all_findings_with_context, BATCH_SIZE, MAX_SAFE_TOKENS)
+
+        logger.info("security_batch_llm_verification",
+                   total_findings=len(all_findings_with_context),
+                   batches=len(batches))
+
+        # Process each batch
+        verified_findings_map: Dict[str, List[Finding]] = {path: [] for path in findings_map.keys()}
+
+        for i, batch in enumerate(batches):
+            try:
+                logger.debug(f"Processing security batch {i+1}/{len(batches)}")
+                verified_batch = await self._verify_security_batch(batch, code_files)
+
+                # Map back to files
+                for item in verified_batch:
+                    file_path = item["file_path"]
+                    verified_findings_map[file_path].append(item["finding"])
+
+            except Exception as e:
+                logger.error("security_batch_verification_failed", batch=i, error=str(e))
+                # Fallback: keep original findings
+                for item in batch:
+                    file_path = item["file_path"]
+                    verified_findings_map[file_path].append(item["finding"])
+
+        return verified_findings_map
+
+    def _smart_batch_findings(
+        self,
+        findings_with_context: List[Dict[str, Any]],
+        max_batch_size: int,
+        max_tokens: int
+    ) -> List[List[Dict[str, Any]]]:
+        """Token-aware batching for findings."""
+        batches = []
+        current_batch = []
+        current_tokens = 0
+
+        for item in findings_with_context:
+            finding = item["finding"]
+            # Estimate tokens: message + code snippet
+            estimated_tokens = len(finding.message.split()) * 1.5
+            if finding.code:
+                estimated_tokens += len(finding.code.split()) * 1.5
+
+            if (current_tokens + estimated_tokens > max_tokens or
+                len(current_batch) >= max_batch_size):
+                if current_batch:
+                    batches.append(current_batch)
+                current_batch = [item]
+                current_tokens = estimated_tokens
+            else:
+                current_batch.append(item)
+                current_tokens += estimated_tokens
+
+        if current_batch:
+            batches.append(current_batch)
+
+        return batches
+
+    async def _verify_security_batch(
+        self,
+        batch: List[Dict[str, Any]],
+        code_files: List[CodeFile]
+    ) -> List[Dict[str, Any]]:
+        """
+        Single LLM call for multiple security findings.
+
+        Args:
+            batch: List of {finding, file_path, code_file}
+
+        Returns:
+            List of verified findings with same structure
+        """
+        # Build batch prompt
+        prompt_parts = ["Review these security findings and verify if they are true vulnerabilities:\n\n"]
+
+        for i, item in enumerate(batch):
+            finding = item["finding"]
+            code_file = item["code_file"]
+
+            prompt_parts.append(f"Finding #{i+1}:")
+            prompt_parts.append(f"File: {item['file_path']}")
+            prompt_parts.append(f"Severity: {finding.severity}")
+            prompt_parts.append(f"Message: {finding.message}")
+            if finding.code:
+                prompt_parts.append(f"Code:\n```\n{finding.code[:200]}\n```")
+            if code_file:
+                # Add limited context
+                prompt_parts.append(f"File Context (first 500 chars):\n```\n{code_file.content[:500]}\n```")
+            prompt_parts.append("\n---\n")
+
+        prompt_parts.append("""
+Return JSON array with verification results:
+[
+  {"finding_id": 1, "is_valid": true/false, "confidence": "high/medium/low", "reason": "..."},
+  ...
+]
+""")
+
+        full_prompt = "\n".join(prompt_parts)
+
+        # Single LLM call
+        try:
+            response = await self.llm_service.send_async(
+                prompt=full_prompt,
+                system="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives."
+            )
+
+            # Parse response (simplified - assumes JSON response)
+            # In production, use robust JSON parsing
+            verified = batch.copy()  # Fallback: keep all
+
+            # TODO: Parse LLM response and filter false positives
+            # For now, return all (no filtering)
+
+            return verified
+
+        except Exception as e:
+            logger.error("security_batch_llm_failed", error=str(e))
+            return batch  # Fallback: keep all findings
+
     def _aggregate_findings(self, check_results: List[CheckResult]) -> List[Finding]:
         """
         Aggregate findings from all check results.

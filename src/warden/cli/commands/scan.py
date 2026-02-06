@@ -20,54 +20,77 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
         # Check if Local LLM is available (Fast Tier)
         # We can reuse the bridge check or try to instantiate a lightweight client
         from warden.llm.factory import create_client
+        from warden.shared.utils.prompt_sanitizer import PromptSanitizer
         client = create_client()
-        
+
         # 1. Check availability first (Fail fast)
         if not await client.is_available_async():
             # console.print("[dim]Local AI unavailable, skipping analysis.[/dim]")
             return
 
         console.print("\n[dim]🤔 Analyzing failure reason with Local AI (timeout: 5s)...[/dim]")
-        
+
         # 2. Aggregate Findings
         findings = []
         frame_results = result_data.get('frame_results', result_data.get('frameResults', []))
         for frame in frame_results:
             findings.extend(frame.get('findings', []))
         categories = {}
-        
+
         # If too many findings, limit to critical ones
         critical_findings = [f for f in findings if str(f.get('severity')).upper() == 'CRITICAL']
         if not critical_findings:
             critical_findings = findings[:50] # Fallback to top 50 if no explicit critical tag
-            
+
         for f in critical_findings:
             cat = f.get('category', 'General')
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append(f)
-            
-        # 3. Prepare Context (Sampled)
-        summary_context = f"""
-        Scan Failed.
-        Stats: {critical_count} critical issues, {frames_failed} failed frames.
-        
-        Top Issue Categories:
-        """
-        
+
+        # 3. Prepare Context (Sampled) - SANITIZED to prevent prompt injection
+        context_parts = [
+            f"Scan Failed.",
+            f"Stats: {critical_count} critical issues, {frames_failed} failed frames.",
+            "",
+            "Top Issue Categories:"
+        ]
+
         for cat, items in list(categories.items())[:5]: # Top 5 categories
             check = items[0]
-            summary_context += f"\n- {cat} ({len(items)} occurrences)\n"
-            summary_context += f"  Example: {check.get('message')} at {check.get('file_path')}:{check.get('line_number')}\n"
+            # Sanitize all user-controlled strings (category, message, file_path)
+            # Fail-safe: If sanitizer fails, redact entirely
+            try:
+                safe_cat = PromptSanitizer.escape_prompt_injection(str(cat))
+            except Exception:
+                safe_cat = "[REDACTED_CATEGORY]"
 
-        # 4. Ask LLM with strict Timeout
+            try:
+                safe_msg = PromptSanitizer.escape_prompt_injection(str(check.get('message', '')))
+            except Exception:
+                safe_msg = "[REDACTED_MESSAGE]"
+
+            try:
+                safe_path = PromptSanitizer.escape_prompt_injection(str(check.get('file_path', '')))
+            except Exception:
+                safe_path = "[REDACTED_PATH]"
+
+            line_num = check.get('line_number', 0)
+
+            context_parts.append(f"\n- {safe_cat} ({len(items)} occurrences)")
+            context_parts.append(f"  Example: {safe_msg} at {safe_path}:{line_num}")
+
+        summary_context = "\n".join(context_parts)
+
+        # 4. Ask LLM with strict Timeout - Use safe prompt structure
         prompt = f"""
         Analyze this security scan failure and provide a concise EXECUTIVE SUMMARY (max 3 sentences).
         Explain WHY the build failed and WHAT is the most important action to take.
         Do not list all issues. Focus on patterns.
-        
-        CONTEXT:
+
+        <scan_results>
         {summary_context}
+        </scan_results>
         """
         
         # Enforce 5s timeout to avoid blocking CI
@@ -159,7 +182,7 @@ def scan_command(
     ctx: typer.Context,
     paths: List[str] = typer.Argument(None, help="Paths to scan (files or directories). Defaults to ."),
     frames: Optional[List[str]] = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
-    format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf"),
+    format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf, shield/badge"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
@@ -356,23 +379,23 @@ async def _run_scan_async(
                     
                     elif evt == "progress_update":
                         increment = data.get('increment', 0)
-                        processed_units += increment
-                        
-                        # If frame_id is present but no increment, count it as 1 to be safe
-                        if increment == 0 and "frame_id" in data:
-                             processed_units += 1
 
-                        if "total_units" in data:
-                            # Only update total if it's explicitly provided and larger
-                            new_total = data['total_units']
-                            if new_total > total_units:
-                                total_units = new_total
-                        
+                        # Only increment if we have a valid increment value
+                        if increment > 0:
+                            processed_units += increment
+                        elif "frame_id" in data:
+                            # If no increment but frame_id present, count as 1 unit
+                            processed_units += 1
+
                         # Update current phase/status
                         new_status = data.get('status', data.get('phase'))
                         if new_status:
                             current_phase = new_status
-                        
+
+                        # Clamp processed_units to never exceed total_units
+                        if total_units > 0 and processed_units > total_units:
+                            processed_units = total_units
+
                         # Update the sticky status line
                         status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
                     
@@ -548,6 +571,12 @@ async def _run_scan_async(
                                     elif fmt == 'pdf':
                                         generator.generate_pdf_report(final_result_data, out_path)
                                         console.print(f"  ✅ [cyan]PDF[/cyan]: {path_str}")
+                                    elif fmt == 'shield':
+                                        generator.generate_shield_report(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]SHIELD (JSON)[/cyan]: {path_str}")
+                                    elif fmt == 'badge':
+                                        generator.generate_svg_badge(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]BADGE (SVG)[/cyan]: {path_str}")
                                         
                                 except Exception as e:
                                     console.print(f"  ❌ [red]{fmt.upper()}[/red]: Failed - {e}")
@@ -579,6 +608,10 @@ async def _run_scan_async(
                 generator.generate_html_report(final_result_data, out_path)
             elif format == "pdf":
                 generator.generate_pdf_report(final_result_data, out_path)
+            elif format == "shield":
+                generator.generate_shield_report(final_result_data, out_path)
+            elif format == "badge":
+                generator.generate_svg_badge(final_result_data, out_path)
             
             console.print("[bold green]Report saved![/bold green]")
 

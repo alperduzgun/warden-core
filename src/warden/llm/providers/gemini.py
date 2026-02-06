@@ -46,12 +46,12 @@ class GeminiClient(ILlmClient):
         """
         start_time = time.time()
         model = request.model or self._default_model
-        
+
         # Gemini API format
         # https://ai.google.dev/api/rest/v1/models/generateContent
-        
-        url = f"{self._base_url}/{model}:generateContent?key={self._api_key}"
-        
+        # Note: API key is sent via header (not URL parameter) for security
+        url = f"{self._base_url}/{model}:generateContent"
+
         # Construct payload
         # System instructions are supported in 1.5 models via system_instruction
         payload: Dict[str, Any] = {
@@ -73,11 +73,17 @@ class GeminiClient(ILlmClient):
             }
 
         try:
+            # Prepare headers with API key (secure method)
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": self._api_key
+            }
+
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
                 response = await client.post(
                     url,
                     json=payload,
-                    headers={"Content-Type": "application/json"}
+                    headers=headers
                 )
                 
                 if response.status_code != 200:

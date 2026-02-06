@@ -23,6 +23,7 @@ class LlmProvider(str, Enum):
     OPENROUTER = "openrouter"
     OLLAMA = "ollama"
     GEMINI = "gemini"
+    CLAUDE_CODE = "claude_code"  # Local Claude Code CLI/SDK integration
 
 
 class LlmRequest(BaseDomainModel):

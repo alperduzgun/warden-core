@@ -18,40 +18,34 @@ frames:
 - resilience
 - fuzz
 - orphan
-# - env-security (Duplicate of environmentsecurity)
 - stress
 - demosecurity
 - architecturalconsistency
 - property
-- antipattern  # Detects bare except, god class, singleton, generic exception
+- antipattern
 frames_config:
   architecturalconsistency:
     enabled: true
     priority: low
     suppressions:
-      # False positive: console.print() is Rich library, not built-in print()
-      - rule: custom_no-print
-        files:
-          - src/warden/cli/commands/serve.py
-        reason: "Uses Rich console.print() for CLI output, not built-in print()"
-      # False positive: KeyboardInterrupt:pass is standard graceful shutdown pattern
-      - rule: no-empty-except
-        files:
-          - src/warden/cli/commands/serve.py
-        reason: "KeyboardInterrupt:pass is intentional for graceful CLI shutdown"
-      # False positive: Simple utility/constants modules don't need logging
-      - rule: mandatory_logger_init
-        files:
-          - src/warden/mcp/infrastructure/mcp_config_paths.py
-        reason: "Constants-only module with no runtime logic requiring logging"
+    - rule: custom_no-print
+      files:
+      - src/warden/cli/commands/serve.py
+      reason: Uses Rich console.print() for CLI output, not built-in print()
+    - rule: no-empty-except
+      files:
+      - src/warden/cli/commands/serve.py
+      reason: KeyboardInterrupt:pass is intentional for graceful CLI shutdown
+    - rule: mandatory_logger_init
+      files:
+      - src/warden/mcp/infrastructure/mcp_config_paths.py
+      reason: Constants-only module with no runtime logic requiring logging
   config:
     enabled: true
   demosecurity:
     check_hardcoded_passwords: true
     enabled: true
     severity_level: high
-#  env-security:
-#    enabled: true
   environmentsecurity:
     enabled: true
   orphan:
@@ -62,7 +56,6 @@ frames_config:
     ignore_private: false
     ignore_test_files: true
     use_llm_filter: true
-
   security:
     checks:
     - sql-injection
@@ -79,34 +72,31 @@ frames_config:
     - async_performance
     enabled: true
     suppressions:
-      # False positives for unclosed files in managed streams/Path.read_text
-      - rule: stress-unclosed_file
-        files:
-          - src/warden/cli_bridge/handlers/pipeline_handler.py
-          - src/warden/secrets/application/template_resolver.py
-          - src/warden/mcp/ports/transport.py
-          - src/warden/mcp/infrastructure/stdio_transport.py
+    - rule: stress-unclosed_file
+      files:
+      - src/warden/cli_bridge/handlers/pipeline_handler.py
+      - src/warden/secrets/application/template_resolver.py
+      - src/warden/mcp/ports/transport.py
+      - src/warden/mcp/infrastructure/stdio_transport.py
   resilience:
     checks:
-      - timeout_handling
-      - retry_logic
-      - circuit_breaker
-      - error_recovery
+    - timeout_handling
+    - retry_logic
+    - circuit_breaker
+    - error_recovery
     enabled: true
     priority: high
     is_blocker: false
     suppressions:
-      # False positives for retry implementation files
-      - rule: "*"
-        files:
-          - src/warden/shared/utils/retry_utils.py
-          - src/warden/analysis/services/finding_verifier.py
-          - src/warden/pipeline/application/orchestrator/orchestrator.py
+    - rule: '*'
+      files:
+      - src/warden/shared/utils/retry_utils.py
+      - src/warden/analysis/services/finding_verifier.py
+      - src/warden/pipeline/application/orchestrator/orchestrator.py
   antipattern:
     enabled: true
     priority: high
     is_blocker: true
-    # Detection toggles
     check_bare_except: true
     check_god_class: true
     check_singleton: true
@@ -115,10 +105,8 @@ frames_config:
     check_todo_fixme: true
     check_builtin_shadow: true
     check_missing_await: true
-    # Thresholds
     max_class_lines: 500
     max_function_lines: 100
-    # Filtering
     ignore_test_files: true
 llm:
   azure:
@@ -133,16 +121,17 @@ llm:
     enabled: true
     base_url: http://localhost:11434
   fast_tier_providers:
-    - ollama
-    - groq
+  - claude_code
+  - ollama
+  - groq
   max_retries: 2
   tpm_limit: 10000
   rpm_limit: 60
-  provider: azure_openai
+  provider: claude_code
   model: qwen2.5-coder:0.5b
   timeout: 300
-  smart_model: gpt-4o
-  fast_model: llama-3.1-70b-versatile
+  smart_model: qwen2.5-coder:0.5b
+  fast_model: qwen2.5-coder:0.5b
 project:
   description: Warden configuration for warden-core
   detected_at: '2025-12-24T16:35:53.922859'
@@ -184,14 +173,10 @@ settings:
     model: qwen2.5-coder:0.5b
     batch_size: 2
   timeout: 300
-
-# --- Custom Rules Configuration ---
 custom_rules:
-  - .warden/rules/my_custom_rules.yaml
-  - .warden/rules/warden_core_rules.yaml
-  - .warden/rules/self_awareness.yaml  # Warden self-scan rules
-
-
+- .warden/rules/my_custom_rules.yaml
+- .warden/rules/warden_core_rules.yaml
+- .warden/rules/self_awareness.yaml
 baseline:
   enabled: true
   path: .warden/baseline.json

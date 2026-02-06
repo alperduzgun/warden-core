@@ -56,10 +56,13 @@ class ASTProviderLoader:
         """
         self._registry = registry
         self._loaded_providers: List[str] = []
+        self._is_loaded = False
 
     async def load_all(self) -> None:
         """
         Load providers from all sources.
+
+        Uses caching to avoid redundant discovery on subsequent calls.
 
         Discovery order:
             1. Built-in providers
@@ -67,6 +70,15 @@ class ASTProviderLoader:
             3. Local plugin directory
             4. Environment variables
         """
+        # Return early if already loaded
+        if self._is_loaded:
+            logger.debug(
+                "using_cached_ast_providers",
+                count=len(self._registry),
+                providers=self._loaded_providers,
+            )
+            return
+
         logger.info("ast_provider_discovery_started")
 
         # 1. Built-in providers
@@ -80,6 +92,9 @@ class ASTProviderLoader:
 
         # 4. Environment variables
         await self._load_env_providers()
+
+        # Mark as loaded to enable caching
+        self._is_loaded = True
 
         logger.info(
             "ast_provider_discovery_completed",

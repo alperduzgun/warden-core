@@ -4,6 +4,7 @@ Main Phase Orchestrator for 6-phase pipeline.
 Coordinates execution of all pipeline phases with shared PipelineContext.
 """
 
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional, Callable
@@ -196,7 +197,7 @@ class PhaseOrchestrator:
                 # Use Language Registry for detection
                 from warden.shared.languages.registry import LanguageRegistry
                 from warden.ast.domain.enums import CodeLanguage
-                
+
                 lang_enum = LanguageRegistry.get_language_from_path(code_files[0].path)
                 if lang_enum != CodeLanguage.UNKNOWN:
                     language = lang_enum.value
@@ -207,7 +208,7 @@ class PhaseOrchestrator:
             try:
                 self.config.analysis_level = AnalysisLevel(analysis_level.lower())
                 logger.info("analysis_level_overridden", level=self.config.analysis_level.value)
-                
+
                 # Global overrides for BASIC level to ensure speed and local-only execution
                 if self.config.analysis_level == AnalysisLevel.BASIC:
                     self.config.use_llm = False
@@ -257,144 +258,167 @@ class PhaseOrchestrator:
             })
 
         try:
-            # Phase 0: PRE-ANALYSIS
-            if self.config.enable_pre_analysis:
-                await self.phase_executor.execute_pre_analysis_async(context, code_files)
+            # Wrap phase execution in timeout (ID 29 - CRITICAL)
+            timeout = getattr(self.config, 'timeout', 300)  # Default 5 minutes
 
-            # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
-            # Only run if LLM is enabled and level is not BASIC
-            from warden.pipeline.domain.enums import AnalysisLevel
-            if getattr(self.config, 'use_llm', True) and self.config.analysis_level != AnalysisLevel.BASIC:
-                logger.info("phase_enabled", phase="TRIAGE", enabled=True)
-                await self.phase_executor.execute_triage_async(context, code_files)
+            async def _execute_phases():
+                # Phase 0: PRE-ANALYSIS
+                if self.config.enable_pre_analysis:
+                    await self.phase_executor.execute_pre_analysis_async(context, code_files)
 
-            # Phase 1: ANALYSIS
-            if getattr(self.config, 'enable_analysis', True):
-                await self.phase_executor.execute_analysis_async(context, code_files)
-                # Initialize after score to before score
-                context.quality_score_after = context.quality_score_before
+                # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
+                # Only run if LLM is enabled and level is not BASIC
+                from warden.pipeline.domain.enums import AnalysisLevel
+                if getattr(self.config, 'use_llm', True) and self.config.analysis_level != AnalysisLevel.BASIC:
+                    logger.info("phase_enabled", phase="TRIAGE", enabled=True)
+                    await self.phase_executor.execute_triage_async(context, code_files)
 
-            # Phase 2: CLASSIFICATION
-            # If frames override is provided, use it and skip AI classification
-            if frames_to_execute:
-                context.selected_frames = frames_to_execute
-                context.classification_reasoning = "User manually selected frames via CLI"
-                logger.info("using_frame_override", selected_frames=frames_to_execute)
-                
-                # Add phase result placeholder
-                context.add_phase_result("CLASSIFICATION", {
-                    "selected_frames": frames_to_execute,
-                    "suppression_rules_count": 0,
-                    "reasoning": "Manual override",
-                    "skipped": True
-                })
-                
-                if self.progress_callback:
-                    self.progress_callback("phase_skipped", {
-                        "phase": "CLASSIFICATION",
-                        "reason": "manual_frame_override"
-                    })
-            else:
-                # Classification is critical for intelligent frame selection
-                logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
-                await self.phase_executor.execute_classification_async(context, code_files)
+                # Phase 1: ANALYSIS
+                if getattr(self.config, 'enable_analysis', True):
+                    await self.phase_executor.execute_analysis_async(context, code_files)
+                    # Initialize after score to before score
+                    context.quality_score_after = context.quality_score_before
 
-            # Phase 3: VALIDATION with execution strategies
-            enable_validation = getattr(self.config, 'enable_validation', True)
-            if enable_validation:
-                logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
-                # Pass pipeline reference to frame executor
-                # Calculate work units for progress bar
-                total_work_units = self._calculate_total_work_units(context, code_files)
-                if self.progress_callback:
-                    self.progress_callback("progress_init", {
-                        "total_units": total_work_units,
-                        "phase_units": {
-                            "VALIDATION": len(context.selected_frames or []) * len(code_files) if context.selected_frames else 0,
-                        }
+                # Phase 2: CLASSIFICATION
+                # If frames override is provided, use it and skip AI classification
+                if frames_to_execute:
+                    context.selected_frames = frames_to_execute
+                    context.classification_reasoning = "User manually selected frames via CLI"
+                    logger.info("using_frame_override", selected_frames=frames_to_execute)
+
+                    # Add phase result placeholder
+                    context.add_phase_result("CLASSIFICATION", {
+                        "selected_frames": frames_to_execute,
+                        "suppression_rules_count": 0,
+                        "reasoning": "Manual override",
+                        "skipped": True
                     })
 
-                await self.frame_executor.execute_validation_with_strategy_async(
-                    context, code_files, self.pipeline
+                    if self.progress_callback:
+                        self.progress_callback("phase_skipped", {
+                            "phase": "CLASSIFICATION",
+                            "reason": "manual_frame_override"
+                        })
+                else:
+                    # Classification is critical for intelligent frame selection
+                    logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
+                    await self.phase_executor.execute_classification_async(context, code_files)
+
+                # Phase 3: VALIDATION with execution strategies
+                enable_validation = getattr(self.config, 'enable_validation', True)
+                if enable_validation:
+                    logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
+                    # Pass pipeline reference to frame executor
+                    # Calculate work units for progress bar
+                    total_work_units = self._calculate_total_work_units(context, code_files)
+                    if self.progress_callback:
+                        self.progress_callback("progress_init", {
+                            "total_units": total_work_units,
+                            "phase_units": {
+                                "VALIDATION": len(context.selected_frames or []) * len(code_files) if context.selected_frames else 0,
+                            }
+                        })
+
+                    await self.frame_executor.execute_validation_with_strategy_async(
+                        context, code_files, self.pipeline
+                    )
+                else:
+                    logger.info("phase_skipped", phase="VALIDATION", reason="disabled_in_config")
+                    if self.progress_callback:
+                        self.progress_callback("phase_skipped", {
+                            "phase": "VALIDATION",
+                            "phase_name": "VALIDATION",
+                            "reason": "disabled_in_config"
+                        })
+
+                # Phase 3.5: VERIFICATION (False Positive Reduction)
+                # Must run BEFORE Fortification to avoid fixing false positives
+                if getattr(self.config, 'enable_issue_validation', False):
+                    await self._execute_verification_phase_async(context)
+
+                # Phase 4: FORTIFICATION
+                enable_fortification = getattr(self.config, 'enable_fortification', True)
+                if enable_fortification:
+                    logger.info("phase_enabled", phase="FORTIFICATION", enabled=enable_fortification)
+                    await self.phase_executor.execute_fortification_async(context, code_files)
+                else:
+                    logger.info("phase_skipped", phase="FORTIFICATION", reason="disabled_in_config")
+                    if self.progress_callback:
+                        self.progress_callback("phase_skipped", {
+                            "phase": "FORTIFICATION",
+                            "phase_name": "FORTIFICATION",
+                            "reason": "disabled_in_config"
+                        })
+
+                # Phase 5: CLEANING
+                enable_cleaning = getattr(self.config, 'enable_cleaning', True)
+                if enable_cleaning:
+                    logger.info("phase_enabled", phase="CLEANING", enabled=enable_cleaning)
+                    await self.phase_executor.execute_cleaning_async(context, code_files)
+                else:
+                    logger.info("phase_skipped", phase="CLEANING", reason="disabled_in_config")
+                    if self.progress_callback:
+                        self.progress_callback("phase_skipped", {
+                            "phase": "CLEANING",
+                            "phase_name": "CLEANING",
+                            "reason": "disabled_in_config"
+                        })
+
+                # Post-Process: Apply Baseline (Smart Filter)
+                self._apply_baseline(context)
+
+                # Update pipeline status based on results (ID 3 - Status Machine Fix)
+                has_errors = len(context.errors) > 0
+                if has_errors:
+                    logger.warning("pipeline_has_errors", count=len(context.errors), errors=context.errors[:5])
+
+                # Classify failures as blocker vs non-blocker (ID 3 fix)
+                blocker_failures = []
+                non_blocker_failures = []
+
+                for fr in getattr(context, 'frame_results', {}).values():
+                    result = fr.get('result')
+                    if result and result.status == "failed":
+                        if result.is_blocker:
+                            blocker_failures.append(fr)
+                        else:
+                            non_blocker_failures.append(fr)
+
+                # Status logic: FAILED > COMPLETED_WITH_FAILURES > COMPLETED
+                if has_errors or blocker_failures:
+                    self.pipeline.status = PipelineStatus.FAILED
+                elif non_blocker_failures:
+                    self.pipeline.status = PipelineStatus.COMPLETED_WITH_FAILURES
+                else:
+                    self.pipeline.status = PipelineStatus.COMPLETED
+
+                self.pipeline.completed_at = datetime.now()
+
+                # Capture LLM Usage if available
+                if self.llm_service and hasattr(self.llm_service, 'get_usage'):
+                    usage = self.llm_service.get_usage()
+                    context.total_tokens = usage.get('total_tokens', 0)
+                    context.prompt_tokens = usage.get('prompt_tokens', 0)
+                    context.completion_tokens = usage.get('completion_tokens', 0)
+                    context.request_count = usage.get('request_count', 0)
+                    logger.info("llm_usage_recorded", **usage)
+
+                logger.info(
+                    "pipeline_execution_completed",
+                    pipeline_id=context.pipeline_id,
+                    summary=context.get_summary(),
                 )
-            else:
-                logger.info("phase_skipped", phase="VALIDATION", reason="disabled_in_config")
-                if self.progress_callback:
-                    self.progress_callback("phase_skipped", {
-                        "phase": "VALIDATION",
-                        "phase_name": "VALIDATION",
-                        "reason": "disabled_in_config"
-                    })
 
-            # Phase 3.5: VERIFICATION (False Positive Reduction)
-            # Must run BEFORE Fortification to avoid fixing false positives
-            if getattr(self.config, 'enable_issue_validation', False):
-                await self._execute_verification_phase_async(context)
+            # Execute phases with timeout enforcement (ID 29)
+            await asyncio.wait_for(_execute_phases(), timeout=timeout)
 
-            # Phase 4: FORTIFICATION
-            enable_fortification = getattr(self.config, 'enable_fortification', True)
-            if enable_fortification:
-                logger.info("phase_enabled", phase="FORTIFICATION", enabled=enable_fortification)
-                await self.phase_executor.execute_fortification_async(context, code_files)
-            else:
-                logger.info("phase_skipped", phase="FORTIFICATION", reason="disabled_in_config")
-                if self.progress_callback:
-                    self.progress_callback("phase_skipped", {
-                        "phase": "FORTIFICATION",
-                        "phase_name": "FORTIFICATION",
-                        "reason": "disabled_in_config"
-                    })
-
-            # Phase 5: CLEANING
-            enable_cleaning = getattr(self.config, 'enable_cleaning', True)
-            if enable_cleaning:
-                logger.info("phase_enabled", phase="CLEANING", enabled=enable_cleaning)
-                await self.phase_executor.execute_cleaning_async(context, code_files)
-            else:
-                logger.info("phase_skipped", phase="CLEANING", reason="disabled_in_config")
-                if self.progress_callback:
-                    self.progress_callback("phase_skipped", {
-                        "phase": "CLEANING",
-                        "phase_name": "CLEANING",
-                        "reason": "disabled_in_config"
-                    })
-
-            # Post-Process: Apply Baseline (Smart Filter)
-            self._apply_baseline(context)
-
-            # Update pipeline status based on results
-            has_errors = len(context.errors) > 0
-            if has_errors:
-                logger.warning("pipeline_has_errors", count=len(context.errors), errors=context.errors[:5])
-            
-            # Check if any BLOCKER frame failed (non-blockers don't cause pipeline failure)
-            has_blocker_failures = any(
-                fr.get('result').is_blocker 
-                for fr in getattr(context, 'frame_results', {}).values() 
-                if fr.get('result') and fr.get('result').status == "failed"
-            )
-            
-            if has_errors or has_blocker_failures:
-                self.pipeline.status = PipelineStatus.FAILED
-            else:
-                self.pipeline.status = PipelineStatus.COMPLETED
-                
-            self.pipeline.completed_at = datetime.now()
-
-            # Capture LLM Usage if available
-            if self.llm_service and hasattr(self.llm_service, 'get_usage'):
-                usage = self.llm_service.get_usage()
-                context.total_tokens = usage.get('total_tokens', 0)
-                context.prompt_tokens = usage.get('prompt_tokens', 0)
-                context.completion_tokens = usage.get('completion_tokens', 0)
-                context.request_count = usage.get('request_count', 0)
-                logger.info("llm_usage_recorded", **usage)
-
-            logger.info(
-                "pipeline_execution_completed",
-                pipeline_id=context.pipeline_id,
-                summary=context.get_summary(),
-            )
+        except asyncio.TimeoutError:
+            # ID 29 - Timeout handler
+            self.pipeline.status = PipelineStatus.FAILED
+            error_msg = f"Pipeline execution timeout after {timeout}s"
+            context.errors.append(error_msg)
+            logger.error("pipeline_timeout", timeout=timeout, pipeline_id=context.pipeline_id)
+            raise RuntimeError(error_msg)
 
         except RuntimeError as e:
             if "Integrity check failed" in str(e):
@@ -404,7 +428,7 @@ class PhaseOrchestrator:
                 # Add a dummy result so CLI can show it
                 return context
             raise e
-            
+
         except Exception as e:
             # Global pipeline failure handler - ensures status is updated and error is traced.
             # While generic, this is necessary at the top orchestration level to catch any phase failure.
@@ -420,6 +444,11 @@ class PhaseOrchestrator:
             )
             context.errors.append(f"Pipeline failed: {str(e)}")
             raise
+
+        finally:
+            # Cleanup and state consistency - always run regardless of success/failure
+            await self._cleanup_on_completion_async(context)
+            self._ensure_state_consistency(context)
 
         return context
 
@@ -635,6 +664,101 @@ class PhaseOrchestrator:
 
         except Exception as e:
             logger.warning("baseline_application_failed", error=str(e))
+
+    async def _cleanup_on_completion_async(self, context: PipelineContext) -> None:
+        """
+        Cleanup resources after pipeline execution (success or failure).
+        Always called in finally block to ensure cleanup happens.
+        """
+        try:
+            # Close semantic search service if open
+            if self.semantic_search_service and hasattr(self.semantic_search_service, 'close'):
+                try:
+                    await self.semantic_search_service.close()
+                except Exception as e:
+                    logger.warning("semantic_search_cleanup_failed", error=str(e))
+
+            # Shutdown LSP servers if running (ID 37 - Zombie Process Fix)
+            if hasattr(self.phase_executor, 'lsp_diagnostics') and self.phase_executor.lsp_diagnostics:
+                try:
+                    if hasattr(self.phase_executor.lsp_diagnostics, 'shutdown'):
+                        await self.phase_executor.lsp_diagnostics.shutdown()
+                except Exception as e:
+                    logger.warning("lsp_shutdown_failed", error=str(e))
+
+            # Shutdown global LSP manager (ensures ALL language servers are killed)
+            try:
+                from warden.lsp.manager import LSPManager
+                lsp_manager = LSPManager.get_instance()
+                await lsp_manager.shutdown_all_async()
+                logger.info("lsp_manager_shutdown_complete")
+            except Exception as e:
+                logger.warning("lsp_manager_shutdown_failed", error=str(e))
+
+            # Close frame executor resources
+            if hasattr(self.frame_executor, 'cleanup'):
+                try:
+                    await self.frame_executor.cleanup()
+                except Exception as e:
+                    logger.warning("frame_executor_cleanup_failed", error=str(e))
+
+            logger.info("pipeline_cleanup_completed", pipeline_id=context.pipeline_id)
+
+        except Exception as e:
+            logger.error("cleanup_failed", pipeline_id=context.pipeline_id, error=str(e))
+
+    def _ensure_state_consistency(self, context: PipelineContext) -> None:
+        """
+        Ensure pipeline context is in consistent state before returning.
+        Fixes: Lying state machine (incomplete phases marked as complete).
+        """
+        try:
+            # Verify pipeline status reflects actual execution
+            if not self.pipeline.completed_at:
+                self.pipeline.completed_at = datetime.now()
+
+            # Check for partial failures
+            frame_results = getattr(context, 'frame_results', {})
+            failed_frames = []
+            passed_frames = []
+
+            for fr_dict in frame_results.values():
+                result_obj = fr_dict.get('result')  # Get FrameResult object
+                if result_obj:
+                    if getattr(result_obj, 'status', None) == 'failed':
+                        failed_frames.append(fr_dict)
+                    elif getattr(result_obj, 'status', None) == 'passed':
+                        passed_frames.append(fr_dict)
+
+            # If some frames failed but pipeline marked COMPLETED, fix it
+            if failed_frames and self.pipeline.status == PipelineStatus.COMPLETED:
+                logger.warning(
+                    "state_inconsistency_detected",
+                    expected_status="COMPLETED_WITH_FAILURES",
+                    actual_status=self.pipeline.status,
+                    failed_frames=len(failed_frames)
+                )
+                # Mark with failures if failures exist
+                self.pipeline.status = PipelineStatus.FAILED
+
+            # Verify context has errors recorded for failed state
+            if self.pipeline.status == PipelineStatus.FAILED and not context.errors:
+                context.errors.append("Pipeline marked FAILED but no errors recorded")
+
+            # Sync pipeline counts to context
+            self.pipeline.frames_passed = len(passed_frames)
+            self.pipeline.frames_failed = len(failed_frames)
+
+            logger.info(
+                "state_consistency_verified",
+                pipeline_id=context.pipeline_id,
+                status=self.pipeline.status.value,
+                frames_passed=self.pipeline.frames_passed,
+                frames_failed=self.pipeline.frames_failed
+            )
+
+        except Exception as e:
+            logger.error("state_consistency_check_failed", error=str(e))
 
     def _build_pipeline_result(self, context: PipelineContext) -> PipelineResult:
         """Build PipelineResult from context for compatibility."""

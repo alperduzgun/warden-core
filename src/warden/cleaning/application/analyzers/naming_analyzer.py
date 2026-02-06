@@ -6,9 +6,10 @@ Detects poor naming conventions in code:
 - Unclear abbreviations
 - Non-descriptive names
 - Inconsistent naming patterns
+
+Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-import ast
 import re
 import structlog
 from typing import List, Optional, Any
@@ -22,6 +23,8 @@ from warden.cleaning.domain.models import (
     CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
+from warden.ast.domain.models import ASTNode
+from warden.ast.domain.enums import ASTNodeType
 
 logger = structlog.get_logger()
 
@@ -55,6 +58,8 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
     - Unclear abbreviations
     - Non-descriptive names (e.g., 'data', 'item', 'thing')
     - Inconsistent naming patterns
+
+    Universal multi-language support via tree-sitter AST.
     """
 
     @property
@@ -67,6 +72,11 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
         """Execution priority."""
         return CleaningAnalyzerPriority.CRITICAL
 
+    @property
+    def supported_languages(self) -> set:
+        """Languages supported by this analyzer (universal - all languages)."""
+        return set()  # Empty set = universal support (all languages)
+
     async def analyze_async(
         self,
         code_file: CodeFile,
@@ -74,11 +84,12 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
         ast_tree: Optional[Any] = None,
     ) -> CleaningResult:
         """
-        Analyze code for naming issues.
+        Analyze code for naming issues using Universal AST.
 
         Args:
             code_file: The code file to analyze
             cancellation_token: Optional cancellation token
+            ast_tree: Optional pre-parsed Universal AST tree
 
         Returns:
             CleaningResult with naming issues
@@ -93,14 +104,24 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
             )
 
         try:
-            issues = self._analyze_naming(code_file.content, ast_tree)
+            # Use base class helper to get AST root
+            ast_root = await self._get_ast_root(code_file, ast_tree)
+
+            if not ast_root:
+                return CleaningResult(
+                    success=True,
+                    file_path=code_file.path,
+                    issues_found=0,
+                    suggestions=[],
+                    cleanup_score=100.0,
+                    summary="AST parsing not available for this language",
+                    analyzer_name=self.name,
+                )
+
+            # Analyze naming
+            issues = self._analyze_naming_universal(ast_root)
 
             if not issues:
-                logger.info(
-                    "no_naming_issues",
-                    file_path=code_file.path,
-                    analyzer=self.name,
-                )
                 return CleaningResult(
                     success=True,
                     file_path=code_file.path,
@@ -110,12 +131,6 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
                     summary="No naming issues found - code has good naming conventions",
                     analyzer_name=self.name,
                 )
-
-            logger.info(
-                "naming_issues_found",
-                count=len(issues),
-                file_path=code_file.path,
-            )
 
             # Convert issues to suggestions
             suggestions = [self._create_suggestion(issue, code_file.content) for issue in issues]
@@ -153,52 +168,46 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_naming(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
+    def _analyze_naming_universal(self, ast_root: ASTNode) -> List[CleaningIssue]:
         """
-        Analyze code for naming issues using AST.
+        Analyze code for naming issues using Universal AST.
+
+        Works for all languages (Python, Swift, Dart, Go, JS, etc.)
 
         Args:
-            code: Source code to analyze
-            ast_tree: Optional pre-parsed AST
+            ast_root: Universal AST root node
 
         Returns:
             List of naming issues
         """
         issues = []
 
-        try:
-            tree = ast_tree if ast_tree else ast.parse(code)
-        except SyntaxError as e:
-            logger.warning("syntax_error_in_code", error=str(e))
-            return issues
+        # Check functions and methods
+        functions_and_methods = self._get_functions_and_methods(ast_root)
+        for func in functions_and_methods:
+            issues.extend(self._check_function_name_universal(func))
 
-        # Analyze all names in the AST
-        for node in ast.walk(tree):
-            # Check function names
-            if isinstance(node, ast.FunctionDef):
-                issues.extend(self._check_function_name(node))
-
-            # Check class names
-            elif isinstance(node, ast.ClassDef):
-                issues.extend(self._check_class_name(node))
-
-            # Check variable assignments
-            elif isinstance(node, ast.Assign):
-                issues.extend(self._check_variable_assignment(node))
-
-            # Check function arguments
-            elif isinstance(node, ast.arg):
-                issues.extend(self._check_argument_name(node))
+        # Check classes
+        classes = ast_root.find_nodes(ASTNodeType.CLASS)
+        for cls in classes:
+            issues.extend(self._check_class_name_universal(cls))
 
         return issues
 
-    def _check_function_name(self, node: ast.FunctionDef) -> List[CleaningIssue]:
-        """Check function name for issues."""
+    def _check_function_name_universal(self, node: ASTNode) -> List[CleaningIssue]:
+        """Check function name for issues (Universal AST)."""
         issues = []
         name = node.name
 
-        # Skip magic methods
+        if not name:
+            return issues
+
+        line_number = node.location.start_line if node.location else 0
+
+        # Skip magic methods/special names
         if name.startswith("__") and name.endswith("__"):
+            return issues
+        if name.startswith("_"):  # Private methods
             return issues
 
         # Check for single letter (except common ones)
@@ -207,7 +216,7 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
                 CleaningIssue(
                     issue_type=CleaningIssueType.POOR_NAMING,
                     description=f"Function '{name}' has single letter name",
-                    line_number=node.lineno,
+                    line_number=line_number,
                     severity=CleaningIssueSeverity.HIGH,
                 )
             )
@@ -219,36 +228,41 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
                     CleaningIssue(
                         issue_type=CleaningIssueType.POOR_NAMING,
                         description=f"Function '{name}' uses unclear abbreviation '{abbr}' (consider '{full}')",
-                        line_number=node.lineno,
+                        line_number=line_number,
                         severity=CleaningIssueSeverity.MEDIUM,
                     )
                 )
 
         # Check for non-descriptive names
-        if name.lower() in ['process', 'handle', 'do', 'execute', 'run', 'go']:
+        if name.lower() in ['process', 'handle', 'do', 'execute', 'run', 'go', 'func', 'method']:
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.POOR_NAMING,
                     description=f"Function '{name}' has non-descriptive name",
-                    line_number=node.lineno,
+                    line_number=line_number,
                     severity=CleaningIssueSeverity.MEDIUM,
                 )
             )
 
         return issues
 
-    def _check_class_name(self, node: ast.ClassDef) -> List[CleaningIssue]:
-        """Check class name for issues."""
+    def _check_class_name_universal(self, node: ASTNode) -> List[CleaningIssue]:
+        """Check class name for issues (Universal AST)."""
         issues = []
         name = node.name
 
-        # Check if class name follows PascalCase
+        if not name:
+            return issues
+
+        line_number = node.location.start_line if node.location else 0
+
+        # Check if class name follows PascalCase (common convention)
         if not re.match(r'^[A-Z][a-zA-Z0-9]*$', name):
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.POOR_NAMING,
                     description=f"Class '{name}' should use PascalCase naming",
-                    line_number=node.lineno,
+                    line_number=line_number,
                     severity=CleaningIssueSeverity.MEDIUM,
                 )
             )
@@ -260,68 +274,10 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
                     CleaningIssue(
                         issue_type=CleaningIssueType.POOR_NAMING,
                         description=f"Class '{name}' uses unclear abbreviation '{abbr}' (consider '{full}')",
-                        line_number=node.lineno,
+                        line_number=line_number,
                         severity=CleaningIssueSeverity.MEDIUM,
                     )
                 )
-
-        return issues
-
-    def _check_variable_assignment(self, node: ast.Assign) -> List[CleaningIssue]:
-        """Check variable names in assignments."""
-        issues = []
-
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                name = target.id
-
-                # Skip private variables
-                if name.startswith("_"):
-                    continue
-
-                # Check for single letter (except common ones)
-                if len(name) == 1 and name not in ACCEPTABLE_SINGLE_LETTERS:
-                    issues.append(
-                        CleaningIssue(
-                            issue_type=CleaningIssueType.POOR_NAMING,
-                            description=f"Variable '{name}' has single letter name",
-                            line_number=node.lineno,
-                            severity=CleaningIssueSeverity.MEDIUM,
-                        )
-                    )
-
-                # Check for non-descriptive names
-                if name.lower() in ['data', 'item', 'thing', 'stuff', 'value', 'result']:
-                    issues.append(
-                        CleaningIssue(
-                            issue_type=CleaningIssueType.POOR_NAMING,
-                            description=f"Variable '{name}' has non-descriptive name",
-                            line_number=node.lineno,
-                            severity=CleaningIssueSeverity.LOW,
-                        )
-                    )
-
-        return issues
-
-    def _check_argument_name(self, node: ast.arg) -> List[CleaningIssue]:
-        """Check function argument names."""
-        issues = []
-        name = node.arg
-
-        # Skip self and cls
-        if name in ['self', 'cls']:
-            return issues
-
-        # Check for single letter (except common ones)
-        if len(name) == 1 and name not in ACCEPTABLE_SINGLE_LETTERS:
-            issues.append(
-                CleaningIssue(
-                    issue_type=CleaningIssueType.POOR_NAMING,
-                    description=f"Argument '{name}' has single letter name",
-                    line_number=node.lineno,
-                    severity=CleaningIssueSeverity.MEDIUM,
-                )
-            )
 
         return issues
 

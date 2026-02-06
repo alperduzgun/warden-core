@@ -3,8 +3,7 @@ Simple logger wrapper for compatibility.
 
 Provides structlog-like interface with fallback to standard logging.
 """
-import logging
-
+import re
 
 class SimpleLogger:
     """Simple logger with keyword argument support."""
@@ -18,27 +17,56 @@ class SimpleLogger:
                 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
             )
 
+    def _scrub(self, text: str) -> str:
+        """
+        Scrub sensitive information from logs.
+        
+        Security: Masks API keys and large code blocks.
+        Performance: Skips regex on very short strings.
+        """
+        if not text:
+            return ""
+        
+        # Performance shortcut for short strings (unlikely to have 50-char code block or keys)
+        if len(text) < 20:
+             return text
+
+        # Scrub source code (heuristics)
+        # Defense in Depth: Limit max log length to avoid DoS via logs
+        if len(text) > 10000:
+            text = text[:10000] + "... [TRUNCATED]"
+
+        if "def " in text or "class " in text or "async def " in text:
+            if len(text) > 50: # Only mask if looking like a block
+                return "[SOURCE CODE REDACTED]"
+        
+        # Scrub potential API keys (basic heuristic)
+        if "key=" in text.lower() or "token=" in text.lower():
+            text = re.sub(r'(key|token)=([a-zA-Z0-9_\-]+)', r'\1=[REDACTED]', text, flags=re.IGNORECASE)
+            
+        return text
+
     def info(self, message: str, **kwargs):
         """Log info message."""
-        extra_info = " ".join(f"{k}={v}" for k, v in kwargs.items())
+        extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
         full_message = f"{message} {extra_info}" if kwargs else message
         self.logger.info(full_message)
 
     def warning(self, message: str, **kwargs):
         """Log warning message."""
-        extra_info = " ".join(f"{k}={v}" for k, v in kwargs.items())
+        extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
         full_message = f"{message} {extra_info}" if kwargs else message
         self.logger.warning(full_message)
 
     def error(self, message: str, **kwargs):
         """Log error message."""
-        extra_info = " ".join(f"{k}={v}" for k, v in kwargs.items())
+        extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
         full_message = f"{message} {extra_info}" if kwargs else message
         self.logger.error(full_message)
 
     def debug(self, message: str, **kwargs):
         """Log debug message."""
-        extra_info = " ".join(f"{k}={v}" for k, v in kwargs.items())
+        extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
         full_message = f"{message} {extra_info}" if kwargs else message
         self.logger.debug(full_message)
 

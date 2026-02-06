@@ -32,6 +32,7 @@ class ContextRetriever:
         searcher: SemanticSearcher,
         max_tokens: int = 4000,
         chars_per_token: int = 4,  # Approximate for estimation
+        max_depth: int = 3,  # Max recursion depth for context references (ID 20)
     ):
         """
         Initialize context retriever.
@@ -40,11 +41,14 @@ class ContextRetriever:
             searcher: Semantic searcher instance
             max_tokens: Maximum tokens for LLM context window
             chars_per_token: Average characters per token (for estimation)
+            max_depth: Maximum recursion depth for nested references (prevents circular refs)
         """
         self.searcher = searcher
         self.max_tokens = max_tokens
         self.chars_per_token = chars_per_token
         self.max_chars = max_tokens * chars_per_token
+        self.max_depth = max_depth
+        self._visited_refs = set()  # Track visited references
 
         logger.info(
             "context_retriever_initialized",
