@@ -719,7 +719,16 @@ class PhaseOrchestrator:
 
             # Check for partial failures
             frame_results = getattr(context, 'frame_results', {})
-            failed_frames = [fr for fr in frame_results.values() if fr.get('result', {}).get('status') == 'failed']
+            failed_frames = []
+            passed_frames = []
+
+            for fr_dict in frame_results.values():
+                result_obj = fr_dict.get('result')  # Get FrameResult object
+                if result_obj:
+                    if getattr(result_obj, 'status', None) == 'failed':
+                        failed_frames.append(fr_dict)
+                    elif getattr(result_obj, 'status', None) == 'passed':
+                        passed_frames.append(fr_dict)
 
             # If some frames failed but pipeline marked COMPLETED, fix it
             if failed_frames and self.pipeline.status == PipelineStatus.COMPLETED:
@@ -737,7 +746,7 @@ class PhaseOrchestrator:
                 context.errors.append("Pipeline marked FAILED but no errors recorded")
 
             # Sync pipeline counts to context
-            self.pipeline.frames_passed = len([fr for fr in frame_results.values() if fr.get('result', {}).get('status') == 'passed'])
+            self.pipeline.frames_passed = len(passed_frames)
             self.pipeline.frames_failed = len(failed_frames)
 
             logger.info(

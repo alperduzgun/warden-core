@@ -1,43 +1,51 @@
 # Build Stage
 FROM python:3.11-slim as builder
 
-# Install build dependencies (removed git and curl - not needed for builds)
-RUN apt-get update && apt-get install -y \
+# Install build dependencies + curl for Node.js setup
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (for Warden CLI UI)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy only necessary files for build (avoid copying entire repo)
+# Copy dependency files first (better layer caching)
 COPY pyproject.toml setup.py setup.cfg README.md ./
-COPY src/ ./src/
-COPY cli/ ./cli/
 
-# Install Python dependencies and Warden
+# Install Python dependencies only (separate layer for caching)
 RUN pip install --no-cache-dir build \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir -e .
 
-# Install Node.js CLI dependencies and build
+# Copy source code (changes less frequently than deps)
+COPY src/ ./src/
+
+# Build CLI separately (better caching)
+COPY cli/package.json cli/package-lock.json ./cli/
 WORKDIR /app/cli
-RUN npm ci --only=production && npm run build
+RUN npm ci --only=production --silent
 
-# Runtime Stage
+COPY cli/ ./
+RUN npm run build && npm prune --production
+
+# Runtime Stage (optimized for size)
 FROM python:3.11-slim
 
-# Install only Node.js runtime (no curl needed in final image)
+# Install only runtime dependencies (minimal footprint)
 RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && apt-get remove -y curl \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get purge -y --auto-remove curl \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Create non-root user for security
 RUN useradd -m -u 1000 warden

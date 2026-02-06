@@ -104,7 +104,7 @@ Your mission: Provide ACCURATE analysis that developers can trust. Reduce false 
 
 def generate_analysis_request(code: str, language: str, file_path: Optional[str] = None) -> str:
     """
-    Generate analysis request for code file
+    Generate analysis request for code file (with prompt injection protection)
 
     Args:
         code: Code to analyze
@@ -114,12 +114,19 @@ def generate_analysis_request(code: str, language: str, file_path: Optional[str]
     Returns:
         Formatted user message for LLM
     """
-    file_info = f"\nFile: {file_path}" if file_path else ""
+    from warden.shared.utils.prompt_sanitizer import PromptSanitizer
 
-    return f"""Analyze this {language} code:{file_info}
+    # Sanitize user-controlled inputs
+    safe_code = PromptSanitizer._escape_xml(code)
+    safe_language = PromptSanitizer.escape_prompt_injection(language)
+    safe_file_path = PromptSanitizer.escape_prompt_injection(file_path) if file_path else None
 
-```{language}
-{code}
-```
+    file_info = f"\nFile: {safe_file_path}" if safe_file_path else ""
+
+    return f"""Analyze this {safe_language} code:{file_info}
+
+<source_code language="{safe_language}">
+{safe_code}
+</source_code>
 
 Provide detailed analysis following the framework above. Return JSON only."""
