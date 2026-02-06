@@ -1,0 +1,9 @@
+# Add to main.py (ID 15)
+import signal, asyncio
+async def main():
+    loop = asyncio.get_event_loop()
+    def handle_sig(s, f):
+        print("Graceful shutdown...")
+        loop.stop()
+    signal.signal(signal.SIGTERM, handle_sig)
+    signal.signal(signal.SIGINT, handle_sig)

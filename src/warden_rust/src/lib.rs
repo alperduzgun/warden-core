@@ -157,7 +157,14 @@ fn get_file_stats(paths: Vec<String>) -> PyResult<Vec<FileStats>> {
         if let Ok(mut file) = File::open(path) {
             // Read first 1024 bytes for binary check
             let mut buffer = [0; 1024];
-            let bytes_read = file.read(&mut buffer).unwrap_or(0);
+            // FIX ID 34: Avoid .unwrap(), use unwrap_or with error logging
+            let bytes_read = match file.read(&mut buffer) {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("[RUST ERROR] Failed to read file {}: {}", path.display(), e);
+                    0
+                }
+            };
             stats.is_binary = inspect(&buffer[..bytes_read]) == ContentType::BINARY;
 
             if !stats.is_binary {
@@ -272,8 +279,29 @@ fn get_ast_metadata(content: String, language: String) -> PyResult<AstMetadata> 
         });
     }
 
-    parser.set_language(lang_parser.unwrap()).unwrap();
-    let tree = parser.parse(&content, None).unwrap();
+    // FIX ID 34: Replace .unwrap() with proper error handling
+    if let Err(_) = parser.set_language(lang_parser.unwrap()) {
+        eprintln!("[RUST ERROR] Failed to set language parser for: {}", language);
+        return Ok(AstMetadata {
+            functions: vec![],
+            classes: vec![],
+            imports: vec![],
+            references: vec![],
+        });
+    }
+
+    let tree = match parser.parse(&content, None) {
+        Some(t) => t,
+        None => {
+            eprintln!("[RUST ERROR] Failed to parse content for language: {}", language);
+            return Ok(AstMetadata {
+                functions: vec![],
+                classes: vec![],
+                imports: vec![],
+                references: vec![],
+            });
+        }
+    };
     let root_node = tree.root_node();
     
     let (func_q, class_q, imp_q, ref_q) = get_queries(&language);

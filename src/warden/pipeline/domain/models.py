@@ -50,7 +50,7 @@ class PipelineConfig(BaseDomainModel):
     Defines how frames should be executed.
     """
 
-    strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL
+    strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL  # TODO: HYBRID has config frame overhead issue
     fail_fast: bool = True
     timeout: int = 300  # Total pipeline timeout in seconds
     frame_timeout: int = 120  # Per-frame timeout in seconds
