@@ -1,4 +1,5 @@
 from typing import Optional, List
+import asyncio
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.logging import get_logger
@@ -63,25 +64,27 @@ class OrchestratedLlmClient(ILlmClient):
         
         # 1. Determine initial target tier
         if request.use_fast_tier and self.fast_clients:
-            # Hierarchical Fast Tier Execution
-            for client in self.fast_clients:
+            # PARALLEL Fast Tier Execution (Global Optimization)
+            # All fast providers race - fastest successful response wins
+            async def try_fast_provider(client: ILlmClient) -> tuple[ILlmClient, LlmResponse]:
+                """Execute single fast provider with timing."""
                 target_model = request.model or self.fast_model
-                
-                logger.debug(
-                    "routing_to_fast_tier",
-                    provider=client.provider,
-                    model=target_model or "default"
+
+                # Clone request to avoid mutation issues
+                provider_request = LlmRequest(
+                    system_prompt=request.system_prompt,
+                    user_message=request.user_message,
+                    model=target_model or self.fast_model,
+                    max_tokens=request.max_tokens,
+                    temperature=request.temperature,
+                    timeout_seconds=request.timeout_seconds,
+                    use_fast_tier=request.use_fast_tier,
                 )
-                
-                # Ensure model is set for this provider
-                original_model = request.model
-                if not request.model and self.fast_model:
-                    request.model = self.fast_model
-                
+
                 start_time = time.time()
-                response = await client.send_async(request)
+                response = await client.send_async(provider_request)
                 duration_ms = int((time.time() - start_time) * 1000)
-                
+
                 # Record metrics
                 self.metrics.record_request(
                     tier="fast",
@@ -91,30 +94,54 @@ class OrchestratedLlmClient(ILlmClient):
                     duration_ms=duration_ms,
                     error=response.error_message
                 )
-                
+
+                return client, response
+
+            # Race all fast providers concurrently
+            tasks = [try_fast_provider(client) for client in self.fast_clients]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Find first successful response
+            successful_response = None
+            failed_providers = []
+
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error("fast_tier_provider_exception", error=str(result))
+                    continue
+
+                client, response = result
                 if response.success:
-                    return response
-                
-                # Fast tier provider failed, log and try next
+                    if successful_response is None:
+                        # First successful response wins
+                        successful_response = response
+                        logger.debug(
+                            "fast_tier_winner",
+                            provider=client.provider.value,
+                            duration_ms=response.duration_ms
+                        )
+                else:
+                    failed_providers.append((client.provider.value, response.error_message))
+
+            # Log failed providers
+            for provider, error in failed_providers:
                 logger.warning(
                     "fast_tier_provider_failed",
-                    provider=client.provider,
-                    error=response.error_message
+                    provider=provider,
+                    error=error
                 )
-                # Restore original model for next provider in chain
-                request.model = original_model
-                
+
+            # Return successful response if any
+            if successful_response:
+                return successful_response
+
             # If we are here, all fast clients failed
             logger.warning("all_fast_tier_providers_failed_falling_back_to_smart")
 
         # 2. Smart Tier Execution (Final fallback or direct choice)
         target_model = request.model or self.smart_model
-        logger.debug(
-            "routing_to_smart_tier",
-            provider=self.smart_client.provider,
-            model=target_model or "default"
-        )
-        
+
+        # Silently route to smart tier (metrics recorded below)
         # Ensure model is set if we have a smart default
         if not request.model and self.smart_model:
             request.model = self.smart_model

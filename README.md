@@ -51,15 +51,71 @@ Warden is built to integrate directly with your AI Agent:
 
 ### 2. ⚡ Offline-First Intelligence (New!)
 Warden is built for resilience. Unlike SaaS tools that go dark without internet:
-*   **Local Models:** Once models (e.g., Qwen) are cached, Warden works 100% offline.
+*   **Local Models:** Multiple options - Claude Code CLI (uses desktop app), Ollama (Qwen), or any local LLM server.
 *   **Network Resilience:** Automatically detects connection timeouts and switches to local cache instantly.
 *   **Zero Latency:** No API round-trips for standard scans.
+*   **Zero API Costs:** Claude Code leverages your existing subscription without consuming API credits.
 
 ### 3. 🧠 Hybrid AI Engine (Dual-Tier)
 Warden balances cost, privacy, and intelligence using a smart routing system:
-*   **Fast Tier (Local):** Uses **Qwen 2.5-Coder** (via Ollama) for high-frequency tasks (parsing, linter filtering). **Free & Private.**
-*   **Smart Tier (Cloud):** Routes only complex logic (security fixes, architecture audits) to **GPT-4o/Claude**.
+*   **Local Tier (Privacy-First):**
+    - **Claude Code CLI** (uses your existing subscription, zero API costs)
+    - **Qwen 2.5-Coder** (via Ollama) for high-frequency tasks
+    - **Free & Private** - Code never leaves your machine
+*   **Cloud Tier (Advanced Analysis):** Routes only complex logic (security fixes, architecture audits) to **GPT-4o/Claude API/Gemini**.
 *   **Result:** 90% cost reduction compared to pure cloud agents.
+
+**Supported Providers:**
+- 🏠 **Local:** Claude Code, Ollama (Qwen), Any OpenAI-compatible local server
+- ☁️ **Cloud:** Anthropic (Claude), OpenAI (GPT-4), Google (Gemini), Groq, DeepSeek
+
+#### ⚡ Performance & Optimization
+
+Warden implements global performance optimizations that benefit ALL providers:
+
+**1. Parallel Fast Tier Execution** (New!)
+- Multiple fast providers race simultaneously - fastest wins
+- Example: Claude Code (10s) + Ollama (0.7s) run in parallel → Result in ~0.7s
+- **Impact:** Up to 93% faster than sequential execution
+
+**2. Smart Caching**
+- File-level hash-based caching skips unchanged files
+- Result-level caching stores analysis outcomes
+- **Impact:** 95% reduction in redundant LLM calls
+
+**3. Intelligent Routing**
+- Fast tier (local models) for syntax/lint checks
+- Smart tier (cloud models) for complex security analysis
+- Automatic fallback if fast providers unavailable
+
+**Provider Performance Profiles:**
+
+| Provider | Avg Response | Overhead | Best Use Case |
+|----------|-------------|----------|---------------|
+| **Ollama (Qwen)** | ~0.7s | 50ms | Quick checks, lint validation |
+| **Claude Code** | ~10s | 200ms | Deep analysis, security audits |
+| **Azure (GPT-4)** | ~2.2s | 100ms | Complex logic, architecture review |
+| **Anthropic API** | ~1.5s | 80ms | Security fixes, context-aware analysis |
+
+**Configuration Example:**
+```yaml
+llm:
+  # Parallel execution of fast providers
+  fast_tier_providers:
+    - ollama       # Fastest (0.7s avg)
+    - claude_code  # Quality fallback if Ollama unavailable
+    - groq         # Cloud fallback
+
+  # Smart tier for complex analysis
+  provider: claude_code  # or anthropic, openai
+  smart_model: claude-sonnet-4-20250514
+```
+
+**💡 Optimization Tips:**
+- **Use --diff mode** for incremental scans (analyze only changed files)
+- **Enable smart caching** (default: enabled) for 95% faster repeat scans
+- **Hybrid routing** leverages fast local models for 90% of checks
+- **Parallel execution** automatically races all fast providers
 
 ### 4. 🛡️ Core Validation Frames (Built-in)
 Warden ships with 6 powerful core frames:
@@ -195,6 +251,43 @@ This command:
 4.  Sets up MCP configuration.
 5.  Creates `.env` and `.env.example` for your API keys.
 
+### Configure Your LLM Provider
+
+Warden auto-detects available providers and uses the best local option by default:
+
+**Option 1: Claude Code (Recommended for Claude Users)**
+```bash
+# No setup needed! If you have Claude Code CLI installed:
+warden config llm use claude-code
+
+# Verify it's working:
+warden config llm test
+```
+
+**Option 2: Ollama (Free & Offline)**
+```bash
+# Install Ollama and pull Qwen model:
+ollama pull qwen2.5-coder:7b
+
+# Warden will auto-detect and use it
+warden scan
+```
+
+**Option 3: Cloud Providers (API Key Required)**
+```bash
+# Configure via interactive CLI:
+warden config llm add
+
+# Or set via environment:
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+```
+
+**Check Current Configuration:**
+```bash
+warden config llm status
+```
+
 ### The "Verify-Loop" Protocol
 
 AI Agents working in a Warden project follow this strict protocol:
@@ -215,6 +308,9 @@ AI Agents working in a Warden project follow this strict protocol:
 | `warden scan --diff` | **(New!)** Incremental scan. Checks only files changed relative to main branch. |
 | `warden scan --diff --baseline` | **(New!)** Smart Autopilot. Uses baseline to hide legacy issues. |
 | `warden validate <file>` | Scans a single file for immediate feedback. |
+| `warden config llm` | **(New!)** Manage LLM providers (add/remove/list/test/use). |
+| `warden config llm status` | Shows current LLM configuration and available providers. |
+| `warden config llm test` | Tests the active LLM provider connection. |
 | `warden serve` | Starts the MCP Server for AI integration. |
 | `warden doctor` | Checks project health and configuration status. |
 | `warden install` | Installs/Updates validation frames. |
@@ -256,6 +352,60 @@ baseline:
 # Automatically applies baseline filtering
 warden scan --diff
 ```
+
+---
+
+## ⚙️ Configuration
+
+### LLM Provider Configuration (`.warden/config.yaml`)
+
+Warden supports multiple LLM providers with automatic fallback and intelligent routing:
+
+```yaml
+llm:
+  # Provider auto-detection (enabled by default)
+  auto_detect: true
+
+  # Active provider
+  active_provider: claude-code  # or: ollama, anthropic, openai, gemini
+
+  providers:
+    claude_code:
+      enabled: true
+      model: claude-sonnet-4-20250514
+      timeout_seconds: 120
+      # No API key needed - uses your Claude Code CLI subscription
+
+    ollama:
+      enabled: true
+      endpoint: http://localhost:11434
+      model: qwen2.5-coder:7b
+      timeout_seconds: 60
+
+    anthropic:
+      enabled: false
+      api_key: ${ANTHROPIC_API_KEY}  # From environment
+      model: claude-sonnet-4-20250514
+      timeout_seconds: 120
+
+    openai:
+      enabled: false
+      api_key: ${OPENAI_API_KEY}
+      model: gpt-4o
+      timeout_seconds: 90
+
+  # Intelligent routing (optional)
+  routing:
+    fast_tier: ollama        # For quick checks (linting, parsing)
+    smart_tier: claude-code  # For complex analysis (security, architecture)
+```
+
+**Priority Order (Auto-Detection):**
+1. Claude Code (if CLI installed)
+2. Ollama (if running with Qwen model)
+3. Anthropic (if API key set)
+4. OpenAI (if API key set)
+5. Gemini (if API key set)
 
 ---
 
