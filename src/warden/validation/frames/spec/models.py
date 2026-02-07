@@ -311,12 +311,77 @@ class PlatformConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PlatformConfig":
-        """Create from dictionary."""
+        """
+        Create from dictionary with comprehensive validation.
+
+        Validates:
+        - Required fields: name, path, type, role
+        - platform_type is in PlatformType enum
+        - role is in PlatformRole enum
+
+        Args:
+            data: Dictionary containing platform configuration
+
+        Returns:
+            PlatformConfig instance
+
+        Raises:
+            ValueError: If required fields are missing or invalid enum values
+        """
+        # Validate required fields
+        name = data.get("name", "").strip()
+        if not name:
+            raise ValueError(
+                "Platform 'name' is required. "
+                "Example: name: 'mobile'"
+            )
+
+        path = data.get("path", "").strip()
+        if not path:
+            raise ValueError(
+                f"Platform 'path' is required for platform '{name}'. "
+                f"Example: path: '../my-app'"
+            )
+
+        platform_type_str = data.get("type", "").strip()
+        if not platform_type_str:
+            raise ValueError(
+                f"Platform 'type' is required for platform '{name}'. "
+                f"Valid options: {', '.join([t.value for t in PlatformType])}"
+            )
+
+        role_str = data.get("role", "").strip()
+        if not role_str:
+            raise ValueError(
+                f"Platform 'role' is required for platform '{name}'. "
+                f"Valid options: {', '.join([r.value for r in PlatformRole])}"
+            )
+
+        # Validate platform_type is valid enum
+        try:
+            platform_type = PlatformType(platform_type_str)
+        except ValueError:
+            valid_types = ", ".join([t.value for t in PlatformType])
+            raise ValueError(
+                f"Invalid platform type '{platform_type_str}' for platform '{name}'. "
+                f"Valid options: {valid_types}"
+            )
+
+        # Validate role is valid enum
+        try:
+            role = PlatformRole(role_str)
+        except ValueError:
+            valid_roles = ", ".join([r.value for r in PlatformRole])
+            raise ValueError(
+                f"Invalid platform role '{role_str}' for platform '{name}'. "
+                f"Valid options: {valid_roles}"
+            )
+
         return cls(
-            name=data.get("name", ""),
-            path=data.get("path", ""),
-            platform_type=PlatformType(data.get("type", "unknown")),
-            role=PlatformRole(data.get("role", "consumer")),
+            name=name,
+            path=path,
+            platform_type=platform_type,
+            role=role,
             description=data.get("description"),
         )
 
@@ -346,6 +411,20 @@ class ContractGap:
     consumer_line: Optional[int] = None
     provider_file: Optional[str] = None
     provider_line: Optional[int] = None
+
+    def get_suppression_key(self) -> str:
+        """
+        Generate a suppression key for this gap.
+
+        Format: "spec:{gap_type}:{operation_name}"
+        Example: "spec:missing_operation:createUser"
+                "spec:type_mismatch:getUserById"
+
+        Returns:
+            Suppression key string
+        """
+        operation = self.operation_name or "unknown"
+        return f"spec:{self.gap_type}:{operation}"
 
     def to_finding_dict(self) -> Dict[str, Any]:
         """Convert to Finding-compatible dictionary."""

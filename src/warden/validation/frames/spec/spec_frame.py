@@ -102,7 +102,7 @@ class SpecFrame(ValidationFrame):
         Initialize SpecFrame.
 
         Args:
-            config: Frame configuration with 'platforms' list
+            config: Frame configuration with 'platforms' list and optional 'suppressions'
         """
         super().__init__(config)
         self.llm_service = llm_service
@@ -110,9 +110,34 @@ class SpecFrame(ValidationFrame):
         # Parse platform configurations
         self.platforms: List[PlatformConfig] = []
         self._parse_platforms_config()
+        # Load suppressions from config
+        self._load_suppressions()
 
     def _parse_platforms_config(self) -> None:
-        """Parse platforms from config."""
+        """
+        Parse platforms from config with comprehensive validation.
+
+        Validates each platform configuration and logs detailed errors
+        for invalid entries. Continues processing remaining platforms
+        on validation errors rather than failing entirely.
+
+        Config structure:
+            platforms:
+              - name: mobile
+                path: ../app
+                type: flutter
+                role: consumer
+
+        Validation:
+        - Required fields: name, path, type, role
+        - type must be valid PlatformType enum value
+        - role must be valid PlatformRole enum value
+
+        On error:
+        - Logs detailed error with platform name and config
+        - Continues to next platform (graceful degradation)
+        - Invalid platforms are skipped
+        """
         if not self.config:
             return
 
@@ -121,12 +146,140 @@ class SpecFrame(ValidationFrame):
             try:
                 platform = PlatformConfig.from_dict(p)
                 self.platforms.append(platform)
-            except Exception as e:
-                logger.warning(
-                    "platform_config_parse_error",
+                logger.debug(
+                    "platform_config_parsed",
+                    platform=platform.name,
+                    type=platform.platform_type.value,
+                    role=platform.role.value,
+                )
+            except ValueError as e:
+                # Validation error - log with clear details
+                logger.error(
+                    "platform_config_validation_error",
                     platform=p.get("name", "unknown"),
+                    config=p,
                     error=str(e),
                 )
+            except Exception as e:
+                # Unexpected error - log with type for debugging
+                logger.error(
+                    "platform_config_parse_error",
+                    platform=p.get("name", "unknown"),
+                    config=p,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+
+    def _load_suppressions(self) -> None:
+        """
+        Load suppression rules from frame configuration.
+
+        Suppressions follow the standard Warden format:
+            suppressions:
+              - rule: "spec:missing_operation:createUser"
+                files: ["src/api/*.py"]
+                reason: "Legacy endpoint, being refactored"
+              - rule: "spec:type_mismatch:*"
+                files: ["*"]
+                reason: "Type system migration in progress"
+
+        Suppression key format:
+            "spec:{gap_type}:{operation_name}"
+
+        Examples:
+            - "spec:missing_operation:deleteUser"
+            - "spec:type_mismatch:getUserById"
+            - "spec:*:*" (suppress all spec gaps)
+        """
+        self.suppressions: List[Dict[str, Any]] = []
+        if not self.config:
+            return
+
+        suppressions_data = self.config.get("suppressions", [])
+        if suppressions_data:
+            self.suppressions = suppressions_data
+            logger.info(
+                "spec_suppressions_loaded",
+                count=len(self.suppressions),
+            )
+
+    def _is_gap_suppressed(self, gap: ContractGap) -> bool:
+        """
+        Check if a gap is suppressed by configuration rules.
+
+        Matches against suppression rules using:
+        1. Suppression key: "spec:{gap_type}:{operation_name}"
+        2. Wildcard support: "spec:*:*", "spec:missing_operation:*"
+        3. File pattern matching (if gap has source file)
+
+        Args:
+            gap: Contract gap to check
+
+        Returns:
+            True if gap is suppressed, False otherwise
+        """
+        if not self.suppressions:
+            return False
+
+        gap_key = gap.get_suppression_key()
+        gap_file = gap.consumer_file or gap.provider_file
+
+        for suppression in self.suppressions:
+            rule = suppression.get("rule", "")
+
+            # Check rule match (supports wildcards)
+            if not self._match_suppression_rule(rule, gap_key):
+                continue
+
+            # Check file pattern match if files specified
+            files = suppression.get("files", [])
+            if files and gap_file:
+                import fnmatch
+                if not any(fnmatch.fnmatch(gap_file, pattern) for pattern in files):
+                    continue
+            elif files and not gap_file:
+                # Suppression has file patterns, but gap has no file - skip
+                continue
+
+            # Match found
+            logger.debug(
+                "gap_suppressed",
+                gap_key=gap_key,
+                suppression_rule=rule,
+                reason=suppression.get("reason", "No reason provided"),
+            )
+            return True
+
+        return False
+
+    def _match_suppression_rule(self, rule: str, gap_key: str) -> bool:
+        """
+        Match suppression rule against gap key with wildcard support.
+
+        Rules:
+        - "spec:missing_operation:createUser" (exact match)
+        - "spec:missing_operation:*" (all missing operations)
+        - "spec:*:*" (all spec gaps)
+        - "*" (all gaps)
+
+        Args:
+            rule: Suppression rule pattern
+            gap_key: Gap suppression key
+
+        Returns:
+            True if rule matches gap_key
+        """
+        # Wildcard "*" matches everything
+        if rule == "*":
+            return True
+
+        # Exact match
+        if rule == gap_key:
+            return True
+
+        # Pattern matching with wildcards
+        import fnmatch
+        return fnmatch.fnmatch(gap_key, rule)
 
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
@@ -173,6 +326,7 @@ class SpecFrame(ValidationFrame):
             "platforms_analyzed": [],
             "contracts_extracted": 0,
             "gaps_found": 0,
+            "suppressed_gaps": 0,
         }
 
         try:
@@ -229,8 +383,20 @@ class SpecFrame(ValidationFrame):
                             f"gap_analysis_{consumer.name}_vs_{provider.name}",
                         )
 
-                        # Convert gaps to findings
+                        # Convert gaps to findings (filter suppressed gaps)
                         for gap in result.gaps:
+                            # Check if gap is suppressed
+                            if self._is_gap_suppressed(gap):
+                                metadata["suppressed_gaps"] += 1
+                                logger.info(
+                                    "gap_suppressed_by_config",
+                                    gap_type=gap.gap_type,
+                                    operation=gap.operation_name,
+                                    suppression_key=gap.get_suppression_key(),
+                                )
+                                continue
+
+                            # Not suppressed - create finding
                             finding = self._gap_to_finding(gap)
                             findings.append(finding)
                             metadata["gaps_found"] += 1

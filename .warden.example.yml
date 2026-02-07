@@ -143,6 +143,47 @@ frames_config:
     max_class_lines: 500
     max_function_lines: 100
 
+  # ============================================
+  # API CONTRACT SPEC FRAME
+  # ============================================
+  spec:
+    enabled: false  # Optional - enable for multi-platform projects
+    priority: "low"
+    is_blocker: false
+
+    # Platform configurations (at least 2 required: consumer + provider)
+    platforms:
+      - name: mobile
+        path: ../my-mobile-app
+        type: flutter  # flutter, react, react-native, angular, vue, swift, kotlin
+        role: consumer  # consumer, provider, both
+
+      - name: backend
+        path: ../my-backend
+        type: spring  # spring, nestjs, express, fastapi, django, aspnetcore, go
+        role: provider
+
+    # Gap analysis configuration
+    gap_analysis:
+      enable_fuzzy: true  # Enable fuzzy matching for operation names
+      fuzzy_threshold: 0.8  # Similarity threshold (0.0-1.0)
+
+    # Suppression rules for contract gaps
+    suppressions:
+      # Exact operation suppression
+      - rule: "spec:missing_operation:createUser"
+        reason: "Legacy endpoint, being refactored"
+
+      # Wildcard for gap type (suppress all type mismatches)
+      - rule: "spec:type_mismatch:*"
+        files: ["legacy/*.py"]
+        reason: "Type system migration in progress"
+
+      # Suppress all spec gaps in specific files
+      - rule: "spec:*:*"
+        files: ["vendor/*", "third-party/*"]
+        reason: "Third-party code"
+
 # Global Suppression Rules
 suppression:
   # Suppress specific issues globally
