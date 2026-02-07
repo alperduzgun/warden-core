@@ -294,6 +294,106 @@ class GapAnalyzer:
 
         return name
 
+    def _sanitize_operation_name(self, operation_name: str) -> Optional[str]:
+        """
+        Sanitize operation name to prevent prompt injection attacks.
+
+        Security checks:
+        1. Length validation (3-100 chars)
+        2. Whitelist pattern (alphanumeric, underscore, dash, dot only)
+        3. Check for prompt injection patterns
+
+        Args:
+            operation_name: Raw operation name from user code
+
+        Returns:
+            Sanitized operation name, or None if invalid
+        """
+        # Check length bounds (SECURITY: Prevent DOS via extremely long names)
+        if len(operation_name) < 3 or len(operation_name) > 100:
+            logger.warning(
+                "operation_name_invalid_length",
+                name=operation_name[:50],  # Truncate for logging
+                length=len(operation_name),
+            )
+            return None
+
+        # Whitelist pattern: only alphanumeric, underscore, dash, dot
+        # SECURITY: Strict validation prevents injection via special chars
+        sanitized = re.sub(r"[^a-zA-Z0-9_\-\.]", "", operation_name)
+        if sanitized != operation_name:
+            logger.warning(
+                "operation_name_contains_invalid_chars",
+                original=operation_name[:50],
+                sanitized=sanitized[:50],
+            )
+            return None
+
+        # SECURITY: Check for prompt injection patterns
+        # These patterns indicate attempts to manipulate LLM behavior
+        injection_patterns = [
+            r"(?i)ignore\s+previous",
+            r"(?i)ignore\s+all",
+            r"(?i)system\s*:",
+            r"(?i)assistant\s*:",
+            r"(?i)user\s*:",
+            r"(?i)forget\s+",
+            r"(?i)disregard\s+",
+            r"(?i)<\s*system",
+            r"(?i)<\s*prompt",
+        ]
+
+        for pattern in injection_patterns:
+            if re.search(pattern, sanitized):
+                logger.error(
+                    "prompt_injection_detected_in_operation_name",
+                    name=sanitized[:50],
+                    pattern=pattern,
+                    security_event=True,  # Flag for security monitoring
+                )
+                return None
+
+        return sanitized
+
+    def _sanitize_rag_context(self, raw_context: str) -> str:
+        """
+        Sanitize RAG context to prevent prompt injection via retrieved code snippets.
+
+        Security measures:
+        1. Truncate to max 500 chars
+        2. Remove non-ASCII characters (keep printable ASCII + newlines)
+        3. Escape System: and User: prefixes that could confuse LLM
+
+        Args:
+            raw_context: Raw context from RAG system
+
+        Returns:
+            Sanitized context safe for LLM prompt
+        """
+        if not raw_context:
+            return ""
+
+        # SECURITY: Truncate to prevent context overflow attacks
+        truncated = raw_context[:500]
+
+        # SECURITY: Remove non-ASCII to prevent unicode injection tricks
+        # Keep only printable ASCII (32-126) plus newline (10) and tab (9)
+        sanitized_chars = []
+        for char in truncated:
+            code = ord(char)
+            if (32 <= code <= 126) or code in (9, 10):
+                sanitized_chars.append(char)
+
+        sanitized = "".join(sanitized_chars)
+
+        # SECURITY: Escape role prefixes that could manipulate conversation flow
+        # Replace "System:" and "User:" with safe equivalents
+        sanitized = re.sub(r"(?i)System\s*:", "[CONTEXT_SYSTEM]:", sanitized)
+        sanitized = re.sub(r"(?i)User\s*:", "[CONTEXT_USER]:", sanitized)
+        sanitized = re.sub(r"(?i)Assistant\s*:", "[CONTEXT_ASSISTANT]:", sanitized)
+
+        return sanitized
+
     async def _semantic_match_operation(
         self,
         consumer_op: OperationDefinition,
@@ -308,10 +408,14 @@ class GapAnalyzer:
         if not provider_ops:
             return None
 
-        # Security: Input Sanitization
-        safe_query = re.sub(r"[^a-zA-Z0-9_\-\.]", "", consumer_op.name)
-        if len(safe_query) < 3 or safe_query != consumer_op.name:
-            logger.warning("skipping_unsafe_semantic_query", query=consumer_op.name)
+        # SECURITY: Sanitize operation name to prevent prompt injection
+        safe_query = self._sanitize_operation_name(consumer_op.name)
+        if safe_query is None:
+            logger.warning(
+                "skipping_unsafe_semantic_query",
+                query=consumer_op.name[:50],  # Truncate for safe logging
+                reason="sanitization_failed",
+            )
             return None
 
         # Filter candidates (Basic Bulkhead)
@@ -362,7 +466,9 @@ class GapAnalyzer:
             if hasattr(self.llm_service, 'find_best_match'):
                 prompt_context = f"API Operation Matching. Consumer: {safe_query} ({consumer_op.operation_type.value})"
                 if rag_context:
-                    prompt_context += f"\nCONTEXT:\n{rag_context}"
+                    # SECURITY: Sanitize RAG context before embedding in prompt
+                    safe_rag_context = self._sanitize_rag_context(rag_context)
+                    prompt_context += f"\nCONTEXT:\n{safe_rag_context}"
 
                 # Call LLM service (assuming it has async support or we use sync call)
                 # Note: Most LLM services are sync, so we call directly

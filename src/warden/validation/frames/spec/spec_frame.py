@@ -202,6 +202,9 @@ class SpecFrame(ValidationFrame):
                         "models": len(contract.models),
                     })
 
+            # Gap analysis timeout config (SECURITY: Prevent DOS via expensive analysis)
+            gap_analysis_timeout = self.config.get("gap_analysis_timeout", 120) if self.config else 120
+
             # Compare contracts (consumer vs provider)
             for consumer in consumers:
                 consumer_contract = contracts.get(consumer.name)
@@ -213,19 +216,55 @@ class SpecFrame(ValidationFrame):
                     if not provider_contract:
                         continue
 
-                    # Analyze gaps
-                    result = await self._analyze_gaps(
-                        consumer_contract,
-                        provider_contract,
-                        consumer.name,
-                        provider.name,
-                    )
+                    # Analyze gaps with timeout protection
+                    try:
+                        result = await with_timeout(
+                            self._analyze_gaps(
+                                consumer_contract,
+                                provider_contract,
+                                consumer.name,
+                                provider.name,
+                            ),
+                            gap_analysis_timeout,
+                            f"gap_analysis_{consumer.name}_vs_{provider.name}",
+                        )
 
-                    # Convert gaps to findings
-                    for gap in result.gaps:
-                        finding = self._gap_to_finding(gap)
-                        findings.append(finding)
-                        metadata["gaps_found"] += 1
+                        # Convert gaps to findings
+                        for gap in result.gaps:
+                            finding = self._gap_to_finding(gap)
+                            findings.append(finding)
+                            metadata["gaps_found"] += 1
+
+                        # Track successful analysis
+                        if "timeout_occurred" not in metadata:
+                            metadata["timeout_occurred"] = False
+
+                    except OperationTimeoutError:
+                        # RESILIENCE: Graceful degradation on timeout
+                        logger.error(
+                            "gap_analysis_timeout",
+                            consumer=consumer.name,
+                            provider=provider.name,
+                            timeout_seconds=gap_analysis_timeout,
+                        )
+
+                        # Create warning finding for timeout
+                        timeout_finding = Finding(
+                            id=f"{self.frame_id}-timeout-{consumer.name}-{provider.name}",
+                            severity="warning",
+                            message=f"Gap analysis timed out comparing {consumer.name} vs {provider.name}",
+                            location="project-level",
+                            detail=f"Analysis exceeded {gap_analysis_timeout}s timeout. "
+                                   f"Partial results may be incomplete. "
+                                   f"Consider increasing 'gap_analysis_timeout' config or optimizing contract size.",
+                            code=None,
+                        )
+                        findings.append(timeout_finding)
+
+                        # Track timeout in metadata
+                        metadata["timeout_occurred"] = True
+                        metadata["timeout_seconds"] = gap_analysis_timeout
+                        metadata["timeout_pair"] = f"{consumer.name}_vs_{provider.name}"
 
             # Determine status
             if any(f.severity == "critical" for f in findings):
