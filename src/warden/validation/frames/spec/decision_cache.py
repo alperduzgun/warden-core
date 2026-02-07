@@ -6,6 +6,9 @@ and improve performance on subsequent runs.
 """
 
 import json
+import os
+import threading
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from warden.shared.infrastructure.logging import get_logger
@@ -15,8 +18,12 @@ logger = get_logger(__name__)
 
 class SpecDecisionCache:
     """
-    Persists semantic match decisions.
-    
+    Persists semantic match decisions with thread-safe operations.
+
+    Thread safety is achieved through:
+    - threading.Lock for all cache operations
+    - Atomic file writes using temp file + rename pattern
+
     Structure:
     {
         "MatchV1:create_invoice:submit_payment": {
@@ -35,10 +42,15 @@ class SpecDecisionCache:
     def __init__(self, cache_file: Path = Path(".warden/memory/spec_matches.json")):
         self.cache_file = cache_file
         self._cache: Dict[str, Any] = {}
+        self._lock = threading.Lock()  # Thread safety for cache operations
         self._load_cache()
 
     def _load_cache(self) -> None:
-        """Load cache from disk."""
+        """
+        Load cache from disk.
+
+        Thread-safe initialization - called only from __init__.
+        """
         try:
             if self.cache_file.exists():
                 text = self.cache_file.read_text(encoding="utf-8")
@@ -49,10 +61,49 @@ class SpecDecisionCache:
             self._cache = {}
 
     def _save_cache(self) -> None:
-        """Save cache to disk."""
+        """
+        Save cache to disk atomically.
+
+        Uses temp file + rename pattern to ensure atomic writes:
+        1. Write to temporary file in same directory
+        2. Rename to target file (atomic operation on POSIX)
+
+        This prevents corruption from:
+        - Concurrent writes (protected by lock)
+        - Partial writes from crashes
+        - Race conditions between read/write
+
+        Note: Caller must hold self._lock before calling.
+        """
         try:
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self.cache_file.write_text(json.dumps(self._cache, indent=2), encoding="utf-8")
+
+            # Write to temp file first for atomic operation
+            fd, temp_path = tempfile.mkstemp(
+                dir=self.cache_file.parent,
+                prefix=f".{self.cache_file.name}.",
+                suffix=".tmp",
+                text=True
+            )
+
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
+                    json.dump(self._cache, temp_file, indent=2)
+                    temp_file.flush()
+                    os.fsync(temp_file.fileno())  # Ensure data written to disk
+
+                # Atomic rename (POSIX guarantees atomicity)
+                os.replace(temp_path, self.cache_file)
+                logger.debug("spec_cache_saved", entries=len(self._cache))
+
+            except Exception as e:
+                # Clean up temp file on error
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise e
+
         except Exception as e:
             logger.warning("spec_cache_save_failed", error=str(e))
 
@@ -62,32 +113,49 @@ class SpecDecisionCache:
 
     def get_decision(self, consumer_op: str, provider_op: str) -> Optional[Dict[str, Any]]:
         """
-        Get cached decision.
-        
+        Get cached decision in a thread-safe manner.
+
+        Args:
+            consumer_op: Consumer operation name
+            provider_op: Provider operation name
+
         Returns:
             Dict with decision data if found, else None.
         """
-        key = self._get_key(consumer_op, provider_op)
-        return self._cache.get(key)
+        with self._lock:
+            key = self._get_key(consumer_op, provider_op)
+            return self._cache.get(key)
 
     def cache_decision(
-        self, 
-        consumer_op: str, 
-        provider_op: str, 
-        matched: bool, 
+        self,
+        consumer_op: str,
+        provider_op: str,
+        matched: bool,
         reasoning: str = "",
         confidence: float = 1.0
     ) -> None:
         """
-        Cache a decision.
+        Cache a decision with thread-safe atomic write.
+
+        Thread safety ensures:
+        - No concurrent modifications to in-memory cache
+        - Atomic file writes via temp + rename pattern
+
+        Args:
+            consumer_op: Consumer operation name
+            provider_op: Provider operation name
+            matched: Whether operations match
+            reasoning: Human-readable explanation
+            confidence: Match confidence score (0.0-1.0)
         """
-        key = self._get_key(consumer_op, provider_op)
-        entry = {
-            "matched": matched,
-            "provider_op": provider_op,
-            "reasoning": reasoning,
-            "confidence": confidence,
-            "timestamp": "iso-timestamp-placeholder" # Ideally real timestamp
-        }
-        self._cache[key] = entry
-        self._save_cache()
+        with self._lock:
+            key = self._get_key(consumer_op, provider_op)
+            entry = {
+                "matched": matched,
+                "provider_op": provider_op,
+                "reasoning": reasoning,
+                "confidence": confidence,
+                "timestamp": "iso-timestamp-placeholder"  # Ideally real timestamp
+            }
+            self._cache[key] = entry
+            self._save_cache()  # Called while holding lock for atomicity

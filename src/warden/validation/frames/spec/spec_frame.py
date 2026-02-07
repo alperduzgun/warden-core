@@ -214,7 +214,7 @@ class SpecFrame(ValidationFrame):
                         continue
 
                     # Analyze gaps
-                    result = self._analyze_gaps(
+                    result = await self._analyze_gaps(
                         consumer_contract,
                         provider_contract,
                         consumer.name,
@@ -277,6 +277,24 @@ class SpecFrame(ValidationFrame):
                 },
             )
 
+    def _get_project_root(self) -> Path:
+        """
+        Get project root directory.
+
+        Returns:
+            Path to project root (where .warden directory is located)
+        """
+        # Look for .warden directory to identify project root
+        current = Path.cwd()
+        while current != current.parent:
+            if (current / ".warden").exists():
+                return current
+            current = current.parent
+
+        # Fallback to cwd if .warden not found
+        logger.warning("project_root_not_found", fallback=str(Path.cwd()))
+        return Path.cwd()
+
     def _validate_configuration(self) -> Optional[FrameResult]:
         """
         Validate frame configuration.
@@ -298,16 +316,20 @@ class SpecFrame(ValidationFrame):
                 "Configure a consumer and provider platform."
             )
 
+        # Get project root for resolving relative paths
+        project_root = self._get_project_root()
+
         # Check platform paths exist
         for platform in self.platforms:
             platform_path = Path(platform.path)
             if not platform_path.is_absolute():
-                # Resolve relative to current project
-                platform_path = Path.cwd() / platform.path
+                # Resolve relative to project root (not cwd)
+                platform_path = project_root / platform.path
 
             if not platform_path.exists():
                 return self._create_skip_result(
-                    f"Platform path not found: {platform.path} ({platform.name})"
+                    f"Platform path not found: {platform.path} "
+                    f"(resolved to: {platform_path.absolute()}) ({platform.name})"
                 )
 
         return None
@@ -344,10 +366,21 @@ class SpecFrame(ValidationFrame):
         Returns:
             Contract or None if extraction fails completely
         """
+        # Get project root for resolving relative paths
+        project_root = self._get_project_root()
+
         # Resolve platform path
         platform_path = Path(platform.path)
         if not platform_path.is_absolute():
-            platform_path = Path.cwd() / platform.path
+            # Resolve relative to project root (not cwd)
+            platform_path = project_root / platform.path
+
+        logger.debug(
+            "resolving_platform_path",
+            platform=platform.name,
+            configured_path=platform.path,
+            resolved_path=str(platform_path.absolute())
+        )
 
         # Get resilience config from frame config if available
         resilience_config = ExtractorResilienceConfig()
@@ -467,7 +500,7 @@ class SpecFrame(ValidationFrame):
             },
         )
 
-    def _analyze_gaps(
+    async def _analyze_gaps(
         self,
         consumer: Contract,
         provider: Contract,
@@ -482,6 +515,8 @@ class SpecFrame(ValidationFrame):
         - Type compatibility checks (int ↔ number)
         - Model field comparison
         - Enum value comparison
+
+        Note: Now async to support async semantic matching.
 
         Args:
             consumer: Consumer contract (what frontend expects)
@@ -505,11 +540,11 @@ class SpecFrame(ValidationFrame):
         from warden.validation.frames.spec.analyzer import GapAnalyzer
 
         analyzer = GapAnalyzer(
-            config=analyzer_config, # Use the analyzer_config created above
+            config=analyzer_config,  # Use the analyzer_config created above
             llm_service=self.llm_service,
             semantic_search_service=self.semantic_search_service
         )
-        return analyzer.analyze(
+        return await analyzer.analyze(
             consumer=consumer,
             provider=provider,
             consumer_platform=consumer_name,
