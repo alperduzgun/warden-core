@@ -1,0 +1,95 @@
+{
+  "module": "unknown",
+  "findings": [
+    {
+      "id": "py-hardcoded-password",
+      "severity": "high",
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "location": "examples/custom-frames/redis-security/test_examples/insecure_redis.py:16",
+      "detail": null,
+      "code": "password='MySecretPassword123'  # \u274c CRITICAL: Hardcoded password",
+      "line": 16,
+      "column": 5,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c"
+    },
+    {
+      "id": "py-hardcoded-password",
+      "severity": "high",
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "location": "examples/custom-frames/redis-security/test_examples/insecure_redis.py:50",
+      "detail": null,
+      "code": "password='admin123',  # \u274c Hardcoded",
+      "line": 50,
+      "column": 5,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c"
+    },
+    {
+      "id": "py-hardcoded-password",
+      "severity": "high",
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "location": "examples/custom-frames/redis-security/frame.py:314",
+      "detail": null,
+      "code": "code=re.sub(r'password\\s*=\\s*[\"\\'][^\"\\']+[\"\\']', 'password=\"***REDACTED***\"', line.strip()),",
+      "line": 314,
+      "column": 71,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c"
+    },
+    {
+      "id": "py-hardcoded-password",
+      "severity": "high",
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "location": "examples/test_secret.py:3",
+      "detail": null,
+      "code": "api_key = \"sk-1234567890abcdef1234567890abcdef\" # Dummy change to invalidate cache",
+      "line": 3,
+      "column": 5,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c"
+    }
+  ],
+  "debt_items": [
+    {
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c",
+      "first_seen": "2026-02-07T09:38:20.236618+00:00",
+      "rule_id": "py-hardcoded-password",
+      "file_path": null,
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "severity": "high"
+    },
+    {
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c",
+      "first_seen": "2026-02-07T09:38:20.236618+00:00",
+      "rule_id": "py-hardcoded-password",
+      "file_path": null,
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "severity": "high"
+    },
+    {
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c",
+      "first_seen": "2026-02-07T09:38:20.236618+00:00",
+      "rule_id": "py-hardcoded-password",
+      "file_path": null,
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "severity": "high"
+    },
+    {
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c",
+      "first_seen": "2026-02-07T09:38:20.236618+00:00",
+      "rule_id": "py-hardcoded-password",
+      "file_path": null,
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "severity": "high"
+    }
+  ],
+  "created_at": "2026-02-07T09:38:20.236611+00:00",
+  "updated_at": "2026-02-07T09:38:20.236657+00:00",
+  "debt_count": 4,
+  "oldest_debt_age_days": 0
+}

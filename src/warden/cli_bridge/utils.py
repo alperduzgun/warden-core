@@ -29,7 +29,41 @@ def serialize_pipeline_result(result: Any) -> Dict[str, Any]:
             return {"data": val} # Wrapper if not dict
             
         if hasattr(result, "model_dump"):
-            return result.model_dump(mode="json")
+            data = result.model_dump(mode="json")
+
+            # Aggregate findings from frame_results for scan.py compatibility
+            # scan.py expects findings in the top-level result
+            # Note: frame_results may contain FrameResult objects that need to_json() conversion
+            all_findings = []
+
+            # First try from result.frame_results (might be objects)
+            if hasattr(result, 'frame_results') and result.frame_results:
+                import sys
+                print(f"DEBUG: Processing {len(result.frame_results)} frame_results", file=sys.stderr)
+                for frame_res in result.frame_results:
+                    # If FrameResult object, access findings attribute directly
+                    if hasattr(frame_res, 'findings') and frame_res.findings:
+                        print(f"DEBUG: Frame {getattr(frame_res, 'frame_id', 'unknown')} has {len(frame_res.findings)} findings", file=sys.stderr)
+                        # findings is a list of Finding objects
+                        for finding in frame_res.findings:
+                            # Convert Finding to dict
+                            if hasattr(finding, 'to_dict'):
+                                all_findings.append(finding.to_dict())
+                            elif hasattr(finding, 'to_json'):
+                                all_findings.append(finding.to_json())
+                            elif isinstance(finding, dict):
+                                all_findings.append(finding)
+                print(f"DEBUG: Total findings aggregated: {len(all_findings)}", file=sys.stderr)
+
+            # Fallback: try from serialized data
+            elif 'frame_results' in data and isinstance(data['frame_results'], list):
+                for frame_res in data['frame_results']:
+                    if isinstance(frame_res, dict) and 'findings' in frame_res:
+                        all_findings.extend(frame_res['findings'])
+
+            data['findings'] = all_findings
+
+            return data
 
         # Fallback manual serialization
         return {

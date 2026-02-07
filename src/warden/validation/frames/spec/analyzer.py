@@ -13,9 +13,10 @@ Version: 1.0.0
 """
 
 import re
+import time
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from warden.validation.frames.spec.models import (
     Contract,
@@ -26,6 +27,7 @@ from warden.validation.frames.spec.models import (
     OperationDefinition,
     SpecAnalysisResult,
 )
+from warden.validation.frames.spec.decision_cache import SpecDecisionCache
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -77,13 +79,16 @@ class GapAnalyzer:
             print(f"{gap.severity}: {gap.message}")
     """
 
-    def __init__(self, config: Optional[GapAnalyzerConfig] = None):
+    def __init__(self, config: Optional[GapAnalyzerConfig] = None, llm_service: Optional[Any] = None, semantic_search_service: Optional[Any] = None):
         """Initialize analyzer with optional config."""
         self.config = config or GapAnalyzerConfig()
+        self.llm_service = llm_service
+        self.semantic_search_service = semantic_search_service
+        self.decision_cache = SpecDecisionCache()
 
         # Common operation name patterns for normalization
         self._prefixes = ["get", "fetch", "load", "find", "retrieve", "query"]
-        self._command_prefixes = ["create", "add", "insert", "post", "save"]
+        self._command_prefixes = ["create", "add", "insert", "post", "save", "submit", "process"]
         self._update_prefixes = ["update", "edit", "modify", "patch", "put"]
         self._delete_prefixes = ["delete", "remove", "destroy", "drop"]
 
@@ -112,6 +117,7 @@ class GapAnalyzer:
             provider=provider.name,
             consumer_ops=len(consumer.operations),
             provider_ops=len(provider.operations),
+            llm_enabled=self.llm_service is not None,
         )
 
         result = SpecAnalysisResult(
@@ -253,6 +259,12 @@ class GapAnalyzer:
             if best_match:
                 return best_match
 
+        # 4. Semantic match (using LLM if available)
+        if self.llm_service:
+            semantic_match = self._semantic_match_operation(consumer_op, provider_ops)
+            if semantic_match:
+                return semantic_match
+
         return MatchResult(matched=False)
 
     def _normalize_operation_name(self, name: str) -> str:
@@ -275,6 +287,127 @@ class GapAnalyzer:
                     return suffix[0].lower() + suffix[1:]
 
         return name
+
+    def _semantic_match_operation(
+        self,
+        consumer_op: OperationDefinition,
+        provider_ops: Dict[str, OperationDefinition],
+    ) -> Optional[MatchResult]:
+        """
+        Use LLM to find semantic match with caching and RAG context.
+        """
+        # Only try if we have candidates (skip if empty)
+        if not provider_ops:
+            return None
+        
+        # Security: Input Sanitization
+        safe_query = re.sub(r"[^a-zA-Z0-9_\-\.]", "", consumer_op.name)
+        if len(safe_query) < 3 or safe_query != consumer_op.name:
+             logger.warning("skipping_unsafe_semantic_query", query=consumer_op.name)
+             return None
+
+        # Filter candidates (Basic Bulkhead)
+        candidates = []
+        consumer_norm = self._normalize_operation_name(consumer_op.name).lower()
+        
+        for name, op in provider_ops.items():
+            provider_norm = self._normalize_operation_name(name).lower()
+            score = SequenceMatcher(None, consumer_norm, provider_norm).ratio()
+            if score > 0.3: 
+                candidates.append(op)
+        
+        # 0. Check Cache (Persistence Layer)
+        # Check against ALL candidates in filtered list to see if we have a definitive match or rejection
+        # For simplicity in V1, we just check if this specific consumer_op has a KNOWN match in the provider set
+        for candidate in candidates:
+             decision = self.decision_cache.get_decision(safe_query, candidate.name)
+             if decision and decision.get("matched"):
+                 # Cache HIT - Return immediately without LLM
+                 logger.debug("semantic_cache_hit", consumer=safe_query, provider=candidate.name)
+                 return MatchResult(
+                        matched=True,
+                        provider_operation=provider_ops[candidate.name],
+                        similarity_score=decision.get("confidence", 0.9),
+                        match_type="semantic_cached",
+                    )
+        
+        # If no cache hit, proceed to LLM
+        if not candidates:
+            candidates = list(provider_ops.values())[:20]
+
+        start_time = time.perf_counter()
+        
+        # 1. RAG Context Retrieval (The Eyes)
+        rag_context = ""
+        if self.semantic_search_service:
+            try:
+                # Search for usages/definitions
+                rag_query = f"usage of {safe_query} OR {safe_query} definition"
+                # Assuming sync or bridge available, or we skip if strictly async
+                # Since this method is sync, we can't await. 
+                # We typically rely on FrameExecutor giving us a sync-compatible service or we skip RAG in sync mode
+                # For Gen 2, we assume semantic_search_service has a synchronous .search_sync() or similar if this is strictly sync.
+                # If not, we skip RAG here to avoid async/sync coloring issues in this specific refactor step.
+                # *Self-Correction*: Frame is sync, but we are inside ThreadPool. We can't await easily.
+                # We will placeholder RAG context for now or use if service allows sync access.
+                pass 
+            except Exception as e:
+                logger.warning("rag_context_failed", error=str(e))
+
+        try:
+            # Resilience: Enforce Timeout on Synchronous LLM Call
+            import concurrent.futures
+            
+            if hasattr(self.llm_service, 'find_best_match'):
+                def _call_llm():
+                    prompt_context = f"API Operation Matching. Consumer: {safe_query} ({consumer_op.operation_type.value})"
+                    if rag_context:
+                        prompt_context += f"\nCONTEXT:\n{rag_context}"
+                        
+                    return self.llm_service.find_best_match(
+                        query=safe_query,
+                        options=[op.name for op in candidates],
+                        context=prompt_context
+                    )
+
+                # Use manual executor management 
+                executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                try:
+                    future = executor.submit(_call_llm)
+                    match_name = future.result(timeout=2.0)
+                finally:
+                    executor.shutdown(wait=False) 
+                
+                duration = time.perf_counter() - start_time
+                
+                if match_name and match_name in provider_ops:
+                    # 2. Cache Success
+                    self.decision_cache.cache_decision(safe_query, match_name, matched=True, confidence=0.9, reasoning="LLM Match")
+                    
+                    logger.info(
+                        "semantic_match_success",
+                        consumer=safe_query,
+                        matched=match_name,
+                        duration=f"{duration:.4f}s",
+                        cached=True
+                    )
+                    return MatchResult(
+                        matched=True,
+                        provider_operation=provider_ops[match_name],
+                        similarity_score=0.9,
+                        match_type="semantic_llm",
+                    )
+                else:
+                     # Cache Failure (Negative Caching) for top candidates to avoid retrying
+                     # For now, simplistic negative cache
+                     pass
+
+        except concurrent.futures.TimeoutError:
+            logger.warning("semantic_match_timeout", query=safe_query, timeout=2.0)
+        except Exception as e:
+            logger.debug(f"llm_semantic_match_failed: {e}")
+            
+        return None
 
     def _fuzzy_match(
         self,

@@ -97,7 +97,7 @@ class SpecFrame(ValidationFrame):
     requires_config = ["platforms"]  # Need platforms configuration
     requires_context = []  # project_context is optional but helpful
 
-    def __init__(self, config: Dict[str, Any] | None = None):
+    def __init__(self, config: Dict[str, Any] | None = None, llm_service: Optional[Any] = None, semantic_search_service: Optional[Any] = None):
         """
         Initialize SpecFrame.
 
@@ -105,7 +105,8 @@ class SpecFrame(ValidationFrame):
             config: Frame configuration with 'platforms' list
         """
         super().__init__(config)
-
+        self.llm_service = llm_service
+        self.semantic_search_service = semantic_search_service
         # Parse platform configurations
         self.platforms: List[PlatformConfig] = []
         self._parse_platforms_config()
@@ -499,9 +500,13 @@ class SpecFrame(ValidationFrame):
             if "enable_fuzzy" in gap_config:
                 analyzer_config.enable_fuzzy_matching = gap_config["enable_fuzzy"]
 
-        # Use GapAnalyzer for comprehensive analysis
-        analyzer = GapAnalyzer(analyzer_config)
+        from warden.validation.frames.spec.analyzer import GapAnalyzer
 
+        analyzer = GapAnalyzer(
+            config=analyzer_config, # Use the analyzer_config created above
+            llm_service=self.llm_service,
+            semantic_search_service=self.semantic_search_service
+        )
         return analyzer.analyze(
             consumer=consumer,
             provider=provider,

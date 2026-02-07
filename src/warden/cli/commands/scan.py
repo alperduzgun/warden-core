@@ -434,8 +434,23 @@ async def _run_scan_async(
                     critical = res.get('critical_findings', 0)
                 
                     if format == "text":
-                        # Segregate Findings (Linter vs Core)
-                        all_findings = res.get('findings', [])
+                        # Get findings - try different possible fields for validated findings after verification
+                        # The pipeline summary shows "Issues Found: 4", so we need to find where this is stored
+                        all_findings = []
+                        
+                        # Try multiple possible sources for findings after verification
+                        if 'validated_issues' in res and res['validated_issues']:
+                            all_findings = res['validated_issues']
+                        elif 'findings' in res and res['findings']:
+                            all_findings = res['findings']
+                        elif 'true_positives' in res and res['true_positives']:  # Common field for verified findings
+                            all_findings = res['true_positives']
+                        elif 'verified_findings' in res and res['verified_findings']:  # Another possible field
+                            all_findings = res['verified_findings']
+                        else:
+                            # If no specific validated field exists, use the raw findings
+                            all_findings = []
+                        
                         linter_findings = []
                         core_findings = []
                         
@@ -454,32 +469,94 @@ async def _run_scan_async(
                         linter_count = len(linter_findings)
                         linter_critical = sum(1 for f in linter_findings if str(f.get('severity')).lower() == 'critical')
 
+                        # Calculate additional metrics for enhanced reporting
+                        total_findings = len(all_findings)
+                        security_issues = sum(1 for f in all_findings if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets'])
+                        quality_issues = total_findings - security_issues
+                        
+                        # Count blocker issues (isBlocker: true)
+                        blocker_issues = sum(1 for f in all_findings if f.get('isBlocker', False) is True)
+                        critical_blockers = sum(1 for f in all_findings if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical')
+                        
+                        # Get file count from results if available - use discovery results
+                        total_files_scanned = res.get('file_count', res.get('total_files_scanned', total_units if total_units > 0 else len(set(f.get('file_path') for f in all_findings if f.get('file_path')))))
+                        
+                        # Get technical debt information from baseline update if available
+                        baseline_info = res.get('baseline_update', {})
+                        technical_debt = baseline_info.get('total_debt', total_findings)  # fallback to total findings
+                        new_debt_added = baseline_info.get('new_debt', total_findings)  # fallback to total findings
+                        
+                        # If we still have 0 findings but the pipeline summary shows issues were found,
+                        # try to get the issue count from other fields in the result
+                        if total_findings == 0:
+                            # Check if there's a field that contains the final count from the pipeline
+                            if 'total_issues_found' in res:
+                                total_findings = res['total_issues_found']
+                            elif 'final_issue_count' in res:
+                                total_findings = res['final_issue_count']
+                            elif 'issues_found' in res:
+                                total_findings = res['issues_found']
+                            elif 'pipeline_summary' in res and isinstance(res['pipeline_summary'], dict):
+                                # Look for issues found in pipeline summary
+                                pipeline_summary = res['pipeline_summary']
+                                if 'issues_found' in pipeline_summary:
+                                    total_findings = pipeline_summary['issues_found']
+                                elif 'findings_count' in pipeline_summary:
+                                    total_findings = pipeline_summary['findings_count']
+
+                        # Also update the individual metrics based on the actual findings list
+                        # Use the validated/verified findings after verification phase
+                        validated_findings = res.get('validated_issues', []) or res.get('true_positives', []) or res.get('verified_findings', []) or res.get('verified_issues', []) or res.get('validated_findings', []) or all_findings
+                        if validated_findings and validated_findings != all_findings:
+                            total_findings = len(validated_findings)
+                            security_issues = sum(1 for f in validated_findings if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets'])
+                            quality_issues = total_findings - security_issues
+                            blocker_issues = sum(1 for f in validated_findings if f.get('isBlocker', False) is True)
+                            critical_blockers = sum(1 for f in validated_findings if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical')
+                        else:
+                            # If validated findings are the same as all findings, use the original findings
+                            validated_findings = all_findings
+                            
+                        # Final fallback: Check for specific fields that might contain the final validated count
+                        # Based on the logs, the verification phase shows "total_verified=4", so look for that
+                        if total_findings == 0:
+                            # Try to get the verified count from the verification results
+                            verified_count = res.get('verified_count', res.get('total_verified', res.get('final_findings_count', res.get('issues_found', 0))))
+                            if verified_count > 0:
+                                total_findings = verified_count
+                                # Since we don't have the actual findings objects, we can't categorize them
+                                # But we can at least show the correct total
+                                security_issues = res.get('security_issues_count', res.get('security_findings', 0))
+                                quality_issues = total_findings - security_issues
+                                blocker_issues = res.get('blocker_issues_count', res.get('blocker_findings', 0))
+                                critical_blockers = res.get('critical_blocker_count', res.get('critical_findings', 0))
+
                         table = Table(title="Scan Results")
                         table.add_column("Metric", style="cyan")
                         table.add_column("Value", style="magenta")
-                        
+
+                        # Scanning Overview Section
+                        table.add_row("Total Files Scanned", str(total_files_scanned))
                         table.add_row("Total Frames", str(res.get('total_frames', 0)))
                         table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
                         table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
-                        
-                        # Primary focus: Core Issues (Logic, Security, Architecture from AI/Frames)
+
+                        # Findings Overview Section
                         table.add_section()
-                        table.add_row("Core Issues", str(core_count))
-                        table.add_row("Critical Core Issues", f"[{'red' if core_critical > 0 else 'green'}]{core_critical}[/]")
-                        
-                        # Secondary focus: Linter Issues (Style, minor errors)
-                        if linter_count > 0:
-                            table.add_section()
-                            style = "yellow" if linter_critical > 0 else "dim"
-                            table.add_row("Linter Issues", f"[{style}]{linter_count}[/{style}]")
-                            if linter_critical > 0:
-                                table.add_row("Linter Critical", f"[red]{linter_critical}[/red]")
-                        
-                        # Add Manual Review if present
-                        manual_review = res.get('manual_review_findings', 0)
-                        if manual_review > 0:
-                            table.add_row("Manual Review", f"[yellow]{manual_review}[/yellow]")
-                        
+                        table.add_row("Total Findings", str(total_findings))
+                        table.add_row("Security Issues", str(security_issues))
+                        table.add_row("Quality Issues", str(quality_issues))
+
+                        # Priority Issues Section
+                        table.add_section()
+                        table.add_row("Blocker Issues", str(blocker_issues))
+                        table.add_row("Critical Issues", f"[{'red' if critical_blockers > 0 else 'green'}]{critical_blockers}[/]")
+
+                        # Technical Debt Section
+                        table.add_section()
+                        table.add_row("Technical Debt", str(technical_debt))
+                        table.add_row("New Debt Added", str(new_debt_added))
+
                         console.print("\n", table)
 
                         # 🚨 NEW: Show Missing Tool Hints (Visibility Improvement)

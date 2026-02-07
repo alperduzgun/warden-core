@@ -783,7 +783,17 @@ class PhaseOrchestrator:
             return v.get('review_required', False) if isinstance(v, dict) else False
 
         # Calculate finding counts
-        findings = context.findings if hasattr(context, 'findings') else []
+        # First try context.findings (set by verification or baseline phase)
+        # If not available or empty, aggregate from frame_results
+        findings = []
+        if hasattr(context, 'findings') and context.findings:
+            findings = context.findings
+        else:
+            # Aggregate findings from all frame results
+            for frame_res in frame_results:
+                if hasattr(frame_res, 'findings') and frame_res.findings:
+                    findings.extend(frame_res.findings)
+
         critical_findings = len([f for f in findings if get_severity(f) == 'critical'])
         high_findings = len([f for f in findings if get_severity(f) == 'high'])
         medium_findings = len([f for f in findings if get_severity(f) == 'medium'])
