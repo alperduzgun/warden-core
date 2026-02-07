@@ -28,6 +28,23 @@ from warden.llm.types import LlmRequest
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import CircuitBreakerOpen, RetryExhausted
 from warden.shared.infrastructure.exceptions import ExternalServiceError
+# =============================================================================
+# PURPOSE: Why SpecFrame? (The Problem it Solves)
+# =============================================================================
+# In modern distributed systems (e.g., Flutter mobile app + Node.js backend), 
+# API contracts often drift. Backend changes an endpoint, and the mobile app 
+# crashes. Traditional solutions (Swagger, OpenAPI) require manual maintenance 
+# which is often skipped or forgotten.
+#
+# SpecFrame solves this by:
+# 1. AUTOMATIC DISCOVERY: Inferring the contract directly from the source code.
+# 2. DRIFT DETECTION: Comparing what the Consumer expects vs what the Provider 
+#    actually offers.
+# 3. TYPE SAFETY: Ensuring that field types match across the network boundary.
+#
+# Gen 3 (Universal) allows this inference to work across any language (Dart, 
+# TS, Python, etc.) by leveraging Tree-sitter and LLM-based semantic analysis.
+# =============================================================================
 
 logger = get_logger(__name__)
 
