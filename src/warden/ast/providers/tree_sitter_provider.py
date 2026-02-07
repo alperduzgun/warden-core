@@ -471,6 +471,10 @@ class TreeSitterProvider(IASTProvider):
                 if child.type in ["identifier", "type_identifier", "field_identifier"]:
                     name = source[child.start_byte:child.end_byte]
                     break
+        
+        # CRITICAL FIX: Identifiers must have their content as name
+        if node_type == ASTNodeType.IDENTIFIER and not name:
+            name = source[ts_node.start_byte:ts_node.end_byte]
 
         # Create the node
         ast_node = ASTNode(
@@ -480,12 +484,24 @@ class TreeSitterProvider(IASTProvider):
             children=[]
         )
         
-        # Add original type as attribute
-        ast_node.attributes["original_type"] = ts_node.type
+        # Add original type as attribute (Robustly)
+        # Convert to string to avoid issues with tree-sitter bindings
+        try:
+            raw_type = ts_node.type
+            if isinstance(raw_type, bytes):
+                raw_type = raw_type.decode('utf-8')
+            ast_node.attributes["original_type"] = str(raw_type)
+        except Exception:
+            ast_node.attributes["original_type"] = "unknown"
         
         # Recursively convert children (skip anonymous nodes unless they are literals)
         for child in ts_node.children:
-            if child.is_named or child.type in ["string", "number", "true", "false", "null"]:
+            if child.is_named: 
+                # Always include named nodes
+                child_ast = self._convert_node(child, source, language, file_path)
+                ast_node.children.append(child_ast)
+            elif child.type in ["string", "number", "true", "false", "null", "string_literal"]:
+                # Include specific anonymous literals
                 child_ast = self._convert_node(child, source, language, file_path)
                 ast_node.children.append(child_ast)
                 

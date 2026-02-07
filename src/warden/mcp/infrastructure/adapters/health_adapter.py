@@ -5,7 +5,7 @@ MCP adapter for health and status tools.
 Maps to gRPC HealthStatusMixin functionality.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -39,7 +39,7 @@ class HealthAdapter(BaseWardenAdapter):
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
         """Initialize health adapter with start time tracking."""
         super().__init__(project_root, bridge)
-        self._start_time = datetime.now()
+        self._start_time = datetime.now(timezone.utc)
 
     def get_tool_definitions(self) -> List[MCPToolDefinition]:
         """Get health tool definitions."""
@@ -99,7 +99,7 @@ class HealthAdapter(BaseWardenAdapter):
             "version": self._get_version(),
             "uptime_seconds": round(uptime, 2),
             "components": components,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
     async def _get_server_status_async(self) -> MCPToolResult:
@@ -154,7 +154,7 @@ class HealthAdapter(BaseWardenAdapter):
             "project": project_info,
             "bridge": bridge_status,
             "version": self._get_version(),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
     def _get_version(self) -> str:

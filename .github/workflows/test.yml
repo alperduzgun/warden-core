@@ -76,6 +76,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src/warden_rust
+          shared-key: "rust-py${{ matrix.python-version }}"
 
       - name: Install Dependencies
         run: |
@@ -83,7 +84,9 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run Unit Tests
-        run: pytest tests/ -v --tb=short --ignore=tests/chaos/ --ignore=tests/integration/
+        run: |
+          pytest tests/ -v --tb=short --ignore=tests/chaos/ --ignore=tests/integration/ \
+            --cov=src/warden --cov-report=xml:coverage.xml
 
       - name: Upload Coverage
         if: matrix.python-version == '3.11'

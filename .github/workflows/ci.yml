@@ -82,6 +82,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src/warden_rust
+          shared-key: "rust-py${{ matrix.python-version }}"
 
       - name: Install Dependencies
         run: |
@@ -126,6 +127,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src/warden_rust
+          shared-key: "rust-warden-scan"
 
       # Removed apt-get install as build-essential is pre-installed on ubuntu-latest
       # and it saves ~1-2 minutes of setup time.
@@ -175,21 +177,24 @@ jobs:
           # Configuration for Hybrid Fast Tier Architecture
           # 1. Smart Tier: Azure OpenAI
           # 2. Fast Tier Priority: Groq (Cloud/Fast) -> Ollama (Local/Free)
-          
+
           # Secrets
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
           AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
-          
+
           # Warden Configuration
           WARDEN_LLM_PROVIDER: "azure_openai"       # Smart Tier
           WARDEN_FAST_TIER_PRIORITY: "groq,ollama"  # Fast Tier Chain
           WARDEN_LLM_CONCURRENCY: "10"              # Concurrency Limit
-          
+
           # Local Service Config
           OLLAMA_HOST: http://localhost:11434
+
+          # Git ref for incremental scan (env var to prevent script injection)
+          BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
           # --- OLLAMA SETUP ---
           # We run this here to ensure the background process persists for the scan duration.
@@ -197,7 +202,10 @@ jobs:
           # We run this here to ensure the background process persists for the scan duration.
           
           echo "Installing Ollama (Official Script)..."
-          curl -fsSL https://ollama.com/install.sh | sh
+          # Download and verify before executing
+          curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
+          bash /tmp/ollama-install.sh
+          rm /tmp/ollama-install.sh
           
           # The install script starts a systemd service as 'ollama' user.
           # We must stop it to run our own instance as 'runner' user (to see the cache).
@@ -218,6 +226,10 @@ jobs:
             fi
             sleep 1
           done
+          if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+            echo "::warning::Ollama failed to start, continuing without local LLM"
+            export OLLAMA_UNAVAILABLE=true
+          fi
           
           echo "Checking for existing models..."
           ollama list # Verify models visible to the server
@@ -270,11 +282,11 @@ jobs:
             echo "Running INCREMENTAL SCAN on changed files..."
             
             # 1. Fetch history to ensure diff works
-            git fetch origin ${{ github.base_ref || 'main' }} --depth=1
-            
+            git fetch origin "$BASE_REF" --depth=1
+
             # 2. Get changed python files
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.base_ref }}...HEAD | grep "\.py$" || true)
+              CHANGED_FILES=$(git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD | grep "\.py$" || true)
             else
               # For push to main/dev, check against previous commit
               CHANGED_FILES=$(git diff --name-only --diff-filter=d HEAD~1 HEAD | grep "\.py$" || true)

@@ -7,6 +7,7 @@ Handles result storage, aggregation, and false positive detection.
 from typing import Dict, Any, List
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.pipeline.domain.models import ValidationPipeline
+from warden.validation.domain.frame import Finding
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -40,11 +41,14 @@ class ResultAggregator:
             if frame_result and hasattr(frame_result, 'findings'):
                 all_findings.extend(frame_result.findings)
 
-        if not hasattr(context, 'findings') or context.findings is None:
-            context.findings = []
-            
-        # Add frame findings to existing findings (e.g. from global rules)
-        context.findings.extend(all_findings)
+            # Aggregate custom rule violations as findings
+            for violation in frame_data.get('pre_violations', []):
+                all_findings.append(self._violation_to_finding(violation, frame_id, "pre"))
+            for violation in frame_data.get('post_violations', []):
+                all_findings.append(self._violation_to_finding(violation, frame_id, "post"))
+
+        # Replace context.findings with aggregated results (single source of truth)
+        context.findings = all_findings
 
         # Ensure validated_issues is always set, even if empty
         validated_issues = []
@@ -112,6 +116,23 @@ class ResultAggregator:
                     finding.get("message", "").find(rule) != -1):
                     return True
         return False
+
+    @staticmethod
+    def _violation_to_finding(violation, frame_id: str, phase: str) -> Finding:
+        """Convert a CustomRuleViolation to a Finding for unified aggregation."""
+        severity = getattr(violation, 'severity', 'medium')
+        if hasattr(severity, 'value'):
+            severity = severity.value
+        return Finding(
+            id=f"rule/{frame_id}/{phase}/{getattr(violation, 'rule_id', 'unknown')}",
+            severity=str(severity).lower(),
+            message=getattr(violation, 'message', str(violation)),
+            location=f"{getattr(violation, 'file', 'unknown')}:{getattr(violation, 'line', 0)}",
+            detail=getattr(violation, 'suggestion', None),
+            code=getattr(violation, 'code_snippet', None),
+            line=getattr(violation, 'line', 0),
+            is_blocker=getattr(violation, 'is_blocker', False),
+        )
 
     def aggregate_frame_results(
         self,

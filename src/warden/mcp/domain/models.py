@@ -6,7 +6,7 @@ Pure domain logic without external dependencies.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from warden.mcp.domain.enums import ServerStatus, ResourceType, ToolCategory
@@ -33,7 +33,7 @@ class MCPSession:
 
     def start(self) -> None:
         """Start session."""
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
         self.status = ServerStatus.RUNNING
 
     def stop(self) -> None:

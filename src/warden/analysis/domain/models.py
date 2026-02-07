@@ -4,7 +4,7 @@ Analysis domain models.
 Core entities for code analysis and issue tracking.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 from uuid import uuid4
 
@@ -93,7 +93,7 @@ class AnalysisResult(BaseDomainModel):
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     status: AnalysisStatus = AnalysisStatus.PENDING
-    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Issue tracking
     total_issues: int = 0
@@ -174,7 +174,7 @@ class IssueSnapshot(BaseDomainModel):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     project_id: str = ""
     branch: str = "main"
     commit_hash: str = ""
@@ -247,8 +247,8 @@ class IssueSnapshot(BaseDomainModel):
                     code_snippet=finding.code or "",
                     code_hash=code_hash,
                     state=IssueState.OPEN,
-                    first_detected=datetime.utcnow(),
-                    last_updated=datetime.utcnow(),
+                    first_detected=datetime.now(timezone.utc),
+                    last_updated=datetime.now(timezone.utc),
                     reopen_count=0,
                     state_history=[],
                 )

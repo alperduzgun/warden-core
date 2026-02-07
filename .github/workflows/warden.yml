@@ -10,6 +10,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   warden:
     name: Security & Quality Scan
@@ -30,8 +34,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install warden-core
-
+        run: pip install .
 
       - name: Run Warden Scan
         run: |

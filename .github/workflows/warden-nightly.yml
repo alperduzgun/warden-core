@@ -10,6 +10,14 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger
 
+permissions:
+  contents: write
+  security-events: write
+
+concurrency:
+  group: warden-nightly
+  cancel-in-progress: false
+
 jobs:
   warden:
     name: Nightly Full Scan
@@ -30,8 +38,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install warden-core
-
+        run: pip install .
 
       - name: Refresh Intelligence
         run: warden refresh --force

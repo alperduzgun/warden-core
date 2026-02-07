@@ -3,6 +3,7 @@ Simple logger wrapper for compatibility.
 
 Provides structlog-like interface with fallback to standard logging.
 """
+import logging
 import re
 
 class SimpleLogger:
@@ -46,29 +47,27 @@ class SimpleLogger:
             
         return text
 
-    def info(self, message: str, **kwargs):
-        """Log info message."""
+    def _format(self, message: str, **kwargs) -> str:
+        """Format message with scrubbed kwargs and message."""
         extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
         full_message = f"{message} {extra_info}" if kwargs else message
-        self.logger.info(full_message)
+        return self._scrub(full_message)
+
+    def info(self, message: str, **kwargs):
+        """Log info message."""
+        self.logger.info(self._format(message, **kwargs))
 
     def warning(self, message: str, **kwargs):
         """Log warning message."""
-        extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
-        full_message = f"{message} {extra_info}" if kwargs else message
-        self.logger.warning(full_message)
+        self.logger.warning(self._format(message, **kwargs))
 
     def error(self, message: str, **kwargs):
         """Log error message."""
-        extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
-        full_message = f"{message} {extra_info}" if kwargs else message
-        self.logger.error(full_message)
+        self.logger.error(self._format(message, **kwargs))
 
     def debug(self, message: str, **kwargs):
         """Log debug message."""
-        extra_info = " ".join(f"{k}={self._scrub(str(v))}" for k, v in kwargs.items())
-        full_message = f"{message} {extra_info}" if kwargs else message
-        self.logger.debug(full_message)
+        self.logger.debug(self._format(message, **kwargs))
 
 
 def get_logger(name: str = None) -> SimpleLogger:

@@ -5,7 +5,7 @@ MCP adapter for pipeline result analysis and trends.
 Maps to gRPC ResultAnalysisMixin functionality.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -38,8 +38,9 @@ class AnalysisAdapter(BaseWardenAdapter):
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
         """Initialize analysis adapter with history tracking."""
         super().__init__(project_root, bridge)
-        # Historical data for trends
-        self._history: List[Dict[str, Any]] = []
+        # Historical data for trends (bounded to prevent memory leaks in long-running processes)
+        from collections import deque
+        self._history: deque = deque(maxlen=1000)
         self._last_result: Dict[str, Any] = {}
 
     def get_tool_definitions(self) -> List[MCPToolDefinition]:
@@ -134,7 +135,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             "new_issues": self._last_result.get("new_issues", 0),
             "resolved_issues": self._last_result.get("resolved_issues", 0),
             "persistent_issues": self._last_result.get("persistent_issues", 0),
-            "analysis_timestamp": datetime.utcnow().isoformat(),
+            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
     async def _get_trends_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
@@ -248,7 +249,7 @@ class AnalysisAdapter(BaseWardenAdapter):
         """Record a pipeline result for trend tracking."""
         self._last_result = result
         self._history.append({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_issues": result.get("total_findings", 0),
             "quality_score": self._calculate_quality_score(result),
             **result,

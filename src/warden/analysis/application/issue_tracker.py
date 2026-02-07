@@ -8,7 +8,7 @@ Tracks issues across multiple pipeline runs:
 """
 
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from warden.issues.domain.models import WardenIssue, StateTransition
 from warden.issues.domain.enums import IssueState
@@ -99,7 +99,7 @@ class IssueTracker:
                         StateTransition(
                             from_state=IssueState.RESOLVED,
                             to_state=IssueState.OPEN,
-                            timestamp=datetime.utcnow(),
+                            timestamp=datetime.now(timezone.utc),
                             transitioned_by="system",
                             comment="Issue reappeared in code",
                         )

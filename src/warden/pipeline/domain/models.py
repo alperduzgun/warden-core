@@ -5,7 +5,7 @@ Core entities for validation pipeline orchestration.
 """
 
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from pydantic import Field
@@ -127,7 +127,7 @@ class ValidationPipeline(BaseDomainModel):
     config: PipelineConfig = Field(default_factory=PipelineConfig)
 
     # Execution tracking
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     duration: float = 0.0
@@ -159,29 +159,50 @@ class ValidationPipeline(BaseDomainModel):
 
         return data
 
+    # Valid state transitions to enforce idempotency and prevent invalid states.
+    _VALID_TRANSITIONS = {
+        PipelineStatus.PENDING: {PipelineStatus.RUNNING, PipelineStatus.CANCELLED},
+        PipelineStatus.RUNNING: {PipelineStatus.COMPLETED, PipelineStatus.FAILED, PipelineStatus.CANCELLED},
+        PipelineStatus.COMPLETED: set(),
+        PipelineStatus.FAILED: set(),
+        PipelineStatus.CANCELLED: set(),
+    }
+
+    def _transition_to(self, target: "PipelineStatus") -> bool:
+        """Attempt state transition. Returns False if transition is invalid."""
+        allowed = self._VALID_TRANSITIONS.get(self.status, set())
+        if target not in allowed:
+            return False
+        self.status = target
+        return True
+
     def start(self) -> None:
         """Mark pipeline as started."""
-        self.status = PipelineStatus.RUNNING
-        self.started_at = datetime.utcnow()
+        if not self._transition_to(PipelineStatus.RUNNING):
+            return
+        self.started_at = datetime.now(timezone.utc)
 
     def complete(self) -> None:
         """Mark pipeline as completed."""
-        self.status = PipelineStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        if not self._transition_to(PipelineStatus.COMPLETED):
+            return
+        self.completed_at = datetime.now(timezone.utc)
         if self.started_at:
             self.duration = (self.completed_at - self.started_at).total_seconds()
 
     def fail(self) -> None:
         """Mark pipeline as failed."""
-        self.status = PipelineStatus.FAILED
-        self.completed_at = datetime.utcnow()
+        if not self._transition_to(PipelineStatus.FAILED):
+            return
+        self.completed_at = datetime.now(timezone.utc)
         if self.started_at:
             self.duration = (self.completed_at - self.started_at).total_seconds()
 
     def cancel(self) -> None:
         """Mark pipeline as cancelled."""
-        self.status = PipelineStatus.CANCELLED
-        self.completed_at = datetime.utcnow()
+        if not self._transition_to(PipelineStatus.CANCELLED):
+            return
+        self.completed_at = datetime.now(timezone.utc)
         if self.started_at:
             self.duration = (self.completed_at - self.started_at).total_seconds()
 
@@ -215,7 +236,7 @@ class PipelineResult(BaseDomainModel):
     frame_results: List[FrameResult] = Field(default_factory=list)
 
     # Metadata
-    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
     # New fields for Dashboard alignment

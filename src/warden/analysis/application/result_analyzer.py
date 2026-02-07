@@ -9,7 +9,7 @@ Analyzes pipeline results to:
 """
 
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from warden.analysis.domain.models import (
     AnalysisResult,
@@ -65,7 +65,7 @@ class ResultAnalyzer:
         Returns:
             AnalysisResult with trends and statistics
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         logger.info(
             "analysis_started",
@@ -111,7 +111,7 @@ class ResultAnalyzer:
         issue_trends = self._calculate_issue_trends()
 
         # Create analysis result
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         analysis_result = AnalysisResult(
             status=AnalysisStatus.COMPLETED,

@@ -7,7 +7,7 @@ Refactored into modular handlers to maintain < 500 lines per core rules.
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional, AsyncIterator, Union
-from datetime import datetime
+from datetime import datetime, timezone
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.cli_bridge.handlers.config_handler import ConfigHandler
@@ -147,8 +147,6 @@ class WardenBridge:
                 "Check LLM configuration and provider credentials."
             )
 
-        from warden.fortification.application.fortification_phase import FortificationPhase
-
         # Sanitize and validate path
         safe_path = sanitize_path(file_path, self.project_root)
         if safe_path is None or not safe_path.exists():
@@ -161,13 +159,6 @@ class WardenBridge:
             "project_type": "unknown", # Could be detected
             "framework": "unknown"     # Could be detected
         }
-        
-        # Initialize phase with LLM service
-        FortificationPhase(
-            config={"use_llm": True},
-            context=context,
-            llm_service=self.llm_service
-        )
         
         # Create minimal finding representation
         finding = {
@@ -356,9 +347,6 @@ class WardenBridge:
 
     async def ping_async(self) -> Dict[str, str]:
         """Health check."""
-        return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
- 
- 
- 
-# CACHE_BUST_1768315992
+

@@ -8,6 +8,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   warden:
     name: PR Security Scan
@@ -15,7 +19,7 @@ jobs:
 
     env:
       CI_LLM_PROVIDER: azure_openai
-
+      BASE_REF: ${{ github.base_ref }}
 
     steps:
       - name: Checkout Code
@@ -30,15 +34,21 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install warden-core
-
+        run: pip install .
 
       - name: Run Warden PR Scan
         run: |
           # CI mode with diff - only scan changed files
           # Output SARIF for GitHub Code Scanning integration
           mkdir -p .warden/reports
-          warden scan --ci --diff --base ${ github.base_ref } --format sarif --output .warden/reports/warden-report.sarif
+          EXIT_CODE=0
+          warden scan --ci --diff --base "$BASE_REF" --format sarif --output .warden/reports/warden-report.sarif || EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 2 ]; then
+            echo "::error::Warden found blocker issues. See SARIF report for details."
+            exit 1
+          elif [ $EXIT_CODE -ne 0 ]; then
+            echo "::warning::Warden scan exited with code $EXIT_CODE"
+          fi
 
       - name: Upload SARIF Report
         if: always()

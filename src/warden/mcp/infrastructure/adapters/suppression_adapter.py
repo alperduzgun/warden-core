@@ -5,7 +5,7 @@ MCP adapter for issue suppression management.
 Maps to gRPC SuppressionMixin functionality.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 import uuid
@@ -155,7 +155,7 @@ class SuppressionAdapter(BaseWardenAdapter):
             "line_number": arguments.get("line_number"),
             "justification": justification,
             "created_by": created_by,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": arguments.get("expires_at"),
             "is_global": arguments.get("is_global", False),
             "enabled": True,
@@ -212,7 +212,10 @@ class SuppressionAdapter(BaseWardenAdapter):
             if supp.get("expires_at"):
                 try:
                     expires = datetime.fromisoformat(supp["expires_at"])
-                    if datetime.utcnow() > expires:
+                    # Ensure timezone-aware comparison
+                    if expires.tzinfo is None:
+                        expires = expires.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) > expires:
                         continue
                 except ValueError:
                     pass

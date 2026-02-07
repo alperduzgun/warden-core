@@ -21,6 +21,10 @@ from typing import Dict, Any, List, Optional
 class PlatformType(str, Enum):
     """Supported platform types for contract extraction."""
 
+    # Universal (language/framework agnostic)
+    UNIVERSAL = "universal"  # AI-powered extraction for any language/SDK
+
+    # Mobile/Frontend platforms
     FLUTTER = "flutter"
     REACT = "react"
     REACT_NATIVE = "react-native"
@@ -56,7 +60,8 @@ class OperationType(str, Enum):
 
     QUERY = "query"  # Read operation (GET)
     COMMAND = "command"  # Write operation (POST, PUT, DELETE)
-    SUBSCRIPTION = "subscription"  # Real-time subscription
+    EVENT = "event"  # Real-time events (WebSocket, SSE, Firebase listeners)
+    SUBSCRIPTION = "subscription"  # GraphQL subscriptions
 
 
 class PrimitiveType(str, Enum):
@@ -182,6 +187,7 @@ class OperationDefinition:
     input_type: Optional[str] = None
     output_type: Optional[str] = None
     description: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     # Source tracking
     source_file: Optional[str] = None
@@ -189,6 +195,32 @@ class OperationDefinition:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
+        # Custom format requested by user
+        # endpoint: METHOD PATH
+        # request: [fields]
+        # response: [fields]
+        if self.metadata and 'endpoint' in self.metadata:
+            result = {}
+            
+            # Construct endpoint string
+            method = self.metadata.get('http_method', 'GET')
+            path = self.metadata.get('endpoint', '/')
+            result['endpoint'] = f"{method} {path}"
+            
+            # Request/Response fields
+            if 'request_fields' in self.metadata:
+                result['request'] = self.metadata['request_fields']
+            elif self.input_type:
+                result['request'] = [f"body: {self.input_type}"]
+                
+            if 'response_fields' in self.metadata:
+                result['response'] = self.metadata['response_fields']
+            elif self.output_type:
+                result['response'] = [f"body: {self.output_type}"]
+                
+            return result
+
+        # Fallback to standard format
         result = {
             "operation": self.name,
             "type": self.operation_type.value,
@@ -197,6 +229,10 @@ class OperationDefinition:
             result["input"] = self.input_type
         if self.output_type:
             result["output"] = self.output_type
+        if self.description:
+            result["description"] = self.description
+        if self.metadata:
+            result.update(self.metadata)
         return result
 
 

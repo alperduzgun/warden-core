@@ -8,8 +8,11 @@ from rich.table import Table
 # Add src to python path
 sys.path.insert(0, os.path.abspath("src"))
 
+from warden.validation.frames.spec.extractors.flutter_extractor import FlutterExtractor
+from warden.validation.frames.spec.extractors.express_extractor import ExpressExtractor
 from warden.validation.frames.spec.analyzer import GapAnalyzer, GapAnalyzerConfig
 from warden.validation.frames.spec.spec_frame import SpecFrame
+from warden.validation.frames.spec.models import PlatformRole
 
 console = Console()
 
@@ -25,7 +28,7 @@ async def main():
 
     # 2. Extract Mobile Contract
     console.print("\n[bold yellow]📦 Extracting Mobile Contract (Flutter)...[/bold yellow]")
-    flutter_extractor = FlutterExtractor(MOBILE_PATH)
+    flutter_extractor = FlutterExtractor(MOBILE_PATH, PlatformRole.CONSUMER)
     mobile_contract = await flutter_extractor.extract()
     
     table = Table(title="Mobile Operations")
@@ -41,7 +44,7 @@ async def main():
 
     # 3. Extract Backend Contract
     console.print("\n[bold yellow]📦 Extracting Backend Contract (Express)...[/bold yellow]")
-    express_extractor = ExpressExtractor(BACKEND_PATH)
+    express_extractor = ExpressExtractor(BACKEND_PATH, PlatformRole.PROVIDER)
     backend_contract = await express_extractor.extract()
 
     table = Table(title="Backend Operations")
@@ -75,31 +78,63 @@ async def main():
     )
 
     # 5. Report Results
-    r_table = Table(title="SpecFrame Results")
-    r_table.add_column("Metric", style="bold")
-    r_table.add_column("Value", style="cyan")
+    console.print("\n[bold cyan]═══════════════════════════════════════════════════[/bold cyan]")
+    console.print("[bold white]           SPECFRAME ANALYSIS RESULTS[/bold white]")
+    console.print("[bold cyan]═══════════════════════════════════════════════════[/bold cyan]\n")
     
-    r_table.add_row("Coverage Score", f"{results.coverage_score:.1f}%")
-    r_table.add_row("Missing Endpoints", str(len(results.missing_endpoints)))
-    r_table.add_row("Zombie Endpoints", str(len(results.zombie_endpoints)))
-    r_table.add_row("Schema Mismatches", str(len(results.schema_mismatches)))
+    r_table = Table(title="Contract Statistics", show_header=True, header_style="bold magenta")
+    r_table.add_column("Metric", style="bold")
+    r_table.add_column("Value", style="cyan", justify="right")
+    
+    # Calculate coverage percentage
+    if results.total_consumer_operations > 0:
+        coverage = (results.matched_operations / results.total_consumer_operations) * 100
+    else:
+        coverage = 0.0
+    
+    r_table.add_row("Consumer Operations", str(results.total_consumer_operations))
+    r_table.add_row("Provider Operations", str(results.total_provider_operations))
+    r_table.add_row("Matched Operations", f"[green]{results.matched_operations}[/green]")
+    r_table.add_row("Coverage", f"[green]{coverage:.1f}%[/green]")
+    r_table.add_row("Missing Endpoints", f"[red]{results.missing_operations}[/red]" if results.missing_operations > 0 else "[green]0[/green]")
+    r_table.add_row("Zombie Endpoints", f"[yellow]{results.unused_operations}[/yellow]" if results.unused_operations > 0 else "[green]0[/green]")
+    r_table.add_row("Type Mismatches", f"[orange1]{results.type_mismatches}[/orange1]" if results.type_mismatches > 0 else "[green]0[/green]")
+    r_table.add_row("Total Gaps", f"[red bold]{len(results.gaps)}[/red bold]" if len(results.gaps) > 0 else "[green]0[/green]")
     
     console.print(r_table)
 
-    if results.missing_endpoints:
-        console.print("\n[bold red]❌ Missing Endpoints (Mobile expects, Backend missing):[/bold red]")
-        for missing in results.missing_endpoints:
-            console.print(f" - {missing.consumer_operation.name} ({missing.consumer_operation.description})")
+    # Show gap details
+    if results.gaps:
+        console.print("\n[bold red]⚠️  IDENTIFIED GAPS:[/bold red]\n")
+        
+        gap_table = Table(show_header=True, header_style="bold yellow")
+        gap_table.add_column("Type", style="cyan")
+        gap_table.add_column("Severity", style="magenta")
+        gap_table.add_column("Message", style="white")
+        gap_table.add_column("Details", style="dim")
+        
+        for gap in results.gaps:
+            severity_color = {
+                "CRITICAL": "[red bold]",
+                "HIGH": "[red]",
+                "MEDIUM": "[yellow]",
+                "LOW": "[dim]"
+            }.get(gap.severity.name, "")
+            
+            gap_table.add_row(
+                gap.gap_type,
+                f"{severity_color}{gap.severity.name}[/]",
+                gap.message,
+                gap.detail or ""
+            )
+        
+        console.print(gap_table)
+    else:
+        console.print("\n[bold green]✅ No gaps found! Consumer and Provider contracts are perfectly aligned.[/bold green]")
 
-    if results.zombie_endpoints:
-        console.print("\n[bold orange3]🧟 Zombie Endpoints (Backend has, Mobile unused):[/bold orange3]")
-        for zombie in results.zombie_endpoints:
-            console.print(f" - {zombie.provider_operation.name} ({zombie.provider_operation.description})")
-
-    if results.matches:
-        console.print("\n[bold green]✅ Successful Matches:[/bold green]")
-        for match in results.matches:
-             console.print(f" - {match.consumer_operation.name} <==> {match.provider_operation.name} ({match.match_type})")
+    # Summary
+    console.print(f"\n[bold blue]📊 Summary:[/bold blue]")
+    console.print(results.summary())
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -6,7 +6,7 @@ Panel UI compatible with before/after comparison support.
 """
 
 from typing import Dict, Any, Optional, List, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import Field
 
 from warden.shared.domain.base_model import BaseDomainModel
@@ -142,7 +142,7 @@ class QualityMetrics(BaseDomainModel):
     previous_score: Optional[float] = None
 
     # Analysis metadata
-    analyzed_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    analyzed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     analysis_duration: float = 0.0  # Seconds
     file_count: int = 0
 

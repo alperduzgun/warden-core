@@ -37,7 +37,7 @@ def privacy_redactor(logger: Any, method_name: str, event_dict: Dict[str, Any]) 
         Redacted event dictionary
     """
     # Only redact if redaction is enabled
-    if not getattr(settings, "log_redaction_enabled", False):
+    if not getattr(settings, "log_redaction_enabled", True):
         return event_dict
 
     # Patterns to redact

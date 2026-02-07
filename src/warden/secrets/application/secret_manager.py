@@ -44,15 +44,18 @@ class SecretManager:
         self,
         providers: list[ISecretProvider] | None = None,
         cache_enabled: bool = True,
+        cache_ttl: int = 300,
     ):
         """Initialize the secret manager.
 
         Args:
             providers: Custom list of providers. If None, auto-configures.
             cache_enabled: Whether to cache secret values.
+            cache_ttl: Cache time-to-live in seconds (default: 300 = 5 minutes).
         """
         self._cache: dict[str, SecretValue] = {}
         self._cache_enabled = cache_enabled
+        self._cache_ttl = cache_ttl
 
         if providers:
             self._providers = sorted(providers, key=lambda p: p.priority)
@@ -104,13 +107,17 @@ class SecretManager:
         # Check cache first
         if self._cache_enabled and key in self._cache:
             cached = self._cache[key]
-            return SecretValue(
-                key=cached.key,
-                value=cached.value,
-                source=cached.source,
-                retrieved_at=datetime.now(),
-                cached=True,
-            )
+            cache_age = (datetime.now() - cached.retrieved_at).total_seconds()
+            if cache_age > self._cache_ttl:
+                del self._cache[key]
+            else:
+                return SecretValue(
+                    key=cached.key,
+                    value=cached.value,
+                    source=cached.source,
+                    retrieved_at=datetime.now(),
+                    cached=True,
+                )
 
         # Try each provider in priority order
         for provider in self._providers:

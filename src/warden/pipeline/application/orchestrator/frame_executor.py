@@ -168,9 +168,9 @@ class FrameExecutor:
                         'pre_violations': [],
                         'post_violations': []
                     }
-                    
-                    # Add to context findings
-                    context.findings.extend(global_violations)
+                    # Note: Do NOT extend context.findings here.
+                    # result_aggregator.store_validation_results() aggregates
+                    # from frame_results to avoid double-counting.
 
             # Store results in context
             logger.info("debug_frame_results_before_aggregation", frames=list(context.frame_results.keys()))
@@ -278,9 +278,9 @@ class FrameExecutor:
                         'pre_violations': [],
                         'post_violations': []
                     }
-                    
-                    # Also keep in global findings for compatibility
-                    context.findings.extend(filtered_findings)
+                    # Note: Do NOT extend context.findings here.
+                    # result_aggregator.store_validation_results() aggregates
+                    # from frame_results to avoid double-counting.
                 else:
                     logger.info("alpha_judgment_filtered_all_hits", raw=total_hits)
 
@@ -701,6 +701,10 @@ class FrameExecutor:
             if post_violations and self._has_blocker_violations(post_violations):
                 if frame_rules.on_fail == "stop":
                     logger.error("post_rules_failed_stopping", frame_id=frame.frame_id)
+
+        # Copy violations into FrameResult so they flow through the pipeline
+        frame_result.pre_rule_violations = pre_violations if pre_violations else None
+        frame_result.post_rule_violations = post_violations if post_violations else None
 
         # Store frame result with violations
         context.frame_results[frame.frame_id] = {

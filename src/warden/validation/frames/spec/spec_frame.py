@@ -93,7 +93,7 @@ class SpecFrame(ValidationFrame):
     applicability = [FrameApplicability.ALL]
 
     # Frame dependencies
-    requires_frames = ["architectural"]  # Need architectural context
+    requires_frames = []  # No dependencies - can run standalone
     requires_config = ["platforms"]  # Need platforms configuration
     requires_context = []  # project_context is optional but helpful
 
@@ -368,6 +368,8 @@ class SpecFrame(ValidationFrame):
             platform_path,
             platform.role,
             resilience_config,
+            llm_service=self.llm_service,  # Pass LLM for AI extraction
+            semantic_search_service=self.semantic_search_service,  # Pass Vector DB for context
         )
 
         if not extractor:

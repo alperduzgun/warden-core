@@ -14,6 +14,10 @@ on:
         required: false
         default: 'true'
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   warden:
     name: Release Security Audit
@@ -34,8 +38,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install warden-core
-
+        run: pip install .
 
       - name: Refresh Intelligence
         run: warden refresh --force

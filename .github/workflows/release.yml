@@ -15,15 +15,18 @@ jobs:
       contents: write  # For creating release
       id-token: write  # MANDATORY for trusted publishing
     
+    env:
+      TAG_NAME: ${{ github.event.workflow_run.head_branch }}
+
     steps:
-    - name: Validate Release Tag
+    - name: Validate tag format
       run: |
-        TAG_NAME="${{ github.event.workflow_run.head_branch }}"
-        echo "Validating tag: $TAG_NAME"
-        if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
-          echo "Error: '$TAG_NAME' does not match semantic versioning (vX.Y.Z). Skipping release."
+        if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+].+)?$ ]]; then
+          echo "::error::Invalid tag format: $TAG_NAME"
           exit 1
         fi
+        echo "Validated tag: $TAG_NAME"
+
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -47,9 +50,9 @@ jobs:
       # No password needed! Trusted Publishing (OIDC) is used.
         
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.event.workflow_run.head_branch }}
+        tag_name: ${{ env.TAG_NAME }}
         files: dist/*
         
     - name: Update Homebrew Formula
@@ -57,22 +60,30 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        TAG_NAME=${{ github.event.workflow_run.head_branch }}
         TARBALL_URL="https://github.com/alperduzgun/warden-core/archive/refs/tags/${TAG_NAME}.tar.gz"
-        
+
         echo "Updating formula for ${TAG_NAME}..."
-        
+
         # Download tarball to calculate SHA256
-        curl -L -o release.tar.gz $TARBALL_URL
+        curl -L -o release.tar.gz "$TARBALL_URL"
         SHA256=$(sha256sum release.tar.gz | awk '{print $1}')
-        
+
         # Update Formula file
         sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/warden.rb
         sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/warden.rb
-        
-        # Commit and Push changes
+
+        # Create a PR instead of pushing directly to the default branch
+        BRANCH_NAME="chore/homebrew-formula-${TAG_NAME}"
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
+        git checkout -b "$BRANCH_NAME"
         git add Formula/warden.rb
         git commit -m "chore: update homebrew formula for ${TAG_NAME}"
-        git push origin HEAD:${{ github.event.repository.default_branch }} || git push origin HEAD:main
+        git push origin "$BRANCH_NAME"
+
+        # Create PR targeting the default branch
+        gh pr create \
+          --title "chore: update homebrew formula for ${TAG_NAME}" \
+          --body "Automated Homebrew formula update for release ${TAG_NAME}." \
+          --base main \
+          --head "$BRANCH_NAME" || echo "::warning::Failed to create PR for Homebrew formula update"

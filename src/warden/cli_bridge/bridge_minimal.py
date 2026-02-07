@@ -6,7 +6,7 @@ Used for CLI testing and development without full Warden installation.
 """
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from warden.cli_bridge.protocol import IPCError, ErrorCode
@@ -136,7 +136,7 @@ class MinimalWardenBridge:
                 "file_path": str(path.absolute()),
                 "language": self._detect_language(path),
                 "file_size": path.stat().st_size if path.exists() else 0,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "mock_mode": True,
             },
         }
@@ -180,7 +180,7 @@ class MinimalWardenBridge:
         return {
             "status": "ok",
             "message": "pong",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "mode": "minimal",
         }
 

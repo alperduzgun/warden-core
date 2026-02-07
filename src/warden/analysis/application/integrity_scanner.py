@@ -5,6 +5,7 @@ Provides validation for code syntax and basic build verification.
 """
 
 import asyncio
+import shlex
 import structlog
 import shutil
 import sys
@@ -137,13 +138,30 @@ class IntegrityScanner:
         logger.info("executing_build_verification", command=command)
         
         try:
-            # Run command with timeout
-            proc = await asyncio.create_subprocess_shell(
-                command,
+            # Detect shell features that shlex.split cannot handle.
+            # Users should wrap complex commands in a script file instead.
+            shell_chars = set('|><&;$`')
+            if any(c in command for c in shell_chars):
+                logger.warning(
+                    "build_command_has_shell_features",
+                    command=command,
+                    hint="Wrap complex commands (pipes, redirects) in a shell script.",
+                )
+                return [IntegrityIssue(
+                    file_path="BUILD",
+                    message=(
+                        f"Build command contains shell features ({', '.join(c for c in shell_chars if c in command)}). "
+                        f"Wrap in a script file for security. Command: {command[:80]}"
+                    ),
+                    severity="warning",
+                )]
+
+            # Security: Use create_subprocess_exec to avoid shell injection
+            proc = await asyncio.create_subprocess_exec(
+                *shlex.split(command),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.project_root,
-                # Set process group to allow killing entire tree?
             )
             
             try:

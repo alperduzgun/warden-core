@@ -19,7 +19,7 @@ import hashlib
 import shutil
 import tempfile
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Final, FrozenSet, Generator, List, Optional, Tuple
 from dataclasses import dataclass, field
@@ -405,7 +405,7 @@ class CIManager:
 
     def _add_version_header(self, content: str) -> str:
         """Add version header to workflow content."""
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         header = (
             f"# Warden CI v{CURRENT_TEMPLATE_VERSION}\n"
             f"# Generated: {timestamp}\n"
@@ -985,7 +985,7 @@ class CIManager:
                 )
 
                 # Update version timestamp
-                timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+                timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 content = re.sub(
                     r'# Generated:.*',
                     f'# Generated: {timestamp} (synced)',

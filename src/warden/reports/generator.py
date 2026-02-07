@@ -449,7 +449,16 @@ class ReportGenerator:
         import time
         
         timestamp = int(time.time())
-        secret_key = b"warden-local-secret"  # TODO: Move to config for real verification
+        badge_secret = os.environ.get("WARDEN_BADGE_SECRET", "")
+        if not badge_secret:
+            from warden.shared.infrastructure.logging import get_logger as _get_logger
+            _get_logger(__name__).warning(
+                "badge_secret_not_set",
+                message="WARDEN_BADGE_SECRET env var not set. Badge signature uses weak default. "
+                        "Set WARDEN_BADGE_SECRET for production use.",
+            )
+            badge_secret = "warden-local-dev-only"
+        secret_key = badge_secret.encode()
         payload = f"{score:.1f}|{timestamp}|WARDEN_QUALITY".encode('utf-8')
         signature = hmac.new(secret_key, payload, hashlib.sha256).hexdigest()
 

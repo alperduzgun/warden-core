@@ -331,6 +331,8 @@ def get_extractor(
     project_root: Path,
     role: PlatformRole,
     resilience_config: Optional[ExtractorResilienceConfig] = None,
+    llm_service: Optional[Any] = None,
+    semantic_search_service: Optional[Any] = None,
 ) -> Optional[BaseContractExtractor]:
     """
     Get an extractor instance for a platform.
@@ -340,10 +342,23 @@ def get_extractor(
         project_root: Project root directory
         role: Consumer or provider role
         resilience_config: Optional resilience configuration
+        llm_service: Optional LLM service (for UniversalExtractor)
+        semantic_search_service: Optional semantic search service (for UniversalExtractor)
 
     Returns:
         Extractor instance or None if not supported
     """
+    # Special handling for UniversalExtractor (doesn't use registry)
+    if platform_type == PlatformType.UNIVERSAL:
+        from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
+        return UniversalContractExtractor(
+            project_root=project_root,
+            role=role,
+            llm_service=llm_service,
+            semantic_search_service=semantic_search_service,
+        )
+    
+    # Legacy extractors from registry
     extractor_class = ExtractorRegistry.get(platform_type)
     if extractor_class:
         return extractor_class(project_root, role, resilience_config)

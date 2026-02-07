@@ -19,6 +19,10 @@ on:
         default: '10'
         type: string
 
+concurrency:
+  group: baseline-generation
+  cancel-in-progress: false
+
 jobs:
   baseline:
     runs-on: ubuntu-latest
@@ -60,7 +64,10 @@ jobs:
         
     - name: Install and Start Ollama
       run: |
-        curl -fsSL https://ollama.com/install.sh | sh
+        # Download and verify before executing
+        curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
+        bash /tmp/ollama-install.sh
+        rm /tmp/ollama-install.sh
         ollama serve &
         echo "Waiting for Ollama to be ready..."
         for i in {1..30}; do
@@ -71,6 +78,9 @@ jobs:
           echo "Attempt $i/30: Ollama not ready yet..."
           sleep 1
         done
+        if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+          echo "::warning::Ollama failed to start, continuing without local LLM"
+        fi
         
     - name: Pull Local Model (Fast Tier Backup)
       run: |

@@ -45,10 +45,24 @@ class TokenBucketLimiter:
     def __init__(self, tpm=60, burst=10):
         self.tpm, self.burst, self.tokens = tpm, burst, burst
         self.last = time.time()
+        self._lock = asyncio.Lock()
 
     async def acquire(self, n=1):
-        elapsed = time.time() - self.last
-        self.tokens = min(self.burst, self.tokens + elapsed * self.tpm / 60)
-        self.last = time.time()
-        if self.tokens < n:
-            await asyncio.sleep((n - self.tokens) * 60 / self.tpm)
+        if n <= 0:
+            return
+        async with self._lock:
+            now = time.time()
+            elapsed = now - self.last
+            self.tokens = min(self.burst, self.tokens + elapsed * self.tpm / 60)
+            self.last = now
+            if self.tokens < n:
+                wait = (n - self.tokens) * 60 / self.tpm
+                self.tokens = 0
+                # Release lock while sleeping so other acquires can queue
+                self._lock.release()
+                try:
+                    await asyncio.sleep(wait)
+                finally:
+                    await self._lock.acquire()
+            else:
+                self.tokens -= n

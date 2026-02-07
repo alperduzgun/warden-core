@@ -238,6 +238,11 @@ class OrchestratedLlmClient(ILlmClient):
             error=response.error_message
         )
 
+        # CORE RESILIENCE: Raise exception on failure so Circuit Breaker can track it
+        if not response.success:
+            from warden.shared.infrastructure.exceptions import ExternalServiceError
+            raise ExternalServiceError(f"Smart tier failed: {response.error_message}")
+
         return response
 
     async def is_available_async(self) -> bool:

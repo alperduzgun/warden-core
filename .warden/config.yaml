@@ -110,15 +110,17 @@ frames_config:
     max_function_lines: 100
     ignore_test_files: true
   spec:
-    platforms:
-      - name: mobile
-        path: /Users/alper/Documents/Development/Personal/OhMyLove
-        type: flutter
-        role: consumer
-      - name: backend
-        path: /Users/alper/Documents/Development/Personal/OhMyLove/functions
-        type: express
-        role: provider
+    # Example platform configs (uncomment and set paths for your project):
+    # platforms:
+    #   - name: mobile
+    #     path: ../OhMyLove
+    #     type: flutter
+    #     role: consumer
+    #   - name: backend
+    #     path: ../OhMyLove/functions
+    #     type: express
+    #     role: provider
+    platforms: []
     gap_analysis:
       enable_fuzzy: true
       fuzzy_threshold: 0.8

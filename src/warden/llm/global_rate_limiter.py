@@ -8,8 +8,13 @@ Issue #17 Fix: Global rate limiting implementation
 """
 
 import asyncio
+import threading
 from typing import Dict, Optional
-from warden.llm.rate_limiter import RateLimiter
+from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
+
+# Module-level threading lock for safe singleton initialization.
+# Threading lock is safe across event loops unlike asyncio.Lock.
+_init_lock = threading.Lock()
 
 
 class GlobalRateLimiter:
@@ -22,7 +27,6 @@ class GlobalRateLimiter:
     """
 
     _instance: Optional["GlobalRateLimiter"] = None
-    _lock = asyncio.Lock()
 
     def __init__(self):
         """Initialize global rate limiter with provider-specific limits."""
@@ -32,17 +36,17 @@ class GlobalRateLimiter:
         # Provider-specific rate limiters
         self._limiters: Dict[str, RateLimiter] = {
             # Fast tier providers (high limits)
-            "qwen": RateLimiter(max_requests_per_minute=60, max_tokens_per_minute=100000),
-            "ollama": RateLimiter(max_requests_per_minute=60, max_tokens_per_minute=100000),
+            "qwen": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
+            "ollama": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
 
             # Smart tier providers (conservative limits)
-            "openai": RateLimiter(max_requests_per_minute=10, max_tokens_per_minute=40000),
-            "azure": RateLimiter(max_requests_per_minute=10, max_tokens_per_minute=40000),
-            "anthropic": RateLimiter(max_requests_per_minute=10, max_tokens_per_minute=40000),
-            "gemini": RateLimiter(max_requests_per_minute=15, max_tokens_per_minute=30000),
+            "openai": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
+            "azure": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
+            "anthropic": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
+            "gemini": RateLimiter(RateLimitConfig(rpm=15, tpm=30000)),
 
             # Default fallback
-            "default": RateLimiter(max_requests_per_minute=10, max_tokens_per_minute=10000),
+            "default": RateLimiter(RateLimitConfig(rpm=10, tpm=10000)),
         }
 
     @classmethod
@@ -50,19 +54,24 @@ class GlobalRateLimiter:
         """
         Get or create the global rate limiter instance (thread-safe).
 
+        Uses a module-level threading lock to avoid TOCTOU race conditions
+        that occur with lazy asyncio.Lock initialization.
+
         Returns:
             Singleton instance of GlobalRateLimiter
         """
-        if cls._instance is None:
-            async with cls._lock:
-                if cls._instance is None:  # Double-check locking
-                    cls._instance = cls()
+        if cls._instance is not None:
+            return cls._instance
+        with _init_lock:
+            if cls._instance is None:
+                cls._instance = cls()
         return cls._instance
 
     @classmethod
     def reset_instance(cls) -> None:
         """Reset the singleton instance (for testing purposes)."""
-        cls._instance = None
+        with _init_lock:
+            cls._instance = None
 
     async def acquire(self, provider: str = "default", tokens: int = 0) -> None:
         """
@@ -76,7 +85,7 @@ class GlobalRateLimiter:
             asyncio.TimeoutError: If rate limit cannot be acquired within timeout
         """
         limiter = self._limiters.get(provider.lower(), self._limiters["default"])
-        await limiter.acquire_async(tokens=tokens)
+        await limiter.acquire(tokens=tokens)
 
     def get_limiter(self, provider: str = "default") -> RateLimiter:
         """
@@ -103,8 +112,6 @@ class GlobalRateLimiter:
         limiter = self._limiters.get(provider.lower(), self._limiters["default"])
         return {
             "provider": provider,
-            "max_requests_per_minute": limiter.max_requests_per_minute,
-            "max_tokens_per_minute": limiter.max_tokens_per_minute,
-            "current_requests": limiter.request_count,
-            "current_tokens": limiter.token_count,
+            "rpm": limiter.config.rpm,
+            "tpm": limiter.config.tpm,
         }

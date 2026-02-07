@@ -8,6 +8,7 @@ Now supports module-based baseline structure for CI optimization.
 
 import json
 import hashlib
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Any, List, Set, Tuple
@@ -138,16 +139,20 @@ class BaselineManager:
             # Create parent dir if needed
             self.baseline_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Execute fetch command
-            # Security Note: We use shell=True to allow complex user commands (pipes, etc.)
-            # But the input comes from config.yaml which is trusted repo code.
-            # Ideally we split, but users might want "aws s3 cp ... | jq ..."
-            # For strict security we could enforce shlex.split but that breaks pipes.
-            # Given config is part of repo, RCE risk is equal to malicious code in repo.
-            
+            # Security: Use shlex.split to avoid shell injection.
+            # Complex shell commands (pipes, etc.) should be wrapped in a script.
+            shell_chars = set('|><&;$`')
+            if any(c in self.fetch_command for c in shell_chars):
+                logger.error(
+                    "fetch_command_has_shell_features",
+                    command=self.fetch_command,
+                    hint="Wrap complex commands (pipes, redirects) in a shell script.",
+                )
+                return None
+
             subprocess.run(
-                self.fetch_command,
-                shell=True,
+                shlex.split(self.fetch_command),
+                shell=False,
                 cwd=str(self.project_root),
                 check=True,
                 capture_output=True,

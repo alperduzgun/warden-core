@@ -5,7 +5,7 @@ MCP adapter for issue tracking and management tools.
 Maps to gRPC IssueManagementMixin functionality.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 import hashlib
@@ -47,8 +47,11 @@ class IssueAdapter(BaseWardenAdapter):
         """Initialize issue adapter with state."""
         super().__init__(project_root, bridge)
         # In-memory issue state (mirrors gRPC servicer pattern)
+        # Bounded to prevent memory leaks in long-running MCP servers.
         self._issues: Dict[str, Dict[str, Any]] = {}
-        self._history: List[Dict[str, Any]] = []
+        self._max_issues = 10000
+        from collections import deque
+        self._history: deque = deque(maxlen=5000)
 
     def get_tool_definitions(self) -> List[MCPToolDefinition]:
         """Get issue management tool definitions."""
@@ -234,7 +237,7 @@ class IssueAdapter(BaseWardenAdapter):
         # Update state
         self._issues[issue_id]["state"] = "resolved"
         self._issues[issue_id]["resolved_by"] = actor
-        self._issues[issue_id]["resolved_at"] = datetime.utcnow().isoformat()
+        self._issues[issue_id]["resolved_at"] = datetime.now(timezone.utc).isoformat()
 
         # Record history
         self._history.append({
@@ -242,7 +245,7 @@ class IssueAdapter(BaseWardenAdapter):
             "action": "resolved",
             "actor": actor,
             "comment": comment,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         return MCPToolResult.json_result({
@@ -267,7 +270,7 @@ class IssueAdapter(BaseWardenAdapter):
         # Update state
         self._issues[issue_id]["state"] = "suppressed"
         self._issues[issue_id]["suppressed_by"] = actor
-        self._issues[issue_id]["suppressed_at"] = datetime.utcnow().isoformat()
+        self._issues[issue_id]["suppressed_at"] = datetime.now(timezone.utc).isoformat()
         self._issues[issue_id]["suppression_reason"] = comment
 
         # Record history
@@ -276,7 +279,7 @@ class IssueAdapter(BaseWardenAdapter):
             "action": "suppressed",
             "actor": actor,
             "comment": comment,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         return MCPToolResult.json_result({
@@ -301,7 +304,7 @@ class IssueAdapter(BaseWardenAdapter):
         # Update state
         self._issues[issue_id]["state"] = "open"
         self._issues[issue_id]["reopened_by"] = actor
-        self._issues[issue_id]["reopened_at"] = datetime.utcnow().isoformat()
+        self._issues[issue_id]["reopened_at"] = datetime.now(timezone.utc).isoformat()
 
         # Record history
         self._history.append({
@@ -309,7 +312,7 @@ class IssueAdapter(BaseWardenAdapter):
             "action": "reopened",
             "actor": actor,
             "comment": comment,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         return MCPToolResult.json_result({
@@ -350,11 +353,16 @@ class IssueAdapter(BaseWardenAdapter):
         content = f"{issue.get('file_path', '')}:{issue.get('line', 0)}:{issue.get('message', '')}"
         issue_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
 
+        # Evict oldest issue if at capacity
+        if len(self._issues) >= self._max_issues:
+            oldest_key = next(iter(self._issues))
+            del self._issues[oldest_key]
+
         self._issues[issue_id] = {
             "id": issue_id,
             "hash": issue_hash,
             "state": "open",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             **issue,
         }
 

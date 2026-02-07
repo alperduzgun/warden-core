@@ -99,8 +99,7 @@ def create_client(
             # Log but don't fail - orchestration will work with whatever fast tier clients are available
             logger.warning("fast_tier_client_creation_failed", provider=fast_provider.value, error=str(e))
     
-    # DEBUG: Diagnosing Hybrid Setup
-    logger.warning("factory_client_status", 
+    logger.debug("factory_client_status",
                 fast_providers_configured=[p.value for p in getattr(config, 'fast_tier_providers', [])],
                 fast_clients_created=[c.provider for c in fast_clients])
 

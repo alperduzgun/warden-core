@@ -8,6 +8,7 @@ with the Ink CLI.
 import asyncio
 import sys
 import os
+import stat
 from typing import Optional, Any, Dict
 import signal
 
@@ -197,11 +198,24 @@ class IPCServer:
 
         # Start server with increased line limit for large JSON responses
         # Default limit is 64KB, we increase to 10MB to handle large analysis results
-        self.server = await asyncio.start_unix_server(
-            handle_client,
-            path=self.socket_path,
-            limit=10 * 1024 * 1024  # 10MB limit for large responses
-        )
+        # Security: Set umask BEFORE creating socket to prevent permission race.
+        # Without this, the socket is briefly world-accessible between creation and chmod.
+        old_umask = os.umask(0o177)  # Only owner can read/write (0o600)
+        try:
+            self.server = await asyncio.start_unix_server(
+                handle_client_async,
+                path=self.socket_path,
+                limit=10 * 1024 * 1024  # 10MB limit for large responses
+            )
+        finally:
+            os.umask(old_umask)
+
+        # Explicit chmod as defense-in-depth (umask already handles this)
+        if self.socket_path:
+            try:
+                os.chmod(self.socket_path, stat.S_IRUSR | stat.S_IWUSR)
+            except FileNotFoundError:
+                logger.warning("socket_not_found_for_chmod", path=self.socket_path)
 
         logger.info("ipc_server_listening", socket_path=self.socket_path, limit_mb=10)
 

@@ -59,27 +59,25 @@ temp/
 build/
 dist/
 .agent/workflows/mem_context.md
-.gitignore
 .agent/workflows/mem_save.md
 .agent/workflows/mem_search.md
 
 # Warden Embeddings
 .warden/embeddings/
 .warden/test_embeddings/
-/Users/alper/Documents/Development/Personal/warden-core/.warden.bak_20260106_023251
+.warden.bak_*
 # Temporary
-temp/
 tmp/
 run.log
-*.log
-coverage.xml
-.coverage
 warden-ink
 warden-ipc
 src/warden/_version.py
 src/.warden/
 
 # Performance Roadmap
+
+# Debug scripts
+debug_spec_run.py
 
 # Rust Build Artifacts
 src/warden_rust/target/

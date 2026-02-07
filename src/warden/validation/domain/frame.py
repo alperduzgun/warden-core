@@ -217,6 +217,13 @@ class ValidationFrame(ABC):
             config: Frame-specific configuration from .warden/config.yaml
                     or programmatic setup
         """
+        # Ensure mutable class-level defaults are copied to instance level
+        # to prevent shared-state mutation across instances.
+        self.applicability = list(self.__class__.applicability)
+        self.requires_frames = list(self.__class__.requires_frames)
+        self.requires_config = list(self.__class__.requires_config)
+        self.requires_context = list(self.__class__.requires_context)
+
         self.config = config or {}
         self._validate_metadata()
         self.project_context: Any | None = None  # Generic to avoid circular imports
@@ -377,8 +384,8 @@ class CodeFile:
     framework: str | None = None  # fastapi, react, flutter, etc.
     size_bytes: int = 0
     line_count: int = 0
-    hash: Optional[str] = None
-    metadata: Dict[str, Any] = None
+    hash: str | None = None
+    metadata: Dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Calculate size and line count if not provided."""

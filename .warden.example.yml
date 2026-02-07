@@ -24,32 +24,32 @@ llm:
   # Max retries on failure
   max_retries: 2
 
-# Validation Frames Configuration
+# Validation Frames (flat list of enabled frame names)
 frames:
+  - config
+  - security
+  - resilience
+  - orphan
+  - fuzz
+  - stress
+  - architecturalconsistency
+  - property
+  - antipattern
+
+# Frame-specific configuration
+frames_config:
   # ============================================
-  # ORPHAN CODE DETECTOR (NEW: LLM-POWERED!)
+  # ORPHAN CODE DETECTOR (LLM-POWERED)
   # ============================================
   orphan:
     enabled: true
-
-    # === INTELLIGENT MODE (RECOMMENDED) ===
-    # Uses LLM to filter false positives
-    # - Detects @property, @abstractmethod, Protocol, etc.
-    # - Works for ALL programming languages
-    # - Cost: ~$0.20 per full scan, $0.01 per incremental
-    # - Accuracy: <10% false positives
+    # Uses LLM to filter false positives (~<10% false positive rate)
     use_llm_filter: true
-
-    # === FAST MODE (FALLBACK) ===
-    # Basic AST filtering without LLM
-    # - Fast but may have 60-70% false positives
-    # - Use for quick local development
-    # use_llm_filter: false
-    # ignore_private: true  # Ignore _private functions/classes
-    # ignore_test_files: true  # Skip test_*.py files
-    # ignore_imports:
-    #   - "annotations"
-    #   - "TYPE_CHECKING"
+    ignore_private: false
+    ignore_test_files: true
+    ignore_imports:
+      - "annotations"
+      - "TYPE_CHECKING"
 
   # ============================================
   # SECURITY FRAME
@@ -58,24 +58,20 @@ frames:
     enabled: true
     priority: "critical"
     is_blocker: true
-
-    # Security checks
     checks:
-      - sql_injection
+      - sql-injection
       - xss
-      - hardcoded_secrets
-      - command_injection
-      - path_traversal
+      - secrets
+      - command-injection
+      - path-traversal
 
   # ============================================
-  # CHAOS ENGINEERING FRAME
+  # RESILIENCE FRAME
   # ============================================
-  chaos:
+  resilience:
     enabled: true
     priority: "high"
     is_blocker: false
-
-    # Resilience checks
     checks:
       - timeout_handling
       - retry_logic
@@ -89,8 +85,6 @@ frames:
     enabled: true
     priority: "medium"
     is_blocker: false
-
-    # Edge case checks
     checks:
       - null_handling
       - empty_string
@@ -105,8 +99,6 @@ frames:
     enabled: true
     priority: "medium"
     is_blocker: false
-
-    # Property checks
     checks:
       - idempotency
       - commutativity
@@ -120,8 +112,6 @@ frames:
     enabled: true
     priority: "low"
     is_blocker: false
-
-    # Performance checks
     checks:
       - memory_leak
       - performance_under_load
@@ -130,16 +120,28 @@ frames:
   # ============================================
   # ARCHITECTURAL CONSISTENCY FRAME
   # ============================================
-  architectural:
+  architecturalconsistency:
     enabled: false  # Optional
     priority: "low"
     is_blocker: false
-
-    # Architecture checks
     checks:
       - design_pattern_adherence
       - dependency_rules
       - layer_boundaries
+
+  # ============================================
+  # ANTI-PATTERN FRAME
+  # ============================================
+  antipattern:
+    enabled: true
+    priority: "high"
+    is_blocker: true
+    check_bare_except: true
+    check_god_class: true
+    check_generic_exception: true
+    check_debug_print: true
+    max_class_lines: 500
+    max_function_lines: 100
 
 # Global Suppression Rules
 suppression:

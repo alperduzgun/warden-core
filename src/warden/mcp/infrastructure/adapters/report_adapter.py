@@ -6,7 +6,7 @@ Maps to gRPC ReportGenerationMixin functionality.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 import uuid
@@ -219,7 +219,7 @@ class ReportAdapter(BaseWardenAdapter):
             report_data = {
                 "report_id": report_id,
                 "run_id": run_id,
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
                 "project_name": project_name,
                 "branch": branch,
                 "commit_hash": commit_hash,
@@ -290,7 +290,7 @@ class ReportAdapter(BaseWardenAdapter):
     <div class="metadata">
         <p>Branch: {branch}</p>
         <p>Run ID: {run_id}</p>
-        <p>Generated: {datetime.utcnow().isoformat()}</p>
+        <p>Generated: {datetime.now(timezone.utc).isoformat()}</p>
     </div>
     <div class="summary">
         <h2>Summary</h2>

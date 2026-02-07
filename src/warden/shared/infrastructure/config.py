@@ -4,7 +4,7 @@ Application configuration using Pydantic Settings.
 Loads configuration from environment variables and .env file.
 """
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
@@ -22,18 +22,18 @@ class Settings(BaseSettings):
     # Application
     app_name: str = Field(default="warden-core", description="Application name")
     app_env: str = Field(default="development", description="Environment (development/production)")
-    debug: bool = Field(default=True, description="Debug mode")
+    debug: bool = Field(default=False, description="Debug mode")
     log_level: str = Field(default="INFO", description="Logging level")
 
     # API Server
-    api_host: str = Field(default="0.0.0.0", description="API host")
+    api_host: str = Field(default="127.0.0.1", description="API host")
     api_port: int = Field(default=8000, description="API port")
     api_workers: int = Field(default=4, description="Number of workers")
     api_reload: bool = Field(default=True, description="Auto-reload on code changes")
 
     # CORS
     cors_origins: List[str] = Field(
-        default=["http://localhost:5173", "http://localhost:3000"],
+        default=[],
         description="Allowed CORS origins",
     )
 
@@ -89,7 +89,7 @@ class Settings(BaseSettings):
 
     # Security
     secret_key: str = Field(
-        default="change-this-in-production",
+        default="",
         description="Secret key for JWT signing",
     )
     algorithm: str = Field(default="HS256", description="JWT algorithm")
@@ -97,6 +97,9 @@ class Settings(BaseSettings):
         default=30,
         description="Access token expiration in minutes",
     )
+
+    # Logging / Privacy
+    log_redaction_enabled: bool = Field(default=True, description="Enable PII redaction in logs")
 
     @property
     def is_development(self) -> bool:
@@ -107,6 +110,16 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production mode."""
         return self.app_env.lower() == "production"
+
+    @model_validator(mode="after")
+    def _validate_production_settings(self) -> "Settings":
+        """Fail fast: enforce critical settings in production."""
+        if self.is_production and not self.secret_key:
+            raise ValueError(
+                "SECRET_KEY must be set in production. "
+                "Set the SECRET_KEY environment variable to a strong random value."
+            )
+        return self
 
 
 # Global settings instance

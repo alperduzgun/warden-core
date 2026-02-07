@@ -2,8 +2,8 @@
 
 > "AI writes the code. Warden guards the production."
 
-![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+![Status](https://img.shields.io/badge/Status-Beta-yellow)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![AI Ready](https://img.shields.io/badge/AI-Native-purple)
 ![Warden Quality](https://raw.githubusercontent.com/alperduzgun/warden-core/main/warden_badge.svg)
 
@@ -121,10 +121,10 @@ llm:
 ### 4. 🛡️ Core Validation Frames (Built-in)
 Warden ships with 6 powerful core frames:
 1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS).
-2.  **ResilienceFrame:** Validates error handling and resilience logic.
+2.  **ResilienceFrame:** Validates error handling, retry, and circuit-breaker patterns.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
 4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
-5.  **ResilienceFrame:** Checks for retry/circuit-breaker patterns.
+5.  **AntiPatternFrame:** Detects code smells, god classes, and bad practices.
 6.  **OrphanFrame:** Detects dead code and unreferenced assets.
 
 ### 5. 🧩 Warden Hub (Marketplace)
