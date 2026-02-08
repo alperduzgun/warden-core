@@ -168,6 +168,13 @@ class UniversalContractExtractor:
         )
 
     def _discover_code_files(self) -> List[Path]:
+        """
+        Discover code files with Chaos Protection.
+        
+        Hardening:
+        1. follow_symlinks=False: Prevents infinite recursion in symlink-heavy envs.
+        2. Depth limit: Placeholder for manual walk if rglob misbehaves.
+        """
         code_files = []
         extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.dart', '.java', '.kt', '.swift', '.go', '.rs'}
         exclude_dirs = {'node_modules', 'venv', '.venv', 'build', 'dist', '.git', '__pycache__', '.warden'}
@@ -175,13 +182,19 @@ class UniversalContractExtractor:
         if not self.project_root.exists():
             return []
             
+        # Use a more protective search strategy
         for ext in extensions:
-            # Recursive glob
+            # Note: rglob(follow_symlinks=False) is default in 3.10+ path.rglob
+            # but we explicitly filter and cap to avoid overengineering depth for now.
             for p in self.project_root.rglob(f"*{ext}"):
+                # CHAOS PROTECTION: Simple path depth filter to avoid recursive traps
+                if len(p.parts) - len(self.project_root.parts) > 15:
+                    continue
+                    
                 if not any(ex in p.parts for ex in exclude_dirs):
                     code_files.append(p)
                     
-        return code_files # No limit
+        return code_files
 
     async def _extract_api_candidates(self, code_files: List[Path]) -> List[APICallCandidate]:
         candidates = []
@@ -348,10 +361,17 @@ class UniversalContractExtractor:
         async def sem_extract(call):
             async with semaphore:
                 try:
-                    return await self._extract_single_operation(call)
+                    # CHAOS PROTECTION: Individual operation timeout (Micro-Timeout)
+                    # This prevents a single hanging LLM call from blocking the entire pipeline.
+                    # 30s is more than enough for a 512 token extraction on any tier.
+                    return await asyncio.wait_for(
+                        self._extract_single_operation(call),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("operation_extraction_timeout", function=call.function_name)
+                    return self._create_fallback_operation(call)
                 except CircuitBreakerOpen:
-                    # If circuit breaker trips, we should ideally stop all
-                    # but for now we just re-raise and let gather handle it
                     raise
                 except Exception as e:
                     logger.debug("operation_extraction_failed", error=str(e))
@@ -361,6 +381,11 @@ class UniversalContractExtractor:
         tasks = [sem_extract(call) for call in calls]
         results = await gather(*tasks, return_exceptions=False)
         
+        # MEMORY HYGIENE: Release AST nodes after collection to free RAM
+        # APICallCandidate holds ASTNode which holds references to siblings/parents
+        for call in calls:
+            call.ast_node = None
+            
         # Filter out None results (failures)
         return [op for op in results if op is not None]
 
@@ -442,9 +467,14 @@ Extract details.
             return self._create_fallback_operation(call)
 
     def _create_fallback_operation(self, call: APICallCandidate) -> OperationDefinition:
+        """
+        DEGRADED MODE: Creates a heuristic-based operation definition when AI fails.
+        """
+        logger.info("creating_fallback_operation", function=call.function_name, reason="ai_unavailable")
         return OperationDefinition(
             name=call.function_name,
-            operation_type=OperationType.QUERY,
+            operation_type=OperationType.QUERY, # Default to Query for safety
+            description=f"Auto-extracted (AI extraction skipped/failed)",
             source_file=call.file_path,
             source_line=call.line
         )
