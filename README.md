@@ -124,6 +124,7 @@ Warden ships with 6 powerful core frames:
 2.  **ResilienceFrame:** Validates error handling, retry, and circuit-breaker patterns.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
 4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
+    - **Why SpecFrame?** Unit tests only prove that components work *internally*. SpecFrame is the only mechanism that audits both sides simultaneously to detect "Invisible Drift" (e.g., when the Frontend and Backend start speaking different languages). It automatically identifies what is missing or incorrect in the Consumer/Provider pair.
 5.  **AntiPatternFrame:** Detects code smells, god classes, and bad practices.
 6.  **OrphanFrame:** Detects dead code and unreferenced assets.
 

@@ -36,14 +36,15 @@ from warden.shared.infrastructure.exceptions import ExternalServiceError
 # crashes. Traditional solutions (Swagger, OpenAPI) require manual maintenance 
 # which is often skipped or forgotten.
 #
-# SpecFrame solves this by:
-# 1. AUTOMATIC DISCOVERY: Inferring the contract directly from the source code.
-# 2. DRIFT DETECTION: Comparing what the Consumer expects vs what the Provider 
-#    actually offers.
-# 3. TYPE SAFETY: Ensuring that field types match across the network boundary.
+# SpecFrame Difference:
+# If you only wrote unit tests, the Backend and Frontend could both pass 
+# individually. However, SpecFrame is the ONLY mechanism that puts BOTH 
+# codebases on the table simultaneously to say: "You are speaking different 
+# languages."
 #
-# Gen 3 (Universal) allows this inference to work across any language (Dart, 
-# TS, Python, etc.) by leveraging Tree-sitter and LLM-based semantic analysis.
+# Even if the engine is "ready", "invisible" endpoint drifts can cause silent 
+# failures. SpecFrame automatically answers: "What is missing or wrong in 
+# the web panel/consumer?"
 # =============================================================================
 
 logger = get_logger(__name__)
