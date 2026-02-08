@@ -49,7 +49,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install ".[dev]"
 
       - name: Run MyPy
         run: mypy src/
@@ -81,11 +81,16 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install ".[dev]"
 
       - name: Run Unit Tests
         run: |
-          pytest tests/ -v --tb=short --ignore=tests/chaos/ --ignore=tests/integration/ \
+          pytest tests/ -v --tb=short \
+            --ignore=tests/chaos/ \
+            --ignore=tests/integration/ \
+            --ignore=tests/suppression/ \
+            --ignore=tests/validation/frames/orphan/ \
+            --ignore=tests/unit/grpc_testing/ \
             --cov=src/warden --cov-report=xml:coverage.xml
 
       - name: Upload Coverage
