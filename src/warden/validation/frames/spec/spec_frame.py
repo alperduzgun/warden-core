@@ -113,6 +113,14 @@ class SpecFrame(ValidationFrame):
         # Load suppressions from config
         self._load_suppressions()
 
+    async def cleanup(self) -> None:
+        """
+        Global Memory Hygiene: Release resources from all extractors.
+        """
+        logger.debug("spec_frame_cleanup_started")
+        # In the future, we can iterate over platform extractors and call their own cleanup
+        await super().cleanup()
+
     def _parse_platforms_config(self) -> None:
         """
         Parse platforms from config with comprehensive validation.

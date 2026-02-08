@@ -168,33 +168,13 @@ class UniversalContractExtractor:
         )
 
     def _discover_code_files(self) -> List[Path]:
-        """
-        Discover code files with Chaos Protection.
+        """Discover code files using global SafeFileScanner."""
+        from warden.shared.utils.path_utils import SafeFileScanner
         
-        Hardening:
-        1. follow_symlinks=False: Prevents infinite recursion in symlink-heavy envs.
-        2. Depth limit: Placeholder for manual walk if rglob misbehaves.
-        """
-        code_files = []
+        scanner = SafeFileScanner(self.project_root, max_depth=15)
         extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.dart', '.java', '.kt', '.swift', '.go', '.rs'}
-        exclude_dirs = {'node_modules', 'venv', '.venv', 'build', 'dist', '.git', '__pycache__', '.warden'}
         
-        if not self.project_root.exists():
-            return []
-            
-        # Use a more protective search strategy
-        for ext in extensions:
-            # Note: rglob(follow_symlinks=False) is default in 3.10+ path.rglob
-            # but we explicitly filter and cap to avoid overengineering depth for now.
-            for p in self.project_root.rglob(f"*{ext}"):
-                # CHAOS PROTECTION: Simple path depth filter to avoid recursive traps
-                if len(p.parts) - len(self.project_root.parts) > 15:
-                    continue
-                    
-                if not any(ex in p.parts for ex in exclude_dirs):
-                    code_files.append(p)
-                    
-        return code_files
+        return scanner.scan(extensions)
 
     async def _extract_api_candidates(self, code_files: List[Path]) -> List[APICallCandidate]:
         candidates = []
@@ -352,41 +332,18 @@ class UniversalContractExtractor:
         return candidates # Identity (Trust creation filter)
 
     async def _extract_operations(self, calls: List[APICallCandidate]) -> List[OperationDefinition]:
-        """Extract definitions for multiple candidates in parallel."""
-        from asyncio import Semaphore, gather
+        """Extract definitions in parallel using global ParallelBatchExecutor."""
+        from warden.shared.infrastructure.resilience.parallel import ParallelBatchExecutor
         
-        # Limit concurrency to 4 to avoid overwhelming local LLM/CPU
-        semaphore = Semaphore(4)
+        executor = ParallelBatchExecutor(concurrency_limit=4, item_timeout=30.0)
         
-        async def sem_extract(call):
-            async with semaphore:
-                try:
-                    # CHAOS PROTECTION: Individual operation timeout (Micro-Timeout)
-                    # This prevents a single hanging LLM call from blocking the entire pipeline.
-                    # 30s is more than enough for a 512 token extraction on any tier.
-                    return await asyncio.wait_for(
-                        self._extract_single_operation(call),
-                        timeout=30.0
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning("operation_extraction_timeout", function=call.function_name)
-                    return self._create_fallback_operation(call)
-                except CircuitBreakerOpen:
-                    raise
-                except Exception as e:
-                    logger.debug("operation_extraction_failed", error=str(e))
-                    return None
-
-        # Run all extractions
-        tasks = [sem_extract(call) for call in calls]
-        results = await gather(*tasks, return_exceptions=False)
+        results = await executor.execute_batch(
+            items=calls,
+            task_fn=self._extract_single_operation,
+            batch_name="spec_operation_extraction"
+        )
         
-        # MEMORY HYGIENE: Release AST nodes after collection to free RAM
-        # APICallCandidate holds ASTNode which holds references to siblings/parents
-        for call in calls:
-            call.ast_node = None
-            
-        # Filter out None results (failures)
+        # Filter out None and return
         return [op for op in results if op is not None]
 
     async def _extract_single_operation(self, call: APICallCandidate) -> Optional[OperationDefinition]:

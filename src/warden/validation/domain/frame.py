@@ -138,10 +138,12 @@ class FrameResult:
             "frameName": self.frame_name,
             "status": self.status,
             "duration": self.duration,
+            "duration": self.duration,
             "issuesFound": self.issues_found,
             "isBlocker": self.is_blocker,
             "findings": [f.to_json() for f in self.findings],
-            "metadata": self.metadata,
+            "metadata": self.metadata or {},
+            "is_degraded": self.metadata.get("is_degraded", False) if self.metadata else False,
         }
 
         # Add pre/post rules if present
@@ -270,43 +272,39 @@ class ValidationFrame(ABC):
         """
         pass
 
+    async def cleanup(self) -> None:
+        """
+        MEMORY HYGIENE: Standard hook to release large objects after execution.
+        Subclasses should override this to nullify AST nodes, large buffers, etc.
+        """
+        pass
+
     async def execute_batch_async(self, code_files: List["CodeFile"]) -> List[FrameResult]:
         """
-        Execute validation on multiple files in PARALLEL.
-
-        Default implementation uses asyncio.gather with a semaphore to limit concurrency.
+        Execute validation on multiple files in PARALLEL using global resilience guardrails.
         """
-        # Limit concurrency to 50 concurrent frame executions per batch
+        from warden.shared.infrastructure.resilience.parallel import ParallelBatchExecutor
+        
         concurrency = self.config.get("concurrency_limit", 50) if isinstance(self.config, dict) else 50
-        semaphore = asyncio.Semaphore(concurrency)
+        timeout = self.config.get("item_timeout", 30.0) if isinstance(self.config, dict) else 30.0
         
-        async def execute_safe_async(code_file: "CodeFile") -> Any:
-            async with semaphore:
-                try:
-                    return await self.execute_async(code_file)
-                except Exception as e:
-                    logger.error(
-                        "frame_execution_error",
-                        frame_id=self.frame_id,
-                        file_path=code_file.path,
-                        error=str(e),
-                        exc_info=True,
-                    )
-                    return None
-
-        # Launch all tasks
-        tasks = [execute_safe_async(f) for f in code_files]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        executor = ParallelBatchExecutor(
+            concurrency_limit=concurrency, 
+            item_timeout=timeout
+        )
         
-        # Filter out None results and exceptions
-        valid_results = []
-        for r in results:
-            if isinstance(r, Exception):
-                continue
-            if r:
-                valid_results.append(r)
+        # Launch using global executor
+        results = await executor.execute_batch(
+            items=code_files,
+            task_fn=self.execute_async,
+            batch_name=f"frame_{self.frame_id}_batch"
+        )
+        
+        # MEMORY HYGIENE: Trigger global cleanup hook
+        await self.cleanup()
                 
-        return valid_results
+        # Filter out None results (failures already logged by executor)
+        return [r for r in results if r is not None]
 
     @property
     def frame_id(self) -> str:
