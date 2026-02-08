@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from itertools import islice
 from pathlib import Path
 from typing import List, Optional
 
@@ -510,30 +511,25 @@ class SpecConfigValidator:
             return
 
         try:
-            # Count files in project (with limit to avoid hanging)
-            file_count = 0
             max_files_to_count = 10000
+            file_count = sum(1 for _ in islice(path.rglob("*"), max_files_to_count))
 
-            for _ in path.rglob("*"):
-                file_count += 1
-                if file_count >= max_files_to_count:
-                    issues.append(ValidationIssue(
-                        severity=IssueSeverity.WARNING,
-                        message=(
-                            f"Project appears very large (>10,000 files): "
-                            f"{platform_name}"
-                        ),
-                        field="path",
-                        platform_name=platform_name,
-                        suggestion=(
-                            "Consider using .gitignore patterns or excluding "
-                            "build/vendor directories to speed up analysis"
-                        ),
-                    ))
-                    break
+            if file_count >= max_files_to_count:
+                issues.append(ValidationIssue(
+                    severity=IssueSeverity.WARNING,
+                    message=(
+                        f"Project appears very large (>10,000 files): "
+                        f"{platform_name}"
+                    ),
+                    field="path",
+                    platform_name=platform_name,
+                    suggestion=(
+                        "Consider using .gitignore patterns or excluding "
+                        "build/vendor directories to speed up analysis"
+                    ),
+                ))
 
         except (PermissionError, OSError):
-            # Ignore errors during size check
             pass
 
     def _is_valid_platform_type(self, type_str: str) -> bool:

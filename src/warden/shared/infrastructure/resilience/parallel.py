@@ -58,7 +58,7 @@ class ParallelBatchExecutor:
                 except Exception as e:
                     logger.error("parallel_task_failed", batch=batch_name, error=str(e))
                     if self.return_exceptions:
-                        raise e
+                        return e  # Return as value for gather to collect
                     return None
 
         # Build tasks

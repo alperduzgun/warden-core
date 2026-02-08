@@ -4,6 +4,7 @@ Tests for GapAnalyzer - Contract Comparison.
 Tests gap detection between consumer and provider contracts.
 """
 
+import pytest
 
 from warden.validation.frames.spec import (
     Contract,
@@ -21,7 +22,8 @@ from warden.validation.frames.spec import (
 class TestGapAnalyzerOperations:
     """Tests for operation matching and gap detection."""
 
-    def test_exact_operation_match(self):
+    @pytest.mark.asyncio
+    async def test_exact_operation_match(self):
         """Test exact operation name matching."""
         consumer = Contract(
             name="consumer",
@@ -51,13 +53,14 @@ class TestGapAnalyzerOperations:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert result.matched_operations == 2
         assert result.missing_operations == 0
         assert result.unused_operations == 0
 
-    def test_missing_operation_detection(self):
+    @pytest.mark.asyncio
+    async def test_missing_operation_detection(self):
         """Test detection of missing operations."""
         consumer = Contract(
             name="consumer",
@@ -83,7 +86,7 @@ class TestGapAnalyzerOperations:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert result.matched_operations == 1
         assert result.missing_operations == 1
@@ -94,7 +97,8 @@ class TestGapAnalyzerOperations:
         assert missing_gaps[0].severity == GapSeverity.CRITICAL
         assert "deleteUser" in missing_gaps[0].message
 
-    def test_unused_operation_detection(self):
+    @pytest.mark.asyncio
+    async def test_unused_operation_detection(self):
         """Test detection of unused operations."""
         consumer = Contract(
             name="consumer",
@@ -124,7 +128,7 @@ class TestGapAnalyzerOperations:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert result.matched_operations == 1
         assert result.unused_operations == 2
@@ -134,7 +138,8 @@ class TestGapAnalyzerOperations:
         assert len(unused_gaps) == 2
         assert all(g.severity == GapSeverity.LOW for g in unused_gaps)
 
-    def test_fuzzy_operation_matching(self):
+    @pytest.mark.asyncio
+    async def test_fuzzy_operation_matching(self):
         """Test fuzzy matching of similar operation names."""
         consumer = Contract(
             name="consumer",
@@ -168,18 +173,26 @@ class TestGapAnalyzerOperations:
             enable_fuzzy_matching=True,
             fuzzy_match_threshold=0.7,
         )
-        result = analyze_contracts(consumer, provider, config)
+        result = await analyze_contracts(consumer, provider, config)
 
         # Should match through fuzzy matching
         assert result.matched_operations >= 1
 
-    def test_fuzzy_matching_disabled(self):
-        """Test that fuzzy matching can be disabled."""
+    @pytest.mark.asyncio
+    async def test_fuzzy_matching_disabled(self):
+        """Test that fuzzy matching can be disabled.
+
+        Note: Normalized matching (stripping common prefixes like get/fetch)
+        is always active. Disabling fuzzy matching only prevents SequenceMatcher-
+        based approximate matching. fetchUsers and getUsers both normalize to
+        'users', so they still match via normalized matching.
+        Use truly different names to test fuzzy-disabled behavior.
+        """
         consumer = Contract(
             name="consumer",
             operations=[
                 OperationDefinition(
-                    name="fetchUsers",
+                    name="loadUserAccounts",
                     operation_type=OperationType.QUERY,
                 ),
             ],
@@ -189,16 +202,17 @@ class TestGapAnalyzerOperations:
             name="provider",
             operations=[
                 OperationDefinition(
-                    name="getUsers",
+                    name="getUserProfiles",
                     operation_type=OperationType.QUERY,
                 ),
             ],
         )
 
         config = GapAnalyzerConfig(enable_fuzzy_matching=False)
-        result = analyze_contracts(consumer, provider, config)
+        result = await analyze_contracts(consumer, provider, config)
 
         # Without fuzzy matching, these shouldn't match
+        # (normalized: "userAccounts" vs "userProfiles" — different enough)
         assert result.matched_operations == 0
         assert result.missing_operations == 1
 
@@ -206,7 +220,8 @@ class TestGapAnalyzerOperations:
 class TestGapAnalyzerTypes:
     """Tests for type compatibility checking."""
 
-    def test_input_type_mismatch(self):
+    @pytest.mark.asyncio
+    async def test_input_type_mismatch(self):
         """Test detection of input type mismatches."""
         consumer = Contract(
             name="consumer",
@@ -230,13 +245,14 @@ class TestGapAnalyzerTypes:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         type_gaps = [g for g in result.gaps if "type" in g.gap_type]
         assert len(type_gaps) >= 1
         assert any(g.severity == GapSeverity.HIGH for g in type_gaps)
 
-    def test_output_type_mismatch(self):
+    @pytest.mark.asyncio
+    async def test_output_type_mismatch(self):
         """Test detection of output type mismatches."""
         consumer = Contract(
             name="consumer",
@@ -260,12 +276,13 @@ class TestGapAnalyzerTypes:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         type_gaps = [g for g in result.gaps if "type" in g.gap_type]
         assert len(type_gaps) >= 1
 
-    def test_compatible_primitive_types(self):
+    @pytest.mark.asyncio
+    async def test_compatible_primitive_types(self):
         """Test that compatible primitive types match."""
         consumer = Contract(
             name="consumer",
@@ -289,7 +306,7 @@ class TestGapAnalyzerTypes:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         # int and integer should be compatible
         type_gaps = [g for g in result.gaps if "type" in g.gap_type]
@@ -299,7 +316,8 @@ class TestGapAnalyzerTypes:
 class TestGapAnalyzerModels:
     """Tests for model field comparison."""
 
-    def test_missing_field_detection(self):
+    @pytest.mark.asyncio
+    async def test_missing_field_detection(self):
         """Test detection of missing fields in models."""
         consumer = Contract(
             name="consumer",
@@ -331,13 +349,14 @@ class TestGapAnalyzerModels:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         missing_field_gaps = [g for g in result.gaps if g.gap_type == "missing_field"]
         assert len(missing_field_gaps) == 1
         assert "avatar" in missing_field_gaps[0].message
 
-    def test_field_type_mismatch(self):
+    @pytest.mark.asyncio
+    async def test_field_type_mismatch(self):
         """Test detection of field type mismatches."""
         consumer = Contract(
             name="consumer",
@@ -365,13 +384,14 @@ class TestGapAnalyzerModels:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         field_type_gaps = [g for g in result.gaps if g.gap_type == "field_type_mismatch"]
         assert len(field_type_gaps) == 1
         assert "price" in field_type_gaps[0].message
 
-    def test_nullable_mismatch(self):
+    @pytest.mark.asyncio
+    async def test_nullable_mismatch(self):
         """Test detection of nullable/optional mismatches."""
         consumer = Contract(
             name="consumer",
@@ -399,7 +419,7 @@ class TestGapAnalyzerModels:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         nullable_gaps = [g for g in result.gaps if g.gap_type == "nullable_mismatch"]
         assert len(nullable_gaps) == 1
@@ -409,7 +429,8 @@ class TestGapAnalyzerModels:
 class TestGapAnalyzerEnums:
     """Tests for enum comparison."""
 
-    def test_missing_enum_value(self):
+    @pytest.mark.asyncio
+    async def test_missing_enum_value(self):
         """Test detection of missing enum values."""
         consumer = Contract(
             name="consumer",
@@ -431,13 +452,14 @@ class TestGapAnalyzerEnums:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         enum_gaps = [g for g in result.gaps if g.gap_type == "enum_value_missing"]
         assert len(enum_gaps) == 1
         assert "DELIVERED" in enum_gaps[0].message or "CANCELLED" in enum_gaps[0].message
 
-    def test_extra_enum_value(self):
+    @pytest.mark.asyncio
+    async def test_extra_enum_value(self):
         """Test detection of extra enum values in provider."""
         consumer = Contract(
             name="consumer",
@@ -459,7 +481,7 @@ class TestGapAnalyzerEnums:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         extra_gaps = [g for g in result.gaps if g.gap_type == "enum_value_extra"]
         assert len(extra_gaps) == 1
@@ -469,7 +491,8 @@ class TestGapAnalyzerEnums:
 class TestGapAnalyzerConfig:
     """Tests for analyzer configuration."""
 
-    def test_custom_severity_levels(self):
+    @pytest.mark.asyncio
+    async def test_custom_severity_levels(self):
         """Test custom severity level configuration."""
         config = GapAnalyzerConfig(
             missing_operation_severity=GapSeverity.HIGH,  # Custom: HIGH instead of CRITICAL
@@ -490,7 +513,7 @@ class TestGapAnalyzerConfig:
             ],
         )
 
-        result = analyze_contracts(consumer, provider, config)
+        result = await analyze_contracts(consumer, provider, config)
 
         missing_gaps = [g for g in result.gaps if g.gap_type == "missing_operation"]
         assert missing_gaps[0].severity == GapSeverity.HIGH
@@ -498,7 +521,8 @@ class TestGapAnalyzerConfig:
         unused_gaps = [g for g in result.gaps if g.gap_type == "unused_operation"]
         assert unused_gaps[0].severity == GapSeverity.MEDIUM
 
-    def test_disable_field_checks(self):
+    @pytest.mark.asyncio
+    async def test_disable_field_checks(self):
         """Test disabling field type checks."""
         config = GapAnalyzerConfig(
             check_field_types=False,
@@ -529,7 +553,7 @@ class TestGapAnalyzerConfig:
             ],
         )
 
-        result = analyze_contracts(consumer, provider, config)
+        result = await analyze_contracts(consumer, provider, config)
 
         # No field-related gaps should be detected
         field_gaps = [g for g in result.gaps if "field" in g.gap_type]
@@ -539,7 +563,8 @@ class TestGapAnalyzerConfig:
 class TestGapAnalyzerResult:
     """Tests for analysis result structure."""
 
-    def test_result_has_critical_gaps(self):
+    @pytest.mark.asyncio
+    async def test_result_has_critical_gaps(self):
         """Test has_critical_gaps method."""
         consumer = Contract(
             name="consumer",
@@ -550,11 +575,12 @@ class TestGapAnalyzerResult:
 
         provider = Contract(name="provider", operations=[])
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert result.has_critical_gaps() is True
 
-    def test_result_summary(self):
+    @pytest.mark.asyncio
+    async def test_result_summary(self):
         """Test result summary generation."""
         consumer = Contract(
             name="test-consumer",
@@ -572,7 +598,7 @@ class TestGapAnalyzerResult:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         summary = result.summary()
 
@@ -581,7 +607,8 @@ class TestGapAnalyzerResult:
         assert "Matched" in summary
         assert "Missing" in summary
 
-    def test_gap_to_finding_conversion(self):
+    @pytest.mark.asyncio
+    async def test_gap_to_finding_conversion(self):
         """Test conversion of gaps to finding dictionaries."""
         consumer = Contract(
             name="consumer",
@@ -597,7 +624,7 @@ class TestGapAnalyzerResult:
 
         provider = Contract(name="provider", operations=[])
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert len(result.gaps) > 0
 
@@ -612,19 +639,21 @@ class TestGapAnalyzerResult:
 class TestGapAnalyzerEdgeCases:
     """Tests for edge cases."""
 
-    def test_empty_contracts(self):
+    @pytest.mark.asyncio
+    async def test_empty_contracts(self):
         """Test analysis of empty contracts."""
         consumer = Contract(name="consumer")
         provider = Contract(name="provider")
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert result.matched_operations == 0
         assert result.missing_operations == 0
         assert result.unused_operations == 0
         assert len(result.gaps) == 0
 
-    def test_consumer_only(self):
+    @pytest.mark.asyncio
+    async def test_consumer_only(self):
         """Test when provider has no operations."""
         consumer = Contract(
             name="consumer",
@@ -636,12 +665,13 @@ class TestGapAnalyzerEdgeCases:
 
         provider = Contract(name="provider")
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert result.missing_operations == 2
         assert result.has_critical_gaps() is True
 
-    def test_provider_only(self):
+    @pytest.mark.asyncio
+    async def test_provider_only(self):
         """Test when consumer has no operations."""
         consumer = Contract(name="consumer")
 
@@ -652,7 +682,7 @@ class TestGapAnalyzerEdgeCases:
             ],
         )
 
-        result = analyze_contracts(consumer, provider)
+        result = await analyze_contracts(consumer, provider)
 
         assert result.unused_operations == 1
         assert result.has_critical_gaps() is False  # Unused is LOW severity

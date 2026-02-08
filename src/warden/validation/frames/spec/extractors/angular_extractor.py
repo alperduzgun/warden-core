@@ -153,9 +153,12 @@ class AngularExtractor(BaseContractExtractor):
         operations: List[OperationDefinition] = []
 
         # Pattern for HttpClient calls
-        # this.http.get<Type>('path') or this.http.get<Type>(`${baseUrl}/path`)
+        # this.http.get<Type>('path')
+        # this.http.get<Type>(`${baseUrl}/path`)
+        # this.http.get<Type>(this.apiUrl)
+        # this.http.delete<void>(`${this.apiUrl}/${id}`)
         http_pattern = re.compile(
-            r"(?:this\.)?(?:http|httpClient)\s*\.\s*(get|post|put|patch|delete)\s*<([^>]+)>\s*\(\s*(?:[`'\"]([^`'\"]+)[`'\"]|`\$\{[^}]+\}([^`]+)`)",
+            r"(?:this\.)?(?:http|httpClient)\s*\.\s*(get|post|put|patch|delete)\s*<([^>]+)>\s*\(\s*(?:[`'\"]([^`'\"]+)[`'\"]|`(\$\{[^}]+\}[^`]*)`|([a-zA-Z_][\w.]*))",
             re.IGNORECASE,
         )
 
@@ -172,7 +175,7 @@ class AngularExtractor(BaseContractExtractor):
             if http_match:
                 http_method = http_match.group(1).lower()
                 response_type = http_match.group(2)
-                path = http_match.group(3) or http_match.group(4) or ""
+                path = http_match.group(3) or http_match.group(4) or http_match.group(5) or ""
 
                 # Find enclosing method name
                 method_name = self._find_enclosing_method(content, i)

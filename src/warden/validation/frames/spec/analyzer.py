@@ -510,6 +510,23 @@ class GapAnalyzer:
 
         return None
 
+    def _get_verb_category(self, name: str) -> Optional[str]:
+        """Get the CRUD verb category of an operation name."""
+        lower = name.lower()
+        for prefix in self._prefixes:
+            if lower.startswith(prefix):
+                return "query"
+        for prefix in self._command_prefixes:
+            if lower.startswith(prefix):
+                return "create"
+        for prefix in self._update_prefixes:
+            if lower.startswith(prefix):
+                return "update"
+        for prefix in self._delete_prefixes:
+            if lower.startswith(prefix):
+                return "delete"
+        return None
+
     def _fuzzy_match(
         self,
         consumer_name: str,
@@ -520,9 +537,18 @@ class GapAnalyzer:
         best_op: Optional[OperationDefinition] = None
 
         consumer_normalized = self._normalize_operation_name(consumer_name).lower()
+        consumer_category = self._get_verb_category(consumer_name)
 
         for name, op in provider_ops.items():
             provider_normalized = self._normalize_operation_name(name).lower()
+
+            # Skip if verb categories conflict (e.g. delete vs get)
+            # Use the operation's original name (op.name) for category detection
+            # since map keys may be normalized (no prefix)
+            if consumer_category:
+                provider_category = self._get_verb_category(op.name)
+                if provider_category and consumer_category != provider_category:
+                    continue
 
             # Calculate similarity
             score = SequenceMatcher(None, consumer_normalized, provider_normalized).ratio()

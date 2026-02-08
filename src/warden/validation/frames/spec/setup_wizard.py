@@ -285,7 +285,8 @@ class SetupWizard:
                     platform["_metadata"] = {
                         "confidence": round(project.confidence, 2),
                         "evidence": project.evidence,
-                        **project.metadata,
+                        **{k: v for k, v in project.metadata.items()
+                           if k not in ("absolute_path",)},
                     }
 
             elif isinstance(project, PlatformSetupInput):
@@ -355,20 +356,27 @@ class SetupWizard:
         # Ensure .warden directory exists
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Read existing config once (avoids TOCTOU between exists() and read_text())
+        existing_content: str | None = None
+        try:
+            existing_content = config_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            pass  # No existing config
+
         # Backup existing config if requested
-        if backup and config_path.exists():
+        if backup and existing_content is not None:
             backup_path = config_path.with_suffix(".yaml.backup")
-            backup_path.write_text(config_path.read_text(encoding="utf-8"))
+            backup_path.write_text(existing_content, encoding="utf-8")
             logger.info(
                 "config_backup_created",
                 backup_path=str(backup_path),
             )
 
         # Merge with existing config if requested
-        if merge and config_path.exists():
+        if merge and existing_content is not None:
             try:
-                existing = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-                if existing:
+                existing = yaml.safe_load(existing_content)
+                if existing and isinstance(existing, dict):
                     config = self._merge_configs(existing, config)
                     logger.info("config_merged_with_existing")
             except yaml.YAMLError as e:

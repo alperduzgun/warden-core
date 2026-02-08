@@ -264,13 +264,20 @@ class BaseContractExtractor(ABC):
             files.extend(self.project_root.glob(pattern))
 
         # Filter out test files, generated files, etc.
-        filtered = [
-            f for f in files
-            if not any(exclude in str(f) for exclude in [
-                "test", "spec", "mock", "generated", "node_modules",
-                ".dart_tool", "build", "dist", ".gradle"
-            ])
-        ]
+        # Only check path parts relative to project_root to avoid false positives
+        # when the absolute path contains exclude words (e.g. pytest tmp_path with "test")
+        exclude_names = {
+            "test", "tests", "spec", "mock", "mocks", "generated",
+            "node_modules", ".dart_tool", "build", "dist", ".gradle",
+        }
+        filtered = []
+        for f in files:
+            try:
+                relative_parts = f.relative_to(self.project_root).parts
+            except ValueError:
+                relative_parts = f.parts
+            if not any(part.lower() in exclude_names for part in relative_parts):
+                filtered.append(f)
 
         logger.info(
             "files_found",
@@ -357,9 +364,27 @@ def get_extractor(
             llm_service=llm_service,
             semantic_search_service=semantic_search_service,
         )
-    
-    # Legacy extractors from registry
-    extractor_class = ExtractorRegistry.get(platform_type)
+
+    # Platform aliases — route related frameworks to their shared extractor
+    _PLATFORM_ALIASES: Dict[PlatformType, PlatformType] = {
+        PlatformType.ECHO: PlatformType.GIN,
+    }
+    resolved_type = _PLATFORM_ALIASES.get(platform_type, platform_type)
+
+    # Registry-based lookup
+    extractor_class = ExtractorRegistry.get(resolved_type)
     if extractor_class:
         return extractor_class(project_root, role, resilience_config)
-    return None
+
+    # Fallback to UniversalExtractor for unsupported platforms
+    logger.info(
+        "falling_back_to_universal_extractor",
+        platform=platform_type.value,
+    )
+    from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
+    return UniversalContractExtractor(
+        project_root=project_root,
+        role=role,
+        llm_service=llm_service,
+        semantic_search_service=semantic_search_service,
+    )

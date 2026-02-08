@@ -163,7 +163,7 @@ public class InvoiceController {
     }
 
     // Provider has this, consumer doesn't use it
-    @GET("/{id}/history")
+    @GetMapping("/{id}/history")
     public ResponseEntity<List<InvoiceHistoryDto>> getInvoiceHistory(
             @PathVariable String id) {
         return ResponseEntity.ok(invoiceService.getHistory(id));

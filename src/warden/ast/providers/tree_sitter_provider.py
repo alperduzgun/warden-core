@@ -126,9 +126,10 @@ class TreeSitterProvider(IASTProvider):
 
                 if lang_fn:
                     self._language_objs[lang] = tree_sitter.Language(lang_fn())
-            except ImportError:
+            except ImportError as e:
                 # Silently track missing grammars (summary logged below)
                 self._missing_modules[lang] = import_name
+                logger.debug("grammar_module_not_found", language=lang.name, module=import_name, error=str(e))
             except Exception as e:
                 logger.warning("failed_to_load_grammar", language=lang.name, error=str(e))
 
@@ -406,20 +407,21 @@ class TreeSitterProvider(IASTProvider):
             return []
             
         try:
-            parser = self.Parser()
-            parser.set_language(ts_language)
-            
-            tree = parser.parse(bytes(source_code, "utf8"))
-            query = ts_language.query(query_str)
-            captures = query.captures(tree.root_node)
-            
+            parser = tree_sitter.Parser(ts_language)
+            source_bytes = bytes(source_code, "utf8")
+            tree = parser.parse(source_bytes)
+            query = tree_sitter.Query(ts_language, query_str)
+            cursor = tree_sitter.QueryCursor(query)
+            captures = cursor.captures(tree.root_node)
+
             dependencies = set()
-            for node, tag in captures:
-                if tag == "dep":
-                    dep_str = source_code[node.start_byte : node.end_byte].strip("\"'")
-                    if dep_str:
-                        dependencies.add(dep_str)
-                        
+            for cap_name, nodes in captures.items():
+                if cap_name == "dep":
+                    for node in nodes:
+                        dep_str = source_bytes[node.start_byte:node.end_byte].decode().strip("\"'`")
+                        if dep_str:
+                            dependencies.add(dep_str)
+
             return sorted(list(dependencies))
         except Exception as e:
             logger.debug(
@@ -432,11 +434,11 @@ class TreeSitterProvider(IASTProvider):
     def _get_dependency_query_str(self, language: CodeLanguage) -> str:
         """Get tree-sitter query string for dependencies based on language."""
         queries = {
-            CodeLanguage.JAVASCRIPT: "(import_declaration source: (string) @dep) (call_expression function: (identifier) @func (#eq? @func \"require\") arguments: (arguments (string) @dep))",
-            CodeLanguage.TYPESCRIPT: "(import_declaration source: (string) @dep) (import_alias_declaration source: (string) @dep)",
-            CodeLanguage.GO: "(import_spec path: (string) @dep)",
-            CodeLanguage.JAVA: "(import_declaration name: (scoped_identifier) @dep)",
-            CodeLanguage.PYTHON: "(import_from_statement module: (dotted_name) @dep) (import_statement name: (dotted_name) @dep)"
+            CodeLanguage.JAVASCRIPT: "(import_statement source: (string) @dep) (call_expression function: (identifier) @func (#eq? @func \"require\") arguments: (arguments (string) @dep))",
+            CodeLanguage.TYPESCRIPT: "(import_statement source: (string) @dep)",
+            CodeLanguage.GO: "(import_spec (interpreted_string_literal) @dep)",
+            CodeLanguage.JAVA: "(import_declaration (scoped_identifier) @dep)",
+            CodeLanguage.PYTHON: "(import_from_statement module_name: (dotted_name) @dep) (import_statement name: (dotted_name) @dep)",
         }
         return queries.get(language, "")
 
@@ -515,6 +517,7 @@ class TreeSitterProvider(IASTProvider):
         mappings = {
             "program": ASTNodeType.MODULE,
             "source_file": ASTNodeType.MODULE,
+            "module": ASTNodeType.MODULE,  # Python root
 
             # Classes & Interfaces
             "class_declaration": ASTNodeType.CLASS,

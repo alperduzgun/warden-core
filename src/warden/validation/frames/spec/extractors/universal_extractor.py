@@ -6,8 +6,6 @@ Reconstructed with fixes for precise extraction and custom output format.
 
 import asyncio
 import time
-import logging
-import traceback
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass
@@ -158,13 +156,20 @@ class UniversalContractExtractor:
         operations = await self._extract_operations(confirmed_candidates)
         self.stats["operations_extracted"] = len(operations)
         
+        # 5. Extract Models & Enums (New in Gen 3.1)
+        models = await self._extract_models(code_files)
+        enums = await self._extract_enums(code_files)
+        self.stats["models_extracted"] = len(models)
+        self.stats["enums_extracted"] = len(enums)
+        
         duration = int((time.time() - start_time) * 1000)
         logger.info("universal_extraction_completed", duration_ms=duration, operations=len(operations), stats=self.stats)
         
         return Contract(
-            name="ohmylove",
+            name=self.project_root.name,
             operations=operations,
-            # Models/Enums extracted later if possible
+            models=models,
+            enums=enums,
         )
 
     def _discover_code_files(self) -> List[Path]:
@@ -174,11 +179,12 @@ class UniversalContractExtractor:
         scanner = SafeFileScanner(self.project_root, max_depth=15)
         extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.dart', '.java', '.kt', '.swift', '.go', '.rs'}
         
-        return scanner.scan(extensions)
+        files = scanner.scan(extensions)
+        print(f"DEBUG [{self.role.name}]: Found {len(files)} files in {self.project_root}")
+        return files
 
     async def _extract_api_candidates(self, code_files: List[Path]) -> List[APICallCandidate]:
         candidates = []
-        # print(f"DEBUG: Starting scan of {len(code_files)} files")
         
         for file_path in code_files:
             try:
@@ -209,9 +215,7 @@ class UniversalContractExtractor:
                 self.stats["files_scanned"] += 1
                 
             except Exception as e:
-                # Print exception for visibility
-                # print(f"CRITICAL ERROR scanning {file_path}: {e}")
-                # traceback.print_exc()
+                logger.debug("file_scan_error", file=str(file_path), error=str(e))
                 continue
                 
         return candidates
@@ -246,6 +250,15 @@ class UniversalContractExtractor:
         if raw_type in ['method_invocation', 'function_expression_invocation', 'call_expression', 'constructor_invocation']:
              is_call = True
              
+        # Dart await_expression: `await http.get(...)` parses as await_expression
+        # with a selector child containing the actual call
+        if raw_type == 'await_expression':
+            for child in node.children:
+                ct = child.attributes.get('original_type', '')
+                if ct in ('selector', 'method_invocation', 'call_expression'):
+                    is_call = True
+                    break
+
         # Dart selector check (expression_statement wrapping identifier + selector)
         if raw_type == 'expression_statement':
             has_selector = False
@@ -256,7 +269,7 @@ class UniversalContractExtractor:
                     has_selector = True
                 if child.node_type == ASTNodeType.IDENTIFIER:
                     has_identifier = True
-            
+
             if has_selector and has_identifier:
                 is_call = True
              
@@ -329,7 +342,22 @@ class UniversalContractExtractor:
         return False
 
     def _heuristic_filter(self, candidates: List[APICallCandidate]) -> List[APICallCandidate]:
-        return candidates # Identity (Trust creation filter)
+        """Filter candidates using lightweight heuristics beyond _is_relevant_candidate.
+
+        Removes duplicates (same function+file+line) and candidates with
+        empty code snippets that provide no value for extraction.
+        """
+        seen = set()
+        filtered = []
+        for c in candidates:
+            key = (c.function_name, c.file_path, c.line)
+            if key in seen:
+                continue
+            seen.add(key)
+            if not c.code_snippet.strip():
+                continue
+            filtered.append(c)
+        return filtered
 
     async def _extract_operations(self, calls: List[APICallCandidate]) -> List[OperationDefinition]:
         """Extract definitions in parallel using global ParallelBatchExecutor."""
@@ -423,6 +451,130 @@ Extract details.
             logger.debug("ai_extraction_failed", error=str(e))
             return self._create_fallback_operation(call)
 
+    async def _extract_models(self, code_files: List[Path]) -> List[ModelDefinition]:
+        """Extract data models (Classes/Interfaces) from code files."""
+        models = []
+        for file_path in code_files:
+            try:
+                language = self._detect_language(file_path)
+                if not language: continue
+                provider = self.ast_registry.get_provider(language)
+                if not provider: continue
+                
+                source = file_path.read_text(encoding='utf-8', errors='replace')
+                result = await provider.parse(source, language, str(file_path))
+                if result.status != ParseStatus.SUCCESS or not result.ast_root:
+                    continue
+                
+                # Find all classes/interfaces
+                model_nodes = self._find_model_nodes(result.ast_root)
+                for node in model_nodes:
+                    model = self._create_model_definition(node, source, file_path)
+                    if model:
+                        models.append(model)
+            except Exception as e:
+                logger.debug("model_extraction_error", file=str(file_path), error=str(e))
+        return models
+
+    async def _extract_enums(self, code_files: List[Path]) -> List[EnumDefinition]:
+        """Extract Enums from code files."""
+        enums = []
+        for file_path in code_files:
+            try:
+                language = self._detect_language(file_path)
+                if not language: continue
+                provider = self.ast_registry.get_provider(language)
+                if not provider: continue
+                
+                source = file_path.read_text(encoding='utf-8', errors='replace')
+                result = await provider.parse(source, language, str(file_path))
+                if result.status != ParseStatus.SUCCESS or not result.ast_root:
+                    continue
+                
+                # Find all enums
+                enum_nodes = self._find_enum_nodes(result.ast_root)
+                for node in enum_nodes:
+                    enum = self._create_enum_definition(node, source, file_path)
+                    if enum:
+                        enums.append(enum)
+            except Exception as e:
+                logger.debug("enum_extraction_error", file=str(file_path), error=str(e))
+        return enums
+
+    def _find_model_nodes(self, node: ASTNode) -> List[ASTNode]:
+        """Find nodes that represent data models."""
+        models = []
+        if node.node_type in [ASTNodeType.CLASS, ASTNodeType.INTERFACE]:
+            # Filter out known non-model classes (UI, etc)
+            name = node.name or ""
+            exclude_keywords = {"Widget", "State", "Page", "Screen", "View", "Controller", "Bloc"}
+            if not any(k in name for k in exclude_keywords):
+                models.append(node)
+        
+        for child in node.children:
+            models.extend(self._find_model_nodes(child))
+        return models
+
+    def _find_enum_nodes(self, node: ASTNode) -> List[ASTNode]:
+        """Find enum nodes based on original type (heuristic)."""
+        enums = []
+        raw_type = node.attributes.get("original_type", "").lower()
+        if "enum" in raw_type:
+            enums.append(node)
+        
+        for child in node.children:
+            enums.extend(self._find_enum_nodes(child))
+        return enums
+
+    def _create_model_definition(self, node: ASTNode, source: str, file_path: Path) -> Optional[ModelDefinition]:
+        from warden.validation.frames.spec.models import FieldDefinition
+        fields = []
+        
+        # Look for fields/properties in children
+        for child in node.children:
+            if child.node_type in [ASTNodeType.FIELD, ASTNodeType.PROPERTY]:
+                field_name = child.name or ""
+                # Attempt to extract type (heuristic)
+                field_type = "any"
+                for grandchild in child.children:
+                    if grandchild.node_type == ASTNodeType.IDENTIFIER and grandchild.name != field_name:
+                        field_type = grandchild.name
+                        break
+                
+                if field_name:
+                    fields.append(FieldDefinition(
+                        name=field_name,
+                        type_name=field_type,
+                        source_file=str(file_path),
+                        source_line=child.location.start_line if child.location else 0
+                    ))
+        
+        if not fields: return None
+        
+        return ModelDefinition(
+            name=node.name or "UnknownModel",
+            fields=fields,
+            source_file=str(file_path),
+            source_line=node.location.start_line if node.location else 0
+        )
+
+    def _create_enum_definition(self, node: ASTNode, source: str, file_path: Path) -> Optional[EnumDefinition]:
+        values = []
+        # In many grammars, enum values are children with specific types
+        for child in node.children:
+            # Heuristic: identifiers in enum body are often values
+            if child.node_type == ASTNodeType.IDENTIFIER and child.name:
+                values.append(child.name)
+        
+        if not values: return None
+        
+        return EnumDefinition(
+            name=node.name or "UnknownEnum",
+            values=values,
+            source_file=str(file_path),
+            source_line=node.location.start_line if node.location else 0
+        )
+
     def _create_fallback_operation(self, call: APICallCandidate) -> OperationDefinition:
         """
         DEGRADED MODE: Creates a heuristic-based operation definition when AI fails.
@@ -437,7 +589,16 @@ Extract details.
         )
 
     async def _get_similar_patterns(self, call: APICallCandidate) -> str:
-        return "" # Stub
+        """Retrieve similar API patterns via semantic search if available."""
+        if not self.semantic_search:
+            return ""
+        try:
+            results = await self.semantic_search.search(call.function_name, limit=3)
+            if results:
+                return "\n".join(str(r) for r in results)
+        except Exception as e:
+            logger.debug("semantic_search_failed", function=call.function_name, error=str(e))
+        return ""
 
     def _get_node_text(self, node: ASTNode, source: str) -> str:
         """Get source text for node using location (Fixed)."""
@@ -471,7 +632,7 @@ Extract details.
                 result.append(lines[el][:ec])
                 
             return "\\n".join(result)
-        except Exception:
+        except (IndexError, UnicodeDecodeError, AttributeError):
             return ""
 
     def _get_context(self, node: ASTNode, source: str) -> str:

@@ -709,6 +709,7 @@ abstract class ModernApi {
         - Only data models extracted
         """
         widget_file = flutter_project / "lib" / "widgets" / "user_widget.dart"
+        widget_file.parent.mkdir(parents=True, exist_ok=True)
         widget_file.write_text('''
 class UserWidget extends StatelessWidget {
   final User user;

@@ -138,7 +138,6 @@ class FrameResult:
             "frameName": self.frame_name,
             "status": self.status,
             "duration": self.duration,
-            "duration": self.duration,
             "issuesFound": self.issues_found,
             "isBlocker": self.is_blocker,
             "findings": [f.to_json() for f in self.findings],

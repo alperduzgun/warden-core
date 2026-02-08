@@ -51,7 +51,7 @@ class GoExtractor(BaseContractExtractor):
     - Struct definitions
     """
 
-    platform_type = PlatformType.GIN  # Primary, also handles Echo/Fiber
+    platform_type = PlatformType.GIN
     supported_languages = [CodeLanguage.GO]
     file_patterns = [
         "**/*.go",

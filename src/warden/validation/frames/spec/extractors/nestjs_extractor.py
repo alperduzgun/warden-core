@@ -185,8 +185,9 @@ class NestJSExtractor(BaseContractExtractor):
 
         # Pattern for method definition
         # async methodName(@Body() dto: Type): Promise<ReturnType>
+        # Note: Uses [\s\S]*? to handle nested parens from decorators like @Body()
         method_pattern = re.compile(
-            r"(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*(?::\s*Promise<([^>]+)>|:\s*(\w+))?\s*\{",
+            r"(?:async\s+)?(\w+)\s*\(((?:[^()]*|\([^()]*\))*)\)\s*(?::\s*Promise<([^>]+)>|:\s*(\w+))?\s*\{",
             re.MULTILINE,
         )
 

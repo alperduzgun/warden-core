@@ -4,6 +4,7 @@ Path utilities for security and sanitization.
 
 import os
 from pathlib import Path
+from typing import List, Optional
 
 def sanitize_path(path: str | Path, base_dir: str | Path) -> Path:
     """
@@ -67,29 +68,23 @@ class SafeFileScanner:
 
     def scan(self, extensions: set[str]) -> List[Path]:
         """Performs a safe scan for files with given extensions."""
-        if not self.project_root.exists():
+        if not extensions:
             return []
 
-        found_files = []
-        for ext in extensions:
-            # We use rglob but enforce depth limits manually to be safer 
-            # and explicitly ignore symlinks via OS walk if needed.
-            # For simplicity with pathlib:
-            for p in self.project_root.rglob(f"*{ext}"):
-                # 1. Depth Protection
-                depth = len(p.parts) - len(self.project_root.parts)
-                if depth > self.max_depth:
-                    continue
-                
-                # 2. Exclusion Protection
-                if any(ex in p.parts for ex in self.exclude_dirs):
-                    continue
-                
-                # 3. Path Traversal Safety
-                try:
-                    p.resolve().relative_to(self.project_root)
-                    found_files.append(p)
-                except (ValueError, RuntimeError):
-                    continue
-                    
+        found_files: List[Path] = []
+        try:
+            for root, dirs, files in os.walk(str(self.project_root), followlinks=False):
+                # Prune excluded directories
+                dirs[:] = [d for d in dirs if d not in self.exclude_dirs]
+
+                for fname in files:
+                    p = Path(root) / fname
+                    if p.suffix in extensions:
+                        found_files.append(p)
+            
+            # print(f"  [Scanner] Found {len(found_files)} files total.")
+        except Exception as e:
+            # print(f"  [Scanner] Error: {e}")
+            pass
+
         return found_files

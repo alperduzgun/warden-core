@@ -109,6 +109,7 @@ class FlutterExtractor(BaseContractExtractor):
         for file_path in files:
             try:
                 content = file_path.read_text(encoding="utf-8")
+                self._stats["files_processed"] += 1
 
                 # Extract Retrofit-style annotations
                 retrofit_ops = self._extract_retrofit_operations(content, file_path)
@@ -180,9 +181,10 @@ class FlutterExtractor(BaseContractExtractor):
 
         # Pattern for method following annotation
         # Future<ReturnType> methodName(params);
+        # Uses non-greedy .+? for nested generics (e.g. Future<List<User>>)
+        # Uses [\s\S]*? for params to handle nested parens from @Path("id"), @Body()
         method_pattern = re.compile(
-            r"Future<([^>]+)>\s+(\w+)\s*\(([^)]*)\)\s*;",
-            re.MULTILINE,
+            r"Future<(.+?)>\s+(\w+)\s*\(([\s\S]*?)\)\s*;",
         )
 
         lines = content.split("\n")
@@ -238,58 +240,49 @@ class FlutterExtractor(BaseContractExtractor):
         """
         operations: List[OperationDefinition] = []
 
-        # Pattern for dio calls
-        # dio.get('/path'), dio.post('/path', data: ...)
+        # Pattern for dio calls — \s* handles multiline split between method call and path
         dio_pattern = re.compile(
             r"(?:dio|_dio|client|httpClient)\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['\"]([^'\"]+)['\"]",
-            re.IGNORECASE,
+            re.IGNORECASE | re.DOTALL,
         )
 
-        # Pattern for http package calls
-        # http.get(Uri.parse('...'))
+        # Pattern for http package calls — \s* handles multiline
         http_pattern = re.compile(
             r"http\s*\.\s*(get|post|put|patch|delete)\s*\(\s*Uri\.parse\s*\(\s*['\"\$]([^'\"]+)",
-            re.IGNORECASE,
+            re.IGNORECASE | re.DOTALL,
         )
 
-        lines = content.split("\n")
+        # Use finditer on full content for multiline matching
+        for dio_match in dio_pattern.finditer(content):
+            method = dio_match.group(1).lower()
+            path = dio_match.group(2)
+            line_num = content[:dio_match.start()].count("\n") + 1
+            op_name = self._path_to_operation_name(path, method)
 
-        for i, line in enumerate(lines):
-            # Check for Dio calls
-            dio_match = dio_pattern.search(line)
-            if dio_match:
-                method = dio_match.group(1).lower()
-                path = dio_match.group(2)
+            operations.append(OperationDefinition(
+                name=op_name,
+                operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
+                description=f"{method.upper()} {path}",
+                source_file=str(file_path),
+                source_line=line_num,
+            ))
 
-                # Generate operation name from path
-                op_name = self._path_to_operation_name(path, method)
+        for http_match in http_pattern.finditer(content):
+            method = http_match.group(1).lower()
+            path = http_match.group(2)
+            line_num = content[:http_match.start()].count("\n") + 1
 
-                operations.append(OperationDefinition(
-                    name=op_name,
-                    operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
-                    description=f"{method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+            # Clean path (remove baseUrl prefix, interpolation)
+            path = re.sub(r"^\$\{?\w+\}?/?", "", path)
+            op_name = self._path_to_operation_name(path, method)
 
-            # Check for http package calls
-            http_match = http_pattern.search(line)
-            if http_match:
-                method = http_match.group(1).lower()
-                path = http_match.group(2)
-
-                # Clean path (remove baseUrl prefix, interpolation)
-                path = re.sub(r"^\$\{?\w+\}?/?", "", path)
-
-                op_name = self._path_to_operation_name(path, method)
-
-                operations.append(OperationDefinition(
-                    name=op_name,
-                    operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
-                    description=f"{method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+            operations.append(OperationDefinition(
+                name=op_name,
+                operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
+                description=f"{method.upper()} {path}",
+                source_file=str(file_path),
+                source_line=line_num,
+            ))
 
         return operations
 
@@ -327,7 +320,7 @@ class FlutterExtractor(BaseContractExtractor):
             class_name = class_match.group(1)
 
             # Skip internal/generated classes
-            if class_name.startswith("_") or class_name.startswith("\$"):
+            if class_name.startswith("_") or class_name.startswith("$"):
                 continue
 
             # Skip non-model classes (widgets, states, etc.)
@@ -452,13 +445,19 @@ class FlutterExtractor(BaseContractExtractor):
 
     def _clean_type(self, type_str: str) -> str:
         """Clean Dart type string to contract type."""
-        # Remove List<> wrapper
-        if type_str.startswith("List<") and type_str.endswith(">"):
-            inner = type_str[5:-1]
-            return self._clean_type(inner)
+        type_str = type_str.strip().rstrip("?")
 
-        # Remove nullable marker
-        type_str = type_str.rstrip("?")
+        # Unwrap generic wrappers: List<X>, ApiResponse<X>, PaginatedResult<X>, etc.
+        generic_match = re.match(r"^(\w+)<(.+)>$", type_str)
+        if generic_match:
+            outer = generic_match.group(1)
+            inner = generic_match.group(2)
+            # Known wrapper types that should be unwrapped to their inner type
+            if outer in ("List", "Future", "Stream"):
+                return self._clean_type(inner)
+            # For other wrappers (ApiResponse, PaginatedResult, etc.),
+            # recursively clean the inner type
+            return self._clean_type(inner)
 
         # Map Dart types to contract primitives
         type_mapping = {
@@ -489,8 +488,11 @@ class FlutterExtractor(BaseContractExtractor):
         # Remove leading slash and api prefix
         path = re.sub(r"^/?(?:api/)?(?:v\d+/)?", "", path)
 
-        # Split path into parts
-        parts = [p for p in path.split("/") if p and not p.startswith("{")]
+        # Split path into parts, filtering path parameters ({id}, $id, ${id}, \$id)
+        parts = [
+            p for p in path.split("/")
+            if p and not p.startswith("{") and not p.startswith("$") and not p.startswith("\\$")
+        ]
 
         if not parts:
             return f"{method}Resource"
@@ -501,10 +503,13 @@ class FlutterExtractor(BaseContractExtractor):
         # Convert to camelCase
         resource = re.sub(r"[-_](.)", lambda m: m.group(1).upper(), resource)
 
+        # Check if path has an ID parameter ({id}, $id, \$id)
+        has_param = "{" in path or "$" in path or "\\$" in path
+
         # Singularize for single-item operations
-        if resource.endswith("s") and method in ["get", "delete", "put", "patch"]:
-            # Check if path has id parameter
-            if "{" in path:
+        if resource.endswith("s"):
+            # Singularize if: path has id param, or method is post (create single)
+            if has_param or method in ["post"]:
                 resource = resource[:-1]  # Remove trailing 's'
 
         # Build operation name based on method
@@ -522,7 +527,7 @@ class FlutterExtractor(BaseContractExtractor):
         resource = resource[0].upper() + resource[1:] if resource else "Resource"
 
         # Add suffix for list operations
-        if method == "get" and "{" not in path and not resource.endswith("s"):
+        if method == "get" and not has_param and not resource.endswith("s"):
             resource += "s"  # Pluralize for list
 
         return f"{prefix}{resource}"

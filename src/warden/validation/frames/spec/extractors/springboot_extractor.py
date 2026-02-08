@@ -108,6 +108,7 @@ class SpringBootExtractor(BaseContractExtractor):
         for file_path in files:
             try:
                 content = file_path.read_text(encoding="utf-8")
+                self._stats["files_processed"] += 1
                 is_kotlin = file_path.suffix == ".kt"
 
                 # Check if it's a controller
@@ -206,21 +207,21 @@ class SpringBootExtractor(BaseContractExtractor):
 
         # Pattern for mapping annotations
         # @GetMapping, @GetMapping("/path"), @GetMapping(value = "/path")
+        # Also matches method-level @RequestMapping(value = "/path", method = ...)
         mapping_pattern = re.compile(
             r'@(Get|Post|Put|Patch|Delete|Request)Mapping(?:\s*\(\s*(?:value\s*=\s*)?(?:"([^"]*)")?)?[^)]*\)?',
             re.IGNORECASE,
         )
 
-        # Pattern for Java method
+        # Pattern for Java method — captures full return type then cleans in _clean_type
         java_method_pattern = re.compile(
-            r"public\s+(?:ResponseEntity<)?([^>(\s]+)(?:>)?\s+(\w+)\s*\(([^)]*)\)",
-            re.MULTILINE,
+            r"public\s+(\S+(?:<[^>]*(?:<[^>]*>)?[^>]*>)?)\s+(\w+)\s*\(([\s\S]*?)\)\s*\{",
         )
 
-        # Pattern for Kotlin function
+        # Pattern for Kotlin function — captures full return type
+        # Matches both block body { and expression body =
         kotlin_method_pattern = re.compile(
-            r"fun\s+(\w+)\s*\(([^)]*)\)\s*:\s*(?:ResponseEntity<)?([^>{\s]+)(?:>)?",
-            re.MULTILINE,
+            r"fun\s+(\w+)\s*\(([\s\S]*?)\)\s*:\s*(\S+(?:<[^>]*(?:<[^>]*>)?[^>]*>)?)\s*[{=]",
         )
 
         lines = content.split("\n")
@@ -230,6 +231,12 @@ class SpringBootExtractor(BaseContractExtractor):
             if mapping_match:
                 http_method = mapping_match.group(1)
                 action_path = mapping_match.group(2) or ""
+
+                # Skip class-level @RequestMapping (followed by class declaration)
+                if http_method.lower() == "request":
+                    lookahead = "\n".join(lines[i : i + 3])
+                    if re.search(r"\bclass\s+\w+", lookahead):
+                        continue
 
                 # Search for method in next lines
                 search_range = "\n".join(lines[i : i + 15])
@@ -258,7 +265,18 @@ class SpringBootExtractor(BaseContractExtractor):
                     output_type = self._clean_type(return_type)
 
                     # Determine operation type
-                    mapping_key = f"{http_method}Mapping"
+                    # For @RequestMapping, check method attribute
+                    actual_http_method = http_method
+                    if http_method.lower() == "request":
+                        method_attr_match = re.search(
+                            r"method\s*=\s*RequestMethod\.(\w+)", line
+                        )
+                        if method_attr_match:
+                            actual_http_method = method_attr_match.group(1).capitalize()
+                        else:
+                            actual_http_method = "Get"  # Default
+
+                    mapping_key = f"{actual_http_method}Mapping"
                     op_type = self.HTTP_MAPPINGS.get(mapping_key, OperationType.QUERY)
 
                     operations.append(OperationDefinition(
@@ -266,7 +284,7 @@ class SpringBootExtractor(BaseContractExtractor):
                         operation_type=op_type,
                         input_type=input_type,
                         output_type=output_type,
-                        description=f"{http_method.upper()} {full_path}",
+                        description=f"{actual_http_method.upper()} {full_path}",
                         source_file=str(file_path),
                         source_line=i + 1,
                     ))
@@ -450,15 +468,27 @@ class SpringBootExtractor(BaseContractExtractor):
         """Extract models from Kotlin data classes."""
         models: List[ModelDefinition] = []
 
-        # Pattern for Kotlin data class
-        data_class_pattern = re.compile(
-            r"data\s+class\s+(\w+)\s*\(([^)]+)\)",
-            re.MULTILINE | re.DOTALL,
+        # Find "data class ClassName(" then use balanced paren counting
+        data_class_start = re.compile(
+            r"data\s+class\s+(\w+)\s*\(",
         )
 
-        for class_match in data_class_pattern.finditer(content):
+        for class_match in data_class_start.finditer(content):
             class_name = class_match.group(1)
-            params = class_match.group(2)
+
+            # Find the balanced closing paren
+            start = class_match.end()
+            depth = 1
+            end = start
+            for j in range(start, len(content)):
+                if content[j] == "(":
+                    depth += 1
+                elif content[j] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        end = j
+                        break
+            params = content[start:end]
 
             if self._should_skip_class(class_name):
                 continue
@@ -613,6 +643,7 @@ class SpringBootExtractor(BaseContractExtractor):
             "Object": "any",
             "Any": "any",
             "void": "void",
+            "Void": "void",
             "Unit": "void",
         }
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 import json
 
 from warden.validation.frames.spec.models import PlatformType, PlatformRole
@@ -72,7 +72,7 @@ class PlatformDetector:
 
     # Platform signature patterns
     # Each signature has: files to check, content patterns, and weight
-    PLATFORM_SIGNATURES: Dict[PlatformType, Dict[str, any]] = {
+    PLATFORM_SIGNATURES: Dict[PlatformType, Dict[str, Any]] = {
         PlatformType.FLUTTER: {
             "files": ["pubspec.yaml"],
             "patterns": {
@@ -303,12 +303,14 @@ class PlatformDetector:
         )
 
         detected_projects: List[DetectedProject] = []
+        visited: Set[str] = set()
 
         # Scan directory tree
         await self._scan_directory(
             search_path,
             current_depth=0,
             detected_projects=detected_projects,
+            visited=visited,
         )
 
         # Filter by confidence threshold
@@ -334,6 +336,7 @@ class PlatformDetector:
         directory: Path,
         current_depth: int,
         detected_projects: List[DetectedProject],
+        visited: Optional[Set[str]] = None,
     ) -> None:
         """
         Recursively scan directory for projects.
@@ -342,6 +345,7 @@ class PlatformDetector:
             directory: Current directory to scan
             current_depth: Current recursion depth
             detected_projects: List to append detected projects to
+            visited: Set of resolved paths to detect symlink cycles
         """
         if current_depth > self.max_depth:
             return
@@ -349,6 +353,14 @@ class PlatformDetector:
         # Check if this directory should be excluded
         if directory.name in self.exclude_dirs:
             return
+
+        # Symlink cycle detection
+        if visited is None:
+            visited = set()
+        resolved = str(directory.resolve())
+        if resolved in visited:
+            return
+        visited.add(resolved)
 
         # Try to detect platform in current directory
         detection = await self._detect_platform_type(directory)
@@ -369,6 +381,7 @@ class PlatformDetector:
                         item,
                         current_depth + 1,
                         detected_projects,
+                        visited,
                     )
         except (PermissionError, OSError) as e:
             logger.warning(
@@ -513,7 +526,7 @@ class PlatformDetector:
         if pattern_checks > 0:
             pattern_ratio = pattern_score / pattern_checks
         else:
-            pattern_ratio = 0.5  # No patterns to check
+            pattern_ratio = 1.0  # No patterns to check — file presence already passed
 
         # Weighted average of file presence and pattern matches
         confidence = (file_score * 0.4 + pattern_ratio * 0.6) * weight
@@ -612,8 +625,8 @@ class PlatformDetector:
             if "@nestjs/core" in deps:
                 metadata["nestjs_version"] = deps["@nestjs/core"]
 
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug("package_json_parse_error", file="package.json", error=str(e))
 
     def _suggest_role(
         self,
