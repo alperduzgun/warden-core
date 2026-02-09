@@ -37,6 +37,7 @@ class ASTNodeType(str, Enum):
     METHOD = "method"
     PROPERTY = "property"
     FIELD = "field"
+    ENUM = "enum"
 
     # Statements
     IMPORT = "import"

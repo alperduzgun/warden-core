@@ -148,7 +148,7 @@ class HardcodedPasswordCheck(ValidationCheck):
                                 "Use environment variables or secret management:\n"
                                 "✅ GOOD: password = os.getenv('DB_PASSWORD')\n"
                                 "✅ GOOD: Use Azure Key Vault, AWS Secrets Manager\n"
-                                "❌ BAD: password = 'hardcoded_secret'"
+                                "❌ BAD: password = 'hardcoded_secret'"  # warden: ignore
                             ),
                             documentation_url="https://cwe.mitre.org/data/definitions/798.html",
                         )
@@ -231,7 +231,7 @@ class HardcodedPasswordCheck(ValidationCheck):
                                 "Never use common passwords. Use strong, unique passwords:\n"
                                 "✅ GOOD: Generated password from password manager\n"
                                 "✅ GOOD: Environment variable with secure value\n"
-                                f"❌ BAD: password = '{weak_password}' (easily guessed)"
+                                f"❌ BAD: password = '{weak_password}' (easily guessed)"  # warden: ignore
                             ),
                             documentation_url="https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_password",
                         )

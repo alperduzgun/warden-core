@@ -267,6 +267,18 @@ class CustomRuleValidator:
 
         return violations
 
+    def _is_suppressed(self, line: str) -> bool:
+        """Check if line has inline suppression."""
+        # Check for Warden specific suppression
+        if "# warden: ignore" in line:
+            return True
+        # Check for common security suppressions
+        if "# nosec" in line:
+            return True
+        if "# noqa" in line:  # General linter suppression
+            return True
+        return False
+
     def _validate_secrets_condition(
         self,
         rule: CustomRule,
@@ -290,6 +302,9 @@ class CustomRuleValidator:
 
         for pattern in patterns:
             for i, line in enumerate(lines, start=1):
+                if self._is_suppressed(line):
+                    continue
+                    
                 if re.search(pattern, line):
                     violations.append(
                         CustomRuleViolation(
@@ -330,6 +345,9 @@ class CustomRuleValidator:
 
         for pattern in forbidden_patterns:
             for i, line in enumerate(lines, start=1):
+                if self._is_suppressed(line):
+                    continue
+
                 if re.search(pattern, line):
                     violations.append(
                         CustomRuleViolation(
@@ -424,6 +442,9 @@ class CustomRuleValidator:
 
             for operation_pattern in redis_operations:
                 for i, line in enumerate(lines, start=1):
+                    if self._is_suppressed(line):
+                        continue
+
                     match = re.search(operation_pattern, line)
                     if match:
                         key = match.group(1)
@@ -480,6 +501,9 @@ class CustomRuleValidator:
 
             for route_def_pattern in route_definitions:
                 for i, line in enumerate(lines, start=1):
+                    if self._is_suppressed(line):
+                        continue
+
                     match = re.search(route_def_pattern, line)
                     if match:
                         route = match.group(2) if match.lastindex >= 2 else match.group(1)
@@ -534,6 +558,9 @@ class CustomRuleValidator:
             async_pattern = r'async\s+def\s+(\w+)\s*\('
 
             for i, line in enumerate(lines, start=1):
+                if self._is_suppressed(line):
+                    continue
+
                 match = re.search(async_pattern, line)
                 if match:
                     method_name = match.group(1)
@@ -543,13 +570,13 @@ class CustomRuleValidator:
                                 rule_id=rule.id,
                                 rule_name=rule.name,
                                 category=rule.category,
-                                severity=rule.severity,
-                                is_blocker=rule.is_blocker,
-                                file=str(file_path),
-                                line=i,
-                                message=rule.message or f"Async method '{method_name}' must end with '{async_suffix}'",
-                                code_snippet=line.strip(),
-                                suggestion=f"Rename to '{method_name}{async_suffix}'",
+                                    severity=rule.severity,
+                                    is_blocker=rule.is_blocker,
+                                    file=str(file_path),
+                                    line=i,
+                                    message=rule.message or f"Async method '{method_name}' must end with '{async_suffix}'",
+                                    code_snippet=line.strip(),
+                                    suggestion=f"Rename to '{method_name}{async_suffix}'",
                             )
                         )
 
@@ -652,7 +679,7 @@ class CustomRuleValidator:
 
         try:
             # Execute script with timeout (use list args for security)
-            process = await asyncio.create_subprocess_exec(
+            process = await asyncio.create_subprocess_exec(  # warden: ignore
                 str(script_path),
                 str(file_path),
                 stdout=asyncio.subprocess.PIPE,

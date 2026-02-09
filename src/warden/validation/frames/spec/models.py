@@ -23,6 +23,7 @@ class PlatformType(str, Enum):
 
     # Universal (language/framework agnostic)
     UNIVERSAL = "universal"  # AI-powered extraction for any language/SDK
+    MODULAR = "modular"  # Pre-generated modular contracts from .warden/contracts/modules/
 
     # Mobile/Frontend platforms
     FLUTTER = "flutter"
@@ -217,6 +218,10 @@ class OperationDefinition:
                 result['response'] = self.metadata['response_fields']
             elif self.output_type:
                 result['response'] = [f"body: {self.output_type}"]
+
+            # Include source_file for modularization support
+            if self.source_file:
+                result['source_file'] = self.source_file
                 
             return result
 

@@ -50,10 +50,16 @@ class LLMSuggestionGenerator:
         self.semantic_search_service = semantic_search_service
         self.rate_limiter = rate_limiter
 
-        logger.info(
-            "llm_suggestion_generator_initialized",
-            has_context=bool(context),
-        )
+    def _get_val(self, obj: Any, key: str, default: Any = None) -> Any:
+        """
+        Safely get a value from either a dictionary or an object.
+        Supports both dict.get() and getattr().
+        """
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
 
     async def generate_suggestions_async(
         self,
@@ -422,15 +428,10 @@ class LLMSuggestionGenerator:
 
         formatted = []
         for finding in findings:
-            # Handle both dict and object access
-            if isinstance(finding, dict):
-                finding_type = finding.get('type', 'issue')
-                message = finding.get('message', 'Security issue')
-                line = finding.get('line_number', 'unknown')
-            else:
-                finding_type = getattr(finding, 'type', 'issue')
-                message = getattr(finding, 'message', 'Security issue')
-                line = getattr(finding, 'line_number', 'unknown')
+            # Handle both dict and object access safely
+            finding_type = self._get_val(finding, 'type', 'issue')
+            message = self._get_val(finding, 'message', 'Security issue')
+            line = self._get_val(finding, 'line_number', 'unknown')
             
             formatted.append(f"- {finding_type}: {message} (line {line})")
 

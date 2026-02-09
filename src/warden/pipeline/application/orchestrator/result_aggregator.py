@@ -9,6 +9,7 @@ from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.pipeline.domain.models import ValidationPipeline
 from warden.validation.domain.frame import Finding
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.utils.finding_utils import get_finding_attribute
 
 logger = get_logger(__name__)
 
@@ -53,25 +54,32 @@ class ResultAggregator:
         # Ensure validated_issues is always set, even if empty
         validated_issues = []
         for finding in all_findings:
-            # Convert finding to dict if it has to_dict method
-            if hasattr(finding, 'to_dict'):
-                finding_dict = finding.to_dict()
-            elif isinstance(finding, dict):
-                finding_dict = finding
-            else:
-                # If it's neither, skip it (shouldn't happen but be safe)
-                logger.warning(
-                    "Unexpected finding type",
-                    finding_type=type(finding).__name__
-                )
-                continue
+            # Safely extract values regardless of type (Chaos/Pareto Lens)
+            finding_dict = {
+                "id": get_finding_attribute(finding, "id"),
+                "type": get_finding_attribute(finding, "type"),
+                "message": get_finding_attribute(finding, "message"),
+                "location": get_finding_attribute(finding, "location"),
+                "file_context": get_finding_attribute(finding, "file_context"),
+                "severity": get_finding_attribute(finding, "severity"),
+                "code_snippet": get_finding_attribute(finding, "code_snippet"),
+            }
 
             # Check if it's a false positive
-            if not self._is_false_positive(
+            is_fp = self._is_false_positive(
                 finding_dict,
                 getattr(context, 'suppression_rules', [])
-            ):
+            )
+            
+            if not is_fp:
                 validated_issues.append(finding_dict)
+            else:
+                logger.info(
+                    "finding_suppressed",
+                    finding_id=finding_dict.get("id"),
+                    reason="suppression_rule_match",
+                    file_path=finding_dict.get("file_path")
+                )
 
         context.validated_issues = validated_issues
 
@@ -105,15 +113,19 @@ class ResultAggregator:
         for rule in suppression_rules:
             # Handle both dict and string rules
             if isinstance(rule, dict):
-                if (
-                    rule.get("issue_type") == finding.get("type") and
-                    rule.get("file_context") == finding.get("file_context")
-                ):
+                # Ensure safe access for rule and finding (Pareto Lens)
+                rule_type = rule.get("issue_type")
+                finding_type = get_finding_attribute(finding, "type")
+                rule_context = rule.get("file_context")
+                finding_context = get_finding_attribute(finding, "file_context")
+                
+                if rule_type == finding_type and rule_context == finding_context:
                     return True
             elif isinstance(rule, str):
                 # Simple string rule matching
-                if (finding.get("type") == rule or
-                    finding.get("message", "").find(rule) != -1):
+                finding_type = get_finding_attribute(finding, "type")
+                finding_msg = get_finding_attribute(finding, "message", "")
+                if (finding_type == rule or finding_msg.find(rule) != -1):
                     return True
         return False
 

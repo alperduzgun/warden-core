@@ -201,6 +201,12 @@ class IgnoreMatcher:
             relative_path = file_path.relative_to(self.project_root)
             rel_str = str(relative_path)
             
+            # Check directory ignores (parent directories)
+            for part in relative_path.parts[:-1]:
+                if self.should_ignore_directory(part):
+                    logger.debug("directory_ignored", dir=part, file=rel_str)
+                    return True
+
             for pattern in self._path_patterns:
                 if self._match_path_pattern(rel_str, pattern):
                     logger.debug("path_ignored", file=rel_str, pattern=pattern)

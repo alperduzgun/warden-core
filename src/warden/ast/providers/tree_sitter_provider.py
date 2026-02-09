@@ -521,9 +521,12 @@ class TreeSitterProvider(IASTProvider):
 
             # Classes & Interfaces
             "class_declaration": ASTNodeType.CLASS,
+            "class_definition": ASTNodeType.CLASS, # Dart/Python/Others
             "class": ASTNodeType.CLASS,
             "interface_declaration": ASTNodeType.INTERFACE,
             "type_alias_declaration": ASTNodeType.INTERFACE, # Often used as interface in TS
+            "enum_declaration": ASTNodeType.ENUM,
+            "enum_definition": ASTNodeType.ENUM,
 
             # Functions & Methods
             "function_declaration": ASTNodeType.FUNCTION,
@@ -570,6 +573,13 @@ class TreeSitterProvider(IASTProvider):
             "namespace_declaration": ASTNodeType.MODULE,
             "property_declaration": ASTNodeType.PROPERTY,
             "package_declaration": ASTNodeType.MODULE,
+
+            # Fields & Properties
+            "field_declaration": ASTNodeType.FIELD,
+            "variable_declaration": ASTNodeType.VARIABLE_DECLARATION,
+            "formal_parameter": ASTNodeType.FIELD, # For data constructors
+            "field_formal_parameter": ASTNodeType.FIELD, # Dart
+            "declaration": ASTNodeType.FIELD, # Heuristic fallback
         }
         
         if t in mappings:

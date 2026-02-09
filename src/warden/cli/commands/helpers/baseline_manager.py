@@ -15,6 +15,7 @@ from typing import Dict, Optional, Any, List, Set, Tuple
 from datetime import datetime, timedelta, timezone
 
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.utils.finding_utils import get_finding_attribute
 
 logger = get_logger(__name__)
 
@@ -505,10 +506,10 @@ class BaselineManager:
                 debt_item = {
                     "fingerprint": fp,
                     "first_seen": now,
-                    "rule_id": finding.get("id") or finding.get("rule_id") or finding.get("ruleId"),
-                    "file_path": finding.get("file_path") or finding.get("path") or finding.get("file"),
-                    "message": finding.get("message"),
-                    "severity": finding.get("severity")
+                    "rule_id": get_finding_attribute(finding, "id") or get_finding_attribute(finding, "rule_id") or get_finding_attribute(finding, "ruleId"),
+                    "file_path": get_finding_attribute(finding, "file_path") or get_finding_attribute(finding, "path") or get_finding_attribute(finding, "file"),
+                    "message": get_finding_attribute(finding, "message"),
+                    "severity": get_finding_attribute(finding, "severity")
                 }
                 module_baseline.debt_items.append(debt_item)
                 new_debt += 1

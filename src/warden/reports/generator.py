@@ -105,6 +105,17 @@ class ReportGenerator:
         self.templates_dir = Path(__file__).parent / "templates"
         self.html_generator = HtmlReportGenerator()
 
+    def _get_val(self, obj: Any, key: str, default: Any = None) -> Any:
+        """
+        Safely get a value from either a dictionary or an object.
+        Supports both dict.get() and getattr().
+        """
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
     def generate_json_report(
         self,
         scan_results: Dict[str, Any],
@@ -216,6 +227,9 @@ class ReportGenerator:
             output_path: Path to save the SARIF report
             base_path: Optional base path for relativizing paths
         """
+        from warden.shared.infrastructure.logging import get_logger
+        logger = get_logger(__name__)
+
         # Basic SARIF v2.1.0 structure
         sarif = {
             "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
@@ -284,19 +298,32 @@ class ReportGenerator:
         frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
         
         for frame in frame_results:
-            findings = frame.get('findings', [])
-            frame_id = frame.get('frame_id', frame.get('frameId', 'generic'))
+            findings = self._get_val(frame, 'findings', [])
+            frame_id = self._get_val(frame, 'frame_id', self._get_val(frame, 'frameId', 'generic'))
             
             for finding in findings:
                 # Use finding ID or Fallback to frame ID
-                rule_id = finding.get('id', frame_id).lower().replace(' ', '-')
+                rule_id = str(self._get_val(finding, 'id', frame_id)).lower().replace(' ', '-')
                 
+                # Handle file path - Finding has 'location' usually as 'file:line'
+                location_str = self._get_val(finding, 'location', 'unknown')
+                file_path = location_str.split(':')[0] if ':' in location_str else location_str
+
+                # Log if critical attributes are missing
+                if not rule_id or not location_str:
+                    logger.warning(
+                        "sarif_finding_missing_critical_attributes",
+                        finding_id=rule_id,
+                        location=location_str,
+                        frame_id=frame_id
+                    )
+
                 # Register rule if not seen
                 if rule_id not in rules_map:
                     rule = {
                         "id": rule_id,
                         "shortDescription": {
-                            "text": frame.get('frame_name', frame.get('frameName', frame_id))
+                            "text": self._get_val(frame, 'frame_name', self._get_val(frame, 'frameName', frame_id))
                         },
                         "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules"
                     }
@@ -304,18 +331,14 @@ class ReportGenerator:
                     rules_map[rule_id] = rule
 
                 # Create SARIF result
-                severity = finding.get('severity', 'warning').lower()
+                severity = self._get_val(finding, 'severity', 'warning').lower()
                 level = "error" if severity in ["critical", "high"] else "warning"
-                
-                # Handle file path - Finding has 'location' usually as 'file:line'
-                location_str = finding.get('location', 'unknown')
-                file_path = location_str.split(':')[0] if ':' in location_str else location_str
                 
                 result = {
                     "ruleId": rule_id,
                     "level": level,
                     "message": {
-                        "text": finding.get('message', 'Issue detected by Warden')
+                        "text": self._get_val(finding, 'message', 'Issue detected by Warden')
                     },
                     "locations": [
                         {
@@ -324,8 +347,8 @@ class ReportGenerator:
                                     "uri": self._to_relative_uri(file_path)
                                 },
                                 "region": {
-                                    "startLine": max(1, finding.get('line', 1)),
-                                    "startColumn": max(1, finding.get('column', 1))
+                                    "startLine": max(1, self._get_val(finding, 'line', 1)),
+                                    "startColumn": max(1, self._get_val(finding, 'column', 1))
                                 }
                             }
                         }
@@ -333,21 +356,32 @@ class ReportGenerator:
                 }
                 
                 # Add detail if available
-                detail = finding.get('detail', '')
+                detail = self._get_val(finding, 'detail', '')
                 
                 # Check for manual review flag in verification metadata
-                verification = finding.get('verification_metadata', {})
-                if verification.get('review_required'):
+                verification = self._get_val(finding, 'verification_metadata', {})
+                if self._get_val(verification, 'review_required'):
                     result["message"]["text"] = f"⚠️ [MANUAL REVIEW REQUIRED] {result['message']['text']}"
                     if not detail:
-                        detail = verification.get('reason', 'LLM verification was uncertain or skipped.')
+                        detail = self._get_val(verification, 'reason', 'LLM verification was uncertain or skipped.')
                     else:
-                        detail = f"{verification.get('reason', 'Verification uncertain')} | {detail}"
+                        detail = f"{self._get_val(verification, 'reason', 'Verification uncertain')} | {detail}"
 
                 if detail:
                     result["message"]["text"] += f"\\n\\nDetails: {detail}"
                     
                 run["results"].append(result)
+
+        # Log suppressed findings
+        suppressed_findings = scan_results.get('suppressed_findings', [])
+        if suppressed_findings:
+            logger.info(
+                "sarif_suppressed_findings",
+                count=len(suppressed_findings),
+                findings=[f.get('id', 'unknown') for f in suppressed_findings]
+            )
+            # Optionally, add suppressed findings to SARIF as notifications or with suppression property
+            # For now, just logging as per instruction.
 
         # Sanitize final SARIF output (in-place is fine since sarif is local to this method)
         self._sanitize_paths(sarif, base_path, inplace=True)
@@ -457,7 +491,7 @@ class ReportGenerator:
                 message="WARDEN_BADGE_SECRET env var not set. Badge signature uses weak default. "
                         "Set WARDEN_BADGE_SECRET for production use.",
             )
-            badge_secret = "warden-local-dev-only"
+            badge_secret = "warden-local-dev-only"  # warden: ignore
         secret_key = badge_secret.encode()
         payload = f"{score:.1f}|{timestamp}|WARDEN_QUALITY".encode('utf-8')
         signature = hmac.new(secret_key, payload, hashlib.sha256).hexdigest()

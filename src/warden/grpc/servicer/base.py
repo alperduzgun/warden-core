@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 # Optional: structured logging
 try:
     from warden.shared.infrastructure.logging import get_logger
+    from warden.shared.utils.finding_utils import get_finding_attribute
 
     logger = get_logger(__name__)
 except ImportError:
@@ -148,26 +149,26 @@ class WardenServicerBase:
         For persistence, use track_issue_async instead.
         """
         hash_content = (
-            f"{finding.get('title', '')}"
-            f"{finding.get('file_path', '')}"
-            f"{finding.get('line_number', 0)}"
+            f"{get_finding_attribute(finding, 'title', '')}"
+            f"{get_finding_attribute(finding, 'file_path', '')}"
+            f"{get_finding_attribute(finding, 'line_number', 0)}"
         )
         content_hash = hashlib.sha256(hash_content.encode()).hexdigest()[:16]
 
-        issue_id = finding.get("id", str(uuid.uuid4()))
+        issue_id = get_finding_attribute(finding, "id", str(uuid.uuid4()))
 
         if content_hash not in [i.get("hash") for i in self._issues.values()]:
             self._issues[issue_id] = {
                 "id": issue_id,
                 "hash": content_hash,
-                "title": finding.get("title", ""),
-                "description": finding.get("description", ""),
-                "severity": finding.get("severity", "medium"),
+                "title": get_finding_attribute(finding, "title", ""),
+                "description": get_finding_attribute(finding, "description", ""),
+                "severity": get_finding_attribute(finding, "severity", "medium"),
                 "state": "open",
-                "file_path": finding.get("file_path", ""),
-                "line_number": finding.get("line_number", 0),
-                "code_snippet": finding.get("code_snippet", ""),
-                "frame_id": finding.get("frame_id", ""),
+                "file_path": get_finding_attribute(finding, "file_path", ""),
+                "line_number": get_finding_attribute(finding, "line_number", 0),
+                "code_snippet": get_finding_attribute(finding, "code_snippet", ""),
+                "frame_id": get_finding_attribute(finding, "frame_id", ""),
                 "first_detected": datetime.now().isoformat(),
                 "last_seen": datetime.now().isoformat(),
                 "occurrence_count": 1,
@@ -195,13 +196,13 @@ class WardenServicerBase:
             The created/updated issue dict
         """
         hash_content = (
-            f"{finding.get('title', '')}"
-            f"{finding.get('file_path', '')}"
-            f"{finding.get('line_number', 0)}"
+            f"{get_finding_attribute(finding, 'title', '')}"
+            f"{get_finding_attribute(finding, 'file_path', '')}"
+            f"{get_finding_attribute(finding, 'line_number', 0)}"
         )
         content_hash = hashlib.sha256(hash_content.encode()).hexdigest()[:16]
 
-        issue_id = finding.get("id", str(uuid.uuid4()))
+        issue_id = get_finding_attribute(finding, "id", str(uuid.uuid4()))
         is_new = True
 
         # Check if issue already exists by hash
@@ -216,14 +217,14 @@ class WardenServicerBase:
             issue_data = {
                 "id": issue_id,
                 "hash": content_hash,
-                "title": finding.get("title", ""),
-                "description": finding.get("description", ""),
-                "severity": finding.get("severity", "medium"),
+                "title": get_finding_attribute(finding, "title", ""),
+                "description": get_finding_attribute(finding, "description", ""),
+                "severity": get_finding_attribute(finding, "severity", "medium"),
                 "state": "open",
-                "file_path": finding.get("file_path", ""),
-                "line_number": finding.get("line_number", 0),
-                "code_snippet": finding.get("code_snippet", ""),
-                "frame_id": finding.get("frame_id", ""),
+                "file_path": get_finding_attribute(finding, "file_path", ""),
+                "line_number": get_finding_attribute(finding, "line_number", 0),
+                "code_snippet": get_finding_attribute(finding, "code_snippet", ""),
+                "frame_id": get_finding_attribute(finding, "frame_id", ""),
                 "first_detected": datetime.now().isoformat(),
                 "last_seen": datetime.now().isoformat(),
                 "occurrence_count": 1,

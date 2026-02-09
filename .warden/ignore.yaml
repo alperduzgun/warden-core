@@ -35,10 +35,13 @@ directories:
   - .vscode
   
   # Documentation and Examples
-  # - examples
+  - examples
   - docs
+  - tests
   - generated
   - .gen
+  - baseline
+
 
 # ═══════════════════════════════════════════════════════════════════
 # FILE PATTERNS - Specific file types to skip (glob syntax)

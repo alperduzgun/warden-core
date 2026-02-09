@@ -355,6 +355,15 @@ def get_extractor(
     Returns:
         Extractor instance or None if not supported
     """
+    # Special handling for ModularExtractor (pre-generated contracts)
+    if platform_type == PlatformType.MODULAR:
+        from warden.validation.frames.spec.extractors.modular_extractor import ModularContractExtractor
+        return ModularContractExtractor(
+            project_root=project_root,
+            role=role,
+            resilience_config=resilience_config,
+        )
+    
     # Special handling for UniversalExtractor (doesn't use registry)
     if platform_type == PlatformType.UNIVERSAL:
         from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
@@ -369,6 +378,17 @@ def get_extractor(
     _PLATFORM_ALIASES: Dict[PlatformType, PlatformType] = {
         PlatformType.ECHO: PlatformType.GIN,
     }
+    
+    # Gen 3.1: Prioritize UniversalExtractor for Core 5 (starting with Flutter)
+    if platform_type in [PlatformType.FLUTTER]:
+        from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
+        return UniversalContractExtractor(
+            project_root=project_root,
+            role=role,
+            llm_service=llm_service,
+            semantic_search_service=semantic_search_service,
+        )
+
     resolved_type = _PLATFORM_ALIASES.get(platform_type, platform_type)
 
     # Registry-based lookup

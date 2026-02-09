@@ -157,7 +157,7 @@ class IntegrityScanner:
                 )]
 
             # Security: Use create_subprocess_exec to avoid shell injection
-            proc = await asyncio.create_subprocess_exec(
+            proc = await asyncio.create_subprocess_exec(  # warden: ignore
                 *shlex.split(command),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

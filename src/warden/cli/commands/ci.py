@@ -224,10 +224,11 @@ def ci_init(
 
 @ci_app.command("update")
 def ci_update(
-    preserve_custom: bool = typer.Option(
-        True,
-        "--preserve-custom/--no-preserve-custom",
-        help="Preserve custom sections in workflow files"
+    no_preserve_custom: bool = typer.Option(
+        False,
+        "--no-preserve-custom",
+        help="Overwrite custom sections in workflow files",
+        flag_value=True
     ),
     dry_run: bool = typer.Option(
         False,
@@ -238,7 +239,7 @@ def ci_update(
     """
     Update CI workflows from latest templates.
 
-    Preserves custom sections marked with WARDEN-CUSTOM comments.
+    Preserves custom sections marked with WARDEN-CUSTOM comments unless --no-preserve-custom is used.
     Use --dry-run to preview changes without applying them.
 
     Examples:
@@ -255,7 +256,7 @@ def ci_update(
 
     try:
         result = manager.update(
-            preserve_custom=preserve_custom,
+            preserve_custom=not no_preserve_custom,
             dry_run=dry_run,
         )
     except CIManagerError as e:

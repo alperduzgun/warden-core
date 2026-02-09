@@ -432,17 +432,17 @@ Return patterns as JSON."""
         suppression_rules = []
 
         for finding in findings:
-            file_path = finding.get("file_path", "")
+            file_path = self._get_val(finding, "file_path", "")
             file_context = file_contexts.get(file_path, {})
             context_type = file_context.get("context", "PRODUCTION")
 
             # Suppress test file vulnerabilities
-            if context_type == "TEST" and finding.get("type") in [
+            if context_type == "TEST" and self._get_val(finding, "type") in [
                 "hardcoded_password",
                 "sql_injection",
             ]:
                 suppression_rules.append({
-                    "finding_id": finding.get("id"),
+                    "finding_id": self._get_val(finding, "id"),
                     "reason": SuppressionReason.TEST_CODE.value,
                     "explanation": "Intentional vulnerability in test file",
                 })
@@ -450,7 +450,7 @@ Return patterns as JSON."""
             # Suppress example code issues
             elif context_type == "EXAMPLE":
                 suppression_rules.append({
-                    "finding_id": finding.get("id"),
+                    "finding_id": self._get_val(finding, "id"),
                     "reason": SuppressionReason.EXAMPLE_CODE.value,
                     "explanation": "Educational example code",
                 })

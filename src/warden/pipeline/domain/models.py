@@ -231,6 +231,9 @@ class PipelineResult(BaseDomainModel):
     medium_findings: int
     low_findings: int
     manual_review_findings: int = 0
+    
+    # Findings List (for CLI retrieval)
+    findings: List[Dict[str, Any]] = Field(default_factory=list)
 
     # Frame results
     frame_results: List[FrameResult] = Field(default_factory=list)
@@ -264,6 +267,9 @@ class PipelineResult(BaseDomainModel):
         data["highFindings"] = self.high_findings
         data["mediumFindings"] = self.medium_findings
         data["lowFindings"] = self.low_findings
+        
+        # Include findings list
+        data["findings"] = self.findings
 
         # Add token usage
         data["llmUsage"] = {

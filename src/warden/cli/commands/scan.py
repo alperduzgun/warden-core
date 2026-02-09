@@ -179,19 +179,18 @@ def _display_memory_stats(snapshot) -> None:
 
 
 def scan_command(
-    ctx: typer.Context,
-    paths: List[str] = typer.Argument(None, help="Paths to scan (files or directories). Defaults to ."),
+    paths: Optional[List[str]] = typer.Argument(None, help="Files or directories to scan"),
     frames: Optional[List[str]] = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
     format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf, shield/badge"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
-    no_ai: bool = typer.Option(False, "--no-ai", help="Shorthand for --level basic"),
+    no_ai: bool = typer.Option(False, "--disable-ai", help="Shorthand for --level basic"),
     memory_profile: bool = typer.Option(False, "--memory-profile", help="Enable memory profiling and leak detection"),
     ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
     base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
-    update_baseline: bool = typer.Option(True, "--update-baseline/--no-update-baseline", help="Update baseline after scan (default: enabled, use --no-update-baseline for CI/PR)"),
+    no_update_baseline: bool = typer.Option(False, "--no-update-baseline", help="Skip baseline update after scan", flag_value=True),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -209,10 +208,20 @@ def scan_command(
         # Handle --no-ai shorthand
         if no_ai:
             level = "basic"
+        
+        # Enforce AI-First Philosophy
+        if level == "basic":
+            console.print("\n[bold red blink]💀 CRITICAL WARNING: ZOMBIE MODE ACTIVE[/bold red blink]")
+            console.print("[bold red]Warden is running without AI. Capability is reduced by 99%.[/bold red]")
+            console.print("[red]Heuristic scanning is a fallback, not a feature. Expect poor results.[/red]\n")
 
         # Default to "." if no paths provided AND no diff mode
         if not paths and not diff:
             paths = ["."]
+        elif not paths:
+            paths = []
+
+        # Incremental Scanning Logic (--diff mode)
 
         # Incremental Scanning Logic (--diff mode)
         baseline_fingerprints = None
@@ -278,7 +287,7 @@ def scan_command(
         exit_code = asyncio.run(_run_scan_async(
             paths, frames, format, output, verbose, level,
             memory_profile, ci, baseline_fingerprints, intelligence_context,
-            update_baseline=update_baseline
+            update_baseline=not no_update_baseline
         ))
         
         # Display memory stats if profiling was enabled
@@ -614,11 +623,14 @@ async def _run_scan_async(
                         with open(config_path) as f:
                             config = yaml.safe_load(f)
                         
+                        # Support both 'ci.output' and 'advanced.output' (Legacy vs Modern config)
                         ci_config = config.get('ci', {})
-                        outputs = ci_config.get('output', [])
+                        advanced_config = config.get('advanced', {})
+                        outputs = ci_config.get('output', []) or advanced_config.get('output', [])
                         
                         if outputs:
-                            console.print("\n[bold]📝 Generating Reports:[/bold]")
+                            if verbose:
+                                console.print(f"\n[dim]📝 Found {len(outputs)} configured output(s)...[/dim]")
                             generator = ReportGenerator()
                             
                             for out in outputs:
@@ -666,7 +678,7 @@ async def _run_scan_async(
                         import traceback
                         traceback.print_exc()
 
-        # Generate report if requested
+        # Generate report if requested (Explicit flag)
         if output and final_result_data:
             from warden.reports.generator import ReportGenerator
             generator = ReportGenerator()
@@ -675,22 +687,25 @@ async def _run_scan_async(
 
             console.print(f"\n[dim]Generating {format.upper()} report to {output}...[/dim]")
             
-            if format == "json":
-                generator.generate_json_report(final_result_data, out_path)
-            elif format == "sarif":
-                generator.generate_sarif_report(final_result_data, out_path)
-            elif format == "junit":
-                generator.generate_junit_report(final_result_data, out_path)
-            elif format == "html":
-                generator.generate_html_report(final_result_data, out_path)
-            elif format == "pdf":
-                generator.generate_pdf_report(final_result_data, out_path)
-            elif format == "shield":
-                generator.generate_shield_report(final_result_data, out_path)
-            elif format == "badge":
-                generator.generate_svg_badge(final_result_data, out_path)
-            
-            console.print("[bold green]Report saved![/bold green]")
+            try:
+                if format == "json":
+                    generator.generate_json_report(final_result_data, out_path)
+                elif format == "sarif":
+                    generator.generate_sarif_report(final_result_data, out_path)
+                elif format == "junit":
+                    generator.generate_junit_report(final_result_data, out_path)
+                elif format == "html":
+                    generator.generate_html_report(final_result_data, out_path)
+                elif format == "pdf":
+                    generator.generate_pdf_report(final_result_data, out_path)
+                elif format == "shield":
+                    generator.generate_shield_report(final_result_data, out_path)
+                elif format == "badge":
+                    generator.generate_svg_badge(final_result_data, out_path)
+                
+                console.print("[bold green]Report saved![/bold green]")
+            except Exception as e:
+                console.print(f"[red]❌ Failed to save report: {e}[/red]")
 
         # Save lightweight AI status file (Token-optimized)
         try:

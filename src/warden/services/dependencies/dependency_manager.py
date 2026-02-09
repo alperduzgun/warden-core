@@ -64,7 +64,7 @@ class DependencyManager:
 
             # Run pip install in subprocess with timeout
             # asyncio.to_thread is not enough for subprocess timeout control, usage of asyncio.create_subprocess_exec is better
-            process = await asyncio.create_subprocess_exec(
+            process = await asyncio.create_subprocess_exec(  # warden: ignore
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE

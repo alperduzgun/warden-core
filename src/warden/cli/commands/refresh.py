@@ -191,7 +191,7 @@ async def _refresh_intelligence_async(
 def refresh_command(
     ctx: typer.Context,
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration even if recent"),
-    intelligence: bool = typer.Option(True, "--intelligence/--no-intelligence", help="Refresh intelligence"),
+    no_intelligence: bool = typer.Option(False, "--no-intelligence", help="Skip intelligence refresh", flag_value=True),
     baseline: bool = typer.Option(False, "--baseline", "-b", help="Also refresh baseline (runs scan)"),
     module: Optional[str] = typer.Option(None, "--module", "-m", help="Refresh only specific module"),
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick mode: only analyze new files"),
@@ -206,11 +206,12 @@ def refresh_command(
     Examples:
         warden refresh                  # Refresh intelligence only
         warden refresh --force          # Force refresh even if recent
+        warden refresh --no-intelligence # Skip intelligence refresh
         warden refresh --module auth    # Refresh only auth module
         warden refresh --quick          # Only analyze new files
         warden refresh --baseline       # Also update baseline (slow)
     """
-    console.print("[bold cyan]🔄 Warden Refresh[/bold cyan]\n")
+    console.print("\n[bold cyan]🔄 Warden Refresh[/bold cyan]")
 
     root = Path.cwd()
     warden_dir = root / ".warden"
@@ -231,7 +232,7 @@ def refresh_command(
         console.print(f"[dim]Mode: {', '.join(mode_info)}[/dim]\n")
 
     # Refresh intelligence
-    if intelligence:
+    if not no_intelligence:
         console.print("[bold blue]🧠 Refreshing Intelligence...[/bold blue]")
         try:
             refreshed = asyncio.run(_refresh_intelligence_async(root, force, module, quick))

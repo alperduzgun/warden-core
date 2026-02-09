@@ -110,15 +110,15 @@ Return fixes as JSON with code examples."""
         prompt = f"""Generate a security fix for this vulnerability:
 
 VULNERABILITY:
-Type: {finding.get('type', 'unknown')}
-Severity: {finding.get('severity', 'medium')}
-Message: {finding.get('message', '')}
-File: {finding.get('file_path', '')}
-Line: {finding.get('line_number', 0)}
+Type: {self._get_val(finding, 'type', 'unknown')}
+Severity: {self._get_val(finding, 'severity', 'medium')}
+Message: {self._get_val(finding, 'message', '')}
+File: {self._get_val(finding, 'file_path', '')}
+Line: {self._get_val(finding, 'line_number', 0)}
 
 VULNERABLE CODE:
 ```{language}
-{finding.get('code_snippet', '')}
+{self._get_val(finding, 'code_snippet', '')}
 ```
 
 SURROUNDING CODE CONTEXT:
@@ -216,10 +216,10 @@ Return as JSON with:
         if llm_result:
             fortification = Fortification(
                 title=llm_result["title"],
-                detail=f"Fix for {finding.get('type', 'vulnerability')}",
-                file_path=finding.get("file_path", ""),
-                line_number=finding.get("line_number", 0),
-                severity=finding.get("severity", "medium"),
+                detail=f"Fix for {self._get_val(finding, 'type', 'vulnerability')}",
+                file_path=self._get_val(finding, 'file_path', ""),
+                line_number=self._get_val(finding, 'line_number', 0),
+                severity=self._get_val(finding, 'severity', "medium"),
                 original_code=llm_result["original_code"],
                 suggested_code=llm_result["suggested_code"],
                 explanation=llm_result["explanation"],
@@ -228,7 +228,7 @@ Return as JSON with:
 
             logger.info(
                 "fortification_generated",
-                type=finding.get("type"),
+                type=self._get_val(finding, "type"),
                 confidence=0.85,
             )
 
@@ -280,10 +280,10 @@ Return as JSON with:
             if llm_result:
                 fortification = Fortification(
                     title=llm_result["title"],
-                    detail=f"Fix for {finding.get('type', 'vulnerability')}",
-                    file_path=finding.get("file_path", ""),
-                    line_number=finding.get("line_number", 0),
-                    severity=finding.get("severity", "medium"),
+                    detail=f"Fix for {self._get_val(finding, 'type', 'vulnerability')}",
+                    file_path=self._get_val(finding, 'file_path', ""),
+                    line_number=self._get_val(finding, 'line_number', 0),
+                    severity=self._get_val(finding, 'severity', "medium"),
                     original_code=llm_result["original_code"],
                     suggested_code=llm_result["suggested_code"],
                     explanation=llm_result["explanation"],
@@ -300,12 +300,12 @@ Return as JSON with:
 
     def _generate_template_fix(
         self,
-        finding: Dict[str, Any],
+        finding: Any, # Use Any to support both dict and Finding
         framework: str,
         language: str,
     ) -> Optional[Fortification]:
         """Generate template-based fix as fallback."""
-        vuln_type = finding.get("type", "").lower()
+        vuln_type = self._get_val(finding, "type", "").lower()
 
         templates = {
             "sql_injection": self._sql_injection_template,
@@ -323,12 +323,12 @@ Return as JSON with:
 
     def _sql_injection_template(
         self,
-        finding: Dict[str, Any],
+        finding: Any,
         framework: str,
         language: str,
     ) -> Fortification:
         """SQL injection fix template."""
-        original = finding.get("code_snippet", "")
+        original = self._get_val(finding, "code_snippet", "")
 
         if language == CodeLanguage.PYTHON.value or language == CodeLanguage.PYTHON:
             if framework == "django":
@@ -403,9 +403,9 @@ safe_input = html.escape(user_input)"""
         return Fortification(
             title="XSS Protection",
             detail="Escape HTML in user-generated content",
-            file_path=finding.get("file_path", ""),
-            line_number=finding.get("line_number", 0),
-            severity=finding.get("severity", "high"),
+            file_path=self._get_val(finding, "file_path", ""),
+            line_number=self._get_val(finding, "line_number", 0),
+            severity=self._get_val(finding, "severity", "high"),
             original_code=original,
             suggested_code=suggested,
             explanation="HTML escaping prevents XSS by converting special characters to HTML entities",
@@ -447,9 +447,9 @@ if (!API_KEY) {
         return Fortification(
             title="Remove Hardcoded Secret",
             detail="Move sensitive data to environment variables",
-            file_path=finding.get("file_path", ""),
-            line_number=finding.get("line_number", 0),
-            severity=finding.get("severity", "critical"),
+            file_path=self._get_val(finding, "file_path", ""),
+            line_number=self._get_val(finding, "line_number", 0),
+            severity=self._get_val(finding, "severity", "critical"),
             original_code=original,
             suggested_code=suggested,
             explanation="Environment variables keep secrets out of source code and version control",
@@ -505,9 +505,9 @@ function safePathJoin(userInput) {
         return Fortification(
             title="Path Traversal Protection",
             detail="Validate and sanitize file paths",
-            file_path=finding.get("file_path", ""),
-            line_number=finding.get("line_number", 0),
-            severity=finding.get("severity", "high"),
+            file_path=self._get_val(finding, "file_path", ""),
+            line_number=self._get_val(finding, "line_number", 0),
+            severity=self._get_val(finding, "severity", "high"),
             original_code=original,
             suggested_code=suggested,
             explanation="Path validation prevents directory traversal attacks by restricting file access",

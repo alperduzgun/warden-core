@@ -18,7 +18,7 @@ from warden.pipeline.domain.models import (
 from warden.pipeline.domain.enums import ExecutionStrategy
 from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
-from warden.validation.domain.frame import CodeFile, ValidationFrame
+from warden.validation.domain.frame import CodeFile, ValidationFrame, Finding, Remediation
 from warden.shared.infrastructure.logging import get_logger
 
 # Import helper modules
@@ -156,7 +156,7 @@ class FrameExecutor:
                         duration=0.5,
                         issues_found=len(global_violations),
                         is_blocker=any(v.is_blocker for v in global_violations),
-                        findings=global_violations,
+                        findings=[self._convert_to_finding(v) for v in global_violations],
                         metadata={"engine": "python_rules"}
                     )
                     
@@ -446,7 +446,7 @@ class FrameExecutor:
                         duration=time.perf_counter() - frame_start_time,
                         issues_found=len(pre_violations),
                         is_blocker=True,
-                        findings=[],
+                        findings=[self._convert_to_finding(v) for v in pre_violations],
                         metadata={"failure_reason": "pre_rules_blocker_violation"}
                     )
                     
@@ -706,6 +706,12 @@ class FrameExecutor:
         frame_result.pre_rule_violations = pre_violations if pre_violations else None
         frame_result.post_rule_violations = post_violations if post_violations else None
 
+        # Also append pre/post violations to findings list so they appear in reports
+        if pre_violations:
+             frame_result.findings.extend([self._convert_to_finding(v) for v in pre_violations])
+        if post_violations:
+             frame_result.findings.extend([self._convert_to_finding(v) for v in post_violations])
+
         # Store frame result with violations
         context.frame_results[frame.frame_id] = {
             'result': frame_result,
@@ -782,6 +788,23 @@ class FrameExecutor:
     ) -> bool:
         """Check if any violations are blockers."""
         return any(v.is_blocker for v in violations)
+
+    def _convert_to_finding(self, violation: CustomRuleViolation) -> Finding:
+        """Convert CustomRuleViolation to Finding."""
+        return Finding(
+            id=violation.rule_id,
+            severity=violation.severity.value if hasattr(violation.severity, 'value') else str(violation.severity),
+            message=violation.message,
+            location=f"{violation.file}:{violation.line}",
+            detail=violation.suggestion,
+            code=violation.code_snippet,
+            line=violation.line,
+            is_blocker=violation.is_blocker,
+            remediation=Remediation(
+                description=violation.suggestion,
+                code="" # No auto-fix code available from violation yet
+            ) if violation.suggestion else None
+        )
 
     def _calculate_coverage(self, code_files: List[CodeFile], findings: List[Any]) -> float:
         """

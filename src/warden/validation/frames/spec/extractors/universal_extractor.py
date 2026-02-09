@@ -128,15 +128,36 @@ class UniversalContractExtractor:
             "operations_extracted": 0,
             "models_extracted": 0,
             "enums_extracted": 0,
+            "ai_enabled": False, # Added ai_enabled to stats
         }
+        self.ai_enabled = False # Default to False, will be set by health check
 
     async def extract(self) -> Contract:
-        logger.info("universal_extraction_started", project=str(self.project_root), role=self.role.value)
+        """
+        Extract API contract using Universal Discovery logic (Gen 3.1).
+        """
+        start_time = time.time()
+        logger.info("universal_extraction_started", project=self.project_root.name, role=self.role.value)
+        
+        # 0. Pre-flight AI Health Check
+        ai_available = False
+        if self.llm_service:
+            try:
+                ai_available = await self.llm_service.is_available_async()
+                if not ai_available:
+                    logger.warning(
+                        "ai_extraction_degraded",
+                        reason="LLM service or configured model not available. Entering heuristic-only mode.",
+                        provider=self.llm_service.provider.value if hasattr(self.llm_service, 'provider') else 'unknown'
+                    )
+            except Exception as e:
+                logger.warning("ai_health_check_failed", error=str(e))
+        
+        self.ai_enabled = ai_available
+        self.stats["ai_enabled"] = ai_available # Update stats
         
         # Initialize providers (Fixed Step 2592)
         await self.ast_registry.discover_providers()
-        
-        start_time = time.time()
         
         # 1. Discover files
         code_files = self._discover_code_files()
@@ -317,29 +338,40 @@ class UniversalContractExtractor:
         if not name: return False
         
         # Blocklist (Noise)
-        blocklist = {
-            "print", "println", "printf", "console.log", "console.error", "length", "toString",
-            "add", "addAll", "remove", "clear", "contains", "map", "forEach", "filter", "reduce",
-            "require", "import", "export", "json.decode", "json.encode",
-            "setState", "initState", "dispose", "build", "super.initState",
-            "Text", "Column", "Row", "Container", "SizedBox", "Padding", "Center", "Align"
+        """Heuristic to filter out non-API calls."""
+        name_lower = name.lower()
+        
+        # Denylist (Common noise)
+        denylist = {
+            "log", "print", "debug", "assert", "expect", "push", "pop", "clear", "add", "remove",
+            "testwidgets", "expect", "pump", "pumpwidget", "tap", "entertext", "drag", "longpress",
+            "setstate", "initstate", "dispose", "build", "render"
         }
-        if name in blocklist: return False
-        
-        lower = name.lower()
-        if "test" in lower and "http" not in lower: return False
-        
-        # Allowlist
+        if name_lower in denylist or any(d == name_lower.split(".")[-1] for d in denylist):
+            return False
+            
+        # Allowlist (HTTP/API keywords) - Use exact/word boundary matching where possible
         api_keywords = {
             "http", "dio", "fetch", "axios", "api", "service", "client", "request",
             "query", "mutation", "subscription", "router", "app.get", "app.post",
-            "db.", "firestore", "collection", "doc", "firebase"
+            "db.", "firestore", "collection", "doc", "firebase", "send", "call",
+            "remote", "endpoint", "auth", "token"
         }
         
-        is_api = any(k in lower for k in api_keywords)
-        if is_api: return True
+        # HTTP Methods (Whole word only to avoid testWidgets matching 'get')
+        http_methods = {"get", "post", "put", "delete", "patch"}
         
-        return False
+        # Score-based relevance
+        score = 0
+        if any(k in name_lower for k in api_keywords): score += 2
+        
+        # Match HTTP methods as separate components (e.g. .get() or getSomething)
+        name_parts = name_lower.replace("_", ".").split(".")
+        if any(m in name_parts for m in http_methods): score += 2
+        
+        if any(name_lower.startswith(k) for k in ["api", "service", "http"]): score += 1
+        
+        return score >= 2
 
     def _heuristic_filter(self, candidates: List[APICallCandidate]) -> List[APICallCandidate]:
         """Filter candidates using lightweight heuristics beyond _is_relevant_candidate.
@@ -359,14 +391,23 @@ class UniversalContractExtractor:
             filtered.append(c)
         return filtered
 
-    async def _extract_operations(self, calls: List[APICallCandidate]) -> List[OperationDefinition]:
-        """Extract definitions in parallel using global ParallelBatchExecutor."""
+    async def _extract_operations(self, candidates: List[APICallCandidate]) -> List[OperationDefinition]:
+        """Extract high-level operation definitions using AI/Heuristics."""
+        if not candidates: return []
+        
+        # If AI is disabled or unavailable, use heuristics only
+        if not self.ai_enabled:
+            logger.info("using_pure_heuristics_for_operations", count=len(candidates))
+            return [self._create_fallback_operation(c) for c in candidates]
+        
+        # Batch processing with AI
+        batch_size = 50
         from warden.shared.infrastructure.resilience.parallel import ParallelBatchExecutor
         
         executor = ParallelBatchExecutor(concurrency_limit=4, item_timeout=30.0)
         
         results = await executor.execute_batch(
-            items=calls,
+            items=candidates, # Changed from 'calls' to 'candidates'
             task_fn=self._extract_single_operation,
             batch_name="spec_operation_extraction"
         )
@@ -508,7 +549,11 @@ Extract details.
             # Filter out known non-model classes (UI, etc)
             name = node.name or ""
             exclude_keywords = {"Widget", "State", "Page", "Screen", "View", "Controller", "Bloc"}
-            if not any(k in name for k in exclude_keywords):
+            
+            # Ensure it's not actually an enum (double check heuristic)
+            raw_type = node.attributes.get("original_type", "").lower()
+            
+            if not any(k in name for k in exclude_keywords) and "enum" not in raw_type:
                 models.append(node)
         
         for child in node.children:
@@ -516,11 +561,15 @@ Extract details.
         return models
 
     def _find_enum_nodes(self, node: ASTNode) -> List[ASTNode]:
-        """Find enum nodes based on original type (heuristic)."""
+        """Find enum nodes based on universal type or original type heuristic."""
         enums = []
-        raw_type = node.attributes.get("original_type", "").lower()
-        if "enum" in raw_type:
+        if node.node_type == ASTNodeType.ENUM:
             enums.append(node)
+        else:
+            # Fallback for unmapped enums
+            raw_type = node.attributes.get("original_type", "").lower()
+            if "enum" in raw_type:
+                enums.append(node)
         
         for child in node.children:
             enums.extend(self._find_enum_nodes(child))
@@ -530,24 +579,29 @@ Extract details.
         from warden.validation.frames.spec.models import FieldDefinition
         fields = []
         
-        # Look for fields/properties in children
-        for child in node.children:
-            if child.node_type in [ASTNodeType.FIELD, ASTNodeType.PROPERTY]:
-                field_name = child.name or ""
-                # Attempt to extract type (heuristic)
-                field_type = "any"
-                for grandchild in child.children:
-                    if grandchild.node_type == ASTNodeType.IDENTIFIER and grandchild.name != field_name:
-                        field_type = grandchild.name
-                        break
-                
-                if field_name:
-                    fields.append(FieldDefinition(
-                        name=field_name,
-                        type_name=field_type,
-                        source_file=str(file_path),
-                        source_line=child.location.start_line if child.location else 0
-                    ))
+        def find_fields_recursive(curr: ASTNode):
+            for child in curr.children:
+                if child.node_type in [ASTNodeType.FIELD, ASTNodeType.PROPERTY]:
+                    field_name = child.name or ""
+                    # Attempt to extract type (heuristic)
+                    field_type = "any"
+                    for grandchild in child.children:
+                        if grandchild.node_type == ASTNodeType.IDENTIFIER and grandchild.name != field_name:
+                            field_type = grandchild.name
+                            break
+                    
+                    if field_name:
+                        fields.append(FieldDefinition(
+                            name=field_name,
+                            type_name=field_type,
+                            source_file=str(file_path),
+                            source_line=child.location.start_line if child.location else 0
+                        ))
+                # Don't recurse into other classes/functions
+                elif child.node_type not in [ASTNodeType.CLASS, ASTNodeType.INTERFACE, ASTNodeType.FUNCTION, ASTNodeType.METHOD]:
+                    find_fields_recursive(child)
+
+        find_fields_recursive(node)
         
         if not fields: return None
         
@@ -564,16 +618,37 @@ Extract details.
         for child in node.children:
             # Heuristic: identifiers in enum body are often values
             if child.node_type == ASTNodeType.IDENTIFIER and child.name:
-                values.append(child.name)
+                # Junk filter
+                name = child.name.strip()
+                if len(name) > 1 and name[0].isalpha():
+                    values.append(name)
         
         if not values: return None
         
         return EnumDefinition(
             name=node.name or "UnknownEnum",
-            values=values,
+            values=list(set(values)), # Deduplicate
             source_file=str(file_path),
             source_line=node.location.start_line if node.location else 0
         )
+
+    def _find_annotated_nodes(self, node: ASTNode) -> List[tuple[ASTNode, str]]:
+        """Find methods or classes with API annotations."""
+        found = []
+        
+        # Check children for annotations
+        for child in node.children:
+            original_type = child.attributes.get("original_type", "")
+            if "annotation" in original_type or "decorator" in original_type:
+                # If this node has an API keyword in its name (e.g. @GET)
+                ann_text = child.name or ""
+                if any(k in ann_text.upper() for k in ["GET", "POST", "PUT", "DELETE", "PATCH", "INTERNAL"]):
+                    found.append((node, ann_text))
+            
+            # Recurse
+            found.extend(self._find_annotated_nodes(child))
+            
+        return found
 
     def _create_fallback_operation(self, call: APICallCandidate) -> OperationDefinition:
         """

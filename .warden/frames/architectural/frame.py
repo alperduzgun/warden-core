@@ -888,30 +888,37 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         # 3. Semantic Similarity Pass (Find clones in src/)
         # If this file is a copy-paste or refactor of something in src/, it's misplaced.
         if hasattr(self, 'semantic_search_service') and self.semantic_search_service:
+            # PHASE 2: Check for semantic root hygiene issues
+            # Pattern: Fail fast with strict timeout on external services (Chaos Lens)
             try:
-                # Search for similar code in project
-                # We assume semantic_search_service has a search method returning results with score
-                search_results = await self.semantic_search_service.search_async(
-                    query=code_file.content, 
-                    k=1,
-                    threshold=0.85 
+                search_results = await asyncio.wait_for(
+                    self.semantic_search_service.search(
+                        query=code_file.content, 
+                        limit=1
+                    ),
+                    timeout=15.0
                 )
                 
                 if search_results:
                     best_match = search_results[0]
+                    # Access path from chunk as SearchResult contains a chunk object
+                    match_path = getattr(best_match.chunk, 'relative_path', '') or best_match.metadata.get("path", "")
+                    
                     # If match is in src/, then this root file is likely a duplicate or misplaced code
-                    if "src/" in best_match.metadata.get("path", ""):
+                    if "src/" in match_path:
                         violations.append(OrganizationViolation(
                             rule="root_hygiene_misplaced_code",
                             severity="warning",
-                            message=f"File content is {best_match.score:.2f} similar to {best_match.metadata.get('path')}. Move implementation to src/.",
+                            message=f"File content is {best_match.score:.2f} similar to {match_path}. Move implementation to src/.",
                             file_path=code_file.path,
-                            expected=f"Consolidate with {best_match.metadata.get('path')}",
+                            expected=f"Consolidate with {match_path}",
                             actual="Duplicate in root",
                         ))
                         return violations
+            except asyncio.TimeoutError:
+                logger.error("semantic_search_timeout", file_path=code_file.path)
             except Exception as e:
-                logger.error(f"Semantic search failed during hygiene check: {e}")
+                logger.error("semantic_search_failed", file_path=code_file.path, error=str(e))
 
         # 4. LLM Judgment (Slow Pass) - Only if enabled and ambiguous
         # (This section is computationally expensive, so it's the last resort)

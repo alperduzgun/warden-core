@@ -95,7 +95,7 @@ class SpecFrame(ValidationFrame):
     # Frame dependencies
     requires_frames = []  # No dependencies - can run standalone
     requires_config = ["platforms"]  # Need platforms configuration
-    requires_context = []  # project_context is optional but helpful
+    requires_context = ["project_context"]  # Required for monorepo auto-detection
 
     def __init__(self, config: Dict[str, Any] | None = None, llm_service: Optional[Any] = None, semantic_search_service: Optional[Any] = None):
         """
@@ -123,18 +123,16 @@ class SpecFrame(ValidationFrame):
 
     def _parse_platforms_config(self) -> None:
         """
-        Parse platforms from config with comprehensive validation.
+        Parse platforms from config OR auto-detect from project_context.
 
-        Validates each platform configuration and logs detailed errors
-        for invalid entries. Continues processing remaining platforms
-        on validation errors rather than failing entirely.
+        Auto-detection (monorepo):
+        - If project_context.project_type == MONOREPO
+        - Uses PlatformDetector to scan subdirectories
+        - Automatically configures all detected platforms
 
-        Config structure:
-            platforms:
-              - name: mobile
-                path: ../app
-                type: flutter
-                role: consumer
+        Manual config (fallback):
+        - Reads from config['platforms']
+        - Validates each platform configuration
 
         Validation:
         - Required fields: name, path, type, role
@@ -146,6 +144,20 @@ class SpecFrame(ValidationFrame):
         - Continues to next platform (graceful degradation)
         - Invalid platforms are skipped
         """
+        # Check for monorepo auto-detection
+        if self.project_context:
+            from warden.analysis.domain.project_context import ProjectType
+            
+            if self.project_context.project_type == ProjectType.MONOREPO:
+                logger.info(
+                    "monorepo_detected_auto_scanning",
+                    project_root=self.project_context.project_root,
+                )
+                # Auto-detect platforms asynchronously
+                # Note: This will be called from execute_async, so we defer to there
+                return
+        
+        # Fallback to manual config
         if not self.config:
             return
 
@@ -324,6 +336,14 @@ class SpecFrame(ValidationFrame):
             platforms_configured=len(self.platforms),
         )
 
+        # Auto-detect platforms for monorepos if not already configured
+        if self.project_context and not self.platforms:
+            from warden.analysis.domain.project_context import ProjectType
+            
+            if self.project_context.project_type == ProjectType.MONOREPO:
+                logger.info("monorepo_auto_detection_starting")
+                await self._auto_detect_platforms()
+
         # Validate configuration
         validation_result = self._validate_configuration()
         if validation_result:
@@ -350,6 +370,7 @@ class SpecFrame(ValidationFrame):
 
             # Extract contracts from each platform
             contracts: Dict[str, Contract] = {}
+            all_gaps: List[ContractGap] = []
 
             for platform in self.platforms:
                 contract = await self._extract_contract(platform)
@@ -407,6 +428,7 @@ class SpecFrame(ValidationFrame):
                             # Not suppressed - create finding
                             finding = self._gap_to_finding(gap)
                             findings.append(finding)
+                            all_gaps.append(gap)
                             metadata["gaps_found"] += 1
 
                         # Track successful analysis
@@ -439,6 +461,10 @@ class SpecFrame(ValidationFrame):
                         metadata["timeout_occurred"] = True
                         metadata["timeout_seconds"] = gap_analysis_timeout
                         metadata["timeout_pair"] = f"{consumer.name}_vs_{provider.name}"
+
+
+            # Enrich project_context with findings
+            self.enrich_project_context(contracts, all_gaps if 'all_gaps' in locals() else [], metadata)
 
             # Determine status
             if any(f.severity == "critical" for f in findings):
@@ -791,4 +817,137 @@ class SpecFrame(ValidationFrame):
             location=location or "project-level",
             detail=gap.detail,
             code=None,
+        )
+
+    async def _auto_detect_platforms(self) -> None:
+        """
+        Auto-detect platforms in monorepo using PlatformDetector.
+        
+        Scans subdirectories for platform signatures (pubspec.yaml, package.json, etc.)
+        and automatically configures detected platforms.
+        """
+        from warden.validation.frames.spec.platform_detector import PlatformDetector
+        from pathlib import Path
+        
+        if not self.project_context:
+            logger.warning("auto_detect_platforms_no_context")
+            return
+        
+        project_root = Path(self.project_context.project_root)
+        
+        logger.info(
+            "platform_auto_detection_started",
+            project_root=str(project_root),
+        )
+        
+        try:
+            detector = PlatformDetector(
+                max_depth=2,  # Don't scan too deep
+                min_confidence=0.6,  # Require reasonable confidence
+            )
+            
+            detected = await detector.detect_projects_async(project_root)
+            
+            logger.info(
+                "platforms_detected",
+                count=len(detected),
+                platforms=[{"name": p.name, "type": p.platform_type.value, "role": p.role.value} for p in detected],
+            )
+            
+            # Convert detected projects to PlatformConfig
+            for project in detected:
+                platform = PlatformConfig(
+                    name=project.name,
+                    path=project.path,
+                    platform_type=project.platform_type,
+                    role=project.role,
+                )
+                self.platforms.append(platform)
+                
+                logger.debug(
+                    "platform_auto_configured",
+                    name=project.name,
+                    type=project.platform_type.value,
+                    role=project.role.value,
+                    confidence=project.confidence,
+                )
+        
+        except Exception as e:
+            logger.error(
+                "platform_auto_detection_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+
+    def enrich_project_context(
+        self,
+        contracts: Dict[str, Contract],
+        gaps: List[ContractGap],
+        metadata: Dict[str, Any],
+    ) -> None:
+        """
+        Enrich project_context with SpecFrame findings.
+        
+        Writes back discovered information to project_context so downstream
+        frames can access:
+        - Detected platforms and their metadata
+        - Extracted API contracts
+        - Contract gaps and drift analysis
+        
+        Args:
+            contracts: Extracted contracts by platform name
+            gaps: Detected contract gaps
+            metadata: Analysis metadata
+        """
+        if not self.project_context:
+            return
+        
+        # Create spec_analysis section in project_context
+        spec_data = {
+            "platforms": [
+                {
+                    "name": p.name,
+                    "type": p.platform_type.value,
+                    "role": p.role.value,
+                    "path": p.path,
+                }
+                for p in self.platforms
+            ],
+            "contracts": {
+                name: {
+                    "operations_count": len(contract.operations),
+                    "models_count": len(contract.models),
+                    "enums_count": len(contract.enums),
+                    "operations": [
+                        {
+                            "name": op.name,
+                            "method": op.metadata.get('http_method', 'N/A'),
+                            "path": op.metadata.get('endpoint', 'N/A'),
+                        }
+                        for op in contract.operations
+                    ],
+                }
+                for name, contract in contracts.items()
+            },
+            "gaps": [
+                {
+                    "type": gap.gap_type,
+                    "operation": gap.operation_name,
+                    "severity": gap.severity.value,
+                    "consumer": gap.consumer_platform,
+                    "provider": gap.provider_platform,
+                }
+                for gap in gaps
+            ],
+            "metadata": metadata,
+        }
+        
+        # Store in project_context
+        self.project_context.spec_analysis = spec_data
+        
+        logger.info(
+            "project_context_enriched",
+            platforms=len(self.platforms),
+            contracts=len(contracts),
+            gaps=len(gaps),
         )

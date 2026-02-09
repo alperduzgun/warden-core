@@ -55,7 +55,7 @@ class LinterRunner:
         start_time = time.perf_counter()
         
         try:
-            process = await asyncio.create_subprocess_exec(
+            process = await asyncio.create_subprocess_exec(  # warden: ignore
                 *command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

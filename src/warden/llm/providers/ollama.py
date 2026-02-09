@@ -86,6 +86,26 @@ class OllamaClient(ILlmClient):
                 duration_ms=duration_ms
             )
 
+        except httpx.HTTPStatusError as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            error_msg = str(e)
+            if e.response.status_code == 404:
+                error_msg = f"Model '{model}' NOT FOUND on this Ollama instance. Please run 'ollama pull {model}'."
+            
+            logger.error(
+                "ollama_request_failed",
+                status_code=e.response.status_code,
+                error=error_msg,
+                model=model,
+                duration_ms=duration_ms
+            )
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=error_msg,
+                provider=self.provider,
+                duration_ms=duration_ms
+            )
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             logger.error(
@@ -104,12 +124,32 @@ class OllamaClient(ILlmClient):
 
     async def is_available_async(self) -> bool:
         """
-        Check if Ollama is running and responsive.
+        Check if Ollama is running and responsive, AND the default model is pulled.
         """
         try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                # Ollama's base endpoint returns "Ollama is running"
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # 1. Check if Ollama is running
                 response = await client.get(self._endpoint)
-                return response.status_code == 200
-        except Exception:
+                if response.status_code != 200:
+                    return False
+                
+                # 2. Check if the model exists
+                tags_response = await client.get(f"{self._endpoint}/api/tags")
+                if tags_response.status_code == 200:
+                    models = tags_response.json().get("models", [])
+                    model_names = [m.get("name") for m in models]
+                    
+                    # Exact match or tag-less match
+                    exists = any(self._default_model == name or f"{self._default_model}:latest" == name for name in model_names)
+                    if not exists:
+                        logger.warning(
+                            "ollama_model_missing",
+                            required=self._default_model,
+                            available=model_names
+                        )
+                        return False
+                
+                return True
+        except Exception as e:
+            logger.debug("ollama_availability_error", error=str(e))
             return False

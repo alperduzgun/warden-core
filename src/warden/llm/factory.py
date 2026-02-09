@@ -121,6 +121,7 @@ async def create_client_with_fallback_async(config: Optional[LlmConfiguration] =
     if config is None:
         config = load_llm_config()
 
+    # Try configured providers
     providers = config.get_all_providers_chain()
     
     for provider in providers:
@@ -137,7 +138,10 @@ async def create_client_with_fallback_async(config: Optional[LlmConfiguration] =
         except Exception:
             continue
 
-    raise RuntimeError("No available LLM providers found.")
+    # FALLBACK: Zombie Mode (Offline)
+    # If no providers worked, return the OfflineClient
+    from .providers.offline import OfflineClient
+    return OfflineClient()
 
 __all__ = [
     "create_client",

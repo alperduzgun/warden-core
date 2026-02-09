@@ -57,21 +57,21 @@ class ProtoConverters:
         return ProtoConverters._to_proto_enum(warden_pb2, lang_enum.value, warden_pb2.OTHER)
 
     @staticmethod
-    def convert_finding(finding: Dict[str, Any]) -> "warden_pb2.Finding":
-        """Convert dict finding to proto Finding."""
+    def convert_finding(finding: Any) -> "warden_pb2.Finding":
+        """Convert finding to proto Finding."""
         return warden_pb2.Finding(
-            id=finding.get("id", ""),
-            title=finding.get("title", ""),
-            description=finding.get("description", ""),
-            severity=ProtoConverters.severity_to_proto(finding.get("severity", "")),
-            file_path=finding.get("file_path", ""),
-            line_number=finding.get("line_number", 0),
-            column_number=finding.get("column_number", 0),
-            code_snippet=finding.get("code_snippet", ""),
-            suggestion=finding.get("suggestion", ""),
-            frame_id=finding.get("frame_id", ""),
-            cwe_id=finding.get("cwe_id", ""),
-            owasp_category=finding.get("owasp_category", "")
+            id=get_finding_attribute(finding, "id", ""),
+            title=get_finding_attribute(finding, "title", ""),
+            description=get_finding_attribute(finding, "description", ""),
+            severity=ProtoConverters.severity_to_proto(get_finding_attribute(finding, "severity", "")),
+            file_path=get_finding_attribute(finding, "file_path", ""),
+            line_number=get_finding_attribute(finding, "line_number", 0),
+            column_number=get_finding_attribute(finding, "column_number", 0),
+            code_snippet=get_finding_attribute(finding, "code_snippet", ""),
+            suggestion=get_finding_attribute(finding, "suggestion", ""),
+            frame_id=get_finding_attribute(finding, "frame_id", ""),
+            cwe_id=get_finding_attribute(finding, "cwe_id", ""),
+            owasp_category=get_finding_attribute(finding, "owasp_category", "")
         )
 
     @staticmethod

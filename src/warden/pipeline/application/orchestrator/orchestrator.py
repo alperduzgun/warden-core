@@ -841,6 +841,7 @@ class PhaseOrchestrator:
             medium_findings=medium_findings,
             low_findings=low_findings,
             manual_review_findings=manual_review_count,
+            findings=[f if isinstance(f, dict) else f.to_dict() for f in findings],
 
             frame_results=frame_results,
             # Populate metadata

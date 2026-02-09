@@ -191,6 +191,13 @@ class ServiceAbstractionDetector:
         Returns:
             Dictionary mapping class name to ServiceAbstraction
         """
+        # Try loading from cache first
+        cached = self._load_cache()
+        if cached:
+            logger.info("service_abstraction_cache_hit", count=len(cached))
+            self.abstractions = cached
+            return self.abstractions
+
         self._injected_files = all_files
         await self._ensure_registry()
         
@@ -220,7 +227,52 @@ class ServiceAbstractionDetector:
             categories=[a.category.value for a in self.abstractions.values()],
         )
         
+        # Save to cache
+        self._save_cache()
+        
         return self.abstractions
+
+    def _get_cache_path(self) -> Path:
+        """Get path to cache file."""
+        cache_dir = self.project_root / ".warden" / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / "services.json"
+
+    def _load_cache(self) -> Optional[Dict[str, ServiceAbstraction]]:
+        """Load abstractions from cache."""
+        try:
+            cache_file = self._get_cache_path()
+            if not cache_file.exists():
+                return None
+                
+            with open(cache_file, "r") as f:
+                data = json.load(f)
+                
+            result = {}
+            for key, value in data.items():
+                # Reconstruct ServiceAbstraction objects
+                # Need to convert string category back to Enum
+                try:
+                    cat_val = value.get("category", "custom")
+                    value["category"] = ServiceCategory(cat_val)
+                except ValueError:
+                    value["category"] = ServiceCategory.CUSTOM
+                    
+                result[key] = ServiceAbstraction(**value)
+            return result
+        except Exception as e:
+            logger.debug("service_cache_load_failed", error=str(e))
+            return None
+
+    def _save_cache(self) -> None:
+        """Save abstractions to cache."""
+        try:
+            cache_file = self._get_cache_path()
+            data = {name: abs_obj.to_dict() for name, abs_obj in self.abstractions.items()}
+            with open(cache_file, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.debug("service_cache_save_failed", error=str(e))
 
     def _get_scan_languages(self) -> List[CodeLanguage]:
         """Determine which languages to scan based on project context."""

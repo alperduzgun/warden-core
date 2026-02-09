@@ -130,7 +130,7 @@ class WardenDoctor:
         
         if missing:
             # LLM is not strictly required for basic static analysis, but required for advanced features
-            return CheckStatus.WARNING, f"Missing: {', '.join(missing)}. AI features will be disabled."
+            return CheckStatus.WARNING, f"Missing: {', '.join(missing)}. Zombie Mode (Offline) active. Intelligence reduced."
         return CheckStatus.SUCCESS, "Environment variables loaded and API keys present."
 
     def check_frames(self) -> Tuple[CheckStatus, str]:

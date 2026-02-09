@@ -74,35 +74,7 @@ async def graceful_shutdown() -> None:
     except Exception as e:
         logger.error("shutdown_error", error=str(e))
 
-def signal_handler(sig: int, frame) -> NoReturn:
-    """
-    Handle termination signals (SIGINT, SIGTERM).
 
-    Args:
-        sig: Signal number
-        frame: Current stack frame
-    """
-    signal_name = "SIGINT" if sig == signal.SIGINT else "SIGTERM"
-    logger.info("signal_received", signal=signal_name)
-
-    console = Console()
-    console.print(f"\n[yellow]Received {signal_name}, shutting down gracefully...[/yellow]")
-
-    # Run graceful shutdown
-    try:
-        # Get or create event loop
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        loop.run_until_complete(graceful_shutdown())
-    except Exception as e:
-        logger.error("signal_handler_error", error=str(e))
-    finally:
-        console.print("[green]Shutdown complete.[/green]")
-        sys.exit(0)
 
 # Initialize Typer app
 app = typer.Typer(
@@ -133,19 +105,11 @@ app.command(name="refresh")(refresh_command)
 
 def main():
     """Entry point for setuptools."""
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    try:
-        app()
-    except Exception as e:
-        console = Console()
-        console.print(f"[bold red]💥 Fatal Error:[/bold red] {e}")
-        # Only print trace text if verbose/debug encoded in env or args,
-        # but since Typer handles args, we might just exit.
-        # For now, clean exit is better than crash.
-        raise typer.Exit(1)
+    # Let Typer and Asyncio handle signals naturally
+    # We do NOT want a global signal handler because it conflicts
+    # with asyncio.run() which manages its own loop lifecycle.
+    
+    app()
 
 if __name__ == "__main__":
     app()

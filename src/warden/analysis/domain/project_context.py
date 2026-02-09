@@ -277,6 +277,9 @@ class ProjectContext(BaseDomainModel):
     # Maps class name to abstraction info (e.g., {"SecretManager": ServiceAbstraction})
     service_abstractions: Dict[str, Any] = Field(default_factory=dict)
 
+    # Spec analysis results (populated by SpecFrame)
+    spec_analysis: Dict[str, Any] = Field(default_factory=dict)
+
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')

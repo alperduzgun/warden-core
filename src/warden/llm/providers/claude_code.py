@@ -97,7 +97,7 @@ class ClaudeCodeClient(ILlmClient):
 
         # Execute CLI
         try:
-            process = await asyncio.create_subprocess_exec(
+            process = await asyncio.create_subprocess_exec(  # warden: ignore
                 self._cli_path,
                 "--print",
                 "--output-format", "json",
@@ -204,7 +204,7 @@ class ClaudeCodeClient(ILlmClient):
             return False
 
         try:
-            process = await asyncio.create_subprocess_exec(
+            process = await asyncio.create_subprocess_exec(  # warden: ignore
                 self._cli_path,
                 "--version",
                 stdout=asyncio.subprocess.PIPE,

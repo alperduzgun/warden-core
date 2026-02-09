@@ -630,6 +630,15 @@ class LLMPhaseBase(ABC):
 
         return initial_result, confidence
 
+    @staticmethod
+    def _get_val(obj: Any, key: str, default: Any = None) -> Any:
+        """
+        Safely get a value from either a dictionary or an object.
+        Delegates to get_finding_attribute for consistency across the core.
+        """
+        from warden.shared.utils.finding_utils import get_finding_attribute
+        return get_finding_attribute(obj, key, default)
+
 
 class PromptTemplates:
     """Common prompt templates for pipeline phases."""
