@@ -15,6 +15,10 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+# Skip if gRPC modules are not available
+grpc = pytest.importorskip("grpc")
+warden_pb2_grpc = pytest.importorskip("warden.grpc.generated.warden_pb2_grpc")
+
 from warden.grpc.generated import warden_pb2
 from warden.grpc.server import WardenServicer
 

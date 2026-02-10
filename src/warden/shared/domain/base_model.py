@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, Type, TypeVar
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 from pydantic.alias_generators import to_camel
 
 T = TypeVar("T", bound="BaseDomainModel")
@@ -26,9 +26,6 @@ class BaseDomainModel(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        }
     )
 
     def to_json(self) -> Dict[str, Any]:

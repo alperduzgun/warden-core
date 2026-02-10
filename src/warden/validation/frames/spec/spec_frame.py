@@ -40,6 +40,7 @@ from warden.validation.domain.frame import (
     Finding,
     CodeFile,
 )
+from warden.validation.domain.mixins import Cleanable, ProjectContextAware
 from warden.validation.domain.enums import (
     FrameCategory,
     FramePriority,
@@ -67,7 +68,7 @@ from warden.shared.infrastructure.resilience import (
 logger = get_logger(__name__)
 
 
-class SpecFrame(ValidationFrame):
+class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
     """
     API Contract Specification Frame.
 
@@ -79,6 +80,10 @@ class SpecFrame(ValidationFrame):
     - Less than 2 platforms configured
     - No consumer/provider pair found
     - Required frames not executed
+
+    Implements:
+    - Cleanable: For releasing extractor resources after execution
+    - ProjectContextAware: For monorepo auto-detection and context-aware analysis
     """
 
     # Required metadata
@@ -107,19 +112,29 @@ class SpecFrame(ValidationFrame):
         super().__init__(config)
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
+        self.project_context: Any | None = None  # Set via set_project_context
         # Parse platform configurations
         self.platforms: List[PlatformConfig] = []
         self._parse_platforms_config()
         # Load suppressions from config
         self._load_suppressions()
 
+    def set_project_context(self, context: Any) -> None:
+        """
+        Inject project context for monorepo auto-detection.
+
+        Args:
+            context: ProjectContext object with project type and structure info
+        """
+        self.project_context = context
+
     async def cleanup(self) -> None:
         """
         Global Memory Hygiene: Release resources from all extractors.
         """
         logger.debug("spec_frame_cleanup_started")
-        # In the future, we can iterate over platform extractors and call their own cleanup
-        await super().cleanup()
+        # Release platform configurations and extractor resources
+        self.platforms = []
 
     def _parse_platforms_config(self) -> None:
         """

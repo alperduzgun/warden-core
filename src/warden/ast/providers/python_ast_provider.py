@@ -203,19 +203,20 @@ class PythonASTProvider(IASTProvider):
             # Fallback for syntax errors in earlier Python versions or invalid code
             return []
 
-    def _convert_to_universal_ast(self, py_node: ast.AST, file_path: str) -> ASTNode:
+    def _convert_to_universal_ast(self, py_node: ast.AST, file_path: str, parent: Optional[ast.AST] = None) -> ASTNode:
         """
         Convert Python AST to universal AST format.
 
         Args:
             py_node: Python ast.AST node
             file_path: Source file path
+            parent: Parent AST node (used for context-aware mapping)
 
         Returns:
             Universal ASTNode
         """
-        # Map Python AST node types to universal types
-        node_type = self._map_node_type(py_node)
+        # Map Python AST node types to universal types (context-aware)
+        node_type = self._map_node_type(py_node, parent)
 
         # Extract node name if available
         name = None
@@ -225,6 +226,13 @@ class PythonASTProvider(IASTProvider):
             name = py_node.name
         elif isinstance(py_node, ast.ClassDef):
             name = py_node.name
+        elif isinstance(py_node, ast.AnnAssign) and isinstance(py_node.target, ast.Name):
+            # For annotated assignments like "name: str", extract field name
+            name = py_node.target.id
+        elif isinstance(py_node, ast.Assign):
+            # For regular assignments like "PENDING = value", extract target name
+            if len(py_node.targets) > 0 and isinstance(py_node.targets[0], ast.Name):
+                name = py_node.targets[0].id
 
         # Get source location
         location = None
@@ -242,15 +250,15 @@ class PythonASTProvider(IASTProvider):
         if isinstance(py_node, ast.Constant):
             value = py_node.value
 
-        # Convert children
+        # Convert children (pass current node as parent for context)
         children = []
         for _field, field_value in ast.iter_fields(py_node):
             if isinstance(field_value, list):
                 for item in field_value:
                     if isinstance(item, ast.AST):
-                        children.append(self._convert_to_universal_ast(item, file_path))
+                        children.append(self._convert_to_universal_ast(item, file_path, py_node))
             elif isinstance(field_value, ast.AST):
-                children.append(self._convert_to_universal_ast(field_value, file_path))
+                children.append(self._convert_to_universal_ast(field_value, file_path, py_node))
 
         # Extract additional attributes
         attributes: Dict[str, Any] = {}
@@ -262,6 +270,25 @@ class PythonASTProvider(IASTProvider):
         elif isinstance(py_node, ast.ImportFrom):
             attributes["module"] = py_node.module
             attributes["names"] = [alias.name for alias in py_node.names]
+        elif isinstance(py_node, ast.ClassDef):
+            # Check if this is an enum class
+            base_names = []
+            for base in py_node.bases:
+                if isinstance(base, ast.Name):
+                    base_names.append(base.id)
+                elif isinstance(base, ast.Attribute):
+                    # Handle cases like enum.Enum
+                    base_names.append(getattr(base, 'attr', ''))
+            attributes["bases"] = base_names
+        elif isinstance(py_node, ast.AnnAssign):
+            # Store type annotation for field type extraction
+            if py_node.annotation:
+                if isinstance(py_node.annotation, ast.Name):
+                    attributes["type_annotation"] = py_node.annotation.id
+                elif isinstance(py_node.annotation, ast.Constant):
+                    attributes["type_annotation"] = str(py_node.annotation.value)
+                else:
+                    attributes["type_annotation"] = ast.unparse(py_node.annotation) if hasattr(ast, 'unparse') else "Any"
 
         return ASTNode(
             node_type=node_type,
@@ -273,25 +300,46 @@ class PythonASTProvider(IASTProvider):
             raw_node=py_node,
         )
 
-    def _map_node_type(self, py_node: ast.AST) -> ASTNodeType:
+    def _map_node_type(self, py_node: ast.AST, parent: Optional[ast.AST] = None) -> ASTNodeType:
         """
         Map Python AST node type to universal node type.
 
         Args:
             py_node: Python AST node
+            parent: Parent AST node for context-aware mapping
 
         Returns:
             Universal ASTNodeType
         """
+        # Context-aware mapping: AnnAssign inside ClassDef is a FIELD
+        if isinstance(py_node, ast.AnnAssign) and isinstance(parent, ast.ClassDef):
+            return ASTNodeType.FIELD
+
+        # Context-aware mapping: ClassDef with Enum base is an ENUM
+        if isinstance(py_node, ast.ClassDef):
+            for base in py_node.bases:
+                base_name = ""
+                if isinstance(base, ast.Name):
+                    base_name = base.id
+                elif isinstance(base, ast.Attribute):
+                    base_name = getattr(base, 'attr', '')
+
+                # Check if base is an Enum type
+                if base_name in ('Enum', 'IntEnum', 'StrEnum', 'Flag', 'IntFlag'):
+                    return ASTNodeType.ENUM
+
+            # Regular class
+            return ASTNodeType.CLASS
+
+        # Standard mapping for other node types
         node_type_map: Dict[type, ASTNodeType] = {
             ast.Module: ASTNodeType.MODULE,
-            ast.ClassDef: ASTNodeType.CLASS,
             ast.FunctionDef: ASTNodeType.FUNCTION,
             ast.AsyncFunctionDef: ASTNodeType.FUNCTION,
             ast.Import: ASTNodeType.IMPORT,
             ast.ImportFrom: ASTNodeType.IMPORT,
             ast.Assign: ASTNodeType.ASSIGNMENT,
-            ast.AnnAssign: ASTNodeType.ASSIGNMENT,
+            ast.AnnAssign: ASTNodeType.ASSIGNMENT,  # Default, overridden above for class context
             ast.AugAssign: ASTNodeType.ASSIGNMENT,
             ast.Return: ASTNodeType.RETURN_STATEMENT,
             ast.If: ASTNodeType.IF_STATEMENT,

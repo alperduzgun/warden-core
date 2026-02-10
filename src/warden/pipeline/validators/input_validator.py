@@ -1,5 +1,5 @@
 """Input validation for CLI/Bridge (ID 14)."""
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 
 
@@ -9,7 +9,8 @@ class CodeFileInput(BaseModel):
     content: str = Field(..., max_length=10_000_000)
     language: Optional[str] = None
 
-    @validator('path')
+    @field_validator('path')
+    @classmethod
     def validate_path(cls, v):
         if '..' in v or v.startswith('/'):
             raise ValueError('Invalid path')

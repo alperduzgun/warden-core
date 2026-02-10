@@ -578,18 +578,25 @@ Extract details.
     def _create_model_definition(self, node: ASTNode, source: str, file_path: Path) -> Optional[ModelDefinition]:
         from warden.validation.frames.spec.models import FieldDefinition
         fields = []
-        
+
         def find_fields_recursive(curr: ASTNode):
             for child in curr.children:
-                if child.node_type in [ASTNodeType.FIELD, ASTNodeType.PROPERTY]:
+                # Check for FIELD, PROPERTY, or ASSIGNMENT (Python fields are mapped as FIELD now, but ASSIGNMENT as safety)
+                if child.node_type in [ASTNodeType.FIELD, ASTNodeType.PROPERTY, ASTNodeType.ASSIGNMENT]:
                     field_name = child.name or ""
                     # Attempt to extract type (heuristic)
                     field_type = "any"
-                    for grandchild in child.children:
-                        if grandchild.node_type == ASTNodeType.IDENTIFIER and grandchild.name != field_name:
-                            field_type = grandchild.name
-                            break
-                    
+
+                    # First check for type_annotation attribute (Python fields)
+                    if "type_annotation" in child.attributes:
+                        field_type = child.attributes["type_annotation"]
+                    else:
+                        # Fallback: search children for type identifier
+                        for grandchild in child.children:
+                            if grandchild.node_type == ASTNodeType.IDENTIFIER and grandchild.name != field_name:
+                                field_type = grandchild.name
+                                break
+
                     if field_name:
                         fields.append(FieldDefinition(
                             name=field_name,
@@ -602,9 +609,9 @@ Extract details.
                     find_fields_recursive(child)
 
         find_fields_recursive(node)
-        
+
         if not fields: return None
-        
+
         return ModelDefinition(
             name=node.name or "UnknownModel",
             fields=fields,
@@ -616,15 +623,23 @@ Extract details.
         values = []
         # In many grammars, enum values are children with specific types
         for child in node.children:
-            # Heuristic: identifiers in enum body are often values
+            # Direct identifier (some languages)
             if child.node_type == ASTNodeType.IDENTIFIER and child.name:
-                # Junk filter
                 name = child.name.strip()
                 if len(name) > 1 and name[0].isalpha():
                     values.append(name)
-        
-        if not values: return None
-        
+            # Python/Java/etc: enum values are assignments (e.g., PENDING = "pending")
+            elif child.node_type == ASTNodeType.ASSIGNMENT and child.name:
+                # The assignment itself has the enum value name
+                name = child.name.strip()
+                if len(name) > 1 and name[0].isalpha():
+                    values.append(name)
+
+        # Even if no values extracted, return the enum (it might be empty or abstract)
+        # But at least one value is expected for a valid enum
+        if not values:
+            return None
+
         return EnumDefinition(
             name=node.name or "UnknownEnum",
             values=list(set(values)), # Deduplicate

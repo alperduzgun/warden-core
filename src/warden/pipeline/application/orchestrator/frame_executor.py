@@ -19,7 +19,9 @@ from warden.pipeline.domain.enums import ExecutionStrategy
 from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.validation.domain.frame import CodeFile, ValidationFrame, Finding, Remediation
+from warden.validation.domain.mixins import BatchExecutable, ProjectContextAware, Cleanable
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.error_handler import async_error_handler, ValidationError
 
 # Import helper modules
 from .frame_matcher import FrameMatcher
@@ -341,6 +343,12 @@ class FrameExecutor:
                 logger.info("stopping_on_blocker", frame_id=frame.frame_id)
                 break
 
+    @async_error_handler(
+        fallback_value=None,
+        log_level="error",
+        context_keys=["frame_id"],
+        reraise=False
+    )
     async def _execute_frame_with_rules_async(
         self,
         context: PipelineContext,
@@ -348,7 +356,12 @@ class FrameExecutor:
         code_files: List[CodeFile],
         pipeline: ValidationPipeline,
     ) -> Optional[FrameResult]:
-        """Execute a frame with PRE/POST rules."""
+        """
+        Execute a frame with PRE/POST rules.
+
+        Uses centralized error handler to ensure frame failures are logged
+        and don't crash the entire pipeline.
+        """
         # Check frame dependencies before execution
         skip_result = self._check_frame_dependencies(context, frame)
         if skip_result:
@@ -417,13 +430,14 @@ class FrameExecutor:
         # Inject semantic search service if available
         if self.semantic_search_service:
             frame.semantic_search_service = self.semantic_search_service
-        
+
         # Inject project context for context-aware checks (e.g., service abstraction detection)
-        if hasattr(frame, 'set_project_context'):
+        # ONLY if frame implements ProjectContextAware mixin
+        if isinstance(frame, ProjectContextAware):
             # Extract ProjectContext from PipelineContext
             # PipelineContext.project_type might hold the ProjectContext object
             project_context = getattr(context, 'project_type', None)
-            
+
             # Verify it's the actual context object (has service_abstractions)
             if project_context and hasattr(project_context, 'service_abstractions'):
                 frame.set_project_context(project_context)
@@ -551,31 +565,43 @@ class FrameExecutor:
                      f_results = []
                 else:
                     try:
-                        # Revert to per-file execution if batch is not explicitly handled or for better granularity
-                        # Note: Most frames use batching for performance, but we need to report per-file for UX
-                        f_results = []
-                        total_files_to_scan = len(files_to_scan)
-                        
-                        # If frame handles batch natively and efficiently, we call it in smaller chunks
-                        # to maintain both performance and progress visibility
-                        CHUNK_SIZE = 5 # Small chunk for better responsiveness
-                        
-                        for i in range(0, total_files_to_scan, CHUNK_SIZE):
-                            chunk = files_to_scan[i:i+CHUNK_SIZE]
-                            chunk_results = await asyncio.wait_for(
-                                frame.execute_batch_async(chunk),
-                                timeout=getattr(self.config, 'frame_timeout', 300.0)
-                            )
-                            if chunk_results:
-                                f_results.extend(chunk_results)
-                                # Update progress per group
-                                if self.progress_callback:
-                                    self.progress_callback("progress_update", {
-                                        "increment": len(chunk_results),
-                                        "frame_id": frame.frame_id,
-                                        "phase": f"Validating {frame.name}"
-                                    })
-                        
+                        # Check if frame implements BatchExecutable for optimized batch processing
+                        if isinstance(frame, BatchExecutable):
+                            # Use frame's custom batch implementation
+                            f_results = []
+                            total_files_to_scan = len(files_to_scan)
+
+                            # If frame handles batch natively and efficiently, we call it in smaller chunks
+                            # to maintain both performance and progress visibility
+                            CHUNK_SIZE = 5 # Small chunk for better responsiveness
+
+                            for i in range(0, total_files_to_scan, CHUNK_SIZE):
+                                chunk = files_to_scan[i:i+CHUNK_SIZE]
+                                chunk_results = await asyncio.wait_for(
+                                    frame.execute_batch_async(chunk),
+                                    timeout=getattr(self.config, 'frame_timeout', 300.0)
+                                )
+                                if chunk_results:
+                                    f_results.extend(chunk_results)
+                                    # Update progress per group
+                                    if self.progress_callback:
+                                        self.progress_callback("progress_update", {
+                                            "increment": len(chunk_results),
+                                            "frame_id": frame.frame_id,
+                                            "phase": f"Validating {frame.name}"
+                                        })
+                        else:
+                            # Fallback: Execute files individually using default implementation
+                            f_results = []
+                            for cf in files_to_scan:
+                                result = await execute_single_file_async(cf)
+                                if result:
+                                    f_results.append(result)
+
+                        # Trigger cleanup if frame implements Cleanable mixin
+                        if isinstance(frame, Cleanable):
+                            await frame.cleanup()
+
                         if f_results:
                             files_scanned = len(f_results)
                             total_findings_from_batch = sum(len(res.findings) if res and res.findings else 0 for res in f_results)

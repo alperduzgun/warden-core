@@ -29,6 +29,7 @@ from warden.validation.domain.frame import (
     Finding,
     CodeFile,
 )
+from warden.validation.domain.mixins import BatchExecutable
 from warden.validation.domain.enums import (
     FrameCategory,
     FramePriority,
@@ -42,7 +43,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 
-class SecurityFrame(ValidationFrame):
+class SecurityFrame(ValidationFrame, BatchExecutable):
     """
     Security validation frame - Critical security checks.
 
@@ -54,6 +55,9 @@ class SecurityFrame(ValidationFrame):
 
     Priority: CRITICAL (blocks PR on failure)
     Applicability: All languages
+
+    Implements:
+    - BatchExecutable: For optimized batch processing with LLM call reduction
     """
 
     # Required metadata

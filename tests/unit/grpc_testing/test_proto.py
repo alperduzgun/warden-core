@@ -2,6 +2,11 @@
 Tests for generated protobuf messages.
 """
 
+import pytest
+
+# Skip if gRPC modules are not available
+warden_pb2_grpc = pytest.importorskip("warden.grpc.generated.warden_pb2_grpc")
+
 from warden.grpc.generated import warden_pb2
 
 

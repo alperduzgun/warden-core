@@ -14,6 +14,7 @@ from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.resilience import resilient
+from ..registry import ProviderRegistry
 
 
 class AnthropicClient(ILlmClient):
@@ -161,3 +162,7 @@ class AnthropicClient(ILlmClient):
         except ValueError:
             # Configuration or validation error
             return False
+
+
+# Self-register with the registry
+ProviderRegistry.register(LlmProvider.ANTHROPIC, AnthropicClient)

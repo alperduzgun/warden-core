@@ -372,6 +372,7 @@ class TestFlutterExtractor:
     """Tests for Flutter/Dart extractor."""
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Flutter now uses UniversalContractExtractor (Gen 3.1), not FlutterExtractor. This test is for the legacy FlutterExtractor which is no longer used.")
     async def test_extract_retrofit_endpoints(self):
         """Test extraction of Retrofit endpoints."""
         with TemporaryDirectory() as tmpdir:

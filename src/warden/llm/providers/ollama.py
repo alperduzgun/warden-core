@@ -12,6 +12,7 @@ from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.resilience import resilient
 from warden.shared.infrastructure.logging import get_logger
+from ..registry import ProviderRegistry
 
 logger = get_logger(__name__)
 
@@ -153,3 +154,7 @@ class OllamaClient(ILlmClient):
         except Exception as e:
             logger.debug("ollama_availability_error", error=str(e))
             return False
+
+
+# Self-register with the registry
+ProviderRegistry.register(LlmProvider.OLLAMA, OllamaClient)

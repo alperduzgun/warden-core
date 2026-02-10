@@ -9,10 +9,71 @@ from .config import LlmConfiguration, load_llm_config, ProviderConfig
 from .types import LlmProvider
 from .providers.base import ILlmClient
 from .metrics import get_global_metrics_collector
+from .registry import ProviderRegistry
+from warden.shared.infrastructure.error_handler import async_error_handler, ProviderUnavailableError
+
+import threading
+import structlog as _structlog
+
+_providers_lock = threading.Lock()
+_providers_imported = False
+_factory_logger = _structlog.get_logger(__name__)
+
+def _ensure_providers_registered() -> None:
+    """
+    Lazy import all providers to trigger self-registration.
+
+    Thread-safe: uses lock to prevent race conditions during concurrent access.
+    Idempotent: only imports once.
+    """
+    global _providers_imported
+
+    if _providers_imported:
+        return
+
+    with _providers_lock:
+        if _providers_imported:
+            return  # Double-check after acquiring lock
+
+        provider_modules = [
+            'warden.llm.providers.anthropic',
+            'warden.llm.providers.deepseek',
+            'warden.llm.providers.qwencode',
+            'warden.llm.providers.openai',
+            'warden.llm.providers.groq',
+            'warden.llm.providers.ollama',
+            'warden.llm.providers.gemini',
+            'warden.llm.providers.claude_code',
+        ]
+
+        import importlib
+        for module_name in provider_modules:
+            try:
+                importlib.import_module(module_name)
+            except ImportError as e:
+                _factory_logger.debug("provider_module_unavailable", module=module_name, error=str(e))
+
+        _providers_imported = True
+
 
 def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILlmClient:
-    """Create a client for a specific provider configuration."""
-    # Local providers don't require an API key
+    """
+    Create a client for a specific provider configuration.
+
+    Uses registry-based factory pattern to eliminate if/elif chains.
+    Providers self-register on module import.
+
+    Args:
+        provider: The LLM provider to create
+        config: Provider configuration
+
+    Returns:
+        Configured ILlmClient instance
+
+    Raises:
+        ValueError: If provider is not configured, enabled, or registered
+    """
+    # Validate configuration before creating client
     local_providers = {LlmProvider.OLLAMA, LlmProvider.CLAUDE_CODE}
     if provider not in local_providers:
         if not config.enabled or not config.api_key:
@@ -20,35 +81,11 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
     elif not config.enabled:
         raise ValueError(f"Provider {provider.value} is not enabled")
 
-    if provider == LlmProvider.ANTHROPIC:
-        from .providers.anthropic import AnthropicClient
-        return AnthropicClient(config)
-    elif provider == LlmProvider.DEEPSEEK:
-        from .providers.deepseek import DeepSeekClient
-        return DeepSeekClient(config)
-    elif provider == LlmProvider.QWENCODE:
-        from .providers.qwencode import QwenCodeClient
-        return QwenCodeClient(config)
-    elif provider == LlmProvider.OPENAI:
-        from .providers.openai import OpenAIClient
-        return OpenAIClient(config, LlmProvider.OPENAI)
-    elif provider == LlmProvider.AZURE_OPENAI:
-        from .providers.openai import OpenAIClient
-        return OpenAIClient(config, LlmProvider.AZURE_OPENAI)
-    elif provider == LlmProvider.GROQ:
-        from .providers.groq import GroqClient
-        return GroqClient(config)
-    elif provider == LlmProvider.OLLAMA:
-        from .providers.ollama import OllamaClient
-        return OllamaClient(config)
-    elif provider == LlmProvider.GEMINI:
-        from .providers.gemini import GeminiClient
-        return GeminiClient(config)
-    elif provider == LlmProvider.CLAUDE_CODE:
-        from .providers.claude_code import ClaudeCodeClient
-        return ClaudeCodeClient(config)
-    else:
-        raise ValueError(f"Unsupported LLM provider: {provider.value}. Supported: {[p.value for p in LlmProvider]}")
+    # Ensure all providers are registered
+    _ensure_providers_registered()
+
+    # Use registry to create the client
+    return ProviderRegistry.create(provider, config)
 
 
 def create_client(
@@ -85,8 +122,6 @@ def create_client(
     
     # Try to create local/fast clients if enabled in priority order
     fast_clients = []
-    import structlog
-    logger = structlog.get_logger(__name__)
 
     for fast_provider in getattr(config, 'fast_tier_providers', [LlmProvider.OLLAMA]):
         try:
@@ -94,12 +129,11 @@ def create_client(
             if fast_cfg and fast_cfg.enabled:
                 client = create_provider_client(fast_provider, fast_cfg)
                 fast_clients.append(client)
-                logger.debug("fast_tier_client_added", provider=fast_provider.value)
+                _factory_logger.debug("fast_tier_client_added", provider=fast_provider.value)
         except Exception as e:
-            # Log but don't fail - orchestration will work with whatever fast tier clients are available
-            logger.warning("fast_tier_client_creation_failed", provider=fast_provider.value, error=str(e))
-    
-    logger.debug("factory_client_status",
+            _factory_logger.warning("fast_tier_client_creation_failed", provider=fast_provider.value, error=str(e))
+
+    _factory_logger.debug("factory_client_status",
                 fast_providers_configured=[p.value for p in getattr(config, 'fast_tier_providers', [])],
                 fast_clients_created=[c.provider for c in fast_clients])
 
@@ -114,28 +148,47 @@ def create_client(
     )
 
 
+def _create_offline_client():
+    """Safely create OfflineClient fallback."""
+    from .providers.offline import OfflineClient
+    return OfflineClient()
+
+@async_error_handler(
+    fallback_value=_create_offline_client,
+    log_level="error",
+    context_keys=["config"],
+    reraise=False
+)
 async def create_client_with_fallback_async(config: Optional[LlmConfiguration] = None) -> ILlmClient:
     """
     Create client with automatic fallback chain.
+
+    Uses centralized error handler to ensure failures always return OfflineClient
+    and are properly logged.
     """
+    import structlog
+    _logger = structlog.get_logger(__name__)
+
     if config is None:
         config = load_llm_config()
 
     # Try configured providers
     providers = config.get_all_providers_chain()
-    
+
     for provider in providers:
         try:
             provider_config = config.get_provider_config(provider)
             if not provider_config:
                 continue
-                
+
             client = create_provider_client(provider, provider_config)
-            
+
             # Check if actually available
             if await client.is_available_async():
                 return client
-        except Exception:
+        except Exception as e:
+            # Issue #20: Log provider fallback failures for visibility
+            _logger.warning("provider_fallback_failed", provider=provider.value, error=str(e))
             continue
 
     # FALLBACK: Zombie Mode (Offline)
@@ -147,5 +200,6 @@ __all__ = [
     "create_client",
     "create_provider_client",
     "create_client_with_fallback_async",
-    "get_global_metrics_collector"
+    "get_global_metrics_collector",
+    "ProviderRegistry"
 ]

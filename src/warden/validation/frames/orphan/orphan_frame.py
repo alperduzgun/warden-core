@@ -24,6 +24,7 @@ from warden.validation.domain.frame import (
     Finding,
     CodeFile,
 )
+from warden.validation.domain.mixins import BatchExecutable
 from warden.validation.domain.enums import (
     FrameCategory,
     FramePriority,
@@ -45,7 +46,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 
-class OrphanFrame(ValidationFrame):
+class OrphanFrame(ValidationFrame, BatchExecutable):
     """
     Orphan code validation frame - Detects dead and unused code.
 
@@ -57,6 +58,9 @@ class OrphanFrame(ValidationFrame):
 
     Priority: MEDIUM (informational warning)
     Applicability: Python only (AST-based analysis)
+
+    Implements:
+    - BatchExecutable: For intelligent batch processing with LLM filtering
     """
 
     # Required metadata

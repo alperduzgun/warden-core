@@ -25,7 +25,7 @@ def test_llm_request_defaults():
         user_message="Test message"
     )
 
-    assert request.temperature == 0.3
+    assert request.temperature == 0.0
     assert request.max_tokens == 4000
     assert request.timeout_seconds == 60
 

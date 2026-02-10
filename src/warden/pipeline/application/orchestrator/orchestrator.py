@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, List, Optional, Callable
 from uuid import uuid4
 
+import structlog
+
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.pipeline.domain.models import (
     PipelineResult,
@@ -20,6 +22,7 @@ from warden.pipeline.domain.enums import PipelineStatus
 from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.validation.domain.frame import CodeFile, ValidationFrame
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.error_handler import async_error_handler, OperationTimeoutError, ValidationError
 
 from .phase_executor import PhaseExecutor
 from .frame_executor import FrameExecutor
@@ -244,9 +247,14 @@ class PhaseOrchestrator:
             started_at=context.started_at,
         )
 
+        # Bind scan_id to context vars for correlation tracking (Issue #20)
+        self.current_scan_id = str(uuid4())[:8]
+        structlog.contextvars.bind_contextvars(scan_id=self.current_scan_id)
+
         logger.info(
             "pipeline_execution_started",
             pipeline_id=context.pipeline_id,
+            scan_id=self.current_scan_id,
             file_count=len(code_files),
             frames_override=frames_to_execute,
         )
@@ -450,6 +458,12 @@ class PhaseOrchestrator:
             await self._cleanup_on_completion_async(context)
             self._ensure_state_consistency(context)
 
+            # Unbind scan_id from context vars (Issue #20)
+            try:
+                structlog.contextvars.unbind_contextvars("scan_id")
+            except Exception:
+                pass  # Don't mask original exception if unbind fails
+
         return context
 
     def _calculate_total_work_units(self, context: PipelineContext, code_files: List[CodeFile]) -> int:
@@ -467,10 +481,18 @@ class PhaseOrchestrator:
         
         return max(total_units, 1)
 
+    @async_error_handler(
+        fallback_value=None,
+        log_level="warning",
+        context_keys=["pipeline_id"],
+        reraise=False
+    )
     async def _execute_verification_phase_async(self, context: PipelineContext) -> None:
         """
         Execute Phase 3.5: Verification (LLM-based filtering).
         Reduces false positives before expensive fortification or reporting.
+
+        Uses centralized error handler to prevent verification failures from blocking pipeline.
         """
         logger.info("phase_started", phase="VERIFICATION")
         if self.progress_callback:
@@ -848,6 +870,7 @@ class PhaseOrchestrator:
             metadata={
                 "strategy": self.config.strategy.value,
                 "fail_fast": self.config.fail_fast,
+                "scan_id": getattr(self, 'current_scan_id', None),
                 "advisories": getattr(context, "advisories", []),
                 "frame_executions": [
                     {

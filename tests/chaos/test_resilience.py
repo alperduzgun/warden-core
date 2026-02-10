@@ -3,12 +3,11 @@ import pytest
 from pathlib import Path
 from warden.reports.generator import ReportGenerator
 
-# Try to import hypothesis, behave gently if missing
-try:
-    from hypothesis import given, strategies as st
-    HAS_HYPOTHESIS = True
-except ImportError:
-    HAS_HYPOTHESIS = False
+# Skip if hypothesis is not installed
+hypothesis = pytest.importorskip("hypothesis")
+from hypothesis import given, strategies as st
+
+HAS_HYPOTHESIS = True
 
 @pytest.fixture
 def generator():

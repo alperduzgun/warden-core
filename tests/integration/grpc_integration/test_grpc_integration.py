@@ -8,6 +8,10 @@ import pytest
 import asyncio
 from pathlib import Path
 
+# Skip if gRPC modules are not available
+grpc = pytest.importorskip("grpc")
+warden_pb2_grpc = pytest.importorskip("warden.grpc.generated.warden_pb2_grpc")
+
 from grpc import aio
 
 from warden.grpc.generated import warden_pb2, warden_pb2_grpc

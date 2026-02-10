@@ -21,6 +21,7 @@ from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.logging import get_logger
+from ..registry import ProviderRegistry
 
 logger = get_logger(__name__)
 
@@ -227,3 +228,7 @@ async def detect_claude_code() -> bool:
         return await client.is_available_async()
     except Exception:
         return False
+
+
+# Self-register with the registry
+ProviderRegistry.register(LlmProvider.CLAUDE_CODE, ClaudeCodeClient)

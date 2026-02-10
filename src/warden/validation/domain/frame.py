@@ -5,6 +5,14 @@ All validation frames (built-in and external) must inherit from ValidationFrame.
 
 Panel Source: /warden-panel-development/src/lib/types/frame.ts
 Frame Docs: /docs/FRAME_SYSTEM.md
+
+IMPORTANT: Optional capabilities have been extracted into mixins.
+Use these mixins for optional functionality:
+- BatchExecutable: For custom batch execution logic
+- ProjectContextAware: For project-level context access
+- Cleanable: For resource cleanup after execution
+
+See: warden.validation.domain.mixins
 """
 
 from __future__ import annotations
@@ -210,6 +218,9 @@ class ValidationFrame(ABC):
     requires_config: List[str] = []  # Config paths that must be set (e.g., "spec.platforms")
     requires_context: List[str] = []  # Context attributes that must exist (e.g., "project_context")
 
+    # Frame state (set at runtime)
+    enabled: bool = True  # Can be disabled via config or runtime
+
     def __init__(self, config: Dict[str, Any] | None = None) -> None:
         """
         Initialize frame with optional configuration.
@@ -227,17 +238,9 @@ class ValidationFrame(ABC):
 
         self.config = config or {}
         self._validate_metadata()
-        self.project_context: Any | None = None  # Generic to avoid circular imports
-        self.semantic_search_service: Any | None = None  # Injectable semantic search service
 
-    def set_project_context(self, context: Any) -> None:
-        """
-        Inject project context (architecture, framework info).
-        
-        Args:
-            context: ProjectContext object
-        """
-        self.project_context = context
+        # Injectable services (only for frames that need them)
+        self.semantic_search_service: Any | None = None
 
     def _validate_metadata(self) -> None:
         """Validate required metadata is present."""
@@ -271,40 +274,6 @@ class ValidationFrame(ABC):
         """
         pass
 
-    async def cleanup(self) -> None:
-        """
-        MEMORY HYGIENE: Standard hook to release large objects after execution.
-        Subclasses should override this to nullify AST nodes, large buffers, etc.
-        """
-        pass
-
-    async def execute_batch_async(self, code_files: List["CodeFile"]) -> List[FrameResult]:
-        """
-        Execute validation on multiple files in PARALLEL using global resilience guardrails.
-        """
-        from warden.shared.infrastructure.resilience.parallel import ParallelBatchExecutor
-        
-        concurrency = self.config.get("concurrency_limit", 50) if isinstance(self.config, dict) else 50
-        timeout = self.config.get("item_timeout", 30.0) if isinstance(self.config, dict) else 30.0
-        
-        executor = ParallelBatchExecutor(
-            concurrency_limit=concurrency, 
-            item_timeout=timeout
-        )
-        
-        # Launch using global executor
-        results = await executor.execute_batch(
-            items=code_files,
-            task_fn=self.execute_async,
-            batch_name=f"frame_{self.frame_id}_batch"
-        )
-        
-        # MEMORY HYGIENE: Trigger global cleanup hook
-        await self.cleanup()
-                
-        # Filter out None results (failures already logged by executor)
-        return [r for r in results if r is not None]
-
     @property
     def frame_id(self) -> str:
         """
@@ -314,35 +283,6 @@ class ValidationFrame(ABC):
         Override for custom ID (e.g., external frames)
         """
         return self.__class__.__name__.lower().replace("frame", "").replace("_", "-")
-
-    def is_applicable(self, language: str, framework: str | None = None) -> bool:
-        """
-        Check if frame is applicable to given language/framework.
-
-        Args:
-            language: Programming language (python, javascript, etc.)
-            framework: Optional framework (fastapi, react, etc.)
-
-        Returns:
-            True if frame should run for this code
-        """
-        # Global frames apply to everything
-        if FrameApplicability.ALL in self.applicability:
-            return True
-
-        # Check language
-        lang_match = any(
-            app.value.lower() == language.lower() for app in self.applicability
-        )
-
-        # Check framework (if provided)
-        if framework:
-            framework_match = any(
-                app.value.lower() == framework.lower() for app in self.applicability
-            )
-            return lang_match or framework_match
-
-        return lang_match
 
     def __repr__(self) -> str:
         """String representation for logging."""

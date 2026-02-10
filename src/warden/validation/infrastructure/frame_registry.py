@@ -393,15 +393,15 @@ class FrameRegistry:
                         )
 
                 except ImportError as e:
-                    logger.debug(f"Import failed for {frame_path.name}: {e}")
+                    # Issue #20: Promote to warning for visibility
                     logger.warning(
                         "builtin_frame_import_failed",
                         frame_name=frame_path.name,
                         error=str(e),
                     )
                 except Exception as e:
-                    logger.debug(f"Exception discovering {frame_path.name}: {e}")
-                    logger.error(
+                    # Issue #20: Promote to warning for visibility
+                    logger.warning(
                         "builtin_frame_discovery_error",
                         frame_name=frame_path.name,
                         error=str(e),

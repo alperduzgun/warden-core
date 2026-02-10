@@ -14,6 +14,8 @@ from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.resilience import resilient
 from warden.shared.infrastructure.exceptions import ExternalServiceError
+from ..registry import ProviderRegistry
+from functools import partial
 
 
 class OpenAIClient(ILlmClient):
@@ -270,3 +272,15 @@ class OpenAIClient(ILlmClient):
             logger = get_logger(__name__)
             logger.error("llm_security_analysis_failed", error=str(e))
             return {"findings": []}
+
+
+# Self-register with the registry
+# OpenAI provider handles both OPENAI and AZURE_OPENAI with provider parameter
+ProviderRegistry.register(
+    LlmProvider.OPENAI,
+    lambda config: OpenAIClient(config, LlmProvider.OPENAI)
+)
+ProviderRegistry.register(
+    LlmProvider.AZURE_OPENAI,
+    lambda config: OpenAIClient(config, LlmProvider.AZURE_OPENAI)
+)

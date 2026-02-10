@@ -11,6 +11,7 @@ from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.resilience import resilient
+from ..registry import ProviderRegistry
 
 
 class GroqClient(ILlmClient):
@@ -113,3 +114,7 @@ class GroqClient(ILlmClient):
         except ValueError as e:
             # Configuration or validation error
             return False
+
+
+# Self-register with the registry
+ProviderRegistry.register(LlmProvider.GROQ, GroqClient)

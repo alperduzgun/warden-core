@@ -789,7 +789,10 @@ Updated: {scan_time}
         # Final exit code decision
         # 1. Check pipeline status (must be valid and completed)
         status_val = final_result_data.get('status')
-        pipeline_ok = final_result_data and str(status_val).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
+        pipeline_ok = final_result_data and str(status_val).upper() in [
+            "2", "5", "SUCCESS", "COMPLETED", "COMPLETED_WITH_FAILURES",
+            "PIPELINESTATUS.COMPLETED", "PIPELINESTATUS.COMPLETED_WITH_FAILURES",
+        ]
         
         # 2. Check for critical issues or frame failures
         critical_count = final_result_data.get('critical_findings', 0)

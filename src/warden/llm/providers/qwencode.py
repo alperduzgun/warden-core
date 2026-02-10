@@ -11,6 +11,7 @@ from ..config import ProviderConfig
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 from warden.shared.infrastructure.resilience import resilient
+from ..registry import ProviderRegistry
 
 
 class QwenCodeClient(ILlmClient):
@@ -113,3 +114,7 @@ class QwenCodeClient(ILlmClient):
             return False
         except ValueError:
             return False
+
+
+# Self-register with the registry
+ProviderRegistry.register(LlmProvider.QWENCODE, QwenCodeClient)

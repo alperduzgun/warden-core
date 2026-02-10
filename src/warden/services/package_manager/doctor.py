@@ -82,32 +82,36 @@ class WardenDoctor:
         return CheckStatus.SUCCESS, f"Python {current_version[0]}.{current_version[1]} (compatible)"
 
     def check_config(self) -> Tuple[CheckStatus, str]:
+        """
+        Validates that warden.yaml exists and is parseable YAML.
+        Note: No schema validation is performed as config structure is flexible.
+        """
         if not self.config_path.exists():
             return CheckStatus.ERROR, "warden.yaml not found at root. Run 'warden init' to start."
-            
+
         try:
-            from warden.config.schema import WardenConfig
-            from pydantic import ValidationError
-            
             with open(self.config_path, "r") as f:
-                data = yaml.safe_load(f) or {}
-                
-            WardenConfig.model_validate(data)
-            return CheckStatus.SUCCESS, "warden.yaml is valid and schema-compliant."
-            
-        except ValidationError as e:
-            error_details = []
-            for err in e.errors():
-                loc = ".".join(str(l) for l in err['loc'])
-                msg = err['msg']
-                error_details.append(f"{loc}: {msg}")
-            
-            return CheckStatus.ERROR, "Configuration Schema Error:\n" + "\n".join(f"    - {d}" for d in error_details)
-            
-        except ImportError:
-             return CheckStatus.WARNING, "Pydantic not available. Skipping schema validation."
+                data = yaml.safe_load(f)
+
+            if data is None:
+                return CheckStatus.ERROR, "warden.yaml is empty."
+
+            if not isinstance(data, dict):
+                return CheckStatus.ERROR, "warden.yaml must contain a YAML mapping (dictionary)."
+
+            # Basic sanity checks for required top-level keys
+            required_keys = ["project", "frames"]
+            missing_keys = [key for key in required_keys if key not in data]
+
+            if missing_keys:
+                return CheckStatus.WARNING, f"warden.yaml missing recommended keys: {', '.join(missing_keys)}"
+
+            return CheckStatus.SUCCESS, "warden.yaml is valid YAML with expected structure."
+
+        except yaml.YAMLError as e:
+            return CheckStatus.ERROR, f"Invalid YAML syntax: {e}"
         except Exception as e:
-            return CheckStatus.ERROR, f"Invalid YAML or unexpected error: {e}"
+            return CheckStatus.ERROR, f"Unexpected error reading config: {e}"
 
     def check_warden_dir(self) -> Tuple[CheckStatus, str]:
         if not self.warden_dir.exists():

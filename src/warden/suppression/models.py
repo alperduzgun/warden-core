@@ -10,7 +10,6 @@ Panel JSON format: camelCase
 Python internal format: snake_case
 """
 
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Dict, Any, Optional
 
@@ -36,7 +35,6 @@ class SuppressionType(Enum):
     GLOBAL = 2  # Global suppression (all instances)
 
 
-@dataclass
 class SuppressionEntry(BaseDomainModel):
     """
     Individual suppression entry.
@@ -62,7 +60,7 @@ class SuppressionEntry(BaseDomainModel):
 
     id: str
     type: SuppressionType
-    rules: List[str] = field(default_factory=list)  # Empty = suppress all
+    rules: List[str] = []  # Empty = suppress all
     file: Optional[str] = None  # File path pattern (glob supported)
     line: Optional[int] = None  # Line number (for inline suppressions)
     reason: Optional[str] = None  # Justification for suppression
@@ -131,7 +129,6 @@ class SuppressionEntry(BaseDomainModel):
         return data
 
 
-@dataclass
 class SuppressionConfig(BaseDomainModel):
     """
     Configuration for suppressions.
@@ -165,9 +162,9 @@ class SuppressionConfig(BaseDomainModel):
     """
 
     enabled: bool = True
-    entries: List[SuppressionEntry] = field(default_factory=list)
-    global_rules: List[str] = field(default_factory=list)
-    ignored_files: List[str] = field(default_factory=list)
+    entries: List[SuppressionEntry] = []
+    global_rules: List[str] = []
+    ignored_files: List[str] = []
 
     def to_json(self) -> Dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""

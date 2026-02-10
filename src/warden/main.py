@@ -63,7 +63,7 @@ async def graceful_shutdown() -> None:
 
         # Close semantic search services
         try:
-            from warden.semantic_search.semantic_search_service import SemanticSearchService
+            from warden.shared.services.semantic_search_service import SemanticSearchService
             # If there's a global instance, close it
             # This is optional - depends on implementation
             logger.info("semantic_search_cleanup_complete")

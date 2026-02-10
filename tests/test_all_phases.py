@@ -38,7 +38,7 @@ class TestPhase2Reliability:
     @pytest.mark.asyncio
     async def test_semantic_search_service(self):
         """ID 5: Semantic search service."""
-        from warden.semantic_search.semantic_search_service import SemanticSearchService
+        from warden.shared.services.semantic_search_service import SemanticSearchService
         service = SemanticSearchService({"project_root": "/tmp"})
         assert service.config is not None
 

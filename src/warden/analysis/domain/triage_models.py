@@ -4,7 +4,7 @@ Defines risk scores, lanes, and triage decisions with strict validation.
 """
 
 from enum import Enum
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 class TriageLane(str, Enum):
@@ -20,7 +20,8 @@ class RiskScore(BaseModel):
     reasoning: str = Field(..., description="Explanation for the assigned score")
     category: str = Field(..., description="Categorization (e.g., 'auth', 'dto', 'ui')")
     
-    @validator('score', pre=True)
+    @field_validator('score', mode='before')
+    @classmethod
     def normalize_score(cls, v):
         """
         Hardens the score against common LLM hallucinations:
@@ -33,13 +34,14 @@ class RiskScore(BaseModel):
             # Chaos Rule: If LLM returns 10-100, assume it's a 100-scale score
             if val > 10 and val <= 100:
                 val = val / 10.0
-            
+
             # Clamp to [0, 10]
             return max(0.0, min(10.0, val))
         except (ValueError, TypeError):
             return 5.0 # Safe default on catastrophic failure
 
-    @validator('confidence', pre=True)
+    @field_validator('confidence', mode='before')
+    @classmethod
     def normalize_confidence(cls, v):
         """
         Hardens confidence against 100-scale hallucinations (e.g. 95.0 -> 0.95).

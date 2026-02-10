@@ -12,6 +12,8 @@ Exports:
     - SuppressionConfig: Configuration model
     - SuppressionMatcher: Main suppression matching logic
     - load_suppression_config: Load configuration from file
+    - save_suppression_config: Save configuration to file
+    - create_default_config: Create default configuration
 """
 
 from warden.suppression.models import (
@@ -19,9 +21,19 @@ from warden.suppression.models import (
     SuppressionEntry,
     SuppressionConfig,
 )
+from warden.suppression.matcher import SuppressionMatcher
+from warden.suppression.config_loader import (
+    load_suppression_config,
+    save_suppression_config,
+    create_default_config,
+)
 
 __all__ = [
     'SuppressionType',
     'SuppressionEntry',
     'SuppressionConfig',
+    'SuppressionMatcher',
+    'load_suppression_config',
+    'save_suppression_config',
+    'create_default_config',
 ]
