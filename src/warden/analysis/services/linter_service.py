@@ -262,13 +262,5 @@ class LinterService:
                 all_findings.extend(findings)
             except Exception as e:
                 logger.error("linter_findings_failed", provider=provider.name, error=str(e))
-                
+
         return all_findings
-
-    def _group_files(self, code_files: List[CodeFile]) -> Dict[CodeLanguage, List[Path]]:
-        # Legacy helper, kept if needed but currently unused in simplification
-        return {}
-
-    def _map_lang_string(self, lang_str: str, path: str) -> Optional[CodeLanguage]:
-        return None
-

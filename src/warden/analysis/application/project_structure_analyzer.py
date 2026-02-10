@@ -6,6 +6,7 @@ and other characteristics for the PRE-ANALYSIS phase.
 """
 
 import asyncio
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Any
@@ -418,8 +419,65 @@ class ProjectStructureAnalyzer:
                     versions["node"] = f.read().strip()
             except (FileNotFoundError, PermissionError, IOError):
                 pass  # Graceful degradation
-                
-        # TODO: Add more SDKs (Java, Go, etc.) as needed
+
+        # Java - from pom.xml or build.gradle
+        if "pom.xml" in self.config_files:
+            try:
+                content = (self.project_root / "pom.xml").read_text()
+                java_match = re.search(r'<java\.version>(\d+[\.\d]*)</java\.version>', content)
+                if java_match:
+                    versions["java"] = java_match.group(1)
+            except (FileNotFoundError, PermissionError, IOError):
+                pass
+
+        # Go - from go.mod
+        if "go.mod" in self.config_files:
+            try:
+                content = (self.project_root / "go.mod").read_text()
+                go_match = re.search(r'^go\s+([\d.]+)', content, re.MULTILINE)
+                if go_match:
+                    versions["go"] = go_match.group(1)
+            except (FileNotFoundError, PermissionError, IOError):
+                pass
+
+        # Rust - from Cargo.toml (rust-version field)
+        if "Cargo.toml" in self.config_files:
+            try:
+                content = (self.project_root / "Cargo.toml").read_text()
+                rust_match = re.search(r'rust-version\s*=\s*"([\d.]+)"', content)
+                if rust_match:
+                    versions["rust"] = rust_match.group(1)
+            except (FileNotFoundError, PermissionError, IOError):
+                pass
+
+        # Python - prefer .python-version if not already set
+        if "python" not in versions and ".python-version" in self.config_files:
+            try:
+                versions["python"] = (self.project_root / ".python-version").read_text().strip()
+            except (FileNotFoundError, PermissionError, IOError):
+                pass
+
+        # Dart/Flutter - from pubspec.yaml
+        if "pubspec.yaml" in self.config_files:
+            try:
+                content = (self.project_root / "pubspec.yaml").read_text()
+                dart_match = re.search(r'sdk:\s*["\']?>=?([\d.]+)', content)
+                if dart_match:
+                    versions["dart"] = dart_match.group(1)
+            except (FileNotFoundError, PermissionError, IOError):
+                pass
+
+        # .NET - from *.csproj
+        for f in self.config_files:
+            if f.endswith('.csproj'):
+                try:
+                    content = (self.project_root / f).read_text()
+                    net_match = re.search(r'<TargetFramework>net([\d.]+)</TargetFramework>', content)
+                    if net_match:
+                        versions["dotnet"] = net_match.group(1)
+                        break
+                except (FileNotFoundError, PermissionError, IOError):
+                    pass
 
         return versions
 
@@ -474,7 +532,7 @@ class ProjectStructureAnalyzer:
 
     def _detect_framework(self) -> Framework:
         """Detect the main framework used."""
-        from warden.analysis.application.framework_detector import FrameworkDetector
+        from warden.analysis.application.discovery.framework_detector import FrameworkDetector
 
         detector = FrameworkDetector(self.project_root, self.config_files)
         return detector.detect()

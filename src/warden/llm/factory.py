@@ -48,7 +48,7 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
         from .providers.claude_code import ClaudeCodeClient
         return ClaudeCodeClient(config)
     else:
-        raise NotImplementedError(f"Provider {provider.value} not implemented")
+        raise ValueError(f"Unsupported LLM provider: {provider.value}. Supported: {[p.value for p in LlmProvider]}")
 
 
 def create_client(

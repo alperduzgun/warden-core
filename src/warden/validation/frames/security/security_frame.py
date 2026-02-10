@@ -908,14 +908,44 @@ Return JSON array with verification results:
                 system="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives."
             )
 
-            # Parse response (simplified - assumes JSON response)
-            # In production, use robust JSON parsing
-            verified = batch.copy()  # Fallback: keep all
+            # Parse LLM response and filter false positives
+            import json
+            try:
+                content = response.get("content", "")
+                parsed = json.loads(content)
 
-            # TODO: Parse LLM response and filter false positives
-            # For now, return all (no filtering)
+                if isinstance(parsed, list):
+                    # Build set of invalid finding IDs (1-based indexing from prompt)
+                    invalid_ids = {
+                        item.get("finding_id")
+                        for item in parsed
+                        if isinstance(item, dict) and not item.get("is_valid", True)
+                    }
 
-            return verified
+                    if invalid_ids:
+                        # Filter out invalid findings (0-based indexing in batch)
+                        verified = [
+                            batch[i] for i in range(len(batch))
+                            if (i + 1) not in invalid_ids
+                        ]
+                        logger.info(
+                            "security_llm_filtered",
+                            total=len(batch),
+                            filtered=len(batch) - len(verified),
+                            remaining=len(verified)
+                        )
+                        return verified
+
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+                logger.warning(
+                    "security_llm_parse_failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    fallback="keeping_all_findings"
+                )
+
+            # Fallback: keep all findings if parsing fails or no invalid findings found
+            return batch
 
         except Exception as e:
             logger.error("security_batch_llm_failed", error=str(e))

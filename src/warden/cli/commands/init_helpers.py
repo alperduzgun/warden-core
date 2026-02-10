@@ -223,6 +223,16 @@ def configure_ollama() -> tuple[dict, dict]:
     # Check if Ollama server is running
     ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
+    # Validate OLLAMA_HOST URL to prevent SSRF
+    from urllib.parse import urlparse
+    parsed = urlparse(ollama_host)
+    if parsed.scheme not in ("http", "https"):
+        console.print(f"[red]Invalid OLLAMA_HOST scheme: {parsed.scheme}. Must be http or https.[/red]")
+        console.print("[dim]Falling back to http://localhost:11434[/dim]")
+        ollama_host = "http://localhost:11434"
+    elif parsed.hostname not in ("localhost", "127.0.0.1", "::1", None):
+        console.print(f"[yellow]Warning: OLLAMA_HOST points to remote host: {parsed.hostname}[/yellow]")
+
     try:
         import urllib.request
         urllib.request.urlopen(f"{ollama_host}/api/tags", timeout=2)

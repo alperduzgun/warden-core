@@ -77,7 +77,7 @@ class TestCustomRuleValidator:
             temp_path = Path(f.name)
 
         try:
-            violations = await validator.validate_file(temp_path)
+            violations = await validator.validate_file_async(temp_path)
 
             assert len(violations) == 2
             assert violations[0].rule_id == "no-secrets"
@@ -117,7 +117,7 @@ class TestCustomRuleValidator:
             temp_path = Path(f.name)
 
         try:
-            violations = await validator.validate_file(temp_path)
+            violations = await validator.validate_file_async(temp_path)
 
             assert len(violations) == 2
             assert violations[0].line == 1
@@ -154,7 +154,7 @@ class TestCustomRuleValidator:
             temp_path = Path(f.name)
 
         try:
-            violations = await validator.validate_file(temp_path)
+            violations = await validator.validate_file_async(temp_path)
 
             assert len(violations) == 2
             assert "/users" in violations[0].message
@@ -212,7 +212,7 @@ class TestCustomRuleValidator:
             temp_path = Path(f.name)
 
         try:
-            violations = await validator.validate_file(temp_path)
+            violations = await validator.validate_file_async(temp_path)
             # Should be 0 because test files are excluded
             assert len(violations) == 0
         finally:
@@ -252,7 +252,7 @@ class TestCustomRuleValidator:
             )
 
             validator = CustomRuleValidator([rule])
-            violations = await validator.validate_file(test_file_path)
+            violations = await validator.validate_file_async(test_file_path)
 
             # Should pass (no violations)
             assert len(violations) == 0
@@ -294,7 +294,7 @@ class TestCustomRuleValidator:
             )
 
             validator = CustomRuleValidator([rule])
-            violations = await validator.validate_file(test_file_path)
+            violations = await validator.validate_file_async(test_file_path)
 
             # Should have 1 violation
             assert len(violations) == 1
@@ -353,11 +353,11 @@ class TestCustomRuleValidator:
             validator = CustomRuleValidator([rule])
 
             # Small file should pass
-            violations_small = await validator.validate_file(small_file_path)
+            violations_small = await validator.validate_file_async(small_file_path)
             assert len(violations_small) == 0
 
             # Large file should fail
-            violations_large = await validator.validate_file(large_file_path)
+            violations_large = await validator.validate_file_async(large_file_path)
             assert len(violations_large) == 1
             assert "too large" in violations_large[0].message.lower()
         finally:
@@ -399,7 +399,7 @@ class TestCustomRuleValidator:
             )
 
             validator = CustomRuleValidator([rule])
-            violations = await validator.validate_file(test_file_path)
+            violations = await validator.validate_file_async(test_file_path)
 
             # Should return None (no violation) on timeout
             assert len(violations) == 0
@@ -431,7 +431,7 @@ class TestCustomRuleValidator:
             )
 
             validator = CustomRuleValidator([rule])
-            violations = await validator.validate_file(test_file_path)
+            violations = await validator.validate_file_async(test_file_path)
 
             # Should return no violations (error logged)
             assert len(violations) == 0
@@ -470,7 +470,7 @@ class TestCustomRuleValidator:
             )
 
             validator = CustomRuleValidator([rule])
-            violations = await validator.validate_file(test_file_path)
+            violations = await validator.validate_file_async(test_file_path)
 
             # Should return no violations (error logged)
             assert len(violations) == 0
@@ -505,7 +505,7 @@ class TestCustomRuleValidator:
 
             # Should raise ValueError
             with pytest.raises(ValueError, match="no script_path"):
-                await validator.validate_file(test_file_path)
+                await validator.validate_file_async(test_file_path)
         finally:
             test_file_path.unlink()
 
@@ -544,7 +544,7 @@ class TestCustomRuleValidator:
             )
 
             validator = CustomRuleValidator([rule])
-            violations = await validator.validate_file(test_file_path)
+            violations = await validator.validate_file_async(test_file_path)
 
             # Should capture stdout as violation message
             assert len(violations) == 1
@@ -592,7 +592,7 @@ class TestCustomRuleValidator:
             )
 
             validator = CustomRuleValidator([rule])
-            violations = await validator.validate_file(test_file_path)
+            violations = await validator.validate_file_async(test_file_path)
 
             # Should work with relative path
             assert len(violations) == 0

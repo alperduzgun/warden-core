@@ -7,12 +7,12 @@ name = "warden-core"
 description = "Warden - AI Code Guardian for comprehensive code validation"
 requires-python = ">=3.10"
 authors = [{name = "Warden Team", email = "warden-core@proton.me"}]
+license = {text = "LicenseRef-Proprietary"}
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Testing",
-    "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

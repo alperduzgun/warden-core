@@ -12,6 +12,7 @@ Author: Warden Team
 Version: 1.0.0
 """
 
+import asyncio
 import re
 import time
 from dataclasses import dataclass
@@ -455,9 +456,12 @@ class GapAnalyzer:
             try:
                 # Search for usages/definitions
                 rag_query = f"usage of {safe_query} OR {safe_query} definition"
-                # TODO: Implement async semantic search when service is async-compatible
-                # For now, skip RAG context to avoid blocking operations
-                pass
+                # Run sync semantic search in thread pool to avoid blocking event loop
+                result = await asyncio.to_thread(
+                    self.semantic_search_service.search, rag_query
+                )
+                if result:
+                    rag_context = str(result)
             except Exception as e:
                 logger.warning("rag_context_failed", error=str(e))
 

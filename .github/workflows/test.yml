@@ -53,7 +53,7 @@ jobs:
 
       - name: Run MyPy
         run: mypy src/
-        continue-on-error: true
+        continue-on-error: false
 
   test:
     name: Unit Tests (Python ${{ matrix.python-version }})
@@ -85,6 +85,12 @@ jobs:
 
       - name: Run Unit Tests
         run: |
+          # Test exclusions (documented):
+          # --ignore=tests/chaos/ - Requires Hypothesis (optional dep)
+          # --ignore=tests/integration/ - Requires external services (Ollama, APIs)
+          # --ignore=tests/suppression/ - TODO: Fix and re-enable
+          # --ignore=tests/validation/frames/orphan/ - Plugin loading - fix in progress
+          # --ignore=tests/unit/grpc_testing/ - gRPC bridge incomplete
           pytest tests/ -v --tb=short \
             --ignore=tests/chaos/ \
             --ignore=tests/integration/ \

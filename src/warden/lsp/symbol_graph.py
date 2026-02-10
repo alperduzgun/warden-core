@@ -13,6 +13,7 @@ class LSPSymbolGraph:
     
     def __init__(self):
         self.lsp_manager = LSPManager.get_instance()
+        self._opened_files: set[str] = set()
 
     async def build_graph_async(self, root_path: str, files: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -43,28 +44,41 @@ class LSPSymbolGraph:
             for file_path in lang_files:
                 try:
                     uri = f"file://{file_path}"
-                    # Ensure open
-                    # TODO: optimize if already open
-                    await client.send_notification_async("textDocument/didOpen", {
-                        "textDocument": {
-                            "uri": uri,
-                            "languageId": language,
-                            "version": 1,
-                            "text": Path(file_path).read_text()
-                        }
-                    })
-                    
+
+                    # Only open if not already opened
+                    if uri not in self._opened_files:
+                        try:
+                            text = Path(file_path).read_text()
+                        except (FileNotFoundError, PermissionError, UnicodeDecodeError) as e:
+                            logger.warning("lsp_file_read_failed", file=str(file_path), error=str(e))
+                            continue
+
+                        await client.send_notification_async("textDocument/didOpen", {
+                            "textDocument": {
+                                "uri": uri,
+                                "languageId": language,
+                                "version": 1,
+                                "text": text
+                            }
+                        })
+                        self._opened_files.add(uri)
+                        logger.debug("lsp_file_opened", uri=uri, total_open=len(self._opened_files))
+
                     symbols = await client.send_request_async("textDocument/documentSymbol", {
                         "textDocument": {"uri": uri}
                     })
-                    
+
                     if symbols:
                         graph[file_path] = symbols
-                        
+
                 except Exception as e:
                     logger.warning("symbol_extraction_failed", file=file_path, error=str(e))
                     
         return graph
+
+    def reset(self) -> None:
+        """Reset tracked open files."""
+        self._opened_files.clear()
 
     def print_graph(self, graph: Dict[str, List[Any]]):
         """Debug helper to log graph structure."""

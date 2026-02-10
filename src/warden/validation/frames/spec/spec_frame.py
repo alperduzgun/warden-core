@@ -464,9 +464,8 @@ class SpecFrame(ValidationFrame):
 
 
             # Enrich project_context with findings
-            self.enrich_project_context(contracts, all_gaps if 'all_gaps' in locals() else [], metadata)
+            self.enrich_project_context(contracts, all_gaps, metadata)
 
-            # Determine status
             if any(f.severity == "critical" for f in findings):
                 status = "failed"
             elif findings:
@@ -923,8 +922,24 @@ class SpecFrame(ValidationFrame):
                             "name": op.name,
                             "method": op.metadata.get('http_method', 'N/A'),
                             "path": op.metadata.get('endpoint', 'N/A'),
+                            "type": op.operation_type.value,
                         }
                         for op in contract.operations
+                    ],
+                    "models": [
+                        {
+                            "name": model.name,
+                            "fields": [
+                                {
+                                    "name": f.name,
+                                    "type": f.type_name,
+                                    "is_optional": f.is_optional,
+                                    "is_array": f.is_array,
+                                }
+                                for f in model.fields
+                            ]
+                        }
+                        for model in contract.models
                     ],
                 }
                 for name, contract in contracts.items()
@@ -936,6 +951,8 @@ class SpecFrame(ValidationFrame):
                     "severity": gap.severity.value,
                     "consumer": gap.consumer_platform,
                     "provider": gap.provider_platform,
+                    "message": gap.message,
+                    "detail": gap.detail,
                 }
                 for gap in gaps
             ],

@@ -18,19 +18,14 @@ from pathlib import Path
 
 @pytest.fixture
 def OrphanFrame():
-    # Load directly from plugin file to bypass registry preference for src version
-    file_path = Path(".warden/frames/orphan/frame.py").absolute()
-    module_name = "orphan_plugin_test"
-    
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    if not spec or not spec.loader:
-        pytest.skip("Could not load OrphanFrame plugin")
-        
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    
-    return module.OrphanFrame
+    """Load OrphanFrame from registry (built-in or plugin)."""
+    from warden.validation.infrastructure.frame_registry import FrameRegistry
+    registry = FrameRegistry()
+    registry.discover_all()
+    cls = registry.get_frame_by_id("orphan")
+    if not cls:
+        pytest.skip("OrphanFrame not found in registry")
+    return cls
 
 
 @pytest.mark.asyncio

@@ -1,8 +1,8 @@
 """
-Cleaning module.
+Cleaning module - PLANNED FEATURE.
 
-This module provides code cleaning capabilities (placeholder for future implementation).
-Currently provides data models for Panel integration.
+Data models for Panel integration are available.
+Code cleaning logic (simplification, SOLID detection) is not yet implemented.
 """
 
 from warden.cleaning.domain.models import Cleaning, CleaningResult

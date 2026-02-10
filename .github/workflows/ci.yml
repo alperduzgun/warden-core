@@ -24,9 +24,8 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
-    # Phase 1: Advisory only - does not block CI
-    # Remove continue-on-error once codebase is lint-clean
-    continue-on-error: true
+    # Lint now blocks CI to enforce code quality
+    continue-on-error: false
 
     steps:
       - name: Free Disk Space (Manual)
@@ -51,11 +50,11 @@ jobs:
 
       - name: Run Ruff Linter
         run: ruff check src/ --output-format=github
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Run Ruff Formatter Check
         run: ruff format src/ --check --diff
-        continue-on-error: true
+        continue-on-error: false
 
   # ============================================================
   # TEST JOB - Matrix testing across Python versions
@@ -91,6 +90,9 @@ jobs:
 
       - name: Run Tests
         run: |
+          # Test exclusions (VALID for CI):
+          # --ignore=tests/chaos/ - Requires Hypothesis (optional dependency)
+          # --ignore=tests/integration/ - Requires external services (Ollama, APIs)
           pytest tests/ -v --tb=short -x --ignore=tests/chaos/ --ignore=tests/integration/ -q
 
   # ============================================================

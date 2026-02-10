@@ -4,9 +4,11 @@ Application configuration using Pydantic Settings.
 Loads configuration from environment variables and .env file.
 """
 
+import secrets
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+import structlog
 
 
 class Settings(BaseSettings):
@@ -114,11 +116,23 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_production_settings(self) -> "Settings":
         """Fail fast: enforce critical settings in production."""
-        if self.is_production and not self.secret_key:
-            raise ValueError(
-                "SECRET_KEY must be set in production. "
-                "Set the SECRET_KEY environment variable to a strong random value."
-            )
+        logger = structlog.get_logger(__name__)
+
+        if not self.secret_key:
+            if self.is_production:
+                raise ValueError(
+                    "SECRET_KEY must be set in production. "
+                    "Set the SECRET_KEY environment variable to a strong random value."
+                )
+            else:
+                # Auto-generate in dev mode with loud warning
+                self.secret_key = secrets.token_urlsafe(32)
+                logger.warning(
+                    "auto_generated_secret_key",
+                    message="SECRET_KEY was empty. Auto-generated a random key for development. "
+                           "Set SECRET_KEY in .env for production use.",
+                    key_length=len(self.secret_key)
+                )
         return self
 
 

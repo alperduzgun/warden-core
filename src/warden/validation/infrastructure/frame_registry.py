@@ -274,7 +274,7 @@ class FrameRegistry:
                 frame_id=frame_id,
                 name=instance.name,
                 description=instance.description,
-                enabled=True,  # TODO: Get from config (.warden/config.yaml)
+                enabled=True,  # Default: all frames enabled. Override via .warden/config.yaml frames_config section.
                 source=source,
                 priority=priority_str.upper(),
                 is_blocker=instance.is_blocker,
@@ -327,16 +327,34 @@ class FrameRegistry:
 
             # Scan each subdirectory in frames/
             for frame_path in frames_dir.iterdir():
+                # Skip non-directories
+                if not frame_path.is_dir():
+                    logger.debug(
+                        "skipping_non_directory",
+                        path=str(frame_path),
+                    )
+                    continue
+
                 # Try standard Hub format first: <frame_name>/frame.py
                 hub_style_file = frame_path / "frame.py"
                 legacy_style_file = frame_path / f"{frame_path.name}_frame.py"
-                
+
                 module_path = None
-                
+
                 if hub_style_file.exists() and hub_style_file.is_file():
                     module_path = f"warden.validation.frames.{frame_path.name}.frame"
+                    logger.debug(
+                        "frame_file_found_hub_style",
+                        frame_name=frame_path.name,
+                        module=module_path,
+                    )
                 elif legacy_style_file.exists() and legacy_style_file.is_file():
                     module_path = f"warden.validation.frames.{frame_path.name}.{frame_path.name}_frame"
+                    logger.debug(
+                        "frame_file_found_legacy_style",
+                        frame_name=frame_path.name,
+                        module=module_path,
+                    )
                 else:
                     logger.debug(
                         "frame_file_not_found",

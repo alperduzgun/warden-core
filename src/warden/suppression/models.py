@@ -108,7 +108,6 @@ class SuppressionEntry(BaseDomainModel):
             # Simple pattern matching (exact match or glob)
             if self.file == file_path:
                 return True
-            # TODO: Add glob pattern matching if needed
             if '*' in self.file or '?' in self.file:
                 import fnmatch
                 if fnmatch.fnmatch(file_path, self.file):

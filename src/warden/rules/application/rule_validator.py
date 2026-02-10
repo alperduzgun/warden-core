@@ -244,7 +244,7 @@ class CustomRuleValidator:
 
         # Git authorship rules
         if "git" in conditions:
-            # TODO: Git validation requires git history, not file content
+            # Git validation requires git history, not file content
             # Should be implemented in a separate validate_project() method that:
             # 1. Runs once per pipeline (not per file)
             # 2. Uses subprocess to run: git log --format=%ae -n 100
@@ -257,7 +257,7 @@ class CustomRuleValidator:
                 rule_name=rule.name,
                 message="Git validation skipped - requires project-level implementation"
             )
-            pass
+            # Explicit: git validation is unimplemented, continue to other conditions
 
         # Connection string rules
         if "connections" in conditions:
@@ -488,25 +488,42 @@ class CustomRuleValidator:
         route_pattern = condition.get("routePattern")
 
         if route_pattern:
-            # TODO: Improve route group extraction (currently fragile)
-            # Should use (pattern, group_index) tuples for clarity
-            # See: RULES_SYSTEM_EXPLAINED.md, SORUN 2
-
-            # Look for API route definitions
+            # Route definitions with (regex_pattern, group_index_for_route_path)
+            # Each tuple specifies which capture group contains the actual route path
             route_definitions = [
-                r'@app\.(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']',
-                r'@router\.(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']',
-                r'Route\s*\(\s*["\']([^"\']+)["\']',
+                # Python frameworks (Flask, FastAPI, etc.)
+                (r'@app\.(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']', 2),
+                (r'@router\.(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']', 2),
+                (r'@bp\.(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']', 2),
+                # Generic Route() pattern
+                (r'Route\s*\(\s*["\']([^"\']+)["\']', 1),
+                # Express.js / Node.js
+                (r'(?:app|router)\.(get|post|put|delete|patch|all)\s*\(\s*["\']([^"\']+)["\']', 2),
+                # Go (gin/echo/chi)
+                (r'\.(?:GET|POST|PUT|DELETE|PATCH|Handle|HandleFunc)\s*\(\s*["\']([^"\']+)["\']', 1),
+                # Java Spring
+                (r'@(?:Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']', 1),
+                # Dart/Flutter (shelf/dart_frog)
+                (r'(?:router|app)\.(get|post|put|delete)\s*\(\s*["\']([^"\']+)["\']', 2),
             ]
 
-            for route_def_pattern in route_definitions:
+            # Track processed lines to prevent duplicate violations
+            processed_lines = set()
+
+            for route_def_pattern, group_idx in route_definitions:
                 for i, line in enumerate(lines, start=1):
                     if self._is_suppressed(line):
                         continue
 
+                    # Skip if we've already found a violation on this line
+                    if i in processed_lines:
+                        continue
+
                     match = re.search(route_def_pattern, line)
                     if match:
-                        route = match.group(2) if match.lastindex >= 2 else match.group(1)
+                        route = match.group(group_idx)
+                        logger.debug("route_detected", line=i, route=route, pattern_type=route_def_pattern[:30])
+
                         if not re.match(route_pattern, route):
                             violations.append(
                                 CustomRuleViolation(
@@ -522,6 +539,8 @@ class CustomRuleValidator:
                                     suggestion=f"API routes must match pattern: {route_pattern}",
                                 )
                             )
+                            # Mark this line as processed
+                            processed_lines.add(i)
 
         return violations
 

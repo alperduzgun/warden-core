@@ -409,9 +409,9 @@ class AnalysisPhase:
         metrics = await self.execute_async(code_files)
 
         if self.config.get("use_llm", False):
-            logger.info("llm_enhancement_requested_but_not_implemented")
-            # TODO: Integrate LLM analyzer when available
-            # llm_insights = await self.llm_analyzer.enhance_metrics(metrics, code_files)
-            # metrics.llm_insights = llm_insights
+            logger.info(
+                "llm_metrics_enhancement_not_available",
+                message="LLM-enhanced metrics analysis is planned but not yet implemented"
+            )
 
         return metrics
