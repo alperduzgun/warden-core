@@ -808,27 +808,16 @@ def configure_vector_db() -> dict:
         }
 
 
-def configure_agent_tools(project_root: Path) -> None:
-    """
-    Configure project for AI Agents (Cursor, Claude Desktop).
-    1. Generate AI_RULES.md
-    2. Update .cursorrules or .windsurfrules
-    3. Update MCP configuration
-    """
-    console.print("\n[bold cyan]🤖 Configuring Agent Tools (Cursor / Claude)[/bold cyan]")
-
-    # 1. AI_RULES.md
+def _generate_agent_protocol(project_root: Path) -> Path:
+    """Generate .warden/AI_RULES.md agent protocol file."""
     warden_dir = project_root / ".warden"
     warden_dir.mkdir(exist_ok=True)
     rules_path = warden_dir / "AI_RULES.md"
 
-    # Built-in template
     try:
-        # Attempt to read from package resources or relative path
         import importlib.resources
         template_content = importlib.resources.read_text("warden.templates", "AI_RULES.md")
     except Exception:
-        # Fallback simplistic content if template is missing/moved
         template_content = """# Warden Agent Protocol
 
 ## 🚀 Setup Assistance
@@ -846,12 +835,19 @@ def configure_agent_tools(project_root: Path) -> None:
     with open(rules_path, "w") as f:
         f.write(template_content)
     console.print(f"[green]✓ Created Agent Protocol: {rules_path}[/green]")
+    return rules_path
 
-    # 2. Update .cursorrules / .windsurfrules
+
+def _configure_ide_rules(project_root: Path, rules_path: Path) -> None:
+    """Inject Warden protocol into .cursorrules / .windsurfrules."""
     rule_files = [".cursorrules", ".windsurfrules"]
     found_rule_file = False
 
-    instruction = f"\n\n# Warden Agent Protocol\n# IMPORTANT: You MUST follow the rules in {rules_path}\n# Run 'warden scan' to verify your work.\n"
+    instruction = (
+        f"\n\n# Warden Agent Protocol\n"
+        f"# IMPORTANT: You MUST follow the rules in {rules_path}\n"
+        f"# Run 'warden scan' to verify your work.\n"
+    )
 
     for rf in rule_files:
         rf_path = project_root / rf
@@ -866,13 +862,14 @@ def configure_agent_tools(project_root: Path) -> None:
             found_rule_file = True
 
     if not found_rule_file:
-        # Create .cursorrules by default if none exist
         default_rules = project_root / ".cursorrules"
         with open(default_rules, "w") as f:
             f.write(instruction)
         console.print(f"[green]✓ Created {default_rules}[/green]")
 
-    # 2.5: Create Claude Hooks (Verified Pattern)
+
+def _configure_claude_hooks(project_root: Path) -> None:
+    """Create .claude/settings.json with SessionStart hook."""
     claude_dir = project_root / ".claude"
     claude_dir.mkdir(exist_ok=True)
     settings_path = claude_dir / "settings.json"
@@ -897,77 +894,60 @@ def configure_agent_tools(project_root: Path) -> None:
             json.dump(hooks_config, f, indent=2)
         console.print(f"[green]✓ Created Claude Hooks: {settings_path}[/green]")
 
-    # 3. Configure MCP (Global Configs)
-    import sys
 
-    # Path to warden executable
-    # Priority 1: Current Python Environment's Warden (venv)
-    # This ensures we use the version installed in this environment
+def _resolve_warden_executable() -> str:
+    """Resolve absolute path to the warden CLI binary."""
+    # Priority 1: Current venv
     venv_warden = Path(sys.prefix) / "bin" / "warden"
-
-    warden_abs = None
     if venv_warden.exists():
-         warden_abs = str(venv_warden)
-    else:
-        # Priority 2: System Path (Resolve to absolute)
-        # shutil.which returns absolute path if found
-        which_warden = shutil.which("warden")
-        if which_warden:
-            warden_abs = which_warden
-        else:
-             # Priority 3: Common Homebrew/Local locations
-             # GUI apps often don't have user PATH, so we must be explicit
-             common_paths = [
-                 Path("/opt/homebrew/bin/warden"),
-                 Path("/usr/local/bin/warden"),
-                 Path.home() / ".local/bin/warden"
-             ]
-             for p in common_paths:
-                 if p.exists():
-                     warden_abs = str(p)
-                     break
+        return str(venv_warden)
 
-    # Fallback (User must verify PATH)
-    if not warden_abs:
-        warden_abs = "warden"
-        console.print("[yellow]Warning: Could not resolve absolute path for 'warden'. utilizing relative path.[/yellow]")
+    # Priority 2: System PATH
+    which_warden = shutil.which("warden")
+    if which_warden:
+        return which_warden
+
+    # Priority 3: Common install locations (GUI apps lack user PATH)
+    common_paths = [
+        Path("/opt/homebrew/bin/warden"),
+        Path("/usr/local/bin/warden"),
+        Path.home() / ".local/bin/warden",
+    ]
+    for p in common_paths:
+        if p.exists():
+            return str(p)
+
+    console.print("[yellow]Warning: Could not resolve absolute path for 'warden'. Using relative path.[/yellow]")
+    return "warden"
+
+
+def _configure_mcp_servers(project_root: Path) -> None:
+    """Register warden MCP server in Cursor, Claude Desktop, Claude Code, Gemini."""
+    warden_abs = _resolve_warden_executable()
 
     mcp_config_entry = {
         "command": warden_abs,
         "args": ["serve", "mcp"],
         "env": {
-             "ProjectRoot": str(project_root.resolve())
-        }
+            "ProjectRoot": str(project_root.resolve())
+        },
     }
 
     configs_to_update = [
         Path.home() / ".cursor" / "mcp.json",
         Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
-        Path.home() / ".config" / "claude-code" / "mcp_settings.json", # Claude Code CLI
-        Path.home() / ".gemini" / "antigravity" / "mcp_config.json", # Antigravity Support
+        Path.home() / ".config" / "claude-code" / "mcp_settings.json",
+        Path.home() / ".gemini" / "antigravity" / "mcp_config.json",
     ]
 
     for cfg_path in configs_to_update:
         if cfg_path.exists():
             try:
-                with open(cfg_path) as f:
-                    content = f.read().strip()
-                    if not content:
-                        data = {}
-                    else:
-                        data = json.loads(content)
+                content = cfg_path.read_text().strip()
+                data = json.loads(content) if content else {}
 
                 if "mcpServers" not in data:
                     data["mcpServers"] = {}
-
-                # Check if warden exists or needs update
-                data["mcpServers"].get("warden")
-
-                # Update if missing or root is different (simple overwrite strategy for now)
-                # Ideally we want to support multiple projects.
-                # Standard MCP doesn't support "context-aware" switching easily yet without specific extension support.
-                # So we update the 'warden' key to point to THIS project.
-                # Warning: This overwrites previous project binding.
 
                 data["mcpServers"]["warden"] = mcp_config_entry
 
@@ -977,3 +957,21 @@ def configure_agent_tools(project_root: Path) -> None:
 
             except Exception as e:
                 console.print(f"[red]Failed to update {cfg_path.name}: {e}[/red]")
+
+
+def configure_agent_tools(project_root: Path) -> None:
+    """
+    Configure project for AI Agents (Cursor, Claude Desktop, Claude Code).
+
+    Orchestrates four independent steps:
+    1. Generate .warden/AI_RULES.md protocol file
+    2. Inject rules into IDE config (.cursorrules / .windsurfrules)
+    3. Create Claude Code hooks (.claude/settings.json)
+    4. Register warden MCP server in all supported tools
+    """
+    console.print("\n[bold cyan]🤖 Configuring Agent Tools (Cursor / Claude)[/bold cyan]")
+
+    rules_path = _generate_agent_protocol(project_root)
+    _configure_ide_rules(project_root, rules_path)
+    _configure_claude_hooks(project_root)
+    _configure_mcp_servers(project_root)
