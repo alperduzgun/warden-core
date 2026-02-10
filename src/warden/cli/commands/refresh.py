@@ -191,7 +191,7 @@ async def _refresh_intelligence_async(
 def refresh_command(
     ctx: typer.Context,
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration even if recent"),
-    no_intelligence: bool = typer.Option(False, "--no-intelligence", help="Skip intelligence refresh", flag_value=True),
+    no_intelligence: bool = typer.Option(False, "--no-intelligence", help="Skip intelligence refresh"),
     baseline: bool = typer.Option(False, "--baseline", "-b", help="Also refresh baseline (runs scan)"),
     module: Optional[str] = typer.Option(None, "--module", "-m", help="Refresh only specific module"),
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick mode: only analyze new files"),

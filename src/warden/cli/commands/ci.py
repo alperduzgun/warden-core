@@ -227,8 +227,7 @@ def ci_update(
     no_preserve_custom: bool = typer.Option(
         False,
         "--no-preserve-custom",
-        help="Overwrite custom sections in workflow files",
-        flag_value=True
+        help="Overwrite custom sections in workflow files"
     ),
     dry_run: bool = typer.Option(
         False,

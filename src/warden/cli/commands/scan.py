@@ -190,7 +190,7 @@ def scan_command(
     ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
     base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
-    no_update_baseline: bool = typer.Option(False, "--no-update-baseline", help="Skip baseline update after scan", flag_value=True),
+    no_update_baseline: bool = typer.Option(False, "--no-update-baseline", help="Skip baseline update after scan"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
