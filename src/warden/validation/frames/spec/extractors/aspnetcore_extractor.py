@@ -23,21 +23,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -94,8 +94,8 @@ class AspNetCoreExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("aspnetcore_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -185,7 +185,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
         file_path: Path,
         controller_route: str,
         controller_name: str,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """
         Extract operations from controller actions.
 
@@ -196,7 +196,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
             [HttpPost("create")]
             public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
         """
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for HTTP attributes with optional route
         # [HttpGet], [HttpGet("path")], [HttpGet("{id}")]
@@ -267,7 +267,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
             parts.append(action_route.strip("/"))
         return "/" + "/".join(parts) if parts else "/"
 
-    def _extract_from_body_param(self, params: str) -> Optional[str]:
+    def _extract_from_body_param(self, params: str) -> str | None:
         """Extract type from [FromBody] parameter."""
         # [FromBody] TypeName paramName
         pattern = re.compile(r"\[FromBody\]\s*(\w+)")
@@ -288,7 +288,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """
         Extract models from C# classes and records.
 
@@ -296,7 +296,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
             public class UserDto { public string Name { get; set; } }
             public record CreateUserRequest(string Name, string Email);
         """
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Pattern for class definition
         class_pattern = re.compile(
@@ -343,7 +343,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
 
             class_body = content[start:end]
 
-            fields: List[FieldDefinition] = []
+            fields: list[FieldDefinition] = []
 
             # Extract properties
             for prop_match in property_pattern.finditer(class_body):
@@ -399,9 +399,9 @@ class AspNetCoreExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[EnumDefinition]:
+    ) -> list[EnumDefinition]:
         """Extract enums from C# code."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
 
         # Pattern for enum
         # public enum Status { Active, Inactive }
@@ -415,7 +415,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
             enum_body = enum_match.group(2)
 
             # Extract values
-            values: List[str] = []
+            values: list[str] = []
             value_pattern = re.compile(r"(\w+)(?:\s*=\s*\d+)?")
 
             for value_match in value_pattern.finditer(enum_body):

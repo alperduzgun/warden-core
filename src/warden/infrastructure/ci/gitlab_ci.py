@@ -5,8 +5,8 @@ Generates GitLab CI pipeline files for running Warden in CI/CD.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 from pathlib import Path
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -15,11 +15,11 @@ class GitLabCIConfig:
 
     stage_name: str = "analysis"
     image: str = "python:3.11"
-    warden_version: Optional[str] = None
+    warden_version: str | None = None
     fail_on_issues: bool = True
     cache_dependencies: bool = True
-    frames: Optional[List[str]] = None
-    rules: Optional[List[Dict[str, str]]] = None
+    frames: list[str] | None = None
+    rules: list[dict[str, str]] | None = None
 
     def __post_init__(self):
         if self.frames is None:
@@ -114,7 +114,7 @@ cache:
 """
 
     @staticmethod
-    def _generate_rules(rules: List[Dict[str, str]]) -> str:
+    def _generate_rules(rules: list[dict[str, str]]) -> str:
         """Generate rules section."""
         if not rules:
             return ""

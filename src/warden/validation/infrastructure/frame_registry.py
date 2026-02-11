@@ -8,17 +8,17 @@ Discovers and loads frames from:
 4. Environment variable (WARDEN_FRAME_PATHS)
 """
 
-import os
-import sys
 import importlib
 import importlib.util
-from pathlib import Path
-from typing import List, Type, Dict, Any, Optional
+import os
+import sys
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Type
 
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import ValidationFrame, ValidationFrameError
 from warden.validation.infrastructure.frame_metadata import FrameMetadata
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -57,11 +57,11 @@ class FrameRegistry:
 
     def __init__(self) -> None:
         """Initialize frame registry."""
-        self.registered_frames: Dict[str, Type[ValidationFrame]] = {}
-        self.frame_metadata: Dict[str, FrameMetadata] = {}
-        self._config_cache: Dict[str, Dict[str, Any]] = {}  # Cache for merged configs
+        self.registered_frames: dict[str, type[ValidationFrame]] = {}
+        self.frame_metadata: dict[str, FrameMetadata] = {}
+        self._config_cache: dict[str, dict[str, Any]] = {}  # Cache for merged configs
 
-    def discover_all(self, project_root: Optional[Path] = None) -> List[Type[ValidationFrame]]:
+    def discover_all(self, project_root: Path | None = None) -> list[type[ValidationFrame]]:
         """
         Discover all available frames from all sources.
 
@@ -137,7 +137,7 @@ class FrameRegistry:
 
         return unique_frames
 
-    def register(self, frame_class: Type[ValidationFrame]) -> None:
+    def register(self, frame_class: type[ValidationFrame]) -> None:
         """
         Register a frame class.
 
@@ -160,7 +160,7 @@ class FrameRegistry:
         self.registered_frames[frame_id] = frame_class
         # Silently register (summary logged in frame_discovery_complete)
 
-    def get(self, frame_id: str) -> Type[ValidationFrame] | None:
+    def get(self, frame_id: str) -> type[ValidationFrame] | None:
         """
         Get a registered frame by ID.
 
@@ -172,11 +172,11 @@ class FrameRegistry:
         """
         return self.registered_frames.get(frame_id)
 
-    def get_all(self) -> List[Type[ValidationFrame]]:
+    def get_all(self) -> list[type[ValidationFrame]]:
         """Get all registered frames."""
         return list(self.registered_frames.values())
 
-    def get_frame_by_id(self, frame_id: str) -> Type[ValidationFrame] | None:
+    def get_frame_by_id(self, frame_id: str) -> type[ValidationFrame] | None:
         """
         Get a frame class by its ID.
 
@@ -188,7 +188,7 @@ class FrameRegistry:
         """
         return self.registered_frames.get(frame_id)
 
-    def get_all_frames_as_dict(self) -> Dict[str, Type[ValidationFrame]]:
+    def get_all_frames_as_dict(self) -> dict[str, type[ValidationFrame]]:
         """
         Get all registered frames as a dictionary.
 
@@ -208,7 +208,7 @@ class FrameRegistry:
 
         return self.registered_frames.copy()
 
-    def get_all_frames_with_metadata(self) -> List[FrameListItem]:
+    def get_all_frames_with_metadata(self) -> list[FrameListItem]:
         """
         Get all registered frames with display metadata (for CLI UI).
 
@@ -230,7 +230,7 @@ class FrameRegistry:
         if not self.registered_frames:
             self.discover_all()
 
-        frames_list: List[FrameListItem] = []
+        frames_list: list[FrameListItem] = []
 
         for frame_id, frame_class in self.registered_frames.items():
             # Instantiate to get metadata
@@ -297,7 +297,7 @@ class FrameRegistry:
 
         return frames_list
 
-    def _discover_builtin_frames(self) -> List[Type[ValidationFrame]]:
+    def _discover_builtin_frames(self) -> list[type[ValidationFrame]]:
         """
         Discover built-in frames from warden.validation.frames.
 
@@ -307,7 +307,7 @@ class FrameRegistry:
         Returns:
             List of built-in ValidationFrame classes
         """
-        frames: List[Type[ValidationFrame]] = []
+        frames: list[type[ValidationFrame]] = []
 
         try:
             # Get frames directory path
@@ -423,7 +423,7 @@ class FrameRegistry:
 
         return frames
 
-    def _discover_entry_point_frames(self) -> List[Type[ValidationFrame]]:
+    def _discover_entry_point_frames(self) -> list[type[ValidationFrame]]:
         """
         Discover frames via Python entry points (PyPI packages).
 
@@ -436,7 +436,7 @@ class FrameRegistry:
         Returns:
             List of ValidationFrame classes from entry points
         """
-        frames: List[Type[ValidationFrame]] = []
+        frames: list[type[ValidationFrame]] = []
 
         try:
             # Try importlib.metadata (Python 3.10+)
@@ -489,7 +489,7 @@ class FrameRegistry:
 
         return frames
 
-    def _discover_local_frames(self, project_root: Optional[Path] = None) -> List[Type[ValidationFrame]]:
+    def _discover_local_frames(self, project_root: Path | None = None) -> list[type[ValidationFrame]]:
         """
         Discover frames from local directories.
 
@@ -499,7 +499,7 @@ class FrameRegistry:
 
         If project_root is not provided, defaults to Path.cwd().
         """
-        frames: List[Type[ValidationFrame]] = []
+        frames: list[type[ValidationFrame]] = []
 
         # 1. Global frames directory (~/.warden/frames/)
         global_frames_dir = Path.home() / ".warden" / "frames"
@@ -562,7 +562,7 @@ class FrameRegistry:
 
         return frames
 
-    def _discover_env_frames(self) -> List[Type[ValidationFrame]]:
+    def _discover_env_frames(self) -> list[type[ValidationFrame]]:
         """
         Discover frames from WARDEN_FRAME_PATHS environment variable.
 
@@ -571,7 +571,7 @@ class FrameRegistry:
         Returns:
             List of ValidationFrame classes from environment paths
         """
-        frames: List[Type[ValidationFrame]] = []
+        frames: list[type[ValidationFrame]] = []
         env_paths = os.getenv("WARDEN_FRAME_PATHS", "")
 
         if not env_paths:
@@ -613,7 +613,7 @@ class FrameRegistry:
 
         return frames
 
-    def _load_local_frame(self, frame_dir: Path) -> Type[ValidationFrame] | None:
+    def _load_local_frame(self, frame_dir: Path) -> type[ValidationFrame] | None:
         """
         Load a frame from a local directory.
 
@@ -685,7 +685,7 @@ class FrameRegistry:
         logger.warning("no_frame_class_found", path=str(frame_dir))
         return None
 
-    def _validate_frame_class(self, frame_class: Type[ValidationFrame]) -> None:
+    def _validate_frame_class(self, frame_class: type[ValidationFrame]) -> None:
         """
         Validate that a class is a proper ValidationFrame.
 
@@ -713,8 +713,8 @@ class FrameRegistry:
             )
 
     def _deduplicate_frames(
-        self, frames: List[Type[ValidationFrame]]
-    ) -> List[Type[ValidationFrame]]:
+        self, frames: list[type[ValidationFrame]]
+    ) -> list[type[ValidationFrame]]:
         """
         Remove duplicate frames (by frame_id).
 
@@ -744,8 +744,8 @@ class FrameRegistry:
         return unique_frames
 
     def get_frame_config(
-        self, frame_id: str, user_config: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
+        self, frame_id: str, user_config: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Get merged frame configuration (defaults from metadata + user overrides).
 
@@ -784,7 +784,7 @@ class FrameRegistry:
             return self._config_cache[cache_key].copy()
 
         # Start with empty config
-        merged_config: Dict[str, Any] = {}
+        merged_config: dict[str, Any] = {}
 
         # 1. Get defaults from frame metadata (if available)
         if frame_id in self.frame_metadata:
@@ -814,7 +814,7 @@ class FrameRegistry:
 
         return merged_config
 
-    def _generate_default_config(self, metadata: FrameMetadata) -> Dict[str, Any]:
+    def _generate_default_config(self, metadata: FrameMetadata) -> dict[str, Any]:
         """
         Generate default configuration from frame metadata schema.
 
@@ -839,7 +839,7 @@ class FrameRegistry:
             >>> # Generated config
             >>> {"enabled": true, "check_ssl": true}
         """
-        default_config: Dict[str, Any] = {}
+        default_config: dict[str, Any] = {}
 
         # Always default to enabled unless explicitly configured
         default_config["enabled"] = True

@@ -11,14 +11,15 @@ Universal AST Support:
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Set, List
+from typing import Any, List, Optional, Set
+
 import structlog
 
+from warden.ast.application.provider_registry import ASTProviderRegistry
+from warden.ast.domain.enums import ASTNodeType, CodeLanguage, ParseStatus
+from warden.ast.domain.models import ASTNode
 from warden.cleaning.domain.models import CleaningResult
 from warden.validation.domain.frame import CodeFile
-from warden.ast.application.provider_registry import ASTProviderRegistry
-from warden.ast.domain.enums import CodeLanguage, ASTNodeType, ParseStatus
-from warden.ast.domain.models import ASTNode
 
 logger = structlog.get_logger()
 
@@ -58,7 +59,7 @@ class BaseCleaningAnalyzer(ABC):
 
     def __init__(self):
         """Initialize analyzer with Universal AST support."""
-        self._ast_registry: Optional[ASTProviderRegistry] = None
+        self._ast_registry: ASTProviderRegistry | None = None
 
     async def _ensure_ast_registry(self) -> None:
         """Ensure AST provider registry is initialized (lazy init)."""
@@ -69,8 +70,8 @@ class BaseCleaningAnalyzer(ABC):
     async def _get_ast_root(
         self,
         code_file: CodeFile,
-        ast_tree: Optional[Any] = None
-    ) -> Optional[ASTNode]:
+        ast_tree: Any | None = None
+    ) -> ASTNode | None:
         """
         Get Universal AST root for a code file.
 
@@ -141,7 +142,7 @@ class BaseCleaningAnalyzer(ABC):
         pass
 
     @property
-    def supported_languages(self) -> Set[str]:
+    def supported_languages(self) -> set[str]:
         """
         Languages supported by this analyzer.
 
@@ -159,8 +160,8 @@ class BaseCleaningAnalyzer(ABC):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze code for cleanup opportunities.
@@ -219,7 +220,7 @@ class BaseCleaningAnalyzer(ABC):
     # Universal AST Helper Methods (Multi-Language Support)
     # =========================================================================
 
-    def _get_functions_and_methods(self, ast_root: ASTNode) -> List[ASTNode]:
+    def _get_functions_and_methods(self, ast_root: ASTNode) -> list[ASTNode]:
         """
         Find all functions and methods in Universal AST.
 
@@ -235,7 +236,7 @@ class BaseCleaningAnalyzer(ABC):
         methods = ast_root.find_nodes(ASTNodeType.METHOD)
         return functions + methods
 
-    def _count_function_lines_universal(self, node: ASTNode, lines: List[str]) -> int:
+    def _count_function_lines_universal(self, node: ASTNode, lines: list[str]) -> int:
         """
         Count non-empty lines in a function (Universal AST).
 
@@ -318,9 +319,7 @@ class BaseCleaningAnalyzer(ABC):
             if node.node_type in (
                 ASTNodeType.IF_STATEMENT,
                 ASTNodeType.LOOP_STATEMENT,
-            ):
-                count += 1
-            elif node.node_type == ASTNodeType.TRY_CATCH:
+            ) or node.node_type == ASTNodeType.TRY_CATCH:
                 count += 1
             elif node.node_type == ASTNodeType.BINARY_EXPRESSION:
                 # Boolean operators (&&, ||) add complexity

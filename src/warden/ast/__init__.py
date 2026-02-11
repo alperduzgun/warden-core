@@ -36,6 +36,11 @@ Community Provider Example (PyPI):
     # Warden auto-discovers and registers your provider
 """
 
+from warden.ast.application import (
+    ASTProviderLoader,
+    ASTProviderRegistry,
+    IASTProvider,
+)
 from warden.ast.domain import (
     ASTNode,
     ASTNodeType,
@@ -46,11 +51,6 @@ from warden.ast.domain import (
     ParseResult,
     ParseStatus,
     SourceLocation,
-)
-from warden.ast.application import (
-    IASTProvider,
-    ASTProviderLoader,
-    ASTProviderRegistry,
 )
 
 __all__ = [

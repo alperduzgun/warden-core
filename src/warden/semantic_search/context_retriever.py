@@ -59,7 +59,7 @@ class ContextRetriever:
     async def retrieve_context(
         self,
         query: str,
-        language: Optional[str] = None,
+        language: str | None = None,
         max_chunks: int = 10,
     ) -> RetrievalContext:
         """
@@ -125,7 +125,7 @@ class ContextRetriever:
 
     def _select_chunks_within_budget(
         self, results: list, max_chunks: int
-    ) -> tuple[List[CodeChunk], List[float]]:
+    ) -> tuple[list[CodeChunk], list[float]]:
         """
         Select chunks that fit within token budget.
 
@@ -172,8 +172,8 @@ class ContextRetriever:
 
     async def retrieve_multi_query_context(
         self,
-        queries: List[str],
-        language: Optional[str] = None,
+        queries: list[str],
+        language: str | None = None,
         chunks_per_query: int = 5,
     ) -> RetrievalContext:
         """
@@ -217,7 +217,7 @@ class ContextRetriever:
         final_chunks, final_scores = self._select_chunks_within_budget(
             [
                 type("Result", (), {"chunk": chunk, "score": score})
-                for chunk, score in zip(all_chunks, all_scores)
+                for chunk, score in zip(all_chunks, all_scores, strict=False)
             ],
             max_chunks=len(all_chunks),
         )
@@ -301,7 +301,7 @@ class ContextRetriever:
         ]
 
         for i, (chunk, score) in enumerate(
-            zip(context.relevant_chunks, context.search_scores), start=1
+            zip(context.relevant_chunks, context.search_scores, strict=False), start=1
         ):
             parts.extend(
                 [
@@ -329,7 +329,7 @@ class ContextOptimizer:
     """
 
     @staticmethod
-    def deduplicate_chunks(chunks: List[CodeChunk]) -> List[CodeChunk]:
+    def deduplicate_chunks(chunks: list[CodeChunk]) -> list[CodeChunk]:
         """
         Remove duplicate chunks based on content hash.
 
@@ -357,8 +357,8 @@ class ContextOptimizer:
 
     @staticmethod
     def sort_by_relevance(
-        chunks: List[CodeChunk], scores: List[float]
-    ) -> tuple[List[CodeChunk], List[float]]:
+        chunks: list[CodeChunk], scores: list[float]
+    ) -> tuple[list[CodeChunk], list[float]]:
         """
         Sort chunks by relevance score (descending).
 
@@ -369,7 +369,7 @@ class ContextOptimizer:
         Returns:
             Sorted (chunks, scores)
         """
-        pairs = list(zip(chunks, scores))
+        pairs = list(zip(chunks, scores, strict=False))
         pairs.sort(key=lambda x: x[1], reverse=True)
 
         sorted_chunks = [pair[0] for pair in pairs]
@@ -379,8 +379,8 @@ class ContextOptimizer:
 
     @staticmethod
     def filter_by_score(
-        chunks: List[CodeChunk], scores: List[float], min_score: float
-    ) -> tuple[List[CodeChunk], List[float]]:
+        chunks: list[CodeChunk], scores: list[float], min_score: float
+    ) -> tuple[list[CodeChunk], list[float]]:
         """
         Filter chunks by minimum score.
 
@@ -394,7 +394,7 @@ class ContextOptimizer:
         """
         filtered_pairs = [
             (chunk, score)
-            for chunk, score in zip(chunks, scores)
+            for chunk, score in zip(chunks, scores, strict=False)
             if score >= min_score
         ]
 

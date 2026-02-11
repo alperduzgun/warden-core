@@ -27,6 +27,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from warden.ast.application.provider_registry import ASTProviderRegistry
+from warden.ast.domain.enums import CodeLanguage
+
+# AST imports
+from warden.ast.domain.models import ASTNode
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
     FrameApplicability,
@@ -42,23 +47,18 @@ from warden.validation.domain.frame import (
     ValidationFrame,
 )
 
-# AST imports
-from warden.ast.domain.models import ASTNode
-from warden.ast.domain.enums import CodeLanguage
-from warden.ast.application.provider_registry import ASTProviderRegistry
+# Detectors
+from warden.validation.frames.antipattern.detectors import (
+    ClassSizeDetector,
+    DebugDetector,
+    ExceptionDetector,
+    TodoDetector,
+)
 
 # Types
 from warden.validation.frames.antipattern.types import (
     AntiPatternSeverity,
     AntiPatternViolation,
-)
-
-# Detectors
-from warden.validation.frames.antipattern.detectors import (
-    ExceptionDetector,
-    ClassSizeDetector,
-    DebugDetector,
-    TodoDetector,
 )
 
 logger = get_logger(__name__)
@@ -96,13 +96,13 @@ class AntiPatternFrame(ValidationFrame):
     applicability = [FrameApplicability.ALL]
 
     # Singleton registry instance (lazy loaded)
-    _registry: Optional[ASTProviderRegistry] = None
+    _registry: ASTProviderRegistry | None = None
 
     @property
     def frame_id(self) -> str:
         return "antipattern"
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize AntiPatternFrame with detectors."""
         super().__init__(config)
 
@@ -174,12 +174,12 @@ class AntiPatternFrame(ValidationFrame):
         if self.ignore_test_files and self._is_test_file(code_file.path):
             return self._create_skipped_result(start_time, "Test file (ignored)")
 
-        violations: List[AntiPatternViolation] = []
-        checks_executed: List[str] = []
+        violations: list[AntiPatternViolation] = []
+        checks_executed: list[str] = []
         lines = code_file.content.split("\n")
 
         # Try to get Universal AST
-        ast_root: Optional[ASTNode] = None
+        ast_root: ASTNode | None = None
         if self.prefer_ast and isinstance(language, CodeLanguage):
             ast_root = await self._get_ast(code_file.content, language, code_file.path)
 
@@ -263,7 +263,7 @@ class AntiPatternFrame(ValidationFrame):
     # LANGUAGE DETECTION
     # =========================================================================
 
-    def _detect_language(self, code_file: CodeFile) -> Optional[CodeLanguage]:
+    def _detect_language(self, code_file: CodeFile) -> CodeLanguage | None:
         """Detect language from file, returning CodeLanguage enum."""
         # Try LanguageRegistry first
         try:
@@ -320,7 +320,7 @@ class AntiPatternFrame(ValidationFrame):
 
     async def _get_ast(
         self, content: str, language: CodeLanguage, file_path: str
-    ) -> Optional[ASTNode]:
+    ) -> ASTNode | None:
         """Get Universal AST for content using best available provider."""
         registry = self._get_registry()
         provider = registry.get_provider(language)
@@ -343,8 +343,8 @@ class AntiPatternFrame(ValidationFrame):
     # =========================================================================
 
     def _violations_to_findings(
-        self, violations: List[AntiPatternViolation]
-    ) -> List[Finding]:
+        self, violations: list[AntiPatternViolation]
+    ) -> list[Finding]:
         """Convert violations to Frame findings."""
         findings = []
 

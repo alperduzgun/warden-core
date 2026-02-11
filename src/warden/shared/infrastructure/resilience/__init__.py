@@ -9,17 +9,17 @@ Provides common fault-tolerance patterns:
 - Resilient Operation
 """
 
-from .timeout import OperationTimeoutError, TimeoutError, with_timeout_async, timeout
-from .retry import RetryConfig, RetryExhausted, with_retry_async, retry
+from .bulkhead import Bulkhead, BulkheadConfig, BulkheadFull
 from .circuit_breaker import (
-    CircuitState,
+    CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerOpen,
-    CircuitBreaker,
+    CircuitState,
     circuit_breaker,
 )
-from .bulkhead import BulkheadConfig, BulkheadFull, Bulkhead
 from .combined import ResilienceConfig, ResilientOperation, resilient
+from .retry import RetryConfig, RetryExhausted, retry, with_retry_async
+from .timeout import OperationTimeoutError, TimeoutError, timeout, with_timeout_async
 
 # Backwards compatibility aliases (these are async functions)
 # NOTE: Prefer using with_timeout_async/with_retry_async directly for clarity

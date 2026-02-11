@@ -10,18 +10,18 @@ Detects exception handling anti-patterns:
 import re
 from typing import List, Optional
 
-from warden.ast.domain.models import ASTNode
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
+from warden.ast.domain.models import ASTNode
 from warden.validation.domain.frame import CodeFile
-from warden.validation.frames.antipattern.types import (
-    AntiPatternSeverity,
-    AntiPatternViolation,
-)
 from warden.validation.frames.antipattern.constants import (
     TRY_CATCH_NODE_TYPES,
     get_exception_patterns,
 )
 from warden.validation.frames.antipattern.detectors.base import BaseDetector
+from warden.validation.frames.antipattern.types import (
+    AntiPatternSeverity,
+    AntiPatternViolation,
+)
 
 
 class ExceptionDetector(BaseDetector):
@@ -31,9 +31,9 @@ class ExceptionDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
+        lines: list[str],
         ast_root: ASTNode,
-    ) -> List[AntiPatternViolation]:
+    ) -> list[AntiPatternViolation]:
         """Detect exception handling anti-patterns using Universal AST."""
         violations = []
         violations.extend(self._detect_catch_issues_ast(code_file, language, lines, ast_root))
@@ -44,8 +44,8 @@ class ExceptionDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
-    ) -> List[AntiPatternViolation]:
+        lines: list[str],
+    ) -> list[AntiPatternViolation]:
         """Detect exception handling anti-patterns using regex."""
         violations = []
         violations.extend(self._detect_catch_issues_regex(code_file, language, lines))
@@ -60,13 +60,13 @@ class ExceptionDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
+        lines: list[str],
         ast_root: ASTNode,
-    ) -> List[AntiPatternViolation]:
+    ) -> list[AntiPatternViolation]:
         """Detect catch block issues using AST."""
         violations = []
 
-        def walk(node: ASTNode, parent: Optional[ASTNode] = None):
+        def walk(node: ASTNode, parent: ASTNode | None = None):
             original_type = node.attributes.get("original_type", "")
 
             if original_type in TRY_CATCH_NODE_TYPES or node.node_type == ASTNodeType.TRY_CATCH:
@@ -133,7 +133,7 @@ class ExceptionDetector(BaseDetector):
         return False
 
     def _is_bare_catch(
-        self, node: ASTNode, original_type: str, language: CodeLanguage, lines: List[str]
+        self, node: ASTNode, original_type: str, language: CodeLanguage, lines: list[str]
     ) -> bool:
         """Check if catch block catches all exceptions without proper handling."""
         if original_type not in {"except_clause", "catch_clause", "rescue"}:
@@ -204,9 +204,9 @@ class ExceptionDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
+        lines: list[str],
         ast_root: ASTNode,
-    ) -> List[AntiPatternViolation]:
+    ) -> list[AntiPatternViolation]:
         """Detect generic exception throwing using Universal AST."""
         violations = []
 
@@ -239,7 +239,7 @@ class ExceptionDetector(BaseDetector):
         walk(ast_root)
         return violations
 
-    def _extract_thrown_type(self, throw_node: ASTNode) -> Optional[str]:
+    def _extract_thrown_type(self, throw_node: ASTNode) -> str | None:
         """Extract the exception type being thrown."""
         for child in throw_node.children:
             if child.node_type == ASTNodeType.CALL_EXPRESSION:
@@ -252,7 +252,7 @@ class ExceptionDetector(BaseDetector):
 
         return None
 
-    def _extract_function_name(self, call_node: ASTNode) -> Optional[str]:
+    def _extract_function_name(self, call_node: ASTNode) -> str | None:
         """Extract function name from a call expression node."""
         if call_node.name:
             return call_node.name
@@ -268,8 +268,8 @@ class ExceptionDetector(BaseDetector):
     # =========================================================================
 
     def _detect_catch_issues_regex(
-        self, code_file: CodeFile, language: CodeLanguage, lines: List[str]
-    ) -> List[AntiPatternViolation]:
+        self, code_file: CodeFile, language: CodeLanguage, lines: list[str]
+    ) -> list[AntiPatternViolation]:
         """Detect catch issues using regex (fallback)."""
         violations = []
         content = code_file.content
@@ -315,8 +315,8 @@ class ExceptionDetector(BaseDetector):
         return violations
 
     def _detect_generic_exception_regex(
-        self, code_file: CodeFile, language: CodeLanguage, lines: List[str]
-    ) -> List[AntiPatternViolation]:
+        self, code_file: CodeFile, language: CodeLanguage, lines: list[str]
+    ) -> list[AntiPatternViolation]:
         """Detect generic exception throwing using regex."""
         violations = []
         content = code_file.content

@@ -14,8 +14,8 @@ Validation checks:
 6. No orphaned nodes/edges
 """
 
-from typing import List, Dict, Set
 from collections import deque
+from typing import Dict, List, Set
 
 from warden.config.domain.models import PipelineConfig
 from warden.validation.domain.frame import get_frame_by_id
@@ -30,8 +30,8 @@ class ValidationResult:
     """Validation result with errors and warnings."""
 
     def __init__(self) -> None:
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
     def add_error(self, message: str) -> None:
         """Add validation error."""
@@ -94,13 +94,13 @@ def has_circular_dependency(config: PipelineConfig) -> bool:
     Returns True if circular dependency detected.
     """
     # Build adjacency list
-    graph: Dict[str, List[str]] = {node.id: [] for node in config.nodes}
+    graph: dict[str, list[str]] = {node.id: [] for node in config.nodes}
     for edge in config.edges:
         graph[edge.source].append(edge.target)
 
     # DFS with recursion stack
-    visited: Set[str] = set()
-    rec_stack: Set[str] = set()
+    visited: set[str] = set()
+    rec_stack: set[str] = set()
 
     def dfs(node_id: str) -> bool:
         """DFS helper - returns True if cycle detected."""
@@ -120,12 +120,7 @@ def has_circular_dependency(config: PipelineConfig) -> bool:
         return False
 
     # Run DFS from all nodes
-    for node in config.nodes:
-        if node.id not in visited:
-            if dfs(node.id):
-                return True
-
-    return False
+    return any(node.id not in visited and dfs(node.id) for node in config.nodes)
 
 
 def has_path_start_to_end(config: PipelineConfig) -> bool:
@@ -141,12 +136,12 @@ def has_path_start_to_end(config: PipelineConfig) -> bool:
         return False
 
     # Build adjacency list
-    graph: Dict[str, List[str]] = {node.id: [] for node in config.nodes}
+    graph: dict[str, list[str]] = {node.id: [] for node in config.nodes}
     for edge in config.edges:
         graph[edge.source].append(edge.target)
 
     # BFS from start
-    visited: Set[str] = set()
+    visited: set[str] = set()
     queue: deque = deque([start_node.id])
 
     while queue:
@@ -168,14 +163,14 @@ def has_path_start_to_end(config: PipelineConfig) -> bool:
     return False
 
 
-def find_orphaned_nodes(config: PipelineConfig) -> List[str]:
+def find_orphaned_nodes(config: PipelineConfig) -> list[str]:
     """
     Find nodes not connected to start or end.
 
     Returns list of orphaned node IDs.
     """
     # Build adjacency list (bidirectional for this check)
-    graph: Dict[str, Set[str]] = {node.id: set() for node in config.nodes}
+    graph: dict[str, set[str]] = {node.id: set() for node in config.nodes}
     for edge in config.edges:
         graph[edge.source].add(edge.target)
         graph[edge.target].add(edge.source)
@@ -185,7 +180,7 @@ def find_orphaned_nodes(config: PipelineConfig) -> List[str]:
     if not start_node:
         return []
 
-    visited: Set[str] = set()
+    visited: set[str] = set()
     queue: deque = deque([start_node.id])
 
     while queue:
@@ -209,7 +204,7 @@ def find_orphaned_nodes(config: PipelineConfig) -> List[str]:
     return orphaned
 
 
-def find_orphaned_edges(config: PipelineConfig) -> List[str]:
+def find_orphaned_edges(config: PipelineConfig) -> list[str]:
     """
     Find edges referencing non-existent nodes.
 

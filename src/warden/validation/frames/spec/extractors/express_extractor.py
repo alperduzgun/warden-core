@@ -20,21 +20,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -92,8 +92,8 @@ class ExpressExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("express_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         # Track router prefixes
         router_prefixes: dict = {}
@@ -158,9 +158,9 @@ class ExpressExtractor(BaseContractExtractor):
         content: str,
         file_path: Path,
         router_prefixes: dict,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """Extract Express route operations."""
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for route definitions
         # app.get('/users', handler)
@@ -225,7 +225,7 @@ class ExpressExtractor(BaseContractExtractor):
 
         return operations
 
-    def _extract_body_type(self, content: str, line_index: int) -> Optional[str]:
+    def _extract_body_type(self, content: str, line_index: int) -> str | None:
         """Try to extract request body type from handler."""
         lines = content.split("\n")
         search_range = "\n".join(lines[line_index:line_index + 10])
@@ -248,9 +248,9 @@ class ExpressExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """Extract TypeScript interfaces and types."""
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         interface_pattern = re.compile(
             r"(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+[^{]+)?\s*\{([^}]+)\}",
@@ -286,14 +286,14 @@ class ExpressExtractor(BaseContractExtractor):
         body: str,
         file_path: Path,
         line_num: int,
-    ) -> Optional[ModelDefinition]:
+    ) -> ModelDefinition | None:
         """Parse interface/type body."""
         # Skip Express-specific types
         skip_types = ["Request", "Response", "NextFunction", "Router", "Application"]
         if name in skip_types:
             return None
 
-        fields: List[FieldDefinition] = []
+        fields: list[FieldDefinition] = []
         field_pattern = re.compile(r"(\w+)\s*(\?)?\s*:\s*([^;,\n]+)")
 
         for match in field_pattern.finditer(body):
@@ -318,9 +318,9 @@ class ExpressExtractor(BaseContractExtractor):
             )
         return None
 
-    def _extract_enums(self, content: str, file_path: Path) -> List[EnumDefinition]:
+    def _extract_enums(self, content: str, file_path: Path) -> list[EnumDefinition]:
         """Extract TypeScript enums."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
         enum_pattern = re.compile(r"(?:export\s+)?enum\s+(\w+)\s*\{([^}]+)\}", re.MULTILINE)
 
         for match in enum_pattern.finditer(content):

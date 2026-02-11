@@ -9,15 +9,15 @@ Detects class/file size anti-patterns:
 import ast
 from typing import List
 
-from warden.ast.domain.models import ASTNode
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
+from warden.ast.domain.models import ASTNode
 from warden.validation.domain.frame import CodeFile
+from warden.validation.frames.antipattern.constants import CLASS_NODE_TYPES
+from warden.validation.frames.antipattern.detectors.base import BaseDetector
 from warden.validation.frames.antipattern.types import (
     AntiPatternSeverity,
     AntiPatternViolation,
 )
-from warden.validation.frames.antipattern.constants import CLASS_NODE_TYPES
-from warden.validation.frames.antipattern.detectors.base import BaseDetector
 
 
 class ClassSizeDetector(BaseDetector):
@@ -32,9 +32,9 @@ class ClassSizeDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
+        lines: list[str],
         ast_root: ASTNode,
-    ) -> List[AntiPatternViolation]:
+    ) -> list[AntiPatternViolation]:
         """Detect god classes using Universal AST."""
         violations = []
 
@@ -72,8 +72,8 @@ class ClassSizeDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
-    ) -> List[AntiPatternViolation]:
+        lines: list[str],
+    ) -> list[AntiPatternViolation]:
         """Detect god classes using regex (fallback)."""
         violations = []
 
@@ -106,8 +106,8 @@ class ClassSizeDetector(BaseDetector):
         return violations
 
     def _check_file_size(
-        self, code_file: CodeFile, lines: List[str]
-    ) -> List[AntiPatternViolation]:
+        self, code_file: CodeFile, lines: list[str]
+    ) -> list[AntiPatternViolation]:
         """Check if file exceeds maximum line count."""
         violations = []
         total_lines = len(lines)

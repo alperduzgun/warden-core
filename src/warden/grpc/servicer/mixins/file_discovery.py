@@ -201,8 +201,8 @@ class FileDiscoveryMixin:
         try:
             path = self.bridge.project_root
 
-            files_by_language: Dict[str, int] = {}
-            lines_by_language: Dict[str, int] = {}
+            files_by_language: dict[str, int] = {}
+            lines_by_language: dict[str, int] = {}
             total_size = 0
             total_lines = 0
             total_files = 0
@@ -221,7 +221,7 @@ class FileDiscoveryMixin:
                             lines_by_language[lang] = (
                                 lines_by_language.get(lang, 0) + line_count
                             )
-                        except (OSError, IOError, ValueError):  # File discovery is best-effort
+                        except (OSError, ValueError):  # File discovery is best-effort
                             pass
 
             stats = warden_pb2.ProjectStats(

@@ -29,27 +29,12 @@ frame_rules:
     pre_rules:
       - no-secrets
     on_fail: continue
-  architecturalconsistency:
+  architectural:
     pre_rules:
       - no-secrets
       - cli-pipeline-status-check
       - llm-context-propagation-check
       - orchestrator-total-frames-check
-    on_fail: continue
-  stress:
-    pre_rules:
-      - file-size-limit
-    on_fail: continue
-  environmentsecurity:
-    pre_rules:
-      - env-var-api-keys
-      - no-secrets
-    on_fail: stop
-  demosecurity:
-    scope:
-      - "examples/**"
-    pre_rules:
-      - no-secrets
     on_fail: continue
   fuzz:
     scope:

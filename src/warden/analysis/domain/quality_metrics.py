@@ -5,8 +5,9 @@ Provides comprehensive code quality scoring on a 0-10 scale.
 Panel UI compatible with before/after comparison support.
 """
 
-from typing import Dict, Any, Optional, List, Union
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Union
+
 from pydantic import Field
 
 from warden.shared.domain.base_model import BaseDomainModel
@@ -22,14 +23,14 @@ class MetricBreakdown(BaseDomainModel):
     name: str  # e.g., "complexity", "duplication"
     score: float  # 0.0 to 10.0
     weight: float  # Weight in overall score calculation (0.0 to 1.0)
-    details: Dict[str, Any] = Field(default_factory=dict)
+    details: dict[str, Any] = Field(default_factory=dict)
 
     @property
     def weighted_score(self) -> float:
         """Calculate weighted contribution to overall score."""
         return self.score * self.weight
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return {
             "name": self.name,
@@ -50,11 +51,11 @@ class CodeHotspot(BaseDomainModel):
     file_path: str
     line_number: int
     issue_type: str  # e.g., "high_complexity", "duplication"
-    severity: Union[str, int]  # "critical", "high", "medium", "low" or 0-3
+    severity: str | int  # "critical", "high", "medium", "low" or 0-3
     message: str
     impact_score: float  # How much it affects overall quality (0.0 to 10.0)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return {
             "filePath": self.file_path,
@@ -77,10 +78,10 @@ class QuickWin(BaseDomainModel):
     description: str
     estimated_effort: str  # e.g., "5min", "30min", "2h"
     score_improvement: float  # Expected score increase
-    file_path: Optional[str] = None
-    line_number: Optional[int] = None
+    file_path: str | None = None
+    line_number: int | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = {
             "type": self.type,
@@ -129,17 +130,17 @@ class QualityMetrics(BaseDomainModel):
     technical_debt_hours: float = 0.0  # Estimated hours to fix all issues
 
     # Problem areas
-    hotspots: List[CodeHotspot] = Field(default_factory=list)
+    hotspots: list[CodeHotspot] = Field(default_factory=list)
 
     # Quick improvements
-    quick_wins: List[QuickWin] = Field(default_factory=list)
+    quick_wins: list[QuickWin] = Field(default_factory=list)
 
     # Metric breakdowns with weights
-    metric_breakdowns: List[MetricBreakdown] = Field(default_factory=list)
+    metric_breakdowns: list[MetricBreakdown] = Field(default_factory=list)
 
     # Trend information (if historical data available)
-    trend: Optional[str] = None  # "improving", "degrading", "stable"
-    previous_score: Optional[float] = None
+    trend: str | None = None  # "improving", "degrading", "stable"
+    previous_score: float | None = None
 
     # Analysis metadata
     analyzed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -155,7 +156,7 @@ class QualityMetrics(BaseDomainModel):
         if self.overall_score == 0.0 and self.metric_breakdowns:
             self.overall_score = self.calculate_overall_score()
 
-    def _create_default_breakdowns(self) -> List[MetricBreakdown]:
+    def _create_default_breakdowns(self) -> list[MetricBreakdown]:
         """Create default metric breakdowns with standard weights."""
         return [
             MetricBreakdown(
@@ -268,7 +269,7 @@ class QualityMetrics(BaseDomainModel):
         else:
             return "F"
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         data = {
             "overallScore": round(self.overall_score, 1),
@@ -325,7 +326,7 @@ class QualityMetrics(BaseDomainModel):
 
         return data
 
-    def to_panel_summary(self) -> Dict[str, Any]:
+    def to_panel_summary(self) -> dict[str, Any]:
         """
         Convert to Panel UI Summary tab format.
 
@@ -350,13 +351,13 @@ class QualityMetrics(BaseDomainModel):
     @classmethod
     def calculate_from_analyzers(
         cls,
-        complexity_result: Optional[Any] = None,
-        duplication_result: Optional[Any] = None,
-        naming_result: Optional[Any] = None,
-        maintainability_result: Optional[Any] = None,
-        documentation_result: Optional[Any] = None,
-        testability_result: Optional[Any] = None,
-        weights: Optional[Dict[str, float]] = None,
+        complexity_result: Any | None = None,
+        duplication_result: Any | None = None,
+        naming_result: Any | None = None,
+        maintainability_result: Any | None = None,
+        documentation_result: Any | None = None,
+        testability_result: Any | None = None,
+        weights: dict[str, float] | None = None,
     ) -> "QualityMetrics":
         """
         Calculate quality metrics from analyzer results.

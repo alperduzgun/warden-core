@@ -1,8 +1,9 @@
 import asyncio
-import typer
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime
+
+import typer
 from rich.console import Console
 from rich.table import Table
 
@@ -92,20 +93,20 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
         {summary_context}
         </scan_results>
         """
-        
+
         # Enforce 5s timeout to avoid blocking CI
         response = await asyncio.wait_for(
             client.complete_async(
-                prompt, 
+                prompt,
                 system_prompt="You are a warm, helpful DevSecOps assistant. Explain failures clearly.",
                 use_fast_tier=True # Force Fast Tier (Qwen)
             ),
             timeout=5.0
         )
-        
+
         console.print("\n[bold red]🤖 Qwen Analysis:[/bold red]")
         console.print(f"[white]{response.content}[/white]")
-        
+
     except asyncio.TimeoutError:
         console.print("\n[dim]⚠️  AI Analysis timed out (skipped)[/dim]")
     except Exception:
@@ -116,12 +117,12 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
 def _display_llm_summary(metrics: dict):
     """Display LLM performance summary in CLI."""
     console.print("\n[bold cyan]🤖 LLM Performance Summary[/bold cyan]")
-    
+
     total_time = metrics.get("totalTime", "N/A")
     total_requests = metrics.get("totalRequests", 0)
     console.print(f"  Total LLM Requests: {total_requests}")
     console.print(f"  Total LLM Time: {total_time}")
-    
+
     if metrics.get("fastTier"):
         fast = metrics["fastTier"]
         console.print("\n  [green]⚡ Fast Tier (Qwen):[/green]")
@@ -131,20 +132,20 @@ def _display_llm_summary(metrics: dict):
         console.print(f"    Total Time: {fast['totalTime']} ({fast['timePercentage']}% of total)")
         if fast.get('timeouts', 0) > 0:
             console.print(f"    [yellow]⚠️  Timeouts: {fast['timeouts']}[/yellow]")
-    
+
     if metrics.get("smartTier"):
         smart = metrics["smartTier"]
         console.print("\n  [blue]🧠 Smart Tier (Azure):[/blue]")
         console.print(f"    Requests: {smart['requests']} ({smart['percentage']}%)")
         console.print(f"    Avg Response: {smart['avgResponseTime']}")
         console.print(f"    Total Time: {smart['totalTime']} ({smart['timePercentage']}% of total)")
-    
+
     if metrics.get("costAnalysis"):
         cost = metrics["costAnalysis"]
         console.print("\n  [bold green]💰 Savings:[/bold green]")
         console.print(f"    Cost: {cost['estimatedCostSavings']}")
         console.print(f"    Time: {cost['estimatedTimeSavings']}")
-    
+
     if metrics.get("issues"):
         console.print("\n  [yellow]⚠️  Performance Issues:[/yellow]")
         for issue in metrics["issues"]:
@@ -157,19 +158,19 @@ def _display_llm_summary(metrics: dict):
 def _display_memory_stats(snapshot) -> None:
     """Display memory profiling statistics."""
     console.print("\n[bold cyan]🧠 Memory Profiling Results[/bold cyan]")
-    
+
     # Get top 10 memory consumers
     top_stats = snapshot.statistics('lineno')[:10]
-    
+
     console.print("\n[bold]Top 10 Memory Allocations:[/bold]")
     for index, stat in enumerate(top_stats, 1):
         console.print(f"  {index}. {stat.traceback.format()[0]}")
         console.print(f"     Size: {stat.size / 1024 / 1024:.2f} MB ({stat.count} blocks)")
-    
+
     # Total memory usage
     total = sum(stat.size for stat in snapshot.statistics('filename'))
     console.print(f"\n[bold]Total Memory Usage:[/bold] {total / 1024 / 1024:.2f} MB")
-    
+
     # Check for potential leaks (allocations > 10MB)
     large_allocations = [s for s in top_stats if s.size > 10 * 1024 * 1024]
     if large_allocations:
@@ -179,10 +180,10 @@ def _display_memory_stats(snapshot) -> None:
 
 
 def scan_command(
-    paths: Optional[List[str]] = typer.Argument(None, help="Files or directories to scan"),
-    frames: Optional[List[str]] = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
+    paths: list[str] | None = typer.Argument(None, help="Files or directories to scan"),
+    frames: list[str] | None = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
     format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf, shield/badge"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output file path"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--disable-ai", help="Shorthand for --level basic"),
@@ -196,19 +197,19 @@ def scan_command(
     Run the full Warden pipeline on files or directories.
     """
     # We defer import to avoid slow startup for other commands
-    
+
     # Start memory profiling if requested
     if memory_profile:
         import tracemalloc
         tracemalloc.start()
         console.print("[dim]🧠 Memory profiling enabled[/dim]\n")
-    
+
     # Run async scan function
     try:
         # Handle --no-ai shorthand
         if no_ai:
             level = "basic"
-        
+
         # Enforce AI-First Philosophy
         if level == "basic":
             console.print("\n[bold red blink]💀 CRITICAL WARNING: ZOMBIE MODE ACTIVE[/bold red blink]")
@@ -289,14 +290,14 @@ def scan_command(
             memory_profile, ci, baseline_fingerprints, intelligence_context,
             update_baseline=not no_update_baseline
         ))
-        
+
         # Display memory stats if profiling was enabled
         if memory_profile:
             import tracemalloc
             snapshot = tracemalloc.take_snapshot()
             _display_memory_stats(snapshot)
             tracemalloc.stop()
-        
+
         if exit_code != 0:
             raise typer.Exit(exit_code)
     except KeyboardInterrupt:
@@ -305,20 +306,20 @@ def scan_command(
 
 
 async def _run_scan_async(
-    paths: List[str],
-    frames: Optional[List[str]],
+    paths: list[str],
+    frames: list[str] | None,
     format: str,
-    output: Optional[str],
+    output: str | None,
     verbose: bool,
     level: str = "standard",
     memory_profile: bool = False,
     ci_mode: bool = False,
-    baseline_fingerprints: Optional[Dict[str, str]] = None,
-    intelligence_context: Optional[Dict] = None,
+    baseline_fingerprints: dict[str, str] | None = None,
+    intelligence_context: dict | None = None,
     update_baseline: bool = False
 ) -> int:
     """Async implementation of scan command."""
-    
+
     display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
     console.print("[bold cyan]🛡️  Warden Scanner[/bold cyan]")
     console.print(f"[dim]Scanning: {display_paths}[/dim]")
@@ -336,7 +337,7 @@ async def _run_scan_async(
 
     # Initialize bridge
     bridge = WardenBridge(project_root=Path.cwd())
-    
+
     # Setup stats tracking
     stats = {
         "passed": 0,
@@ -362,7 +363,7 @@ async def _run_scan_async(
                 ci_mode=ci_mode
             ):
                 event_type = event.get("type")
-                
+
                 if event_type == "progress":
                     evt = event['event']
                     data = event.get('data', {})
@@ -373,7 +374,7 @@ async def _run_scan_async(
                     if evt == "discovery_complete":
                         total_units = data.get('total_files', 0)
                         status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})")
-                    
+
                     elif evt == "pipeline_started":
                         # Use file_count as baseline if total_units not yet initialized
                         if total_units <= 0:
@@ -385,7 +386,7 @@ async def _run_scan_async(
                         if new_total > 0:
                             total_units = new_total
                         status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
-                    
+
                     elif evt == "progress_update":
                         increment = data.get('increment', 0)
 
@@ -407,7 +408,7 @@ async def _run_scan_async(
 
                         # Update the sticky status line
                         status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
-                    
+
                     elif evt == "phase_started":
                         current_phase = data.get('phase', current_phase)
                         status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
@@ -420,7 +421,7 @@ async def _run_scan_async(
                         stats["total"] += 1
                         name = data.get('frame_name', data.get('frame_id'))
                         frame_status = data.get('status', 'unknown')
-                        icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️" 
+                        icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️"
                         style = "green" if frame_status == "passed" else "red" if frame_status == "failed" else "yellow"
                         findings_count = data.get('findings', data.get('issues_found', 0))
 
@@ -430,7 +431,7 @@ async def _run_scan_async(
                             stats["failed"] += 1
                         else:
                             stats["skipped"] += 1
-                            
+
                         if verbose:
                             console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
 
@@ -438,15 +439,15 @@ async def _run_scan_async(
                     # Final results
                     final_result_data = event['data']
                     res = final_result_data
-                    
+
                     # Check critical findings
                     critical = res.get('critical_findings', 0)
-                
+
                     if format == "text":
                         # Get findings - try different possible fields for validated findings after verification
                         # The pipeline summary shows "Issues Found: 4", so we need to find where this is stored
                         all_findings = []
-                        
+
                         # Try multiple possible sources for findings after verification
                         if 'validated_issues' in res and res['validated_issues']:
                             all_findings = res['validated_issues']
@@ -459,10 +460,10 @@ async def _run_scan_async(
                         else:
                             # If no specific validated field exists, use the raw findings
                             all_findings = []
-                        
+
                         linter_findings = []
                         core_findings = []
-                        
+
                         for f in all_findings:
                             # Robust check for Linter source
                             detail = f.get('detail') or ""
@@ -470,11 +471,11 @@ async def _run_scan_async(
                                 linter_findings.append(f)
                             else:
                                 core_findings.append(f)
-                                
+
                         # Recalculate stats for cleaner report
                         core_count = len(core_findings)
                         core_critical = sum(1 for f in core_findings if str(f.get('severity')).lower() == 'critical')
-                        
+
                         linter_count = len(linter_findings)
                         linter_critical = sum(1 for f in linter_findings if str(f.get('severity')).lower() == 'critical')
 
@@ -482,19 +483,19 @@ async def _run_scan_async(
                         total_findings = len(all_findings)
                         security_issues = sum(1 for f in all_findings if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets'])
                         quality_issues = total_findings - security_issues
-                        
+
                         # Count blocker issues (isBlocker: true)
                         blocker_issues = sum(1 for f in all_findings if f.get('isBlocker', False) is True)
                         critical_blockers = sum(1 for f in all_findings if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical')
-                        
+
                         # Get file count from results if available - use discovery results
-                        total_files_scanned = res.get('file_count', res.get('total_files_scanned', total_units if total_units > 0 else len(set(f.get('file_path') for f in all_findings if f.get('file_path')))))
-                        
+                        total_files_scanned = res.get('file_count', res.get('total_files_scanned', total_units if total_units > 0 else len({f.get('file_path') for f in all_findings if f.get('file_path')})))
+
                         # Get technical debt information from baseline update if available
                         baseline_info = res.get('baseline_update', {})
                         technical_debt = baseline_info.get('total_debt', total_findings)  # fallback to total findings
                         new_debt_added = baseline_info.get('new_debt', total_findings)  # fallback to total findings
-                        
+
                         # If we still have 0 findings but the pipeline summary shows issues were found,
                         # try to get the issue count from other fields in the result
                         if total_findings == 0:
@@ -525,7 +526,7 @@ async def _run_scan_async(
                         else:
                             # If validated findings are the same as all findings, use the original findings
                             validated_findings = all_findings
-                            
+
                         # Final fallback: Check for specific fields that might contain the final validated count
                         # Based on the logs, the verification phase shows "total_verified=4", so look for that
                         if total_findings == 0:
@@ -574,7 +575,7 @@ async def _run_scan_async(
                         # Actually 'stats' object in this function tracks skipped counts, but we don't have the frame objects there locally?
                         # We need to rely on the streaming events we processed? Or the final result structure.
                         # Assuming final_result_data['results'] contains detailed frame results.
-                        
+
                         frame_results = res.get('results', [])
                         missing_tools = []
                         for fr in frame_results:
@@ -584,27 +585,27 @@ async def _run_scan_async(
                                 frame_name = fr.get('frame_name', 'Unknown Frame')
                                 if hint:
                                     missing_tools.append((frame_name, hint))
-                        
+
                         if missing_tools:
                             console.print("\n[bold yellow]⚠️  Missing Dependencies (Action Required):[/bold yellow]")
                             for name, hint in missing_tools:
                                 console.print(f"  • [cyan]{name}[/cyan]: {hint}")
                             console.print("")
 
-                        
+
                         # Display LLM Performance Metrics
                         llm_metrics = res.get('llmMetrics', {})
                         if llm_metrics:
                             _display_llm_summary(llm_metrics)
-                        
+
                         # Status check (COMPLETED=2)
                         status_raw = res.get('status')
                         # Handle both integer and string statuses (Enums are often serialized to name or value)
                         is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
-                        
+
                         if verbose:
                             console.print(f"[dim]Debug: status={status_raw} ({type(status_raw).__name__}), is_success={is_success}[/dim]")
-                        
+
                         if is_success:
                             console.print("\n[bold green]✨ Scan Succeeded![/bold green]")
                         else:
@@ -614,34 +615,35 @@ async def _run_scan_async(
             if final_result_data:
                 try:
                     import yaml
+
                     from warden.reports.generator import ReportGenerator
-                    
+
                     root_manifest = Path.cwd() / "warden.yaml"
                     legacy_config = Path.cwd() / ".warden" / "config.yaml"
                     config_path = root_manifest if root_manifest.exists() else legacy_config
                     if config_path.exists():
                         with open(config_path) as f:
                             config = yaml.safe_load(f)
-                        
+
                         # Support both 'ci.output' and 'advanced.output' (Legacy vs Modern config)
                         ci_config = config.get('ci', {})
                         advanced_config = config.get('advanced', {})
                         outputs = ci_config.get('output', []) or advanced_config.get('output', [])
-                        
+
                         if outputs:
                             if verbose:
                                 console.print(f"\n[dim]📝 Found {len(outputs)} configured output(s)...[/dim]")
                             generator = ReportGenerator()
-                            
+
                             for out in outputs:
                                 fmt = out.get('format')
                                 path_str = out.get('path')
                                 if not fmt or not path_str:
                                     continue
-                                    
+
                                 out_path = Path.cwd() / path_str
                                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                                
+
                                 try:
                                     if fmt == 'json':
                                         generator.generate_json_report(final_result_data, out_path)
@@ -666,7 +668,7 @@ async def _run_scan_async(
                                     elif fmt == 'badge':
                                         generator.generate_svg_badge(final_result_data, out_path)
                                         console.print(f"  ✅ [cyan]BADGE (SVG)[/cyan]: {path_str}")
-                                        
+
                                 except Exception as e:
                                     console.print(f"  ❌ [red]{fmt.upper()}[/red]: Failed - {e}")
                                     if verbose:
@@ -686,7 +688,7 @@ async def _run_scan_async(
             out_path.parent.mkdir(parents=True, exist_ok=True)
 
             console.print(f"\n[dim]Generating {format.upper()} report to {output}...[/dim]")
-            
+
             try:
                 if format == "json":
                     generator.generate_json_report(final_result_data, out_path)
@@ -702,7 +704,7 @@ async def _run_scan_async(
                     generator.generate_shield_report(final_result_data, out_path)
                 elif format == "badge":
                     generator.generate_svg_badge(final_result_data, out_path)
-                
+
                 console.print("[bold green]Report saved![/bold green]")
             except Exception as e:
                 console.print(f"[red]❌ Failed to save report: {e}[/red]")
@@ -720,7 +722,7 @@ async def _run_scan_async(
                 critical_count = final_result_data.get('critical_findings', 0)
                 total_count = final_result_data.get('total_findings', 0)
                 scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
+
                 status_content = f"""# Warden Security Status
 Updated: {scan_time}
 
@@ -793,27 +795,27 @@ Updated: {scan_time}
             "2", "5", "SUCCESS", "COMPLETED", "COMPLETED_WITH_FAILURES",
             "PIPELINESTATUS.COMPLETED", "PIPELINESTATUS.COMPLETED_WITH_FAILURES",
         ]
-        
+
         # 2. Check for critical issues or frame failures
         critical_count = final_result_data.get('critical_findings', 0)
         frames_failed = final_result_data.get('frames_failed', 0)
-        
+
         if not pipeline_ok:
              console.print("[bold red]❌ Pipeline did not complete successfully.[/bold red]")
              return 1
-             
+
         if critical_count > 0:
             console.print(f"[bold red]❌ Scan failed: {critical_count} critical issues found.[/bold red]")
             await _generate_smart_failure_summary(critical_count, frames_failed, final_result_data)
             return 2  # Exit code 2: Policy Failure (Findings found)
-            
+
         if frames_failed > 0:
             console.print(f"[bold red]❌ Scan failed: {frames_failed} frames failed.[/bold red]")
             await _generate_smart_failure_summary(critical_count, frames_failed, final_result_data)
             return 2  # Exit code 2: Policy Failure (Frames failed)
 
         return 0
-        
+
     except Exception as e:
         console.print("\n[bold red]💥 Scan failed unexpectedly.[/bold red]")
         console.print(f"[red]Error:[/red] {e}")

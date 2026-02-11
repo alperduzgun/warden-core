@@ -16,16 +16,16 @@ Exports:
     - create_default_config: Create default configuration
 """
 
-from warden.suppression.models import (
-    SuppressionType,
-    SuppressionEntry,
-    SuppressionConfig,
-)
-from warden.suppression.matcher import SuppressionMatcher
 from warden.suppression.config_loader import (
+    create_default_config,
     load_suppression_config,
     save_suppression_config,
-    create_default_config,
+)
+from warden.suppression.matcher import SuppressionMatcher
+from warden.suppression.models import (
+    SuppressionConfig,
+    SuppressionEntry,
+    SuppressionType,
 )
 
 __all__ = [

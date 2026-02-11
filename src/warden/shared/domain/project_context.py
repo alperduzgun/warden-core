@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -31,17 +31,16 @@ class ModuleInfo:
 
     path: Path
     name: str
-    files: List[Path]
-    subdirectories: List[Path]
+    files: list[Path]
+    subdirectories: list[Path]
     is_empty: bool = False
     line_count: int = 0
 
     def __post_init__(self) -> None:
         """Calculate derived properties."""
         # Check if empty (only __init__.py with < 100 bytes)
-        if len(self.files) == 1 and self.files[0].name == "__init__.py":
-            if self.files[0].stat().st_size < 100:
-                self.is_empty = True
+        if len(self.files) == 1 and self.files[0].name == "__init__.py" and self.files[0].stat().st_size < 100:
+            self.is_empty = True
 
 
 @dataclass
@@ -66,14 +65,14 @@ class ProjectContext:
     """
 
     root_path: Path
-    all_files: List[Path] = field(default_factory=list)
-    all_directories: List[Path] = field(default_factory=list)
-    modules: List[ModuleInfo] = field(default_factory=list)
-    module_tree: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    all_files: list[Path] = field(default_factory=list)
+    all_directories: list[Path] = field(default_factory=list)
+    modules: list[ModuleInfo] = field(default_factory=list)
+    module_tree: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_project_root(cls, root_path: Path) -> "ProjectContext":
+    def from_project_root(cls, root_path: Path) -> ProjectContext:
         """
         Create ProjectContext by scanning project root.
 
@@ -161,7 +160,7 @@ class ProjectContext:
 
     def _build_module_tree(self) -> None:
         """Build hierarchical module tree."""
-        tree: Dict[str, Any] = {}
+        tree: dict[str, Any] = {}
 
         for module in self.modules:
             parts = module.name.split(".")
@@ -178,7 +177,7 @@ class ProjectContext:
     # QUERY METHODS
     # ==============================================
 
-    def get_empty_modules(self) -> List[ModuleInfo]:
+    def get_empty_modules(self) -> list[ModuleInfo]:
         """
         Get all empty modules (only __init__.py with minimal content).
 
@@ -187,7 +186,7 @@ class ProjectContext:
         """
         return [m for m in self.modules if m.is_empty]
 
-    def get_modules_by_pattern(self, pattern: str) -> List[ModuleInfo]:
+    def get_modules_by_pattern(self, pattern: str) -> list[ModuleInfo]:
         """
         Get modules matching name pattern.
 
@@ -201,14 +200,14 @@ class ProjectContext:
 
         return [m for m in self.modules if fnmatch.fnmatch(m.name, pattern)]
 
-    def get_duplicate_files(self) -> Dict[str, List[Path]]:
+    def get_duplicate_files(self) -> dict[str, list[Path]]:
         """
         Find files with identical names in different locations.
 
         Returns:
             Dict mapping filename to list of paths
         """
-        file_groups: Dict[str, List[Path]] = {}
+        file_groups: dict[str, list[Path]] = {}
 
         for file_path in self.all_files:
             filename = file_path.name
@@ -286,7 +285,7 @@ class ProjectContext:
 
         return (has_cli or has_tui) and not has_web_framework
 
-    def get_module_statistics(self) -> Dict[str, int]:
+    def get_module_statistics(self) -> dict[str, int]:
         """
         Get project module statistics.
 

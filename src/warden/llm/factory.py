@@ -4,16 +4,18 @@ LLM Client Factory
 Functional factory for creating LLM clients with fallback support.
 """
 
-from typing import Optional, Union
-from .config import LlmConfiguration, load_llm_config, ProviderConfig
-from .types import LlmProvider
-from .providers.base import ILlmClient
-from .metrics import get_global_metrics_collector
-from .registry import ProviderRegistry
-from warden.shared.infrastructure.error_handler import async_error_handler, ProviderUnavailableError
-
 import threading
+from typing import Optional, Union
+
 import structlog as _structlog
+
+from warden.shared.infrastructure.error_handler import ProviderUnavailableError, async_error_handler
+
+from .config import LlmConfiguration, ProviderConfig, load_llm_config
+from .metrics import get_global_metrics_collector
+from .providers.base import ILlmClient
+from .registry import ProviderRegistry
+from .types import LlmProvider
 
 _providers_lock = threading.Lock()
 _providers_imported = False
@@ -89,13 +91,13 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
 
 
 def create_client(
-    provider_or_config: Optional[Union[LlmProvider, LlmConfiguration, str]] = None
+    provider_or_config: LlmProvider | LlmConfiguration | str | None = None
 ) -> ILlmClient:
     """
     Create an LLM client based on input or default configuration.
 
     Args:
-        provider_or_config: 
+        provider_or_config:
             - None: Use default configuration
             - LlmProvider/str: Use default config for specific provider
             - LlmConfiguration: Use specific configuration
@@ -119,7 +121,7 @@ def create_client(
 
     # Create primary (smart) client
     smart_client = create_provider_client(provider, provider_config)
-    
+
     # Try to create local/fast clients if enabled in priority order
     fast_clients = []
 
@@ -159,7 +161,7 @@ def _create_offline_client():
     context_keys=["config"],
     reraise=False
 )
-async def create_client_with_fallback_async(config: Optional[LlmConfiguration] = None) -> ILlmClient:
+async def create_client_with_fallback_async(config: LlmConfiguration | None = None) -> ILlmClient:
     """
     Create client with automatic fallback chain.
 

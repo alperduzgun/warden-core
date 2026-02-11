@@ -7,13 +7,14 @@ for false positive prevention and context-aware analysis.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
 import structlog
 
 from warden.analysis.domain.file_context import (
+    ContextWeights,
     FileContext,
     FileContextInfo,
-    ContextWeights,
 )
 from warden.analysis.domain.project_context import ProjectContext
 
@@ -33,7 +34,7 @@ class FileContextAnalyzer:
 
     def __init__(
         self,
-        project_context: Optional[ProjectContext] = None,
+        project_context: ProjectContext | None = None,
         llm_analyzer: Optional['LlmContextAnalyzer'] = None,
     ) -> None:
         """
@@ -93,9 +94,9 @@ class FileContextAnalyzer:
                 # Read file content for LLM
                 file_content = None
                 try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    with open(file_path, encoding='utf-8', errors='ignore') as f:
                         file_content = f.read()[:5000]
-                except (FileNotFoundError, PermissionError, IOError):
+                except (OSError, FileNotFoundError, PermissionError):
                     pass  # File unreadable - continue without content
 
                 # Enhance with LLM
@@ -141,7 +142,7 @@ class FileContextAnalyzer:
             has_ignore_marker=has_ignore_marker,
         )
 
-    def _detect_context(self, file_path: Path) -> Tuple[FileContext, float, str]:
+    def _detect_context(self, file_path: Path) -> tuple[FileContext, float, str]:
         """
         Detect file context using multiple strategies.
 
@@ -150,13 +151,13 @@ class FileContextAnalyzer:
         """
         # Layer 1: Path-based detection (highest priority)
         path_result = self._detect_by_path(file_path)
-        
+
         # Layer 2: Content-based detection
         content_result = self._detect_by_content(file_path)
-        
+
         # Layer 3: Import analysis
         import_result = self._detect_by_imports(file_path)
-        
+
         # Layer 4: Metadata/comments
         metadata_result = self._detect_by_metadata(file_path)
 
@@ -173,13 +174,13 @@ class FileContextAnalyzer:
             (metadata_result, "metadata"),
             (project_hint, "project_context")
         ]
-        
+
         # Filter None and find best candidate
         candidates = [(r[0], r[1], m) for r, m in results if r]
-        
+
         if not candidates:
             return FileContext.PRODUCTION, 0.5, "default"
-            
+
         # Find candidate with highest confidence
         best_context, best_confidence, best_method = max(candidates, key=lambda x: x[1])
 
@@ -187,14 +188,14 @@ class FileContextAnalyzer:
         # If project context is known, we can boost certain detections to bypass LLM
         if self.project_context and best_confidence < 0.8:
             boosted = False
-            
+
             # Boost Test confidence if project uses a known test framework
             if best_context == FileContext.TEST:
                 from warden.analysis.domain.project_context import TestFramework
                 if self.project_context.test_framework != TestFramework.NONE:
                     best_confidence += 0.3
                     boosted = True
-                    
+
             # Boost Framework confidence if it's a known framework project
             elif best_context == FileContext.FRAMEWORK:
                 from warden.analysis.domain.project_context import Framework
@@ -209,7 +210,7 @@ class FileContextAnalyzer:
 
         return best_context, best_confidence, best_method
 
-    def _compile_path_patterns(self) -> Dict[FileContext, List[re.Pattern]]:
+    def _compile_path_patterns(self) -> dict[FileContext, list[re.Pattern]]:
         """Compile regex patterns for path-based detection."""
         patterns = {
             FileContext.TEST: [
@@ -306,7 +307,7 @@ class FileContextAnalyzer:
 
         return compiled
 
-    def _compile_content_patterns(self) -> Dict[FileContext, List[re.Pattern]]:
+    def _compile_content_patterns(self) -> dict[FileContext, list[re.Pattern]]:
         """Compile regex patterns for content-based detection."""
         patterns = {
             FileContext.TEST: [
@@ -359,7 +360,7 @@ class FileContextAnalyzer:
 
         return compiled
 
-    def _detect_by_path(self, file_path: Path) -> Optional[Tuple[FileContext, float]]:
+    def _detect_by_path(self, file_path: Path) -> tuple[FileContext, float] | None:
         """Detect context by file path patterns."""
         path_str = str(file_path)
 
@@ -372,11 +373,11 @@ class FileContextAnalyzer:
 
         return None
 
-    def _detect_by_content(self, file_path: Path) -> Optional[Tuple[FileContext, float]]:
+    def _detect_by_content(self, file_path: Path) -> tuple[FileContext, float] | None:
         """Detect context by file content patterns."""
         try:
             # Read first 5000 characters for performance
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding='utf-8', errors='ignore') as f:
                 content = f.read(5000)
 
             match_counts = {}
@@ -405,13 +406,13 @@ class FileContextAnalyzer:
 
         return None
 
-    def _detect_by_imports(self, file_path: Path) -> Optional[Tuple[FileContext, float]]:
+    def _detect_by_imports(self, file_path: Path) -> tuple[FileContext, float] | None:
         """Detect context by import statements."""
-        if not file_path.suffix == '.py':
+        if file_path.suffix != '.py':
             return None
 
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding='utf-8', errors='ignore') as f:
                 content = f.read()
 
             # Test framework imports
@@ -433,10 +434,10 @@ class FileContextAnalyzer:
 
         return None
 
-    def _detect_by_metadata(self, file_path: Path) -> Optional[Tuple[FileContext, float]]:
+    def _detect_by_metadata(self, file_path: Path) -> tuple[FileContext, float] | None:
         """Detect context by file metadata or special comments."""
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding='utf-8', errors='ignore') as f:
                 # Check first 1000 characters for metadata
                 content = f.read(1000)
 
@@ -462,7 +463,7 @@ class FileContextAnalyzer:
 
         return None
 
-    def _detect_by_project_context(self, file_path: Path) -> Optional[Tuple[FileContext, float]]:
+    def _detect_by_project_context(self, file_path: Path) -> tuple[FileContext, float] | None:
         """Use project context hints for detection."""
         if not self.project_context:
             return None
@@ -482,7 +483,7 @@ class FileContextAnalyzer:
 
         return None
 
-    def _get_suppressed_issues(self, context: FileContext) -> List[str]:
+    def _get_suppressed_issues(self, context: FileContext) -> list[str]:
         """Get list of issue types to suppress for context."""
         suppression_map = {
             FileContext.TEST: [
@@ -522,7 +523,7 @@ class FileContextAnalyzer:
 
         return suppression_map.get(context, [])
 
-    def _get_suppression_reason(self, context: FileContext) -> Optional[str]:
+    def _get_suppression_reason(self, context: FileContext) -> str | None:
         """Get suppression reason for context."""
         reasons = {
             FileContext.TEST: "Test files often contain intentional vulnerabilities",
@@ -539,7 +540,7 @@ class FileContextAnalyzer:
     def _check_ignore_marker(self, file_path: Path) -> bool:
         """Check if file has ignore marker."""
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding='utf-8', errors='ignore') as f:
                 content = f.read(1000)
 
             ignore_markers = [

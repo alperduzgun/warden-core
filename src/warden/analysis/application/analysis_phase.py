@@ -7,27 +7,27 @@ This is the first phase of the 5-phase pipeline.
 
 import asyncio
 import time
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import structlog
 
+from warden.analysis.application.metrics_aggregator import MetricsAggregator
 from warden.analysis.domain.quality_metrics import (
     QualityMetrics,
 )
-from warden.analysis.application.metrics_aggregator import MetricsAggregator
+from warden.ast.domain.enums import CodeLanguage
 from warden.cleaning.application.analyzers.complexity_analyzer import ComplexityAnalyzer
+from warden.cleaning.application.analyzers.documentation_analyzer import DocumentationAnalyzer
 from warden.cleaning.application.analyzers.duplication_analyzer import DuplicationAnalyzer
-from warden.cleaning.application.analyzers.naming_analyzer import NamingAnalyzer
+from warden.cleaning.application.analyzers.lsp_diagnostics_analyzer import LSPDiagnosticsAnalyzer
 from warden.cleaning.application.analyzers.magic_number_analyzer import MagicNumberAnalyzer
 from warden.cleaning.application.analyzers.maintainability_analyzer import MaintainabilityAnalyzer
-from warden.cleaning.application.analyzers.documentation_analyzer import DocumentationAnalyzer
+from warden.cleaning.application.analyzers.naming_analyzer import NamingAnalyzer
 from warden.cleaning.application.analyzers.testability_analyzer import TestabilityAnalyzer
-from warden.cleaning.application.analyzers.lsp_diagnostics_analyzer import LSPDiagnosticsAnalyzer
-from warden.validation.domain.frame import CodeFile
-from warden.shared.utils.language_utils import get_language_from_path
-from warden.ast.domain.enums import CodeLanguage
-
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
+from warden.shared.utils.language_utils import get_language_from_path
+from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
 
@@ -42,9 +42,9 @@ class AnalysisPhase:
 
     def __init__(
         self,
-        config: Optional[Dict[str, Any]] = None,
-        progress_callback: Optional[callable] = None,
-        project_root: Optional[Path] = None,
+        config: dict[str, Any] | None = None,
+        progress_callback: callable | None = None,
+        project_root: Path | None = None,
         use_gitignore: bool = True,
     ) -> None:
         """
@@ -68,7 +68,7 @@ class AnalysisPhase:
             "testability": TestabilityAnalyzer(),
             "lsp_diagnostics": LSPDiagnosticsAnalyzer(),
         }
-        
+
         # Get analysis level from config
         from warden.pipeline.domain.enums import AnalysisLevel
         level_str = self.config.get("analysis_level", "standard")
@@ -76,14 +76,14 @@ class AnalysisPhase:
             self.analysis_level = AnalysisLevel(level_str.lower())
         except (ValueError, AttributeError):
             self.analysis_level = AnalysisLevel.STANDARD
-        
+
         # Initialize IgnoreMatcher
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.ignore_matcher = IgnoreMatcher(self.project_root, use_gitignore=use_gitignore)
 
         # Get metric weights from config
         self.weights = self.config.get("weights", self._get_default_weights())
-        
+
         # Initialize Metrics Aggregator
         self.metrics_aggregator = MetricsAggregator(self.weights)
 
@@ -98,7 +98,7 @@ class AnalysisPhase:
             cached_entries=len(self._cache_data)
         )
 
-    def _get_default_config(self) -> Dict[str, Any]:
+    def _get_default_config(self) -> dict[str, Any]:
         """Get default analysis configuration."""
         return {
             "enabled": True,
@@ -108,7 +108,7 @@ class AnalysisPhase:
             "timeout": 5.0,  # 5 second timeout for analysis phase
         }
 
-    def _get_default_weights(self) -> Dict[str, float]:
+    def _get_default_weights(self) -> dict[str, float]:
         """Get default metric weights for score calculation."""
         return {
             "complexity": 0.25,
@@ -119,7 +119,7 @@ class AnalysisPhase:
             "testability": 0.10,
         }
 
-    def _load_cache(self) -> Dict[str, Any]:
+    def _load_cache(self) -> dict[str, Any]:
         """Load analysis cache."""
         try:
             if self._cache_file.exists():
@@ -138,22 +138,22 @@ class AnalysisPhase:
         except Exception as e:
             logger.warning("analysis_cache_save_failed", error=str(e))
 
-    def _get_cached_result(self, code_file: CodeFile) -> Optional[Dict[str, Any]]:
+    def _get_cached_result(self, code_file: CodeFile) -> dict[str, Any] | None:
         """Retrieve cached result if valid."""
         if not code_file.hash:
             return None
-            
+
         cached = self._cache_data.get(code_file.path)
         if cached and cached.get("hash") == code_file.hash:
             # Validate schema version if needed, for now trust it
             return cached.get("result")
         return None
 
-    def _update_cache(self, code_file: CodeFile, result: Dict[str, Any]):
+    def _update_cache(self, code_file: CodeFile, result: dict[str, Any]):
         """Update cache with new result."""
         if not code_file.hash:
             return
-            
+
         self._cache_data[code_file.path] = {
             "hash": code_file.hash,
             "timestamp": time.time(),
@@ -162,8 +162,8 @@ class AnalysisPhase:
 
     async def execute_async(
         self,
-        code_files: List[CodeFile],
-        pipeline_context: Optional[Any] = None,
+        code_files: list[CodeFile],
+        pipeline_context: Any | None = None,
         **kwargs: Any,
     ) -> QualityMetrics:
         """
@@ -186,12 +186,12 @@ class AnalysisPhase:
             return QualityMetrics()
 
         start_time = time.perf_counter()
-        
+
         # Check cache
         files_to_analyze = []
         all_results = {}
         cached_count = 0
-        
+
         for cf in code_files:
             cached_res = self._get_cached_result(cf)
             if cached_res:
@@ -220,10 +220,10 @@ class AnalysisPhase:
                 # Use CPU-bound friendly limit: min(CPUs, 8)
                 import os
                 concurrency_limit = min(os.cpu_count() or 4, 8)
-                semaphore = asyncio.Semaphore(concurrency_limit) 
-                
+                semaphore = asyncio.Semaphore(concurrency_limit)
+
                 logger.info("analysis_concurrency_set", limit=concurrency_limit)
-                
+
                 async def analyze_with_limit(cf):
                     async with semaphore:
                         result = await self._analyze_file_async(cf, pipeline_context)
@@ -234,19 +234,19 @@ class AnalysisPhase:
                                 "file": cf.path
                             })
                         return result
-    
+
                 # Run all analyzers in parallel for all files with semi-concurrency
                 tasks = [analyze_with_limit(cf) for cf in files_to_analyze]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                for cf, res in zip(files_to_analyze, results):
+
+                for cf, res in zip(files_to_analyze, results, strict=False):
                     if isinstance(res, Exception):
                         logger.error("file_analysis_failed", file=cf.path, error=str(res))
                         all_results[cf.path] = {}
                     else:
                         all_results[cf.path] = res
                         self._update_cache(cf, res)
-                
+
                 # Save cache after processing
                 self._save_cache()
 
@@ -287,7 +287,7 @@ class AnalysisPhase:
                 file_count=len(code_files),
             )
 
-    async def _analyze_file_async(self, code_file: CodeFile, pipeline_context: Optional[Any] = None) -> Dict[str, Any]:
+    async def _analyze_file_async(self, code_file: CodeFile, pipeline_context: Any | None = None) -> dict[str, Any]:
         """
         Run all analyzers on a single file.
 
@@ -314,10 +314,9 @@ class AnalysisPhase:
         # we must discard it for standard 'ast' based analyzers to prevent crashes.
         # PythonASTProvider stores ast.AST in raw_node.
         import ast
-        if is_python and ast_tree is not None:
-             if not isinstance(ast_tree, ast.AST):
-                 logger.debug("incompatible_ast_cache_discarding", file=code_file.path, type=type(ast_tree).__name__)
-                 ast_tree = None
+        if is_python and ast_tree is not None and not isinstance(ast_tree, ast.AST):
+            logger.debug("incompatible_ast_cache_discarding", file=code_file.path, type=type(ast_tree).__name__)
+            ast_tree = None
 
         # Subsetting analyzers for BASIC level to hit performance targets
         from warden.pipeline.domain.enums import AnalysisLevel
@@ -328,13 +327,13 @@ class AnalysisPhase:
             tasks["complexity"] = asyncio.create_task(
                 self.analyzers["complexity"].analyze_async(code_file, ast_tree=ast_tree)
             )
-        
+
             # Skip duplication check in BASIC level (heavy)
             if not is_basic:
                 tasks["duplication"] = asyncio.create_task(
                     self.analyzers["duplication"].analyze_async(code_file, ast_tree=ast_tree)
                 )
-                
+
             tasks["maintainability"] = asyncio.create_task(
                 self.analyzers["maintainability"].analyze_async(code_file, ast_tree=ast_tree)
             )
@@ -347,12 +346,12 @@ class AnalysisPhase:
             tasks["testability"] = asyncio.create_task(
                 self.analyzers["testability"].analyze_async(code_file, ast_tree=ast_tree)
             )
-            
+
             # Additional analyzer for hotspots
             tasks["magic_numbers"] = asyncio.create_task(
                 self.analyzers["magic_numbers"].analyze_async(code_file, ast_tree=ast_tree)
             )
-        
+
         # Skip LSP in BASIC level (slow/external dependency)
         if not is_basic:
             tasks["lsp_diagnostics"] = asyncio.create_task(
@@ -369,7 +368,7 @@ class AnalysisPhase:
 
             # Map results back to analyzer names
             analyzer_results = {}
-            for (name, _), result in zip(tasks.items(), results):
+            for (name, _), result in zip(tasks.items(), results, strict=False):
                 if isinstance(result, Exception):
                     logger.warning(
                         "analyzer_failed",
@@ -391,7 +390,7 @@ class AnalysisPhase:
             )
             return {}
 
-    async def execute_with_llm_async(self, code_files: List[CodeFile]) -> QualityMetrics:
+    async def execute_with_llm_async(self, code_files: list[CodeFile]) -> QualityMetrics:
         """
         Execute analysis with LLM enhancement.
 

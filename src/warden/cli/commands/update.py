@@ -1,6 +1,8 @@
-import typer
 import asyncio
+
+import typer
 from rich.console import Console
+
 from warden.services.package_manager.registry import RegistryClient
 from warden.shared.infrastructure.logging import get_logger
 
@@ -12,14 +14,14 @@ def update_command() -> None:
     Update the Warden Hub catalog from remote Git repository.
     """
     registry = RegistryClient()
-    
+
     console.print("[bold cyan]🔄 Updating Warden Hub catalog...[/bold cyan]")
-    
+
     async def run_sync():
         return await registry.sync()
-        
+
     success = asyncio.run(run_sync())
-    
+
     if success:
         console.print("\n[bold green]✨ Catalog updated successfully![/bold green]")
         # Show a summary of available frames

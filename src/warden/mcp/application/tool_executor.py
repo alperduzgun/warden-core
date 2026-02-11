@@ -14,11 +14,11 @@ Supports:
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from warden.mcp.domain.errors import MCPToolExecutionError, MCPToolNotFoundError
 from warden.mcp.domain.models import MCPToolResult
-from warden.mcp.domain.errors import MCPToolNotFoundError, MCPToolExecutionError
+from warden.mcp.infrastructure.file_resource_repo import FileResourceRepository
 from warden.mcp.infrastructure.tool_registry import ToolRegistry
 from warden.mcp.infrastructure.warden_adapter import WardenBridgeAdapter
-from warden.mcp.infrastructure.file_resource_repo import FileResourceRepository
 from warden.mcp.ports.tool_executor import IToolExecutor
 
 # Optional logging
@@ -51,7 +51,7 @@ class ToolExecutorService:
         self._resource_repo = FileResourceRepository(project_root)
 
         # Adapter registry - stores all registered adapters
-        self._adapters: List[IToolExecutor] = []
+        self._adapters: list[IToolExecutor] = []
 
         # Legacy bridge adapter (for backward compatibility)
         self._bridge_adapter = WardenBridgeAdapter(project_root)
@@ -163,7 +163,7 @@ class ToolExecutorService:
                 tool_count=len(adapter.get_tool_definitions()),
             )
 
-    def _find_adapter_for_tool(self, tool_name: str) -> Optional[IToolExecutor]:
+    def _find_adapter_for_tool(self, tool_name: str) -> IToolExecutor | None:
         """
         Find the adapter that supports the given tool.
 
@@ -193,8 +193,8 @@ class ToolExecutorService:
     async def execute_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Execute a tool by name.
 
@@ -253,7 +253,7 @@ class ToolExecutorService:
     async def _execute_builtin_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """
         Execute built-in (non-bridge) tools.

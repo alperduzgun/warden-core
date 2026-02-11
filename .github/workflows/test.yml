@@ -88,13 +88,11 @@ jobs:
           # Test exclusions (documented):
           # --ignore=tests/chaos/ - Requires Hypothesis (optional dep)
           # --ignore=tests/integration/ - Requires external services (Ollama, APIs)
-          # --ignore=tests/suppression/ - TODO: Fix and re-enable
           # --ignore=tests/validation/frames/orphan/ - Plugin loading - fix in progress
           # --ignore=tests/unit/grpc_testing/ - gRPC bridge incomplete
           pytest tests/ -v --tb=short \
             --ignore=tests/chaos/ \
             --ignore=tests/integration/ \
-            --ignore=tests/suppression/ \
             --ignore=tests/validation/frames/orphan/ \
             --ignore=tests/unit/grpc_testing/ \
             --cov=src/warden --cov-report=xml:coverage.xml

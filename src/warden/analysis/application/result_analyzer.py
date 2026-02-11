@@ -8,18 +8,18 @@ Analyzes pipeline results to:
 - Generate quality scores
 """
 
-from typing import List, Dict, Any
 from datetime import datetime, timezone
+from typing import Any, Dict, List
 
+from warden.analysis.application.issue_tracker import IssueTracker
+from warden.analysis.domain.enums import AnalysisStatus, TrendDirection
 from warden.analysis.domain.models import (
     AnalysisResult,
-    IssueTrend,
-    SeverityStats,
     FrameStats,
     IssueSnapshot,
+    IssueTrend,
+    SeverityStats,
 )
-from warden.analysis.domain.enums import TrendDirection, AnalysisStatus
-from warden.analysis.application.issue_tracker import IssueTracker
 from warden.pipeline.domain.models import PipelineResult
 from warden.shared.infrastructure.logging import get_logger
 
@@ -149,9 +149,9 @@ class ResultAnalyzer:
     def _calculate_frame_stats(
         self,
         pipeline_result: PipelineResult,
-    ) -> List[FrameStats]:
+    ) -> list[FrameStats]:
         """Calculate statistics for each frame."""
-        frame_stats: List[FrameStats] = []
+        frame_stats: list[FrameStats] = []
 
         for frame_result in pipeline_result.frame_results:
             # Count severity
@@ -219,20 +219,20 @@ class ResultAnalyzer:
         else:
             return TrendDirection.STABLE
 
-    def _calculate_issue_trends(self) -> List[IssueTrend]:
+    def _calculate_issue_trends(self) -> list[IssueTrend]:
         """
         Calculate trends for individual issues.
 
         Returns:
             List of IssueTrend for frequently occurring issues
         """
-        issue_trends: List[IssueTrend] = []
+        issue_trends: list[IssueTrend] = []
 
         # Get all issues
         all_issues = self.issue_tracker.get_all_issues_async()
 
         # Group by issue type
-        issue_by_type: Dict[str, List[Any]] = {}
+        issue_by_type: dict[str, list[Any]] = {}
 
         for issue in all_issues:
             if issue.type not in issue_by_type:

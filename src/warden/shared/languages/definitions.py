@@ -3,7 +3,9 @@ Language definitions and metadata.
 """
 
 from typing import List, Optional, Set
+
 from pydantic import BaseModel, Field
+
 from warden.ast.domain.enums import CodeLanguage
 
 
@@ -11,20 +13,20 @@ class LanguageDefinition(BaseModel):
     """Rich metadata for a programming language."""
     name: str
     id: CodeLanguage
-    extensions: Set[str]
+    extensions: set[str]
     primary_extension: str
-    aliases: List[str] = Field(default_factory=list)
+    aliases: list[str] = Field(default_factory=list)
     is_compiled: bool = False
     is_web: bool = False
     is_mobile: bool = False
     is_analyzable: bool = False
-    tree_sitter_id: Optional[str] = None
-    proto_type_name: Optional[str] = None
-    linter_names: List[str] = Field(default_factory=list)
+    tree_sitter_id: str | None = None
+    proto_type_name: str | None = None
+    linter_names: list[str] = Field(default_factory=list)
 
 
 # Central Registry of Language Metadata
-LANGUAGE_DEFINITIONS: List[LanguageDefinition] = [
+LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
     LanguageDefinition(
         name="Python",
         id=CodeLanguage.PYTHON,
@@ -111,7 +113,7 @@ LANGUAGE_DEFINITIONS: List[LanguageDefinition] = [
         primary_extension=".dart",
         is_mobile=True,
         tree_sitter_id="dart",
-        proto_type_name="DART", 
+        proto_type_name="DART",
         is_analyzable=True,
         linter_names=["dart_analyze"]
     ),

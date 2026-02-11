@@ -8,9 +8,9 @@ name: "Production-Ready Validation"
 # Critical frames for production
 frames:
   - security       # BLOCKER: Security vulnerabilities
-  - chaos          # Resilience under failure
-  - stress         # Performance under load
-  - architectural  # Code quality and design
+  - resilience     # Resilience under failure
+  - antipattern    # Code quality and design
+  - architectural  # Architecture consistency
 
 # Global security rules (applied to all frames)
 global_rules:

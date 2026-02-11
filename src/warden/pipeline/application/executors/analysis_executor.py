@@ -5,10 +5,10 @@ Analysis Phase Executor.
 import time
 from typing import List
 
-from warden.pipeline.domain.pipeline_context import PipelineContext
-from warden.validation.domain.frame import CodeFile
-from warden.shared.infrastructure.logging import get_logger
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
+from warden.pipeline.domain.pipeline_context import PipelineContext
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
@@ -19,7 +19,7 @@ class AnalysisExecutor(BasePhaseExecutor):
     async def execute_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute ANALYSIS phase."""
         # Check if verbose mode is enabled via context
@@ -61,12 +61,11 @@ class AnalysisExecutor(BasePhaseExecutor):
             if use_llm:
                 from warden.analysis.application.llm_analysis_phase import LLMAnalysisPhase as AnalysisPhase
                 from warden.analysis.application.llm_phase_base import LLMPhaseConfig
-
                 from warden.shared.services.semantic_search_service import SemanticSearchService
 
                 phase = AnalysisPhase(
                     config=LLMPhaseConfig(
-                        enabled=True, 
+                        enabled=True,
                         fallback_to_rules=True,
                         tpm_limit=self.config.llm_config.get('tpm_limit', 1000) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'tpm_limit', 1000) if hasattr(self.config, 'llm') else 1000),
                         rpm_limit=self.config.llm_config.get('rpm_limit', 6) if getattr(self.config, 'llm_config', None) else (getattr(self.config.llm, 'rpm_limit', 6) if hasattr(self.config, 'llm') else 6)
@@ -86,7 +85,7 @@ class AnalysisExecutor(BasePhaseExecutor):
                 analysis_config = getattr(self.config, 'analysis_config', {})
                 if not isinstance(analysis_config, dict):
                     analysis_config = {}
-                
+
                 # Propagate analysis_level
                 if hasattr(self.config, 'analysis_level'):
                     analysis_config["analysis_level"] = self.config.analysis_level.value
@@ -107,19 +106,19 @@ class AnalysisExecutor(BasePhaseExecutor):
             # -------------------------------------------------------------
             from warden.analysis.services.linter_service import LinterService
             linter_service = LinterService()
-            
+
             # Re-detect if not already set (safety net) or use shared instance pattern
             # For now, relying on fresh instance checking availability (fast check)
             await linter_service.detect_and_setup(context)
-            
+
             linter_metrics = await linter_service.run_metrics(code_files)
             context.linter_metrics = linter_metrics
-            
+
             # Simple Quality Score Impact (e.g., -0.2 per blocker, max -5.0 penalty)
             # This provides an objective baseline before LLM subjectivity
             linter_penalty = 0.0
             total_errors = 0
-            
+
             for tool, m in linter_metrics.items():
                 if m.is_available:
                      linter_penalty += (m.blocker_count * 0.5) + (m.total_errors * 0.05)
@@ -132,13 +131,13 @@ class AnalysisExecutor(BasePhaseExecutor):
             # Filter out unchanged files to save LLM tokens
             files_to_analyze = []
             file_contexts = getattr(context, 'file_contexts', {})
-            
+
             for cf in code_files:
                 f_info = file_contexts.get(cf.path)
                 # If no context info or not marked unchanged, we analyze it
                 if not f_info or not getattr(f_info, 'is_unchanged', False):
                     files_to_analyze.append(cf)
-            
+
             if not files_to_analyze:
                  logger.info("analysis_phase_skipped_optimization", reason="all_files_unchanged")
                  # Create a dummy result to satisfy pipeline expectations
@@ -158,13 +157,13 @@ class AnalysisExecutor(BasePhaseExecutor):
             else:
                 if verbose:
                     logger.info("analysis_phase_analyzing_subset", total=len(code_files), changed=len(files_to_analyze))
-                
+
                 # Identify impacted files for hints
                 impacted_paths = [
-                    cf.path for cf in files_to_analyze 
+                    cf.path for cf in files_to_analyze
                     if getattr(file_contexts.get(cf.path), 'is_impacted', False)
                 ]
-                
+
                 llm_start_time = time.perf_counter()
                 result = await phase.execute_async(files_to_analyze, pipeline_context=context, impacted_files=impacted_paths)
                 llm_duration = time.perf_counter() - llm_start_time

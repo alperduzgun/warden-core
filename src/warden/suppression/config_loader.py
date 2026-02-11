@@ -10,7 +10,8 @@ Functions:
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import yaml
 
 from warden.suppression.models import (
@@ -65,8 +66,8 @@ def _convert_keys_to_camel_case(data: Any) -> Any:
 
 
 def load_suppression_config(
-    config_path: Optional[Path] = None,
-    project_root: Optional[Path] = None,
+    config_path: Path | None = None,
+    project_root: Path | None = None,
 ) -> SuppressionConfig:
     """
     Load suppression configuration from YAML file.
@@ -108,7 +109,7 @@ def load_suppression_config(
 
     # Load YAML
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding='utf-8') as f:
             content = f.read()
             if not content.strip():
                 # Empty file
@@ -180,8 +181,8 @@ def load_suppression_config(
 
 def save_suppression_config(
     config: SuppressionConfig,
-    config_path: Optional[Path] = None,
-    project_root: Optional[Path] = None,
+    config_path: Path | None = None,
+    project_root: Path | None = None,
 ) -> None:
     """
     Save suppression configuration to YAML file.
@@ -204,7 +205,7 @@ def save_suppression_config(
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert to dict
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
     data['enabled'] = config.enabled
 
     # Add non-empty lists
@@ -243,8 +244,8 @@ def save_suppression_config(
 
 
 def create_default_config(
-    config_path: Optional[Path] = None,
-    project_root: Optional[Path] = None,
+    config_path: Path | None = None,
+    project_root: Path | None = None,
 ) -> SuppressionConfig:
     """
     Create and save default suppression configuration.

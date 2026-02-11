@@ -12,10 +12,9 @@ Python internal format: snake_case
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from warden.shared.domain.base_model import BaseDomainModel
-
 
 # Type aliases for Panel compatibility
 PipelineNodeType = Literal['start', 'end', 'frame', 'globalRule', 'rule']
@@ -60,9 +59,9 @@ class ProjectSummary(BaseDomainModel):
 
     id: str
     name: str
-    path: Optional[str] = None
-    branch: Optional[str] = None
-    commit: Optional[str] = None
+    path: str | None = None
+    branch: str | None = None
+    commit: str | None = None
 
 
 @dataclass
@@ -83,13 +82,13 @@ class PipelineSettings(BaseDomainModel):
     """
 
     fail_fast: bool = True  # Stop on first error
-    timeout: Optional[int] = None  # Execution timeout in seconds
+    timeout: int | None = None  # Execution timeout in seconds
     parallel: bool = False  # Run frames in parallel
     enable_llm: bool = True  # Enable LLM-enhanced analysis (C# pattern)
     llm_provider: str = "deepseek"  # LLM provider (deepseek, openai, anthropic, etc.)
     enable_issue_validation: bool = True  # Enable false positive reduction
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         return {
             'failFast': self.fail_fast,
@@ -100,7 +99,7 @@ class PipelineSettings(BaseDomainModel):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> 'PipelineSettings':
+    def from_json(cls, data: dict[str, Any]) -> 'PipelineSettings':
         """Parse Panel JSON to Python model."""
         return cls(
             fail_fast=data.get('failFast', True),
@@ -153,12 +152,12 @@ class FrameNodeData(BaseDomainModel):
 
     frame_id: str  # Reference to frame (e.g., "security", "chaos")
     type: Literal['frame'] = 'frame'
-    pre_rules: List[CustomRule] = field(default_factory=list)  # Execute before frame
-    post_rules: List[CustomRule] = field(default_factory=list)  # Execute after frame
+    pre_rules: list[CustomRule] = field(default_factory=list)  # Execute before frame
+    post_rules: list[CustomRule] = field(default_factory=list)  # Execute after frame
     on_fail: OnFailAction = 'stop'
-    config: Dict[str, Any] = field(default_factory=dict)  # Frame-specific config
+    config: dict[str, Any] = field(default_factory=dict)  # Frame-specific config
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return {
             'type': self.type,
@@ -215,9 +214,9 @@ class PipelineNode(BaseDomainModel):
     id: str
     type: PipelineNodeType
     position: Position
-    data: Dict[str, Any]  # FrameNodeData | GlobalRuleNodeData | StartNodeData | EndNodeData
+    data: dict[str, Any]  # FrameNodeData | GlobalRuleNodeData | StartNodeData | EndNodeData
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return {
             'id': self.id,
@@ -241,10 +240,10 @@ class EdgeStyle(BaseDomainModel):
     ```
     """
 
-    stroke: Optional[str] = None
-    stroke_width: Optional[int] = None
+    stroke: str | None = None
+    stroke_width: int | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         result = {}
         if self.stroke:
@@ -278,16 +277,16 @@ class PipelineEdge(BaseDomainModel):
     id: str
     source: str  # Source node ID
     target: str  # Target node ID
-    source_handle: Optional[str] = None
-    target_handle: Optional[EdgeHandle] = None
+    source_handle: str | None = None
+    target_handle: EdgeHandle | None = None
     type: str = 'smoothstep'  # Edge type (smoothstep, straight, step)
     animated: bool = True  # Dashed animation
-    style: Optional[EdgeStyle] = None
-    label: Optional[str] = None
+    style: EdgeStyle | None = None
+    label: str | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             'id': self.id,
             'source': self.source,
             'target': self.target,
@@ -332,15 +331,15 @@ class PipelineConfig(BaseDomainModel):
     id: str
     name: str
     version: str = "1.0"
-    project: Optional[ProjectSummary] = None
-    nodes: List[PipelineNode] = field(default_factory=list)
-    edges: List[PipelineEdge] = field(default_factory=list)
-    global_rules: List[CustomRule] = field(default_factory=list)
+    project: ProjectSummary | None = None
+    nodes: list[PipelineNode] = field(default_factory=list)
+    edges: list[PipelineEdge] = field(default_factory=list)
+    global_rules: list[CustomRule] = field(default_factory=list)
     settings: PipelineSettings = field(default_factory=PipelineSettings)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             'id': self.id,
             'name': self.name,
             'version': self.version,
@@ -355,25 +354,25 @@ class PipelineConfig(BaseDomainModel):
 
         return result
 
-    def get_start_node(self) -> Optional[PipelineNode]:
+    def get_start_node(self) -> PipelineNode | None:
         """Find the start node."""
         for node in self.nodes:
             if node.type == 'start':
                 return node
         return None
 
-    def get_end_node(self) -> Optional[PipelineNode]:
+    def get_end_node(self) -> PipelineNode | None:
         """Find the end node."""
         for node in self.nodes:
             if node.type == 'end':
                 return node
         return None
 
-    def get_frame_nodes(self) -> List[PipelineNode]:
+    def get_frame_nodes(self) -> list[PipelineNode]:
         """Get all frame nodes."""
         return [node for node in self.nodes if node.type == 'frame']
 
-    def get_execution_order(self, respect_priority: bool = True) -> List[str]:
+    def get_execution_order(self, respect_priority: bool = True) -> list[str]:
         """
         Get execution order of frames from start to end.
 
@@ -386,6 +385,7 @@ class PipelineConfig(BaseDomainModel):
             List of frame node IDs in execution order
         """
         from collections import deque
+
         from warden.validation.domain.frame import get_frame_by_id, get_frames_by_priority
 
         start_node = self.get_start_node()
@@ -393,7 +393,7 @@ class PipelineConfig(BaseDomainModel):
             return []
 
         # Build adjacency list
-        graph: Dict[str, List[str]] = {node.id: [] for node in self.nodes}
+        graph: dict[str, list[str]] = {node.id: [] for node in self.nodes}
         for edge in self.edges:
             graph[edge.source].append(edge.target)
 
@@ -441,7 +441,7 @@ class PipelineConfig(BaseDomainModel):
         else:
             return [node.id for node in frame_nodes]
 
-    def get_execution_groups_for_parallel(self) -> List[List[str]]:
+    def get_execution_groups_for_parallel(self) -> list[list[str]]:
         """
         Get frame execution groups for parallel processing.
 
@@ -452,7 +452,7 @@ class PipelineConfig(BaseDomainModel):
             List of groups, each containing frame node IDs
             Example: [[security], [chaos], [fuzz, property], [stress]]
         """
-        from warden.validation.domain.frame import get_frame_by_id, get_execution_groups
+        from warden.validation.domain.frame import get_execution_groups, get_frame_by_id
 
         frame_nodes = self.get_frame_nodes()
 

@@ -8,6 +8,7 @@ Validates .warden/config.yaml for:
 """
 
 from typing import Dict, Any, List, Optional, Set
+from pathlib import Path
 import yaml
 
 from warden.validation.domain.frame import ValidationFrame, FrameResult, Finding, CodeFile
@@ -47,7 +48,7 @@ class ConfigValidationFrame(ValidationFrame):
         super().__init__(config)
         self._registered_frame_ids: Set[str] = set()
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute(self, code_file: CodeFile) -> FrameResult:
         """Execute config validation (called per file, but we only care about config.yaml)."""
         # Skip non-config files
         if not code_file.path.endswith("config.yaml") or ".warden" not in code_file.path:
@@ -85,7 +86,7 @@ class ConfigValidationFrame(ValidationFrame):
             findings.append(Finding(
                 id="config-yaml-parse-error",
                 severity="critical",
-                message="Invalid YAML syntax in config.yaml",
+                message=f"Invalid YAML syntax in config.yaml",
                 location=code_file.path,
                 detail=str(e),
                 line=1,

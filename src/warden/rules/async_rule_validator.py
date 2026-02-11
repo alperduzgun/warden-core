@@ -4,9 +4,10 @@ Prevents event loop starvation from expensive regex operations.
 """
 
 import asyncio
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
-import re
+
 import structlog
 
 logger = structlog.get_logger()
@@ -23,8 +24,8 @@ class AsyncRuleValidator:
     async def validate_patterns_async(
         self,
         content: str,
-        patterns: List[str]
-    ) -> List:
+        patterns: list[str]
+    ) -> list:
         """
         Validate content against patterns asynchronously.
 
@@ -45,7 +46,7 @@ class AsyncRuleValidator:
         return matches
 
     @staticmethod
-    def _validate_patterns(content: str, patterns: List[str]) -> List:
+    def _validate_patterns(content: str, patterns: list[str]) -> list:
         """Execute regex validation in thread pool."""
         matches = []
         for pattern in patterns:

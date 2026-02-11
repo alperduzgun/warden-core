@@ -8,9 +8,9 @@ Maps to gRPC CleanupMixin functionality.
 from pathlib import Path
 from typing import Any, Dict, List
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.shared.utils.path_utils import sanitize_path
 
 
@@ -31,7 +31,7 @@ class CleanupAdapter(BaseWardenAdapter):
     })
     TOOL_CATEGORY = ToolCategory.CLEANUP
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get cleanup tool definitions."""
         return [
             self._create_tool_definition(
@@ -69,7 +69,7 @@ class CleanupAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute cleanup tool."""
         handlers = {
@@ -83,7 +83,7 @@ class CleanupAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _analyze_cleanup_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _analyze_cleanup_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Analyze code for cleanup opportunities."""
         path = arguments.get("path", str(self.project_root))
         analyzers = arguments.get("analyzers", [])
@@ -108,14 +108,14 @@ class CleanupAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Cleanup analysis failed: {e}")
 
-    async def _get_cleanup_suggestions_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_cleanup_suggestions_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get cleanup suggestions."""
         arguments.get("path", str(self.project_root))
 
         # Delegate to analyze_cleanup
         return await self._analyze_cleanup_async(arguments)
 
-    async def _get_cleanup_score_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_cleanup_score_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get cleanup score."""
         if self.bridge and hasattr(self.bridge, "get_cleanup_score"):
             try:
@@ -135,7 +135,7 @@ class CleanupAdapter(BaseWardenAdapter):
             },
         })
 
-    def _basic_cleanup_analysis(self, path: Path) -> List[Dict[str, Any]]:
+    def _basic_cleanup_analysis(self, path: Path) -> list[dict[str, Any]]:
         """Basic cleanup analysis without bridge."""
         suggestions = []
 

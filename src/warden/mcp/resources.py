@@ -5,9 +5,9 @@ Manages Warden report resources for MCP protocol.
 Exposes validation reports, configuration, and status files.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
 
 from warden.mcp.protocol import MCPResource, MCPResourceContent
 
@@ -23,7 +23,7 @@ class ResourceDefinition:
 
 
 # Standard Warden resources
-WARDEN_RESOURCES: List[ResourceDefinition] = [
+WARDEN_RESOURCES: list[ResourceDefinition] = [
     ResourceDefinition(
         uri="warden://reports/sarif",
         name="SARIF Report",
@@ -87,7 +87,7 @@ class MCPResourceManager:
         self.project_root = project_root
         self._resource_definitions = {r.uri: r for r in WARDEN_RESOURCES}
 
-    def list_resources(self) -> List[MCPResource]:
+    def list_resources(self) -> list[MCPResource]:
         """
         List all available resources.
 
@@ -144,7 +144,7 @@ class MCPResourceManager:
             text=content,
         )
 
-    def get_resource_info(self, uri: str) -> Optional[ResourceDefinition]:
+    def get_resource_info(self, uri: str) -> ResourceDefinition | None:
         """Get resource definition by URI."""
         return self._resource_definitions.get(uri)
 
@@ -160,7 +160,7 @@ class MCPResourceManager:
         """Get the reports directory path."""
         return self.project_root / ".warden" / "reports"
 
-    def list_all_reports(self) -> List[Dict[str, Any]]:
+    def list_all_reports(self) -> list[dict[str, Any]]:
         """
         List all report files in the reports directory.
 

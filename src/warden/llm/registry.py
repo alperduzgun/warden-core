@@ -5,16 +5,18 @@ Registry-based factory pattern to eliminate if/elif chains.
 Providers self-register on module import.
 """
 
-from typing import Dict, List, Type, Optional, Callable
-from .types import LlmProvider
-from .providers.base import ILlmClient
+from collections.abc import Callable
+from typing import Dict, List, Optional, Type
+
 from .config import ProviderConfig
+from .providers.base import ILlmClient
+from .types import LlmProvider
 
 
 class ProviderRegistry:
     """Registry-based factory for LLM provider clients."""
 
-    _providers: Dict[LlmProvider, Callable[[ProviderConfig], ILlmClient]] = {}
+    _providers: dict[LlmProvider, Callable[[ProviderConfig], ILlmClient]] = {}
 
     @classmethod
     def register(
@@ -60,7 +62,7 @@ class ProviderRegistry:
         return factory(config)
 
     @classmethod
-    def available(cls) -> List[LlmProvider]:
+    def available(cls) -> list[LlmProvider]:
         """
         Get list of registered providers.
 

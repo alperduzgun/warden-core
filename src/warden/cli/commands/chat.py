@@ -1,7 +1,8 @@
-import typer
 import shutil
 import subprocess
 from pathlib import Path
+
+import typer
 from rich.console import Console
 
 console = Console()
@@ -12,7 +13,7 @@ def chat_command(
 ):
     """
     Launch the interactive AI Chat interface (Node.js required).
-    
+
     This delegates to the 'warden-cli' executable or local dev script.
     """
     console.print("[bold blue]🚀 Launching Warden AI Chat...[/bold blue]")
@@ -21,10 +22,10 @@ def chat_command(
     # This logic assumes we are running from src/warden/cli/commands/chat.py
     # so project root is 4 levels up -> warden-core/
     # (src/warden/cli/commands/chat.py -> parents[0]=commands, [1]=cli, [2]=warden, [3]=src, [4]=warden-core)
-    
+
     # Actually logic in main.py was parents[2] because it was src/warden/main.py.
     # Here parents[4] is safe if cwd() is unreliable, but usually we refer to relative path from file.
-    
+
     # Let's double check path logic.
     # main.py: Path(__file__).parents[2] / "cli"
     #   src/warden/main.py -> parents[0]=warden, parents[1]=src, parents[2]=warden-core.
@@ -32,15 +33,15 @@ def chat_command(
     #   Path("src/warden/main.py").parents[0] -> src/warden
     #   parents[1] -> src
     #   parents[2] -> . (root)
-    
+
     # chat.py: src/warden/cli/commands/chat.py
     #   parents[0] -> commands
     #   parents[1] -> cli
     #   parents[2] -> warden
     #   parents[3] -> src
     #   parents[4] -> . (root)
-    
-    repo_root = Path(__file__).parents[4] 
+
+    repo_root = Path(__file__).parents[4]
     cli_dir = repo_root / "cli"
 
     if dev and cli_dir.exists():
@@ -65,7 +66,7 @@ def chat_command(
             return
         except KeyboardInterrupt:
             return
-    
+
     # 3. Check for npx
     if shutil.which("npx"):
         try:

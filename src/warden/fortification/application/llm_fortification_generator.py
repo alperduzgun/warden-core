@@ -12,8 +12,8 @@ from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
     PromptTemplates,
 )
-from warden.shared.infrastructure.logging import get_logger
 from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ class Fortification:
     explanation: str
     confidence: float
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to JSON."""
         return {
             "title": self.title,
@@ -100,7 +100,7 @@ Path Traversal:
 
 Return fixes as JSON with code examples."""
 
-    def format_user_prompt(self, context: Dict[str, Any]) -> str:
+    def format_user_prompt(self, context: dict[str, Any]) -> str:
         """Format prompt for fortification generation."""
         finding = context.get("finding", {})
         code_context = context.get("code_context", "")
@@ -151,7 +151,7 @@ Return as JSON with:
 
         return prompt
 
-    def parse_llm_response(self, response: str) -> Dict[str, Any]:
+    def parse_llm_response(self, response: str) -> dict[str, Any]:
         """Parse fortification response."""
         try:
             # Extract JSON
@@ -186,11 +186,11 @@ Return as JSON with:
 
     async def generate_fortification_async(
         self,
-        finding: Dict[str, Any],
+        finding: dict[str, Any],
         code_context: str,
         framework: str = "none",
         language: str = "python",
-    ) -> Optional[Fortification]:
+    ) -> Fortification | None:
         """
         Generate fortification for a vulnerability.
 
@@ -239,11 +239,11 @@ Return as JSON with:
 
     async def generate_batch_fortifications_async(
         self,
-        findings: List[Dict[str, Any]],
-        code_contexts: Dict[str, str],
+        findings: list[dict[str, Any]],
+        code_contexts: dict[str, str],
         framework: str = "none",
         language: str = "python",
-    ) -> List[Fortification]:
+    ) -> list[Fortification]:
         """
         Generate fortifications for multiple findings.
 
@@ -303,7 +303,7 @@ Return as JSON with:
         finding: Any, # Use Any to support both dict and Finding
         framework: str,
         language: str,
-    ) -> Optional[Fortification]:
+    ) -> Fortification | None:
         """Generate template-based fix as fallback."""
         vuln_type = self._get_val(finding, "type", "").lower()
 
@@ -374,7 +374,7 @@ db.query(query, [username], (err, results) => {
 
     def _xss_template(
         self,
-        finding: Dict[str, Any],
+        finding: dict[str, Any],
         framework: str,
         language: str,
     ) -> Fortification:
@@ -414,7 +414,7 @@ safe_input = html.escape(user_input)"""
 
     def _hardcoded_secret_template(
         self,
-        finding: Dict[str, Any],
+        finding: dict[str, Any],
         framework: str,
         language: str,
     ) -> Fortification:
@@ -458,7 +458,7 @@ if (!API_KEY) {
 
     def _path_traversal_template(
         self,
-        finding: Dict[str, Any],
+        finding: dict[str, Any],
         framework: str,
         language: str,
     ) -> Fortification:
@@ -514,7 +514,7 @@ function safePathJoin(userInput) {
             confidence=0.7,
         )
 
-    def _get_default_fix(self) -> Dict[str, Any]:
+    def _get_default_fix(self) -> dict[str, Any]:
         """Get default fix when parsing fails."""
         return {
             "title": "Security Fix Required",

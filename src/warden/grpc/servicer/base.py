@@ -53,11 +53,11 @@ class WardenServicerBase:
 
     def __init__(
         self,
-        bridge: Optional[WardenBridge] = None,
-        project_root: Optional[Path] = None,
-        issue_repository: Optional[IIssueRepository] = None,
-        suppression_repository: Optional[ISuppressionRepository] = None,
-        history_repository: Optional[IIssueHistoryRepository] = None,
+        bridge: WardenBridge | None = None,
+        project_root: Path | None = None,
+        issue_repository: IIssueRepository | None = None,
+        suppression_repository: ISuppressionRepository | None = None,
+        history_repository: IIssueHistoryRepository | None = None,
     ):
         """
         Initialize servicer with repositories.
@@ -88,12 +88,12 @@ class WardenServicerBase:
 
         # In-memory cache for backward compatibility with mixins
         # These will be synced with repositories
-        self._issues: Dict[str, dict] = {}
-        self._issue_history: List[dict] = []
-        self._suppressions: Dict[str, dict] = {}
+        self._issues: dict[str, dict] = {}
+        self._issue_history: list[dict] = []
+        self._suppressions: dict[str, dict] = {}
 
         # Report status tracking (kept in-memory as it's temporary state)
-        self._report_status: Dict[str, dict] = {}
+        self._report_status: dict[str, dict] = {}
 
         logger.info(
             "grpc_servicer_initialized",
@@ -142,7 +142,7 @@ class WardenServicerBase:
             history_events=len(self._issue_history),
         )
 
-    def track_issue(self, finding: Dict[str, Any]) -> None:
+    def track_issue(self, finding: dict[str, Any]) -> None:
         """
         Track a finding as an issue (in-memory).
 
@@ -180,7 +180,7 @@ class WardenServicerBase:
                     issue["occurrence_count"] = issue.get("occurrence_count", 0) + 1
                     break
 
-    async def track_issue_async(self, finding: Dict[str, Any]) -> Dict[str, Any]:
+    async def track_issue_async(self, finding: dict[str, Any]) -> dict[str, Any]:
         """
         Track a finding as an issue with persistence.
 
@@ -263,7 +263,7 @@ class WardenServicerBase:
 
         return issue_data
 
-    async def save_issue_async(self, issue: "WardenIssue") -> "WardenIssue":
+    async def save_issue_async(self, issue: WardenIssue) -> WardenIssue:
         """
         Save a WardenIssue model with persistence.
 
@@ -286,11 +286,11 @@ class WardenServicerBase:
 
         return saved_issue
 
-    async def get_issue_async(self, issue_id: str) -> Optional["WardenIssue"]:
+    async def get_issue_async(self, issue_id: str) -> WardenIssue | None:
         """Get issue by ID from repository."""
         return await self._issue_repo.get_async(issue_id)
 
-    async def get_all_issues_async(self) -> List["WardenIssue"]:
+    async def get_all_issues_async(self) -> list[WardenIssue]:
         """Get all issues from repository."""
         return await self._issue_repo.get_all_async()
 

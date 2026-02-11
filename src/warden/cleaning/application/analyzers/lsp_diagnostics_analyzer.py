@@ -1,9 +1,11 @@
 
-import structlog
-from typing import Dict, Any, Optional
 from pathlib import Path
-from warden.validation.domain.frame import CodeFile
+from typing import Any, Dict, Optional
+
+import structlog
+
 from warden.lsp import LSPManager
+from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
 
@@ -11,15 +13,15 @@ class LSPDiagnosticsAnalyzer:
     """
     Analyzer that captures compiler-grade diagnostics from LSP servers.
     """
-    
+
     def __init__(self):
         pass
 
     async def analyze_async(
         self,
         code_file: CodeFile,
-        ast_tree: Optional[Any] = None
-    ) -> Dict[str, Any]:
+        ast_tree: Any | None = None
+    ) -> dict[str, Any]:
         """
         Analyze file using LSP for diagnostics.
         """

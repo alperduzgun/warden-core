@@ -7,19 +7,20 @@ Indexes code chunks into vector database using an adapter.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
-from pathlib import Path
 import structlog
 
+from warden.semantic_search.adapters import VectorStoreAdapter
+from warden.semantic_search.chunker import CodeChunker
 from warden.semantic_search.embeddings import EmbeddingGenerator
 from warden.semantic_search.models import (
     IndexStats,
 )
-from warden.semantic_search.chunker import CodeChunker
-from warden.semantic_search.adapters import VectorStoreAdapter
 
 logger = structlog.get_logger()
 
@@ -33,14 +34,14 @@ class CodeIndexer:
 
     adapter: VectorStoreAdapter
     embedding_generator: EmbeddingGenerator
-    project_root: Optional[Path]
+    project_root: Path | None
     chunker: CodeChunker
 
     def __init__(
         self,
         adapter: VectorStoreAdapter,
         embedding_generator: EmbeddingGenerator,
-        project_root: Optional[Path] = None,
+        project_root: Path | None = None,
         chunk_size: int = 500,
     ):
         """
@@ -79,17 +80,15 @@ class CodeIndexer:
         """
         Index a single file with change detection.
         """
-        
+
         # 1. Calculate current hash
         current_hash = self._calculate_file_hash(file_path)
-        
+
         # 2. Check for changes based on relative path if possible for portability
         rel_path = file_path
         if self.project_root:
-            try:
+            with contextlib.suppress(ValueError):
                 rel_path = str(Path(file_path).relative_to(self.project_root))
-            except ValueError:
-                pass
 
         if not force and current_hash:
             # Try relative path first (Portable across CI/Local)
@@ -97,7 +96,7 @@ class CodeIndexer:
             # Fallback to absolute if not found (Legacy)
             if not existing_hash and rel_path != file_path:
                 existing_hash = self.adapter.get_existing_file_hash(file_path)
-                
+
             if existing_hash == current_hash:
                 logger.debug(
                     "file_unchanged_skipping_index",
@@ -131,7 +130,7 @@ class CodeIndexer:
         documents = []
         indexed_count = 0
 
-        for chunk, embedding, emb_metadata in batch_results:
+        for chunk, embedding, _emb_metadata in batch_results:
             # Prepare metadata (ChromaDB only supports simple types in metadata)
             metadata = {
                 "chunk_id": chunk.id,
@@ -144,7 +143,7 @@ class CodeIndexer:
                 "file_hash": current_hash,
                 "indexed_at": datetime.now().isoformat(),
             }
-            
+
             # Flatten extra metadata if any
             if chunk.metadata:
                 for k, v in chunk.metadata.items():
@@ -178,15 +177,15 @@ class CodeIndexer:
         return indexed_count
 
     async def index_files(
-        self, 
-        file_paths: str | List[str], 
-        languages: dict[str, str], 
+        self,
+        file_paths: str | list[str],
+        languages: dict[str, str],
         max_concurrency: int = 5,
-        progress_callback: Optional[callable] = None
+        progress_callback: callable | None = None
     ) -> IndexStats:
         """
         Index multiple files in parallel.
-        
+
         Args:
             file_paths: List of absolute file paths or single path
             languages: Mapping of file path to language
@@ -201,7 +200,7 @@ class CodeIndexer:
         chunks_by_language: dict[str, int] = {}
         chunks_by_type: dict[str, int] = {}
         files_indexed = 0
-        
+
         semaphore = asyncio.Semaphore(max_concurrency)
 
         async def _index_with_semaphore(file_path: str):

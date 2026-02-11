@@ -11,9 +11,10 @@ Python internal format: snake_case
 """
 
 from enum import Enum
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import Field
+
 from warden.shared.domain.base_model import BaseDomainModel
 
 
@@ -104,9 +105,9 @@ class Dependency(BaseDomainModel):
     version: str
     type: DependencyType = DependencyType.PRODUCTION
     is_direct: bool = True
-    extras: List[str] = Field(default_factory=list)
+    extras: list[str] = Field(default_factory=list)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         data = super().to_json()
         # Ensure extras is always present even if empty
@@ -135,7 +136,7 @@ class BuildScript(BaseDomainModel):
 
     name: str
     command: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class BuildContext(BaseDomainModel):
@@ -167,19 +168,19 @@ class BuildContext(BaseDomainModel):
 
     build_system: BuildSystem
     project_path: str
-    project_name: Optional[str] = None
-    project_version: Optional[str] = None
-    project_description: Optional[str] = None
-    config_file_path: Optional[str] = None
-    dependencies: List[Dependency] = Field(default_factory=list)
-    dev_dependencies: List[Dependency] = Field(default_factory=list)
-    scripts: List[BuildScript] = Field(default_factory=list)
-    python_version: Optional[str] = None
-    node_version: Optional[str] = None
-    engines: Dict[str, str] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    project_name: str | None = None
+    project_version: str | None = None
+    project_description: str | None = None
+    config_file_path: str | None = None
+    dependencies: list[Dependency] = Field(default_factory=list)
+    dev_dependencies: list[Dependency] = Field(default_factory=list)
+    scripts: list[BuildScript] = Field(default_factory=list)
+    python_version: str | None = None
+    node_version: str | None = None
+    engines: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         data = super().to_json()
 
@@ -190,11 +191,11 @@ class BuildContext(BaseDomainModel):
 
         return data
 
-    def get_all_dependencies(self) -> List[Dependency]:
+    def get_all_dependencies(self) -> list[Dependency]:
         """Get all dependencies (production + dev)."""
         return self.dependencies + self.dev_dependencies
 
-    def get_dependency_by_name(self, name: str) -> Optional[Dependency]:
+    def get_dependency_by_name(self, name: str) -> Dependency | None:
         """Find dependency by name (case-insensitive)."""
         name_lower = name.lower()
         for dep in self.get_all_dependencies():
@@ -206,14 +207,14 @@ class BuildContext(BaseDomainModel):
         """Check if dependency exists (case-insensitive)."""
         return self.get_dependency_by_name(name) is not None
 
-    def get_production_dependencies(self) -> List[Dependency]:
+    def get_production_dependencies(self) -> list[Dependency]:
         """Get only production dependencies."""
         return [
             dep for dep in self.get_all_dependencies()
             if dep.type == DependencyType.PRODUCTION
         ]
 
-    def get_script_by_name(self, name: str) -> Optional[BuildScript]:
+    def get_script_by_name(self, name: str) -> BuildScript | None:
         """Find script by name."""
         for script in self.scripts:
             if script.name == name:

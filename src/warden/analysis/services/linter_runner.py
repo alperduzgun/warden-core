@@ -7,11 +7,12 @@ Designed to be used by specific Language Linter Frames (Hub Items).
 """
 
 import asyncio
-import subprocess
+import contextlib
 import json
+import subprocess
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from warden.shared.infrastructure.logging import get_logger
 
@@ -21,7 +22,7 @@ logger = get_logger(__name__)
 class LinterRunner:
     """
     Generic execution engine for CLI-based linters.
-    
+
     Responsibilities:
     - Safe subprocess execution (asyncio)
     - Timeout management
@@ -35,25 +36,25 @@ class LinterRunner:
         self.max_output_size = max_output_size  # 10MB default
 
     async def execute_json_command_async(
-        self, 
-        command: List[str], 
-        cwd: Optional[Path] = None,
-        env: Optional[Dict[str, str]] = None
-    ) -> Tuple[bool, Any, Optional[str]]:
+        self,
+        command: list[str],
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None
+    ) -> tuple[bool, Any, str | None]:
         """
         Execute a command and parse its output as JSON.
-        
+
         Args:
             command: Command list (e.g. ['ruff', 'check', ...])
             cwd: Working directory
             env: Environment variables
-            
+
         Returns:
             Tuple(success, parsed_data_or_none, error_message)
         """
         tool_name = Path(command[0]).name
         start_time = time.perf_counter()
-        
+
         try:
             process = await asyncio.create_subprocess_exec(  # warden: ignore
                 *command,
@@ -72,15 +73,15 @@ class LinterRunner:
                 return False, None, f"Timeout exceeded ({self.timeout}s)"
 
             duration = time.perf_counter() - start_time
-            
+
             # Check exit code
-            # Note: Many linters return non-zero on findings. 
+            # Note: Many linters return non-zero on findings.
             # We rely on stdout presence for success usually, but let's check basic execution failures.
             stderr_decoded = stderr.decode().strip()
-            
+
             # Logic: If we got valid JSON on stdout, we consider it a 'successful run' even if exit code is 1 (findings found)
             stdout_decoded = stdout.decode().strip()
-            
+
             if not stdout_decoded:
                 if process.returncode != 0:
                     logger.warning("linter_exec_failed_no_output", tool=tool_name, error=stderr_decoded)
@@ -100,10 +101,8 @@ class LinterRunner:
 
     def _kill_process(self, process: asyncio.subprocess.Process) -> None:
         """Safely kill a process."""
-        try:
+        with contextlib.suppress(ProcessLookupError):
             process.kill()
-        except ProcessLookupError:
-            pass
 
     # Alias for backwards compatibility
     execute_json_command = execute_json_command_async

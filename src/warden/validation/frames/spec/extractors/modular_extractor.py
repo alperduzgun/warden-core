@@ -8,22 +8,24 @@ and merges them into a single Contract object. This enables:
 - Project-agnostic contract loading
 """
 
-import yaml
 from pathlib import Path
-from typing import List, Optional, Any
-from warden.validation.frames.spec.models import (
-    Contract,
-    OperationDefinition,
-    ModelDefinition,
-    PlatformRole,
-    PlatformType,
-    OperationType,
-)
+from typing import Any, List, Optional
+
+import yaml
+
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorResilienceConfig,
 )
-from warden.shared.infrastructure.logging import get_logger
+from warden.validation.frames.spec.models import (
+    Contract,
+    ModelDefinition,
+    OperationDefinition,
+    OperationType,
+    PlatformRole,
+    PlatformType,
+)
 
 logger = get_logger(__name__)
 
@@ -31,28 +33,28 @@ logger = get_logger(__name__)
 class ModularContractExtractor(BaseContractExtractor):
     """
     Extractor for pre-generated modular contracts.
-    
+
     Reads YAML files from `.warden/contracts/modules/` and merges them
     into a single Contract object. Respects .wardenignore patterns.
     """
-    
+
     platform_type = PlatformType.UNIVERSAL
     supported_languages = []  # Not language-specific
     file_patterns = []  # Not file-based scanning
-    
+
     def __init__(
         self,
         project_root: Path,
         role: PlatformRole,
-        resilience_config: Optional[ExtractorResilienceConfig] = None,
+        resilience_config: ExtractorResilienceConfig | None = None,
     ):
         super().__init__(project_root, role, resilience_config)
         self.modules_dir = project_root / ".warden" / "contracts" / "modules"
-    
+
     async def extract(self) -> Contract:
         """
         Extract contract by reading and merging modular YAML files.
-        
+
         Returns:
             Merged Contract with all operations and models
         """
@@ -66,10 +68,10 @@ class ModularContractExtractor(BaseContractExtractor):
                 name=f"{self.role.value}_contract",
                 extracted_from="modular",
             )
-        
+
         # Collect all YAML files
         yaml_files = sorted(self.modules_dir.glob("*.yaml"))
-        
+
         if not yaml_files:
             logger.warning(
                 "no_module_files_found",
@@ -79,17 +81,17 @@ class ModularContractExtractor(BaseContractExtractor):
                 name=f"{self.role.value}_contract",
                 extracted_from="modular",
             )
-        
+
         logger.info(
             "loading_modular_contracts",
             modules_dir=str(self.modules_dir),
             file_count=len(yaml_files),
         )
-        
+
         # Merge all modules
-        all_operations: List[OperationDefinition] = []
-        all_models: List[ModelDefinition] = []
-        
+        all_operations: list[OperationDefinition] = []
+        all_models: list[ModelDefinition] = []
+
         for yaml_file in yaml_files:
             try:
                 module_contract = self._load_module(yaml_file)
@@ -97,7 +99,7 @@ class ModularContractExtractor(BaseContractExtractor):
                     all_operations.extend(module_contract.get("contracts", []))
                     # Models are not typically in modular format, but support if present
                     all_models.extend(module_contract.get("models", []))
-                    
+
             except Exception as e:
                 logger.error(
                     "module_load_failed",
@@ -106,7 +108,7 @@ class ModularContractExtractor(BaseContractExtractor):
                 )
                 self._stats["files_failed"] += 1
                 continue
-        
+
         # Convert raw dicts to OperationDefinition objects
         operations = []
         for op_dict in all_operations:
@@ -118,7 +120,7 @@ class ModularContractExtractor(BaseContractExtractor):
                     operation=op_dict.get("endpoint", "unknown"),
                     error=str(e),
                 )
-        
+
         logger.info(
             "modular_contract_loaded",
             total_operations=len(operations),
@@ -126,20 +128,20 @@ class ModularContractExtractor(BaseContractExtractor):
             modules_processed=self._stats["files_processed"],
             modules_failed=self._stats["files_failed"],
         )
-        
+
         return Contract(
             name=f"{self.role.value}_contract",
             extracted_from="modular",
             operations=operations,
             models=all_models,
         )
-    
-    def _load_module(self, yaml_file: Path) -> Optional[dict]:
+
+    def _load_module(self, yaml_file: Path) -> dict | None:
         """Load a single module YAML file."""
         try:
-            with open(yaml_file, 'r') as f:
+            with open(yaml_file) as f:
                 content = yaml.safe_load(f)
-            
+
             self._stats["files_processed"] += 1
             logger.debug(
                 "module_loaded",
@@ -147,7 +149,7 @@ class ModularContractExtractor(BaseContractExtractor):
                 operations=len(content.get("contracts", [])),
             )
             return content
-            
+
         except Exception as e:
             logger.error(
                 "module_read_failed",
@@ -155,17 +157,17 @@ class ModularContractExtractor(BaseContractExtractor):
                 error=str(e),
             )
             raise
-    
+
     def _dict_to_operation(self, op_dict: dict) -> OperationDefinition:
         """Convert a dict to OperationDefinition."""
         endpoint_str = op_dict.get("endpoint", "")
         http_method = self._extract_http_method(endpoint_str)
-        
+
         # Extract operation name from endpoint
         # "POST /auth/login" -> "login" or "auth_login"
         path = endpoint_str.replace(http_method, "").strip()
         operation_name = path.replace("/", "_").strip("_") or "unknown_operation"
-        
+
         return OperationDefinition(
             name=operation_name,
             operation_type=OperationType.COMMAND if http_method in ["POST", "PUT", "DELETE", "PATCH"] else OperationType.QUERY,
@@ -178,7 +180,7 @@ class ModularContractExtractor(BaseContractExtractor):
                 "response_fields": op_dict.get("response", []),
             }
         )
-    
+
     def _extract_http_method(self, endpoint: str) -> str:
         """Extract HTTP method from endpoint string."""
         methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]

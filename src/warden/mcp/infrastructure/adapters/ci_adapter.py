@@ -15,18 +15,17 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
-
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.services.ci_manager import (
     CIManager,
-    CIProvider,
     CIManagerError,
-    ValidationError,
+    CIProvider,
+    FileOperationError,
     SecurityError,
     TemplateError,
-    FileOperationError,
+    ValidationError,
 )
 
 try:
@@ -59,7 +58,7 @@ class CIAdapter(BaseWardenAdapter):
     })
     TOOL_CATEGORY = ToolCategory.CONFIG
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get CI tool definitions."""
         return [
             self._create_tool_definition(
@@ -130,7 +129,7 @@ class CIAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute CI tool with proper error handling."""
         logger.info(
@@ -168,7 +167,7 @@ class CIAdapter(BaseWardenAdapter):
         """
         return CIManager(project_root=self.project_root)
 
-    async def _ci_init_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _ci_init_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """
         Initialize CI workflows.
 
@@ -246,7 +245,7 @@ class CIAdapter(BaseWardenAdapter):
         except (TemplateError, FileOperationError) as e:
             return MCPToolResult.error(f"File operation failed: {e}")
 
-    async def _ci_update_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _ci_update_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """
         Update CI workflows from templates.
 

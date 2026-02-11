@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Any, List
 from enum import Enum
+from typing import Any, Dict, List
 
 
 class CheckSeverity(str, Enum):
@@ -59,7 +59,7 @@ class CheckFinding:
     documentation_url: str | None = None  # Link to docs
     is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""
         return {
             "checkId": self.check_id,
@@ -85,9 +85,9 @@ class CheckResult:
     check_id: str
     check_name: str
     passed: bool
-    findings: List[CheckFinding]
+    findings: list[CheckFinding]
     duration: float = 0.0  # in seconds
-    metadata: Dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
     @property
     def critical_count(self) -> int:
@@ -99,7 +99,7 @@ class CheckResult:
         """Count of high severity findings."""
         return sum(1 for f in self.findings if f.severity == CheckSeverity.HIGH)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""
         return {
             "checkId": self.check_id,
@@ -156,9 +156,9 @@ class ValidationCheck(ABC):
     enabled_by_default: bool = True
 
     # Configuration
-    config: Dict[str, Any]
+    config: dict[str, Any]
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize check with optional configuration.
 
@@ -177,7 +177,7 @@ class ValidationCheck(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'name' attribute")
 
     @abstractmethod
-    async def execute_async(self, code_file: "CodeFile") -> CheckResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:  # type: ignore[name-defined]
         """
         Execute validation check on code file.
 
@@ -195,7 +195,7 @@ class ValidationCheck(ABC):
         """
         pass
 
-    def is_enabled(self, frame_config: Dict[str, Any] | None = None) -> bool:
+    def is_enabled(self, frame_config: dict[str, Any] | None = None) -> bool:
         """
         Check if this check is enabled.
 
@@ -210,7 +210,7 @@ class ValidationCheck(ABC):
 
         # Check if explicitly enabled/disabled in config
         check_config = frame_config.get("checks", {})
-        
+
         # Handle list format (list of enabled check IDs)
         if isinstance(check_config, list):
             return self.id in check_config
@@ -241,7 +241,7 @@ class CheckRegistry:
 
     def __init__(self) -> None:
         """Initialize check registry."""
-        self._checks: Dict[str, ValidationCheck] = {}
+        self._checks: dict[str, ValidationCheck] = {}
 
     def register(self, check: ValidationCheck) -> None:
         """
@@ -280,7 +280,7 @@ class CheckRegistry:
         """
         return self._checks.get(check_id)
 
-    def get_all(self) -> List[ValidationCheck]:
+    def get_all(self) -> list[ValidationCheck]:
         """
         Get all registered checks.
 
@@ -289,7 +289,7 @@ class CheckRegistry:
         """
         return list(self._checks.values())
 
-    def get_enabled(self, frame_config: Dict[str, Any] | None = None) -> List[ValidationCheck]:
+    def get_enabled(self, frame_config: dict[str, Any] | None = None) -> list[ValidationCheck]:
         """
         Get all enabled checks.
 

@@ -6,7 +6,7 @@ Detects frameworks based on file patterns, imports, and dependencies.
 
 import json
 from pathlib import Path
-from typing import List, Dict, Set, Optional
+from typing import Dict, List, Optional, Set
 
 from warden.analysis.application.discovery.models import Framework, FrameworkDetectionResult
 
@@ -19,7 +19,7 @@ class FrameworkDetector:
     """
 
     # Python framework detection patterns
-    PYTHON_FRAMEWORK_IMPORTS: Dict[Framework, Set[str]] = {
+    PYTHON_FRAMEWORK_IMPORTS: dict[Framework, set[str]] = {
         Framework.DJANGO: {"django", "django.conf", "django.db"},
         Framework.FLASK: {"flask", "flask.app"},
         Framework.FASTAPI: {"fastapi", "fastapi.app"},
@@ -28,7 +28,7 @@ class FrameworkDetector:
     }
 
     # JavaScript/TypeScript framework detection in package.json
-    JS_FRAMEWORK_PACKAGES: Dict[Framework, Set[str]] = {
+    JS_FRAMEWORK_PACKAGES: dict[Framework, set[str]] = {
         Framework.REACT: {"react", "react-dom"},
         Framework.VUE: {"vue", "@vue/cli"},
         Framework.ANGULAR: {"@angular/core", "@angular/cli"},
@@ -47,8 +47,8 @@ class FrameworkDetector:
             project_root: Root directory of the project
         """
         self.project_root = project_root
-        self.detected_frameworks: List[Framework] = []
-        self.confidence_scores: Dict[str, float] = {}
+        self.detected_frameworks: list[Framework] = []
+        self.confidence_scores: dict[str, float] = {}
 
     async def detect(self) -> FrameworkDetectionResult:
         """
@@ -116,7 +116,7 @@ class FrameworkDetector:
                     if any(package_name in line for line in lines):
                         self._add_framework(framework, confidence=0.9)
                         break
-        except (IOError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             pass
 
     async def _analyze_pyproject(self, pyproject_path: Path) -> None:
@@ -135,7 +135,7 @@ class FrameworkDetector:
                     if package_name in content:
                         self._add_framework(framework, confidence=0.9)
                         break
-        except (IOError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             pass
 
     async def _analyze_setup_py(self, setup_path: Path) -> None:
@@ -154,7 +154,7 @@ class FrameworkDetector:
                     if package_name in content:
                         self._add_framework(framework, confidence=0.8)
                         break
-        except (IOError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             pass
 
     async def _scan_python_imports(self) -> None:
@@ -172,7 +172,7 @@ class FrameworkDetector:
                         if any(import_pattern in line for line in lines):
                             self._add_framework(framework, confidence=0.7)
                             break
-            except (IOError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError):
                 continue
 
     async def _detect_js_frameworks(self) -> None:
@@ -197,7 +197,7 @@ class FrameworkDetector:
                         confidence = 0.9 if package in dependencies else 0.8
                         self._add_framework(framework, confidence=confidence)
                         break
-        except (IOError, json.JSONDecodeError, UnicodeDecodeError):
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             pass
 
     def _add_framework(self, framework: Framework, confidence: float) -> None:
@@ -216,7 +216,7 @@ class FrameworkDetector:
         current_confidence = self.confidence_scores.get(framework_key, 0.0)
         self.confidence_scores[framework_key] = max(current_confidence, confidence)
 
-    def _get_primary_framework(self) -> Optional[Framework]:
+    def _get_primary_framework(self) -> Framework | None:
         """
         Get the primary framework (highest confidence).
 

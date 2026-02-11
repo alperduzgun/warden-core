@@ -10,13 +10,13 @@ This module is part of the SpecFrame setup wizard system.
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
-import json
 
-from warden.validation.frames.spec.models import PlatformType, PlatformRole
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.frames.spec.models import PlatformRole, PlatformType
 
 logger = get_logger(__name__)
 
@@ -40,10 +40,10 @@ class DetectedProject:
     platform_type: PlatformType
     confidence: float
     role: PlatformRole
-    evidence: List[str] = field(default_factory=list)
-    metadata: Dict[str, str] = field(default_factory=dict)
+    evidence: list[str] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
         return {
             "name": self.name,
@@ -72,7 +72,7 @@ class PlatformDetector:
 
     # Platform signature patterns
     # Each signature has: files to check, content patterns, and weight
-    PLATFORM_SIGNATURES: Dict[PlatformType, Dict[str, Any]] = {
+    PLATFORM_SIGNATURES: dict[PlatformType, dict[str, Any]] = {
         PlatformType.FLUTTER: {
             "files": ["pubspec.yaml"],
             "patterns": {
@@ -236,7 +236,7 @@ class PlatformDetector:
         self,
         max_depth: int = 3,
         min_confidence: float = 0.5,
-        exclude_dirs: Optional[Set[str]] = None,
+        exclude_dirs: set[str] | None = None,
     ):
         """
         Initialize platform detector.
@@ -271,7 +271,7 @@ class PlatformDetector:
     async def detect_projects_async(
         self,
         search_path: str | Path,
-    ) -> List[DetectedProject]:
+    ) -> list[DetectedProject]:
         """
         Detect projects in a directory tree asynchronously.
 
@@ -302,8 +302,8 @@ class PlatformDetector:
             min_confidence=self.min_confidence,
         )
 
-        detected_projects: List[DetectedProject] = []
-        visited: Set[str] = set()
+        detected_projects: list[DetectedProject] = []
+        visited: set[str] = set()
 
         # Scan directory tree
         await self._scan_directory(
@@ -335,8 +335,8 @@ class PlatformDetector:
         self,
         directory: Path,
         current_depth: int,
-        detected_projects: List[DetectedProject],
-        visited: Optional[Set[str]] = None,
+        detected_projects: list[DetectedProject],
+        visited: set[str] | None = None,
     ) -> None:
         """
         Recursively scan directory for projects.
@@ -393,7 +393,7 @@ class PlatformDetector:
     async def _detect_platform_type(
         self,
         directory: Path,
-    ) -> Optional[DetectedProject]:
+    ) -> DetectedProject | None:
         """
         Detect platform type for a specific directory.
 
@@ -403,7 +403,7 @@ class PlatformDetector:
         Returns:
             DetectedProject if platform detected, None otherwise
         """
-        best_match: Optional[tuple[PlatformType, float, List[str], Dict]] = None
+        best_match: tuple[PlatformType, float, list[str], dict] | None = None
 
         for platform_type, signature in self.PLATFORM_SIGNATURES.items():
             score, evidence, metadata = await self._calculate_confidence(
@@ -435,8 +435,8 @@ class PlatformDetector:
     async def _calculate_confidence(
         self,
         directory: Path,
-        signature: Dict,
-    ) -> tuple[float, List[str], Dict[str, str]]:
+        signature: dict,
+    ) -> tuple[float, list[str], dict[str, str]]:
         """
         Calculate confidence score for a platform signature.
 
@@ -453,8 +453,8 @@ class PlatformDetector:
             Tuple of (confidence_score, evidence_list, metadata_dict)
         """
         score = 0.0
-        evidence: List[str] = []
-        metadata: Dict[str, str] = {}
+        evidence: list[str] = []
+        metadata: dict[str, str] = {}
 
         required_files = signature["files"]
         patterns = signature.get("patterns", {})
@@ -539,8 +539,8 @@ class PlatformDetector:
     async def _check_file_patterns(
         self,
         file_path: Path,
-        patterns: List[str],
-        metadata: Dict[str, str],
+        patterns: list[str],
+        metadata: dict[str, str],
     ) -> int:
         """
         Check if patterns exist in file content.
@@ -591,7 +591,7 @@ class PlatformDetector:
     async def _extract_package_json_metadata(
         self,
         content: str,
-        metadata: Dict[str, str],
+        metadata: dict[str, str],
     ) -> None:
         """
         Extract metadata from package.json content.
@@ -632,7 +632,7 @@ class PlatformDetector:
         self,
         platform_type: PlatformType,
         directory: Path,
-        metadata: Dict[str, str],
+        metadata: dict[str, str],
     ) -> PlatformRole:
         """
         Suggest role (consumer/provider) based on platform type and context.

@@ -7,12 +7,12 @@ Tracks issues across multiple pipeline runs:
 - Historical tracking
 """
 
-from typing import List, Dict
 from datetime import datetime, timezone
+from typing import Dict, List
 
-from warden.issues.domain.models import WardenIssue, StateTransition
-from warden.issues.domain.enums import IssueState
 from warden.analysis.domain.models import IssueSnapshot
+from warden.issues.domain.enums import IssueState
+from warden.issues.domain.models import StateTransition, WardenIssue
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -33,14 +33,14 @@ class IssueTracker:
     def __init__(self) -> None:
         """Initialize issue tracker."""
         # In-memory storage (will be replaced with persistent storage)
-        self.issues_by_hash: Dict[str, WardenIssue] = {}
-        self.snapshots: List[IssueSnapshot] = []
+        self.issues_by_hash: dict[str, WardenIssue] = {}
+        self.snapshots: list[IssueSnapshot] = []
 
     def track_snapshot(
         self,
         snapshot: IssueSnapshot,
         previous_snapshot: IssueSnapshot | None = None,
-    ) -> Dict[str, List[WardenIssue]]:
+    ) -> dict[str, list[WardenIssue]]:
         """
         Track issues from a new snapshot.
 
@@ -165,7 +165,7 @@ class IssueTracker:
 
         return result
 
-    def _update_issue_store(self, issues: List[WardenIssue]) -> None:
+    def _update_issue_store(self, issues: list[WardenIssue]) -> None:
         """Update internal issue store with latest issues."""
         for issue in issues:
             self.issues_by_hash[issue.code_hash] = issue
@@ -174,11 +174,11 @@ class IssueTracker:
         """Get issue by code hash."""
         return self.issues_by_hash.get(code_hash)
 
-    def get_all_issues(self) -> List[WardenIssue]:
+    def get_all_issues(self) -> list[WardenIssue]:
         """Get all tracked issues."""
         return list(self.issues_by_hash.values())
 
-    def get_open_issues(self) -> List[WardenIssue]:
+    def get_open_issues(self) -> list[WardenIssue]:
         """Get all open issues."""
         return [
             issue
@@ -186,7 +186,7 @@ class IssueTracker:
             if issue.state == IssueState.OPEN
         ]
 
-    def get_resolved_issues(self) -> List[WardenIssue]:
+    def get_resolved_issues(self) -> list[WardenIssue]:
         """Get all resolved issues."""
         return [
             issue
@@ -194,9 +194,9 @@ class IssueTracker:
             if issue.state == IssueState.RESOLVED
         ]
 
-    def get_issue_count_by_state(self) -> Dict[IssueState, int]:
+    def get_issue_count_by_state(self) -> dict[IssueState, int]:
         """Get issue count by state."""
-        counts = {state: 0 for state in IssueState}
+        counts = dict.fromkeys(IssueState, 0)
 
         for issue in self.issues_by_hash.values():
             counts[issue.state] += 1
@@ -209,7 +209,7 @@ class IssueTracker:
             return None
         return self.snapshots[-1]
 
-    def get_snapshot_history(self, limit: int = 10) -> List[IssueSnapshot]:
+    def get_snapshot_history(self, limit: int = 10) -> list[IssueSnapshot]:
         """
         Get snapshot history.
 

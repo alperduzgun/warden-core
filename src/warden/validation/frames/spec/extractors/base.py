@@ -13,26 +13,26 @@ Resilience Features:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Type, Any
+from typing import Any, Dict, List, Optional, Type
 
-from warden.validation.frames.spec.models import (
-    Contract,
-    PlatformType,
-    PlatformRole,
-)
-from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
 from warden.ast.domain.enums import CodeLanguage
+from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import (
-    with_timeout,
-    with_retry,
-    CircuitBreaker,
-    CircuitBreakerConfig,
     Bulkhead,
     BulkheadConfig,
-    RetryConfig,
-    OperationTimeoutError,
+    CircuitBreaker,
+    CircuitBreakerConfig,
     CircuitBreakerOpen,
+    OperationTimeoutError,
+    RetryConfig,
+    with_retry,
+    with_timeout,
+)
+from warden.validation.frames.spec.models import (
+    Contract,
+    PlatformRole,
+    PlatformType,
 )
 
 logger = get_logger(__name__)
@@ -79,14 +79,14 @@ class BaseContractExtractor(ABC):
 
     # To be defined by subclasses
     platform_type: PlatformType
-    supported_languages: List[CodeLanguage] = []
-    file_patterns: List[str] = []  # Glob patterns for files to scan
+    supported_languages: list[CodeLanguage] = []
+    file_patterns: list[str] = []  # Glob patterns for files to scan
 
     def __init__(
         self,
         project_root: Path,
         role: PlatformRole,
-        resilience_config: Optional[ExtractorResilienceConfig] = None,
+        resilience_config: ExtractorResilienceConfig | None = None,
     ):
         """
         Initialize extractor with resilience support.
@@ -136,7 +136,7 @@ class BaseContractExtractor(ABC):
         """
         pass
 
-    async def _parse_file(self, file_path: Path, language: CodeLanguage) -> Optional[Any]:
+    async def _parse_file(self, file_path: Path, language: CodeLanguage) -> Any | None:
         """
         Parse a file using tree-sitter with resilience patterns.
 
@@ -167,7 +167,7 @@ class BaseContractExtractor(ABC):
         except Exception:
             pass  # If circuit breaker check fails, continue anyway
 
-        async def do_parse() -> Optional[Any]:
+        async def do_parse() -> Any | None:
             """Inner function for retry logic."""
             # Use bulkhead to limit concurrent operations
             async with self._bulkhead:
@@ -239,7 +239,7 @@ class BaseContractExtractor(ABC):
             )
             return None
 
-    def get_extraction_stats(self) -> Dict[str, Any]:
+    def get_extraction_stats(self) -> dict[str, Any]:
         """
         Get extraction statistics for observability.
 
@@ -252,7 +252,7 @@ class BaseContractExtractor(ABC):
             "bulkhead_available": self._bulkhead.available,
         }
 
-    def _find_files(self) -> List[Path]:
+    def _find_files(self) -> list[Path]:
         """
         Find files to scan based on file_patterns.
 
@@ -294,10 +294,10 @@ class ExtractorRegistry:
     Registry for platform-specific extractors.
     """
 
-    _extractors: Dict[PlatformType, Type[BaseContractExtractor]] = {}
+    _extractors: dict[PlatformType, type[BaseContractExtractor]] = {}
 
     @classmethod
-    def register(cls, extractor_class: Type[BaseContractExtractor]) -> Type[BaseContractExtractor]:
+    def register(cls, extractor_class: type[BaseContractExtractor]) -> type[BaseContractExtractor]:
         """
         Register an extractor class.
 
@@ -315,7 +315,7 @@ class ExtractorRegistry:
         return extractor_class
 
     @classmethod
-    def get(cls, platform_type: PlatformType) -> Optional[Type[BaseContractExtractor]]:
+    def get(cls, platform_type: PlatformType) -> type[BaseContractExtractor] | None:
         """
         Get extractor class for a platform type.
 
@@ -328,7 +328,7 @@ class ExtractorRegistry:
         return cls._extractors.get(platform_type)
 
     @classmethod
-    def get_all(cls) -> Dict[PlatformType, Type[BaseContractExtractor]]:
+    def get_all(cls) -> dict[PlatformType, type[BaseContractExtractor]]:
         """Get all registered extractors."""
         return cls._extractors.copy()
 
@@ -337,10 +337,10 @@ def get_extractor(
     platform_type: PlatformType,
     project_root: Path,
     role: PlatformRole,
-    resilience_config: Optional[ExtractorResilienceConfig] = None,
-    llm_service: Optional[Any] = None,
-    semantic_search_service: Optional[Any] = None,
-) -> Optional[BaseContractExtractor]:
+    resilience_config: ExtractorResilienceConfig | None = None,
+    llm_service: Any | None = None,
+    semantic_search_service: Any | None = None,
+) -> BaseContractExtractor | None:
     """
     Get an extractor instance for a platform.
 
@@ -363,7 +363,7 @@ def get_extractor(
             role=role,
             resilience_config=resilience_config,
         )
-    
+
     # Special handling for UniversalExtractor (doesn't use registry)
     if platform_type == PlatformType.UNIVERSAL:
         from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
@@ -375,10 +375,10 @@ def get_extractor(
         )
 
     # Platform aliases — route related frameworks to their shared extractor
-    _PLATFORM_ALIASES: Dict[PlatformType, PlatformType] = {
+    _PLATFORM_ALIASES: dict[PlatformType, PlatformType] = {
         PlatformType.ECHO: PlatformType.GIN,
     }
-    
+
     # Gen 3.1: Prioritize UniversalExtractor for Core 5 (starting with Flutter)
     if platform_type in [PlatformType.FLUTTER]:
         from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor

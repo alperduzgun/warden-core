@@ -5,12 +5,18 @@ Ensures proper resource cleanup using context managers (with statements).
 Detects file handles, database connections, network sockets without proper disposal.
 """
 
-import structlog
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import Any, List, Optional
+
+import structlog
 
 from warden.fortification.domain.base import BaseFortifier
-from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
+from warden.fortification.domain.models import (
+    FortificationAction,
+    FortificationActionType,
+    FortificationResult,
+    FortifierPriority,
+)
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -38,7 +44,7 @@ class ResourceDisposalFortifier(BaseFortifier):
     - Locks and semaphores
     """
 
-    def __init__(self, llm_service: Optional[Any] = None):
+    def __init__(self, llm_service: Any | None = None):
         """
         Initialize Resource Disposal Fortifier.
 
@@ -60,7 +66,7 @@ class ResourceDisposalFortifier(BaseFortifier):
     async def fortify_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
+        cancellation_token: str | None = None,
     ) -> FortificationResult:
         """
         Fortify code by adding proper resource disposal.
@@ -146,7 +152,7 @@ class ResourceDisposalFortifier(BaseFortifier):
                 fortifier_name=self.name,
             )
 
-    def _analyze_disposal(self, code: str) -> List[DisposalSuggestion]:
+    def _analyze_disposal(self, code: str) -> list[DisposalSuggestion]:
         """Analyze code for missing resource disposal."""
         suggestions = []
         lines = code.split("\n")
@@ -211,7 +217,7 @@ class ResourceDisposalFortifier(BaseFortifier):
         return suggestions
 
     @staticmethod
-    def _is_in_with_block(lines: List[str], line_index: int) -> bool:
+    def _is_in_with_block(lines: list[str], line_index: int) -> bool:
         """Check if a line is inside a 'with' block."""
         # Check current line
         current_line = lines[line_index].strip()
@@ -237,7 +243,7 @@ class ResourceDisposalFortifier(BaseFortifier):
 
     @staticmethod
     def _build_disposal_prompt(
-        code_file: CodeFile, suggestions: List[DisposalSuggestion]
+        code_file: CodeFile, suggestions: list[DisposalSuggestion]
     ) -> str:
         """Build LLM prompt for resource disposal."""
         resources_list = "\n".join(

@@ -5,17 +5,18 @@ Coordinates all fortifiers to add safety measures to code.
 Executes fortifiers in priority order and combines results.
 """
 
-import structlog
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
-from warden.fortification.domain.base import BaseFortifier
-from warden.fortification.domain.models import FortificationResult, FortificationAction
+import structlog
+
 from warden.fortification.application.fortifiers import (
     ErrorHandlingFortifier,
-    LoggingFortifier,
     InputValidationFortifier,
+    LoggingFortifier,
     ResourceDisposalFortifier,
 )
+from warden.fortification.domain.base import BaseFortifier
+from warden.fortification.domain.models import FortificationAction, FortificationResult
 from warden.validation.domain.frame import CodeFile
 
 # AnalysisResult is optional - for future integration
@@ -38,7 +39,7 @@ class FortificationOrchestrator:
     4. Logging (MEDIUM)
     """
 
-    def __init__(self, fortifiers: Optional[List[BaseFortifier]] = None, llm_service: Optional[Any] = None):
+    def __init__(self, fortifiers: list[BaseFortifier] | None = None, llm_service: Any | None = None):
         """
         Initialize Code Fortifier.
 
@@ -70,8 +71,8 @@ class FortificationOrchestrator:
     async def fortify_async(
         self,
         code_file: CodeFile,
-        analysis_result: Optional[AnalysisResult] = None,
-        cancellation_token: Optional[str] = None,
+        analysis_result: AnalysisResult | None = None,
+        cancellation_token: str | None = None,
     ) -> FortificationResult:
         """
         Fortify code by applying all fortifiers in sequence.
@@ -98,8 +99,8 @@ class FortificationOrchestrator:
 
         # Start with original code
         current_code = code_file.content
-        all_actions: List[FortificationAction] = []
-        failed_fortifiers: List[str] = []
+        all_actions: list[FortificationAction] = []
+        failed_fortifiers: list[str] = []
 
         # Apply each fortifier in sequence
         for fortifier in self._fortifiers:
@@ -177,7 +178,7 @@ class FortificationOrchestrator:
 
     @staticmethod
     def _build_summary(
-        actions: List[FortificationAction], failed_fortifiers: List[str]
+        actions: list[FortificationAction], failed_fortifiers: list[str]
     ) -> str:
         """
         Build human-readable summary of fortification.
@@ -212,7 +213,7 @@ class FortificationOrchestrator:
 
         return "\n".join(lines)
 
-    def get_fortifiers(self) -> List[BaseFortifier]:
+    def get_fortifiers(self) -> list[BaseFortifier]:
         """Get list of registered fortifiers."""
         return self._fortifiers.copy()
 

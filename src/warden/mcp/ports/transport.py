@@ -19,7 +19,7 @@ class ITransport(ABC):
     """
 
     @abstractmethod
-    async def read_message(self) -> Optional[str]:
+    async def read_message(self) -> str | None:
         """
         Read a message from the transport.
 

@@ -14,9 +14,9 @@ try:
 except ImportError:
     dotenv_values = None
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class HealthAdapter(BaseWardenAdapter):
@@ -41,7 +41,7 @@ class HealthAdapter(BaseWardenAdapter):
         super().__init__(project_root, bridge)
         self._start_time = datetime.now(timezone.utc)
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get health tool definitions."""
         return [
             self._create_tool_definition(
@@ -64,7 +64,7 @@ class HealthAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute health tool."""
         if tool_name == "warden_health_check":
@@ -116,7 +116,7 @@ class HealthAdapter(BaseWardenAdapter):
             memory_mb = rusage.ru_maxrss / 1024  # Convert to MB on macOS
             if sys.platform == "linux":
                 memory_mb = rusage.ru_maxrss / 1024  # Already in KB on Linux
-        except (OSError, IOError, ValueError):  # Health check non-critical
+        except (OSError, ValueError):  # Health check non-critical
             pass
 
         # Get Python info
@@ -209,7 +209,7 @@ class HealthAdapter(BaseWardenAdapter):
         if config_path.exists():
             try:
                 import yaml
-                with open(config_path, 'r', encoding='utf-8') as f:
+                with open(config_path, encoding='utf-8') as f:
                     config = yaml.safe_load(f) or {}
 
                 # Type-safe access: llm might not be a dict
@@ -381,9 +381,9 @@ class HealthAdapter(BaseWardenAdapter):
             return True  # Local providers don't need API keys
 
         # Use python-dotenv for robust parsing (imported at module level)
-        
+
         env_name = self._get_api_key_env_name(provider)
-        
+
         # Check OS environment first
         if os.environ.get(env_name):
             return True
@@ -396,7 +396,7 @@ class HealthAdapter(BaseWardenAdapter):
                 config = dotenv_values(env_file)
                 if config.get(env_name):
                     return True
-            except (OSError, IOError, ValueError):  # Health check non-critical
+            except (OSError, ValueError):  # Health check non-critical
                 pass
 
         return False
@@ -404,6 +404,7 @@ class HealthAdapter(BaseWardenAdapter):
     def _check_mcp_registration(self) -> bool:
         """Check if Warden is registered in any known MCP config."""
         import json
+
         from warden.mcp.infrastructure.mcp_config_paths import get_mcp_config_paths_list
 
         # Use centralized config paths (DRY principle)
@@ -412,7 +413,7 @@ class HealthAdapter(BaseWardenAdapter):
         for config_path in config_paths:
             if config_path.exists():
                 try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
+                    with open(config_path, encoding='utf-8') as f:
                         data = json.load(f)
                     # Type-safe check
                     if isinstance(data, dict):

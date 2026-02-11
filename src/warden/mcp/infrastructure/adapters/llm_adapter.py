@@ -7,9 +7,9 @@ Maps to gRPC LlmOperationsMixin functionality.
 
 from typing import Any, Dict, List
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class LlmAdapter(BaseWardenAdapter):
@@ -33,7 +33,7 @@ class LlmAdapter(BaseWardenAdapter):
     })
     TOOL_CATEGORY = ToolCategory.LLM
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get LLM tool definitions."""
         return [
             self._create_tool_definition(
@@ -118,7 +118,7 @@ class LlmAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute LLM tool."""
         handlers = {
@@ -134,7 +134,7 @@ class LlmAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _analyze_with_llm_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _analyze_with_llm_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Analyze code with LLM."""
         code = arguments.get("code")
         prompt = arguments.get("prompt")
@@ -165,7 +165,7 @@ class LlmAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"LLM analysis failed: {e}")
 
-    async def _classify_code_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _classify_code_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Classify code for frame recommendation."""
         code = arguments.get("code")
         file_path = arguments.get("file_path", "")
@@ -186,7 +186,7 @@ class LlmAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Classification failed: {e}")
 
-    def _basic_classify(self, code: str) -> Dict[str, Any]:
+    def _basic_classify(self, code: str) -> dict[str, Any]:
         """Basic code classification without LLM."""
         code_lower = code.lower()
 
@@ -204,7 +204,7 @@ class LlmAdapter(BaseWardenAdapter):
             "method": "basic_heuristic",
         }
 
-    async def _test_llm_provider_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _test_llm_provider_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Test LLM provider connectivity."""
         provider = arguments.get("provider")
         prompt = arguments.get("prompt", "Hello, respond with 'OK' if you can read this.")
@@ -228,7 +228,7 @@ class LlmAdapter(BaseWardenAdapter):
                 "error_message": str(e),
             })
 
-    async def _get_available_models_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_available_models_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get available models for provider."""
         provider = arguments.get("provider")
 
@@ -249,7 +249,7 @@ class LlmAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to get models: {e}")
 
-    def _get_default_models(self, provider: str) -> List[Dict[str, Any]]:
+    def _get_default_models(self, provider: str) -> list[dict[str, Any]]:
         """Get default models for provider."""
         provider_models = {
             "anthropic": [
@@ -263,7 +263,7 @@ class LlmAdapter(BaseWardenAdapter):
         }
         return provider_models.get(provider.lower(), [])
 
-    async def _validate_llm_config_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _validate_llm_config_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Validate LLM configuration."""
         provider = arguments.get("provider")
         config = arguments.get("config", {})

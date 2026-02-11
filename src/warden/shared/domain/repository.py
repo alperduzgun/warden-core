@@ -31,12 +31,12 @@ class IRepository(ABC, Generic[T, ID]):
     """
 
     @abstractmethod
-    async def get_async(self, id: ID) -> Optional[T]:
+    async def get_async(self, id: ID) -> T | None:
         """Get entity by ID."""
         ...
 
     @abstractmethod
-    async def get_all_async(self) -> List[T]:
+    async def get_all_async(self) -> list[T]:
         """Get all entities."""
         ...
 
@@ -69,17 +69,17 @@ class IIssueRepository(ABC):
     """
 
     @abstractmethod
-    async def get_async(self, id: str) -> Optional["WardenIssue"]:
+    async def get_async(self, id: str) -> WardenIssue | None:
         """Get issue by ID."""
         ...
 
     @abstractmethod
-    async def get_all_async(self) -> List["WardenIssue"]:
+    async def get_all_async(self) -> list[WardenIssue]:
         """Get all issues."""
         ...
 
     @abstractmethod
-    async def save_async(self, entity: "WardenIssue") -> "WardenIssue":
+    async def save_async(self, entity: WardenIssue) -> WardenIssue:
         """Save or update issue."""
         ...
 
@@ -99,27 +99,27 @@ class IIssueRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_by_state_async(self, state: "IssueState") -> List["WardenIssue"]:
+    async def get_by_state_async(self, state: IssueState) -> list[WardenIssue]:
         """Get all issues by state (OPEN, RESOLVED, SUPPRESSED)."""
         ...
 
     @abstractmethod
-    async def get_by_severity_async(self, severity: "IssueSeverity") -> List["WardenIssue"]:
+    async def get_by_severity_async(self, severity: IssueSeverity) -> list[WardenIssue]:
         """Get all issues by severity."""
         ...
 
     @abstractmethod
-    async def get_by_file_path_async(self, file_path: str) -> List["WardenIssue"]:
+    async def get_by_file_path_async(self, file_path: str) -> list[WardenIssue]:
         """Get all issues for a specific file."""
         ...
 
     @abstractmethod
-    async def get_history_async(self, issue_id: str) -> List["StateTransition"]:
+    async def get_history_async(self, issue_id: str) -> list[StateTransition]:
         """Get state transition history for an issue."""
         ...
 
     @abstractmethod
-    async def save_all_async(self, issues: List["WardenIssue"]) -> List["WardenIssue"]:
+    async def save_all_async(self, issues: list[WardenIssue]) -> list[WardenIssue]:
         """Batch save multiple issues."""
         ...
 
@@ -132,17 +132,17 @@ class ISuppressionRepository(ABC):
     """
 
     @abstractmethod
-    async def get_async(self, id: str) -> Optional["Dict[str, Any]"]:
+    async def get_async(self, id: str) -> dict[str, Any] | None:
         """Get suppression by ID."""
         ...
 
     @abstractmethod
-    async def get_all_async(self) -> List["Dict[str, Any]"]:
+    async def get_all_async(self) -> list[dict[str, Any]]:
         """Get all suppressions."""
         ...
 
     @abstractmethod
-    async def save_async(self, entity: "Dict[str, Any]") -> "Dict[str, Any]":
+    async def save_async(self, entity: dict[str, Any]) -> dict[str, Any]:
         """Save or update suppression."""
         ...
 
@@ -162,17 +162,17 @@ class ISuppressionRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_enabled_async(self) -> List["Dict[str, Any]"]:
+    async def get_enabled_async(self) -> list[dict[str, Any]]:
         """Get all enabled suppressions."""
         ...
 
     @abstractmethod
-    async def get_for_file_async(self, file_path: str) -> List["Dict[str, Any]"]:
+    async def get_for_file_async(self, file_path: str) -> list[dict[str, Any]]:
         """Get suppressions applicable to a file path."""
         ...
 
     @abstractmethod
-    async def get_for_rule_async(self, rule_id: str) -> List["Dict[str, Any]"]:
+    async def get_for_rule_async(self, rule_id: str) -> list[dict[str, Any]]:
         """Get suppressions for a specific rule."""
         ...
 
@@ -185,18 +185,18 @@ class IIssueHistoryRepository(ABC):
     """
 
     @abstractmethod
-    async def add_event_async(self, issue_id: str, event: "Dict[str, Any]") -> None:
+    async def add_event_async(self, issue_id: str, event: dict[str, Any]) -> None:
         """Add an event to issue history."""
         ...
 
     @abstractmethod
     async def get_events_async(
         self, issue_id: str, limit: int = 100
-    ) -> List["Dict[str, Any]"]:
+    ) -> list[dict[str, Any]]:
         """Get events for an issue."""
         ...
 
     @abstractmethod
-    async def get_all_events_async(self, limit: int = 1000) -> List["Dict[str, Any]"]:
+    async def get_all_events_async(self, limit: int = 1000) -> list[dict[str, Any]]:
         """Get all events across all issues."""
         ...

@@ -1,5 +1,9 @@
 """File locking for concurrent writes (ID 26)."""
-import asyncio, fcntl, os
+import asyncio
+import fcntl
+import os
+
+
 class FileLockManager:
     async def atomic_write(self, path, content):
         tmp = path + '.tmp'

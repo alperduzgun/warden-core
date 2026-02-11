@@ -4,12 +4,12 @@ Fortification Phase Executor.
 
 import time
 import traceback
-from typing import List, Any
+from typing import Any, List
 
-from warden.pipeline.domain.pipeline_context import PipelineContext
-from warden.validation.domain.frame import CodeFile
-from warden.shared.infrastructure.logging import get_logger
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
+from warden.pipeline.domain.pipeline_context import PipelineContext
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,7 @@ class FortificationExecutor(BasePhaseExecutor):
     async def execute_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute FORTIFICATION phase."""
         logger.info("executing_phase", phase="FORTIFICATION")
@@ -63,7 +63,7 @@ class FortificationExecutor(BasePhaseExecutor):
 
             # Use findings from context (whether validated or raw)
             raw_findings = getattr(context, 'findings', []) or []
-            
+
             # Convert objects to dicts expected by FortificationPhase
             validated_issues = []
             for f in raw_findings:
@@ -71,7 +71,7 @@ class FortificationExecutor(BasePhaseExecutor):
                 if hasattr(f, 'to_json'):
                     # Parse location for file path
                     file_path = f.location.split(':')[0] if f.location else ""
-                    
+
                     # Map Finding object to Fortification Dictionary Contract
                     issue = {
                         "id": f.id,
@@ -99,10 +99,10 @@ class FortificationExecutor(BasePhaseExecutor):
 
             # Link Fortifications back to Findings for Reporting
             from warden.validation.domain.frame import Remediation
-            
+
             # Create a lookup for findings
             findings_map = {f.id: f for f in context.findings}
-            
+
             for fort in result.fortifications:
                 # Handle both object and dict (including camelCase from to_json)
                 if isinstance(fort, dict):
@@ -124,7 +124,7 @@ class FortificationExecutor(BasePhaseExecutor):
                         code=suggested_code or "",
                         unified_diff=None # Can be generated if original_code exists
                     )
-                    
+
                     # Log diff generation attempt
                     if original_code and suggested_code:
                          try:
@@ -139,7 +139,7 @@ class FortificationExecutor(BasePhaseExecutor):
                              remediation.unified_diff = '\n'.join(list(diff))
                          except (ValueError, TypeError, RuntimeError):  # Fortification isolated
                              pass
-                    
+
                     # Assign to finding
                     finding.remediation = remediation
 
@@ -147,11 +147,11 @@ class FortificationExecutor(BasePhaseExecutor):
             context.add_phase_result("FORTIFICATION", {
                 "fortifications_count": len(result.fortifications),
                 "critical_fixes": len([
-                    f for f in result.fortifications 
+                    f for f in result.fortifications
                     if fort_get(f, "severity") == "critical"
                 ]),
                 "auto_fixable": len([
-                    f for f in result.fortifications 
+                    f for f in result.fortifications
                     if fort_get(f, "auto_fixable") or fort_get(f, "autoFixable")
                 ]),
             })
@@ -181,5 +181,5 @@ class FortificationExecutor(BasePhaseExecutor):
             if self.llm_service and hasattr(context, 'fortifications') and context.fortifications:
                  fortification_data["llm_used"] = True
                  fortification_data["fixes_generated"] = len(context.fortifications)
-            
+
             self.progress_callback("phase_completed", fortification_data)

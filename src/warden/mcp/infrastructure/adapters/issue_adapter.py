@@ -5,15 +5,15 @@ MCP adapter for issue tracking and management tools.
 Maps to gRPC IssueManagementMixin functionality.
 """
 
+import hashlib
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
-import hashlib
-import uuid
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class IssueAdapter(BaseWardenAdapter):
@@ -48,12 +48,12 @@ class IssueAdapter(BaseWardenAdapter):
         super().__init__(project_root, bridge)
         # In-memory issue state (mirrors gRPC servicer pattern)
         # Bounded to prevent memory leaks in long-running MCP servers.
-        self._issues: Dict[str, Dict[str, Any]] = {}
+        self._issues: dict[str, dict[str, Any]] = {}
         self._max_issues = 10000
         from collections import deque
         self._history: deque = deque(maxlen=5000)
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get issue management tool definitions."""
         return [
             self._create_tool_definition(
@@ -152,7 +152,7 @@ class IssueAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute issue management tool."""
         handlers = {
@@ -171,7 +171,7 @@ class IssueAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _get_all_issues_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_all_issues_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get all issues with filtering."""
         states = arguments.get("states", [])
         severities = arguments.get("severities", [])
@@ -203,12 +203,12 @@ class IssueAdapter(BaseWardenAdapter):
             "issues": paginated,
         })
 
-    async def _get_open_issues_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_open_issues_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get open issues only."""
         arguments["states"] = ["open"]
         return await self._get_all_issues_async(arguments)
 
-    async def _get_issue_by_hash_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_issue_by_hash_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get issue by content hash."""
         hash_value = arguments.get("hash")
         if not hash_value:
@@ -220,7 +220,7 @@ class IssueAdapter(BaseWardenAdapter):
 
         return MCPToolResult.error(f"Issue not found: {hash_value}")
 
-    async def _resolve_issue_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _resolve_issue_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Resolve an issue."""
         issue_id = arguments.get("issue_id")
         actor = arguments.get("actor")
@@ -253,7 +253,7 @@ class IssueAdapter(BaseWardenAdapter):
             "issue": self._issues[issue_id],
         })
 
-    async def _suppress_issue_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _suppress_issue_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Suppress an issue."""
         issue_id = arguments.get("issue_id")
         actor = arguments.get("actor")
@@ -287,7 +287,7 @@ class IssueAdapter(BaseWardenAdapter):
             "issue": self._issues[issue_id],
         })
 
-    async def _reopen_issue_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _reopen_issue_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Reopen an issue."""
         issue_id = arguments.get("issue_id")
         actor = arguments.get("actor")
@@ -320,14 +320,14 @@ class IssueAdapter(BaseWardenAdapter):
             "issue": self._issues[issue_id],
         })
 
-    async def _get_issue_history_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_issue_history_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get issue history."""
         return MCPToolResult.json_result({
             "history": self._history,
             "total_count": len(self._history),
         })
 
-    async def _get_issue_stats_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_issue_stats_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get issue statistics."""
         stats = {
             "total": len(self._issues),
@@ -347,7 +347,7 @@ class IssueAdapter(BaseWardenAdapter):
 
         return MCPToolResult.json_result(stats)
 
-    def add_issue(self, issue: Dict[str, Any]) -> str:
+    def add_issue(self, issue: dict[str, Any]) -> str:
         """Add an issue to the tracker (for pipeline integration)."""
         issue_id = str(uuid.uuid4())
         content = f"{issue.get('file_path', '')}:{issue.get('line', 0)}:{issue.get('message', '')}"

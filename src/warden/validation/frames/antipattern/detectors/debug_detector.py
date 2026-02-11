@@ -11,13 +11,9 @@ Detects debug output in production code:
 import re
 from typing import List, Optional
 
-from warden.ast.domain.models import ASTNode
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
+from warden.ast.domain.models import ASTNode
 from warden.validation.domain.frame import CodeFile
-from warden.validation.frames.antipattern.types import (
-    AntiPatternSeverity,
-    AntiPatternViolation,
-)
 from warden.validation.frames.antipattern.constants import (
     CALL_NODE_TYPES,
     DEBUG_FUNCTION_NAMES,
@@ -25,6 +21,10 @@ from warden.validation.frames.antipattern.constants import (
     get_debug_patterns,
 )
 from warden.validation.frames.antipattern.detectors.base import BaseDetector
+from warden.validation.frames.antipattern.types import (
+    AntiPatternSeverity,
+    AntiPatternViolation,
+)
 
 
 class DebugDetector(BaseDetector):
@@ -34,9 +34,9 @@ class DebugDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
+        lines: list[str],
         ast_root: ASTNode,
-    ) -> List[AntiPatternViolation]:
+    ) -> list[AntiPatternViolation]:
         """Detect debug output using Universal AST."""
         violations = []
 
@@ -71,8 +71,8 @@ class DebugDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
-    ) -> List[AntiPatternViolation]:
+        lines: list[str],
+    ) -> list[AntiPatternViolation]:
         """Detect debug output using regex (fallback)."""
         violations = []
         content = code_file.content
@@ -109,7 +109,7 @@ class DebugDetector(BaseDetector):
     # HELPERS
     # =========================================================================
 
-    def _extract_function_name(self, call_node: ASTNode) -> Optional[str]:
+    def _extract_function_name(self, call_node: ASTNode) -> str | None:
         """Extract function name from a call expression node."""
         # Direct function call: print(...)
         if call_node.name:
@@ -128,7 +128,7 @@ class DebugDetector(BaseDetector):
 
         return None
 
-    def _extract_member_chain(self, node: ASTNode) -> List[str]:
+    def _extract_member_chain(self, node: ASTNode) -> list[str]:
         """Extract member access chain (e.g., ['console', 'log'])."""
         parts = []
 

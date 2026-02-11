@@ -26,7 +26,7 @@ class ProjectDetector:
     def LANGUAGE_EXTENSIONS(self):
         """Dynamic mapping from LanguageRegistry."""
         from warden.shared.languages.registry import LanguageRegistry
-        return {ext: LanguageRegistry.get_language_from_path(ext).value 
+        return {ext: LanguageRegistry.get_language_from_path(ext).value
                 for ext in LanguageRegistry.get_all_supported_extensions()}
 
     def __init__(self, project_root: Path) -> None:
@@ -413,10 +413,7 @@ class ProjectDetector:
         # Multiple package.json or pyproject.toml in subdirectories
         package_jsons = list(self.project_root.glob("*/package.json"))
         pyprojects = list(self.project_root.glob("*/pyproject.toml"))
-        if len(package_jsons) > 1 or len(pyprojects) > 1:
-            return True
-
-        return False
+        return bool(len(package_jsons) > 1 or len(pyprojects) > 1)
 
     def _is_library(self) -> bool:
         """Check if project is a library."""

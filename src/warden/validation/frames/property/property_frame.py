@@ -10,23 +10,23 @@ Validates business logic correctness:
 Priority: HIGH
 """
 
-import time
 import re
-from typing import List, Dict, Any
+import time
+from typing import Any, Dict, List
 
-from warden.validation.domain.frame import (
-    ValidationFrame,
-    FrameResult,
-    Finding,
-    CodeFile,
-)
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
+    FrameApplicability,
     FrameCategory,
     FramePriority,
     FrameScope,
-    FrameApplicability,
 )
-from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import (
+    CodeFile,
+    Finding,
+    FrameResult,
+    ValidationFrame,
+)
 
 logger = get_logger(__name__)
 
@@ -107,7 +107,7 @@ Output must be a valid JSON object with the following structure:
     ]
 }"""
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize PropertyFrame."""
         super().__init__(config)
 
@@ -201,9 +201,9 @@ Output must be a valid JSON object with the following structure:
         severity: str,
         message: str,
         suggestion: str | None = None,
-    ) -> List[Finding]:
+    ) -> list[Finding]:
         """Check for pattern matches in code using pre-compiled pattern."""
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         try:
             lines = code_file.content.split("\n")
@@ -234,9 +234,9 @@ Output must be a valid JSON object with the following structure:
 
         return findings
 
-    def _check_assertions(self, code_file: CodeFile) -> List[Finding]:
+    def _check_assertions(self, code_file: CodeFile) -> list[Finding]:
         """Check for missing assertions in critical code."""
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         # Count assertions vs functions using pre-compiled patterns
         assertion_count = len(self._assertion_pattern.findall(code_file.content))
@@ -256,7 +256,7 @@ Output must be a valid JSON object with the following structure:
 
         return findings
 
-    def _determine_status(self, findings: List[Finding]) -> str:
+    def _determine_status(self, findings: list[Finding]) -> str:
         """Determine frame status based on findings."""
         if not findings:
             return "passed"
@@ -271,12 +271,13 @@ Output must be a valid JSON object with the following structure:
         else:
             return "passed"  # Only medium/low
 
-    async def _analyze_with_llm(self, code_file: CodeFile) -> List[Finding]:
+    async def _analyze_with_llm(self, code_file: CodeFile) -> list[Finding]:
         """Analyze code using LLM for deeper property verification."""
-        findings: List[Finding] = []
+        findings: list[Finding] = []
         try:
             import json
-            from warden.llm.types import LlmRequest, AnalysisResult
+
+            from warden.llm.types import AnalysisResult, LlmRequest
 
             logger.info("property_llm_analysis_started", file=code_file.path)
 

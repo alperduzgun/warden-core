@@ -7,21 +7,21 @@ Priority: NATIVE (highest priority for Python).
 
 import ast
 import time
-from typing import Any, Optional, Dict, List
+from typing import Any, Dict, List, Optional
 
 from warden.ast.application.provider_interface import IASTProvider
+from warden.ast.domain.enums import (
+    ASTNodeType,
+    ASTProviderPriority,
+    CodeLanguage,
+    ParseStatus,
+)
 from warden.ast.domain.models import (
     ASTNode,
     ASTProviderMetadata,
     ParseError,
     ParseResult,
     SourceLocation,
-)
-from warden.ast.domain.enums import (
-    ASTNodeType,
-    ASTProviderPriority,
-    CodeLanguage,
-    ParseStatus,
 )
 
 
@@ -64,7 +64,7 @@ class PythonASTProvider(IASTProvider):
         self,
         source_code: str,
         language: CodeLanguage,
-        file_path: Optional[str] = None,
+        file_path: str | None = None,
     ) -> ParseResult:
         """
         Parse Python source code.
@@ -91,7 +91,7 @@ class PythonASTProvider(IASTProvider):
             )
 
         start_time = time.time()
-        errors: List[ParseError] = []
+        errors: list[ParseError] = []
 
         try:
             # Parse Python code
@@ -171,39 +171,38 @@ class PythonASTProvider(IASTProvider):
         """
         return True
 
-    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> List[str]:
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> list[str]:
         """
         Extract Python dependencies (imports).
-        
+
         Args:
             source_code: Python source code
             language: Must be CodeLanguage.PYTHON
-            
+
         Returns:
             List of unique import strings
         """
         if language != CodeLanguage.PYTHON:
             return []
-            
+
         try:
             tree = ast.parse(source_code)
             dependencies = set()
-            
+
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
                         dependencies.add(alias.name)
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        dependencies.add(node.module)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    dependencies.add(node.module)
                     # Handle relative imports if needed, but for now we just want the module name
-                        
-            return sorted(list(dependencies))
+
+            return sorted(dependencies)
         except Exception:
             # Fallback for syntax errors in earlier Python versions or invalid code
             return []
 
-    def _convert_to_universal_ast(self, py_node: ast.AST, file_path: str, parent: Optional[ast.AST] = None) -> ASTNode:
+    def _convert_to_universal_ast(self, py_node: ast.AST, file_path: str, parent: ast.AST | None = None) -> ASTNode:
         """
         Convert Python AST to universal AST format.
 
@@ -220,11 +219,7 @@ class PythonASTProvider(IASTProvider):
 
         # Extract node name if available
         name = None
-        if hasattr(py_node, "name"):
-            name = py_node.name
-        elif isinstance(py_node, ast.FunctionDef):
-            name = py_node.name
-        elif isinstance(py_node, ast.ClassDef):
+        if hasattr(py_node, "name") or isinstance(py_node, (ast.FunctionDef, ast.ClassDef)):
             name = py_node.name
         elif isinstance(py_node, ast.AnnAssign) and isinstance(py_node.target, ast.Name):
             # For annotated assignments like "name: str", extract field name
@@ -261,7 +256,7 @@ class PythonASTProvider(IASTProvider):
                 children.append(self._convert_to_universal_ast(field_value, file_path, py_node))
 
         # Extract additional attributes
-        attributes: Dict[str, Any] = {}
+        attributes: dict[str, Any] = {}
         if isinstance(py_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             attributes["async"] = isinstance(py_node, ast.AsyncFunctionDef)
             attributes["decorators"] = [d.id if isinstance(d, ast.Name) else str(d) for d in py_node.decorator_list]
@@ -300,7 +295,7 @@ class PythonASTProvider(IASTProvider):
             raw_node=py_node,
         )
 
-    def _map_node_type(self, py_node: ast.AST, parent: Optional[ast.AST] = None) -> ASTNodeType:
+    def _map_node_type(self, py_node: ast.AST, parent: ast.AST | None = None) -> ASTNodeType:
         """
         Map Python AST node type to universal node type.
 
@@ -332,7 +327,7 @@ class PythonASTProvider(IASTProvider):
             return ASTNodeType.CLASS
 
         # Standard mapping for other node types
-        node_type_map: Dict[type, ASTNodeType] = {
+        node_type_map: dict[type, ASTNodeType] = {
             ast.Module: ASTNodeType.MODULE,
             ast.FunctionDef: ASTNodeType.FUNCTION,
             ast.AsyncFunctionDef: ASTNodeType.FUNCTION,

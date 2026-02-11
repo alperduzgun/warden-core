@@ -3,8 +3,10 @@
 import asyncio
 import functools
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Optional
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,12 +33,12 @@ class RetryExhausted(Exception):
 
 async def with_retry_async(
     coro_factory: Callable[[], Any],
-    config: Optional[RetryConfig] = None,
+    config: RetryConfig | None = None,
     operation_name: str = "operation",
 ) -> Any:
     """Execute an async operation with retry logic."""
     config = config or RetryConfig()
-    last_error: Optional[Exception] = None
+    last_error: Exception | None = None
 
     for attempt in range(1, config.max_attempts + 1):
         try:
@@ -76,7 +78,7 @@ def retry(
     initial_delay: float = 1.0,
     max_delay: float = 30.0,
     retryable_exceptions: tuple = (Exception,),
-    operation_name: Optional[str] = None,
+    operation_name: str | None = None,
 ):
     """Decorator to add retry logic to async functions."""
     config = RetryConfig(

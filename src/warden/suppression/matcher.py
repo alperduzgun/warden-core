@@ -12,7 +12,7 @@ Supports:
 """
 
 import re
-from typing import Optional, Dict, Set, List
+from typing import Dict, List, Optional, Set
 
 from warden.suppression.models import SuppressionConfig, SuppressionType
 
@@ -28,7 +28,7 @@ class SuppressionMatcher:
     4. Inline comments
     """
 
-    def __init__(self, config: Optional[SuppressionConfig] = None):
+    def __init__(self, config: SuppressionConfig | None = None):
         """
         Initialize suppression matcher.
 
@@ -51,8 +51,8 @@ class SuppressionMatcher:
         self,
         line: int,
         rule: str,
-        file_path: Optional[str] = None,
-        code: Optional[str] = None,
+        file_path: str | None = None,
+        code: str | None = None,
     ) -> bool:
         """
         Check if a specific line/rule should be suppressed.
@@ -106,9 +106,9 @@ class SuppressionMatcher:
         self,
         line: int,
         rule: str,
-        file_path: Optional[str] = None,
-        code: Optional[str] = None,
-    ) -> Optional[str]:
+        file_path: str | None = None,
+        code: str | None = None,
+    ) -> str | None:
         """
         Get the reason why a line/rule is suppressed.
 
@@ -138,24 +138,22 @@ class SuppressionMatcher:
             if not entry.enabled:
                 continue
 
-            if entry.matches_location(file_path=file_path, line_number=line):
-                if entry.matches_rule(rule):
-                    if entry.reason:
-                        return entry.reason
-                    return f"Suppressed by configuration entry '{entry.id}'"
+            if entry.matches_location(file_path=file_path, line_number=line) and entry.matches_rule(rule):
+                if entry.reason:
+                    return entry.reason
+                return f"Suppressed by configuration entry '{entry.id}'"
 
         # Priority 4: Inline comments
         if code:
             suppressed_rules = self._parse_inline_suppression(code, line)
-            if suppressed_rules is not None:
-                if len(suppressed_rules) == 0 or rule in suppressed_rules:
-                    return "Suppressed by inline comment"
+            if suppressed_rules is not None and (len(suppressed_rules) == 0 or rule in suppressed_rules):
+                return "Suppressed by inline comment"
 
         return None
 
     def _parse_inline_suppression(
         self, code: str, line: int
-    ) -> Optional[Set[str]]:
+    ) -> set[str] | None:
         """
         Parse inline suppression comment from code.
 
@@ -203,7 +201,7 @@ class SuppressionMatcher:
         self,
         code: str,
         line: int,
-        rules: Optional[List[str]] = None,
+        rules: list[str] | None = None,
         comment_style: str = '#',
     ) -> str:
         """
@@ -274,7 +272,7 @@ class SuppressionMatcher:
         lines[line - 1] = modified_line
         return '\n'.join(lines)
 
-    def get_suppressed_lines(self, code: str) -> Dict[int, Set[str]]:
+    def get_suppressed_lines(self, code: str) -> dict[int, set[str]]:
         """
         Get all lines with inline suppressions.
 
@@ -288,10 +286,10 @@ class SuppressionMatcher:
         if not code:
             return {}
 
-        result: Dict[int, Set[str]] = {}
+        result: dict[int, set[str]] = {}
         lines = code.split('\n')
 
-        for line_num, line_content in enumerate(lines, start=1):
+        for line_num, _line_content in enumerate(lines, start=1):
             suppressed_rules = self._parse_inline_suppression(code, line_num)
             if suppressed_rules is not None:
                 result[line_num] = suppressed_rules

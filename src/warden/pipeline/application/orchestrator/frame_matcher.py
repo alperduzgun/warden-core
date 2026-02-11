@@ -4,10 +4,11 @@ Frame matcher module for validation frames.
 Handles frame matching and discovery logic.
 """
 
-from typing import Optional, List
 from pathlib import Path
-from warden.validation.domain.frame import ValidationFrame
+from typing import List, Optional
+
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import ValidationFrame
 
 logger = get_logger(__name__)
 
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 class FrameMatcher:
     """Handles frame matching and discovery."""
 
-    def __init__(self, frames: Optional[List[ValidationFrame]] = None, available_frames: Optional[List[ValidationFrame]] = None):
+    def __init__(self, frames: list[ValidationFrame] | None = None, available_frames: list[ValidationFrame] | None = None):
         """
         Initialize frame matcher.
 
@@ -131,7 +132,7 @@ class FrameMatcher:
             )
             return False
 
-    def find_frame_by_name(self, name: str) -> Optional[ValidationFrame]:
+    def find_frame_by_name(self, name: str) -> ValidationFrame | None:
         """
         Find a frame by various name formats.
 
@@ -214,8 +215,8 @@ class FrameMatcher:
 
     def get_frames_to_execute(
         self,
-        selected_frames: Optional[List[str]] = None,
-    ) -> List[ValidationFrame]:
+        selected_frames: list[str] | None = None,
+    ) -> list[ValidationFrame]:
         """
         Get frames to execute with user preference enforcement.
 

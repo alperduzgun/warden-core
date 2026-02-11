@@ -10,17 +10,18 @@ Calculates Maintainability Index and detects code smells:
 
 import ast
 import math
-import structlog
-from typing import List, Optional, Dict, Any
 from collections import defaultdict
+from typing import Any, Dict, List, Optional
+
+import structlog
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
+    CleaningIssue,
+    CleaningIssueSeverity,
+    CleaningIssueType,
     CleaningResult,
     CleaningSuggestion,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -51,8 +52,8 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze code maintainability.
@@ -127,7 +128,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _calculate_maintainability_index(self, code: str, ast_tree: Optional[Any] = None) -> tuple[float, Dict[str, Any]]:
+    def _calculate_maintainability_index(self, code: str, ast_tree: Any | None = None) -> tuple[float, dict[str, Any]]:
         """
         Calculate Maintainability Index based on Halstead metrics.
 
@@ -172,7 +173,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return mi, halstead
 
-    def _calculate_halstead_metrics(self, tree: ast.AST, code: str) -> Dict[str, Any]:
+    def _calculate_halstead_metrics(self, tree: ast.AST, code: str) -> dict[str, Any]:
         """
         Calculate Halstead complexity metrics.
 
@@ -244,7 +245,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return complexity
 
-    def _detect_maintainability_issues(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
+    def _detect_maintainability_issues(self, code: str, ast_tree: Any | None = None) -> list[CleaningIssue]:
         """
         Detect maintainability issues and code smells.
 
@@ -272,7 +273,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _detect_god_classes(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _detect_god_classes(self, tree: ast.AST) -> list[CleaningIssue]:
         """Detect God Classes (classes doing too much)."""
         issues = []
 
@@ -304,7 +305,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _detect_long_parameter_lists(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _detect_long_parameter_lists(self, tree: ast.AST) -> list[CleaningIssue]:
         """Detect functions with too many parameters."""
         issues = []
         MAX_PARAMS = 5
@@ -324,7 +325,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _detect_deep_inheritance(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _detect_deep_inheritance(self, tree: ast.AST) -> list[CleaningIssue]:
         """Detect deep inheritance hierarchies."""
         issues = []
 
@@ -343,7 +344,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _detect_feature_envy(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _detect_feature_envy(self, tree: ast.AST) -> list[CleaningIssue]:
         """Detect Feature Envy (methods using other class's data excessively)."""
         issues = []
 
@@ -353,11 +354,10 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
                 attr_access_count = defaultdict(int)
 
                 for child in ast.walk(node):
-                    if isinstance(child, ast.Attribute):
-                        if isinstance(child.value, ast.Name):
-                            obj_name = child.value.id
-                            if obj_name != 'self':
-                                attr_access_count[obj_name] += 1
+                    if isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name):
+                        obj_name = child.value.id
+                        if obj_name != 'self':
+                            attr_access_count[obj_name] += 1
 
                 # Check if any external object is accessed too much
                 for obj_name, count in attr_access_count.items():
@@ -373,7 +373,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _detect_inappropriate_intimacy(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _detect_inappropriate_intimacy(self, tree: ast.AST) -> list[CleaningIssue]:
         """Detect classes that know too much about each other."""
         issues = []
 
@@ -406,7 +406,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _detect_data_clumps(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _detect_data_clumps(self, tree: ast.AST) -> list[CleaningIssue]:
         """Detect Data Clumps (parameters that always appear together)."""
         issues = []
         param_combinations = defaultdict(int)

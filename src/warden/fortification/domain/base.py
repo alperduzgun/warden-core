@@ -34,7 +34,7 @@ class BaseFortifier(ABC):
     async def fortify_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
+        cancellation_token: str | None = None,
     ) -> FortificationResult:
         """
         Fortify code by adding safety measures.

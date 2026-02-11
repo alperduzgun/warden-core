@@ -12,8 +12,8 @@ Extended to support:
 
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-from warden.mcp.domain.models import MCPToolDefinition
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition
 
 if TYPE_CHECKING:
     from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
@@ -29,7 +29,7 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         """Initialize registry with built-in tools."""
-        self._tools: Dict[str, MCPToolDefinition] = {}
+        self._tools: dict[str, MCPToolDefinition] = {}
         self._register_builtin_tools()
 
     def _register_builtin_tools(self) -> None:
@@ -131,7 +131,7 @@ class ToolRegistry:
             return True
         return False
 
-    def get(self, name: str) -> Optional[MCPToolDefinition]:
+    def get(self, name: str) -> MCPToolDefinition | None:
         """
         Get tool by name.
 
@@ -143,7 +143,7 @@ class ToolRegistry:
         """
         return self._tools.get(name)
 
-    def list_all(self, bridge_available: bool = True) -> List[MCPToolDefinition]:
+    def list_all(self, bridge_available: bool = True) -> list[MCPToolDefinition]:
         """
         List all available tools.
 
@@ -157,7 +157,7 @@ class ToolRegistry:
             return list(self._tools.values())
         return [t for t in self._tools.values() if not t.requires_bridge]
 
-    def list_by_category(self, category: ToolCategory) -> List[MCPToolDefinition]:
+    def list_by_category(self, category: ToolCategory) -> list[MCPToolDefinition]:
         """
         List tools by category.
 
@@ -181,7 +181,7 @@ class ToolRegistry:
     # Batch Registration Methods
     # =========================================================================
 
-    def register_batch(self, tools: List[MCPToolDefinition]) -> int:
+    def register_batch(self, tools: list[MCPToolDefinition]) -> int:
         """
         Register multiple tools at once.
 
@@ -210,7 +210,7 @@ class ToolRegistry:
         tools = adapter.get_tool_definitions()
         return self.register_batch(tools)
 
-    def register_from_adapters(self, adapters: List["BaseWardenAdapter"]) -> int:
+    def register_from_adapters(self, adapters: list["BaseWardenAdapter"]) -> int:
         """
         Register tools from multiple adapters.
 

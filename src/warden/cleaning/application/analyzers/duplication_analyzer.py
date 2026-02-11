@@ -9,20 +9,21 @@ Detects code duplication:
 Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-import structlog
-from typing import List, Optional, Tuple, Any
 from difflib import SequenceMatcher
+from typing import Any, List, Optional, Tuple
 
+import structlog
+
+from warden.ast.domain.models import ASTNode
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
+    CleaningIssue,
+    CleaningIssueSeverity,
+    CleaningIssueType,
     CleaningResult,
     CleaningSuggestion,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
-from warden.ast.domain.models import ASTNode
 
 logger = structlog.get_logger()
 
@@ -62,8 +63,8 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze code for duplication using Universal AST.
@@ -161,7 +162,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _find_duplicate_blocks(self, lines: List[str]) -> List[Tuple[int, int, int]]:
+    def _find_duplicate_blocks(self, lines: list[str]) -> list[tuple[int, int, int]]:
         """
         Find duplicate code blocks (line-based, language-agnostic).
 
@@ -224,7 +225,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
         self,
         ast_root: ASTNode,
         code: str
-    ) -> List[Tuple[str, str, int, float]]:
+    ) -> list[tuple[str, str, int, float]]:
         """
         Find similar functions using Universal AST.
 
@@ -259,7 +260,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
         self,
         func1: ASTNode,
         func2: ASTNode,
-        lines: List[str]
+        lines: list[str]
     ) -> float:
         """
         Calculate similarity between two functions using Universal AST.
@@ -288,8 +289,8 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
     def _get_function_body_lines_universal(
         self,
         func: ASTNode,
-        lines: List[str]
-    ) -> List[str]:
+        lines: list[str]
+    ) -> list[str]:
         """
         Extract function body lines from Universal AST node.
 

@@ -1,6 +1,8 @@
-import typer
 from pathlib import Path
+
+import typer
 from rich.console import Console
+
 from warden.infrastructure.ci.github_cli import GitHubCli
 from warden.reports.status_reporter import StatusReporter
 
@@ -12,8 +14,8 @@ def status_command(
 ):
     """
     Check the current security status of the project.
-    
-    Reads from .warden/reports/warden.sarif. 
+
+    Reads from .warden/reports/warden.sarif.
     Use --fetch to download artifacts from the latest CI run.
     """
     warden_dir = Path(".warden")
@@ -22,23 +24,22 @@ def status_command(
 
     if fetch:
         # 1. Dependency Check
-        if not GitHubCli.is_installed():
-            if not GitHubCli.install_interactive():
-                raise typer.Exit(1)
-                
+        if not GitHubCli.is_installed() and not GitHubCli.install_interactive():
+            raise typer.Exit(1)
+
         # 2. Authentication Check
         if not GitHubCli.ensure_auth():
              console.print("[red]Authentication required to fetch artifacts.[/red]")
              raise typer.Exit(1)
-             
+
         # 3. Download Logic with Retry & Circuit Breaker
         console.print("[dim]Downloading 'warden-scan-results' artifact...[/dim]")
         tmp_download = warden_dir / "tmp_download"
-        
+
         import time
         max_retries = 3
         backoff_factor = 2
-        
+
         success = False
         for attempt in range(max_retries):
             try:
@@ -46,7 +47,7 @@ def status_command(
                     import shutil
                     shutil.rmtree(tmp_download)
                 tmp_download.mkdir(parents=True, exist_ok=True)
-                
+
                 if GitHubCli.download_artifact("warden-scan-results", tmp_download):
                     success = True
                     break
@@ -54,7 +55,7 @@ def status_command(
                 wait_time = backoff_factor ** attempt
                 console.print(f"[yellow]⚠️  Download failed (Attempt {attempt+1}/{max_retries}): {e}. Retrying in {wait_time}s...[/yellow]")
                 time.sleep(wait_time)
-                
+
         if success:
             downloaded = tmp_download / "warden.sarif"
             if downloaded.exists():
@@ -67,7 +68,7 @@ def status_command(
         else:
              console.print(f"[bold red]❌ Failed to download artifacts after {max_retries} attempts.[/bold red]")
              raise typer.Exit(1)
-        
+
         # Cleanup acts as "finally" but we only do it if we are done
         if tmp_download.exists():
             import shutil

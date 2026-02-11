@@ -3,6 +3,7 @@
 import asyncio
 import functools
 from typing import Any, Optional
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -42,7 +43,7 @@ async def with_timeout_async(
         )
         raise OperationTimeoutError(operation_name, timeout_seconds)
 
-def timeout(seconds: float, operation_name: Optional[str] = None):
+def timeout(seconds: float, operation_name: str | None = None):
     """Decorator to add timeout to async functions."""
     def decorator(func):
         @functools.wraps(func)

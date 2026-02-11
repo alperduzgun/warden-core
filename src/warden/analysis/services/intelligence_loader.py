@@ -7,13 +7,14 @@ Designed for CI environments where LLM is not available.
 
 import json
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
+
 import structlog
 
 from warden.analysis.domain.intelligence import (
-    ProjectIntelligence,
-    ModuleInfo,
     FileException,
+    ModuleInfo,
+    ProjectIntelligence,
     RiskLevel,
     SecurityPosture,
 )
@@ -46,7 +47,7 @@ class IntelligenceLoader:
         self.intelligence_path = (
             self.project_root / self.INTELLIGENCE_DIR / self.INTELLIGENCE_FILE
         )
-        self._intelligence: Optional[ProjectIntelligence] = None
+        self._intelligence: ProjectIntelligence | None = None
         self._loaded = False
 
     @property
@@ -74,7 +75,7 @@ class IntelligenceLoader:
             return False
 
         try:
-            with open(self.intelligence_path, "r", encoding="utf-8") as f:
+            with open(self.intelligence_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             self._intelligence = ProjectIntelligence.from_json(data)
@@ -114,7 +115,7 @@ class IntelligenceLoader:
 
         return self._intelligence.get_risk_for_file(file_path)
 
-    def get_module_for_file(self, file_path: str) -> Optional[ModuleInfo]:
+    def get_module_for_file(self, file_path: str) -> ModuleInfo | None:
         """
         Get the module that contains a file.
 
@@ -202,7 +203,7 @@ class IntelligenceLoader:
 
         return self._intelligence.quality_score
 
-    def get_module_map(self) -> Dict[str, ModuleInfo]:
+    def get_module_map(self) -> dict[str, ModuleInfo]:
         """
         Get the full module map.
 
@@ -214,7 +215,7 @@ class IntelligenceLoader:
 
         return self._intelligence.modules
 
-    def get_file_exceptions(self) -> Dict[str, FileException]:
+    def get_file_exceptions(self) -> dict[str, FileException]:
         """
         Get all file exceptions.
 
@@ -226,7 +227,7 @@ class IntelligenceLoader:
 
         return self._intelligence.exceptions
 
-    def to_context_dict(self) -> Dict[str, Any]:
+    def to_context_dict(self) -> dict[str, Any]:
         """
         Export intelligence as a dictionary for context injection.
 

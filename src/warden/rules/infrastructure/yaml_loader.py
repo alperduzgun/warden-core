@@ -27,7 +27,7 @@ class RulesYAMLLoader:
         rules_path = project_root / ".warden" / "rules.yaml"
         if not rules_path.exists():
             rules_path = project_root / ".warden" / "rules"
-        
+
         if not rules_path.exists():
              return ProjectRuleConfig(
                 project_name="unknown",
@@ -85,9 +85,9 @@ class RulesYAMLLoader:
         """Load rules from all YAML files in a directory and merge them."""
         # Use shared merger logic (DRY)
         from warden.shared.utils.yaml_merger import YAMLMerger
-        
+
         merged_data = YAMLMerger.merge_directory(dir_path)
-        
+
         if not merged_data["rules"] and not merged_data["frame_rules"]:
              logger.warning("no_rules_found_in_directory", directory=str(dir_path))
 
@@ -95,11 +95,11 @@ class RulesYAMLLoader:
         return RulesYAMLLoader._parse_yaml_data(merged_data, str(dir_path))
 
     @staticmethod
-    def _parse_yaml_data(data: Dict[str, Any], source: str) -> ProjectRuleConfig:
+    def _parse_yaml_data(data: dict[str, Any], source: str) -> ProjectRuleConfig:
         """Parse validated YAML dictionary into ProjectRuleConfig."""
         # Validate structure
         # RulesYAMLLoader._validate_yaml_structure(data) # This might be too strict for partial files, skip strict top-level check for merged data?
-        # Actually let's assumemerged data is complete enough 
+        # Actually let's assumemerged data is complete enough
 
         # Parse project config
         project_data = data.get("project", {})
@@ -153,7 +153,7 @@ class RulesYAMLLoader:
         return config
 
     @staticmethod
-    def _validate_yaml_structure(data: Dict[str, Any]) -> None:
+    def _validate_yaml_structure(data: dict[str, Any]) -> None:
         """Validate YAML structure.
 
         Args:
@@ -175,7 +175,7 @@ class RulesYAMLLoader:
             raise ValueError("'rules' must be a list")
 
     @staticmethod
-    def _parse_rule(rule_data: Dict[str, Any]) -> CustomRule:
+    def _parse_rule(rule_data: dict[str, Any]) -> CustomRule:
         """Parse a single rule from YAML data.
 
         Args:
@@ -241,7 +241,7 @@ class RulesYAMLLoader:
         )
 
     @staticmethod
-    def _parse_conditions(conditions_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_conditions(conditions_data: dict[str, Any]) -> dict[str, Any]:
         """Parse and validate rule conditions from YAML data.
 
         Args:
@@ -279,7 +279,7 @@ class RulesYAMLLoader:
         return conditions_data
 
     @staticmethod
-    def _validate_secrets_condition(condition: Dict[str, Any]) -> None:
+    def _validate_secrets_condition(condition: dict[str, Any]) -> None:
         """Validate secrets condition structure."""
         if "patterns" not in condition:
             raise ValueError("secrets condition requires 'patterns' field")
@@ -289,7 +289,7 @@ class RulesYAMLLoader:
             raise ValueError("secrets.patterns cannot be empty")
 
     @staticmethod
-    def _validate_git_condition(condition: Dict[str, Any]) -> None:
+    def _validate_git_condition(condition: dict[str, Any]) -> None:
         """Validate git condition structure."""
         valid_fields = {"authorNameBlacklist", "authorEmailBlacklist", "commitMessagePattern"}
         if not any(field in condition for field in valid_fields):
@@ -299,13 +299,13 @@ class RulesYAMLLoader:
             raise ValueError("git.authorEmailBlacklist must be a list")
 
     @staticmethod
-    def _validate_connections_condition(condition: Dict[str, Any]) -> None:
+    def _validate_connections_condition(condition: dict[str, Any]) -> None:
         """Validate connections condition structure."""
         if "forbiddenPatterns" in condition and not isinstance(condition["forbiddenPatterns"], list):
             raise ValueError("connections.forbiddenPatterns must be a list")
 
     @staticmethod
-    def _validate_redis_condition(condition: Dict[str, Any]) -> None:
+    def _validate_redis_condition(condition: dict[str, Any]) -> None:
         """Validate redis condition structure."""
         if "keyPattern" not in condition:
             raise ValueError("redis condition requires 'keyPattern' field")
@@ -313,7 +313,7 @@ class RulesYAMLLoader:
             raise ValueError("redis.keyPattern must be a string (regex pattern)")
 
     @staticmethod
-    def _validate_api_condition(condition: Dict[str, Any]) -> None:
+    def _validate_api_condition(condition: dict[str, Any]) -> None:
         """Validate api condition structure."""
         if "routePattern" not in condition:
             raise ValueError("api condition requires 'routePattern' field")
@@ -321,14 +321,14 @@ class RulesYAMLLoader:
             raise ValueError("api.routePattern must be a string (regex pattern)")
 
     @staticmethod
-    def _validate_naming_condition(condition: Dict[str, Any]) -> None:
+    def _validate_naming_condition(condition: dict[str, Any]) -> None:
         """Validate naming condition structure."""
         valid_fields = {"asyncMethodSuffix", "interfacePrefix", "privateFieldPrefix"}
         if not any(field in condition for field in valid_fields):
             raise ValueError("naming condition requires at least one of: asyncMethodSuffix, interfacePrefix, privateFieldPrefix")
 
     @staticmethod
-    def _parse_frame_rules(config_data: Dict[str, Any], all_rules: list[CustomRule]) -> Dict[str, FrameRules]:
+    def _parse_frame_rules(config_data: dict[str, Any], all_rules: list[CustomRule]) -> dict[str, FrameRules]:
         """Parse frame_rules section from YAML config.
 
         Args:
@@ -356,7 +356,7 @@ class RulesYAMLLoader:
         # Create lookup map: rule_id -> CustomRule object
         rule_lookup = {rule.id: rule for rule in all_rules}
 
-        frame_rules_result: Dict[str, FrameRules] = {}
+        frame_rules_result: dict[str, FrameRules] = {}
         missing_rule_ids: list[str] = []
 
         for frame_id, rules_spec in frame_rules_data.items():

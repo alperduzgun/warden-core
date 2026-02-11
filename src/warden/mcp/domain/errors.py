@@ -21,14 +21,14 @@ class MCPDomainError(Exception):
         self,
         message: str,
         code: MCPErrorCode = MCPErrorCode.INTERNAL_ERROR,
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
         self.code = code
         self.details = details or {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-RPC error format."""
         result = {
             "code": int(self.code),
@@ -42,7 +42,7 @@ class MCPDomainError(Exception):
 class MCPTransportError(MCPDomainError):
     """Raised when transport layer operations fail."""
 
-    def __init__(self, message: str, cause: Optional[str] = None) -> None:
+    def __init__(self, message: str, cause: str | None = None) -> None:
         super().__init__(
             message=message,
             code=MCPErrorCode.TRANSPORT_ERROR,
@@ -90,7 +90,7 @@ class MCPResourceNotFoundError(MCPDomainError):
 class MCPProtocolError(MCPDomainError):
     """Raised for MCP protocol violations."""
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         super().__init__(
             message=message,
             code=MCPErrorCode.INVALID_REQUEST,

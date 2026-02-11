@@ -1,9 +1,10 @@
 
 import asyncio
 import functools
-import random
 import logging
-from typing import Type, Tuple, Callable, Any
+import random
+from collections.abc import Callable
+from typing import Any, Tuple, Type
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ def async_retry(
     max_delay: float = 60.0,
     backoff_factor: float = 2.0,
     jitter: bool = True,
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
+    exceptions: tuple[type[Exception], ...] = (Exception,),
 ):
     # Fuzzing Guard: Ensure exceptions is a non-empty tuple
     if not exceptions:
@@ -46,7 +47,7 @@ def async_retry(
 
                     # Calculate delay with backoff
                     current_delay = min(delay * (backoff_factor ** attempt), max_delay)
-                    
+
                     if jitter:
                         # Add random jitter (±10% of current delay)
                         current_delay = current_delay * (1 + random.uniform(-0.1, 0.1))
@@ -55,9 +56,9 @@ def async_retry(
                         f"Retry attempt {attempt + 1}/{retries} for {func.__name__} "
                         f"failed with {type(e).__name__}: {e}. Retrying in {current_delay:.2f}s..."
                     )
-                    
+
                     await asyncio.sleep(current_delay)
-            
+
             # This should technically not be reached due to re-raise above
             if last_exception:
                 raise last_exception

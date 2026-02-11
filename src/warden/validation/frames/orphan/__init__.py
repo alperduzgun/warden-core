@@ -24,21 +24,21 @@ Usage:
     # LSP mode (slower, cross-file) - set via OrphanDetectorFactory
 """
 
-from warden.validation.frames.orphan.orphan_frame import OrphanFrame
+from warden.validation.frames.orphan.llm_orphan_filter import (
+    FilterDecision,
+    LLMOrphanFilter,
+)
 from warden.validation.frames.orphan.orphan_detector import (
+    LSP_AVAILABLE,
     AbstractOrphanDetector,
-    PythonOrphanDetector,
-    TreeSitterOrphanDetector,
-    RustOrphanDetector,
     LSPOrphanDetector,
     OrphanDetectorFactory,
     OrphanFinding,
-    LSP_AVAILABLE,
+    PythonOrphanDetector,
+    RustOrphanDetector,
+    TreeSitterOrphanDetector,
 )
-from warden.validation.frames.orphan.llm_orphan_filter import (
-    LLMOrphanFilter,
-    FilterDecision,
-)
+from warden.validation.frames.orphan.orphan_frame import OrphanFrame
 
 __all__ = [
     "OrphanFrame",

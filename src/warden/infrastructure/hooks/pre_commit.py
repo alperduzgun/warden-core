@@ -161,7 +161,7 @@ if __name__ == "__main__":
         return "Warden pre-commit hook" in content
 
     @staticmethod
-    def run(staged_files: Optional[List[str]] = None) -> int:
+    def run(staged_files: list[str] | None = None) -> int:
         """
         Run pre-commit hook logic.
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         return 0
 
     @staticmethod
-    def _get_staged_files() -> List[str]:
+    def _get_staged_files() -> list[str]:
         """Get list of staged Python files."""
         result = subprocess.run(
             ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],

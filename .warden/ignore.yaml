@@ -105,8 +105,8 @@ frames:
     - "**/__main__.py"
     - "**/cli.py"
     - "**/main.py"
-  
-  architecturalconsistency:
+
+  architectural:
     # Test files have different structure expectations
     - "tests/**"
     - "test_*.py"

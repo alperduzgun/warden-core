@@ -4,8 +4,10 @@ Process files in chunks instead of loading all into RAM.
 """
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import List, AsyncIterator, Optional
+from typing import List, Optional
+
 import structlog
 
 from warden.validation.domain.frame import CodeFile
@@ -21,9 +23,9 @@ class MemoryManager:
 
     @staticmethod
     async def stream_files_chunked(
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
         chunk_size: int = CHUNK_SIZE
-    ) -> AsyncIterator[List[CodeFile]]:
+    ) -> AsyncIterator[list[CodeFile]]:
         """
         Stream files in chunks to prevent OOM.
 
@@ -55,10 +57,10 @@ class MemoryManager:
 
     @staticmethod
     async def process_with_memory_limit(
-        items: List,
+        items: list,
         processor_func,
         batch_size: int = 10
-    ) -> List:
+    ) -> list:
         """Process items with memory constraints."""
         results = []
         for i in range(0, len(items), batch_size):
@@ -69,7 +71,7 @@ class MemoryManager:
         return results
 
     @staticmethod
-    def estimate_memory_usage(code_files: List[CodeFile]) -> int:
+    def estimate_memory_usage(code_files: list[CodeFile]) -> int:
         """Estimate total memory needed for all files in MB."""
         total_bytes = sum(len(f.content.encode()) for f in code_files if f.content)
         return total_bytes // (1024 * 1024)

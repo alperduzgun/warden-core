@@ -6,28 +6,30 @@ The main entry point for the Warden Python CLI.
 Provides commands for scanning, serving, and launching the interactive chat.
 """
 
-import typer
-from rich.console import Console
-import signal
 import asyncio
+import signal
 import sys
 from typing import NoReturn
 
-# Command Logic Imports
-from warden.cli.commands.version import version_command
-from warden.cli.commands.chat import chat_command
-from warden.cli.commands.status import status_command
-from warden.cli.commands.scan import scan_command
-from warden.cli.commands.init import init_command
-from warden.cli.commands.serve import serve_app
-from warden.cli.commands.search import search_command, index_command
-from warden.cli.commands.install import install as install_command
-from warden.cli.commands.doctor import doctor as doctor_command
-from warden.cli.commands.update import update_command
-from warden.cli.commands.refresh import refresh_command
+import typer
+from rich.console import Console
+
 from warden.cli.commands.baseline import baseline_app
+from warden.cli.commands.chat import chat_command
 from warden.cli.commands.ci import ci_app
 from warden.cli.commands.config import config_app
+from warden.cli.commands.doctor import doctor as doctor_command
+from warden.cli.commands.init import init_command
+from warden.cli.commands.install import install as install_command
+from warden.cli.commands.refresh import refresh_command
+from warden.cli.commands.scan import scan_command
+from warden.cli.commands.search import index_command, search_command
+from warden.cli.commands.serve import serve_app
+from warden.cli.commands.status import status_command
+from warden.cli.commands.update import update_command
+
+# Command Logic Imports
+from warden.cli.commands.version import version_command
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -108,7 +110,7 @@ def main():
     # Let Typer and Asyncio handle signals naturally
     # We do NOT want a global signal handler because it conflicts
     # with asyncio.run() which manages its own loop lifecycle.
-    
+
     app()
 
 if __name__ == "__main__":

@@ -110,7 +110,7 @@ class ResultAnalysisMixin:
         try:
             response = warden_pb2.FrameStats()
 
-            frame_issues: Dict[str, List[dict]] = {}
+            frame_issues: dict[str, list[dict]] = {}
             for issue in self._issues.values():
                 frame_id = issue.get("frame_id", "unknown")
                 if frame_id not in frame_issues:

@@ -16,10 +16,12 @@ The cleaning step will analyze code and suggest cleanup/refactoring improvements
 
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from pydantic import Field
+
 from warden.shared.domain.base_model import BaseDomainModel
+
 
 class CleaningIssueType(Enum):
     """Types of cleaning opportunities."""
@@ -61,33 +63,36 @@ class CleaningIssue(BaseDomainModel):
     description: str
     line_number: int
     severity: CleaningIssueSeverity = CleaningIssueSeverity.MEDIUM
-    code_snippet: Optional[str] = None
-    column_start: Optional[int] = None
-    column_end: Optional[int] = None
+    code_snippet: str | None = None
+    column_start: int | None = None
+    column_end: int | None = None
 
 class CleaningSuggestion(BaseDomainModel):
     """A suggestion for code cleanup."""
     issue: CleaningIssue
     suggestion: str
-    example_code: Optional[str] = None
-    rationale: Optional[str] = None
+    example_code: str | None = None
+    rationale: str | None = None
 
 class CleaningResult(BaseDomainModel):
     """
     Result of cleaning step execution.
     """
     success: bool = True
-    cleanings: List[Cleaning] = Field(default_factory=list)
+    cleanings: list[Cleaning] = Field(default_factory=list)
     issues_found: int = 0
-    suggestions: List[CleaningSuggestion] = Field(default_factory=list)
+    suggestions: list[CleaningSuggestion] = Field(default_factory=list)
     cleanup_score: float = 0.0
-    files_modified: List[str] = Field(default_factory=list)
+    files_modified: list[str] = Field(default_factory=list)
     summary: str = ""
     duration: float = 0.0
     timestamp: datetime = Field(default_factory=datetime.now)
     metrics: dict = Field(default_factory=dict)
+    error_message: str | None = None
+    analyzer_name: str | None = None
+    file_path: str = ""
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Serialize to Panel-compatible JSON."""
         return {
             "success": self.success,

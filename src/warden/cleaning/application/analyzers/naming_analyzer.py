@@ -11,20 +11,21 @@ Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer 
 """
 
 import re
-import structlog
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
+import structlog
+
+from warden.ast.domain.enums import ASTNodeType
+from warden.ast.domain.models import ASTNode
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
+    CleaningIssue,
+    CleaningIssueSeverity,
+    CleaningIssueType,
     CleaningResult,
     CleaningSuggestion,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
-from warden.ast.domain.models import ASTNode
-from warden.ast.domain.enums import ASTNodeType
 
 logger = structlog.get_logger()
 
@@ -80,8 +81,8 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze code for naming issues using Universal AST.
@@ -168,7 +169,7 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_naming_universal(self, ast_root: ASTNode) -> List[CleaningIssue]:
+    def _analyze_naming_universal(self, ast_root: ASTNode) -> list[CleaningIssue]:
         """
         Analyze code for naming issues using Universal AST.
 
@@ -194,7 +195,7 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _check_function_name_universal(self, node: ASTNode) -> List[CleaningIssue]:
+    def _check_function_name_universal(self, node: ASTNode) -> list[CleaningIssue]:
         """Check function name for issues (Universal AST)."""
         issues = []
         name = node.name
@@ -246,7 +247,7 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _check_class_name_universal(self, node: ASTNode) -> List[CleaningIssue]:
+    def _check_class_name_universal(self, node: ASTNode) -> list[CleaningIssue]:
         """Check class name for issues (Universal AST)."""
         issues = []
         name = node.name

@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 from typing import Optional
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +26,7 @@ class BulkheadFull(Exception):
 
 class Bulkhead:
     """Bulkhead pattern for resource isolation."""
-    def __init__(self, name: str, config: Optional[BulkheadConfig] = None):
+    def __init__(self, name: str, config: BulkheadConfig | None = None):
         self.name = name
         self.config = config or BulkheadConfig()
         self._semaphore = asyncio.Semaphore(self.config.max_concurrent)

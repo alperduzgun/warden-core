@@ -39,7 +39,7 @@ class CustomRuleValidator:
         llm_service: Optional LLM service for AI-powered validation
     """
 
-    def __init__(self, rules: List[CustomRule], llm_service: Optional[Any] = None):
+    def __init__(self, rules: list[CustomRule], llm_service: Any | None = None):
         """Initialize validator with custom rules.
 
         Args:
@@ -51,10 +51,10 @@ class CustomRuleValidator:
         logger.info("custom_rule_validator_initialized", rule_count=len(self.rules), has_llm=llm_service is not None)
 
     async def validate_file_async(
-        self, 
-        file_path: Path | str, 
-        rules: Optional[List[CustomRule]] = None
-    ) -> List[CustomRuleViolation]:
+        self,
+        file_path: Path | str,
+        rules: list[CustomRule] | None = None
+    ) -> list[CustomRuleViolation]:
         """Validate a file against rules.
 
         Args:
@@ -68,17 +68,17 @@ class CustomRuleValidator:
 
     async def validate_batch_async(
         self,
-        file_paths: List[Path | str],
-        rules: Optional[List[CustomRule]] = None
-    ) -> List[CustomRuleViolation]:
+        file_paths: list[Path | str],
+        rules: list[CustomRule] | None = None
+    ) -> list[CustomRuleViolation]:
         """Validate multiple files against rules efficiently.
-        
+
         Automatically routes rules to Rust engine if capable.
         """
         # Normalize paths
         paths = [Path(p) if isinstance(p, str) else p for p in file_paths]
         valid_paths = [p for p in paths if p.exists()]
-        
+
         if not valid_paths:
             return []
 
@@ -106,10 +106,10 @@ class CustomRuleValidator:
             for file_path in valid_paths:
                 violations = await self._validate_single_file_python(file_path, python_rules)
                 all_violations.extend(violations)
-                
+
         return all_violations
 
-    async def _validate_single_file_python(self, file_path: Path, rules: List[CustomRule]) -> List[CustomRuleViolation]:
+    async def _validate_single_file_python(self, file_path: Path, rules: list[CustomRule]) -> list[CustomRuleViolation]:
         """Legacy validation logic (refactored from validate_file_async)."""
         # Support both Path and str
         if isinstance(file_path, str):
@@ -120,7 +120,7 @@ class CustomRuleValidator:
 
         # Use passed rules or fallback to global rules
         active_rules = rules if rules is not None else self.rules
-        
+
         if not active_rules:
             return []
 
@@ -172,7 +172,7 @@ class CustomRuleValidator:
 
         return violations
 
-    def _is_language_match(self, file_path: Path, languages: List[str]) -> bool:
+    def _is_language_match(self, file_path: Path, languages: list[str]) -> bool:
         """Check if file matches language filter.
 
         Args:
@@ -198,7 +198,7 @@ class CustomRuleValidator:
         file_language = language_map.get(suffix)
         return file_language in [lang.lower() for lang in languages] if file_language else False
 
-    def _is_exception_match(self, file_path: Path, exceptions: List[str]) -> bool:
+    def _is_exception_match(self, file_path: Path, exceptions: list[str]) -> bool:
         """Check if file matches exception pattern.
 
         Args:
@@ -209,19 +209,15 @@ class CustomRuleValidator:
             True if file matches any exception pattern
         """
         file_str = str(file_path)
-        for pattern in exceptions:
-            # Use fnmatch for proper glob matching (handles *, ?, [], etc.)
-            if fnmatch.fnmatch(file_str, pattern):
-                return True
-        return False
+        return any(fnmatch.fnmatch(file_str, pattern) for pattern in exceptions)
 
     def _validate_security_rule(
         self,
         rule: CustomRule,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         content: str,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate security rules (secrets, connections, git).
 
         Args:
@@ -283,9 +279,9 @@ class CustomRuleValidator:
         self,
         rule: CustomRule,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         condition: dict,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate secrets detection condition.
 
         Args:
@@ -304,7 +300,7 @@ class CustomRuleValidator:
             for i, line in enumerate(lines, start=1):
                 if self._is_suppressed(line):
                     continue
-                    
+
                 if re.search(pattern, line):
                     violations.append(
                         CustomRuleViolation(
@@ -326,9 +322,9 @@ class CustomRuleValidator:
         self,
         rule: CustomRule,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         condition: dict,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate connection string condition.
 
         Args:
@@ -369,9 +365,9 @@ class CustomRuleValidator:
         self,
         rule: CustomRule,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         content: str,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate convention rules (redis, api, naming).
 
         Args:
@@ -410,9 +406,9 @@ class CustomRuleValidator:
         self,
         rule: CustomRule,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         condition: dict,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate Redis key pattern condition.
 
         Args:
@@ -470,9 +466,9 @@ class CustomRuleValidator:
         self,
         rule: CustomRule,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         condition: dict,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate API route pattern condition.
 
         Args:
@@ -548,9 +544,9 @@ class CustomRuleValidator:
         self,
         rule: CustomRule,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         condition: dict,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate naming convention condition.
 
         Args:
@@ -605,7 +601,7 @@ class CustomRuleValidator:
         self,
         rule: CustomRule,
         file_path: Path,
-    ) -> Optional[CustomRuleViolation]:
+    ) -> CustomRuleViolation | None:
         """Execute external script for validation.
 
         Script contract:
@@ -804,7 +800,7 @@ class CustomRuleValidator:
         rule: CustomRule,
         file_path: Path,
         content: str,
-    ) -> List[CustomRuleViolation]:
+    ) -> list[CustomRuleViolation]:
         """Validate code using LLM as a pure AI rule.
 
         Args:
@@ -855,16 +851,16 @@ RETURN ONLY A JSON OBJECT:
             # Call LLM service with model override
             logger.debug("executing_ai_rule", rule_id=rule.id, file=str(file_path), model=model)
             response = await self.llm_service.complete_async(
-                prompt=prompt, 
+                prompt=prompt,
                 system_prompt="You are a specialized code validation agent.",
                 model=model
             )
             logger.debug("ai_rule_response_received", rule_id=rule.id)
-            
+
             # Parse JSON response
             from warden.shared.utils.json_parser import parse_json_from_llm
             result = parse_json_from_llm(response.content if hasattr(response, 'content') else str(response))
-            
+
             if result.get("violation_found"):
                 logger.info("ai_rule_violation_found", rule_id=rule.id, file=str(file_path), explanation=result.get("explanation"))
                 return [
@@ -881,14 +877,14 @@ RETURN ONLY A JSON OBJECT:
                         code_snippet=None, # AI doesn't always provide snippets
                     )
                 ]
-            
+
             return []
 
         except Exception as e:
             logger.error("ai_rule_execution_failed", rule_id=rule.id, error=str(e))
             return []
 
-    def _classify_rules(self, rules: List[CustomRule]) -> tuple[List[CustomRule], List[CustomRule]]:
+    def _classify_rules(self, rules: list[CustomRule]) -> tuple[list[CustomRule], list[CustomRule]]:
         """Intelligent Router: Split rules into Rust-capable and Python-only."""
         rust_rules = []
         python_rules = []
@@ -901,17 +897,17 @@ RETURN ONLY A JSON OBJECT:
                 rust_rules.append(rule)
             else:
                 python_rules.append(rule)
-        
+
         if rust_rules:
             logger.info("rules_routed_to_rust", count=len(rust_rules), rules=[r.id for r in rust_rules])
-        
+
         return rust_rules, python_rules
 
     def _is_rust_capable(self, rule: CustomRule) -> bool:
         """Check if rule can be executed by Rust engine."""
         if rule.type != "convention":
             return False
-            
+
         # Must not have script path
         if rule.script_path:
             return False
@@ -919,10 +915,10 @@ RETURN ONLY A JSON OBJECT:
         # Must have compatible conditions
         # Supported: patterns (regex), max_lines (metric), max_size_mb (metric)
         conditions = rule.conditions
-        
+
         supported_keys = {'patterns', 'max_lines', 'max_size_mb'}
         keys = set(conditions.keys())
-        
+
         # If keys is subset of supported -> Pure Rust rule
         if keys.issubset(supported_keys) and keys:
             # CHECK: Verify Regex Compatibility
@@ -932,11 +928,11 @@ RETURN ONLY A JSON OBJECT:
                     # Check for look-around: (?=, (?<=, (?!, (?<!
                     # Check for backreference: \1, \2 (basic heuristic)
                     if any(x in pattern for x in ["(?=", "(?<=", "(?!", "(?<!"]):
-                        logger.debug("rule_routed_to_python_incompatible_regex", 
-                                   rule_id=rule.id, 
+                        logger.debug("rule_routed_to_python_incompatible_regex",
+                                   rule_id=rule.id,
                                    reason="look-around")
                         return False
-                    
+
                     # Backreferences like \1 might be valid escapes, but we'll be conservative
                     # If regex contains \1, \2.. it implies backref or octal escape.
                     # Rust regex doesn't support backrefs in match.
@@ -944,22 +940,22 @@ RETURN ONLY A JSON OBJECT:
                         # Simple check for backslash followed by digit 1-9
                         import re
                         if re.search(r"\\[1-9]", pattern):
-                            logger.debug("rule_routed_to_python_incompatible_regex", 
-                                       rule_id=rule.id, 
+                            logger.debug("rule_routed_to_python_incompatible_regex",
+                                       rule_id=rule.id,
                                        reason="backreference")
                             return False
 
             return True
-            
+
         return False
 
-    async def _execute_rust_validation(self, paths: List[Path], rules: List[CustomRule]) -> List[CustomRuleViolation]:
+    async def _execute_rust_validation(self, paths: list[Path], rules: list[CustomRule]) -> list[CustomRuleViolation]:
         """Prepare and execute Rust validation."""
         path_strs = [str(p.absolute()) for p in paths]
-        
+
         regex_rules = []
         metric_rules = []
-        
+
         # Map for ID traceback
         rule_map = {r.id: r for r in rules}
 
@@ -968,7 +964,7 @@ RETURN ONLY A JSON OBJECT:
             if "max_size_mb" in r.conditions:
                 threshold_bytes = r.conditions["max_size_mb"] * 1024 * 1024
                 metric_rules.append(warden_core_rust.MetricRule(r.id, "size_bytes", int(threshold_bytes)))
-            
+
             if "max_lines" in r.conditions:
                 metric_rules.append(warden_core_rust.MetricRule(r.id, "line_count", int(r.conditions["max_lines"])))
 
@@ -981,7 +977,7 @@ RETURN ONLY A JSON OBJECT:
         # Run in executor to avoid blocking event loop
         loop = asyncio.get_running_loop()
         results = await loop.run_in_executor(
-            None, 
+            None,
             lambda: warden_core_rust.validate_files(path_strs, regex_rules, metric_rules)
         )
 
@@ -989,7 +985,7 @@ RETURN ONLY A JSON OBJECT:
         for res in results:
             rule = rule_map.get(res.rule_id)
             if not rule: continue
-            
+
             violations.append(CustomRuleViolation(
                 rule_id=rule.id,
                 rule_name=rule.name,
@@ -1001,5 +997,5 @@ RETURN ONLY A JSON OBJECT:
                 message=res.message,
                 code_snippet=res.snippet
             ))
-            
+
         return violations

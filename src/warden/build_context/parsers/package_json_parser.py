@@ -6,14 +6,14 @@ Extracts build configuration and dependencies from package.json files.
 
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from warden.build_context.models import (
     BuildContext,
+    BuildScript,
     BuildSystem,
     Dependency,
     DependencyType,
-    BuildScript,
 )
 
 
@@ -67,7 +67,7 @@ class PackageJsonParser:
             # Default to NPM if package.json exists but no lock file
             return BuildSystem.NPM
 
-    def parse(self) -> Optional[BuildContext]:
+    def parse(self) -> BuildContext | None:
         """
         Parse package.json and extract build context.
 
@@ -78,7 +78,7 @@ class PackageJsonParser:
             return None
 
         try:
-            with open(self.package_json_path, "r", encoding="utf-8") as f:
+            with open(self.package_json_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             build_system = self.detect_build_system()
@@ -121,7 +121,7 @@ class PackageJsonParser:
             node_version = engines.get("node")
 
             # Extract additional metadata
-            metadata: Dict[str, Any] = {}
+            metadata: dict[str, Any] = {}
             for key in ["author", "license", "repository", "keywords", "homepage"]:
                 if key in data:
                     metadata[key] = data[key]
@@ -141,16 +141,16 @@ class PackageJsonParser:
                 metadata=metadata,
             )
 
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             # Log error but don't crash - return None
             print(f"Error parsing package.json: {e}")
             return None
 
     def _parse_dependencies(
         self,
-        deps_dict: Dict[str, str],
+        deps_dict: dict[str, str],
         dep_type: DependencyType
-    ) -> List[Dependency]:
+    ) -> list[Dependency]:
         """
         Parse dependencies dictionary.
 
@@ -161,7 +161,7 @@ class PackageJsonParser:
         Returns:
             List of Dependency objects
         """
-        dependencies: List[Dependency] = []
+        dependencies: list[Dependency] = []
 
         for name, version in deps_dict.items():
             dependencies.append(
@@ -175,7 +175,7 @@ class PackageJsonParser:
 
         return dependencies
 
-    def _parse_scripts(self, scripts_dict: Dict[str, str]) -> List[BuildScript]:
+    def _parse_scripts(self, scripts_dict: dict[str, str]) -> list[BuildScript]:
         """
         Parse scripts dictionary.
 
@@ -185,7 +185,7 @@ class PackageJsonParser:
         Returns:
             List of BuildScript objects
         """
-        scripts: List[BuildScript] = []
+        scripts: list[BuildScript] = []
 
         for name, command in scripts_dict.items():
             scripts.append(
@@ -198,7 +198,7 @@ class PackageJsonParser:
 
         return scripts
 
-    def _get_script_description(self, script_name: str) -> Optional[str]:
+    def _get_script_description(self, script_name: str) -> str | None:
         """
         Get human-readable description for common script names.
 

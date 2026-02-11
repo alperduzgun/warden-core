@@ -7,11 +7,11 @@ Maps to gRPC PipelineMixin functionality.
 
 from typing import Any, Dict, List
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
-from warden.shared.utils.retry_utils import async_retry
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 from warden.shared.utils.path_utils import sanitize_path
+from warden.shared.utils.retry_utils import async_retry
 
 
 class PipelineAdapter(BaseWardenAdapter):
@@ -30,7 +30,7 @@ class PipelineAdapter(BaseWardenAdapter):
     TOOL_CATEGORY = ToolCategory.PIPELINE
 
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get pipeline tool definitions."""
         return [
             self._create_tool_definition(
@@ -73,7 +73,7 @@ class PipelineAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute pipeline tool."""
         if tool_name == "warden_execute_pipeline":
@@ -84,7 +84,7 @@ class PipelineAdapter(BaseWardenAdapter):
             return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
     @async_retry(retries=5, initial_delay=1.0)
-    async def _execute_pipeline_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _execute_pipeline_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Execute full validation pipeline."""
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")
@@ -105,7 +105,7 @@ class PipelineAdapter(BaseWardenAdapter):
             return MCPToolResult.error(f"Pipeline execution failed: {e}")
 
     @async_retry(retries=5, initial_delay=1.0)
-    async def _execute_pipeline_stream_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _execute_pipeline_stream_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Execute pipeline with streaming (collect all events)."""
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")

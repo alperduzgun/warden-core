@@ -29,6 +29,6 @@ class AntiPatternViolation:
     file_path: str
     line: int
     column: int = 0
-    code_snippet: Optional[str] = None
-    suggestion: Optional[str] = None
+    code_snippet: str | None = None
+    suggestion: str | None = None
     is_blocker: bool = False

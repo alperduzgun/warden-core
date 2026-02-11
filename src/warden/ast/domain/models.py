@@ -10,14 +10,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from warden.shared.domain.base_model import BaseDomainModel
 from pydantic import Field
+
 from warden.ast.domain.enums import (
     ASTNodeType,
-    ParseStatus,
-    CodeLanguage,
     ASTProviderPriority,
+    CodeLanguage,
+    ParseStatus,
 )
+from warden.shared.domain.base_model import BaseDomainModel
 
 
 @dataclass
@@ -34,7 +35,7 @@ class SourceLocation:
     end_line: int
     end_column: int
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "file_path": self.file_path,
@@ -45,7 +46,7 @@ class SourceLocation:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> SourceLocation:
+    def from_dict(cls, data: dict[str, Any]) -> SourceLocation:
         """Create from dictionary."""
         return cls(
             file_path=data["file_path"],
@@ -66,20 +67,20 @@ class ASTNode:
     """
 
     node_type: ASTNodeType
-    name: Optional[str] = None
-    value: Optional[Any] = None
-    location: Optional[SourceLocation] = None
-    children: List[ASTNode] = field(default_factory=list)
-    attributes: Dict[str, Any] = field(default_factory=dict)
-    raw_node: Optional[Any] = None  # Original language-specific node (not serialized)
+    name: str | None = None
+    value: Any | None = None
+    location: SourceLocation | None = None
+    children: list[ASTNode] = field(default_factory=list)
+    attributes: dict[str, Any] = field(default_factory=dict)
+    raw_node: Any | None = None  # Original language-specific node (not serialized)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert to dictionary for serialization.
 
         Note: raw_node is excluded from serialization.
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "node_type": self.node_type.value,
             "name": self.name,
             "value": self.value,
@@ -90,7 +91,7 @@ class ASTNode:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ASTNode:
+    def from_dict(cls, data: dict[str, Any]) -> ASTNode:
         """Create from dictionary."""
         return cls(
             node_type=ASTNodeType(data["node_type"]),
@@ -103,7 +104,7 @@ class ASTNode:
             attributes=data.get("attributes", {}),
         )
 
-    def find_nodes(self, node_type: ASTNodeType) -> List[ASTNode]:
+    def find_nodes(self, node_type: ASTNodeType) -> list[ASTNode]:
         """
         Find all nodes of a specific type (recursive).
 
@@ -113,7 +114,7 @@ class ASTNode:
         Returns:
             List of matching nodes
         """
-        results: List[ASTNode] = []
+        results: list[ASTNode] = []
 
         if self.node_type == node_type:
             results.append(self)
@@ -123,7 +124,7 @@ class ASTNode:
 
         return results
 
-    def find_by_name(self, name: str) -> List[ASTNode]:
+    def find_by_name(self, name: str) -> list[ASTNode]:
         """
         Find all nodes with specific name (recursive).
 
@@ -133,7 +134,7 @@ class ASTNode:
         Returns:
             List of matching nodes
         """
-        results: List[ASTNode] = []
+        results: list[ASTNode] = []
 
         if self.name == name:
             results.append(self)
@@ -153,11 +154,11 @@ class ParseError:
     """
 
     message: str
-    location: Optional[SourceLocation] = None
-    error_code: Optional[str] = None
+    location: SourceLocation | None = None
+    error_code: str | None = None
     severity: str = "error"  # error, warning, info
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "message": self.message,
@@ -177,11 +178,11 @@ class ParseResult(BaseDomainModel):
     status: ParseStatus
     language: CodeLanguage
     provider_name: str
-    ast_root: Optional[ASTNode] = None
-    errors: List[ParseError] = Field(default_factory=list)
-    warnings: List[ParseError] = Field(default_factory=list)
+    ast_root: ASTNode | None = None
+    errors: list[ParseError] = Field(default_factory=list)
+    warnings: list[ParseError] = Field(default_factory=list)
     parse_time_ms: float = 0.0
-    file_path: Optional[str] = None
+    file_path: str | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
 
     def is_success(self) -> bool:
@@ -207,18 +208,18 @@ class ASTProviderMetadata:
 
     name: str
     priority: ASTProviderPriority
-    supported_languages: List[CodeLanguage]
+    supported_languages: list[CodeLanguage]
     version: str = "1.0.0"
     description: str = ""
     author: str = ""
     requires_installation: bool = False  # True if needs extra dependencies
-    installation_command: Optional[str] = None  # e.g., "pip install tree-sitter-python"
+    installation_command: str | None = None  # e.g., "pip install tree-sitter-python"
 
     def supports_language(self, language: CodeLanguage) -> bool:
         """Check if provider supports a language."""
         return language in self.supported_languages
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,

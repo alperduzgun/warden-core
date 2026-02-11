@@ -11,7 +11,7 @@ Supports standard unified diff format from git diff.
 
 import re
 from dataclasses import dataclass
-from typing import List, Set, Dict, Any
+from typing import Any, Dict, List, Set
 
 
 @dataclass
@@ -26,9 +26,9 @@ class DiffHunk:
     old_count: int  # Number of lines in old file
     new_start: int  # Starting line in new file
     new_count: int  # Number of lines in new file
-    added_lines: Set[int]  # Line numbers that were added
-    deleted_lines: Set[int]  # Line numbers that were deleted (in old file)
-    context_lines: Set[int]  # Unchanged context lines (in new file)
+    added_lines: set[int]  # Line numbers that were added
+    deleted_lines: set[int]  # Line numbers that were deleted (in old file)
+    context_lines: set[int]  # Unchanged context lines (in new file)
 
     def get_changed_line_range(self) -> tuple[int, int]:
         """
@@ -42,16 +42,16 @@ class DiffHunk:
 
         return (min(self.added_lines), max(self.added_lines))
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Serialize to JSON."""
         return {
             "oldStart": self.old_start,
             "oldCount": self.old_count,
             "newStart": self.new_start,
             "newCount": self.new_count,
-            "addedLines": sorted(list(self.added_lines)),
-            "deletedLines": sorted(list(self.deleted_lines)),
-            "contextLines": sorted(list(self.context_lines)),
+            "addedLines": sorted(self.added_lines),
+            "deletedLines": sorted(self.deleted_lines),
+            "contextLines": sorted(self.context_lines),
         }
 
 
@@ -68,38 +68,38 @@ class FileDiff:
     is_new: bool = False  # File was added
     is_deleted: bool = False  # File was deleted
     is_renamed: bool = False  # File was renamed
-    hunks: List[DiffHunk] = None  # type: ignore[assignment]
+    hunks: list[DiffHunk] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         """Initialize hunks list if not provided."""
         if self.hunks is None:
             self.hunks = []
 
-    def get_all_added_lines(self) -> Set[int]:
+    def get_all_added_lines(self) -> set[int]:
         """
         Get all added line numbers across all hunks.
 
         Returns:
             Set of line numbers that were added
         """
-        all_lines: Set[int] = set()
+        all_lines: set[int] = set()
         for hunk in self.hunks:
             all_lines.update(hunk.added_lines)
         return all_lines
 
-    def get_all_deleted_lines(self) -> Set[int]:
+    def get_all_deleted_lines(self) -> set[int]:
         """
         Get all deleted line numbers across all hunks.
 
         Returns:
             Set of line numbers that were deleted (from old file)
         """
-        all_lines: Set[int] = set()
+        all_lines: set[int] = set()
         for hunk in self.hunks:
             all_lines.update(hunk.deleted_lines)
         return all_lines
 
-    def get_changed_line_ranges(self) -> List[tuple[int, int]]:
+    def get_changed_line_ranges(self) -> list[tuple[int, int]]:
         """
         Get all ranges of changed lines.
 
@@ -108,7 +108,7 @@ class FileDiff:
         """
         return [hunk.get_changed_line_range() for hunk in self.hunks]
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Serialize to JSON."""
         return {
             "filePath": self.file_path,
@@ -117,8 +117,8 @@ class FileDiff:
             "isDeleted": self.is_deleted,
             "isRenamed": self.is_renamed,
             "hunks": [hunk.to_json() for hunk in self.hunks],
-            "addedLines": sorted(list(self.get_all_added_lines())),
-            "deletedLines": sorted(list(self.get_all_deleted_lines())),
+            "addedLines": sorted(self.get_all_added_lines()),
+            "deletedLines": sorted(self.get_all_deleted_lines()),
         }
 
 
@@ -155,7 +155,7 @@ class GitDiffParser:
     RENAME_FROM = re.compile(r"^rename from (.*)$")
     RENAME_TO = re.compile(r"^rename to (.*)$")
 
-    def parse(self, diff_output: str) -> List[FileDiff]:
+    def parse(self, diff_output: str) -> list[FileDiff]:
         """
         Parse git diff output.
 
@@ -175,7 +175,7 @@ class GitDiffParser:
             return []
 
         lines = diff_output.split("\n")
-        file_diffs: List[FileDiff] = []
+        file_diffs: list[FileDiff] = []
         current_file: FileDiff | None = None
         current_hunk: DiffHunk | None = None
         current_old_line = 0

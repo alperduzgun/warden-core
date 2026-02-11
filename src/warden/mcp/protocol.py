@@ -6,9 +6,10 @@ Based on the MCP specification for AI assistant tool/resource integration.
 """
 
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable, Awaitable
 from enum import IntEnum
+from typing import Any, Dict, List, Optional
 
 
 class MCPErrorCode(IntEnum):
@@ -31,9 +32,9 @@ class MCPError:
     """MCP error response."""
     code: int
     message: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {"code": self.code, "message": self.message}
         if self.data is not None:
             result["data"] = self.data
@@ -45,11 +46,11 @@ class MCPRequest:
     """MCP JSON-RPC request."""
     jsonrpc: str
     method: str
-    id: Optional[int | str] = None
-    params: Optional[Dict[str, Any]] = None
+    id: int | str | None = None
+    params: dict[str, Any] | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MCPRequest":
+    def from_dict(cls, data: dict[str, Any]) -> "MCPRequest":
         return cls(
             jsonrpc=data.get("jsonrpc", "2.0"),
             method=data["method"],
@@ -66,11 +67,11 @@ class MCPRequest:
 class MCPResponse:
     """MCP JSON-RPC response."""
     jsonrpc: str = "2.0"
-    id: Optional[int | str] = None
-    result: Optional[Any] = None
-    error: Optional[MCPError] = None
+    id: int | str | None = None
+    result: Any | None = None
+    error: MCPError | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         response = {"jsonrpc": self.jsonrpc}
         if self.id is not None:
             response["id"] = self.id
@@ -92,7 +93,7 @@ class MCPServerCapabilities:
     prompts: bool = False
     logging: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         caps = {}
         if self.resources:
             caps["resources"] = {}
@@ -111,7 +112,7 @@ class MCPServerInfo:
     name: str = "warden-mcp"
     version: str = "1.0.0"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "version": self.version}
 
 
@@ -120,10 +121,10 @@ class MCPResource:
     """MCP resource definition."""
     uri: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     mime_type: str = "application/json"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {
             "uri": self.uri,
             "name": self.name,
@@ -139,10 +140,10 @@ class MCPResourceContent:
     """MCP resource content."""
     uri: str
     mime_type: str
-    text: Optional[str] = None
-    blob: Optional[str] = None  # base64 encoded
+    text: str | None = None
+    blob: str | None = None  # base64 encoded
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {"uri": self.uri, "mimeType": self.mime_type}
         if self.text is not None:
             result["text"] = self.text
@@ -156,9 +157,9 @@ class MCPTool:
     """MCP tool definition."""
     name: str
     description: str
-    input_schema: Dict[str, Any] = field(default_factory=dict)
+    input_schema: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "description": self.description,
@@ -169,10 +170,10 @@ class MCPTool:
 @dataclass
 class MCPToolResult:
     """MCP tool execution result."""
-    content: List[Dict[str, Any]]
+    content: list[dict[str, Any]]
     is_error: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "content": self.content,
             "isError": self.is_error,
@@ -180,7 +181,7 @@ class MCPToolResult:
 
 
 # Type alias for method handlers
-MethodHandler = Callable[[Optional[Dict[str, Any]]], Awaitable[Any]]
+MethodHandler = Callable[[dict[str, Any] | None], Awaitable[Any]]
 
 
 class MCPProtocol:
@@ -192,7 +193,7 @@ class MCPProtocol:
     """
 
     def __init__(self):
-        self._handlers: Dict[str, MethodHandler] = {}
+        self._handlers: dict[str, MethodHandler] = {}
         self.server_info = MCPServerInfo()
         self.capabilities = MCPServerCapabilities()
 
@@ -200,7 +201,7 @@ class MCPProtocol:
         """Register a handler for an MCP method."""
         self._handlers[method] = handler
 
-    async def handle_message(self, raw_message: str) -> Optional[str]:
+    async def handle_message(self, raw_message: str) -> str | None:
         """
         Handle incoming MCP message.
 
@@ -264,10 +265,10 @@ class MCPProtocol:
 
     def create_error_response(
         self,
-        request_id: Optional[int | str],
+        request_id: int | str | None,
         code: MCPErrorCode,
         message: str,
-        data: Optional[Any] = None,
+        data: Any | None = None,
     ) -> MCPResponse:
         """Create an error response."""
         return MCPResponse(

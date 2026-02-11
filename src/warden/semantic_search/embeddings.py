@@ -30,22 +30,22 @@ class EmbeddingGenerator:
 
     Supports multiple embedding models and providers.
     """
-    
+
     provider: str
     model_name: str
     dimensions: int
     device: str
     client: Any
-    azure_deployment: Optional[str] = None
+    azure_deployment: str | None = None
 
     def __init__(
         self,
         provider: str = "openai",
         model_name: str = "text-embedding-3-small",
-        api_key: Optional[str] = None,
-        azure_endpoint: Optional[str] = None,
-        azure_deployment: Optional[str] = None,
-        dimensions: Optional[int] = None,
+        api_key: str | None = None,
+        azure_endpoint: str | None = None,
+        azure_deployment: str | None = None,
+        dimensions: int | None = None,
         trust_remote_code: bool = True,
         device: str = "cpu",
     ):
@@ -91,16 +91,16 @@ class EmbeddingGenerator:
                 raise ValueError(
                     "sentence-transformers not installed. Please install it with 'pip install sentence-transformers'"
                 )
-            
+
             # Initialize local model
             # For Jina embeddings v2, trust_remote_code=True is required
             # Force CPU by default to avoid UI freezes on Mac (MPS issues)
-            
+
             # Offline-First Strategy: Try loading from local cache to avoid network latency/timeouts
             try:
                 logger.debug("attempting_local_cache_load", model=model_name)
                 self.client = SentenceTransformer(
-                    model_name, 
+                    model_name,
                     trust_remote_code=trust_remote_code,
                     device=device,
                     local_files_only=True
@@ -110,7 +110,7 @@ class EmbeddingGenerator:
                 # Fallback to online loading if not found locally or other error
                 logger.info("model_not_in_cache_downloading", model=model_name, reason=str(e))
                 self.client = SentenceTransformer(
-                    model_name, 
+                    model_name,
                     trust_remote_code=trust_remote_code,
                     device=device
                     # local_files_only=False (default)
@@ -147,8 +147,8 @@ class EmbeddingGenerator:
         before_sleep=tenacity.before_sleep_log(logger, "info"),
     )
     async def generate_embedding(
-        self, text: str, metadata: Optional[dict] = None
-    ) -> tuple[List[float], EmbeddingMetadata]:
+        self, text: str, metadata: dict | None = None
+    ) -> tuple[list[float], EmbeddingMetadata]:
         """
         Generate embedding vector for text.
 
@@ -172,7 +172,7 @@ class EmbeddingGenerator:
                 kwargs["model"] = self.azure_deployment
                 if self.dimensions and self.dimensions != 1536:
                      kwargs["dimensions"] = self.dimensions
-                
+
                 response = await self.client.embeddings.create(**kwargs)
                 embedding_vector = response.data[0].embedding
                 token_count = response.usage.total_tokens
@@ -190,7 +190,7 @@ class EmbeddingGenerator:
                 import asyncio
                 loop = asyncio.get_running_loop()
                 embedding_vector = await loop.run_in_executor(
-                    None, 
+                    None,
                     lambda: self.client.encode(text, device=self.device).tolist()
                 )
                 token_count = len(text.split()) # Rough estimate
@@ -227,7 +227,7 @@ class EmbeddingGenerator:
 
     async def generate_chunk_embedding(
         self, chunk: CodeChunk
-    ) -> tuple[List[float], EmbeddingMetadata]:
+    ) -> tuple[list[float], EmbeddingMetadata]:
         """
         Generate embedding for a code chunk.
 
@@ -277,8 +277,8 @@ class EmbeddingGenerator:
         return "\n".join(context_parts)
 
     async def generate_batch_embeddings(
-        self, chunks: List[CodeChunk], batch_size: int = 100, max_concurrency: int = 4
-    ) -> List[tuple[CodeChunk, List[float], EmbeddingMetadata]]:
+        self, chunks: list[CodeChunk], batch_size: int = 100, max_concurrency: int = 4
+    ) -> list[tuple[CodeChunk, list[float], EmbeddingMetadata]]:
         """
         Generate embeddings for multiple chunks in parallel batches.
 
@@ -323,7 +323,7 @@ class EmbeddingGenerator:
             batch_results = await asyncio.gather(
                 *[_embed_with_semaphore(chunk) for chunk in batch]
             )
-            
+
             # Filter failed ones
             results.extend([r for r in batch_results if r is not None])
 
@@ -367,11 +367,11 @@ class EmbeddingCache:
         Args:
             max_size: Maximum number of cached embeddings
         """
-        self.cache: dict[str, tuple[List[float], EmbeddingMetadata]] = {}
+        self.cache: dict[str, tuple[list[float], EmbeddingMetadata]] = {}
         self.max_size = max_size
         logger.info("embedding_cache_initialized", max_size=max_size)
 
-    def get(self, chunk_id: str) -> Optional[tuple[List[float], EmbeddingMetadata]]:
+    def get(self, chunk_id: str) -> tuple[list[float], EmbeddingMetadata] | None:
         """
         Get cached embedding.
 
@@ -386,7 +386,7 @@ class EmbeddingCache:
             logger.debug("embedding_cache_hit", chunk_id=chunk_id)
         return result
 
-    def set(self, chunk_id: str, embedding: List[float], metadata: EmbeddingMetadata) -> None:
+    def set(self, chunk_id: str, embedding: list[float], metadata: EmbeddingMetadata) -> None:
         """
         Cache embedding.
 

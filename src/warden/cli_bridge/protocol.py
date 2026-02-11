@@ -4,10 +4,10 @@ JSON-RPC 2.0 Protocol Implementation for IPC
 Provides type-safe protocol layer for communication between Python backend and Ink CLI.
 """
 
-from enum import IntEnum
-from typing import Any, Optional, Dict, Union
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
+from enum import IntEnum
+from typing import Any, Dict, Optional, Union
 
 
 class ErrorCode(IntEnum):
@@ -32,14 +32,14 @@ class ErrorCode(IntEnum):
 class IPCError(Exception):
     """JSON-RPC 2.0 Error object (also an Exception for raising)"""
 
-    def __init__(self, code: int, message: str, data: Optional[Dict[str, Any]] = None):
+    def __init__(self, code: int, message: str, data: dict[str, Any] | None = None):
         """Initialize error with code, message, and optional data"""
         self.code = code
         self.message = message
         self.data = data
         super().__init__(message)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         result = {"code": self.code, "message": self.message}
         if self.data is not None:
@@ -62,10 +62,10 @@ class IPCRequest:
 
     jsonrpc: str = "2.0"
     method: str = ""
-    params: Optional[Union[Dict[str, Any], list]] = None
-    id: Optional[Union[str, int]] = None
+    params: dict[str, Any] | list | None = None
+    id: str | int | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         result = {"jsonrpc": self.jsonrpc, "method": self.method}
         if self.params is not None:
@@ -92,7 +92,7 @@ class IPCRequest:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON: {e}")
 
-    def validate(self) -> Optional[IPCError]:
+    def validate(self) -> IPCError | None:
         """
         Validate request according to JSON-RPC 2.0 spec
 
@@ -123,11 +123,11 @@ class IPCResponse:
     """JSON-RPC 2.0 Response object"""
 
     jsonrpc: str = "2.0"
-    result: Optional[Any] = None
-    error: Optional[IPCError] = None
-    id: Optional[Union[str, int]] = None
+    result: Any | None = None
+    error: IPCError | None = None
+    id: str | int | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         obj = {"jsonrpc": self.jsonrpc}
 
@@ -169,13 +169,13 @@ class IPCResponse:
             raise ValueError(f"Invalid JSON: {e}")
 
     @staticmethod
-    def create_success(result: Any, request_id: Optional[Union[str, int]] = None) -> "IPCResponse":
+    def create_success(result: Any, request_id: str | int | None = None) -> "IPCResponse":
         """Create success response"""
         return IPCResponse(jsonrpc="2.0", result=result, id=request_id)
 
     @staticmethod
     def create_error(
-        error_obj: IPCError, request_id: Optional[Union[str, int]] = None
+        error_obj: IPCError, request_id: str | int | None = None
     ) -> "IPCResponse":
         """Create error response"""
         return IPCResponse(jsonrpc="2.0", error=error_obj, id=request_id)
@@ -187,7 +187,7 @@ class StreamChunk:
 
     event: str
     data: Any
-    id: Optional[str] = None
+    id: str | None = None
 
     def to_sse(self) -> str:
         """Convert to Server-Sent Events format"""
@@ -204,7 +204,7 @@ class StreamChunk:
         return json.dumps({"event": self.event, "data": self.data, "id": self.id})
 
 
-def parse_message(data: str) -> Union[IPCRequest, IPCResponse]:
+def parse_message(data: str) -> IPCRequest | IPCResponse:
     """
     Parse JSON-RPC message (auto-detect request or response)
 

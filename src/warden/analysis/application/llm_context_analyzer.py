@@ -6,17 +6,18 @@ Falls back to rule-based detection when LLM is unavailable.
 """
 
 import json
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 import structlog
 
-from warden.llm.factory import create_client
-from warden.llm.config import LlmConfiguration
-from warden.llm.types import LlmRequest, LlmResponse
-from warden.llm.rate_limiter import RateLimiter
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import Framework, ProjectType
+from warden.llm.config import LlmConfiguration
+from warden.llm.factory import create_client
+from warden.llm.rate_limiter import RateLimiter
+from warden.llm.types import LlmRequest, LlmResponse
 
 logger = structlog.get_logger()
 
@@ -28,7 +29,7 @@ class LlmContextDecision:
     context: str  # FileContext or ProjectType value
     confidence: float  # 0.0 to 1.0
     reasoning: str  # Why this context was chosen
-    secondary_contexts: List[str] = None  # Other possible contexts
+    secondary_contexts: list[str] = None  # Other possible contexts
 
 
 class LlmContextAnalyzer:
@@ -43,12 +44,12 @@ class LlmContextAnalyzer:
 
     def __init__(
         self,
-        llm_config: Optional[LlmConfiguration] = None,
+        llm_config: LlmConfiguration | None = None,
         confidence_threshold: float = 0.7,
         batch_size: int = 10,
         cache_enabled: bool = True,
-        rate_limiter: Optional[RateLimiter] = None,
-        llm_service: Optional[Any] = None,
+        rate_limiter: RateLimiter | None = None,
+        llm_service: Any | None = None,
     ):
         """
         Initialize LLM context analyzer.
@@ -76,7 +77,7 @@ class LlmContextAnalyzer:
         self.confidence_threshold = confidence_threshold
         self.batch_size = batch_size
         self.cache_enabled = cache_enabled
-        self.cache: Dict[str, LlmContextDecision] = {}
+        self.cache: dict[str, LlmContextDecision] = {}
         self.rate_limiter = rate_limiter
 
         # Initialize tokenizer for token estimation
@@ -101,8 +102,8 @@ class LlmContextAnalyzer:
         file_path: Path,
         initial_context: FileContext,
         initial_confidence: float,
-        file_content: Optional[str] = None,
-    ) -> Tuple[FileContext, float, str]:
+        file_content: str | None = None,
+    ) -> tuple[FileContext, float, str]:
         """
         Analyze file context with LLM enhancement.
 
@@ -144,7 +145,7 @@ class LlmContextAnalyzer:
         try:
             # Read file content if not provided
             if file_content is None:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                with open(file_path, encoding='utf-8', errors='ignore') as f:
                     file_content = f.read()[:5000]  # Limit for LLM
 
             # Call LLM for analysis
@@ -183,12 +184,12 @@ class LlmContextAnalyzer:
     async def analyze_project_structure_async(
         self,
         project_root: Path,
-        file_list: List[Path],
-        config_files: Dict[str, str],
+        file_list: list[Path],
+        config_files: dict[str, str],
         initial_project_type: ProjectType,
         initial_framework: Framework,
         initial_confidence: float,
-    ) -> Tuple[ProjectType, Framework, float]:
+    ) -> tuple[ProjectType, Framework, float]:
         """
         Analyze project structure with LLM enhancement.
 
@@ -254,8 +255,8 @@ class LlmContextAnalyzer:
 
     async def analyze_batch_async(
         self,
-        files: List[Tuple[Path, FileContext, float]],
-    ) -> List[Tuple[FileContext, float, str]]:
+        files: list[tuple[Path, FileContext, float]],
+    ) -> list[tuple[FileContext, float, str]]:
         """
         Analyze multiple files in a single LLM call for efficiency.
 
@@ -288,10 +289,10 @@ class LlmContextAnalyzer:
             # Internal sub-batching to avoid TPM limit deadlocks
             SUB_BATCH_SIZE = 20
             decisions = []
-            
+
             for i in range(0, len(needs_llm), SUB_BATCH_SIZE):
                 sub_batch = needs_llm[i : i + SUB_BATCH_SIZE]
-                
+
                 # Create batch prompt for sub-batch
                 batch_prompt = self._create_batch_prompt(sub_batch)
 
@@ -305,7 +306,7 @@ class LlmContextAnalyzer:
             # Merge results
             results = []
             llm_index = 0
-            for path, ctx, conf in files:
+            for _path, ctx, conf in files:
                 if conf >= self.confidence_threshold:
                     results.append((ctx, conf, "rule-based"))
                 else:
@@ -440,7 +441,7 @@ Return JSON:
                     estimated_tokens += len(self.tokenizer.encode(prompt))
                 except (ValueError, KeyError, TypeError):  # Graceful fallback for context extraction
                     pass
-            
+
             # Acquire rate limit before sending
             await self.rate_limiter.acquire_async(estimated_tokens)
 
@@ -464,7 +465,7 @@ Return JSON:
                     estimated_tokens += len(self.tokenizer.encode(batch_prompt))
                 except (ValueError, KeyError, TypeError):  # Graceful fallback for context extraction
                     pass
-            
+
             # Acquire rate limit before sending
             await self.rate_limiter.acquire_async(estimated_tokens)
 
@@ -527,18 +528,18 @@ Return JSON:
         # Find first container start
         start_obj = text.find("{")
         start_arr = text.find("[")
-        
+
         if start_obj == -1 and start_arr == -1:
             return ""
-            
+
         start = start_obj if (start_obj != -1 and (start_arr == -1 or start_obj < start_arr)) else start_arr
-        
+
         # Find last container end
         end_obj = text.rfind("}")
         end_arr = text.rfind("]")
-        
+
         end = max(end_obj, end_arr) + 1
-        
+
         if start != -1 and end > start:
             return text[start:end]
 
@@ -547,8 +548,8 @@ Return JSON:
     def _create_project_summary(
         self,
         project_root: Path,
-        file_list: List[Path],
-        config_files: Dict[str, str],
+        file_list: list[Path],
+        config_files: dict[str, str],
     ) -> str:
         """Create project summary for LLM analysis."""
         # Directory structure
@@ -580,7 +581,7 @@ Total files: {len(file_list)}
 
     def _create_batch_prompt(
         self,
-        files: List[Tuple[Path, FileContext, float]]
+        files: list[tuple[Path, FileContext, float]]
     ) -> str:
         """Create batch analysis prompt."""
         prompt = "Analyze these files and determine their contexts:\n\n"
@@ -605,7 +606,7 @@ Total files: {len(file_list)}
         self,
         response: LlmResponse,
         expected_count: int,
-    ) -> List[LlmContextDecision]:
+    ) -> list[LlmContextDecision]:
         """Parse batch LLM response."""
         try:
             if not response.content or not response.content.strip():

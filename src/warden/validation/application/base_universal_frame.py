@@ -5,30 +5,32 @@ Provides a foundation for frames that operate on the Universal AST (ASTNode)
 rather than language-specific representations.
 """
 
+from typing import Any, Dict, List, Optional
+
 import structlog
-from typing import List, Dict, Any, Optional
-from warden.validation.domain.frame import ValidationFrame, CodeFile
+
 from warden.ast.application.provider_registry import ASTProviderRegistry
-from warden.ast.domain.models import ASTNode, ParseResult
 from warden.ast.domain.enums import CodeLanguage, ParseStatus
+from warden.ast.domain.models import ASTNode, ParseResult
+from warden.validation.domain.frame import CodeFile, ValidationFrame
 
 logger = structlog.get_logger(__name__)
 
 class BaseUniversalFrame(ValidationFrame):
     """
     Base class for cross-language validation frames.
-    
+
     Automates Universal AST retrieval and provides helpers for pattern matching.
     """
-    
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__(config)
         self.registry = ASTProviderRegistry()
         # Note: In a real app, the registry would be injected or pre-populated
         # For now, we rely on the FrameExecutor to have registered providers
         # or we manually ensure they are loaded.
 
-    async def get_universal_ast_async(self, code_file: CodeFile) -> Optional[ASTNode]:
+    async def get_universal_ast_async(self, code_file: CodeFile) -> ASTNode | None:
         """
         Retrieve the universal AST for a code file.
         """
@@ -51,40 +53,39 @@ class BaseUniversalFrame(ValidationFrame):
 
         if parse_result.status in [ParseStatus.SUCCESS, ParseStatus.PARTIAL]:
             return parse_result.ast_root
-            
-        logger.warning("universal_ast_parse_failed", 
-                       file=code_file.path, 
+
+        logger.warning("universal_ast_parse_failed",
+                       file=code_file.path,
                        status=parse_result.status.value)
         return None
 
-    def find_nodes_by_type(self, root: ASTNode, target_type: Any) -> List[ASTNode]:
+    def find_nodes_by_type(self, root: ASTNode, target_type: Any) -> list[ASTNode]:
         """
         Helper to find all nodes of a specific type in the AST.
         """
         found = []
-        
+
         def walk(node: ASTNode):
             if node.node_type == target_type:
                 found.append(node)
             for child in node.children:
                 walk(child)
-                
+
         walk(root)
         return found
 
-    def extract_literals(self, root: ASTNode) -> List[str]:
+    def extract_literals(self, root: ASTNode) -> list[str]:
         """
         Helper to extract all string/number literals.
         """
         from warden.ast.domain.enums import ASTNodeType
         literals = []
-        
+
         def walk(node: ASTNode):
-            if node.node_type == ASTNodeType.LITERAL:
-                if node.value and isinstance(node.value, str):
-                    literals.append(node.value)
+            if node.node_type == ASTNodeType.LITERAL and node.value and isinstance(node.value, str):
+                literals.append(node.value)
             for child in node.children:
                 walk(child)
-                
+
         walk(root)
         return literals

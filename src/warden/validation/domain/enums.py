@@ -4,7 +4,7 @@ Validation domain enums.
 Matches C# Warden.Core enum definitions for compatibility.
 """
 
-from enum import IntEnum, Enum
+from enum import Enum, IntEnum
 
 
 class FramePriority(IntEnum):

@@ -10,17 +10,18 @@ Analyzes code testability and test coverage potential:
 """
 
 import ast
-import structlog
-from typing import List, Optional, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import structlog
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
+    CleaningIssue,
+    CleaningIssueSeverity,
+    CleaningIssueType,
     CleaningResult,
     CleaningSuggestion,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -52,8 +53,8 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze code testability.
@@ -158,13 +159,9 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         path_parts = [p.lower() for p in path.parts]
         test_dirs = ['test', 'tests', 'spec', 'specs', '__tests__']
 
-        for test_dir in test_dirs:
-            if test_dir in path_parts:
-                return True
+        return any(test_dir in path_parts for test_dir in test_dirs)
 
-        return False
-
-    def _analyze_testability(self, code: str, ast_tree: Optional[Any] = None) -> Dict[str, Any]:
+    def _analyze_testability(self, code: str, ast_tree: Any | None = None) -> dict[str, Any]:
         """
         Analyze code testability factors.
 
@@ -233,7 +230,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
             "metrics": metrics,
         }
 
-    def _analyze_function_testability(self, node: ast.FunctionDef, tree: ast.AST) -> List[CleaningIssue]:
+    def _analyze_function_testability(self, node: ast.FunctionDef, tree: ast.AST) -> list[CleaningIssue]:
         """Analyze testability issues in a function."""
         issues = []
 
@@ -286,7 +283,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _analyze_class_testability(self, node: ast.ClassDef) -> List[CleaningIssue]:
+    def _analyze_class_testability(self, node: ast.ClassDef) -> list[CleaningIssue]:
         """Analyze testability issues in a class."""
         issues = []
 
@@ -321,7 +318,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _analyze_test_quality(self, code: str, ast_tree: Optional[Any] = None) -> Dict[str, Any]:
+    def _analyze_test_quality(self, code: str, ast_tree: Any | None = None) -> dict[str, Any]:
         """
         Analyze test file quality.
 
@@ -420,7 +417,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         return False
 
-    def _detect_hard_dependencies(self, node: ast.FunctionDef) -> List[str]:
+    def _detect_hard_dependencies(self, node: ast.FunctionDef) -> list[str]:
         """Detect hard-coded dependencies in function."""
         hard_deps = []
 
@@ -434,11 +431,10 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
                         hard_deps.append(class_name)
 
                 # Import and instantiate pattern
-                if isinstance(child.func, ast.Attribute):
-                    if hasattr(child.func.value, 'id'):
-                        module = child.func.value.id
-                        if module in ['requests', 'urllib', 'socket', 'subprocess']:
-                            hard_deps.append(f"{module}.{child.func.attr}")
+                if isinstance(child.func, ast.Attribute) and hasattr(child.func.value, 'id'):
+                    module = child.func.value.id
+                    if module in ['requests', 'urllib', 'socket', 'subprocess']:
+                        hard_deps.append(f"{module}.{child.func.attr}")
 
         return hard_deps
 
@@ -458,12 +454,9 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
     def _uses_global_variables(self, node: ast.FunctionDef) -> bool:
         """Check if function uses global variables."""
-        for child in ast.walk(node):
-            if isinstance(child, (ast.Global, ast.Nonlocal)):
-                return True
-        return False
+        return any(isinstance(child, (ast.Global, ast.Nonlocal)) for child in ast.walk(node))
 
-    def _detect_global_state_usage(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _detect_global_state_usage(self, tree: ast.AST) -> list[CleaningIssue]:
         """Detect global state usage in module."""
         issues = []
         global_vars = set()
@@ -506,13 +499,12 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
                     if isinstance(target, ast.Name) and '_instance' in target.id.lower():
                         has_instance = True
 
-            if isinstance(child, ast.FunctionDef):
-                if child.name == '__new__':
-                    has_new = True
+            if isinstance(child, ast.FunctionDef) and child.name == '__new__':
+                has_new = True
 
         return has_instance or has_new
 
-    def _check_static_methods(self, node: ast.ClassDef) -> List[CleaningIssue]:
+    def _check_static_methods(self, node: ast.ClassDef) -> list[CleaningIssue]:
         """Check static methods for testability issues."""
         issues = []
 
@@ -536,7 +528,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _get_init_method(self, node: ast.ClassDef) -> Optional[ast.FunctionDef]:
+    def _get_init_method(self, node: ast.ClassDef) -> ast.FunctionDef | None:
         """Get __init__ method from class."""
         for child in node.body:
             if isinstance(child, ast.FunctionDef) and child.name == '__init__':

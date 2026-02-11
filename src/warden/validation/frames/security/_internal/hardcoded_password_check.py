@@ -8,13 +8,13 @@ Detects hardcoded passwords in code:
 """
 
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from warden.validation.domain.check import (
-    ValidationCheck,
-    CheckResult,
     CheckFinding,
+    CheckResult,
     CheckSeverity,
+    ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -67,7 +67,7 @@ class HardcodedPasswordCheck(ValidationCheck):
         "admin123",
     ]
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize hardcoded password check."""
         super().__init__(config)
 
@@ -99,7 +99,7 @@ class HardcodedPasswordCheck(ValidationCheck):
             for weak_password in self.COMMON_PASSWORDS
         ]
 
-    def _build_patterns(self) -> List[tuple[str, str]]:
+    def _build_patterns(self) -> list[tuple[str, str]]:
         """Build regex patterns for password detection."""
         patterns = []
 
@@ -124,7 +124,7 @@ class HardcodedPasswordCheck(ValidationCheck):
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute hardcoded password detection."""
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         for line_num, line in enumerate(code_file.content.split("\n"), start=1):
             # Skip if using environment variables (safe)
@@ -205,14 +205,11 @@ class HardcodedPasswordCheck(ValidationCheck):
             return False
 
         # Exclude template variables
-        if "{{" in value or "}}" in value or "${" in value:
-            return False
+        return not ("{{" in value or "}}" in value or "${" in value)
 
-        return True
-
-    def _check_weak_passwords(self, code_file: CodeFile) -> List[CheckFinding]:
+    def _check_weak_passwords(self, code_file: CodeFile) -> list[CheckFinding]:
         """Check for common weak passwords."""
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         for line_num, line in enumerate(code_file.content.split("\n"), start=1):
             for compiled_pattern, weak_password in self._compiled_weak_patterns:

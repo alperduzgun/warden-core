@@ -8,11 +8,11 @@ This enables pluggable, language-specific parsers.
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from warden.ast.domain.enums import CodeLanguage
 from warden.ast.domain.models import (
     ASTProviderMetadata,
     ParseResult,
 )
-from warden.ast.domain.enums import CodeLanguage
 
 
 class IASTProvider(ABC):
@@ -45,7 +45,7 @@ class IASTProvider(ABC):
         self,
         source_code: str,
         language: CodeLanguage,
-        file_path: Optional[str] = None,
+        file_path: str | None = None,
     ) -> ParseResult:
         """
         Parse source code into universal AST.
@@ -65,14 +65,14 @@ class IASTProvider(ABC):
         pass
 
     @abstractmethod
-    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> List[str]:
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> list[str]:
         """
         Extract raw dependency strings (imports, requires, includes).
-        
+
         Args:
             source_code: Source code to analyze
             language: Programming language of the code
-            
+
         Returns:
             List of raw import/dependency strings
         """

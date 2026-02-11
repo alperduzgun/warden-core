@@ -7,9 +7,17 @@ Priority: TREE_SITTER (fallback for languages without native provider).
 
 import time
 from datetime import datetime
-from typing import Any, Optional, List, Tuple
+from typing import Any, List, Optional, Tuple
+
+import structlog
 
 from warden.ast.application.provider_interface import IASTProvider
+from warden.ast.domain.enums import (
+    ASTNodeType,
+    ASTProviderPriority,
+    CodeLanguage,
+    ParseStatus,
+)
 from warden.ast.domain.models import (
     ASTNode,
     ASTProviderMetadata,
@@ -17,14 +25,7 @@ from warden.ast.domain.models import (
     ParseResult,
     SourceLocation,
 )
-from warden.ast.domain.enums import (
-    ASTNodeType,
-    ASTProviderPriority,
-    CodeLanguage,
-    ParseStatus,
-)
 
-import structlog
 logger = structlog.get_logger(__name__)
 
 # Try to import tree-sitter (optional dependency)
@@ -68,7 +69,7 @@ class TreeSitterProvider(IASTProvider):
     def __init__(self) -> None:
         """Initialize Tree-sitter provider."""
         from warden.shared.languages.registry import LanguageRegistry
-        
+
         self._metadata = ASTProviderMetadata(
             name="tree-sitter",
             priority=ASTProviderPriority.TREE_SITTER,
@@ -87,7 +88,7 @@ class TreeSitterProvider(IASTProvider):
         self._available = TREE_SITTER_AVAILABLE
         self._language_objs = {} # Language -> tree_sitter.Language
         self._missing_modules = {} # Language -> module_name
-        
+
         if self._available:
             self._initialize_languages()
 
@@ -98,12 +99,12 @@ class TreeSitterProvider(IASTProvider):
 
         from warden.shared.languages.registry import LanguageRegistry
         logger.debug("initializing_tree_sitter_languages_from_registry")
-        
+
         for lang in self._metadata.supported_languages:
             defn = LanguageRegistry.get_definition(lang)
             if not defn or not defn.tree_sitter_id:
                 continue
-                
+
             ts_id = defn.tree_sitter_id
             # Normalize ID for import (e.g. c_sharp -> c_sharp)
             import_name = f"tree_sitter_{ts_id.replace('-', '_')}"
@@ -133,10 +134,10 @@ class TreeSitterProvider(IASTProvider):
             except Exception as e:
                 logger.warning("failed_to_load_grammar", language=lang.name, error=str(e))
 
-        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs.keys()], missing=len(self._missing_modules))
+        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs], missing=len(self._missing_modules))
 
     @property
-    def missing_grammars(self) -> List[str]:
+    def missing_grammars(self) -> list[str]:
         """Get list of missing grammar package names."""
         # Convert tree_sitter_swift -> tree-sitter-swift (pip package name)
         return [mod.replace("_", "-") for mod in self._missing_modules.values()]
@@ -242,7 +243,7 @@ class TreeSitterProvider(IASTProvider):
         """Get provider metadata."""
         return self._metadata
 
-    def _get_ts_language(self, language: CodeLanguage) -> Optional[Any]:
+    def _get_ts_language(self, language: CodeLanguage) -> Any | None:
         """Get tree-sitter language object if available."""
         return self._language_objs.get(language)
 
@@ -250,7 +251,7 @@ class TreeSitterProvider(IASTProvider):
         self,
         source_code: str,
         language: CodeLanguage,
-        file_path: Optional[str] = None,
+        file_path: str | None = None,
     ) -> ParseResult:
         """
         Parse source code using tree-sitter.
@@ -325,13 +326,13 @@ class TreeSitterProvider(IASTProvider):
                     )
 
             parser = tree_sitter.Parser(language_obj)
-            
+
             # Parse the code
             tree = parser.parse(bytes(source_code, "utf8"))
-            
+
             # Convert to universal AST
             ast_root = self._convert_node(tree.root_node, source_code, language, file_path)
-            
+
             parse_time_ms = (time.time() - start_time) * 1000
 
             return ParseResult(
@@ -382,20 +383,20 @@ class TreeSitterProvider(IASTProvider):
         # Parse will fail gracefully with informative error
         return True
 
-    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> List[str]:
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> list[str]:
         """
         Extract dependencies using tree-sitter queries.
-        
+
         Args:
             source_code: Source code to analyze
             language: Programming language of the code
-            
+
         Returns:
             List of unique dependency strings
         """
         if not self._available:
             return []
-            
+
         # Check if grammar is loaded before attempting query
         ts_language = self._get_ts_language(language)
         if not ts_language:
@@ -405,7 +406,7 @@ class TreeSitterProvider(IASTProvider):
         query_str = self._get_dependency_query_str(language)
         if not query_str:
             return []
-            
+
         try:
             parser = tree_sitter.Parser(ts_language)
             source_bytes = bytes(source_code, "utf8")
@@ -422,7 +423,7 @@ class TreeSitterProvider(IASTProvider):
                         if dep_str:
                             dependencies.add(dep_str)
 
-            return sorted(list(dependencies))
+            return sorted(dependencies)
         except Exception as e:
             logger.debug(
                 "tree_sitter_dependency_extraction_failed",
@@ -442,10 +443,10 @@ class TreeSitterProvider(IASTProvider):
         }
         return queries.get(language, "")
 
-    def _convert_node(self, ts_node: "tree_sitter.Node", source: str, language: CodeLanguage, file_path: Optional[str] = None) -> ASTNode:
+    def _convert_node(self, ts_node: "tree_sitter.Node", source: str, language: CodeLanguage, file_path: str | None = None) -> ASTNode:
         """Recursively convert a tree-sitter node to Warden ASTNode."""
         node_type, is_generic = self._map_node_type(ts_node, language)
-        
+
         # Get location
         start_point = ts_node.start_point
         end_point = ts_node.end_point
@@ -456,24 +457,24 @@ class TreeSitterProvider(IASTProvider):
             end_line=end_point[0] + 1,
             end_column=end_point[1]
         )
-        
+
         # Extract name if applicable
         name = None
         # Common patterns for names in TS/JS/Go
-        name_node = (ts_node.child_by_field_name("name") or 
+        name_node = (ts_node.child_by_field_name("name") or
                      ts_node.child_by_field_name("identifier") or
                      ts_node.child_by_field_name("field_identifier"))
-        
+
         if name_node:
              name = source[name_node.start_byte:name_node.end_byte]
-        
+
         # If it's a type node but no name found via field, try some common patterns
         if node_type in [ASTNodeType.CLASS, ASTNodeType.FUNCTION, ASTNodeType.INTERFACE, ASTNodeType.METHOD] and not name:
             for child in ts_node.children:
                 if child.type in ["identifier", "type_identifier", "field_identifier"]:
                     name = source[child.start_byte:child.end_byte]
                     break
-        
+
         # CRITICAL FIX: Identifiers must have their content as name
         if node_type == ASTNodeType.IDENTIFIER and not name:
             name = source[ts_node.start_byte:ts_node.end_byte]
@@ -485,7 +486,7 @@ class TreeSitterProvider(IASTProvider):
             location=location,
             children=[]
         )
-        
+
         # Add original type as attribute (Robustly)
         # Convert to string to avoid issues with tree-sitter bindings
         try:
@@ -495,10 +496,10 @@ class TreeSitterProvider(IASTProvider):
             ast_node.attributes["original_type"] = str(raw_type)
         except Exception:
             ast_node.attributes["original_type"] = "unknown"
-        
+
         # Recursively convert children (skip anonymous nodes unless they are literals)
         for child in ts_node.children:
-            if child.is_named: 
+            if child.is_named:
                 # Always include named nodes
                 child_ast = self._convert_node(child, source, language, file_path)
                 ast_node.children.append(child_ast)
@@ -506,13 +507,13 @@ class TreeSitterProvider(IASTProvider):
                 # Include specific anonymous literals
                 child_ast = self._convert_node(child, source, language, file_path)
                 ast_node.children.append(child_ast)
-                
+
         return ast_node
 
-    def _map_node_type(self, ts_node: "tree_sitter.Node", language: CodeLanguage) -> Tuple[ASTNodeType, bool]:
+    def _map_node_type(self, ts_node: "tree_sitter.Node", language: CodeLanguage) -> tuple[ASTNodeType, bool]:
         """Map tree-sitter node type to Warden ASTNodeType."""
         t = ts_node.type
-        
+
         # Common mappings
         mappings = {
             "program": ASTNodeType.MODULE,
@@ -581,14 +582,14 @@ class TreeSitterProvider(IASTProvider):
             "field_formal_parameter": ASTNodeType.FIELD, # Dart
             "declaration": ASTNodeType.FIELD, # Heuristic fallback
         }
-        
+
         if t in mappings:
             return mappings[t], False
-            
+
         # Heuristic for generic mappings
         if "declaration" in t or "definition" in t:
              if "function" in t: return ASTNodeType.FUNCTION, True
              if "class" in t: return ASTNodeType.CLASS, True
              if "method" in t: return ASTNodeType.METHOD, True
-             
+
         return ASTNodeType.UNKNOWN, True

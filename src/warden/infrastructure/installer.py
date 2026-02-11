@@ -9,7 +9,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 from warden.shared.domain.exceptions import InstallError
 from warden.shared.infrastructure.logging import get_logger
@@ -19,9 +19,9 @@ from warden.shared.infrastructure.logging import get_logger
 class InstallConfig:
     """Configuration for Warden installation."""
 
-    version: Optional[str] = None
-    install_path: Optional[Path] = None
-    config_path: Optional[Path] = None
+    version: str | None = None
+    install_path: Path | None = None
+    config_path: Path | None = None
     install_hooks: bool = False
     verify_install: bool = True
 
@@ -32,8 +32,8 @@ class InstallResult:
 
     success: bool
     message: str
-    version: Optional[str] = None
-    install_path: Optional[str] = None
+    version: str | None = None
+    install_path: str | None = None
     config_discovered: bool = False
 
 
@@ -41,7 +41,7 @@ class AutoInstaller:
     """Auto-installer for Warden in CI/CD environments."""
 
     @staticmethod
-    def detect_ci_platform() -> Optional[str]:
+    def detect_ci_platform() -> str | None:
         """
         Detect current CI/CD platform from environment variables.
 
@@ -84,7 +84,7 @@ class AutoInstaller:
 
         Returns:
             Installation result (success)
-            
+
         Raises:
             InstallError: If installation fails
         """
@@ -153,14 +153,14 @@ class AutoInstaller:
                 install_path=str(config.install_path) if config.install_path else None,
                 config_discovered=config_discovered,
             )
-            
+
             logger.info("install_success", result=result)
             return result
 
         except subprocess.CalledProcessError as e:
             logger.error("install_failed_subprocess", stderr=e.stderr, cmd=e.cmd)
             raise InstallError(f"Pip install failed: {e.stderr}") from e
-            
+
         except ImportError as e:
             logger.error("install_failed_import", error=str(e))
             raise InstallError(f"Dependency missing: {e}") from e
@@ -190,7 +190,7 @@ class AutoInstaller:
              return InstallResult(success=False, message=f"Verification exception: {str(e)}")
 
     @staticmethod
-    def _get_installed_version() -> Optional[str]:
+    def _get_installed_version() -> str | None:
         """Get installed Warden version."""
         try:
             result = subprocess.run(
@@ -208,7 +208,7 @@ class AutoInstaller:
             return None
 
     @staticmethod
-    def discover_config(start_path: Optional[Path] = None) -> Optional[Path]:
+    def discover_config(start_path: Path | None = None) -> Path | None:
         """
         Discover Warden config file.
 
@@ -285,7 +285,7 @@ infrastructure:
             return False
 
     @staticmethod
-    def get_ci_env_info() -> Dict[str, str]:
+    def get_ci_env_info() -> dict[str, str]:
         """
         Get CI environment information.
 
@@ -319,7 +319,7 @@ infrastructure:
     @staticmethod
     def generate_install_script(
         platform: str = "github",
-        version: Optional[str] = None,
+        version: str | None = None,
     ) -> str:
         """
         Generate installation script for CI platform.

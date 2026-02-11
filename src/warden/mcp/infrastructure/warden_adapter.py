@@ -8,9 +8,9 @@ Translates MCP tool calls to WardenBridge operations.
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from warden.mcp.ports.tool_executor import IToolExecutor
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.errors import MCPToolExecutionError
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.ports.tool_executor import IToolExecutor
 from warden.shared.utils.path_utils import sanitize_path
 
 # Optional imports for bridge functionality
@@ -52,7 +52,7 @@ class WardenBridgeAdapter(IToolExecutor):
             project_root: Project root directory
         """
         self.project_root = project_root
-        self._bridge: Optional[Any] = None
+        self._bridge: Any | None = None
 
         if BRIDGE_AVAILABLE:
             try:
@@ -73,7 +73,7 @@ class WardenBridgeAdapter(IToolExecutor):
     async def execute_async(
         self,
         tool: MCPToolDefinition,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """
         Execute a bridge-based tool.
@@ -103,7 +103,7 @@ class WardenBridgeAdapter(IToolExecutor):
             logger.error("bridge_tool_error", tool=tool.name, error=str(e))
             raise MCPToolExecutionError(tool.name, str(e))
 
-    async def _execute_scan_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _execute_scan_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Execute warden_scan tool."""
         path = arguments.get("path", str(self.project_root))
         frames = arguments.get("frames")

@@ -7,11 +7,13 @@ Based on C# ILlmClient.cs:
 All provider implementations must inherit from this interface
 """
 
-from abc import ABC, abstractmethod
 import json
+from abc import ABC, abstractmethod
 from typing import Optional
-from ..types import LlmProvider, LlmRequest, LlmResponse
+
 from warden.shared.infrastructure.exceptions import ExternalServiceError
+
+from ..types import LlmProvider, LlmRequest, LlmResponse
 
 
 class ILlmClient(ABC):
@@ -62,7 +64,7 @@ class ILlmClient(ABC):
         """
         pass
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None, use_fast_tier: bool = False) -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None, use_fast_tier: bool = False) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
@@ -99,14 +101,14 @@ class ILlmClient(ABC):
     async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:
         """
         Analyze code for security vulnerabilities using LLM.
-        
+
         Default implementation uses complete_async with a standard prompt.
         Providers may override this for specialized models or parameters.
-        
+
         Args:
             code_content: Source code to analyze
             language: Language of the code
-            
+
         Returns:
             Dict containing findings list
         """
@@ -115,9 +117,9 @@ class ILlmClient(ABC):
         prompt = f"""
         You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
         Target vulnerabilities: SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, and Command Injection.
-        
+
         Ignore stylistic issues. Focus only on exploitable security flaws.
-        
+
         Return a JSON object in this exact format:
         {{
             "findings": [
@@ -129,24 +131,24 @@ class ILlmClient(ABC):
                 }}
             ]
         }}
-        
+
         If no issues found, return {{ "findings": [] }}.
-        
+
         Code:
         ```{language}
         {code_content[:4000]}
         ```
         """
-        
+
         try:
             response = await self.complete_async(
-                prompt, 
+                prompt,
                 system_prompt="You are a strict security auditor. Output valid JSON only.",
                 use_fast_tier=use_fast_tier
             )
             if not response.success:
                 return {"findings": []}
-                
+
             parsed = parse_json_from_llm(response.content)
             return parsed or {"findings": []}
         except (json.JSONDecodeError, ValueError, KeyError):

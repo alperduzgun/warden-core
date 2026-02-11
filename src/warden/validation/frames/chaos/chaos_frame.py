@@ -15,18 +15,19 @@ Usage:
 import asyncio
 import random
 from typing import Optional
-from warden.validation.domain.frame import (
-    ValidationFrame,
-    FrameResult,
-    CodeFile,
-)
+
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
+    FrameApplicability,
     FrameCategory,
     FramePriority,
     FrameScope,
-    FrameApplicability,
 )
-from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import (
+    CodeFile,
+    FrameResult,
+    ValidationFrame,
+)
 
 logger = get_logger(__name__)
 
@@ -34,20 +35,20 @@ logger = get_logger(__name__)
 class ChaosFrame(ValidationFrame):
     """
     Chaos Engineering Frame for Resilience Testing
-    
+
     Randomly injects failures to verify:
     - Error isolation (core survives)
     - Graceful degradation (partial results)
     - Logging completeness (all failures logged)
     """
-    
+
     name = "Chaos Engineering Frame"
     description = "Injects random failures to test system resilience"
     category = FrameCategory.GLOBAL
     priority = FramePriority.LOW
     scope = FrameScope.FILE_LEVEL
     applicability = [FrameApplicability.ALL]
-    
+
     # Chaos configuration
     FAILURE_RATE = 0.3  # 30% of files will experience chaos
     CHAOS_TYPES = [
@@ -57,18 +58,18 @@ class ChaosFrame(ValidationFrame):
         "partial_failure",
         "resource_exhaustion"
     ]
-    
-    def __init__(self, config: Optional[dict] = None):
+
+    def __init__(self, config: dict | None = None):
         super().__init__(config)
         self.failure_rate = config.get("failure_rate", self.FAILURE_RATE) if config else self.FAILURE_RATE
         self.chaos_seed = config.get("seed", None) if config else None
         if self.chaos_seed:
             random.seed(self.chaos_seed)  # Deterministic chaos for testing
-    
+
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute chaos injection with configurable failure rate.
-        
+
         Returns:
             - Normal FrameResult if no chaos injected
             - Raises exception or returns malformed data if chaos injected
@@ -84,11 +85,11 @@ class ChaosFrame(ValidationFrame):
                 status="passed",
                 message="No chaos injected (lucky!)"
             )
-        
+
         # Select chaos type
         chaos_type = random.choice(self.CHAOS_TYPES)
         logger.warning("chaos_injected", file=code_file.path, chaos_type=chaos_type)
-        
+
         if chaos_type == "timeout":
             await self._inject_timeout()
         elif chaos_type == "exception":
@@ -99,7 +100,7 @@ class ChaosFrame(ValidationFrame):
             return self._inject_partial_failure(code_file)
         elif chaos_type == "resource_exhaustion":
             self._inject_resource_exhaustion()
-        
+
         # Should never reach here
         return FrameResult(
             frame_id=self.id,
@@ -108,12 +109,12 @@ class ChaosFrame(ValidationFrame):
             status="failed",
             message="Chaos injection failed to trigger"
         )
-    
+
     async def _inject_timeout(self):
         """Simulate infinite hang (timeout scenario)"""
         logger.error("chaos_timeout_injected", message="Simulating infinite hang")
         await asyncio.sleep(999)  # Will be killed by frame timeout
-    
+
     def _inject_exception(self):
         """Raise random exception"""
         exceptions = [
@@ -126,13 +127,13 @@ class ChaosFrame(ValidationFrame):
         exception = random.choice(exceptions)
         logger.error("chaos_exception_injected", exception_type=type(exception).__name__)
         raise exception
-    
+
     def _inject_malformed_output(self):
         """Return malformed FrameResult (type violation)"""
         logger.error("chaos_malformed_output_injected", message="Returning invalid type")
         # Return wrong type - should be caught by type validation
         return "This is not a FrameResult object!"  # type: ignore
-    
+
     def _inject_partial_failure(self, code_file: CodeFile) -> FrameResult:
         """Return partial result with error flag"""
         logger.warning("chaos_partial_failure_injected", file=code_file.path)
@@ -144,7 +145,7 @@ class ChaosFrame(ValidationFrame):
             message="Chaos: Partial failure - some checks could not complete",
             error="Simulated partial failure for resilience testing"
         )
-    
+
     def _inject_resource_exhaustion(self):
         """Simulate memory exhaustion"""
         logger.error("chaos_resource_exhaustion_injected", message="Allocating large memory")

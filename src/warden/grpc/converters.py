@@ -5,7 +5,7 @@ Converts between Python dicts and Protocol Buffer messages.
 """
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Import generated protobuf code
 try:
@@ -35,9 +35,9 @@ class ProtoConverters:
     @staticmethod
     def language_to_file_type(lang: str) -> int:
         """Convert language string to proto FileType enum."""
-        from warden.shared.languages.registry import LanguageRegistry
         from warden.ast.domain.enums import CodeLanguage
-        
+        from warden.shared.languages.registry import LanguageRegistry
+
         # 1. Resolve to CodeLanguage enum
         try:
             if lang.startswith("."): # It's an extension
@@ -52,7 +52,7 @@ class ProtoConverters:
         defn = LanguageRegistry.get_definition(lang_enum)
         if defn and defn.proto_type_name:
              return getattr(warden_pb2, defn.proto_type_name.upper(), warden_pb2.OTHER)
-             
+
         # 3. Fallback to name-based lookup if no definition found
         return ProtoConverters._to_proto_enum(warden_pb2, lang_enum.value, warden_pb2.OTHER)
 
@@ -75,7 +75,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_fortification(fort: Dict[str, Any]) -> "warden_pb2.Fortification":
+    def convert_fortification(fort: dict[str, Any]) -> "warden_pb2.Fortification":
         """Convert dict fortification to proto Fortification."""
         return warden_pb2.Fortification(
             id=fort.get("id", ""),
@@ -89,7 +89,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_cleaning(clean: Dict[str, Any]) -> "warden_pb2.Cleaning":
+    def convert_cleaning(clean: dict[str, Any]) -> "warden_pb2.Cleaning":
         """Convert dict cleaning to proto Cleaning."""
         return warden_pb2.Cleaning(
             id=clean.get("id", ""),
@@ -101,7 +101,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_issue(issue: Dict[str, Any]) -> "warden_pb2.Issue":
+    def convert_issue(issue: dict[str, Any]) -> "warden_pb2.Issue":
         """Convert dict issue to proto Issue."""
         return warden_pb2.Issue(
             id=issue.get("id", ""),
@@ -125,7 +125,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_code_chunk(chunk: Dict[str, Any]) -> "warden_pb2.CodeChunk":
+    def convert_code_chunk(chunk: dict[str, Any]) -> "warden_pb2.CodeChunk":
         """Convert dict code chunk to proto CodeChunk."""
         return warden_pb2.CodeChunk(
             id=chunk.get("id", ""),
@@ -140,7 +140,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_discovered_file(file: Dict[str, Any]) -> "warden_pb2.DiscoveredFile":
+    def convert_discovered_file(file: dict[str, Any]) -> "warden_pb2.DiscoveredFile":
         """Convert dict file to proto DiscoveredFile."""
         lang = file.get("language", "").lower()
         file_type = ProtoConverters.language_to_file_type(lang)
@@ -155,7 +155,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_framework(fw: Dict[str, Any]) -> "warden_pb2.DetectedFramework":
+    def convert_framework(fw: dict[str, Any]) -> "warden_pb2.DetectedFramework":
         """Convert dict framework to proto DetectedFramework."""
         return warden_pb2.DetectedFramework(
             name=fw.get("name", ""),
@@ -166,7 +166,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_suppression(suppression: Dict[str, Any]) -> "warden_pb2.Suppression":
+    def convert_suppression(suppression: dict[str, Any]) -> "warden_pb2.Suppression":
         """Convert dict suppression to proto Suppression."""
         return warden_pb2.Suppression(
             id=suppression.get("id", ""),
@@ -181,7 +181,7 @@ class ProtoConverters:
         )
 
     @staticmethod
-    def convert_cleanup_suggestion(suggestion: Dict[str, Any]) -> "warden_pb2.CleanupSuggestion":
+    def convert_cleanup_suggestion(suggestion: dict[str, Any]) -> "warden_pb2.CleanupSuggestion":
         """Convert dict cleanup suggestion to proto CleanupSuggestion."""
         return warden_pb2.CleanupSuggestion(
             id=suggestion.get("id", ""),
@@ -197,7 +197,7 @@ class ProtoConverters:
 
     @staticmethod
     def convert_fortification_suggestion(
-        suggestion: Dict[str, Any]
+        suggestion: dict[str, Any]
     ) -> "warden_pb2.FortificationSuggestion":
         """Convert dict fortification suggestion to proto FortificationSuggestion."""
         return warden_pb2.FortificationSuggestion(

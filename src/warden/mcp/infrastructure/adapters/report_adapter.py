@@ -6,14 +6,14 @@ Maps to gRPC ReportGenerationMixin functionality.
 """
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
-import uuid
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class ReportAdapter(BaseWardenAdapter):
@@ -38,9 +38,9 @@ class ReportAdapter(BaseWardenAdapter):
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
         """Initialize report adapter."""
         super().__init__(project_root, bridge)
-        self._report_status: Dict[str, Dict[str, Any]] = {}
+        self._report_status: dict[str, dict[str, Any]] = {}
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get report tool definitions."""
         return [
             self._create_tool_definition(
@@ -121,7 +121,7 @@ class ReportAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute report tool."""
         handlers = {
@@ -136,7 +136,7 @@ class ReportAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _generate_html_report_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _generate_html_report_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Generate HTML report."""
         run_id = arguments.get("run_id", str(uuid.uuid4()))
         output_path = arguments.get("output_path")
@@ -177,7 +177,7 @@ class ReportAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"HTML report generation failed: {e}")
 
-    async def _generate_pdf_report_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _generate_pdf_report_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Generate PDF report."""
         run_id = arguments.get("run_id", str(uuid.uuid4()))
         output_path = arguments.get("output_path")
@@ -201,7 +201,7 @@ class ReportAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"PDF report generation failed: {e}")
 
-    async def _generate_json_report_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _generate_json_report_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Generate JSON report."""
         run_id = arguments.get("run_id", str(uuid.uuid4()))
         output_path = arguments.get("output_path")
@@ -254,7 +254,7 @@ class ReportAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"JSON report generation failed: {e}")
 
-    async def _get_report_status_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_report_status_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get report generation status."""
         report_id = arguments.get("report_id")
 

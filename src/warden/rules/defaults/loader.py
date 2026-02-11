@@ -2,10 +2,11 @@
 
 from pathlib import Path
 from typing import Dict, List, Optional
+
 import yaml
 
-from warden.rules.domain.models import CustomRule
 from warden.rules.domain.enums import RuleCategory, RuleSeverity
+from warden.rules.domain.models import CustomRule
 
 
 class DefaultRulesLoader:
@@ -14,13 +15,13 @@ class DefaultRulesLoader:
     def __init__(self):
         """Initialize the default rules loader."""
         self.rules_dir = Path(__file__).parent
-        # Assuming logger is set up globally or passed, but file used 'print'. 
+        # Assuming logger is set up globally or passed, but file used 'print'.
         # I need to verify imports. 'loader.py' lines 1-10 show NO logger import.
         # I should add 'from warden.shared.infrastructure.logging import get_logger' or use structlog.
         # Looking at previous file view, it had 'import yaml'.
         # I will stick to 'print' replacement if I can import logger, but wait, look at file content again.
-        
-    def get_rules_for_language(self, language: str, context_tags: Optional[Dict[str, str]] = None) -> List[CustomRule]:
+
+    def get_rules_for_language(self, language: str, context_tags: dict[str, str] | None = None) -> list[CustomRule]:
         """
         Get all default rules for a specific language.
 
@@ -40,7 +41,7 @@ class DefaultRulesLoader:
         # Load all YAML files in the language directory
         for yaml_file in language_dir.glob("*.yaml"):
             try:
-                with open(yaml_file, 'r') as f:
+                with open(yaml_file) as f:
                     data = yaml.safe_load(f)
 
                     if 'rules' in data:
@@ -52,7 +53,7 @@ class DefaultRulesLoader:
                                 if not context_tags:
                                     # Rule requires specific context, none provided -> Skip
                                     continue
-                                
+
                                 activation = rule_data['activation']
                                 should_load = True
                                 for key, value in activation.items():
@@ -62,7 +63,7 @@ class DefaultRulesLoader:
                                         break
                                 if not should_load:
                                     continue
-                            
+
                             # Convert pattern to conditions for compatibility
                             conditions = {}
                             if 'pattern' in rule_data:
@@ -99,14 +100,14 @@ class DefaultRulesLoader:
             except Exception as e:
                 # Observability: Log failure structurally (placeholder print until logger import added)
                  print(f"Error loading rules from {yaml_file}: {e}")
-                
+
                  # In a real fix, I would add logger import above.
                  # I'll try to add it in a multi-edit if possible or separate step.
                  continue
 
         return rules
 
-    def get_security_rules(self, language: str) -> List[CustomRule]:
+    def get_security_rules(self, language: str) -> list[CustomRule]:
         """Get security-specific rules for a language."""
         security_file = self.rules_dir / language.lower() / "security.yaml"
 
@@ -115,7 +116,7 @@ class DefaultRulesLoader:
 
         return self._load_rules_from_file(security_file)
 
-    def get_style_rules(self, language: str) -> List[CustomRule]:
+    def get_style_rules(self, language: str) -> list[CustomRule]:
         """Get style-specific rules for a language."""
         style_file = self.rules_dir / language.lower() / "style.yaml"
 
@@ -124,12 +125,12 @@ class DefaultRulesLoader:
 
         return self._load_rules_from_file(style_file)
 
-    def _load_rules_from_file(self, file_path: Path) -> List[CustomRule]:
+    def _load_rules_from_file(self, file_path: Path) -> list[CustomRule]:
         """Load rules from a specific YAML file."""
         rules = []
 
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path) as f:
                 data = yaml.safe_load(f)
 
                 if 'rules' in data:
@@ -172,7 +173,7 @@ class DefaultRulesLoader:
 
         return rules
 
-    def get_available_languages(self) -> List[str]:
+    def get_available_languages(self) -> list[str]:
         """Get list of languages with default rules."""
         languages = []
 
@@ -182,7 +183,7 @@ class DefaultRulesLoader:
 
         return sorted(languages)
 
-    def get_rules_summary(self) -> Dict[str, Dict[str, int]]:
+    def get_rules_summary(self) -> dict[str, dict[str, int]]:
         """Get a summary of available rules per language."""
         summary = {}
 

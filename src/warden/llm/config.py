@@ -5,6 +5,7 @@ Supports multi-provider configuration with fallback chain.
 Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 """
 
+import contextlib
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -19,10 +20,10 @@ class ProviderConfig:
     Matches C# ProviderConfig
     Security: API keys should be loaded from environment variables
     """
-    api_key: Optional[str] = None
-    endpoint: Optional[str] = None
-    default_model: Optional[str] = None
-    api_version: Optional[str] = None  # For Azure OpenAI
+    api_key: str | None = None
+    endpoint: str | None = None
+    default_model: str | None = None
+    api_version: str | None = None  # For Azure OpenAI
     enabled: bool = True
     concurrency: int = 4  # Max concurrent requests for this provider
 
@@ -47,9 +48,8 @@ class ProviderConfig:
             errors.append(f"{provider_name}: Default model is required but not configured")
 
         # Validate endpoint URL if provided
-        if self.endpoint:
-            if not self.endpoint.startswith(("http://", "https://")):
-                errors.append(f"{provider_name}: Endpoint must use HTTP or HTTPS protocol")
+        if self.endpoint and not self.endpoint.startswith(("http://", "https://")):
+            errors.append(f"{provider_name}: Endpoint must use HTTP or HTTPS protocol")
 
         return errors
 
@@ -96,12 +96,12 @@ class LlmConfiguration:
     claude_code: ProviderConfig = field(default_factory=ProviderConfig)  # Local Claude Code CLI/SDK
 
     # Model Tiering (Optional)
-    smart_model: Optional[str] = None  # High-reasoning model (e.g. gpt-4o)
-    fast_model: Optional[str] = None   # Fast/Cheap model (e.g. gpt-4o-mini)
+    smart_model: str | None = None  # High-reasoning model (e.g. gpt-4o)
+    fast_model: str | None = None   # Fast/Cheap model (e.g. gpt-4o-mini)
     fast_tier_providers: list[LlmProvider] = field(default_factory=lambda: [LlmProvider.OLLAMA])
     max_concurrency: int = 4           # Global max concurrent requests
 
-    def get_provider_config(self, provider: LlmProvider) -> Optional[ProviderConfig]:
+    def get_provider_config(self, provider: LlmProvider) -> ProviderConfig | None:
         """
         Get configuration for a specific provider
 
@@ -190,7 +190,7 @@ def create_default_config() -> LlmConfiguration:
     return config
 
 
-def load_llm_config(config_override: Optional[dict] = None) -> LlmConfiguration:
+def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
     """
     Load LLM configuration using SecretManager.
 
@@ -198,8 +198,9 @@ def load_llm_config(config_override: Optional[dict] = None) -> LlmConfiguration:
         config_override: Optional dictionary of overrides (e.g. from config.yaml)
     """
     import asyncio
-    import httpx
     from pathlib import Path
+
+    import httpx
     import yaml
 
     # Auto-load from .warden/config.yaml if no override provided
@@ -207,7 +208,7 @@ def load_llm_config(config_override: Optional[dict] = None) -> LlmConfiguration:
         config_yaml_path = Path.cwd() / ".warden" / "config.yaml"
         if config_yaml_path.exists():
             try:
-                with open(config_yaml_path, "r") as f:
+                with open(config_yaml_path) as f:
                     project_config = yaml.safe_load(f)
                     config_override = project_config.get("llm", {})
             except Exception:
@@ -265,7 +266,7 @@ async def _check_claude_code_availability() -> bool:
         return False
 
 
-async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmConfiguration:
+async def load_llm_config_async(config_override: dict | None = None) -> LlmConfiguration:
     """
     Async version of load_llm_config using SecretManager.
 
@@ -279,10 +280,8 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
     # Check if explicit provider override exists - we'll prioritize it
     explicit_provider_override = None
     if config_override and "provider" in config_override:
-        try:
+        with contextlib.suppress(ValueError):
             explicit_provider_override = LlmProvider(config_override["provider"])
-        except ValueError:
-            pass
 
     # Create base configuration
     config = LlmConfiguration(
@@ -331,7 +330,7 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
     smart_model_secret = secrets.get("WARDEN_SMART_MODEL")
     if smart_model_secret:
         config.smart_model = smart_model_secret.value
-        
+
     fast_model_secret = secrets.get("WARDEN_FAST_MODEL")
     if fast_model_secret:
         config.fast_model = fast_model_secret.value
@@ -342,21 +341,19 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
         if providers_str:
             try:
                 config.fast_tier_providers = [
-                    LlmProvider(p.strip().lower()) 
-                    for p in providers_str.split(",") 
+                    LlmProvider(p.strip().lower())
+                    for p in providers_str.split(",")
                     if p.strip()
                 ]
             except ValueError as e:
                 import structlog
                 logger = structlog.get_logger(__name__)
                 logger.warning("invalid_fast_tier_priority", value=providers_str, error=str(e))
-    
+
     concurrency_secret = secrets.get("WARDEN_LLM_CONCURRENCY")
     if concurrency_secret and concurrency_secret.found:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             config.max_concurrency = int(concurrency_secret.value)
-        except (ValueError, TypeError):
-            pass
 
     # Configure Azure OpenAI (primary provider for Warden)
     azure_api_key = secrets.get("AZURE_OPENAI_API_KEY")
@@ -423,7 +420,7 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
     ollama_endpoint = "http://localhost:11434"
     if ollama_host_secret and hasattr(ollama_host_secret, 'found') and ollama_host_secret.found:
         ollama_endpoint = ollama_host_secret.value or ollama_endpoint
-        
+
     config.ollama.endpoint = ollama_endpoint
     config.ollama.enabled = True  # Enabled by default for dual-tier fallback
     configured_providers.append(LlmProvider.OLLAMA)
@@ -461,18 +458,18 @@ async def load_llm_config_async(config_override: Optional[dict] = None) -> LlmCo
 
     # --- AUTO-PILOT LOGIC ---
     # Determine Fast Tier Chain based on available credentials and service health
-    
+
     detected_fast_tier = []
-    
+
     # Priority 1: Groq (Cloud Speed)
     if LlmProvider.GROQ in configured_providers:
         detected_fast_tier.append(LlmProvider.GROQ)
-        
+
     # Priority 2: Ollama (Local/Free) - Only if service is actually running
     # This fail-fast check prevents adding a dead service to the chain
     if await _check_ollama_availability(ollama_endpoint):
         detected_fast_tier.append(LlmProvider.OLLAMA)
-    
+
     # Apply Auto-Detected chain if no manual override exists
     # If WARDEN_FAST_TIER_PRIORITY was set earlier, we honor it.
     # Otherwise, we use our smart auto-detected list.

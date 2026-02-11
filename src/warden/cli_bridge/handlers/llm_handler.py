@@ -3,25 +3,27 @@ LLM Handler for Warden Bridge.
 Handles AI-driven code analysis and streaming responses.
 """
 
-from typing import Any, Optional, AsyncIterator
-from warden.shared.infrastructure.logging import get_logger
-from warden.cli_bridge.protocol import IPCError, ErrorCode
+from collections.abc import AsyncIterator
+from typing import Any, Optional
+
 from warden.cli_bridge.handlers.base import BaseHandler
+from warden.cli_bridge.protocol import ErrorCode, IPCError
+from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
 class LLMHandler(BaseHandler):
     """Handles LLM-powered analysis and chat streaming."""
 
-    def __init__(self, llm_config: Any, llm_service: Optional[Any] = None):
+    def __init__(self, llm_config: Any, llm_service: Any | None = None):
         self.llm_config = llm_config
         self.llm_service = llm_service
 
-    async def analyze_with_llm_async(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
+    async def analyze_with_llm_async(self, prompt: str, provider: str | None = None, stream: bool = True) -> AsyncIterator[str]:
         """Execute LLM analysis with streaming or full completion."""
-        from warden.llm.types import LlmProvider
         from warden.llm.factory import create_client
-        
+        from warden.llm.types import LlmProvider
+
         try:
             # Resolve provider
             resolved_provider = self.llm_config.default_provider
@@ -36,7 +38,7 @@ class LLMHandler(BaseHandler):
                 llm_client = self.llm_service
             else:
                 llm_client = create_client(resolved_provider)
-                
+
             if not llm_client:
                 raise IPCError(ErrorCode.LLM_ERROR, "No LLM provider available")
 

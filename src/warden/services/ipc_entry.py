@@ -7,14 +7,15 @@ Launched via: python -m warden.services.ipc_entry
 
 import asyncio
 import logging
-import sys
 import os
 import signal
+import sys
 from pathlib import Path
+
+from warden.cli_bridge.bridge import WardenBridge
 
 # Absolute imports from within the package
 from warden.cli_bridge.server import IPCServer
-from warden.cli_bridge.bridge import WardenBridge
 
 # Project root calculation:
 # src/warden/services/ipc_entry.py -> src/warden/services -> src/warden -> src -> ROOT

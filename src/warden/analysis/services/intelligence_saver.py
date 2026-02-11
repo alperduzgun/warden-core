@@ -6,15 +6,16 @@ Used during `warden init` and `warden refresh` commands.
 """
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
-from datetime import datetime, timezone
+
 import structlog
 
 from warden.analysis.domain.intelligence import (
-    ProjectIntelligence,
-    ModuleInfo,
     FileException,
+    ModuleInfo,
+    ProjectIntelligence,
     SecurityPosture,
 )
 
@@ -62,9 +63,9 @@ class IntelligenceSaver:
         purpose: str,
         architecture: str,
         security_posture: SecurityPosture,
-        module_map: Dict[str, ModuleInfo],
-        file_exceptions: Optional[Dict[str, FileException]] = None,
-        project_name: Optional[str] = None,
+        module_map: dict[str, ModuleInfo],
+        file_exceptions: dict[str, FileException] | None = None,
+        project_name: str | None = None,
     ) -> bool:
         """
         Save project intelligence to disk.
@@ -156,7 +157,7 @@ class IntelligenceSaver:
     def update_verification_counts(
         self,
         verified_count: int,
-        total_claims: Optional[int] = None
+        total_claims: int | None = None
     ) -> bool:
         """
         Update verification counts in existing intelligence file.
@@ -175,7 +176,7 @@ class IntelligenceSaver:
             return False
 
         try:
-            with open(self.intelligence_path, "r", encoding="utf-8") as f:
+            with open(self.intelligence_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             data["verifiedClaimsCount"] = verified_count
@@ -205,7 +206,7 @@ class IntelligenceSaver:
         """Check if intelligence file exists."""
         return self.intelligence_path.exists()
 
-    def get_last_modified(self) -> Optional[datetime]:
+    def get_last_modified(self) -> datetime | None:
         """
         Get last modification time of intelligence file.
 

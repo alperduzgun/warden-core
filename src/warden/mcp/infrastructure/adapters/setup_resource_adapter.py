@@ -5,12 +5,12 @@ Provides the 'warden://setup/guide' resource to teach Agents
 how to conduct an interactive setup interview.
 """
 
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
 
+from warden.mcp.domain.enums import ResourceType, ToolCategory
 from warden.mcp.domain.models import MCPResourceDefinition, MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.enums import ToolCategory, ResourceType
 
 
 class SetupResourceAdapter(BaseWardenAdapter):
@@ -19,13 +19,13 @@ class SetupResourceAdapter(BaseWardenAdapter):
     """
 
     SUPPORTED_TOOLS = frozenset()
-    TOOL_CATEGORY = ToolCategory.CONFIG 
+    TOOL_CATEGORY = ToolCategory.CONFIG
 
     SETUP_PROTOCOL = """
 # Warden Setup Protocol for Agents
 
 ## Objective
-Your goal is to help a potentially non-technical user configure Warden. 
+Your goal is to help a potentially non-technical user configure Warden.
 You must act as a **Setup Expert**. Do not just execute commands; **guide** the user.
 
 ## The Interview Process
@@ -63,7 +63,7 @@ Once `warden_configure` returns success:
 2. Suggest they run their first scan.
 """
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         # This adapter only provides Resources, no tools.
         return []
 
@@ -72,8 +72,8 @@ Once `warden_configure` returns success:
         return MCPToolResult.error("No tools protected by this adapter")
 
     # --- Resource Provider Implementation ---
-    
-    def list_resources(self) -> List[MCPResourceDefinition]:
+
+    def list_resources(self) -> list[MCPResourceDefinition]:
         """List available setup resources."""
         return [
             MCPResourceDefinition(
@@ -86,7 +86,7 @@ Once `warden_configure` returns success:
             )
         ]
 
-    def read_resource(self, uri: str) -> Optional[str]:
+    def read_resource(self, uri: str) -> str | None:
         """Read the setup protocol."""
         if uri == "warden://setup/guide":
             return self.SETUP_PROTOCOL

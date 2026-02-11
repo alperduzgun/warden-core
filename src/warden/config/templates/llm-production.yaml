@@ -88,18 +88,13 @@ stages:
         is_blocker: true
 
       - priority: "high"
-        frames: ["chaos", "fuzz"]
+        frames: ["resilience", "antipattern", "fuzz"]
         timeout_seconds: 180
         is_blocker: false
 
       - priority: "medium"
         frames: ["property", "architectural"]
         timeout_seconds: 120
-        is_blocker: false
-
-      - priority: "low"
-        frames: ["stress"]
-        timeout_seconds: 90
         is_blocker: false
 
   # Stage 4: Fortification (Optional)

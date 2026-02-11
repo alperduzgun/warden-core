@@ -15,7 +15,7 @@ Contract Structure:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class PlatformType(str, Enum):
@@ -103,11 +103,11 @@ class FieldDefinition:
     type_name: str  # Primitive type or model reference
     is_optional: bool = False
     is_array: bool = False
-    description: Optional[str] = None
+    description: str | None = None
 
     # Source tracking
-    source_file: Optional[str] = None
-    source_line: Optional[int] = None
+    source_file: str | None = None
+    source_line: int | None = None
 
     def to_yaml_repr(self) -> str:
         """Convert to YAML representation."""
@@ -133,14 +133,14 @@ class ModelDefinition:
     """
 
     name: str
-    fields: List[FieldDefinition] = field(default_factory=list)
-    description: Optional[str] = None
+    fields: list[FieldDefinition] = field(default_factory=list)
+    description: str | None = None
 
     # Source tracking
-    source_file: Optional[str] = None
-    source_line: Optional[int] = None
+    source_file: str | None = None
+    source_line: int | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
         return {
             self.name: [f.to_yaml_repr() for f in self.fields]
@@ -157,14 +157,14 @@ class EnumDefinition:
     """
 
     name: str
-    values: List[str] = field(default_factory=list)
-    description: Optional[str] = None
+    values: list[str] = field(default_factory=list)
+    description: str | None = None
 
     # Source tracking
-    source_file: Optional[str] = None
-    source_line: Optional[int] = None
+    source_file: str | None = None
+    source_line: int | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
         return {
             self.name: self.values
@@ -185,16 +185,16 @@ class OperationDefinition:
 
     name: str
     operation_type: OperationType
-    input_type: Optional[str] = None
-    output_type: Optional[str] = None
-    description: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    input_type: str | None = None
+    output_type: str | None = None
+    description: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Source tracking
-    source_file: Optional[str] = None
-    source_line: Optional[int] = None
+    source_file: str | None = None
+    source_line: int | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
         # Custom format requested by user
         # endpoint: METHOD PATH
@@ -202,18 +202,18 @@ class OperationDefinition:
         # response: [fields]
         if self.metadata and 'endpoint' in self.metadata:
             result = {}
-            
+
             # Construct endpoint string
             method = self.metadata.get('http_method', 'GET')
             path = self.metadata.get('endpoint', '/')
             result['endpoint'] = f"{method} {path}"
-            
+
             # Request/Response fields
             if 'request_fields' in self.metadata:
                 result['request'] = self.metadata['request_fields']
             elif self.input_type:
                 result['request'] = [f"body: {self.input_type}"]
-                
+
             if 'response_fields' in self.metadata:
                 result['response'] = self.metadata['response_fields']
             elif self.output_type:
@@ -222,7 +222,7 @@ class OperationDefinition:
             # Include source_file for modularization support
             if self.source_file:
                 result['source_file'] = self.source_file
-                
+
             return result
 
         # Fallback to standard format
@@ -252,18 +252,18 @@ class Contract:
 
     name: str
     version: str = "1.0.0"
-    operations: List[OperationDefinition] = field(default_factory=list)
-    models: List[ModelDefinition] = field(default_factory=list)
-    enums: List[EnumDefinition] = field(default_factory=list)
+    operations: list[OperationDefinition] = field(default_factory=list)
+    models: list[ModelDefinition] = field(default_factory=list)
+    enums: list[EnumDefinition] = field(default_factory=list)
 
     # Metadata
-    description: Optional[str] = None
-    extracted_from: Optional[str] = None  # Platform name
-    metadata: Dict[str, Any] = field(default_factory=dict)  # Additional metadata
+    description: str | None = None
+    extracted_from: str | None = None  # Platform name
+    metadata: dict[str, Any] = field(default_factory=dict)  # Additional metadata
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
 
         if self.operations:
             result["contracts"] = [op.to_dict() for op in self.operations]
@@ -280,14 +280,14 @@ class Contract:
 
         return result
 
-    def get_operation(self, name: str) -> Optional[OperationDefinition]:
+    def get_operation(self, name: str) -> OperationDefinition | None:
         """Get operation by name."""
         for op in self.operations:
             if op.name == name:
                 return op
         return None
 
-    def get_model(self, name: str) -> Optional[ModelDefinition]:
+    def get_model(self, name: str) -> ModelDefinition | None:
         """Get model by name."""
         for model in self.models:
             if model.name == name:
@@ -312,10 +312,10 @@ class PlatformConfig:
     path: str
     platform_type: PlatformType
     role: PlatformRole
-    description: Optional[str] = None
+    description: str | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PlatformConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "PlatformConfig":
         """
         Create from dictionary with comprehensive validation.
 
@@ -403,19 +403,19 @@ class ContractGap:
     gap_type: str  # "missing_operation", "type_mismatch", "nullable_mismatch", "unused"
     severity: GapSeverity
     message: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
     # Context
-    consumer_platform: Optional[str] = None
-    provider_platform: Optional[str] = None
-    operation_name: Optional[str] = None
-    field_name: Optional[str] = None
+    consumer_platform: str | None = None
+    provider_platform: str | None = None
+    operation_name: str | None = None
+    field_name: str | None = None
 
     # Source tracking
-    consumer_file: Optional[str] = None
-    consumer_line: Optional[int] = None
-    provider_file: Optional[str] = None
-    provider_line: Optional[int] = None
+    consumer_file: str | None = None
+    consumer_line: int | None = None
+    provider_file: str | None = None
+    provider_line: int | None = None
 
     def get_suppression_key(self) -> str:
         """
@@ -431,7 +431,7 @@ class ContractGap:
         operation = self.operation_name or "unknown"
         return f"spec:{self.gap_type}:{operation}"
 
-    def to_finding_dict(self) -> Dict[str, Any]:
+    def to_finding_dict(self) -> dict[str, Any]:
         """Convert to Finding-compatible dictionary."""
         location = ""
         if self.consumer_file:
@@ -458,7 +458,7 @@ class SpecAnalysisResult:
 
     consumer_contract: Contract
     provider_contract: Contract
-    gaps: List[ContractGap] = field(default_factory=list)
+    gaps: list[ContractGap] = field(default_factory=list)
 
     # Statistics
     total_consumer_operations: int = 0

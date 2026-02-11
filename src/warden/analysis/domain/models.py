@@ -5,14 +5,15 @@ Core entities for code analysis and issue tracking.
 """
 
 from datetime import datetime, timezone
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 from uuid import uuid4
 
 from pydantic import Field
-from warden.shared.domain.base_model import BaseDomainModel
-from warden.analysis.domain.enums import TrendDirection, AnalysisStatus
-from warden.issues.domain.models import WardenIssue
+
+from warden.analysis.domain.enums import AnalysisStatus, TrendDirection
 from warden.issues.domain.enums import IssueSeverity
+from warden.issues.domain.models import WardenIssue
+from warden.shared.domain.base_model import BaseDomainModel
 
 
 class IssueTrend(BaseDomainModel):
@@ -31,7 +32,7 @@ class IssueTrend(BaseDomainModel):
     reopen_count: int  # How many times reopened
     trend: TrendDirection
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         data["trend"] = self.trend.value  # String for Panel
@@ -106,20 +107,20 @@ class AnalysisResult(BaseDomainModel):
     severity_stats: SeverityStats = Field(default_factory=SeverityStats)
 
     # Frame statistics
-    frame_stats: List[FrameStats] = Field(default_factory=list)
+    frame_stats: list[FrameStats] = Field(default_factory=list)
 
     # Trend analysis
     overall_trend: TrendDirection = TrendDirection.UNKNOWN
-    issue_trends: List[IssueTrend] = Field(default_factory=list)
+    issue_trends: list[IssueTrend] = Field(default_factory=list)
 
     # Comparison with baseline
-    baseline_comparison: Dict[str, Any] = Field(default_factory=dict)
+    baseline_comparison: dict[str, Any] = Field(default_factory=dict)
 
     # Metadata
     duration: float = 0.0
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
 
@@ -180,16 +181,16 @@ class IssueSnapshot(BaseDomainModel):
     commit_hash: str = ""
 
     # Issues in this snapshot
-    issues: List[WardenIssue] = Field(default_factory=list)
+    issues: list[WardenIssue] = Field(default_factory=list)
 
     # Summary statistics
     total_issues: int = 0
     severity_stats: SeverityStats = Field(default_factory=SeverityStats)
 
     # Metadata
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
 
@@ -221,12 +222,13 @@ class IssueSnapshot(BaseDomainModel):
         Returns:
             IssueSnapshot with issues from pipeline result
         """
-        from warden.issues.domain.models import WardenIssue
-        from warden.issues.domain.enums import IssueState
         import hashlib
 
+        from warden.issues.domain.enums import IssueState
+        from warden.issues.domain.models import WardenIssue
+
         # Extract issues from pipeline result
-        issues: List[WardenIssue] = []
+        issues: list[WardenIssue] = []
         severity_stats = SeverityStats()
 
         for frame_result in pipeline_result.frame_results:

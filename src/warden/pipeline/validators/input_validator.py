@@ -1,13 +1,14 @@
 """Input validation for CLI/Bridge (ID 14)."""
+from typing import List, Optional
+
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
 
 
 class CodeFileInput(BaseModel):
     """Validated code file input."""
     path: str = Field(..., min_length=1, max_length=1024)
     content: str = Field(..., max_length=10_000_000)
-    language: Optional[str] = None
+    language: str | None = None
 
     @field_validator('path')
     @classmethod
@@ -19,8 +20,8 @@ class CodeFileInput(BaseModel):
 
 class FrameExecutionInput(BaseModel):
     """Validated frame execution request."""
-    frame_ids: List[str] = Field(..., min_length=1, max_length=100)
-    analysis_level: Optional[str] = Field(default="standard", pattern="^(basic|standard|advanced)$")
+    frame_ids: list[str] = Field(..., min_length=1, max_length=100)
+    analysis_level: str | None = Field(default="standard", pattern="^(basic|standard|advanced)$")
 
 
 class PipelineInput(BaseModel):

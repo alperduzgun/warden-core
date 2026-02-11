@@ -5,21 +5,22 @@ Main application orchestrator for MCP operations.
 Coordinates transport, session management, and use case execution.
 """
 
-import json
 import asyncio
+import contextlib
+import json
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from warden.mcp.domain.models import MCPSession
-from warden.mcp.domain.enums import MCPErrorCode
-from warden.mcp.domain.errors import MCPProtocolError, MCPDomainError
-from warden.mcp.domain.value_objects import ProtocolVersion, ServerInfo, ServerCapabilities
-from warden.mcp.ports.transport import ITransport
-from warden.mcp.application.tool_executor import ToolExecutorService
 from warden.mcp.application.resource_provider import ResourceProviderService
 from warden.mcp.application.session_manager import SessionManager
+from warden.mcp.application.tool_executor import ToolExecutorService
+from warden.mcp.domain.enums import MCPErrorCode
+from warden.mcp.domain.errors import MCPDomainError, MCPProtocolError
+from warden.mcp.domain.models import MCPSession
+from warden.mcp.domain.value_objects import ProtocolVersion, ServerCapabilities, ServerInfo
 from warden.mcp.infrastructure.tool_registry import ToolRegistry
+from warden.mcp.ports.transport import ITransport
 
 # Optional logging
 try:
@@ -42,7 +43,7 @@ class MCPService:
     def __init__(
         self,
         transport: ITransport,
-        project_root: Optional[Path] = None,
+        project_root: Path | None = None,
     ) -> None:
         """
         Initialize MCP service.
@@ -64,17 +65,17 @@ class MCPService:
         self.tool_executor = ToolExecutorService(self.project_root)
         self.resource_provider = ResourceProviderService(self.project_root)
         self._tool_registry = ToolRegistry()
-        
+
         # Register Setup Resource Adapter
         # This provides the Agentry Protocol
         from warden.mcp.infrastructure.adapters.setup_resource_adapter import SetupResourceAdapter
         self._setup_adapter = SetupResourceAdapter(self.project_root)
-        
+
         # Background tasks
-        self._watcher_task: Optional[asyncio.Task] = None
+        self._watcher_task: asyncio.Task | None = None
 
         # Handler dispatch table
-        self._handlers: Dict[str, Any] = {
+        self._handlers: dict[str, Any] = {
             "initialize": self._handle_initialize,
             "initialized": self._handle_initialized,
             "ping": self._handle_ping,
@@ -113,18 +114,16 @@ class MCPService:
             # Cancel background tasks
             if self._watcher_task:
                 self._watcher_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._watcher_task
-                except asyncio.CancelledError:
-                    pass
-            
+
             session.stop_async()
             await self.transport.close()
             logger.info("mcp_service_stopped")
 
     async def _process_message_async(
         self, raw: str, session: MCPSession
-    ) -> Optional[str]:
+    ) -> str | None:
         """Process incoming message and return response."""
         try:
             data = json.loads(raw)
@@ -163,8 +162,8 @@ class MCPService:
     # =========================================================================
 
     async def _handle_initialize_async(
-        self, params: Optional[Dict], session: MCPSession
-    ) -> Dict:
+        self, params: dict | None, session: MCPSession
+    ) -> dict:
         """Handle initialize request."""
         return {
             "protocolVersion": str(self._protocol_version),
@@ -173,7 +172,7 @@ class MCPService:
         }
 
     async def _handle_initialized_async(
-        self, params: Optional[Dict], session: MCPSession
+        self, params: dict | None, session: MCPSession
     ) -> None:
         """Handle initialized notification."""
         session.mark_initialized(params)
@@ -181,31 +180,31 @@ class MCPService:
         return None
 
     async def _handle_ping_async(
-        self, params: Optional[Dict], session: MCPSession
-    ) -> Dict:
+        self, params: dict | None, session: MCPSession
+    ) -> dict:
         """Handle ping request."""
         return {}
 
     async def _handle_resources_list_async(
-        self, params: Optional[Dict], session: MCPSession
-    ) -> Dict:
+        self, params: dict | None, session: MCPSession
+    ) -> dict:
         """Handle resources/list request."""
         resources = await self.resource_provider.list_resources()
-        
+
         # Merge Protocol Resources
         protocol_resources = self._setup_adapter.list_resources()
-        
+
         all_resources = [r.to_mcp_format() for r in resources] + [r.to_mcp_format() for r in protocol_resources]
         return {"resources": all_resources}
 
     async def _handle_resources_read_async(
-        self, params: Optional[Dict], session: MCPSession
-    ) -> Dict:
+        self, params: dict | None, session: MCPSession
+    ) -> dict:
         """Handle resources/read request."""
         if not params or "uri" not in params:
             raise MCPProtocolError("Missing required parameter: uri")
         uri = params["uri"]
-        
+
         # Check Protocol Resources first
         protocol_content = self._setup_adapter.read_resource(uri)
         if protocol_content:
@@ -215,15 +214,15 @@ class MCPService:
         return {"contents": [content]}
 
     async def _handle_tools_list_async(
-        self, params: Optional[Dict], session: MCPSession
-    ) -> Dict:
+        self, params: dict | None, session: MCPSession
+    ) -> dict:
         """Handle tools/list request."""
         tools = self._tool_registry.list_all(self.tool_executor.bridge_available)
         return {"tools": [t.to_mcp_format() for t in tools]}
 
     async def _handle_tools_call_async(
-        self, params: Optional[Dict], session: MCPSession
-    ) -> Dict:
+        self, params: dict | None, session: MCPSession
+    ) -> dict:
         """Handle tools/call request."""
         if not params or "name" not in params:
             raise MCPProtocolError("Missing required parameter: name")
@@ -237,7 +236,7 @@ class MCPService:
     # Notification & Background Tasks
     # =========================================================================
 
-    async def send_notification_async(self, method: str, params: Dict[str, Any]) -> None:
+    async def send_notification_async(self, method: str, params: dict[str, Any]) -> None:
         """
         Send a JSON-RPC notification to the client.
 
@@ -261,7 +260,7 @@ class MCPService:
         Sends notifications/resources/updated when changed.
         """
         report_path = self.project_root / ".warden" / "reports" / "warden_report.json"
-        
+
         # Check alternate location if default doesn't exist
         if not report_path.exists():
              alternate = self.project_root / "warden_report.json"
@@ -269,20 +268,18 @@ class MCPService:
                  report_path = alternate
 
         last_mtime = 0.0
-        
+
         # Initial check
         if report_path.exists():
-            try:
+            with contextlib.suppress(OSError):
                 last_mtime = os.path.getmtime(report_path)
-            except OSError:
-                pass
 
         logger.info("mcp_report_watcher_started", path=str(report_path))
 
         while True:
             try:
                 await asyncio.sleep(2.0)  # Polling interval
-                
+
                 if not report_path.exists():
                     continue
 
@@ -290,9 +287,9 @@ class MCPService:
                     current_mtime = os.path.getmtime(report_path)
                     if current_mtime > last_mtime:
                         last_mtime = current_mtime
-                        
+
                         logger.info("mcp_report_updated", path=str(report_path))
-                        
+
                         # Notify clients that reports resource has changed
                         await self.send_notification_async(
                             "notifications/resources/updated",
@@ -300,7 +297,7 @@ class MCPService:
                         )
                 except OSError as e:
                     logger.warning("mcp_watcher_error", error=str(e))
-                    
+
             except asyncio.CancelledError:
                 logger.info("mcp_report_watcher_stopped")
                 break

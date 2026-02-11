@@ -22,21 +22,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -102,8 +102,8 @@ class SpringBootExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("springboot_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -185,7 +185,7 @@ class SpringBootExtractor(BaseContractExtractor):
         file_path: Path,
         base_path: str,
         is_kotlin: bool,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """
         Extract operations from Spring mapping annotations.
 
@@ -203,7 +203,7 @@ class SpringBootExtractor(BaseContractExtractor):
             @PostMapping
             fun createUser(@RequestBody request: CreateUserRequest): User { ... }
         """
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for mapping annotations
         # @GetMapping, @GetMapping("/path"), @GetMapping(value = "/path")
@@ -300,7 +300,7 @@ class SpringBootExtractor(BaseContractExtractor):
             parts.append(action_path.strip("/"))
         return "/" + "/".join(parts) if parts else "/"
 
-    def _extract_request_body(self, params: str, is_kotlin: bool) -> Optional[str]:
+    def _extract_request_body(self, params: str, is_kotlin: bool) -> str | None:
         """Extract type from @RequestBody parameter."""
         if is_kotlin:
             # @RequestBody request: CreateUserRequest
@@ -326,7 +326,7 @@ class SpringBootExtractor(BaseContractExtractor):
         content: str,
         file_path: Path,
         is_kotlin: bool,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """
         Extract models from Java classes or Kotlin data classes.
 
@@ -342,7 +342,7 @@ class SpringBootExtractor(BaseContractExtractor):
                 val email: String?
             )
         """
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         if is_kotlin:
             models.extend(self._extract_kotlin_models(content, file_path))
@@ -355,9 +355,9 @@ class SpringBootExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """Extract models from Java classes."""
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Pattern for Java class
         class_pattern = re.compile(
@@ -385,7 +385,7 @@ class SpringBootExtractor(BaseContractExtractor):
             if self._should_skip_class(record_name):
                 continue
 
-            fields: List[FieldDefinition] = []
+            fields: list[FieldDefinition] = []
             for component in components.split(","):
                 component = component.strip()
                 parts = component.split()
@@ -436,7 +436,7 @@ class SpringBootExtractor(BaseContractExtractor):
 
             class_body = content[start:end]
 
-            fields: List[FieldDefinition] = []
+            fields: list[FieldDefinition] = []
             for field_match in field_pattern.finditer(class_body):
                 field_type = field_match.group(1)
                 field_name = field_match.group(2)
@@ -464,9 +464,9 @@ class SpringBootExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """Extract models from Kotlin data classes."""
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Find "data class ClassName(" then use balanced paren counting
         data_class_start = re.compile(
@@ -493,7 +493,7 @@ class SpringBootExtractor(BaseContractExtractor):
             if self._should_skip_class(class_name):
                 continue
 
-            fields: List[FieldDefinition] = []
+            fields: list[FieldDefinition] = []
 
             # Parse constructor parameters
             # val name: String, val email: String?
@@ -542,9 +542,9 @@ class SpringBootExtractor(BaseContractExtractor):
         content: str,
         file_path: Path,
         is_kotlin: bool,
-    ) -> List[EnumDefinition]:
+    ) -> list[EnumDefinition]:
         """Extract enums from Java/Kotlin code."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
 
         if is_kotlin:
             # Kotlin enum: enum class Status { ACTIVE, INACTIVE }
@@ -566,7 +566,7 @@ class SpringBootExtractor(BaseContractExtractor):
             # Extract values (before any semicolon for complex enums)
             values_part = enum_body.split(";")[0]
 
-            values: List[str] = []
+            values: list[str] = []
             value_pattern = re.compile(r"(\w+)(?:\s*\([^)]*\))?")
 
             for value_match in value_pattern.finditer(values_part):

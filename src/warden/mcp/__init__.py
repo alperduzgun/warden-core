@@ -30,16 +30,15 @@ Architecture (DDD):
 """
 
 # Backward compatible exports (original API)
-from warden.mcp.server import MCPServer
-from warden.mcp.resources import MCPResourceManager
-from warden.mcp.protocol import MCPProtocol
-
 # New DDD API exports
 from warden.mcp.application.mcp_service import MCPService
-from warden.mcp.domain.models import MCPSession, MCPToolDefinition, MCPResourceDefinition
-from warden.mcp.domain.enums import ServerStatus, MCPErrorCode, ToolCategory, ResourceType
+from warden.mcp.domain.enums import MCPErrorCode, ResourceType, ServerStatus, ToolCategory
+from warden.mcp.domain.models import MCPResourceDefinition, MCPSession, MCPToolDefinition
 from warden.mcp.infrastructure.stdio_transport import STDIOTransport
 from warden.mcp.infrastructure.tool_registry import ToolRegistry
+from warden.mcp.protocol import MCPProtocol
+from warden.mcp.resources import MCPResourceManager
+from warden.mcp.server import MCPServer
 
 __all__ = [
     # Backward compatible (original API)

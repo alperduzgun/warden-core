@@ -8,7 +8,7 @@ NOTE: These are placeholder models. Actual test execution logic is not yet imple
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from warden.shared.domain.base_model import BaseDomainModel
 
@@ -30,11 +30,11 @@ class TestAssertion(BaseDomainModel):
     id: str
     description: str
     passed: bool
-    error: Optional[str] = None
-    stack_trace: Optional[str] = None
-    duration: Optional[str] = None
+    error: str | None = None
+    stack_trace: str | None = None
+    duration: str | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -75,9 +75,9 @@ class TestResult(BaseDomainModel):
     name: str
     status: str  # 'passed' | 'failed' | 'skipped'
     duration: str
-    assertions: List[TestAssertion] = field(default_factory=list)
+    assertions: list[TestAssertion] = field(default_factory=list)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -107,12 +107,12 @@ class SecurityTestDetails(BaseDomainModel):
         auth_tests: Authentication/authorization tests
     """
 
-    sql_injection_tests: List[TestResult] = field(default_factory=list)
-    xss_tests: List[TestResult] = field(default_factory=list)
-    secrets_scan: List[TestResult] = field(default_factory=list)
-    auth_tests: List[TestResult] = field(default_factory=list)
+    sql_injection_tests: list[TestResult] = field(default_factory=list)
+    xss_tests: list[TestResult] = field(default_factory=list)
+    secrets_scan: list[TestResult] = field(default_factory=list)
+    auth_tests: list[TestResult] = field(default_factory=list)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -139,11 +139,11 @@ class ChaosTestDetails(BaseDomainModel):
         error_recovery: Error recovery mechanism tests
     """
 
-    network_failures: List[TestResult] = field(default_factory=list)
-    resource_exhaustion: List[TestResult] = field(default_factory=list)
-    error_recovery: List[TestResult] = field(default_factory=list)
+    network_failures: list[TestResult] = field(default_factory=list)
+    resource_exhaustion: list[TestResult] = field(default_factory=list)
+    error_recovery: list[TestResult] = field(default_factory=list)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -169,11 +169,11 @@ class FuzzTestDetails(BaseDomainModel):
         boundary_tests: Boundary value tests
     """
 
-    input_validation: List[TestResult] = field(default_factory=list)
-    edge_cases: List[TestResult] = field(default_factory=list)
-    boundary_tests: List[TestResult] = field(default_factory=list)
+    input_validation: list[TestResult] = field(default_factory=list)
+    edge_cases: list[TestResult] = field(default_factory=list)
+    boundary_tests: list[TestResult] = field(default_factory=list)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -199,11 +199,11 @@ class PropertyTestDetails(BaseDomainModel):
         consistency: Consistency property tests
     """
 
-    invariants: List[TestResult] = field(default_factory=list)
-    idempotency: List[TestResult] = field(default_factory=list)
-    consistency: List[TestResult] = field(default_factory=list)
+    invariants: list[TestResult] = field(default_factory=list)
+    idempotency: list[TestResult] = field(default_factory=list)
+    consistency: list[TestResult] = field(default_factory=list)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -237,7 +237,7 @@ class StressTestMetrics(BaseDomainModel):
     max_concurrent_users: int
     error_rate: float
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -266,10 +266,10 @@ class StressTestDetails(BaseDomainModel):
         metrics: Performance metrics collected during testing
     """
 
-    load_tests: List[TestResult] = field(default_factory=list)
-    metrics: Optional[StressTestMetrics] = None
+    load_tests: list[TestResult] = field(default_factory=list)
+    metrics: StressTestMetrics | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
@@ -301,20 +301,20 @@ class ValidationTestDetails(BaseDomainModel):
         stress: Stress testing details
     """
 
-    security: Optional[SecurityTestDetails] = None
-    chaos: Optional[ChaosTestDetails] = None
-    fuzz: Optional[FuzzTestDetails] = None
-    property: Optional[PropertyTestDetails] = None
-    stress: Optional[StressTestDetails] = None
+    security: SecurityTestDetails | None = None
+    chaos: ChaosTestDetails | None = None
+    fuzz: FuzzTestDetails | None = None
+    property: PropertyTestDetails | None = None
+    stress: StressTestDetails | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON.
 
         Panel expects: {security?, chaos?, fuzz?, property?, stress?}
         Only includes non-None test details.
         """
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
 
         if self.security is not None:
             result["security"] = self.security.to_json()

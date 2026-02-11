@@ -3,9 +3,12 @@ Offline LLM Provider
 """
 
 from typing import Optional
+
 from warden.shared.infrastructure.exceptions import ExternalServiceError
+
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
+
 
 class OfflineClient(ILlmClient):
     """
@@ -34,9 +37,9 @@ class OfflineClient(ILlmClient):
         """
         return True
 
-    async def complete_async(self, prompt: str, system_prompt: str = "", model: Optional[str] = None, use_fast_tier: bool = False) -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "", model: str | None = None, use_fast_tier: bool = False) -> LlmResponse:
         return await self.send_async(None)
-    
+
     async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:
         """
         Return empty findings in offline mode.

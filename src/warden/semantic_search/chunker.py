@@ -1,11 +1,14 @@
 
 from __future__ import annotations
+
 import ast
 from pathlib import Path
 from typing import List, Optional
+
 import structlog
-from warden.semantic_search.models import ChunkType, CodeChunk
+
 from warden.semantic_search.embeddings import EmbeddingGenerator
+from warden.semantic_search.models import ChunkType, CodeChunk
 
 logger = structlog.get_logger()
 
@@ -16,7 +19,7 @@ class CodeChunker:
     Extracts functions, classes, and code blocks.
     """
 
-    def __init__(self, project_root: Optional[Path] = None, max_chunk_size: int = 500):
+    def __init__(self, project_root: Path | None = None, max_chunk_size: int = 500):
         """
         Initialize code chunker.
 
@@ -27,7 +30,7 @@ class CodeChunker:
         self.project_root = project_root
         self.max_chunk_size = max_chunk_size
 
-    def chunk_python_file(self, file_path: str, content: str) -> List[CodeChunk]:
+    def chunk_python_file(self, file_path: str, content: str) -> list[CodeChunk]:
         """
         Chunk Python file into semantic units.
 
@@ -79,7 +82,7 @@ class CodeChunker:
 
     def _extract_function_chunk(
         self, node: ast.FunctionDef, file_path: str, content: str
-    ) -> Optional[CodeChunk]:
+    ) -> CodeChunk | None:
         """Extract function as code chunk."""
         start_line = node.lineno
         end_line = node.end_lineno or start_line
@@ -134,7 +137,7 @@ class CodeChunker:
 
     def _extract_class_chunk(
         self, node: ast.ClassDef, file_path: str, content: str
-    ) -> Optional[CodeChunk]:
+    ) -> CodeChunk | None:
         """Extract class as code chunk."""
         start_line = node.lineno
         end_line = node.end_lineno or start_line
@@ -226,7 +229,7 @@ class CodeChunker:
             language=language,
         )
 
-    def chunk_file(self, file_path: str, language: str) -> List[CodeChunk]:
+    def chunk_file(self, file_path: str, language: str) -> list[CodeChunk]:
         """
         Chunk any file based on language.
 
@@ -238,7 +241,7 @@ class CodeChunker:
             List of code chunks
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
         except Exception as e:
             logger.error("file_read_failed", file_path=file_path, error=str(e))

@@ -67,7 +67,7 @@ Report MISSING resilience patterns, not existing ones. Ask:
 - **low**: Suboptimal but functional, minor inefficiency
 """
 
-def generate_chaos_request(code: str, language: str, file_path: Optional[str] = None, context: Optional[dict] = None) -> str:
+def generate_chaos_request(code: str, language: str, file_path: str | None = None, context: dict | None = None) -> str:
     """
     Generate chaos analysis request for code file.
 

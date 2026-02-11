@@ -7,10 +7,10 @@ Reads Warden resources from the filesystem.
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from warden.mcp.ports.resource_repository import IResourceRepository
-from warden.mcp.domain.models import MCPResourceDefinition
 from warden.mcp.domain.enums import ResourceType
 from warden.mcp.domain.errors import MCPResourceNotFoundError
+from warden.mcp.domain.models import MCPResourceDefinition
+from warden.mcp.ports.resource_repository import IResourceRepository
 
 # Optional logging
 try:
@@ -23,7 +23,7 @@ except ImportError:
 
 
 # Standard Warden resources
-WARDEN_RESOURCES: List[MCPResourceDefinition] = [
+WARDEN_RESOURCES: list[MCPResourceDefinition] = [
     MCPResourceDefinition(
         uri="warden://reports/sarif",
         name="SARIF Report",
@@ -90,7 +90,7 @@ class FileResourceRepository(IResourceRepository):
             project_root: Project root directory
         """
         self.project_root = project_root
-        self._resources: Dict[str, MCPResourceDefinition] = {
+        self._resources: dict[str, MCPResourceDefinition] = {
             r.uri: r for r in WARDEN_RESOURCES
         }
 
@@ -104,7 +104,7 @@ class FileResourceRepository(IResourceRepository):
             return False
         return (self.project_root / resource.file_path).exists()
 
-    async def get_content(self, uri: str) -> Optional[str]:
+    async def get_content(self, uri: str) -> str | None:
         """Read resource content."""
         if uri == "warden://reports/latest":
             report_path = self._find_latest_report()
@@ -126,31 +126,31 @@ class FileResourceRepository(IResourceRepository):
             logger.error("resource_read_error", uri=uri, error=str(e))
             raise MCPResourceNotFoundError(uri)
 
-    def _find_latest_report(self) -> Optional[Path]:
+    def _find_latest_report(self) -> Path | None:
         """Find the most recently modified report file."""
         reports_dir = self.get_reports_dir()
         if not reports_dir.exists():
             return None
-            
+
         # Filter for known report types
         report_files = [
-            f for f in reports_dir.iterdir() 
+            f for f in reports_dir.iterdir()
             if f.is_file() and f.suffix in {'.json', '.sarif', '.html', '.md'}
         ]
-        
+
         if not report_files:
             return None
-            
+
         # Return newest
         return max(report_files, key=lambda f: f.stat().st_mtime)
 
-    async def list_available(self) -> List[MCPResourceDefinition]:
+    async def list_available(self) -> list[MCPResourceDefinition]:
         """List resources that exist on disk."""
         available = []
         for resource in self._resources.values():
             if await self.exists(resource.uri):
                 available.append(resource)
-        
+
         # Add dynamic latest report if available
         latest_path = self._find_latest_report()
         if latest_path:
@@ -165,7 +165,7 @@ class FileResourceRepository(IResourceRepository):
 
         return available
 
-    def get_definition(self, uri: str) -> Optional[MCPResourceDefinition]:
+    def get_definition(self, uri: str) -> MCPResourceDefinition | None:
         """Get resource definition by URI."""
         return self._resources.get(uri)
 
@@ -173,7 +173,7 @@ class FileResourceRepository(IResourceRepository):
         """Get the reports directory path."""
         return self.project_root / ".warden" / "reports"
 
-    def list_all_reports(self) -> List[Dict[str, Any]]:
+    def list_all_reports(self) -> list[dict[str, Any]]:
         """
         List all report files in the reports directory.
 

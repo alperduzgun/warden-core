@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from warden.mcp.domain.enums import ServerStatus, ResourceType, ToolCategory
+from warden.mcp.domain.enums import ResourceType, ServerStatus, ToolCategory
 
 
 @dataclass
@@ -22,10 +22,10 @@ class MCPSession:
     session_id: str
     status: ServerStatus = ServerStatus.INITIALIZING
     initialized: bool = False
-    started_at: Optional[datetime] = None
-    client_info: Optional[Dict[str, Any]] = None
+    started_at: datetime | None = None
+    client_info: dict[str, Any] | None = None
 
-    def mark_initialized(self, client_info: Optional[Dict[str, Any]] = None) -> None:
+    def mark_initialized(self, client_info: dict[str, Any] | None = None) -> None:
         """Mark session as initialized after client handshake."""
         self.initialized = True
         self.client_info = client_info
@@ -59,14 +59,14 @@ class MCPToolDefinition:
     name: str
     description: str
     category: ToolCategory
-    input_schema: Dict[str, Any] = field(default_factory=lambda: {
+    input_schema: dict[str, Any] = field(default_factory=lambda: {
         "type": "object",
         "properties": {},
         "required": [],
     })
     requires_bridge: bool = False
 
-    def to_mcp_format(self) -> Dict[str, Any]:
+    def to_mcp_format(self) -> dict[str, Any]:
         """Convert to MCP protocol format."""
         return {
             "name": self.name,
@@ -89,7 +89,7 @@ class MCPResourceDefinition:
     mime_type: str
     file_path: str  # Relative to project root
 
-    def to_mcp_format(self) -> Dict[str, Any]:
+    def to_mcp_format(self) -> dict[str, Any]:
         """Convert to MCP protocol format."""
         result = {
             "uri": self.uri,
@@ -108,10 +108,10 @@ class MCPToolResult:
 
     Encapsulates tool output in MCP-compatible format.
     """
-    content: List[Dict[str, Any]]
+    content: list[dict[str, Any]]
     is_error: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to MCP protocol format."""
         return {
             "content": self.content,

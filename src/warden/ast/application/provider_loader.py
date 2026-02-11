@@ -8,12 +8,13 @@ Auto-discovers and loads AST providers from multiple sources:
 4. Environment variables (WARDEN_AST_PROVIDERS)
 """
 
+import importlib
+import importlib.util
 import os
 import sys
 from pathlib import Path
 from typing import List, Optional
-import importlib
-import importlib.util
+
 import structlog
 
 from warden.ast.application.provider_interface import IASTProvider
@@ -55,7 +56,7 @@ class ASTProviderLoader:
             registry: Provider registry to load providers into
         """
         self._registry = registry
-        self._loaded_providers: List[str] = []
+        self._loaded_providers: list[str] = []
         self._is_loaded = False
 
     async def load_all(self) -> None:
@@ -135,20 +136,15 @@ class ASTProviderLoader:
 
         try:
             # Python 3.10+ has importlib.metadata
-            if sys.version_info >= (3, 10):
-                from importlib.metadata import entry_points
+            from importlib.metadata import entry_points
 
-                eps = entry_points()
-                if hasattr(eps, "select"):
-                    # Python 3.10+
-                    warden_eps = eps.select(group="warden.ast_providers")
-                else:
-                    # Python 3.9
-                    warden_eps = eps.get("warden.ast_providers", [])
+            eps = entry_points()
+            if hasattr(eps, "select"):
+                # Python 3.10+
+                warden_eps = eps.select(group="warden.ast_providers")
             else:
-                # Fallback for older Python versions
-                logger.warning("entry_points_not_supported", python_version=sys.version)
-                return
+                # Python 3.9
+                warden_eps = eps.get("warden.ast_providers", [])
 
             for ep in warden_eps:
                 try:
@@ -252,7 +248,7 @@ class ASTProviderLoader:
         self,
         module_name: str,
         class_name: str,
-    ) -> Optional[IASTProvider]:
+    ) -> IASTProvider | None:
         """
         Load provider from Python module.
 
@@ -306,7 +302,7 @@ class ASTProviderLoader:
     async def _load_provider_from_file(
         self,
         file_path: Path,
-        class_name: Optional[str] = None,
+        class_name: str | None = None,
     ) -> None:
         """
         Load provider from Python file.

@@ -5,15 +5,16 @@ Adds try-except blocks, error handling, and validation to code.
 Detects risky operations (async, file I/O, network, database) and wraps them.
 """
 
-import structlog
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import Any, List, Optional
+
+import structlog
 
 from warden.fortification.domain.base import BaseFortifier
 from warden.fortification.domain.models import (
+    Fortification,
     FortificationResult,
     FortifierPriority,
-    Fortification,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -42,7 +43,7 @@ class ErrorHandlingFortifier(BaseFortifier):
     - External API calls
     """
 
-    def __init__(self, llm_service: Optional[Any] = None):
+    def __init__(self, llm_service: Any | None = None):
         """
         Initialize Error Handling Fortifier.
 
@@ -64,7 +65,7 @@ class ErrorHandlingFortifier(BaseFortifier):
     async def fortify_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
+        cancellation_token: str | None = None,
     ) -> FortificationResult:
         """
         Fortify code by adding error handling.
@@ -153,7 +154,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             fortifier_name=self.name,
         )
 
-    def _analyze_error_handling(self, code: str) -> List[ErrorHandlingSuggestion]:
+    def _analyze_error_handling(self, code: str) -> list[ErrorHandlingSuggestion]:
         """
         Analyze code for missing error handling.
 
@@ -242,7 +243,7 @@ class ErrorHandlingFortifier(BaseFortifier):
         return suggestions
 
     @staticmethod
-    def _is_inside_try_except(lines: List[str], line_index: int) -> bool:
+    def _is_inside_try_except(lines: list[str], line_index: int) -> bool:
         """
         Check if a line is inside a try-except block.
 
@@ -292,8 +293,8 @@ class ErrorHandlingFortifier(BaseFortifier):
     async def _enhance_suggestions_with_llm_async(
         self,
         code_file: CodeFile,
-        suggestions: List[Fortification],
-    ) -> Optional[List[Fortification]]:
+        suggestions: list[Fortification],
+    ) -> list[Fortification] | None:
         """
         Use LLM to enhance suggestions with better descriptions.
 

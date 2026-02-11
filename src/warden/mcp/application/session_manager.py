@@ -7,8 +7,8 @@ Manages MCP session lifecycle.
 import uuid
 from typing import Optional
 
-from warden.mcp.domain.models import MCPSession
 from warden.mcp.domain.enums import ServerStatus
+from warden.mcp.domain.models import MCPSession
 
 
 class SessionManager:
@@ -20,7 +20,7 @@ class SessionManager:
 
     def __init__(self) -> None:
         """Initialize session manager."""
-        self._current_session: Optional[MCPSession] = None
+        self._current_session: MCPSession | None = None
 
     def create_session(self) -> MCPSession:
         """
@@ -33,7 +33,7 @@ class SessionManager:
         self._current_session = MCPSession(session_id=session_id)
         return self._current_session
 
-    def get_current(self) -> Optional[MCPSession]:
+    def get_current(self) -> MCPSession | None:
         """
         Get current session.
 

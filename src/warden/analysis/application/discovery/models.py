@@ -6,14 +6,14 @@ Core entities for file discovery and classification.
 
 from __future__ import annotations
 
-from pydantic import Field
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from warden.shared.domain.base_model import BaseDomainModel
-
+from pydantic import Field
 
 from warden.ast.domain.enums import CodeLanguage
+from warden.shared.domain.base_model import BaseDomainModel
+
 
 class FileType(str, Enum):
     """
@@ -103,9 +103,9 @@ class DiscoveredFile(BaseDomainModel):
     file_type: FileType
     size_bytes: int
     is_analyzable: bool  # Can Warden analyze this file?
-    hash: Optional[str] = None
-    line_count: Optional[int] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    hash: str | None = None
+    line_count: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class FrameworkDetectionResult(BaseDomainModel):
@@ -115,10 +115,10 @@ class FrameworkDetectionResult(BaseDomainModel):
     Contains all detected frameworks and their confidence scores.
     """
 
-    detected_frameworks: List[Framework] = Field(default_factory=list)
-    primary_framework: Optional[Framework] = None
-    confidence_scores: Dict[str, float] = Field(default_factory=dict)  # framework -> score
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    detected_frameworks: list[Framework] = Field(default_factory=list)
+    primary_framework: Framework | None = None
+    confidence_scores: dict[str, float] = Field(default_factory=dict)  # framework -> score
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class DiscoveryStats(BaseDomainModel):
@@ -131,7 +131,7 @@ class DiscoveryStats(BaseDomainModel):
     total_files: int = 0
     analyzable_files: int = 0
     ignored_files: int = 0  # Filtered by .gitignore
-    files_by_type: Dict[str, int] = Field(default_factory=dict)  # file_type -> count
+    files_by_type: dict[str, int] = Field(default_factory=dict)  # file_type -> count
     total_size_bytes: int = 0
     scan_duration_seconds: float = 0.0
 
@@ -151,19 +151,19 @@ class DiscoveryResult(BaseDomainModel):
     """
 
     project_path: str
-    files: List[DiscoveredFile] = Field(default_factory=list)
+    files: list[DiscoveredFile] = Field(default_factory=list)
     framework_detection: FrameworkDetectionResult = Field(
         default_factory=FrameworkDetectionResult
     )
     stats: DiscoveryStats = Field(default_factory=DiscoveryStats)
-    gitignore_patterns: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    gitignore_patterns: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    def get_analyzable_files(self) -> List[DiscoveredFile]:
+    def get_analyzable_files(self) -> list[DiscoveredFile]:
         """Get only files that can be analyzed."""
         return [f for f in self.files if f.is_analyzable]
 
-    def get_files_by_type(self, file_type: FileType) -> List[DiscoveredFile]:
+    def get_files_by_type(self, file_type: FileType) -> list[DiscoveredFile]:
         """Get all files of a specific type."""
         return [f for f in self.files if f.file_type == file_type]
 

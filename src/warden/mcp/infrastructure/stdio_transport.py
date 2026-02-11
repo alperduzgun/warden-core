@@ -9,8 +9,8 @@ import asyncio
 import sys
 from typing import Optional
 
-from warden.mcp.ports.transport import ITransport
 from warden.mcp.domain.errors import MCPTransportError
+from warden.mcp.ports.transport import ITransport
 
 # Optional logging import
 try:
@@ -36,7 +36,7 @@ class STDIOTransport(ITransport):
         self._read_lock = asyncio.Lock()
         self._write_lock = asyncio.Lock()
 
-    async def read_message(self) -> Optional[str]:
+    async def read_message(self) -> str | None:
         """
         Read a line from stdin asynchronously.
 

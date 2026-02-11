@@ -4,14 +4,14 @@ Git hooks installer for Warden.
 Manages installation and uninstallation of Git hooks.
 """
 
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-from dataclasses import dataclass
-import subprocess
 
+from warden.infrastructure.hooks.commit_message_hook import CommitMessageHook
 from warden.infrastructure.hooks.pre_commit import PreCommitHook
 from warden.infrastructure.hooks.pre_push import PrePushHook
-from warden.infrastructure.hooks.commit_message_hook import CommitMessageHook
 
 
 @dataclass
@@ -34,7 +34,7 @@ class HookInstaller:
     }
 
     @staticmethod
-    def find_git_dir(start_path: Optional[Path] = None) -> Optional[Path]:
+    def find_git_dir(start_path: Path | None = None) -> Path | None:
         """
         Find .git directory by traversing up from start_path.
 
@@ -59,10 +59,10 @@ class HookInstaller:
 
     @staticmethod
     def install_hooks(
-        hooks: Optional[List[str]] = None,
-        git_dir: Optional[Path] = None,
+        hooks: list[str] | None = None,
+        git_dir: Path | None = None,
         force: bool = False,
-    ) -> List[HookInstallResult]:
+    ) -> list[HookInstallResult]:
         """
         Install Git hooks.
 
@@ -132,9 +132,9 @@ class HookInstaller:
 
     @staticmethod
     def uninstall_hooks(
-        hooks: Optional[List[str]] = None,
-        git_dir: Optional[Path] = None,
-    ) -> List[HookInstallResult]:
+        hooks: list[str] | None = None,
+        git_dir: Path | None = None,
+    ) -> list[HookInstallResult]:
         """
         Uninstall Git hooks.
 
@@ -193,7 +193,7 @@ class HookInstaller:
         return results
 
     @staticmethod
-    def list_hooks(git_dir: Optional[Path] = None) -> Dict[str, bool]:
+    def list_hooks(git_dir: Path | None = None) -> dict[str, bool]:
         """
         List installed Warden hooks.
 
@@ -216,7 +216,7 @@ class HookInstaller:
         return status
 
     @staticmethod
-    def validate_git_repository(path: Optional[Path] = None) -> bool:
+    def validate_git_repository(path: Path | None = None) -> bool:
         """
         Validate that path is inside a Git repository.
 
@@ -230,7 +230,7 @@ class HookInstaller:
         return git_dir is not None
 
     @staticmethod
-    def get_git_config(key: str, git_dir: Optional[Path] = None) -> Optional[str]:
+    def get_git_config(key: str, git_dir: Path | None = None) -> str | None:
         """
         Get Git configuration value.
 

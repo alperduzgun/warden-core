@@ -15,10 +15,11 @@ Supports 30+ languages including:
 """
 
 import shutil
-import structlog
 import threading
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
+
+import structlog
 
 from warden.lsp.client import LanguageServerClient
 
@@ -27,7 +28,7 @@ logger = structlog.get_logger()
 
 # LSP server configurations: language -> (binary_names, args)
 # Based on Serena's 30+ language support
-LSP_SERVER_CONFIG: Dict[str, Dict] = {
+LSP_SERVER_CONFIG: dict[str, dict] = {
     # --- Primary Languages ---
     "python": {
         "binaries": ["pyright-langserver", "pylsp", "pyls", "jedi-language-server"],
@@ -178,9 +179,9 @@ class LSPManager:
     _lock: threading.Lock = threading.Lock()
 
     def __init__(self) -> None:
-        self._clients: Dict[str, LanguageServerClient] = {}
-        self._binaries: Dict[str, str] = {}
-        self._root_path: Optional[str] = None
+        self._clients: dict[str, LanguageServerClient] = {}
+        self._binaries: dict[str, str] = {}
+        self._root_path: str | None = None
         self._discover_binaries()
 
     @classmethod
@@ -245,7 +246,7 @@ class LSPManager:
         """Check if LSP is available for a language."""
         return language.lower() in self._binaries
 
-    def get_available_languages(self) -> List[str]:
+    def get_available_languages(self) -> list[str]:
         """Get list of languages with available LSP servers."""
         return list(self._binaries.keys())
 
@@ -253,7 +254,7 @@ class LSPManager:
         self,
         language: str,
         root_path: str
-    ) -> Optional[LanguageServerClient]:
+    ) -> LanguageServerClient | None:
         """
         Get or spawn a client for the given language.
 

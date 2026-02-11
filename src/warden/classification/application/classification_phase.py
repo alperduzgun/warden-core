@@ -8,10 +8,10 @@ This phase determines which validation frames should run based on:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
-from warden.validation.domain.frame import CodeFile, ValidationFrame
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile, ValidationFrame
 
 logger = get_logger(__name__)
 
@@ -20,12 +20,12 @@ logger = get_logger(__name__)
 class ClassificationResult:
     """Result from classification phase."""
 
-    selected_frames: List[str] = field(default_factory=list)
-    suppression_rules: List[Dict[str, Any]] = field(default_factory=list)
-    frame_priorities: Dict[str, int] = field(default_factory=dict)
+    selected_frames: list[str] = field(default_factory=list)
+    suppression_rules: list[dict[str, Any]] = field(default_factory=list)
+    frame_priorities: dict[str, int] = field(default_factory=dict)
     reasoning: str = ""
-    learned_patterns: List[Dict[str, Any]] = field(default_factory=list)
-    advisories: List[str] = field(default_factory=list)  # AI Strategic Advice / Warnings
+    learned_patterns: list[dict[str, Any]] = field(default_factory=list)
+    advisories: list[str] = field(default_factory=list)  # AI Strategic Advice / Warnings
     confidence: float = 0.0
     duration: float = 0.0
 
@@ -37,7 +37,7 @@ class ClassificationPhase:
     Determines which frames to run and which issues to suppress.
     """
 
-    def __init__(self, config: Dict[str, Any] = None, context: Dict[str, Any] = None, available_frames: List[ValidationFrame] = None, semantic_search_service: Any = None):
+    def __init__(self, config: dict[str, Any] = None, context: dict[str, Any] = None, available_frames: list[ValidationFrame] = None, semantic_search_service: Any = None):
         """
         Initialize classification phase.
 
@@ -58,7 +58,7 @@ class ClassificationPhase:
             has_context=bool(context)
         )
 
-    async def execute_async(self, code_files: List[CodeFile]) -> ClassificationResult:
+    async def execute_async(self, code_files: list[CodeFile]) -> ClassificationResult:
         """
         Execute classification phase.
 
@@ -128,7 +128,7 @@ class ClassificationPhase:
         project_type: str,
         framework: str,
         quality_score: float
-    ) -> List[str]:
+    ) -> list[str]:
         """Select appropriate frames based on project context and semantic search."""
 
         frames = []
@@ -161,10 +161,9 @@ class ClassificationPhase:
                     query="circuit breaker retry logic timeout handling distributed system",
                     limit=3
                 )
-                if any(m.score > 0.7 for m in resilience_matches):
-                    if "resilience" not in frames:
-                        frames.append("resilience")
-                        logger.info("semantic_trigger_resilience", reason="Detected resilience patterns")
+                if any(m.score > 0.7 for m in resilience_matches) and "resilience" not in frames:
+                    frames.append("resilience")
+                    logger.info("semantic_trigger_resilience", reason="Detected resilience patterns")
 
                 # 2. Check for security sensitive patterns
                 security_matches = await self.semantic_search_service.search(
@@ -188,9 +187,9 @@ class ClassificationPhase:
 
     def _calculate_frame_priorities(
         self,
-        frames: List[str],
-        hotspots: List[Dict[str, Any]]
-    ) -> Dict[str, int]:
+        frames: list[str],
+        hotspots: list[dict[str, Any]]
+    ) -> dict[str, int]:
         """Calculate priority for each frame."""
 
         priorities = {}
@@ -221,7 +220,7 @@ class ClassificationPhase:
         self,
         project_type: str,
         framework: str
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generate suppression rules based on context."""
 
         rules = []

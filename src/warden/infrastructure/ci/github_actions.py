@@ -5,8 +5,8 @@ Generates GitHub Actions workflow files for running Warden in CI/CD.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
 
 
 @dataclass
@@ -14,12 +14,12 @@ class GitHubActionsConfig:
     """Configuration for GitHub Actions workflow."""
 
     workflow_name: str = "Warden Analysis"
-    trigger_events: List[str] = None
+    trigger_events: list[str] = None
     python_version: str = "3.11"
-    warden_version: Optional[str] = None
+    warden_version: str | None = None
     fail_on_issues: bool = True
     upload_artifacts: bool = True
-    frames: Optional[List[str]] = None
+    frames: list[str] | None = None
 
     def __post_init__(self):
         if self.trigger_events is None:
@@ -124,7 +124,7 @@ jobs:
         return template
 
     @staticmethod
-    def _generate_triggers(events: List[str]) -> str:
+    def _generate_triggers(events: list[str]) -> str:
         """Generate trigger section for workflow."""
         if len(events) == 1:
             return f"'on': [{events[0]}]"
@@ -204,7 +204,7 @@ jobs:
             if not isinstance(data["jobs"], dict):
                 return False
 
-            for job_name, job_config in data["jobs"].items():
+            for _job_name, job_config in data["jobs"].items():
                 if "runs-on" not in job_config:
                     return False
                 if "steps" not in job_config:

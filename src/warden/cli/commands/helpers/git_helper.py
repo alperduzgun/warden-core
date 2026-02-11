@@ -22,10 +22,10 @@ class GitHelper:
     def __init__(self, working_dir: Path):
         self.working_dir = working_dir
         self.git_cmd = shutil.which("git")
-        
+
         if not self.git_cmd:
             raise RuntimeError("Git executable not found in PATH")
-            
+
         if not (self.working_dir / ".git").exists():
              # Check if we are in a subdirectory of a repo
              try:
@@ -38,19 +38,19 @@ class GitHelper:
              except subprocess.CalledProcessError:
                  raise RuntimeError(f"Directory {working_dir} is not a git repository")
 
-    def get_changed_files(self, base_branch: str = "main", diff_filter: str = "d") -> List[str]:
+    def get_changed_files(self, base_branch: str = "main", diff_filter: str = "d") -> list[str]:
         """
         Get list of changed files relative to base branch.
-        
+
         Args:
             base_branch: Branch to compare against (default: main)
             diff_filter: Diff filter options (default: 'd' for no deleted files)
-            
+
         Returns:
             List of absolute paths to changed files.
         """
         logger.info("git_diff_started", base_branch=base_branch, cwd=str(self.working_dir))
-        
+
         try:
             # 1. Fetch to ensure we have the base ref
             # (skip in local-only scenarios if user prefers, but safer to try)
@@ -59,9 +59,9 @@ class GitHelper:
             # 2. Get Diff against base branch (e.g. origin/main...HEAD)
             # We use 3 dots (merge-base) for safer comparison
             # Fallback to local main if origin/main unavailable
-            
+
             target = f"origin/{base_branch}"
-            
+
             # Check if remote branch exists, else try local
             if not self._ref_exists(target):
                 logger.warning("git_remote_ref_not_found", ref=target, fallback=base_branch)
@@ -84,7 +84,7 @@ class GitHelper:
             # If I have uncommitted changes, they are on top of HEAD.
             # So: origin/main...HEAD covers commits.
             # We NEED to also check uncommitted changes.
-            
+
             changed_files = set()
 
             # A. Committed changes diff (base...HEAD comparison)
@@ -112,7 +112,7 @@ class GitHelper:
                 abs_p = self.working_dir / rel_path
                 if abs_p.exists() and abs_p.is_file():
                     abs_paths.append(str(abs_p))
-            
+
             logger.info("git_diff_completed", count=len(abs_paths))
             return sorted(abs_paths)
 

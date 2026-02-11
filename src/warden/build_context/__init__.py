@@ -28,18 +28,18 @@ context = get_build_context_sync("/path/to/project")
 ```
 """
 
-from warden.build_context.models import (
-    BuildContext,
-    BuildSystem,
-    Dependency,
-    DependencyType,
-    BuildScript,
-    create_empty_context,
-)
 from warden.build_context.context_provider import (
     BuildContextProvider,
     get_build_context_async,
     get_build_context_sync,
+)
+from warden.build_context.models import (
+    BuildContext,
+    BuildScript,
+    BuildSystem,
+    Dependency,
+    DependencyType,
+    create_empty_context,
 )
 
 __all__ = [

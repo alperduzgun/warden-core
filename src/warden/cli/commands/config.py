@@ -17,15 +17,15 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Optional
 
 import typer
 import yaml
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
-from rich.tree import Tree
 from rich.syntax import Syntax
+from rich.table import Table
+from rich.tree import Tree
 
 from warden.llm.types import LlmProvider
 
@@ -55,7 +55,7 @@ VALID_LLM_PROVIDERS = [p.value for p in LlmProvider]
 # Helper Functions
 # =============================================================================
 
-def _find_config_path() -> Optional[Path]:
+def _find_config_path() -> Path | None:
     """
     Find the Warden config file.
 
@@ -148,9 +148,7 @@ def _set_nested_value(data: dict, key: str, value: Any) -> None:
 
     # Navigate to parent, creating dicts as needed
     for k in keys[:-1]:
-        if k not in current:
-            current[k] = {}
-        elif not isinstance(current[k], dict):
+        if k not in current or not isinstance(current[k], dict):
             current[k] = {}
         current = current[k]
 

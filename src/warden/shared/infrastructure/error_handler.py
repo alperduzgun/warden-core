@@ -1,7 +1,9 @@
 """Centralized async error handling decorator."""
 import functools
+from collections.abc import Callable
+from typing import Any, Dict, List, Optional, Type
+
 import structlog
-from typing import Any, Callable, Optional, Dict, Type, List
 
 logger = structlog.get_logger(__name__)
 
@@ -24,8 +26,8 @@ class ValidationError(Exception):
 def async_error_handler(
     fallback_value: Any = None,
     log_level: str = "error",
-    error_map: Optional[Dict[Type[Exception], Type[Exception]]] = None,
-    context_keys: Optional[List[str]] = None,
+    error_map: dict[type[Exception], type[Exception]] | None = None,
+    context_keys: list[str] | None = None,
     reraise: bool = True,
 ):
     """

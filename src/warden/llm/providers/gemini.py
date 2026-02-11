@@ -5,15 +5,17 @@ Direct integration with Google Generative Language API via HTTPX.
 Avoids heavy dependencies like google-generativeai.
 """
 
-import httpx
 import time
 from typing import Any, Dict, Optional
 
+import httpx
+
+from warden.shared.infrastructure.resilience import resilient
+
 from ..config import ProviderConfig
+from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
-from warden.shared.infrastructure.resilience import resilient
-from ..registry import ProviderRegistry
 
 
 class GeminiClient(ILlmClient):
@@ -55,7 +57,7 @@ class GeminiClient(ILlmClient):
 
         # Construct payload
         # System instructions are supported in 1.5 models via system_instruction
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "contents": [
                 {
                     "parts": [{"text": request.user_message}]
@@ -86,10 +88,10 @@ class GeminiClient(ILlmClient):
                     json=payload,
                     headers=headers
                 )
-                
+
                 if response.status_code != 200:
                     response.raise_for_status()
-                
+
                 result = response.json()
 
             duration_ms = int((time.time() - start_time) * 1000)
@@ -102,7 +104,7 @@ class GeminiClient(ILlmClient):
                 if "content" in candidate and "parts" in candidate["content"]:
                     parts = candidate["content"]["parts"]
                     content = "".join([p.get("text", "") for p in parts])
-            
+
             if not content:
                  # Check for safety ratings blocking
                 return LlmResponse(
@@ -115,7 +117,7 @@ class GeminiClient(ILlmClient):
 
             # Token usage
             usage = result.get("usageMetadata", {})
-            
+
             return LlmResponse(
                 content=content,
                 success=True,

@@ -7,9 +7,9 @@ Maps to gRPC SemanticSearchMixin functionality.
 
 from typing import Any, Dict, List
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class SearchAdapter(BaseWardenAdapter):
@@ -35,7 +35,7 @@ class SearchAdapter(BaseWardenAdapter):
     })
     TOOL_CATEGORY = ToolCategory.SEARCH
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get search tool definitions."""
         return [
             self._create_tool_definition(
@@ -129,7 +129,7 @@ class SearchAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute search tool."""
         handlers = {
@@ -146,7 +146,7 @@ class SearchAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _search_code_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _search_code_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Search code using semantic search."""
         query = arguments.get("query")
         language = arguments.get("language")
@@ -167,7 +167,7 @@ class SearchAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Search failed: {e}")
 
-    async def _search_similar_code_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _search_similar_code_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Find similar code."""
         code = arguments.get("code")
         language = arguments.get("language")
@@ -188,7 +188,7 @@ class SearchAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Similar search failed: {e}")
 
-    async def _search_by_description_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _search_by_description_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Search code by natural language description."""
         query = arguments.get("query")
         limit = arguments.get("limit", 10)
@@ -209,7 +209,7 @@ class SearchAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Description search failed: {e}")
 
-    async def _index_project_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _index_project_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Index project for semantic search."""
         path = arguments.get("path", str(self.project_root))
         force = arguments.get("force_reindex", False)
@@ -227,7 +227,7 @@ class SearchAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Indexing failed: {e}")
 
-    async def _get_index_stats_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_index_stats_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get index statistics."""
         if not self.bridge:
             return MCPToolResult.error("Warden bridge not available")
@@ -244,7 +244,7 @@ class SearchAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to get index stats: {e}")
 
-    async def _clear_index_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _clear_index_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Clear semantic search index."""
         if not self.bridge:
             return MCPToolResult.error("Warden bridge not available")

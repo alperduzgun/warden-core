@@ -7,14 +7,16 @@ Based on C# AnthropicClient.cs:
 API Documentation: https://docs.anthropic.com/claude/reference
 """
 
-import httpx
 import time
 
+import httpx
+
+from warden.shared.infrastructure.resilience import resilient
+
 from ..config import ProviderConfig
+from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
-from warden.shared.infrastructure.resilience import resilient
-from ..registry import ProviderRegistry
 
 
 class AnthropicClient(ILlmClient):

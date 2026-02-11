@@ -10,7 +10,8 @@ Issue #17 Fix: Global rate limiting implementation
 import asyncio
 import threading
 from typing import Dict, Optional
-from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
+
+from warden.llm.rate_limiter import RateLimitConfig, RateLimiter
 
 # Module-level threading lock for safe singleton initialization.
 # Threading lock is safe across event loops unlike asyncio.Lock.
@@ -34,7 +35,7 @@ class GlobalRateLimiter:
             raise RuntimeError("Use GlobalRateLimiter.get_instance() instead")
 
         # Provider-specific rate limiters
-        self._limiters: Dict[str, RateLimiter] = {
+        self._limiters: dict[str, RateLimiter] = {
             # Fast tier providers (high limits)
             "qwen": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
             "ollama": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
@@ -99,7 +100,7 @@ class GlobalRateLimiter:
         """
         return self._limiters.get(provider.lower(), self._limiters["default"])
 
-    def get_stats(self, provider: str = "default") -> Dict:
+    def get_stats(self, provider: str = "default") -> dict:
         """
         Get current rate limit statistics for a provider.
 

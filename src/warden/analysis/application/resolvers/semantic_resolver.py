@@ -1,13 +1,15 @@
 """
 Semantic Resolver for Language-Agnostic Dependency Mapping.
 
-Handles the mapping of raw import strings (e.g., "@/utils", "../core") 
+Handles the mapping of raw import strings (e.g., "@/utils", "../core")
 to actual project file paths using heuristics, project context, and LLM fallback.
 """
 
 from pathlib import Path
 from typing import Optional
+
 import structlog
+
 from warden.analysis.domain.project_context import ProjectContext
 from warden.ast.domain.enums import CodeLanguage
 
@@ -16,7 +18,7 @@ logger = structlog.get_logger()
 class SemanticResolver:
     """
     Resolves dependency strings to physical file paths.
-    
+
     Uses a multi-layered approach:
     1. Heuristic (Relative/Common paths)
     2. Context-Aware (Alias resolution from ProjectContext)
@@ -26,7 +28,7 @@ class SemanticResolver:
     def __init__(self, project_root: Path, project_context: ProjectContext):
         """
         Initialize resolver.
-        
+
         Args:
             project_root: Root directory of the project
             project_context: Metadata about the project (Phase 0)
@@ -38,15 +40,15 @@ class SemanticResolver:
             "warden.shared.logger", "warden.reports", "warden.cli"
         }
 
-    def resolve(self, import_str: str, current_file: Path, language: CodeLanguage) -> Optional[Path]:
+    def resolve(self, import_str: str, current_file: Path, language: CodeLanguage) -> Path | None:
         """
         Resolve an import string to an absolute path.
-        
+
         Args:
             import_str: Raw string from source code
             current_file: Absolute path of the file containing the import
             language: Programming language context
-            
+
         Returns:
             Resolved absolute Path or None if not found/skipped
         """
@@ -75,7 +77,7 @@ class SemanticResolver:
         base_module = parts[0]
         return base_module in self.skip_list or import_str in self.skip_list
 
-    def _resolve_heuristic(self, import_str: str, current_file: Path, language: CodeLanguage) -> Optional[Path]:
+    def _resolve_heuristic(self, import_str: str, current_file: Path, language: CodeLanguage) -> Path | None:
         """Resolve common relative and absolute-within-project patterns."""
         # Relative paths: ./utils, ../core
         if import_str.startswith('.'):
@@ -89,19 +91,19 @@ class SemanticResolver:
                     for char in import_str:
                         if char == '.': dot_count += 1
                         else: break
-                    
+
                     if dot_count > 0:
                         parent = current_file.parent
                         for _ in range(dot_count - 1):
                             parent = parent.parent
-                        
+
                         rel_path = import_str[dot_count:].replace('.', '/')
                         path = parent / rel_path
                     else:
                         path = current_file.parent / import_str.replace('.', '/')
                 else:
                     path = current_file.parent / import_str
-                
+
                 return self._verify_path(path, language)
             except Exception:
                 return None
@@ -111,12 +113,12 @@ class SemanticResolver:
         resolved = self._verify_path(root_path, language)
         if resolved:
             return resolved
-            
+
         # Try prepending 'src' (Common in Python/JS projects)
         src_path = self.project_root / "src" / import_str.replace('.', '/')
         return self._verify_path(src_path, language)
 
-    def _resolve_context(self, import_str: str, language: CodeLanguage) -> Optional[Path]:
+    def _resolve_context(self, import_str: str, language: CodeLanguage) -> Path | None:
         """Resolve using project-specific aliases (e.g., TSC aliases)."""
         # 1. Check for known aliases in ProjectContext
         # Future: ProjectContext could store alias mappings detected in Phase 0
@@ -124,10 +126,10 @@ class SemanticResolver:
         if import_str.startswith('@/'):
             path = self.project_root / 'src' / import_str[2:]
             return self._verify_path(path, language)
-            
+
         return None
 
-    def _verify_path(self, path: Path, language: CodeLanguage) -> Optional[Path]:
+    def _verify_path(self, path: Path, language: CodeLanguage) -> Path | None:
         """Check if path exists with appropriate extension."""
         extensions = {
             CodeLanguage.PYTHON: [".py", "/__init__.py"],
@@ -140,7 +142,7 @@ class SemanticResolver:
         # Try base path first (if it's a directory or already has extension)
         if path.is_file():
             return path.absolute()
-        
+
         if path.is_dir():
              # Check for index files
              for ext in extensions:
@@ -155,5 +157,5 @@ class SemanticResolver:
             p = path.with_suffix(ext)
             if p.exists():
                 return p.absolute()
-        
+
         return None

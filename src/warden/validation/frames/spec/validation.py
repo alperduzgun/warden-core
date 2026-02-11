@@ -15,8 +15,8 @@ from itertools import islice
 from pathlib import Path
 from typing import List, Optional
 
-from warden.validation.frames.spec.models import PlatformType, PlatformRole
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.frames.spec.models import PlatformRole, PlatformType
 
 logger = get_logger(__name__)
 
@@ -43,8 +43,8 @@ class ValidationIssue:
     severity: IssueSeverity
     message: str
     field: str
-    suggestion: Optional[str] = None
-    platform_name: Optional[str] = None
+    suggestion: str | None = None
+    platform_name: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -68,7 +68,7 @@ class ValidationResult:
         metadata: Additional validation metadata
     """
     is_valid: bool
-    issues: List[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidationIssue] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
 
     @property
@@ -122,7 +122,7 @@ class SpecConfigValidator:
                 print(f"{issue.severity}: {issue.message}")
     """
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         """
         Initialize validator.
 
@@ -154,7 +154,7 @@ class SpecConfigValidator:
 
     def validate_platforms(
         self,
-        platforms: List[dict],
+        platforms: list[dict],
     ) -> ValidationResult:
         """
         Validate platform configurations.
@@ -174,7 +174,7 @@ class SpecConfigValidator:
             project_root=str(self.project_root),
         )
 
-        issues: List[ValidationIssue] = []
+        issues: list[ValidationIssue] = []
         metadata: dict = {
             "platforms_checked": len(platforms),
             "consumer_count": 0,
@@ -281,7 +281,7 @@ class SpecConfigValidator:
         self,
         platform: dict,
         platform_name: str,
-        issues: List[ValidationIssue],
+        issues: list[ValidationIssue],
     ) -> None:
         """
         Validate required fields are present.
@@ -307,7 +307,7 @@ class SpecConfigValidator:
         self,
         platform: dict,
         platform_name: str,
-        issues: List[ValidationIssue],
+        issues: list[ValidationIssue],
     ) -> None:
         """
         Validate platform path exists and is accessible.
@@ -368,8 +368,8 @@ class SpecConfigValidator:
         self,
         platform: dict,
         platform_name: str,
-        issues: List[ValidationIssue],
-    ) -> Optional[PlatformType]:
+        issues: list[ValidationIssue],
+    ) -> PlatformType | None:
         """
         Validate platform type is a valid enum value.
 
@@ -402,8 +402,8 @@ class SpecConfigValidator:
         self,
         platform: dict,
         platform_name: str,
-        issues: List[ValidationIssue],
-    ) -> Optional[PlatformRole]:
+        issues: list[ValidationIssue],
+    ) -> PlatformRole | None:
         """
         Validate platform role is a valid enum value.
 
@@ -438,7 +438,7 @@ class SpecConfigValidator:
         platform_name: str,
         seen_names: set[str],
         seen_paths: set[str],
-        issues: List[ValidationIssue],
+        issues: list[ValidationIssue],
     ) -> None:
         """
         Check for duplicate platform names and paths.
@@ -489,7 +489,7 @@ class SpecConfigValidator:
         self,
         platform: dict,
         platform_name: str,
-        issues: List[ValidationIssue],
+        issues: list[ValidationIssue],
     ) -> None:
         """
         Check if project is very large (warning only).

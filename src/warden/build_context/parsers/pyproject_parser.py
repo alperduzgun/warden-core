@@ -4,16 +4,16 @@ Pyproject.toml parser for Poetry/PEP 621 projects.
 Extracts build configuration and dependencies from pyproject.toml files.
 """
 
-from pathlib import Path
-from typing import Optional, Dict, Any, List
 import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from warden.build_context.models import (
     BuildContext,
+    BuildScript,
     BuildSystem,
     Dependency,
     DependencyType,
-    BuildScript,
 )
 
 
@@ -64,10 +64,10 @@ class PyprojectParser:
                 return BuildSystem.POETRY
             else:
                 return BuildSystem.PIP
-        except IOError:
+        except OSError:
             return BuildSystem.PIP
 
-    def parse(self) -> Optional[BuildContext]:
+    def parse(self) -> BuildContext | None:
         """
         Parse pyproject.toml and extract build context.
 
@@ -92,13 +92,13 @@ class PyprojectParser:
             else:
                 return None
 
-        except (IOError, ValueError) as e:
+        except (OSError, ValueError) as e:
             print(f"Error parsing pyproject.toml: {e}")
             return None
 
     def _parse_poetry(
         self,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         build_system: BuildSystem
     ) -> BuildContext:
         """
@@ -145,7 +145,7 @@ class PyprojectParser:
         scripts = self._parse_poetry_scripts(poetry.get("scripts", {}))
 
         # Extract metadata
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
         for key in ["authors", "license", "repository", "keywords", "homepage"]:
             if key in poetry:
                 metadata[key] = poetry[key]
@@ -166,7 +166,7 @@ class PyprojectParser:
 
     def _parse_pep621(
         self,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         build_system: BuildSystem
     ) -> BuildContext:
         """
@@ -191,7 +191,7 @@ class PyprojectParser:
         )
 
         # Parse optional dependencies (dev, test, etc.)
-        dev_dependencies: List[Dependency] = []
+        dev_dependencies: list[Dependency] = []
         optional_deps = project.get("optional-dependencies", {})
         for group_name, group_deps in optional_deps.items():
             parsed = self._parse_pep621_dependencies(group_deps)
@@ -210,7 +210,7 @@ class PyprojectParser:
         scripts = self._parse_pep621_scripts(project.get("scripts", {}))
 
         # Extract metadata
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
         for key in ["authors", "license", "repository", "keywords", "homepage"]:
             if key in project:
                 metadata[key] = project[key]
@@ -231,9 +231,9 @@ class PyprojectParser:
 
     def _parse_poetry_dependencies(
         self,
-        deps_dict: Dict[str, Any],
-        exclude: Optional[List[str]] = None
-    ) -> List[Dependency]:
+        deps_dict: dict[str, Any],
+        exclude: list[str] | None = None
+    ) -> list[Dependency]:
         """
         Parse Poetry dependencies.
 
@@ -248,7 +248,7 @@ class PyprojectParser:
         Returns:
             List of Dependency objects
         """
-        dependencies: List[Dependency] = []
+        dependencies: list[Dependency] = []
         exclude = exclude or []
 
         for name, spec in deps_dict.items():
@@ -284,8 +284,8 @@ class PyprojectParser:
 
     def _parse_pep621_dependencies(
         self,
-        deps_list: List[str]
-    ) -> List[Dependency]:
+        deps_list: list[str]
+    ) -> list[Dependency]:
         """
         Parse PEP 621 dependencies.
 
@@ -297,7 +297,7 @@ class PyprojectParser:
         Returns:
             List of Dependency objects
         """
-        dependencies: List[Dependency] = []
+        dependencies: list[Dependency] = []
 
         for dep_str in deps_list:
             parsed = self._parse_requirement_string(dep_str)
@@ -306,7 +306,7 @@ class PyprojectParser:
 
         return dependencies
 
-    def _parse_requirement_string(self, req_str: str) -> Optional[Dependency]:
+    def _parse_requirement_string(self, req_str: str) -> Dependency | None:
         """
         Parse a single requirement string.
 
@@ -332,7 +332,7 @@ class PyprojectParser:
         extras_str = match.group(2)
         version = match.group(3).strip() if match.group(3) else "*"
 
-        extras: List[str] = []
+        extras: list[str] = []
         if extras_str:
             extras = [e.strip() for e in extras_str.split(",")]
 
@@ -346,8 +346,8 @@ class PyprojectParser:
 
     def _parse_poetry_scripts(
         self,
-        scripts_dict: Dict[str, str]
-    ) -> List[BuildScript]:
+        scripts_dict: dict[str, str]
+    ) -> list[BuildScript]:
         """
         Parse Poetry scripts.
 
@@ -357,7 +357,7 @@ class PyprojectParser:
         Returns:
             List of BuildScript objects
         """
-        scripts: List[BuildScript] = []
+        scripts: list[BuildScript] = []
 
         for name, command in scripts_dict.items():
             scripts.append(
@@ -371,8 +371,8 @@ class PyprojectParser:
 
     def _parse_pep621_scripts(
         self,
-        scripts_dict: Dict[str, str]
-    ) -> List[BuildScript]:
+        scripts_dict: dict[str, str]
+    ) -> list[BuildScript]:
         """
         Parse PEP 621 scripts.
 
@@ -384,7 +384,7 @@ class PyprojectParser:
         """
         return self._parse_poetry_scripts(scripts_dict)
 
-    def _parse_toml(self, path: Path) -> Dict[str, Any]:
+    def _parse_toml(self, path: Path) -> dict[str, Any]:
         """
         Simple TOML parser (basic support only).
 
@@ -410,7 +410,7 @@ class PyprojectParser:
                 # Fallback to basic parsing if no TOML library available
                 return self._basic_toml_parse(path)
 
-    def _basic_toml_parse(self, path: Path) -> Dict[str, Any]:
+    def _basic_toml_parse(self, path: Path) -> dict[str, Any]:
         """
         Very basic TOML parsing fallback.
 
@@ -422,10 +422,10 @@ class PyprojectParser:
         Returns:
             Parsed data dictionary
         """
-        result: Dict[str, Any] = {}
-        current_section: List[str] = []
+        result: dict[str, Any] = {}
+        current_section: list[str] = []
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
 

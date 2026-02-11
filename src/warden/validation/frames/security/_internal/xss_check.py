@@ -11,10 +11,10 @@ import re
 from typing import List
 
 from warden.validation.domain.check import (
-    ValidationCheck,
-    CheckResult,
     CheckFinding,
+    CheckResult,
     CheckSeverity,
+    ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -64,7 +64,7 @@ class XSSCheck(ValidationCheck):
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute XSS detection."""
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         for compiled_pattern, description in self._compiled_patterns:
             for line_num, line in enumerate(code_file.content.split("\n"), start=1):

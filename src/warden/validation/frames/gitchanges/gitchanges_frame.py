@@ -14,30 +14,31 @@ Usage in CI/CD:
     - Focus on new code quality
 """
 
-import time
 import subprocess
 import sys
+import time
 from pathlib import Path
-from typing import List, Dict, Any, Set
+from typing import Any, Dict, List, Set
 
 # Add current directory to path for local imports
 if str(Path(__file__).parent) not in sys.path:
     sys.path.append(str(Path(__file__).parent))
 
-from warden.validation.domain.frame import (
-    ValidationFrame,
-    FrameResult,
-    Finding,
-    CodeFile,
-)
+from git_diff_parser import FileDiff, GitDiffParser
+
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
+    FrameApplicability,
     FrameCategory,
     FramePriority,
     FrameScope,
-    FrameApplicability,
 )
-from git_diff_parser import GitDiffParser, FileDiff
-from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import (
+    CodeFile,
+    Finding,
+    FrameResult,
+    ValidationFrame,
+)
 
 logger = get_logger(__name__)
 
@@ -68,7 +69,7 @@ class GitChangesFrame(ValidationFrame):
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize GitChangesFrame.
 
@@ -163,8 +164,8 @@ class GitChangesFrame(ValidationFrame):
                 findings=findings,
                 metadata={
                     "status": "analyzed",
-                    "added_lines": sorted(list(file_diff.get_all_added_lines())),
-                    "deleted_lines": sorted(list(file_diff.get_all_deleted_lines())),
+                    "added_lines": sorted(file_diff.get_all_added_lines()),
+                    "deleted_lines": sorted(file_diff.get_all_deleted_lines()),
                     "hunks_count": len(file_diff.hunks),
                     "is_new_file": file_diff.is_new,
                     "is_deleted_file": file_diff.is_deleted,
@@ -255,7 +256,7 @@ class GitChangesFrame(ValidationFrame):
 
     def _analyze_changed_lines(
         self, code_file: CodeFile, file_diff: FileDiff
-    ) -> List[Finding]:
+    ) -> list[Finding]:
         """
         Analyze changed lines and generate findings.
 
@@ -266,7 +267,7 @@ class GitChangesFrame(ValidationFrame):
         Returns:
             List of Finding objects for changed lines
         """
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         # Get all added lines
         added_lines = file_diff.get_all_added_lines()
@@ -319,7 +320,7 @@ class GitChangesFrame(ValidationFrame):
         return findings
 
     def _create_summary_detail(
-        self, file_diff: FileDiff, added_lines: Set[int]
+        self, file_diff: FileDiff, added_lines: set[int]
     ) -> str:
         """
         Create detailed summary of changes.
@@ -355,8 +356,8 @@ class GitChangesFrame(ValidationFrame):
     def _create_result(
         self,
         start_time: float,
-        findings: List[Finding],
-        metadata: Dict[str, Any],
+        findings: list[Finding],
+        metadata: dict[str, Any],
     ) -> FrameResult:
         """
         Create frame result.

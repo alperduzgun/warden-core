@@ -61,8 +61,8 @@ class BaseFileRepository(Generic[T]):
         self.entity_name = entity_name
         self._lock = asyncio.Lock()
         self._create_if_missing = create_if_missing
-        self._cache: Optional[Dict[str, Any]] = None
-        self._cache_time: Optional[datetime] = None
+        self._cache: dict[str, Any] | None = None
+        self._cache_time: datetime | None = None
         self._cache_ttl_seconds = cache_ttl_seconds
 
     async def _ensure_storage_exists_async(self) -> None:
@@ -85,7 +85,7 @@ class BaseFileRepository(Generic[T]):
                 entity=self.entity_name,
             )
 
-    def _get_empty_structure(self) -> Dict[str, Any]:
+    def _get_empty_structure(self) -> dict[str, Any]:
         """Get empty data structure for new storage file."""
         return {
             "version": "1.0",
@@ -94,7 +94,7 @@ class BaseFileRepository(Generic[T]):
             "entities": {},
         }
 
-    async def _read_data_async(self) -> Dict[str, Any]:
+    async def _read_data_async(self) -> dict[str, Any]:
         """Read and parse JSON data from storage file."""
         await self._ensure_storage_exists_async()
 
@@ -108,7 +108,7 @@ class BaseFileRepository(Generic[T]):
             return self._cache
 
         try:
-            async with aiofiles.open(self.storage_path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(self.storage_path, encoding="utf-8") as f:
                 content = await f.read()
                 data = (
                     json.loads(content) if content.strip() else self._get_empty_structure()
@@ -130,7 +130,7 @@ class BaseFileRepository(Generic[T]):
         except FileNotFoundError:
             return self._get_empty_structure()
 
-    async def _write_data_async(self, data: Dict[str, Any]) -> None:
+    async def _write_data_async(self, data: dict[str, Any]) -> None:
         """Write data to storage file with backup."""
         async with self._lock:
             # Create backup if file exists
@@ -139,7 +139,7 @@ class BaseFileRepository(Generic[T]):
                 try:
                     # Read current content and write to backup
                     async with aiofiles.open(
-                        self.storage_path, "r", encoding="utf-8"
+                        self.storage_path, encoding="utf-8"
                     ) as f:
                         current_content = await f.read()
                     async with aiofiles.open(backup_path, "w", encoding="utf-8") as f:

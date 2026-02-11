@@ -5,31 +5,33 @@ Coordinates execution of all pipeline phases with shared PipelineContext.
 """
 
 import asyncio
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Callable
+from typing import Any, List, Optional
 from uuid import uuid4
 
 import structlog
 
-from warden.pipeline.domain.pipeline_context import PipelineContext
-from warden.pipeline.domain.models import (
-    PipelineResult,
-    ValidationPipeline,
-    PipelineConfig,
-)
-from warden.pipeline.domain.enums import PipelineStatus
-from warden.rules.application.rule_validator import CustomRuleValidator
-from warden.validation.domain.frame import CodeFile, ValidationFrame
-from warden.shared.infrastructure.logging import get_logger
-from warden.shared.infrastructure.error_handler import async_error_handler, OperationTimeoutError, ValidationError
-
-from .phase_executor import PhaseExecutor
-from .frame_executor import FrameExecutor
-from warden.shared.services.semantic_search_service import SemanticSearchService
 from warden.analysis.services.finding_verifier import FindingVerificationService
 from warden.llm.factory import create_client
+from warden.lsp.diagnostic_service import LSPDiagnosticService
+from warden.pipeline.domain.enums import PipelineStatus
+from warden.pipeline.domain.models import (
+    PipelineConfig,
+    PipelineResult,
+    ValidationPipeline,
+)
+from warden.pipeline.domain.pipeline_context import PipelineContext
+from warden.rules.application.rule_validator import CustomRuleValidator
+from warden.shared.infrastructure.error_handler import OperationTimeoutError, ValidationError, async_error_handler
+from warden.shared.infrastructure.logging import get_logger
+from warden.shared.services.semantic_search_service import SemanticSearchService
 from warden.shared.utils.finding_utils import get_finding_attribute, get_finding_severity
+from warden.validation.domain.frame import CodeFile, ValidationFrame
+
+from .frame_executor import FrameExecutor
+from .phase_executor import PhaseExecutor
 
 logger = get_logger(__name__)
 
@@ -49,13 +51,13 @@ class PhaseOrchestrator:
 
     def __init__(
         self,
-        frames: Optional[List[ValidationFrame]] = None,
-        config: Optional[PipelineConfig] = None,
-        progress_callback: Optional[Callable] = None,
-        project_root: Optional[Path] = None,
-        llm_service: Optional[Any] = None,
-        available_frames: Optional[List[ValidationFrame]] = None,
-        rate_limiter: Optional[Any] = None,
+        frames: list[ValidationFrame] | None = None,
+        config: PipelineConfig | None = None,
+        progress_callback: Callable | None = None,
+        project_root: Path | None = None,
+        llm_service: Any | None = None,
+        available_frames: list[ValidationFrame] | None = None,
+        rate_limiter: Any | None = None,
     ):
         """
         Initialize phase orchestrator.
@@ -100,6 +102,14 @@ class PhaseOrchestrator:
             ss_config["project_root"] = str(self.project_root)
             self.semantic_search_service = SemanticSearchService(ss_config)
 
+        # Initialize LSP Diagnostic Service if enabled in config
+        self.lsp_service = None
+        lsp_config = getattr(self.config, 'lsp_config', None)
+        if lsp_config and lsp_config.get("enabled", False):
+            servers = lsp_config.get("servers", [])
+            self.lsp_service = LSPDiagnosticService(enabled=True, servers=servers)
+            logger.info("lsp_service_initialized", servers=servers)
+
         # Initialize phase executor
         self.phase_executor = PhaseExecutor(
             config=self.config,
@@ -135,12 +145,12 @@ class PhaseOrchestrator:
         )
 
     @property
-    def progress_callback(self) -> Optional[Callable]:
+    def progress_callback(self) -> Callable | None:
         """Get progress callback."""
         return self._progress_callback
 
     @progress_callback.setter
-    def progress_callback(self, value: Optional[Callable]) -> None:
+    def progress_callback(self, value: Callable | None) -> None:
         """Set progress callback and propagate to executors."""
         self._progress_callback = value
         if hasattr(self, 'phase_executor'):
@@ -155,9 +165,9 @@ class PhaseOrchestrator:
 
     async def execute_async(
         self,
-        code_files: List[CodeFile],
-        frames_to_execute: Optional[List[str]] = None,
-        analysis_level: Optional[str] = None,
+        code_files: list[CodeFile],
+        frames_to_execute: list[str] | None = None,
+        analysis_level: str | None = None,
     ) -> tuple[PipelineResult, PipelineContext]:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -179,9 +189,9 @@ class PhaseOrchestrator:
 
     async def execute_pipeline_async(
         self,
-        code_files: List[CodeFile],
-        frames_to_execute: Optional[List[str]] = None,
-        analysis_level: Optional[str] = None,
+        code_files: list[CodeFile],
+        frames_to_execute: list[str] | None = None,
+        analysis_level: str | None = None,
     ) -> PipelineContext:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -198,8 +208,8 @@ class PhaseOrchestrator:
             language = code_files[0].language or "unknown"
             if language == "unknown" and code_files[0].path:
                 # Use Language Registry for detection
-                from warden.shared.languages.registry import LanguageRegistry
                 from warden.ast.domain.enums import CodeLanguage
+                from warden.shared.languages.registry import LanguageRegistry
 
                 lang_enum = LanguageRegistry.get_language_from_path(code_files[0].path)
                 if lang_enum != CodeLanguage.UNKNOWN:
@@ -339,6 +349,10 @@ class PhaseOrchestrator:
                             "reason": "disabled_in_config"
                         })
 
+                # Phase 3.3: LSP DIAGNOSTICS (Optional Language Server Integration)
+                if self.lsp_service:
+                    await self._execute_lsp_diagnostics_async(context, code_files)
+
                 # Phase 3.5: VERIFICATION (False Positive Reduction)
                 # Must run BEFORE Fortification to avoid fixing false positives
                 if getattr(self.config, 'enable_issue_validation', False):
@@ -466,20 +480,121 @@ class PhaseOrchestrator:
 
         return context
 
-    def _calculate_total_work_units(self, context: PipelineContext, code_files: List[CodeFile]) -> int:
+    def _calculate_total_work_units(self, context: PipelineContext, code_files: list[CodeFile]) -> int:
         """Calculate total work units for progress reporting."""
         total_units = 0
-        
+
         # 1. Validation units (Effective Frames * Files)
         # If no frames selected by classification yet, use configured frames as fallback estimate
         selected_frames = getattr(context, 'selected_frames', [])
         effective_frames_count = len(selected_frames) if selected_frames else len(self.frames)
-        
+
         total_units += effective_frames_count * len(code_files)
-        
+
         # 2. Verification and Fortification will be added dynamically as we find issues
-        
+
         return max(total_units, 1)
+
+    @async_error_handler(
+        fallback_value=None,
+        log_level="warning",
+        context_keys=["pipeline_id"],
+        reraise=False
+    )
+    async def _execute_lsp_diagnostics_async(
+        self,
+        context: PipelineContext,
+        code_files: list[CodeFile]
+    ) -> None:
+        """
+        Execute Phase 3.3: LSP Diagnostics (Optional).
+        Collects diagnostics from language servers and merges them into findings.
+
+        Uses centralized error handler to prevent LSP failures from blocking pipeline.
+        """
+        logger.info("phase_started", phase="LSP_DIAGNOSTICS")
+
+        if self.progress_callback:
+            self.progress_callback("phase_started", {
+                "phase": "LSP_DIAGNOSTICS",
+                "phase_name": "LSP Diagnostics",
+            })
+
+        try:
+            # Collect LSP diagnostics
+            lsp_findings = await self.lsp_service.collect_diagnostics_async(
+                code_files,
+                self.project_root
+            )
+
+            if lsp_findings:
+                # Add LSP findings to context
+                if not hasattr(context, 'findings'):
+                    context.findings = []
+
+                context.findings.extend(lsp_findings)
+
+                # Also create a pseudo frame result for LSP
+                from warden.validation.domain.frame import FrameResult
+
+                lsp_result = FrameResult(
+                    frame_id="lsp",
+                    frame_name="LSP Diagnostics",
+                    status="passed",
+                    findings=lsp_findings,
+                    issues_found=len(lsp_findings),
+                    duration=0.0,
+                    is_blocker=False,
+                    metadata={
+                        "source": "lsp",
+                        "description": "Language Server Protocol diagnostics"
+                    }
+                )
+
+                # Add to frame results
+                if not hasattr(context, 'frame_results'):
+                    context.frame_results = {}
+
+                context.frame_results["lsp"] = {
+                    "result": lsp_result,
+                    "frame_id": "lsp",
+                    "status": "completed"
+                }
+
+                # Extract languages from findings for logging
+                languages_found = []
+                for f in lsp_findings:
+                    # Extract language from detail field
+                    if f.detail and "from" in f.detail:
+                        detail_parts = f.detail.split("from")
+                        if len(detail_parts) > 1:
+                            source = detail_parts[1].split("(")[0].strip()
+                            languages_found.append(source)
+
+                logger.info(
+                    "lsp_diagnostics_collected",
+                    findings_count=len(lsp_findings),
+                    sources=list(set(languages_found)) if languages_found else ["unknown"]
+                )
+
+        except Exception as e:
+            logger.warning(
+                "lsp_diagnostics_failed",
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            # Don't fail the pipeline if LSP fails
+            context.add_phase_result("LSP_DIAGNOSTICS", {
+                "status": "failed",
+                "error": str(e)
+            })
+
+        finally:
+            if self.progress_callback:
+                self.progress_callback("phase_completed", {
+                    "phase": "LSP_DIAGNOSTICS",
+                    "phase_name": "LSP Diagnostics",
+                })
 
     @async_error_handler(
         fallback_value=None,
@@ -523,7 +638,7 @@ class PhaseOrchestrator:
                 if result_obj and result_obj.findings:
                     # Sync findings from object to dict for verifier contract
                     findings_to_verify = [f.to_dict() if hasattr(f, 'to_dict') else f for f in result_obj.findings]
-                    
+
                     # Track metrics locally for logs
                     total_findings = len(findings_to_verify)
 
@@ -539,7 +654,7 @@ class PhaseOrchestrator:
                     # Filter original objects in-place
                     final_findings = []
                     cached_count = 0
-                    
+
                     for f in result_obj.findings:
                         fid = f.get('id') if isinstance(f, dict) else f.id
                         if fid in verified_ids:
@@ -554,11 +669,11 @@ class PhaseOrchestrator:
 
                     result_obj.findings = final_findings
                     result_obj.issues_found = len(final_findings)
-                    
-                    logger.info("finding_verification_complete", 
-                                frame_id=frame_id, 
+
+                    logger.info("finding_verification_complete",
+                                frame_id=frame_id,
                                 total=total_findings,
-                                verified=len(final_findings), 
+                                verified=len(final_findings),
                                 dropped=dropped,
                                 cached=cached_count)
 
@@ -570,8 +685,8 @@ class PhaseOrchestrator:
                     all_verified.extend(res.findings)
             context.findings = all_verified
 
-            logger.info("verification_phase_completed", 
-                        total_verified=verified_count, 
+            logger.info("verification_phase_completed",
+                        total_verified=verified_count,
                         total_dropped=dropped_count)
 
         except Exception as e:
@@ -582,11 +697,11 @@ class PhaseOrchestrator:
         """Filter out existing issues present in baseline."""
         import json
         baseline_path = self.project_root / ".warden" / "baseline.json"
-        
+
         # Only apply if baseline exists and NOT in 'strict' mode (unless configured otherwise)
         if not baseline_path.exists():
             return
-            
+
         settings = getattr(self.config, 'settings', {})
         if settings.get('mode') == 'strict' and not settings.get('use_baseline_in_strict', False):
             # In strict mode, we might want to ignore baseline and show everything
@@ -596,7 +711,7 @@ class PhaseOrchestrator:
         try:
             with open(baseline_path) as f:
                 baseline_data = json.load(f)
-            
+
             # Extract baseline fingerprints (rule_id + file_path)
             known_issues = set()
             for frame_res in baseline_data.get('frame_results', []):
@@ -604,9 +719,9 @@ class PhaseOrchestrator:
                     # Robust identification: rule_id + file (relative to root)
                     rid = get_finding_attribute(finding, 'rule_id')
                     fpath = get_finding_attribute(finding, 'file_path') or get_finding_attribute(finding, 'path')
-                    
+
                     if not fpath: continue
-                    
+
                     # Normalize path relative to project root
                     try:
                         abs_path = Path(fpath)
@@ -616,34 +731,34 @@ class PhaseOrchestrator:
                     except (ValueError, OSError):
                         # Path resolution failed - use original path as fallback
                         rel_path = str(fpath)
-                    
+
                     if rid:
                         known_issues.add(f"{rid}:{rel_path}")
 
             if not known_issues:
                 return
-            
+
             logger.info("baseline_loaded", known_issues_count=len(known_issues))
 
             # Filter current findings in Frame Results
             total_suppressed = 0
-            
-            for fid, f_res in context.frame_results.items():
+
+            for _fid, f_res in context.frame_results.items():
                 result_obj = f_res.get('result') # FrameResult object
                 if not result_obj: continue
-                
+
                 filtered_findings = []
                 # Keep track of suppressions
                 suppressed_in_frame = 0
-                
+
                 # Findings might be objects or dicts
                 current_findings = result_obj.findings
                 if not current_findings: continue
-                
+
                 for finding in current_findings:
                     rid = getattr(finding, 'rule_id', getattr(finding, 'check_id', None))
                     fpath = getattr(finding, 'file_path', getattr(finding, 'path', str(context.file_path)))
-                    
+
                     # Normalize current finding path
                     try:
                         abs_path = Path(fpath)
@@ -655,26 +770,26 @@ class PhaseOrchestrator:
                         rel_path = str(fpath)
 
                     key = f"{rid}:{rel_path}"
-                    
+
                     if key in known_issues:
                         suppressed_in_frame += 1
                         total_suppressed += 1
                         # We suppress it from active findings
                     else:
                         filtered_findings.append(finding)
-                
+
                 # Update frame result
                 result_obj.findings = filtered_findings
-                
+
                 # Update status if all findings suppressed
                 if not filtered_findings and result_obj.status == "failed":
                     result_obj.status = "passed"
                     # Also unmark is_blocker?
-                    # result_obj.is_blocker = False 
-            
+                    # result_obj.is_blocker = False
+
             if total_suppressed > 0:
                 logger.info("baseline_applied", suppressed_issues=total_suppressed)
-                
+
                 # Sync context.findings to reflect suppression
                 # Re-aggregate from frames
                 all_findings = []
@@ -699,6 +814,14 @@ class PhaseOrchestrator:
                     await self.semantic_search_service.close()
                 except Exception as e:
                     logger.warning("semantic_search_cleanup_failed", error=str(e))
+
+            # Shutdown LSP diagnostic service if enabled
+            if self.lsp_service:
+                try:
+                    await self.lsp_service.shutdown_async()
+                    logger.info("lsp_diagnostic_service_shutdown_complete")
+                except Exception as e:
+                    logger.warning("lsp_diagnostic_service_shutdown_failed", error=str(e))
 
             # Shutdown LSP servers if running (ID 37 - Zombie Process Fix)
             if hasattr(self.phase_executor, 'lsp_diagnostics') and self.phase_executor.lsp_diagnostics:
@@ -788,7 +911,7 @@ class PhaseOrchestrator:
 
         # Convert context frame results to FrameResult objects
         if hasattr(context, 'frame_results') and context.frame_results:
-            for frame_id, frame_data in context.frame_results.items():
+            for _frame_id, frame_data in context.frame_results.items():
                 result = frame_data.get('result')
                 if result:
                     frame_results.append(result)
@@ -825,7 +948,7 @@ class PhaseOrchestrator:
 
         # Calculate quality score if not present or default
         quality_score = getattr(context, 'quality_score_before', None)
-        
+
 
 
         if quality_score is None or quality_score == 0.0:
@@ -839,12 +962,12 @@ class PhaseOrchestrator:
         # Calculate actual frames processed based on execution results
         frames_passed = getattr(self.pipeline, 'frames_passed', 0) if hasattr(self, 'pipeline') else 0
         frames_failed = getattr(self.pipeline, 'frames_failed', 0) if hasattr(self, 'pipeline') else 0
-        frames_skipped = 0 
-        
+        frames_skipped = 0
+
         actual_total = frames_passed + frames_failed + frames_skipped
         planned_total = len(getattr(context, 'selected_frames', [])) or len(self.frames)
         executed_count = len(frame_results)
-        
+
         # Ensure total never shows less than what was actually processed/passed or exists in results
         total_frames = max(actual_total, planned_total, executed_count)
 

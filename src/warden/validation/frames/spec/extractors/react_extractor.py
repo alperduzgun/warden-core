@@ -23,21 +23,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -90,8 +90,8 @@ class ReactExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("react_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -138,9 +138,9 @@ class ReactExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """Extract API operations from various patterns."""
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # 1. Axios calls
         operations.extend(self._extract_axios_calls(content, file_path))
@@ -157,9 +157,9 @@ class ReactExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """Extract axios API calls."""
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # axios.get<Type>('/path') or api.post('/path', data)
         axios_pattern = re.compile(
@@ -194,9 +194,9 @@ class ReactExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """Extract fetch API calls."""
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # fetch('/path', { method: 'POST' })
         fetch_pattern = re.compile(
@@ -229,9 +229,9 @@ class ReactExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """Extract React Query / TanStack Query hooks."""
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # useQuery<Type>(['key'], fetchFn)
         # useQuery({ queryKey: ['key'], queryFn: fetchFn })
@@ -286,7 +286,7 @@ class ReactExtractor(BaseContractExtractor):
 
         return operations
 
-    def _find_enclosing_function(self, content: str, line_index: int) -> Optional[str]:
+    def _find_enclosing_function(self, content: str, line_index: int) -> str | None:
         """Find enclosing function name."""
         lines = content.split("\n")
 
@@ -309,9 +309,9 @@ class ReactExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """Extract TypeScript interfaces and types."""
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Interface pattern
         interface_pattern = re.compile(
@@ -349,14 +349,14 @@ class ReactExtractor(BaseContractExtractor):
         body: str,
         file_path: Path,
         line_num: int,
-    ) -> Optional[ModelDefinition]:
+    ) -> ModelDefinition | None:
         """Parse interface/type body."""
         # Skip React-specific types
         skip_types = ["Props", "State", "Context", "FC", "Component"]
         if any(name.endswith(s) for s in skip_types):
             return None
 
-        fields: List[FieldDefinition] = []
+        fields: list[FieldDefinition] = []
         field_pattern = re.compile(r"(\w+)\s*(\?)?\s*:\s*([^;,\n]+)")
 
         for match in field_pattern.finditer(body):
@@ -381,9 +381,9 @@ class ReactExtractor(BaseContractExtractor):
             )
         return None
 
-    def _extract_enums(self, content: str, file_path: Path) -> List[EnumDefinition]:
+    def _extract_enums(self, content: str, file_path: Path) -> list[EnumDefinition]:
         """Extract TypeScript enums."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
         enum_pattern = re.compile(r"(?:export\s+)?enum\s+(\w+)\s*\{([^}]+)\}", re.MULTILINE)
 
         for match in enum_pattern.finditer(content):

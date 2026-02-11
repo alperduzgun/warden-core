@@ -7,19 +7,18 @@ Extends the base PipelineOrchestrator with optional pre/post-processing phases:
 - Post: Suppression filtering (removes false positives)
 """
 
-from typing import List, Any, Optional
 from pathlib import Path
+from typing import Any, List, Optional
 
+from warden.analysis.application.discovery import DiscoveredFile, FileDiscoverer
+from warden.build_context import BuildContext, BuildContextProvider
 from warden.pipeline.application.orchestrator import PhaseOrchestrator
 from warden.pipeline.domain.models import (
     PipelineConfig,
     PipelineResult,
 )
-from warden.validation.domain.frame import ValidationFrame, CodeFile
-from warden.analysis.application.discovery import FileDiscoverer, DiscoveredFile
-from warden.build_context import BuildContextProvider, BuildContext
-
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile, ValidationFrame
 
 logger = get_logger(__name__)
 
@@ -49,8 +48,8 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
 
     def __init__(
         self,
-        frames: List[ValidationFrame],
-        config: Optional[PipelineConfig] = None,
+        frames: list[ValidationFrame],
+        config: PipelineConfig | None = None,
     ) -> None:
         """
         Initialize enhanced orchestrator.
@@ -62,8 +61,8 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         super().__init__(frames, config)
 
         # Phase tracking
-        self.discovery_result: Optional[Any] = None
-        self.build_context: Optional[BuildContext] = None
+        self.discovery_result: Any | None = None
+        self.build_context: BuildContext | None = None
 
 
         logger.info(
@@ -122,7 +121,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
 
         return result
 
-    async def _discover_files_phase_async(self, project_path: str) -> List[CodeFile]:
+    async def _discover_files_phase_async(self, project_path: str) -> list[CodeFile]:
         """
         Phase 1: Discover files in project.
 
@@ -191,8 +190,8 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             return []
 
     async def _convert_to_code_files_async(
-        self, discovered_files: List[DiscoveredFile]
-    ) -> List[CodeFile]:
+        self, discovered_files: list[DiscoveredFile]
+    ) -> list[CodeFile]:
         """
         Convert DiscoveredFile objects to CodeFile objects.
 
@@ -202,7 +201,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         Returns:
             List of CodeFile objects with loaded content
         """
-        code_files: List[CodeFile] = []
+        code_files: list[CodeFile] = []
 
         for discovered_file in discovered_files:
             try:
@@ -323,7 +322,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             return parts[0]
         return ""
 
-    def get_discovery_result(self) -> Optional[Any]:
+    def get_discovery_result(self) -> Any | None:
         """
         Get the discovery result from the last execution.
 
@@ -332,7 +331,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         """
         return self.discovery_result
 
-    def get_build_context(self) -> Optional[BuildContext]:
+    def get_build_context(self) -> BuildContext | None:
         """
         Get the build context from the last execution.
 

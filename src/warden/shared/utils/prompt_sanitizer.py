@@ -35,7 +35,7 @@ class PromptSanitizer:
     def create_safe_prompt(
         system_instruction: str,
         user_query: str,
-        code_context: Optional[str] = None,
+        code_context: str | None = None,
         language: str = "unknown"
     ) -> dict:
         """

@@ -5,9 +5,11 @@ Provides utilities for managing Warden configuration files while preserving
 YAML comments and formatting.
 """
 
-import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import yaml
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,11 +33,11 @@ class ConfigManager:
         # Support both root warden.yaml and legacy .warden/config.yaml
         root_manifest = project_root / "warden.yaml"
         legacy_config = project_root / ".warden" / "config.yaml"
-        
+
         self.config_path = root_manifest if root_manifest.exists() else legacy_config
         self.rules_path = project_root / ".warden" / "rules.yaml"
 
-    def read_config(self) -> Dict[str, Any]:
+    def read_config(self) -> dict[str, Any]:
         """
         Read config from .warden/config.yaml
 
@@ -53,12 +55,12 @@ class ConfigManager:
             else:
                 raise FileNotFoundError(f"Config file not found in {self.project_root} (checked warden.yaml and .warden/config.yaml)")
 
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path) as f:
             config = yaml.safe_load(f)
 
         return config or {}
 
-    def write_config(self, config: Dict[str, Any]) -> None:
+    def write_config(self, config: dict[str, Any]) -> None:
         """
         Write config to .warden/config.yaml
 
@@ -79,7 +81,7 @@ class ConfigManager:
                 indent=2
             )
 
-    def update_frame_status(self, frame_id: str, enabled: bool) -> Dict[str, Any]:
+    def update_frame_status(self, frame_id: str, enabled: bool) -> dict[str, Any]:
         """
         Update frame enabled status in config
 
@@ -122,7 +124,7 @@ class ConfigManager:
             "config": config['frames_config'][frame_id]
         }
 
-    def get_frame_status(self, frame_id: str) -> Optional[bool]:
+    def get_frame_status(self, frame_id: str) -> bool | None:
         """
         Get frame enabled status from config
 
@@ -138,7 +140,7 @@ class ConfigManager:
         except FileNotFoundError:
             return None
 
-    def read_rules(self) -> Dict[str, Any]:
+    def read_rules(self) -> dict[str, Any]:
         """
         Read rules from .warden/rules.yaml OR .warden/rules/ directory
 
@@ -162,12 +164,12 @@ class ConfigManager:
             from warden.shared.utils.yaml_merger import YAMLMerger
             return YAMLMerger.merge_directory(self.rules_path)
 
-        with open(self.rules_path, 'r') as f:
+        with open(self.rules_path) as f:
             rules = yaml.safe_load(f)
 
         return rules or {}
 
-    def validate_frame_consistency(self) -> Dict[str, Any]:
+    def validate_frame_consistency(self) -> dict[str, Any]:
         """
         Validate frame IDs are consistent between config.yaml and rules.yaml
 

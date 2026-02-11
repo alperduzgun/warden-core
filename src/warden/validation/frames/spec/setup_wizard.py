@@ -21,20 +21,21 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
+
 import yaml
 
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.frames.spec.models import PlatformRole, PlatformType
 from warden.validation.frames.spec.platform_detector import (
-    PlatformDetector,
     DetectedProject,
+    PlatformDetector,
 )
 from warden.validation.frames.spec.validation import (
-    SpecConfigValidator,
-    ValidationResult,
-    ValidationIssue,
     IssueSeverity,
+    SpecConfigValidator,
+    ValidationIssue,
+    ValidationResult,
 )
-from warden.validation.frames.spec.models import PlatformType, PlatformRole
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -54,7 +55,7 @@ class SetupWizardConfig:
     search_path: str = ".."
     max_depth: int = 3
     min_confidence: float = 0.7
-    exclude_dirs: Optional[Set[str]] = None
+    exclude_dirs: set[str] | None = None
     auto_suggest_roles: bool = True
 
 
@@ -77,9 +78,9 @@ class PlatformSetupInput:
     path: str
     platform_type: str
     role: str
-    description: Optional[str] = None
+    description: str | None = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary for configuration."""
         result = {
             "name": self.name,
@@ -108,8 +109,8 @@ class SetupWizard:
 
     def __init__(
         self,
-        config: Optional[SetupWizardConfig] = None,
-        project_root: Optional[Path] = None,
+        config: SetupWizardConfig | None = None,
+        project_root: Path | None = None,
     ):
         """
         Initialize setup wizard.
@@ -157,8 +158,8 @@ class SetupWizard:
 
     async def discover_projects_async(
         self,
-        search_path: Optional[str] = None,
-    ) -> List[DetectedProject]:
+        search_path: str | None = None,
+    ) -> list[DetectedProject]:
         """
         Discover projects automatically using platform detection.
 
@@ -197,7 +198,7 @@ class SetupWizard:
 
     def validate_setup(
         self,
-        projects: List[DetectedProject] | List[PlatformSetupInput],
+        projects: list[DetectedProject] | list[PlatformSetupInput],
     ) -> ValidationResult:
         """
         Validate a list of projects or manual platform inputs.
@@ -248,9 +249,9 @@ class SetupWizard:
 
     def generate_config(
         self,
-        projects: List[DetectedProject] | List[PlatformSetupInput],
+        projects: list[DetectedProject] | list[PlatformSetupInput],
         include_metadata: bool = True,
-    ) -> Dict:
+    ) -> dict:
         """
         Generate SpecFrame configuration from projects.
 
@@ -326,7 +327,7 @@ class SetupWizard:
 
     def save_config(
         self,
-        config: Dict,
+        config: dict,
         merge: bool = True,
         backup: bool = True,
     ) -> Path:
@@ -404,7 +405,7 @@ class SetupWizard:
 
         return config_path
 
-    def load_existing_config(self) -> Optional[Dict]:
+    def load_existing_config(self) -> dict | None:
         """
         Load existing configuration from .warden/config.yaml.
 
@@ -432,7 +433,7 @@ class SetupWizard:
             )
             return None
 
-    def _merge_configs(self, existing: Dict, new: Dict) -> Dict:
+    def _merge_configs(self, existing: dict, new: dict) -> dict:
         """
         Deep merge new config into existing config.
 
@@ -459,8 +460,8 @@ class SetupWizard:
 
     def _deduplicate_projects(
         self,
-        projects: List[DetectedProject],
-    ) -> List[DetectedProject]:
+        projects: list[DetectedProject],
+    ) -> list[DetectedProject]:
         """
         Deduplicate projects based on path.
 
@@ -473,7 +474,7 @@ class SetupWizard:
         Returns:
             Deduplicated list of projects
         """
-        path_to_project: Dict[str, DetectedProject] = {}
+        path_to_project: dict[str, DetectedProject] = {}
 
         for project in projects:
             normalized_path = str(Path(project.path).resolve())
@@ -498,8 +499,8 @@ class SetupWizard:
 
     def create_interactive_summary(
         self,
-        projects: List[DetectedProject],
-        validation: Optional[ValidationResult] = None,
+        projects: list[DetectedProject],
+        validation: ValidationResult | None = None,
     ) -> str:
         """
         Create a human-readable summary of detected projects.

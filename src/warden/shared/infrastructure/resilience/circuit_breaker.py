@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -34,21 +35,20 @@ class CircuitBreakerOpen(Exception):
 
 class CircuitBreaker:
     """Circuit breaker implementation."""
-    def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
+    def __init__(self, name: str, config: CircuitBreakerConfig | None = None):
         self.name = name
         self.config = config or CircuitBreakerConfig()
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._success_count = 0
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
 
     @property
     def state(self) -> CircuitState:
-        if self._state == CircuitState.OPEN:
-            if self._last_failure_time:
-                elapsed = time.time() - self._last_failure_time
-                if elapsed >= self.config.timeout_duration:
-                    self._transition_to(CircuitState.HALF_OPEN)
+        if self._state == CircuitState.OPEN and self._last_failure_time:
+            elapsed = time.time() - self._last_failure_time
+            if elapsed >= self.config.timeout_duration:
+                self._transition_to(CircuitState.HALF_OPEN)
         return self._state
 
     def _transition_to(self, new_state: CircuitState) -> None:

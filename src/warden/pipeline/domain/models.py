@@ -4,16 +4,16 @@ Pipeline domain models.
 Core entities for validation pipeline orchestration.
 """
 
-from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from pydantic import Field
-from warden.shared.domain.base_model import BaseDomainModel
-from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy, AnalysisLevel
-from warden.validation.domain.frame import FrameResult
-from warden.rules.domain.models import CustomRule, FrameRules
 
+from warden.pipeline.domain.enums import AnalysisLevel, ExecutionStrategy, PipelineStatus
+from warden.rules.domain.models import CustomRule, FrameRules
+from warden.shared.domain.base_model import BaseDomainModel
+from warden.validation.domain.frame import FrameResult
 
 
 class FrameExecution(BaseDomainModel):
@@ -26,13 +26,13 @@ class FrameExecution(BaseDomainModel):
     frame_id: str
     frame_name: str
     status: str  # "pending", "running", "completed", "failed", "skipped"
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     duration: float = 0.0
-    result: Optional[FrameResult] = None
-    error: Optional[str] = None
+    result: FrameResult | None = None
+    error: str | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
 
@@ -78,22 +78,25 @@ class PipelineConfig(BaseDomainModel):
     enable_issue_validation: bool = True  # Apply confidence-based false positive detection
 
     # Phase-specific configurations
-    discovery_config: Optional[Dict[str, Any]] = None  # Discovery configuration options
-    suppression_config_path: Optional[str] = None  # Path to suppression config file
-    issue_validation_config: Optional[Dict[str, Any]] = None  # Issue validator configuration (min_confidence, rules)
+    discovery_config: dict[str, Any] | None = None  # Discovery configuration options
+    suppression_config_path: str | None = None  # Path to suppression config file
+    issue_validation_config: dict[str, Any] | None = None  # Issue validator configuration (min_confidence, rules)
 
     # PRE-ANALYSIS configuration (NEW!)
-    pre_analysis_config: Optional[Dict[str, Any]] = None  # PRE-ANALYSIS phase config (use_llm, llm_threshold, etc.)
+    pre_analysis_config: dict[str, Any] | None = None  # PRE-ANALYSIS phase config (use_llm, llm_threshold, etc.)
 
     # Custom Rules (NEW)
-    global_rules: List[CustomRule] = Field(default_factory=list)  # Rules applied to all frames
-    frame_rules: Dict[str, FrameRules] = Field(default_factory=dict)  # Frame-specific rules (key: frame_id)
-    
-    # Semantic Search configuration (NEW!)
-    semantic_search_config: Optional[Dict[str, Any]] = None  # Configuration for semantic search service
-    llm_config: Optional[Dict[str, Any]] = None  # LLM configuration (tpm, rpm, etc.)
+    global_rules: list[CustomRule] = Field(default_factory=list)  # Rules applied to all frames
+    frame_rules: dict[str, FrameRules] = Field(default_factory=dict)  # Frame-specific rules (key: frame_id)
 
-    def to_json(self) -> Dict[str, Any]:
+    # Semantic Search configuration (NEW!)
+    semantic_search_config: dict[str, Any] | None = None  # Configuration for semantic search service
+    llm_config: dict[str, Any] | None = None  # LLM configuration (tpm, rpm, etc.)
+
+    # LSP Integration (NEW!)
+    lsp_config: dict[str, Any] | None = None  # LSP integration configuration (enabled, servers)
+
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         # Convert enum to string value
@@ -128,12 +131,12 @@ class ValidationPipeline(BaseDomainModel):
 
     # Execution tracking
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     duration: float = 0.0
 
     # Frame executions
-    frame_executions: List[FrameExecution] = Field(default_factory=list)
+    frame_executions: list[FrameExecution] = Field(default_factory=list)
 
     # Summary
     total_frames: int = 0
@@ -144,7 +147,7 @@ class ValidationPipeline(BaseDomainModel):
     total_issues: int = 0
     blocker_issues: int = 0
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
 
@@ -231,19 +234,19 @@ class PipelineResult(BaseDomainModel):
     medium_findings: int
     low_findings: int
     manual_review_findings: int = 0
-    
+
     # Findings List (for CLI retrieval)
-    findings: List[Dict[str, Any]] = Field(default_factory=list)
+    findings: list[dict[str, Any]] = Field(default_factory=list)
 
     # Frame results
-    frame_results: List[FrameResult] = Field(default_factory=list)
+    frame_results: list[FrameResult] = Field(default_factory=list)
 
     # Metadata
     executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
     # New fields for Dashboard alignment
-    artifacts: List[Dict[str, Any]] = Field(default_factory=list)
+    artifacts: list[dict[str, Any]] = Field(default_factory=list)
     quality_score: float = 0.0
 
     # LLM Usage
@@ -251,7 +254,7 @@ class PipelineResult(BaseDomainModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
 
@@ -260,14 +263,14 @@ class PipelineResult(BaseDomainModel):
 
         # Convert frame results
         data["frameResults"] = [fr.to_json() for fr in self.frame_results]
-        
+
         # Explicitly map fields to ensure camelCase (Panel expectation)
         data["totalFindings"] = self.total_findings
         data["criticalFindings"] = self.critical_findings
         data["highFindings"] = self.high_findings
         data["mediumFindings"] = self.medium_findings
         data["lowFindings"] = self.low_findings
-        
+
         # Include findings list
         data["findings"] = self.findings
 
@@ -277,7 +280,7 @@ class PipelineResult(BaseDomainModel):
             "promptTokens": self.prompt_tokens,
             "completionTokens": self.completion_tokens,
         }
-        
+
         # Add LLM performance metrics
         try:
             from warden.llm.factory import get_global_metrics_collector
@@ -286,7 +289,7 @@ class PipelineResult(BaseDomainModel):
         except Exception:
             # Gracefully handle if metrics not available
             pass
-        
+
         data["qualityScore"] = self.quality_score
         data["artifacts"] = self.artifacts
 
@@ -329,7 +332,7 @@ class SubStep(BaseDomainModel):
     name: str
     type: str  # SubStepType value: 'security' | 'chaos' | 'fuzz' | 'property' | 'stress' | 'architectural'
     status: str  # StepStatus value: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-    duration: Optional[str] = None  # Format: "0.8s", "1m 43s"
+    duration: str | None = None  # Format: "0.8s", "1m 43s"
 
     @classmethod
     def from_frame_execution(cls, frame_exec: FrameExecution) -> "SubStep":
@@ -389,11 +392,11 @@ class PipelineStep(BaseDomainModel):
     name: str
     type: str  # StepType value: 'analysis' | 'classification' | 'validation' | 'fortification' | 'cleaning'
     status: str  # StepStatus value: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-    duration: Optional[str] = None  # Format: "0.8s", "1m 43s"
-    score: Optional[str] = None  # Format: "4/10", "8/12"
-    sub_steps: List[SubStep] = Field(default_factory=list)  # Only for validation step
+    duration: str | None = None  # Format: "0.8s", "1m 43s"
+    score: str | None = None  # Format: "4/10", "8/12"
+    sub_steps: list[SubStep] = Field(default_factory=list)  # Only for validation step
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON with subSteps (camelCase)."""
         data = super().to_json()
         # Ensure subSteps is included (base class handles conversion)
@@ -421,7 +424,7 @@ class PipelineSummary(BaseDomainModel):
     findings_low: int = 0
     ai_source: str = "warden-cli"
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Convert to Panel-compatible JSON with nested structure.
 
@@ -474,14 +477,14 @@ class PipelineRun(BaseDomainModel):
     status: str  # CRITICAL: Panel expects string: 'running' | 'success' | 'failed'
     trigger: str  # "manual", "git-push", "schedule", etc.
     start_time: datetime
-    steps: List[PipelineStep]  # Always 5 steps: analysis, classification, validation, fortification, cleaning
+    steps: list[PipelineStep]  # Always 5 steps: analysis, classification, validation, fortification, cleaning
     summary: PipelineSummary
-    active_step_id: Optional[str] = None
-    active_sub_step_id: Optional[str] = None
+    active_step_id: str | None = None
+    active_sub_step_id: str | None = None
     active_tab_id: str = "logs"  # Default tab: "logs" | "console" | "tests" | "issues"
-    test_results: Optional[Dict[str, Any]] = None  # ValidationTestDetails (complex nested structure)
+    test_results: dict[str, Any] | None = None  # ValidationTestDetails (complex nested structure)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Convert to Panel-compatible JSON.
 

@@ -5,10 +5,10 @@ Pre-Analysis Phase Executor.
 import time
 from typing import List
 
-from warden.pipeline.domain.pipeline_context import PipelineContext
-from warden.validation.domain.frame import CodeFile
-from warden.shared.infrastructure.logging import get_logger
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
+from warden.pipeline.domain.pipeline_context import PipelineContext
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
@@ -19,7 +19,7 @@ class PreAnalysisExecutor(BasePhaseExecutor):
     async def execute_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute PRE-ANALYSIS phase."""
         logger.info("executing_phase", phase="PRE_ANALYSIS")

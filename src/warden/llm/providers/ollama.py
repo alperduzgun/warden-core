@@ -4,15 +4,17 @@ Ollama LLM Client (Local Model Support)
 API: http://localhost:11434/api/chat
 """
 
-import httpx
 import time
 
+import httpx
+
+from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.resilience import resilient
+
 from ..config import ProviderConfig
+from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
-from warden.shared.infrastructure.resilience import resilient
-from warden.shared.infrastructure.logging import get_logger
-from ..registry import ProviderRegistry
 
 logger = get_logger(__name__)
 
@@ -27,7 +29,7 @@ class OllamaClient(ILlmClient):
         # Ollama doesn't require an API key by default
         self._endpoint = config.endpoint or "http://localhost:11434"
         self._default_model = config.default_model or "qwen2.5-coder:0.5b"
-        
+
         logger.debug(
             "ollama_client_initialized",
             endpoint=self._endpoint,
@@ -92,7 +94,7 @@ class OllamaClient(ILlmClient):
             error_msg = str(e)
             if e.response.status_code == 404:
                 error_msg = f"Model '{model}' NOT FOUND on this Ollama instance. Please run 'ollama pull {model}'."
-            
+
             logger.error(
                 "ollama_request_failed",
                 status_code=e.response.status_code,
@@ -133,13 +135,13 @@ class OllamaClient(ILlmClient):
                 response = await client.get(self._endpoint)
                 if response.status_code != 200:
                     return False
-                
+
                 # 2. Check if the model exists
                 tags_response = await client.get(f"{self._endpoint}/api/tags")
                 if tags_response.status_code == 200:
                     models = tags_response.json().get("models", [])
                     model_names = [m.get("name") for m in models]
-                    
+
                     # Exact match or tag-less match
                     exists = any(self._default_model == name or f"{self._default_model}:latest" == name for name in model_names)
                     if not exists:
@@ -149,7 +151,7 @@ class OllamaClient(ILlmClient):
                             available=model_names
                         )
                         return False
-                
+
                 return True
         except Exception as e:
             logger.debug("ollama_availability_error", error=str(e))

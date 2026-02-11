@@ -10,7 +10,7 @@ from typing import Any, Dict
 class WardenException(Exception):
     """Base exception for all Warden errors."""
 
-    def __init__(self, message: str, details: Dict[str, Any] | None = None) -> None:
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         """
         Initialize exception.
 

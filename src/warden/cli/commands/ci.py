@@ -16,23 +16,23 @@ Chaos Engineering Principles:
 
 from __future__ import annotations
 
-import sys
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from warden.services.ci_manager import (
-    CIManager,
-    CIProvider,
     CURRENT_TEMPLATE_VERSION,
+    CIManager,
     CIManagerError,
-    ValidationError,
+    CIProvider,
     SecurityError,
+    ValidationError,
 )
 
 console = Console()
@@ -66,7 +66,7 @@ def _get_ci_manager() -> CIManager:
         raise typer.Exit(1)
 
 
-def _parse_provider(provider: Optional[str]) -> Optional[CIProvider]:
+def _parse_provider(provider: str | None) -> CIProvider | None:
     """
     Parse and validate provider string.
 
@@ -112,7 +112,7 @@ def _print_secrets_hint(llm_provider: str) -> None:
 
 @ci_app.command("init")
 def ci_init(
-    provider: Optional[str] = typer.Option(
+    provider: str | None = typer.Option(
         None,
         "--provider", "-p",
         help="CI provider: github or gitlab"

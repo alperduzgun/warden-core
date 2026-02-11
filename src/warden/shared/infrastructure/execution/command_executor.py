@@ -6,11 +6,12 @@ Handles timeouts, output capturing, and logging.
 """
 
 import asyncio
+import contextlib
 import os
 import signal
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 from warden.shared.infrastructure.logging import get_logger
 
@@ -43,10 +44,10 @@ class CommandExecutor:
 
     async def run_async(
         self,
-        command: Union[str, List[str]],
-        cwd: Optional[Union[str, Path]] = None,
-        env: Optional[Dict[str, str]] = None,
-        timeout: Optional[float] = None,
+        command: str | list[str],
+        cwd: str | Path | None = None,
+        env: dict[str, str] | None = None,
+        timeout: float | None = None,
         shell: bool = False
     ) -> CommandResult:
         """
@@ -65,7 +66,7 @@ class CommandExecutor:
         import time
         start_time = time.perf_counter()
         timeout_val = timeout if timeout is not None else self.default_timeout
-        
+
         # Prepare command
         if isinstance(command, str) and not shell:
             # Split string if not using shell
@@ -107,18 +108,16 @@ class CommandExecutor:
 
             try:
                 stdout_data, stderr_data = await asyncio.wait_for(
-                    process.communicate(), 
+                    process.communicate(),
                     timeout=timeout_val
                 )
             except asyncio.TimeoutError:
                 logger.warning("command_timeout", command=cmd_str, timeout=timeout_val)
-                
+
                 # Kill process group to ensure children die too
-                try:
+                with contextlib.suppress(ProcessLookupError):
                     os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                
+
                 return CommandResult(
                     command=cmd_str,
                     exit_code=-1,
@@ -135,9 +134,9 @@ class CommandExecutor:
 
             if exit_code != 0:
                 logger.warning(
-                    "command_failed", 
-                    command=cmd_str, 
-                    exit_code=exit_code, 
+                    "command_failed",
+                    command=cmd_str,
+                    exit_code=exit_code,
                     stderr_snippet=stderr_str[:200]
                 )
             else:

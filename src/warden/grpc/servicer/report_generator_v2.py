@@ -1,5 +1,9 @@
 """Report generator with atomic writes and memory optimization (ID 41, 42)."""
-import os, json, asyncio
+import asyncio
+import json
+import os
+
+
 class ReportGenerator:
     async def generate_json_report_safe(self, path, data):
         tmp = path + '.tmp'

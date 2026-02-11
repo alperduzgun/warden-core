@@ -5,18 +5,19 @@ Detects project-specific service abstractions (like SecretManager, ConfigLoader)
 and their responsibilities for context-aware consistency enforcement.
 """
 
-from typing import Dict, List, Optional, Any, Tuple
+import json
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from dataclasses import dataclass, field
-import structlog
-import json
+from typing import Any, Dict, List, Optional, Tuple
 
-from warden.ast.application.provider_registry import ASTProviderRegistry
-from warden.ast.domain.enums import CodeLanguage, ASTNodeType
+import structlog
+
 from warden.analysis.domain.project_context import ProjectContext
-from warden.llm.factory import create_client
+from warden.ast.application.provider_registry import ASTProviderRegistry
+from warden.ast.domain.enums import ASTNodeType, CodeLanguage
 from warden.llm.config import LlmConfiguration
+from warden.llm.factory import create_client
 from warden.llm.types import LlmRequest
 
 logger = structlog.get_logger(__name__)
@@ -39,34 +40,34 @@ class ServiceCategory(Enum):
 @dataclass
 class ServiceAbstraction:
     """Represents a detected service abstraction in the project."""
-    
+
     # Basic info
     name: str  # Class name (e.g., "SecretManager")
     file_path: str  # File where it's defined
     category: ServiceCategory = ServiceCategory.CUSTOM
-    
+
     # What the service handles
-    responsibilities: List[str] = field(default_factory=list)
+    responsibilities: list[str] = field(default_factory=list)
     # e.g., ["secret access", "API key retrieval"]
-    
+
     # Bypass patterns - what NOT to use when this service exists
-    bypass_patterns: List[str] = field(default_factory=list)
+    bypass_patterns: list[str] = field(default_factory=list)
     # e.g., ["os.getenv", "os.environ.get"] for SecretManager
-    
+
     # Keywords that indicate this service should be used
-    responsibility_keywords: List[str] = field(default_factory=list)
+    responsibility_keywords: list[str] = field(default_factory=list)
     # e.g., ["API_KEY", "SECRET", "TOKEN", "PASSWORD"]
-    
+
     # Methods exposed by this service
-    public_methods: List[str] = field(default_factory=list)
-    
+    public_methods: list[str] = field(default_factory=list)
+
     # Confidence in detection (0.0 to 1.0)
     confidence: float = 0.0
-    
+
     # Documentation/description from docstring
     description: str = ""
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "name": self.name,
@@ -125,25 +126,25 @@ SERVICE_PATTERNS = {
 class ServiceAbstractionDetector:
     """
     Detects service abstractions in a project for context-aware consistency enforcement.
-    
+
     This detector:
     1. Scans project files using the best available AST provider
     2. Matches against known service patterns
     3. Extracts responsibilities from docstrings and method names
     4. Identifies bypass patterns that should be avoided when these services exist
     """
-    
+
     def __init__(
-        self, 
-        project_root: Path, 
-        project_context: Optional[ProjectContext] = None,
-        llm_config: Optional[LlmConfiguration] = None,
-        analysis_level: Optional[Any] = None,
-        llm_service: Optional[Any] = None
+        self,
+        project_root: Path,
+        project_context: ProjectContext | None = None,
+        llm_config: LlmConfiguration | None = None,
+        analysis_level: Any | None = None,
+        llm_service: Any | None = None
     ) -> None:
         """
         Initialize detector.
-        
+
         Args:
             project_root: Root directory of the project
             project_context: Optional project context for language detection
@@ -152,14 +153,14 @@ class ServiceAbstractionDetector:
         """
         self.project_root = Path(project_root)
         self.project_context = project_context
-        self.abstractions: Dict[str, ServiceAbstraction] = {}
+        self.abstractions: dict[str, ServiceAbstraction] = {}
         self.analysis_level = analysis_level
-        self._injected_files: Optional[List[Path]] = None
-        
+        self._injected_files: list[Path] | None = None
+
         # Initialize AST registry
         self.registry = ASTProviderRegistry()
         self._registry_initialized = False
-        
+
         # Initialize LLM
         self.llm = llm_service
         if not self.llm:
@@ -174,20 +175,20 @@ class ServiceAbstractionDetector:
         if self.analysis_level == AnalysisLevel.BASIC:
             self.llm = None
             logger.debug("llm_disabled_for_detector", reason="analysis_level_basic")
-    
+
     async def _ensure_registry(self) -> None:
         """Ensure AST registry is initialized and loaded."""
         if not self._registry_initialized:
             await self.registry.discover_providers()
             self._registry_initialized = True
-    
-    async def detect_async(self, all_files: Optional[List[Path]] = None) -> Dict[str, ServiceAbstraction]:
+
+    async def detect_async(self, all_files: list[Path] | None = None) -> dict[str, ServiceAbstraction]:
         """
         Detect service abstractions in the project.
-        
+
         Args:
             all_files: Optional list of pre-discovered files
-            
+
         Returns:
             Dictionary mapping class name to ServiceAbstraction
         """
@@ -200,36 +201,36 @@ class ServiceAbstractionDetector:
 
         self._injected_files = all_files
         await self._ensure_registry()
-        
+
         logger.info("service_abstraction_detection_started", project=str(self.project_root))
-        
+
         # Determine languages to scan
         languages = self._get_scan_languages()
-        
+
         # Find all relevant files
         project_files = self._find_project_files(languages)
-        
+
         for file_path, language in project_files:
             try:
                 await self._analyze_file_async(file_path, language)
             except Exception as e:
                 logger.debug("file_analysis_failed", file=str(file_path), error=str(e))
-        
+
         # Post-process: enrich with LLM-synthesized bypass rules if possible
         await self._synthesize_bypass_rules_async()
-        
+
         # Enrich with local context
         self._enrich_abstractions()
-        
+
         logger.info(
             "service_abstraction_detection_completed",
             detected_count=len(self.abstractions),
             categories=[a.category.value for a in self.abstractions.values()],
         )
-        
+
         # Save to cache
         self._save_cache()
-        
+
         return self.abstractions
 
     def _get_cache_path(self) -> Path:
@@ -238,16 +239,16 @@ class ServiceAbstractionDetector:
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir / "services.json"
 
-    def _load_cache(self) -> Optional[Dict[str, ServiceAbstraction]]:
+    def _load_cache(self) -> dict[str, ServiceAbstraction] | None:
         """Load abstractions from cache."""
         try:
             cache_file = self._get_cache_path()
             if not cache_file.exists():
                 return None
-                
-            with open(cache_file, "r") as f:
+
+            with open(cache_file) as f:
                 data = json.load(f)
-                
+
             result = {}
             for key, value in data.items():
                 # Reconstruct ServiceAbstraction objects
@@ -257,7 +258,7 @@ class ServiceAbstractionDetector:
                     value["category"] = ServiceCategory(cat_val)
                 except ValueError:
                     value["category"] = ServiceCategory.CUSTOM
-                    
+
                 result[key] = ServiceAbstraction(**value)
             return result
         except Exception as e:
@@ -274,7 +275,7 @@ class ServiceAbstractionDetector:
         except Exception as e:
             logger.debug("service_cache_save_failed", error=str(e))
 
-    def _get_scan_languages(self) -> List[CodeLanguage]:
+    def _get_scan_languages(self) -> list[CodeLanguage]:
         """Determine which languages to scan based on project context."""
         if self.project_context and self.project_context.primary_language:
             primary = self.project_context.primary_language.lower()
@@ -282,11 +283,11 @@ class ServiceAbstractionDetector:
                 return [CodeLanguage(primary)]
             except ValueError:
                 pass
-        
+
         # Fallback to common languages
         return [CodeLanguage.PYTHON, CodeLanguage.TYPESCRIPT, CodeLanguage.JAVASCRIPT, CodeLanguage.GO]
 
-    def _find_project_files(self, languages: List[CodeLanguage]) -> List[Tuple[Path, CodeLanguage]]:
+    def _find_project_files(self, languages: list[CodeLanguage]) -> list[tuple[Path, CodeLanguage]]:
         """Find relevant project files for the given languages."""
         lang_extensions = {
             CodeLanguage.PYTHON: [".py"],
@@ -295,14 +296,14 @@ class ServiceAbstractionDetector:
             CodeLanguage.GO: [".go"],
             CodeLanguage.JAVA: [".java"],
         }
-        
+
         excluded_patterns = [
             "node_modules", "venv", ".venv", "env", "__pycache__",
             "dist", "build", ".git", ".tox", ".mypy_cache", "vendor",
         ]
-        
+
         files = []
-        
+
         if self._injected_files is not None:
             # Use pre-discovered files, filtered by extension/language and basic exclude
             for path in self._injected_files:
@@ -326,7 +327,7 @@ class ServiceAbstractionDetector:
                     if "test" in file_path.name.lower() or file_path.name.startswith("test_"):
                         continue
                     files.append((file_path, lang))
-        
+
         return files
 
     async def _analyze_file_async(self, file_path: Path, language: CodeLanguage) -> None:
@@ -337,7 +338,7 @@ class ServiceAbstractionDetector:
 
         content = file_path.read_text(encoding="utf-8", errors="ignore")
         result = await provider.parse(content, language, str(file_path))
-        
+
         if not result.ast_root:
             return
 
@@ -345,7 +346,7 @@ class ServiceAbstractionDetector:
         type_nodes = []
         type_nodes.extend(result.ast_root.find_nodes(ASTNodeType.CLASS))
         type_nodes.extend(result.ast_root.find_nodes(ASTNodeType.INTERFACE))
-        
+
         for node in type_nodes:
             abstraction = self._analyze_node(node, file_path, content, language)
             if abstraction and abstraction.confidence > 0.3:
@@ -355,12 +356,12 @@ class ServiceAbstractionDetector:
                     self.abstractions[abstraction.name] = abstraction
 
     def _analyze_node(
-        self, 
+        self,
         node: Any, # ASTNode
         file_path: Path,
         file_content: str,
         language: CodeLanguage
-    ) -> Optional[ServiceAbstraction]:
+    ) -> ServiceAbstraction | None:
         """Analyze a class or interface node for service abstraction characteristics."""
         name = node.name
         logger.debug("analyzing_service_candidate", node_type=node.node_type.value, name=name)
@@ -369,7 +370,7 @@ class ServiceAbstractionDetector:
 
         # Detect category based on name
         category, category_confidence = self._detect_category_from_name(name)
-        
+
         # Check if it looks like a service
         service_suffixes = ["Service", "Manager", "Provider", "Client", "Handler", "Factory", "Repository"]
         if category == ServiceCategory.CUSTOM and category_confidence < 0.5:
@@ -381,9 +382,9 @@ class ServiceAbstractionDetector:
         if not method_nodes:
             # Fallback: check children for functions which might be methods in some parsers
             method_nodes = [c for c in node.children if c.node_type == ASTNodeType.FUNCTION]
-            
+
         public_methods = [m.name for m in method_nodes if m.name and not m.name.startswith("_")]
-        
+
         # Extract description (docstrings are often in attributes or as comments)
         description = node.attributes.get("docstring") or ""
         if not description and node.children:
@@ -401,28 +402,28 @@ class ServiceAbstractionDetector:
             description=description[:200] if description else "",
             confidence=category_confidence,
         )
-        
+
         # Set bypass patterns and keywords
         if category in SERVICE_PATTERNS:
             patterns = SERVICE_PATTERNS[category]
             abstraction.bypass_patterns = patterns.get("bypass_patterns", [])
             abstraction.responsibility_keywords = patterns.get("keywords", [])
-            
+
             # Boost confidence for expected methods
             method_patterns = patterns.get("method_patterns", [])
             matching_methods = sum(1 for m in public_methods if any(p in m.lower() for p in method_patterns))
             if matching_methods > 0:
                 abstraction.confidence = min(1.0, abstraction.confidence + 0.2)
-        
+
         return abstraction
-    
+
     async def _synthesize_bypass_rules_async(self) -> None:
         """Use LLM to synthesize bypass rules for detected services."""
         if not self.llm or not self.abstractions:
             return
 
         logger.info("synthesizing_bypass_rules", count=len(self.abstractions))
-        
+
         # Collect services that need rules
         services_to_analyze = []
         for name, abs_info in self.abstractions.items():
@@ -433,7 +434,7 @@ class ServiceAbstractionDetector:
                 "methods": abs_info.public_methods[:10],
                 "description": abs_info.description
             })
-            
+
         if not services_to_analyze:
             return
 
@@ -466,26 +467,26 @@ Return strictly JSON:
                 max_tokens=1000,
                 temperature=0.0
             )
-            
+
             response = await self.llm.send_async(request)
             data = self._parse_json(response.content)
-            
+
             for item in data.get("abstractions", []):
                 name = item.get("name")
                 if name in self.abstractions:
                     # Merge LLM suggestions with existing patterns
                     new_patterns = item.get("bypass_patterns", [])
                     self.abstractions[name].bypass_patterns = list(set(self.abstractions[name].bypass_patterns + new_patterns))
-                    
+
                     new_kws = item.get("keywords", [])
                     self.abstractions[name].responsibility_keywords = list(set(self.abstractions[name].responsibility_keywords + new_kws))
-                    
+
             logger.info("bypass_rules_synthesized", count=len(data.get("abstractions", [])))
-            
+
         except Exception as e:
             logger.error("bypass_rule_synthesis_failed", error=str(e))
 
-    def _parse_json(self, content: str) -> Dict[str, Any]:
+    def _parse_json(self, content: str) -> dict[str, Any]:
         """Extract and parse JSON from LLM response content."""
         try:
             start = content.find("{")
@@ -501,7 +502,7 @@ Return strictly JSON:
         for abstraction in self.abstractions.values():
             # Generate responsibilities from methods and description
             responsibilities = []
-            
+
             if abstraction.category == ServiceCategory.SECRET_MANAGEMENT:
                 responsibilities.append("Manages secret and credential access")
                 responsibilities.append("Provides environment-aware secret loading")
@@ -509,39 +510,39 @@ Return strictly JSON:
                 responsibilities.append("Manages application configuration")
             elif abstraction.category == ServiceCategory.DATABASE_ACCESS:
                 responsibilities.append("Manages database connections and queries")
-            
+
             # Add method-based responsibilities
             for method in abstraction.public_methods[:5]:
                 if not method.startswith("_"):
                     responsibilities.append(f"Provides {method.replace('_', ' ')} functionality")
-            
+
             abstraction.responsibilities = responsibilities[:5]  # Limit to 5
 
-    def _detect_category_from_name(self, class_name: str) -> Tuple[ServiceCategory, float]:
+    def _detect_category_from_name(self, class_name: str) -> tuple[ServiceCategory, float]:
         """Detect service category from class name."""
         name_lower = class_name.lower()
-        
+
         for category, patterns in SERVICE_PATTERNS.items():
             for pattern in patterns["class_patterns"]:
                 if pattern.lower() in name_lower or name_lower in pattern.lower():
                     return category, 0.8
-        
+
         # Generic service detection
         if any(suffix in class_name for suffix in ["Service", "Manager", "Provider"]):
             return ServiceCategory.CUSTOM, 0.5
-        
+
         return ServiceCategory.CUSTOM, 0.3
 
 
 # Convenience function for standalone usage
-async def detect_service_abstractions_async(project_root: Path, project_context: Optional[ProjectContext] = None) -> Dict[str, ServiceAbstraction]:
+async def detect_service_abstractions_async(project_root: Path, project_context: ProjectContext | None = None) -> dict[str, ServiceAbstraction]:
     """
     Detect service abstractions in a project.
-    
+
     Args:
         project_root: Root directory of the project
         project_context: Optional project context
-        
+
     Returns:
         Dictionary mapping class name to ServiceAbstraction
     """

@@ -45,7 +45,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
 
     MAX_EVENTS = 10000  # Maximum events to store
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         """
         Initialize history repository.
 
@@ -57,7 +57,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
         super().__init__(storage_path, "history")
         logger.info("history_repository_initialized", storage_path=str(storage_path))
 
-    def _get_empty_structure(self) -> Dict[str, Any]:
+    def _get_empty_structure(self) -> dict[str, Any]:
         """Get empty data structure for history storage."""
         return {
             "version": "1.0",
@@ -66,7 +66,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             "events": [],
         }
 
-    async def add_event_async(self, issue_id: str, event: Dict[str, Any]) -> None:
+    async def add_event_async(self, issue_id: str, event: dict[str, Any]) -> None:
         """Add an event to issue history."""
         data = await self._read_data_async()
 
@@ -94,7 +94,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             event_type=event.get("event_type"),
         )
 
-    async def get_events_async(self, issue_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_events_async(self, issue_id: str, limit: int = 100) -> list[dict[str, Any]]:
         """Get events for an issue."""
         data = await self._read_data_async()
         events = data.get("events", [])
@@ -109,7 +109,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             reverse=True,
         )
 
-    async def get_all_events_async(self, limit: int = 1000) -> List[Dict[str, Any]]:
+    async def get_all_events_async(self, limit: int = 1000) -> list[dict[str, Any]]:
         """Get all events across all issues."""
         data = await self._read_data_async()
         events = data.get("events", [])
@@ -123,7 +123,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
 
     async def get_events_by_type_async(
         self, event_type: str, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get events by event type."""
         data = await self._read_data_async()
         events = data.get("events", [])
@@ -140,7 +140,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
 
     async def get_events_since_async(
         self, since: datetime, limit: int = 1000
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get events since a specific datetime."""
         data = await self._read_data_async()
         events = data.get("events", [])

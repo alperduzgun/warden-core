@@ -43,10 +43,10 @@ class PipelineContext:
     started_at: datetime
     file_path: Path
     source_code: str
-    project_root: Optional[Path] = None  # NEW: Root directory of the project
+    project_root: Path | None = None  # NEW: Root directory of the project
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns
     language: str = "python"
-    llm_config: Optional[Any] = None  # NEW: Global LLM configuration for tiering
+    llm_config: Any | None = None  # NEW: Global LLM configuration for tiering
 
     # Memory limits (class variables)
     MAX_LLM_HISTORY: int = field(default=100, init=False)
@@ -57,54 +57,54 @@ class PipelineContext:
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
     # Phase 0: PRE-ANALYSIS Results
-    project_type: Optional[ProjectType] = None
-    framework: Optional[Framework] = None
-    file_context: Optional[FileContext] = None
-    file_contexts: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    project_metadata: Dict[str, Any] = field(default_factory=dict)
-    
+    project_type: ProjectType | None = None
+    framework: Framework | None = None
+    file_context: FileContext | None = None
+    file_contexts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    project_metadata: dict[str, Any] = field(default_factory=dict)
+
     # Phase 0.5: TRIAGE Results (Adaptive Hybrid Triage)
-    triage_decisions: Dict[str, Any] = field(default_factory=dict) # Key: file_path, Value: TriageDecision.model_dump()
+    triage_decisions: dict[str, Any] = field(default_factory=dict) # Key: file_path, Value: TriageDecision.model_dump()
 
     # Phase 1: ANALYSIS Results
-    quality_metrics: Optional[QualityMetrics] = None
+    quality_metrics: QualityMetrics | None = None
     quality_score_before: float = 0.0
     quality_confidence: float = 0.0
-    hotspots: List[Dict[str, Any]] = field(default_factory=list)
-    quick_wins: List[Dict[str, Any]] = field(default_factory=list)
+    hotspots: list[dict[str, Any]] = field(default_factory=list)
+    quick_wins: list[dict[str, Any]] = field(default_factory=list)
     technical_debt_hours: float = 0.0
 
     # Phase 2: CLASSIFICATION Results
-    selected_frames: List[str] = field(default_factory=list)
-    suppression_rules: List[Dict[str, Any]] = field(default_factory=list)
-    frame_priorities: Dict[str, str] = field(default_factory=dict)
+    selected_frames: list[str] = field(default_factory=list)
+    suppression_rules: list[dict[str, Any]] = field(default_factory=list)
+    frame_priorities: dict[str, str] = field(default_factory=dict)
     classification_reasoning: str = ""
-    learned_patterns: List[Dict[str, Any]] = field(default_factory=list)
-    advisories: List[str] = field(default_factory=list)  # NEW: AI Strategic Warnings
+    learned_patterns: list[dict[str, Any]] = field(default_factory=list)
+    advisories: list[str] = field(default_factory=list)  # NEW: AI Strategic Warnings
 
     # Phase 3: VALIDATION Results
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    validated_issues: List[Dict[str, Any]] = field(default_factory=list)
-    false_positives: List[str] = field(default_factory=list)
-    true_positives: List[str] = field(default_factory=list)
-    frame_results: Dict[str, Any] = field(default_factory=dict)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    validated_issues: list[dict[str, Any]] = field(default_factory=list)
+    false_positives: list[str] = field(default_factory=list)
+    true_positives: list[str] = field(default_factory=list)
+    frame_results: dict[str, Any] = field(default_factory=dict)
 
     # Phase 4: FORTIFICATION Results
-    fortifications: List[Dict[str, Any]] = field(default_factory=list)
-    applied_fixes: List[Dict[str, Any]] = field(default_factory=list)
-    security_improvements: Dict[str, Any] = field(default_factory=dict)
+    fortifications: list[dict[str, Any]] = field(default_factory=list)
+    applied_fixes: list[dict[str, Any]] = field(default_factory=list)
+    security_improvements: dict[str, Any] = field(default_factory=dict)
 
     # Phase 5: CLEANING Results
-    cleaning_suggestions: List[Dict[str, Any]] = field(default_factory=list)
-    refactorings: List[Dict[str, Any]] = field(default_factory=list)
+    cleaning_suggestions: list[dict[str, Any]] = field(default_factory=list)
+    refactorings: list[dict[str, Any]] = field(default_factory=list)
     quality_score_after: float = 0.0
-    code_improvements: Dict[str, Any] = field(default_factory=dict)
+    code_improvements: dict[str, Any] = field(default_factory=dict)
 
     # LLM Context (accumulated prompts and responses)
-    llm_history: List[Dict[str, Any]] = field(default_factory=list)
+    llm_history: list[dict[str, Any]] = field(default_factory=list)
 
     # Artifacts
-    artifacts: List[Dict[str, Any]] = field(default_factory=list)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
 
     # LLM Usage Statistics
     total_tokens: int = 0
@@ -113,21 +113,21 @@ class PipelineContext:
     request_count: int = 0
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    
+    metadata: dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
     # Linter Metrics (Multi-Tool)
-    linter_metrics: Dict[str, Any] = field(default_factory=dict)
+    linter_metrics: dict[str, Any] = field(default_factory=dict)
 
     # Cross-Phases Cache (New)
     # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)
-    ast_cache: Dict[str, Any] = field(default_factory=dict)
+    ast_cache: dict[str, Any] = field(default_factory=dict)
 
     # State Tracking
     completed_phases: set[str] = field(default_factory=set)
 
-    def add_phase_result(self, phase: str, result: Dict[str, Any]) -> None:
+    def add_phase_result(self, phase: str, result: dict[str, Any]) -> None:
         """
         Add results from a phase execution (thread-safe).
 
@@ -147,7 +147,7 @@ class PipelineContext:
         prompt: str,
         response: str,
         confidence: float = 0.0,
-        usage: Optional[Dict[str, int]] = None,
+        usage: dict[str, int] | None = None,
     ) -> None:
         """
         Record LLM interaction for audit trail (thread-safe, memory-bounded).
@@ -179,7 +179,7 @@ class PipelineContext:
                 "usage": usage or {},
             })
 
-    def _add_to_bounded_list(self, target_list: List, item: Any, max_size: int = None) -> None:
+    def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int = None) -> None:
         """
         Add item to list with memory bounds (internal helper).
 
@@ -194,7 +194,7 @@ class PipelineContext:
                 target_list.pop(0)  # FIFO eviction
             target_list.append(item)
 
-    def get_context_for_phase(self, phase: str) -> Dict[str, Any]:
+    def get_context_for_phase(self, phase: str) -> dict[str, Any]:
         """
         Get relevant context for a specific phase.
 
@@ -309,7 +309,7 @@ class PipelineContext:
             else:
                 pt = self.project_type.value if self.project_type else "unknown"
                 fw = self.framework.value if self.framework else "unknown"
-            
+
             if concise:
                 context_parts.append(f"PROJECT: {pt} / {fw}")
             else:
@@ -369,7 +369,7 @@ class PipelineContext:
 
         return "\n".join(context_parts)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert context to JSON for serialization."""
         # Determine project type and framework values
         if hasattr(self.project_type, 'project_type'):

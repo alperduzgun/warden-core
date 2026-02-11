@@ -6,7 +6,7 @@ by inheriting from them, reducing the surface area of the base ValidationFrame c
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List
 
 if TYPE_CHECKING:
     from warden.validation.domain.frame import CodeFile, FrameResult
@@ -29,9 +29,9 @@ class BatchExecutable(ABC):
     @abstractmethod
     async def execute_batch_async(
         self,
-        code_files: List["CodeFile"],
+        code_files: list["CodeFile"],
         context: Any = None
-    ) -> List["FrameResult"]:
+    ) -> list["FrameResult"]:
         """
         Execute validation on multiple files in batch.
 

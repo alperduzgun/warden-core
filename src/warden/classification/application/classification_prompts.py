@@ -4,13 +4,15 @@ Prompt templates and formatting logic for LLM-based classification.
 
 import json
 from typing import Any, Dict, List, Optional
+
 from warden.analysis.domain.project_context import Framework, ProjectType
 
-def get_classification_system_prompt(available_frames: Optional[List[Any]] = None) -> str:
+
+def get_classification_system_prompt(available_frames: list[Any] | None = None) -> str:
     """Get classification system prompt with Strategic Selection Principles."""
     if available_frames:
         frames_descriptions = "\n".join([
-            f"- {f.frame_id}: {f.description}" 
+            f"- {f.frame_id}: {f.description}"
             for f in available_frames
         ])
     else:
@@ -64,7 +66,7 @@ Return a JSON object:
 }}
 """
 
-def format_classification_user_prompt(context: Dict[str, Any]) -> str:
+def format_classification_user_prompt(context: dict[str, Any]) -> str:
     """Format user prompt for classification."""
     project_type = context.get("project_type", ProjectType.APPLICATION.value)
     framework = context.get("framework", Framework.NONE.value)

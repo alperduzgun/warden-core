@@ -8,17 +8,18 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+import structlog
+
+from warden.analysis.application.discovery.classifier import FileClassifier
+from warden.analysis.application.discovery.framework_detector import FrameworkDetector
+from warden.analysis.application.discovery.gitignore_filter import GitignoreFilter, create_gitignore_filter
 from warden.analysis.application.discovery.models import (
     DiscoveredFile,
     DiscoveryResult,
     DiscoveryStats,
     FileType,
 )
-from warden.analysis.application.discovery.classifier import FileClassifier
-from warden.analysis.application.discovery.gitignore_filter import GitignoreFilter, create_gitignore_filter
-from warden.analysis.application.discovery.framework_detector import FrameworkDetector
 
-import structlog
 logger = structlog.get_logger(__name__)
 
 
@@ -32,9 +33,9 @@ class FileDiscoverer:
     def __init__(
         self,
         root_path: str | Path,
-        max_depth: Optional[int] = None,
+        max_depth: int | None = None,
         use_gitignore: bool = True,
-        max_size_mb: Optional[int] = None,
+        max_size_mb: int | None = None,
     ) -> None:
         """
         Initialize the file discoverer.
@@ -55,7 +56,7 @@ class FileDiscoverer:
 
         # Initialize components
         self.classifier = FileClassifier()
-        self.gitignore_filter: Optional[GitignoreFilter] = None
+        self.gitignore_filter: GitignoreFilter | None = None
 
         if self.use_gitignore:
             self.gitignore_filter = create_gitignore_filter(self.root_path)
@@ -85,7 +86,7 @@ class FileDiscoverer:
         stats = self._calculate_stats(files, start_time)
 
         # Get gitignore patterns
-        gitignore_patterns: List[str] = []
+        gitignore_patterns: list[str] = []
         if self.gitignore_filter:
             gitignore_patterns = self.gitignore_filter.get_patterns()
 
@@ -117,15 +118,15 @@ class FileDiscoverer:
 
         return asyncio.run(self.discover_async())
 
-    async def _discover_files_async(self) -> List[DiscoveredFile]:
+    async def _discover_files_async(self) -> list[DiscoveredFile]:
         """
         Discover all files in the project.
 
         Returns:
             List of DiscoveredFile objects
         """
-        discovered_files: List[DiscoveredFile] = []
-        
+        discovered_files: list[DiscoveredFile] = []
+
         # Try Rust discovery first
         try:
             from warden import warden_core_rust
@@ -137,16 +138,16 @@ class FileDiscoverer:
             try:
                 logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path), max_size_mb=self.max_size_mb)
                 rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore, self.max_size_mb)
-                
+
                 # STEP 1: Batch get stats (Parallel line count, hash, binary check)
                 raw_paths = [f[0] for f in rust_files]
                 stats_batch = warden_core_rust.get_file_stats(raw_paths)
                 stats_map = {s.path: s for s in stats_batch}
-                
+
                 for path_str, initial_size, detected_lang in rust_files:
                     file_path = Path(path_str)
                     rust_stat = stats_map.get(path_str)
-                    
+
                     # Double check max depth if needed
                     if self.max_depth is not None:
                         try:
@@ -186,7 +187,7 @@ class FileDiscoverer:
                         metadata={"engine": "rust", "detected_lang": detected_lang},
                     )
                     discovered_files.append(discovered_file)
-                
+
                 logger.info("discovery_process_complete", engine="rust", file_count=len(discovered_files))
                 return discovered_files
 
@@ -195,9 +196,9 @@ class FileDiscoverer:
 
         # Fallback to Python discovery
         logger.debug("discovery_engine_selected", engine="python", project_root=str(self.root_path))
-        
+
         for file_path in self._walk_directory(self.root_path, current_depth=0):
-            # Skip if gitignore says so (already covered by _walk_directory items, 
+            # Skip if gitignore says so (already covered by _walk_directory items,
             # but adding for safety if logic changes)
             if self.gitignore_filter and self.gitignore_filter.should_ignore(file_path):
                 continue
@@ -234,7 +235,7 @@ class FileDiscoverer:
 
         return discovered_files
 
-    def _walk_directory(self, directory: Path, current_depth: int) -> List[Path]:
+    def _walk_directory(self, directory: Path, current_depth: int) -> list[Path]:
         """
         Recursively walk directory tree.
 
@@ -249,7 +250,7 @@ class FileDiscoverer:
         if self.max_depth is not None and current_depth > self.max_depth:
             return []
 
-        paths: List[Path] = []
+        paths: list[Path] = []
 
         try:
             for item in directory.iterdir():
@@ -270,7 +271,7 @@ class FileDiscoverer:
         return paths
 
     def _calculate_stats(
-        self, files: List[DiscoveredFile], start_time: float
+        self, files: list[DiscoveredFile], start_time: float
     ) -> DiscoveryStats:
         """
         Calculate discovery statistics.
@@ -303,7 +304,7 @@ class FileDiscoverer:
 
         return stats
 
-    def get_analyzable_files(self) -> List[Path]:
+    def get_analyzable_files(self) -> list[Path]:
         """
         Get only analyzable files (synchronous).
 
@@ -319,7 +320,7 @@ class FileDiscoverer:
         result = self.discover_sync()
         return [Path(f.path) for f in result.get_analyzable_files()]
 
-    async def get_analyzable_files_async(self) -> List[Path]:
+    async def get_analyzable_files_async(self) -> list[Path]:
         """
         Get only analyzable files (asynchronous).
 
@@ -335,7 +336,7 @@ class FileDiscoverer:
         result = await self.discover_async()
         return [Path(f.path) for f in result.get_analyzable_files()]
 
-    def get_files_by_type(self, file_type: FileType) -> List[Path]:
+    def get_files_by_type(self, file_type: FileType) -> list[Path]:
         """
         Get files of a specific type (synchronous).
 
@@ -357,7 +358,7 @@ class FileDiscoverer:
 
 async def discover_project_files_async(
     project_root: str | Path,
-    max_depth: Optional[int] = None,
+    max_depth: int | None = None,
     use_gitignore: bool = True,
 ) -> DiscoveryResult:
     """

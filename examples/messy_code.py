@@ -43,3 +43,28 @@ y  =  2
 z =3
 
 # Benchmark cache invalidation comment
+
+# Code Simplifier Examples:
+
+def old_style_formatting(name, age):
+    """Old % formatting - should use f-strings."""
+    message = "Hello %s, you are %d years old" % (name, age)
+    return message
+
+def format_method_example(user, count):
+    """Using .format() - should use f-strings."""
+    return "User {} has {} items".format(user, count)
+
+def manual_list_building(items):
+    """Manual list building - should use comprehension."""
+    result = []
+    for item in items:
+        result.append(item.value)
+    return result
+
+def redundant_else_example(x):
+    """Redundant else after return."""
+    if x > 0:
+        return x
+    else:
+        return 0

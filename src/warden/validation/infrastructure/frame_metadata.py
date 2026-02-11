@@ -6,7 +6,8 @@ Validates frame.yaml structure and provides type-safe metadata access.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 import yaml
 
 from warden.validation.domain.enums import FrameCategory, FramePriority, FrameScope
@@ -34,14 +35,14 @@ class FrameMetadata:
     is_blocker: bool = False
 
     # Optional fields
-    applicability: List[Dict[str, str]] = field(default_factory=list)
-    min_warden_version: Optional[str] = None
-    max_warden_version: Optional[str] = None
-    config_schema: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
+    applicability: list[dict[str, str]] = field(default_factory=list)
+    min_warden_version: str | None = None
+    max_warden_version: str | None = None
+    config_schema: dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
 
     # Frame dependencies
-    requires: Dict[str, List[str]] = field(default_factory=dict)
+    requires: dict[str, list[str]] = field(default_factory=dict)
     # Example:
     # {
     #   "frames": ["architectural", "project-architecture"],
@@ -50,7 +51,7 @@ class FrameMetadata:
     # }
 
     # Metadata
-    source_path: Optional[Path] = None  # Path to frame directory
+    source_path: Path | None = None  # Path to frame directory
 
     @classmethod
     def from_yaml(cls, yaml_path: Path) -> "FrameMetadata":
@@ -90,7 +91,7 @@ class FrameMetadata:
             raise ValueError(f"Invalid YAML in {yaml_path}: {e}") from e
 
     @classmethod
-    def _from_dict(cls, data: Dict[str, Any], source_path: Path) -> "FrameMetadata":
+    def _from_dict(cls, data: dict[str, Any], source_path: Path) -> "FrameMetadata":
         """Create FrameMetadata from dictionary."""
         return cls(
             name=data.get("name", ""),
@@ -157,11 +158,10 @@ class FrameMetadata:
             )
 
         # Validate ID format (kebab-case)
-        if self.id:
-            if not self.id.replace("-", "").replace("_", "").isalnum():
-                errors.append(
-                    f"Invalid ID format: {self.id}. Use kebab-case (e.g., redis-security)"
-                )
+        if self.id and not self.id.replace("-", "").replace("_", "").isalnum():
+            errors.append(
+                f"Invalid ID format: {self.id}. Use kebab-case (e.g., redis-security)"
+            )
 
         # Validate version format (semver)
         if self.version:
@@ -211,7 +211,7 @@ class FrameMetadata:
         """Get scope as enum."""
         return FrameScope(self.scope)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary (for JSON serialization)."""
         return {
             "name": self.name,

@@ -6,17 +6,17 @@ with the Ink CLI.
 """
 
 import asyncio
-import sys
 import os
-import stat
-from typing import Optional, Any, Dict
 import signal
+import stat
+import sys
+from typing import Any, Dict, Optional
 
 from warden.cli_bridge.protocol import (
+    ErrorCode,
+    IPCError,
     IPCRequest,
     IPCResponse,
-    IPCError,
-    ErrorCode,
 )
 from warden.shared.utils.retry_utils import async_retry as retry_async
 
@@ -30,6 +30,8 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 # Import bridge - must be imported after protocol to avoid circular import
+import contextlib
+
 from warden.cli_bridge.bridge import WardenBridge
 
 
@@ -42,9 +44,9 @@ class IPCServer:
 
     def __init__(
         self,
-        bridge: Optional[WardenBridge] = None,
+        bridge: WardenBridge | None = None,
         transport: str = "stdio",
-        socket_path: Optional[str] = None,
+        socket_path: str | None = None,
     ) -> None:
         """
         Initialize IPC server
@@ -57,7 +59,7 @@ class IPCServer:
         self.bridge = bridge or WardenBridge()
         self.transport = transport
         self.socket_path = socket_path
-        self.server: Optional[asyncio.Server] = None
+        self.server: asyncio.Server | None = None
         self.running = False
 
         # Method routing table
@@ -101,10 +103,8 @@ class IPCServer:
 
         # Clean up socket file
         if self.transport == "socket" and self.socket_path:
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 os.unlink(self.socket_path)
-            except FileNotFoundError:
-                pass
 
         logger.info("ipc_server_stopped")
 
@@ -382,7 +382,7 @@ class IPCServer:
             writer.write((response.to_json() + "\n").encode("utf-8"))
             await writer.drain()
 
-    async def _handle_streaming_method_async(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    async def _handle_streaming_method_async(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
         Handle streaming method (analyze_with_llm)
 
@@ -400,7 +400,7 @@ class IPCServer:
 
 async def run_ipc_server_async(
     transport: str = "stdio",
-    socket_path: Optional[str] = None,
+    socket_path: str | None = None,
 ) -> None:
     """
     Run IPC server (convenience function)

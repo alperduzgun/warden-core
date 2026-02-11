@@ -1,23 +1,25 @@
-import typer
-import subprocess
 import asyncio
 import json
-import sys
-import yaml
 import os
+import subprocess
+import sys
 from pathlib import Path
+
+import typer
+import yaml
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm, Prompt
+
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
-from warden.cli.commands.install import install as run_install
 from warden.cli.commands.init_helpers import (
+    configure_agent_tools,
+    configure_ci_workflow,
     configure_llm,
     configure_vector_db,
-    select_ci_provider,
-    configure_ci_workflow,
     generate_ai_tool_files,
-    configure_agent_tools,
+    select_ci_provider,
 )
+from warden.cli.commands.install import install as run_install
 
 console = Console()
 
@@ -28,13 +30,13 @@ def _generate_ignore_file(root: Path, meta):
         console.print("[dim].wardenignore exists, skipping.[/dim]")
         return
 
-    
+
     # Smart Deduplication: Read .gitignore to avoid redundancy
     gitignore_patterns = set()
     gitignore_path = root / ".gitignore"
     if gitignore_path.exists():
         try:
-            with open(gitignore_path, "r") as f:
+            with open(gitignore_path) as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
@@ -44,7 +46,7 @@ def _generate_ignore_file(root: Path, meta):
 
     # Filter out patterns already in .gitignore
     final_content = []
-    
+
     # Header
     final_content.extend([
         "# Warden Ignore File",
@@ -88,14 +90,14 @@ def _generate_ignore_file(root: Path, meta):
         "",
         # Language Specific
     ]
-    
+
     # Add language specific defaults
     lang_defaults = []
     if meta.language == "python":
         lang_defaults = ["__pycache__/", "*.pyc", "*.pyo", ".pytest_cache/", ".mypy_cache/", "htmlcov/"]
     elif meta.language in ["javascript", "typescript"]:
         lang_defaults = [".next/", ".nuxt/", "coverage/", ".turbo/"]
-    
+
     all_defaults = default_patterns + lang_defaults
 
     # write patterns if not in gitignore
@@ -104,16 +106,16 @@ def _generate_ignore_file(root: Path, meta):
         if not line.strip(): # keep empty lines for formatting
              final_content.append(line)
              continue
-             
+
         # Check logic
         clean_line = line.strip()
         is_covered = clean_line in gitignore_patterns
-        
+
         # Try variations commonly used in gitignore
         if not is_covered and clean_line.endswith("/"):
              # "build/" might be "build" in gitignore
              is_covered = clean_line.rstrip("/") in gitignore_patterns
-        
+
         if not is_covered:
             final_content.append(line)
 
@@ -147,15 +149,14 @@ def _setup_semantic_search(config_path: Path):
          # Inner function to perform indexing
          async def run_indexing_if_files_exist_async():
              from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
-             
+
              matcher = IgnoreMatcher(Path.cwd())
              code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.dart', '.swift', '.kt'}
-             
+
              files = []
              for f in Path.cwd().rglob("*"):
-                 if f.is_file() and f.suffix in code_extensions:
-                     if not matcher.should_ignore_file(f):
-                         files.append(f)
+                 if f.is_file() and f.suffix in code_extensions and not matcher.should_ignore_file(f):
+                     files.append(f)
 
              if not files:
                  console.print("[yellow]No code files found to index.[/yellow]")
@@ -165,14 +166,14 @@ def _setup_semantic_search(config_path: Path):
                  with console.status(f"[bold green]Indexing {len(files)} files...[/bold green]", spinner="dots") as status:
                     processed = 0
                     total = len(files)
-                    
+
                     async def progress_cb(count):
                         nonlocal processed
                         processed += count
                         status.update(f"[bold green]Indexing {total} files... ({processed}/{total})[/bold green]")
-                        
+
                     await service.index_project(Path.cwd(), files, progress_callback=progress_cb)
-                    
+
                  console.print(f"[green]✓ Semantic Index Ready ({len(files)} files)[/green]")
              except KeyboardInterrupt:
                  console.print("\n[yellow]⚠️  Indexing skipped by user.[/yellow]")
@@ -221,21 +222,21 @@ async def _create_baseline_async(root: Path, config_path: Path):
         # We use execute_pipeline_stream_async to get live updates
         all_issues = []
         last_summary = {}
-        processed_count = 0 
+        processed_count = 0
         total_files = 0
-        
+
         with console.status("[bold blue]🚀 Starting Analysis...[/bold blue]", spinner="dots") as status:
             async for event in bridge.execute_pipeline_stream_async(str(root)):
                 etype = event.get("type")
-                
+
                 if etype == "progress":
                     evt = event.get("event")
                     data = event.get("data", {})
-                    
+
                     if evt == "discovery_complete":
                         files_found = data.get("total_files", 0)
                         status.update(f"[bold blue]🔍 Analyzable Files: {files_found}[/bold blue]")
-                    
+
                     elif evt == "pipeline_started":
                         # Initial guess based on file count
                         files_found = data.get("file_count") or files_found
@@ -264,7 +265,7 @@ async def _create_baseline_async(root: Path, config_path: Path):
                     res = event.get("data")
                     if res:
                         last_summary = res.get("summary", {})
-                        
+
                         # Flatten issues for legacy baseline format
                         for fr in res.get("frame_results", []):
                             for f in fr.get("findings", []):
@@ -278,7 +279,7 @@ async def _create_baseline_async(root: Path, config_path: Path):
 
         # Construct final result for baseline
         result = {
-            "success": True, 
+            "success": True,
             "issues": all_issues,
             "summary": last_summary
         }
@@ -313,8 +314,8 @@ async def _generate_intelligence_async(root: Path, config_files: dict = None):
 
     try:
         from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
+        from warden.analysis.domain.intelligence import RiskLevel, SecurityPosture
         from warden.analysis.services.intelligence_saver import IntelligenceSaver
-        from warden.analysis.domain.intelligence import SecurityPosture, RiskLevel
 
         # Get all code files for analysis
         code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.dart'}
@@ -472,8 +473,8 @@ def init_command(
         table.add_column("Distribution", justify="right", style="magenta")
         table.add_column("Status", style="dim")
 
-        from warden.shared.languages.registry import LanguageRegistry
         from warden.ast.domain.enums import CodeLanguage
+        from warden.shared.languages.registry import LanguageRegistry
 
         sorted_stats = sorted(context.language_breakdown.items(), key=lambda x: x[1], reverse=True)
         for lang_id, percent in sorted_stats:
@@ -811,7 +812,7 @@ custom_rules:
         branch = "main"
         try:
             branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
-        except (OSError, IOError, PermissionError):  # Cleanup is best-effort
+        except (OSError, PermissionError):  # Cleanup is best-effort
             pass
 
         # Select CI provider
@@ -837,8 +838,8 @@ custom_rules:
     console.print("[dim]Auto-installing parsers for detected languages...[/dim]")
 
     try:
-        from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
         from warden.ast.domain.enums import CodeLanguage
+        from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
 
         provider = TreeSitterProvider()
 

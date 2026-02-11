@@ -7,6 +7,7 @@ All models are Panel-compatible with JSON serialization (camelCase).
 from typing import Any, Dict, List, Optional
 
 from pydantic import Field
+
 from warden.rules.domain.enums import RuleCategory, RuleSeverity
 from warden.shared.domain.base_model import BaseDomainModel
 
@@ -44,23 +45,23 @@ class CustomRule(BaseDomainModel):
     description: str
     enabled: bool
     type: str  # 'security' | 'convention' | 'pattern' | 'script' | 'ai'
-    conditions: Dict[str, Any] = Field(default_factory=dict)
-    examples: Optional[Dict[str, List[str]]] = None
-    message: Optional[str] = None
-    language: Optional[List[str]] = None
-    exceptions: Optional[List[str]] = None
-    script_path: Optional[str] = Field(None, alias="scriptPath")
-    timeout: Optional[int] = None
+    conditions: dict[str, Any] = Field(default_factory=dict)
+    examples: dict[str, list[str]] | None = None
+    message: str | None = None
+    language: list[str] | None = None
+    exceptions: list[str] | None = None
+    script_path: str | None = Field(None, alias="scriptPath")
+    timeout: int | None = None
     # Additional fields for default rules compatibility
-    pattern: Optional[str] = None
-    tags: Optional[List[str]] = None
-    file_pattern: Optional[str] = Field(None, alias="filePattern")
-    excluded_paths: Optional[List[str]] = Field(None, alias="excludedPaths")
-    auto_fix: Optional[Dict[str, Any]] = Field(None, alias="autoFix")
-    
+    pattern: str | None = None
+    tags: list[str] | None = None
+    file_pattern: str | None = Field(None, alias="filePattern")
+    excluded_paths: list[str] | None = Field(None, alias="excludedPaths")
+    auto_fix: dict[str, Any] | None = Field(None, alias="autoFix")
+
     def __hash__(self):
         return hash(self.id)
-        
+
     def __eq__(self, other):
         if not isinstance(other, CustomRule):
             return False
@@ -93,8 +94,8 @@ class CustomRuleViolation(BaseDomainModel):
     file: str
     line: int
     message: str
-    suggestion: Optional[str] = None
-    code_snippet: Optional[str] = Field(None, alias="codeSnippet")
+    suggestion: str | None = None
+    code_snippet: str | None = Field(None, alias="codeSnippet")
 
 
 class FrameRules(BaseDomainModel):
@@ -109,8 +110,8 @@ class FrameRules(BaseDomainModel):
         on_fail: Behavior when blocker rule fails ("stop" or "continue")
     """
 
-    pre_rules: List[CustomRule] = Field(default_factory=list, alias="preRules")
-    post_rules: List[CustomRule] = Field(default_factory=list, alias="postRules")
+    pre_rules: list[CustomRule] = Field(default_factory=list, alias="preRules")
+    post_rules: list[CustomRule] = Field(default_factory=list, alias="postRules")
     on_fail: str = Field("stop", alias="onFail")  # "stop" or "continue"
 
 
@@ -134,11 +135,11 @@ class ProjectRuleConfig(BaseDomainModel):
 
     project_name: str = Field(alias="projectName")
     language: str
-    framework: Optional[str] = None
-    rules: List[CustomRule] = Field(default_factory=list)
-    global_rules: List[str] = Field(default_factory=list, alias="globalRules")  # Rule IDs for global rules
-    frame_rules: Dict[str, FrameRules] = Field(default_factory=dict, alias="frameRules")
+    framework: str | None = None
+    rules: list[CustomRule] = Field(default_factory=list)
+    global_rules: list[str] = Field(default_factory=list, alias="globalRules")  # Rule IDs for global rules
+    frame_rules: dict[str, FrameRules] = Field(default_factory=dict, alias="frameRules")
     ai_validation_enabled: bool = Field(True, alias="aiValidationEnabled")
-    llm_provider: Optional[str] = Field(None, alias="llmProvider")
-    exclude_paths: List[str] = Field(default_factory=list, alias="excludePaths")
-    exclude_files: List[str] = Field(default_factory=list, alias="excludeFiles")
+    llm_provider: str | None = Field(None, alias="llmProvider")
+    exclude_paths: list[str] = Field(default_factory=list, alias="excludePaths")
+    exclude_files: list[str] = Field(default_factory=list, alias="excludeFiles")

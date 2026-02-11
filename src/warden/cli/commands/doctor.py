@@ -1,6 +1,8 @@
-import typer
 from pathlib import Path
+
+import typer
 from rich.console import Console
+
 from warden.services.package_manager.doctor import WardenDoctor
 
 app = typer.Typer(help="Warden Doctor - Diagnostic tool for project health.")
@@ -20,10 +22,10 @@ def doctor() -> None:
     Verify project health and readiness.
     """
     console.print("[bold cyan]🩺 Warden Doctor[/bold cyan] - Running diagnostics...")
-    
+
     doc = WardenDoctor(Path.cwd())
     success = doc.run_all()
-    
+
     if success:
         console.print("\n[bold green]✅ Your project is healthy and ready for a scan![/bold green]")
         console.print("[dim](Warnings may limit some advanced features, but core scanning is operational)[/dim]")

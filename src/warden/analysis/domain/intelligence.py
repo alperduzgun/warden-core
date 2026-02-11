@@ -10,9 +10,9 @@ These models are designed to be:
 - Updatable incrementally via 'warden refresh'
 """
 
-from enum import Enum
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 from pydantic import Field
 
@@ -57,15 +57,15 @@ class ModuleInfo(BaseDomainModel):
     risk_level: RiskLevel = RiskLevel.P2_MEDIUM
 
     # Security focus areas for this module
-    security_focus: List[str] = Field(default_factory=list)
+    security_focus: list[str] = Field(default_factory=list)
     # e.g., ["injection", "auth_bypass", "data_leak"]
 
     # Dependencies on other modules
-    depends_on: List[str] = Field(default_factory=list)
+    depends_on: list[str] = Field(default_factory=list)
     # e.g., ["auth", "database"]
 
     # Modules that depend on this one
-    depended_by: List[str] = Field(default_factory=list)
+    depended_by: list[str] = Field(default_factory=list)
 
     # File count in this module
     file_count: int = 0
@@ -73,7 +73,7 @@ class ModuleInfo(BaseDomainModel):
     # Verification status
     verified: bool = False  # True if AST cross-validated LLM claims
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to JSON with camelCase keys."""
         return {
             "name": self.name,
@@ -88,7 +88,7 @@ class ModuleInfo(BaseDomainModel):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "ModuleInfo":
+    def from_json(cls, data: dict[str, Any]) -> "ModuleInfo":
         """Create from JSON dict with camelCase keys."""
         return cls(
             name=data.get("name", ""),
@@ -113,9 +113,9 @@ class FileException(BaseDomainModel):
     path: str = ""  # Relative path
     risk_level: RiskLevel = RiskLevel.P0_CRITICAL
     reason: str = ""  # Why this file is an exception
-    security_focus: List[str] = Field(default_factory=list)
+    security_focus: list[str] = Field(default_factory=list)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to JSON with camelCase keys."""
         return {
             "path": self.path,
@@ -125,7 +125,7 @@ class FileException(BaseDomainModel):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "FileException":
+    def from_json(cls, data: dict[str, Any]) -> "FileException":
         """Create from JSON dict."""
         return cls(
             path=data.get("path", ""),
@@ -156,13 +156,13 @@ class ProjectIntelligence(BaseDomainModel):
     security_posture: SecurityPosture = SecurityPosture.STANDARD
 
     # Module map: module_name -> ModuleInfo
-    modules: Dict[str, ModuleInfo] = Field(default_factory=dict)
+    modules: dict[str, ModuleInfo] = Field(default_factory=dict)
 
     # File exceptions: file_path -> FileException
-    exceptions: Dict[str, FileException] = Field(default_factory=dict)
+    exceptions: dict[str, FileException] = Field(default_factory=dict)
 
     # Cross-module security rules
-    cross_module_rules: List[Dict[str, Any]] = Field(default_factory=list)
+    cross_module_rules: list[dict[str, Any]] = Field(default_factory=list)
     # e.g., [{"if_module": "payments", "must_import": ["auth", "validation"]}]
 
     # Validation metrics
@@ -206,7 +206,7 @@ class ProjectIntelligence(BaseDomainModel):
 
         return max(0, min(100, score))
 
-    def get_module_for_file(self, file_path: str) -> Optional[ModuleInfo]:
+    def get_module_for_file(self, file_path: str) -> ModuleInfo | None:
         """
         Get the module that contains a file.
 
@@ -250,7 +250,7 @@ class ProjectIntelligence(BaseDomainModel):
         # Default: P1_HIGH for unknown (paranoid approach)
         return RiskLevel.P1_HIGH
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to JSON for storage."""
         return {
             "schemaVersion": self.schema_version,
@@ -268,7 +268,7 @@ class ProjectIntelligence(BaseDomainModel):
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "ProjectIntelligence":
+    def from_json(cls, data: dict[str, Any]) -> "ProjectIntelligence":
         """Create from JSON dict."""
         modules = {}
         for name, mod_data in data.get("modules", {}).items():

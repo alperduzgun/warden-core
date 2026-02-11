@@ -17,20 +17,20 @@ See: warden.validation.domain.mixins
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import asyncio
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 from warden.validation.domain.enums import (
+    FrameApplicability,
+    FrameCategory,
     FramePriority,
     FrameScope,
-    FrameCategory,
-    FrameApplicability,
 )
 
 
@@ -42,8 +42,8 @@ class Remediation:
     description: str
     code: str  # The replacement code
     unified_diff: str | None = None
-    
-    def to_json(self) -> Dict[str, Any]:
+
+    def to_json(self) -> dict[str, Any]:
         return {
             "description": self.description,
             "code": self.code,
@@ -78,7 +78,7 @@ class Finding:
     is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
     remediation: Remediation | None = None  # 🛡️ NEW: Suggested fix
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""
         return {
             "id": self.id,
@@ -94,7 +94,7 @@ class Finding:
             "remediation": self.remediation.to_json() if self.remediation else None,
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Alias for to_json for compatibility."""
         return self.to_json()
 
@@ -125,21 +125,21 @@ class FrameResult:
     duration: float  # in seconds
     issues_found: int
     is_blocker: bool
-    findings: List[Finding]
-    metadata: Dict[str, Any] | None = None
+    findings: list[Finding]
+    metadata: dict[str, Any] | None = None
 
     # ⭐ NEW: Pre/Post Rules Support
-    pre_rules: List[CustomRule] | None = None
-    post_rules: List[CustomRule] | None = None
-    pre_rule_violations: List[CustomRuleViolation] | None = None
-    post_rule_violations: List[CustomRuleViolation] | None = None
+    pre_rules: list[CustomRule] | None = None
+    post_rules: list[CustomRule] | None = None
+    pre_rule_violations: list[CustomRuleViolation] | None = None
+    post_rule_violations: list[CustomRuleViolation] | None = None
 
     @property
     def passed(self) -> bool:
         """Check if frame passed (no issues)."""
         return self.status == "passed"
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON (camelCase)."""
         result = {
             "frameId": self.frame_id,
@@ -206,7 +206,7 @@ class ValidationFrame(ABC):
     # Optional metadata
     version: str = "0.0.0"
     author: str = "Unknown"
-    applicability: List[FrameApplicability] = [FrameApplicability.ALL]
+    applicability: list[FrameApplicability] = [FrameApplicability.ALL]
 
     # Frame compatibility (for community frames)
     min_warden_version: str | None = None
@@ -214,14 +214,14 @@ class ValidationFrame(ABC):
 
     # Frame dependencies (for conditional execution)
     # Frame will be skipped if dependencies are not met
-    requires_frames: List[str] = []  # Frame IDs that must run before this frame
-    requires_config: List[str] = []  # Config paths that must be set (e.g., "spec.platforms")
-    requires_context: List[str] = []  # Context attributes that must exist (e.g., "project_context")
+    requires_frames: list[str] = []  # Frame IDs that must run before this frame
+    requires_config: list[str] = []  # Config paths that must be set (e.g., "spec.platforms")
+    requires_context: list[str] = []  # Context attributes that must exist (e.g., "project_context")
 
     # Frame state (set at runtime)
     enabled: bool = True  # Can be disabled via config or runtime
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize frame with optional configuration.
 
@@ -251,7 +251,7 @@ class ValidationFrame(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'description' attribute")
 
     @abstractmethod
-    async def execute_async(self, code_file: "CodeFile") -> FrameResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:  # type: ignore[name-defined]
         """
         Execute validation frame on code file.
 
@@ -322,7 +322,7 @@ class CodeFile:
     size_bytes: int = 0
     line_count: int = 0
     hash: str | None = None
-    metadata: Dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Calculate size and line count if not provided."""

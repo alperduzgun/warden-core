@@ -7,8 +7,8 @@ Provides common services used across different phases:
 - Security suggestion service
 """
 
-from typing import Optional, List, Dict, Any
 import asyncio
+from typing import Any, Dict, List, Optional
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import resilient
@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 class LLMService:
     """Service for LLM-based analysis and suggestions."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize LLM service."""
         self.config = config or {}
         self.enabled = self.config.get("enabled", False)
@@ -28,7 +28,7 @@ class LLMService:
         try:
             from warden.llm.config import load_llm_config
             from warden.llm.factory import create_client
-            
+
             llm_config = load_llm_config()
             self.llm_service = create_client(llm_config.default_provider)
             self.llm_available = True
@@ -38,7 +38,7 @@ class LLMService:
             logger.warning("llm_service_unavailable", error=str(e))
 
     @resilient(name="llm_generate_suggestion", timeout_seconds=30.0, retry_max_attempts=3, circuit_breaker_enabled=True)
-    async def generate_suggestion(self, issue: Dict[str, Any]) -> Optional[str]:
+    async def generate_suggestion(self, issue: dict[str, Any]) -> str | None:
         """Generate a fix suggestion for an issue."""
         if not self.enabled or not self.llm_available:
             return None
@@ -52,7 +52,7 @@ class LLMService:
             return None
 
     @resilient(name="llm_analyze_code", timeout_seconds=60.0, retry_max_attempts=3, circuit_breaker_enabled=True)
-    async def analyze_code(self, code: str, context: str = "") -> Dict[str, Any]:
+    async def analyze_code(self, code: str, context: str = "") -> dict[str, Any]:
         """Analyze code with LLM."""
         if not self.enabled or not self.llm_available:
             return {"analysis": "LLM not available"}
@@ -68,7 +68,7 @@ class LLMService:
             logger.error("code_analysis_failed", error=str(e))
             return {"error": str(e)}
 
-    def _build_suggestion_prompt(self, issue: Dict[str, Any]) -> str:
+    def _build_suggestion_prompt(self, issue: dict[str, Any]) -> str:
         """Build prompt for suggestion generation."""
         return f"""
         Issue: {issue.get('message', '')}
@@ -83,11 +83,11 @@ class LLMService:
 class SecuritySuggestionService:
     """Service for generating security fix suggestions."""
 
-    def __init__(self, llm_service: Optional[LLMService] = None):
+    def __init__(self, llm_service: LLMService | None = None):
         """Initialize security suggestion service."""
         self.llm_service = llm_service or LLMService()
 
-    async def generate_fortification_async(self, issue: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_fortification_async(self, issue: dict[str, Any]) -> dict[str, Any]:
         """Generate fortification for a security issue."""
         severity = issue.get("severity", "medium")
 
@@ -129,15 +129,15 @@ class SecuritySuggestionService:
 class CodeImprovementService:
     """Service for generating code quality improvements."""
 
-    def __init__(self, llm_service: Optional[LLMService] = None):
+    def __init__(self, llm_service: LLMService | None = None):
         """Initialize code improvement service."""
         self.llm_service = llm_service or LLMService()
 
     async def generate_cleaning_suggestion(
         self,
         code: str,
-        issues: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        issues: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Generate cleaning suggestions for code."""
 
         suggestions = []

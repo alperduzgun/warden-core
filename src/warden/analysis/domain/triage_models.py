@@ -4,8 +4,10 @@ Defines risk scores, lanes, and triage decisions with strict validation.
 """
 
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+
+from pydantic import BaseModel, Field, field_validator
+
 
 class TriageLane(str, Enum):
     """Routing lanes for analysis depth."""
@@ -19,7 +21,7 @@ class RiskScore(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the score")
     reasoning: str = Field(..., description="Explanation for the assigned score")
     category: str = Field(..., description="Categorization (e.g., 'auth', 'dto', 'ui')")
-    
+
     @field_validator('score', mode='before')
     @classmethod
     def normalize_score(cls, v):
@@ -61,4 +63,4 @@ class TriageDecision(BaseModel):
     risk_score: RiskScore
     processing_time_ms: float
     is_cached: bool = False
-    metadata: Optional[dict] = Field(default_factory=dict)
+    metadata: dict | None = Field(default_factory=dict)

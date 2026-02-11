@@ -20,30 +20,30 @@ Usage:
             role: provider
 """
 
-from warden.validation.frames.spec.spec_frame import SpecFrame
-from warden.validation.frames.spec.models import (
-    Contract,
-    OperationDefinition,
-    ModelDefinition,
-    EnumDefinition,
-    FieldDefinition,
-    PlatformConfig,
-    PlatformType,
-    PlatformRole,
-    OperationType,
-    ContractGap,
-    GapSeverity,
-    SpecAnalysisResult,
-)
 from warden.validation.frames.spec.analyzer import (
     GapAnalyzer,
     GapAnalyzerConfig,
     analyze_contracts,
 )
+from warden.validation.frames.spec.models import (
+    Contract,
+    ContractGap,
+    EnumDefinition,
+    FieldDefinition,
+    GapSeverity,
+    ModelDefinition,
+    OperationDefinition,
+    OperationType,
+    PlatformConfig,
+    PlatformRole,
+    PlatformType,
+    SpecAnalysisResult,
+)
 from warden.validation.frames.spec.report import (
     SarifReportGenerator,
     generate_sarif_report,
 )
+from warden.validation.frames.spec.spec_frame import SpecFrame
 
 __all__ = [
     "SpecFrame",

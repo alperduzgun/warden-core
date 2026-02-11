@@ -7,6 +7,7 @@ Handles creation and parsing of LLM prompts for the fortification phase.
 import json
 import re
 from typing import Any, Dict, List, Optional
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,9 +32,9 @@ class FortificationPromptBuilder:
     @staticmethod
     def create_llm_prompt(
         issue_type: str,
-        issues: List[Dict[str, Any]],
-        context: Dict[str, Any],
-        semantic_context: Optional[List[Any]] = None,
+        issues: list[dict[str, Any]],
+        context: dict[str, Any],
+        semantic_context: list[Any] | None = None,
     ) -> str:
         """Create optimized LLM prompt for fix generation."""
         # Get context information
@@ -55,11 +56,11 @@ class FortificationPromptBuilder:
             examples = []
             max_chars = 1500  # Reduced validation context
             total_chars = 0
-            
+
             for i, result in enumerate(semantic_context[:3]):
                 file_path = "unknown"
                 content = ""
-                
+
                 # ... extractor logic same as before ...
                 if hasattr(result, 'chunk'):
                      chunk = result.chunk
@@ -71,14 +72,14 @@ class FortificationPromptBuilder:
                 elif isinstance(result, dict):
                     file_path = result.get('file_path', 'unknown')
                     content = result.get('content', str(result))
-                
+
                 content = (content or "")[:300] # Reduced from 500
-                
+
                 example = f"# Ex{i+1} ({file_path})\n{content}\n"
                 if total_chars + len(example) > max_chars: break
                 examples.append(example)
                 total_chars += len(example)
-            
+
             if examples:
                 semantic_section = f"REFERENCE PATTERNS:\n{''.join(examples)}\n"
 
@@ -110,8 +111,8 @@ Fix must match project style.
     @staticmethod
     def parse_llm_response(
         response: str,
-        issues: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        issues: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Parse LLM response into fortification objects."""
         fortifications = []
 
@@ -125,7 +126,7 @@ Fix must match project style.
 
             if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
                 json_str = response[start_idx : end_idx + 1]
-                
+
                 try:
                     fixes_data = json.loads(json_str)
                 except json.JSONDecodeError:

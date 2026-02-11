@@ -4,16 +4,17 @@ Handles AST provider discovery and validation.
 """
 
 from typing import Any, Dict, List
-from warden.shared.infrastructure.logging import get_logger
-from warden.cli_bridge.protocol import IPCError, ErrorCode
+
 from warden.cli_bridge.handlers.base import BaseHandler
+from warden.cli_bridge.protocol import ErrorCode, IPCError
+from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
 class ToolHandler(BaseHandler):
     """Handles discovery and testing of language tools (LSP, AST providers)."""
 
-    async def get_available_providers_async(self) -> List[Dict[str, Any]]:
+    async def get_available_providers_async(self) -> list[dict[str, Any]]:
         """List all available AST providers and their metadata."""
         try:
             from warden.ast.application.provider_registry import ASTProviderRegistry
@@ -34,12 +35,12 @@ class ToolHandler(BaseHandler):
             logger.error("get_available_providers_failed", error=str(e))
             raise IPCError(ErrorCode.INTERNAL_ERROR, f"Failed to get providers: {e}")
 
-    async def test_provider(self, language: str) -> Dict[str, Any]:
+    async def test_provider(self, language: str) -> dict[str, Any]:
         """Test if a language provider is available and functional."""
         try:
             from warden.ast.application.provider_registry import ASTProviderRegistry
             from warden.ast.domain.enums import CodeLanguage
-            
+
             try:
                 lang = CodeLanguage(language.lower())
             except ValueError:

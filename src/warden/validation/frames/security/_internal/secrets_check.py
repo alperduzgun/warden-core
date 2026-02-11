@@ -9,13 +9,13 @@ Detects hardcoded secrets and credentials:
 """
 
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from warden.validation.domain.check import (
-    ValidationCheck,
-    CheckResult,
     CheckFinding,
+    CheckResult,
     CheckSeverity,
+    ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -72,7 +72,7 @@ class SecretsCheck(ValidationCheck):
         (r"rk_live_[a-zA-Z0-9]{24,}", "Stripe Restricted Key"),
     ]
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize secrets check."""
         super().__init__(config)
 
@@ -104,7 +104,7 @@ class SecretsCheck(ValidationCheck):
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute secrets detection."""
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         for line_num, line in enumerate(code_file.content.split("\n"), start=1):
             # Skip if line uses environment variables (safe)

@@ -7,7 +7,7 @@ All application errors should inherit from WardenError.
 
 class WardenError(Exception):
     """Base class for all Warden exceptions."""
-    
+
     def __init__(self, message: str, context: dict = None):
         super().__init__(message)
         self.context = context or {}

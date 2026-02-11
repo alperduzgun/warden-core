@@ -123,7 +123,7 @@ class StepStatus(str, Enum):
 class AnalysisLevel(str, Enum):
     """
     Scanning analysis levels.
-    
+
     Determines the depth of AI-driven analysis.
     """
     BASIC = "basic"        # No LLM, regex/AST only

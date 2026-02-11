@@ -12,8 +12,8 @@ from typing import Optional
 
 from warden.mcp.application.mcp_service import MCPService
 from warden.mcp.infrastructure.stdio_transport import STDIOTransport
-from warden.mcp.resources import MCPResourceManager
 from warden.mcp.protocol import MCPProtocol
+from warden.mcp.resources import MCPResourceManager
 
 # Optional logging
 try:
@@ -42,7 +42,7 @@ class MCPServer:
 
     def __init__(
         self,
-        project_root: Optional[Path] = None,
+        project_root: Path | None = None,
     ):
         """
         Initialize MCP server.

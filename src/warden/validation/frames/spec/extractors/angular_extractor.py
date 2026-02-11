@@ -21,21 +21,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -92,8 +92,8 @@ class AngularExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("angular_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -141,7 +141,7 @@ class AngularExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """
         Extract operations from HttpClient calls.
 
@@ -150,7 +150,7 @@ class AngularExtractor(BaseContractExtractor):
             this.http.post<User>(`${this.apiUrl}/users`, userData)
             return this.httpClient.get<Response>(`${environment.apiUrl}/items`);
         """
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for HttpClient calls
         # this.http.get<Type>('path')
@@ -199,7 +199,7 @@ class AngularExtractor(BaseContractExtractor):
 
         return operations
 
-    def _find_enclosing_method(self, content: str, line_index: int) -> Optional[str]:
+    def _find_enclosing_method(self, content: str, line_index: int) -> str | None:
         """Find the method name that contains the given line."""
         lines = content.split("\n")
 
@@ -219,7 +219,7 @@ class AngularExtractor(BaseContractExtractor):
 
         return None
 
-    def _extract_request_body_type(self, line: str, content: str, line_index: int) -> Optional[str]:
+    def _extract_request_body_type(self, line: str, content: str, line_index: int) -> str | None:
         """Extract request body type from POST/PUT/PATCH call."""
         # Look for second argument in http call
         # this.http.post<User>('/api/users', userData)
@@ -243,7 +243,7 @@ class AngularExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """
         Extract interfaces and types from TypeScript.
 
@@ -258,7 +258,7 @@ class AngularExtractor(BaseContractExtractor):
                 email: string;
             }
         """
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Pattern for interfaces
         interface_pattern = re.compile(
@@ -302,13 +302,13 @@ class AngularExtractor(BaseContractExtractor):
         body: str,
         file_path: Path,
         line_num: int,
-    ) -> Optional[ModelDefinition]:
+    ) -> ModelDefinition | None:
         """Parse interface/type body to extract fields."""
         # Skip common non-model types
         if name in ["Observable", "HttpHeaders", "HttpParams", "HttpErrorResponse"]:
             return None
 
-        fields: List[FieldDefinition] = []
+        fields: list[FieldDefinition] = []
 
         # Pattern for field: name: type; or name?: type;
         field_pattern = re.compile(
@@ -345,9 +345,9 @@ class AngularExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[EnumDefinition]:
+    ) -> list[EnumDefinition]:
         """Extract TypeScript enums."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
 
         # Pattern for enum
         enum_pattern = re.compile(
@@ -359,7 +359,7 @@ class AngularExtractor(BaseContractExtractor):
             enum_name = enum_match.group(1)
             enum_body = enum_match.group(2)
 
-            values: List[str] = []
+            values: list[str] = []
             value_pattern = re.compile(r"(\w+)\s*(?:=\s*[^,]+)?")
 
             for value_match in value_pattern.finditer(enum_body):

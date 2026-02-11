@@ -1,13 +1,14 @@
 """Pipeline module - Validation pipeline orchestration."""
 
+from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator
+from warden.pipeline.domain.enums import ExecutionStrategy, PipelineStatus
 from warden.pipeline.domain.models import (
-    ValidationPipeline,
+    FrameExecution,
     PipelineConfig,
     PipelineResult,
-    FrameExecution,
+    ValidationPipeline,
 )
-from warden.pipeline.domain.enums import PipelineStatus, ExecutionStrategy
-from warden.pipeline.application.phase_orchestrator import PhaseOrchestrator
+
 # Legacy names for compatibility
 PipelineOrchestrator = PhaseOrchestrator
 EnhancedPipelineOrchestrator = PhaseOrchestrator

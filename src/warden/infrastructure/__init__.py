@@ -10,8 +10,8 @@ Components:
 - Auto-installer: Pip install script, Docker support
 """
 
-from warden.infrastructure.installer import AutoInstaller
 from warden.infrastructure.hooks.installer import HookInstaller
+from warden.infrastructure.installer import AutoInstaller
 
 __all__ = [
     "AutoInstaller",

@@ -9,11 +9,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from warden.shared.infrastructure.logging import get_logger
-from warden.validation.domain.frame import CodeFile
+from warden.fortification.application.prompt_builder import FortificationPromptBuilder
 from warden.fortification.domain.models import Fortification
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
-from warden.fortification.application.prompt_builder import FortificationPromptBuilder
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 # Try to import LLMService, use None if not available
 try:
@@ -28,9 +28,9 @@ logger = get_logger(__name__)
 class FortificationResult:
     """Result from fortification phase."""
 
-    fortifications: List[Dict[str, Any]]
-    applied_fixes: List[Dict[str, Any]]
-    security_improvements: Dict[str, Any]
+    fortifications: list[dict[str, Any]]
+    applied_fixes: list[dict[str, Any]]
+    security_improvements: dict[str, Any]
     confidence: float = 0.0
 
 
@@ -43,7 +43,7 @@ class FortificationPhase:
     - Generate context-aware remediation suggestions
     - Provide framework-specific code examples
     - Assess fixability (auto-fixable flag for reporting)
-    
+
     Warden is a Read-Only tool. This phase acts as an AI Tech Lead,
     providing advice but NEVER modifying source code directly.
     """
@@ -53,11 +53,11 @@ class FortificationPhase:
 
     def __init__(
         self,
-        config: Optional[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None,
-        llm_service: Optional[LLMService] = None,
-        semantic_search_service: Optional[Any] = None,
-        rate_limiter: Optional[Any] = None,
+        config: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
+        llm_service: LLMService | None = None,
+        semantic_search_service: Any | None = None,
+        rate_limiter: Any | None = None,
     ):
         """
         Initialize fortification phase.
@@ -82,7 +82,7 @@ class FortificationPhase:
             use_gitignore = self.context.get('use_gitignore', True)
         else:
             use_gitignore = getattr(self.context, 'use_gitignore', True)
-        
+
         self.ignore_matcher = IgnoreMatcher(Path(project_root), use_gitignore=use_gitignore)
 
         logger.info(
@@ -93,8 +93,8 @@ class FortificationPhase:
 
     async def execute_async(
         self,
-        validated_issues: List[Dict[str, Any]],
-        code_files: Optional[List[CodeFile]] = None,
+        validated_issues: list[dict[str, Any]],
+        code_files: list[CodeFile] | None = None,
     ) -> FortificationResult:
         """
         Execute fortification phase.
@@ -112,18 +112,18 @@ class FortificationPhase:
         for issue in validated_issues:
             normalized = self._normalize_issue(issue)
             if not self.ignore_matcher.should_ignore_for_frame(
-                Path(normalized.get("file_path", "")), 
+                Path(normalized.get("file_path", "")),
                 "fortification"
             ):
                 normalized_issues.append(normalized)
-        
+
         if len(validated_issues) > len(normalized_issues):
              logger.info(
                 "fortification_phase_issues_ignored",
                 ignored=len(validated_issues) - len(normalized_issues),
                 remaining=len(normalized_issues)
             )
-        
+
         validated_issues = normalized_issues
 
         from warden.fortification.application.orchestrator import FortificationOrchestrator
@@ -136,10 +136,10 @@ class FortificationPhase:
             # Filter files based on ignore matcher
             original_count = len(code_files)
             code_files = [
-                cf for cf in code_files 
+                cf for cf in code_files
                 if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "fortification")
             ]
-            
+
             if len(code_files) < original_count:
                 logger.info(
                     "fortification_phase_files_ignored",
@@ -168,7 +168,7 @@ class FortificationPhase:
                 fixes = await self._generate_llm_fixes_async(issue_type, issues)
             else:
                 fixes = await self._generate_rule_based_fixes_async(issue_type, issues)
-            
+
             for fix in fixes:
                 # Use the finding ID from the fix or the first issue in the group
                 fid = fix.get("finding_id")
@@ -191,7 +191,7 @@ class FortificationPhase:
 
         result = FortificationResult(
             fortifications=[
-                f.to_json() if hasattr(f, 'to_json') else f 
+                f.to_json() if hasattr(f, 'to_json') else f
                 for f in all_fortifications
             ],
             applied_fixes=[],
@@ -204,8 +204,8 @@ class FortificationPhase:
     async def _generate_llm_fixes_async(
         self,
         issue_type: str,
-        issues: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        issues: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """
         Generate fixes using LLM for context-aware solutions.
 
@@ -228,10 +228,10 @@ class FortificationPhase:
                 if self.semantic_search_service.is_available():
                     # Get search queries for this issue type
                     queries = FortificationPromptBuilder.ISSUE_SEARCH_QUERIES.get(
-                        issue_type.lower(), 
+                        issue_type.lower(),
                         [f"secure {issue_type} handling", f"safe {issue_type} pattern"]
                     )
-                    
+
                     # Search for similar patterns
                     for query in queries[:2]:  # Limit to 2 queries
                         results = await self.semantic_search_service.search(
@@ -241,7 +241,7 @@ class FortificationPhase:
                         )
                         if results:
                             semantic_context.extend(results)
-                    
+
                     if semantic_context:
                         logger.info(
                             "semantic_context_retrieved",
@@ -256,7 +256,7 @@ class FortificationPhase:
                 )
                 # Continue without semantic context
                 pass
-        
+
         # Deduplicate and Re-Rank semantic context
         # Ensure we prioritize the highest scoring examples, especially since we merged multiple queries
         if semantic_context:
@@ -269,7 +269,7 @@ class FortificationPhase:
                 if content not in seen:
                     seen.add(content)
                     unique_context.append(item)
-            
+
             # Sort by score descending (if available)
             unique_context.sort(key=lambda x: getattr(x, 'score', 0.0), reverse=True)
             semantic_context = unique_context
@@ -336,8 +336,8 @@ class FortificationPhase:
     async def _generate_rule_based_fixes_async(
         self,
         issue_type: str,
-        issues: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        issues: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """
         Generate fixes using predefined rules and templates.
 
@@ -362,8 +362,8 @@ class FortificationPhase:
     def _create_fix_for_issue(
         self,
         issue_type: str,
-        issue: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+        issue: dict[str, Any],
+    ) -> dict[str, Any] | None:
         """
         Create rule-based fix for a specific issue.
 
@@ -420,10 +420,10 @@ class FortificationPhase:
             "confidence": 0.7,
         }
 
-    def _normalize_issue(self, issue: Any) -> Dict[str, Any]:
+    def _normalize_issue(self, issue: Any) -> dict[str, Any]:
         """
         Normalize issue to standard dictionary format.
-        
+
         Handles:
         - Dictionary objects
         - Finding objects
@@ -432,10 +432,10 @@ class FortificationPhase:
         """
         if isinstance(issue, dict):
             return issue
-            
+
         # Convert object to dict logic
         normalized = {}
-        
+
         # safely get attributes
         def get_attr(obj, attrs, default=None):
             for attr in attrs:
@@ -445,35 +445,35 @@ class FortificationPhase:
 
         # ID
         normalized["id"] = get_attr(issue, ["id", "rule_id", "ruleId"], "unknown")
-        
+
         # File Path
         normalized["file_path"] = get_attr(issue, ["file_path", "file", "path"], "")
-        
+
         # Line Number
         normalized["line_number"] = get_attr(issue, ["line_number", "line"], 0)
-        
+
         # Type/Category
         normalized["type"] = get_attr(issue, ["type", "category", "rule_name", "ruleName"], "issue")
         if hasattr(normalized["type"], "value"): # Handle Enum
              normalized["type"] = normalized["type"].value
-             
+
         # Severity
         normalized["severity"] = get_attr(issue, ["severity"], "medium")
         if hasattr(normalized["severity"], "value"): # Handle Enum
              normalized["severity"] = normalized["severity"].value.lower()
-             
+
         # Message/Description
         normalized["message"] = get_attr(issue, ["message", "description", "detail"], "")
-        
+
         # Source Object (for specialized fixing if needed)
-        # normalized["_source"] = issue 
-        
+        # normalized["_source"] = issue
+
         return normalized
 
     def _group_issues_by_type(
         self,
-        issues: List[Dict[str, Any]],
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        issues: list[dict[str, Any]],
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Group issues by their type for batch processing.
 
@@ -494,9 +494,9 @@ class FortificationPhase:
 
     def _calculate_improvements(
         self,
-        issues: List[Dict[str, Any]],
-        fortifications: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        issues: list[dict[str, Any]],
+        fortifications: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """
         Calculate security improvements from fortifications.
 

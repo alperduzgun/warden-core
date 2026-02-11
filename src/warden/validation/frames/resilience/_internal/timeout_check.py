@@ -11,14 +11,14 @@ Detects missing or inadequate timeout configurations on:
 import re
 from typing import List
 
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.check import (
-    ValidationCheck,
-    CheckResult,
     CheckFinding,
+    CheckResult,
     CheckSeverity,
+    ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -94,7 +94,7 @@ class TimeoutCheck(ValidationCheck):
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute timeout configuration check."""
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         for pattern_str, description, suggestion in self.RISKY_PATTERNS:
             pattern = re.compile(pattern_str, re.IGNORECASE | re.DOTALL)

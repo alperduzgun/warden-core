@@ -40,12 +40,12 @@ class RuleSeverity(Enum):
 
 class RuleType(Enum):
     """Type of custom rule execution logic.
-    
+
     Determines how the rule is evaluated.
     """
-    
+
     SECURITY = "security"
-    CONVENTION = "convention" 
+    CONVENTION = "convention"
     PATTERN = "pattern"
     SCRIPT = "script"
     AI = "ai"

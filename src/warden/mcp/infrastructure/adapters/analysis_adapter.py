@@ -9,9 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class AnalysisAdapter(BaseWardenAdapter):
@@ -41,9 +41,9 @@ class AnalysisAdapter(BaseWardenAdapter):
         # Historical data for trends (bounded to prevent memory leaks in long-running processes)
         from collections import deque
         self._history: deque = deque(maxlen=1000)
-        self._last_result: Dict[str, Any] = {}
+        self._last_result: dict[str, Any] = {}
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get analysis tool definitions."""
         return [
             self._create_tool_definition(
@@ -87,7 +87,7 @@ class AnalysisAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute analysis tool."""
         handlers = {
@@ -103,7 +103,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _analyze_results_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _analyze_results_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Analyze pipeline results."""
         run_id = arguments.get("run_id")
 
@@ -138,7 +138,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
-    async def _get_trends_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_trends_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get trend data over time."""
         limit = arguments.get("limit", 10)
 
@@ -164,9 +164,9 @@ class AnalysisAdapter(BaseWardenAdapter):
             "total_points": len(points),
         })
 
-    async def _get_frame_stats_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_frame_stats_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get per-frame statistics."""
-        stats: Dict[str, Dict[str, Any]] = {}
+        stats: dict[str, dict[str, Any]] = {}
 
         # Get from last result
         frame_results = self._last_result.get("frame_results", [])
@@ -184,7 +184,7 @@ class AnalysisAdapter(BaseWardenAdapter):
 
         return MCPToolResult.json_result({"stats": stats})
 
-    async def _get_severity_stats_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_severity_stats_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get severity distribution."""
         critical = self._last_result.get("critical_findings", 0)
         high = self._last_result.get("high_findings", 0)
@@ -204,7 +204,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             "weighted_score": weighted,
         })
 
-    async def _get_quality_score_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_quality_score_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get overall quality score."""
         score = self._calculate_quality_score(self._last_result)
 
@@ -233,7 +233,7 @@ class AnalysisAdapter(BaseWardenAdapter):
             "breakdown": breakdown,
         })
 
-    def _calculate_quality_score(self, result: Dict[str, Any]) -> float:
+    def _calculate_quality_score(self, result: dict[str, Any]) -> float:
         """Calculate quality score from result."""
         critical = result.get("critical_findings", 0)
         high = result.get("high_findings", 0)
@@ -245,7 +245,7 @@ class AnalysisAdapter(BaseWardenAdapter):
 
         return round(score, 1)
 
-    def record_result(self, result: Dict[str, Any]) -> None:
+    def record_result(self, result: dict[str, Any]) -> None:
         """Record a pipeline result for trend tracking."""
         self._last_result = result
         self._history.append({

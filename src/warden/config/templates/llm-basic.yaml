@@ -42,13 +42,18 @@ stages:
         is_blocker: true
         timeout_seconds: 300
 
-      - name: "chaos"
+      - name: "resilience"
         priority: "high"
         is_blocker: false
         timeout_seconds: 180
 
-      - name: "fuzz"
+      - name: "antipattern"
         priority: "high"
+        is_blocker: false
+        timeout_seconds: 120
+
+      - name: "fuzz"
+        priority: "medium"
         is_blocker: false
         timeout_seconds: 120
 

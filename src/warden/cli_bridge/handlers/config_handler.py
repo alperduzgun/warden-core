@@ -3,11 +3,13 @@ Configuration Handler for Warden Bridge.
 Handles pipeline configuration loading and frame discovery.
 """
 
-import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from warden.shared.infrastructure.logging import get_logger
+
+import yaml
+
 from warden.cli_bridge.handlers.base import BaseHandler
+from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -18,10 +20,10 @@ class ConfigHandler(BaseHandler):
         self.project_root = project_root
         self.active_config_name = "no-config"
 
-    def load_pipeline_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
+    def load_pipeline_config(self, config_path: str | None = None) -> dict[str, Any]:
         """Load pipeline configuration from warden.yaml or legacy config.yaml."""
         from warden.pipeline.domain.models import PipelineConfig
-        
+
         # Find config file
         root_manifest = self.project_root / "warden.yaml"
         legacy_config = self.project_root / ".warden" / "config.yaml"
@@ -38,7 +40,7 @@ class ConfigHandler(BaseHandler):
 
         from warden.cli_bridge.config_manager import ConfigManager
         config_mgr = ConfigManager(self.project_root)
-        
+
         try:
             config_data = config_mgr.read_config()
         except Exception as e:
@@ -64,7 +66,7 @@ class ConfigHandler(BaseHandler):
                 frame_config[fid] = merged
 
         available_frames, frame_map = self._instantiate_all_frames(frame_config)
-        
+
         frame_names = config_data.get('frames', [])
         if not frame_names:
             frames = self.get_default_frames()
@@ -75,12 +77,12 @@ class ConfigHandler(BaseHandler):
 
         settings = config_data.get('settings', {})
         # Load all rules using RulesYAMLLoader
-        from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
         from warden.rules.domain.models import FrameRules
-        
+        from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+
         RulesYAMLLoader() # Static methods used below
         project_rule_config = RulesYAMLLoader.load_rules_sync(self.project_root)
-        
+
         # Extract global rules as objects
         global_rules_objects = []
         if project_rule_config.global_rules:
@@ -90,7 +92,7 @@ class ConfigHandler(BaseHandler):
             for rid in project_rule_config.global_rules:
                 if rid in rule_map:
                     global_rules_objects.append(rule_map[rid])
-        
+
         # Build frame rules (map IDs to FrameRules objects)
         pipeline_frame_rules = {}
         for fid, fr_data in project_rule_config.frame_rules.items():
@@ -145,11 +147,11 @@ class ConfigHandler(BaseHandler):
             enable_cleaning=True,
         )
 
-    def get_default_frames(self) -> List[Any]:
+    def get_default_frames(self) -> list[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
         registry.discover_all(project_root=self.project_root)
-        
+
         # Default built-in frames that come with warden-core
         default_ids = ["security", "resilience", "orphan", "fuzz", "property"]
         frames = []
@@ -167,7 +169,7 @@ class ConfigHandler(BaseHandler):
                     logger.warning("default_frame_init_failed", fid=fid, error=str(e))
         return frames
 
-    def get_available_frames_async(self) -> List[Any]:
+    def get_available_frames_async(self) -> list[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
         registry.discover_all(project_root=self.project_root)
@@ -179,11 +181,11 @@ class ConfigHandler(BaseHandler):
                 logger.warning("frame_instantiation_failed", fid=fid, error=str(e))
         return frames
 
-    def _instantiate_all_frames(self, frame_config: Dict[str, Any]) -> Tuple[List[Any], Dict[str, Any]]:
+    def _instantiate_all_frames(self, frame_config: dict[str, Any]) -> tuple[list[Any], dict[str, Any]]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
         registry = FrameRegistry()
         registry.discover_all(project_root=self.project_root)
-        
+
         available = []
         frame_map = {}
         for fid, cls in registry.registered_frames.items():
@@ -202,7 +204,7 @@ class ConfigHandler(BaseHandler):
                 logger.warning("frame_init_failed", fid=fid, error=str(e))
         return available, frame_map
 
-    def _select_frames(self, names: List[str], frame_map: Dict[str, Any], available: List[Any]) -> List[Any]:
+    def _select_frames(self, names: list[str], frame_map: dict[str, Any], available: list[Any]) -> list[Any]:
         selected = []
         for name in names:
             norm = name.replace('-', '').replace('_', '').lower()

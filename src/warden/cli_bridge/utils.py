@@ -5,6 +5,7 @@ Bridge Utilities - Serialization and Metadata helpers.
 from pathlib import Path
 from typing import Any, Dict
 
+
 def detect_language(path: Path) -> str:
     """Detect programming language from file extension."""
     try:
@@ -14,7 +15,7 @@ def detect_language(path: Path) -> str:
         # Fallback for unknown extensions
         return "unknown"
 
-def serialize_pipeline_result(result: Any) -> Dict[str, Any]:
+def serialize_pipeline_result(result: Any) -> dict[str, Any]:
     """Serialize pipeline result to JSON-RPC compatible dict."""
     try:
         if hasattr(result, "to_json"):
@@ -24,10 +25,10 @@ def serialize_pipeline_result(result: Any) -> Dict[str, Any]:
             val = result.to_json()
             if isinstance(val, dict):
                 return val
-            # If it's a JSON string, we can't easily return it here if typed as Dict/Any 
+            # If it's a JSON string, we can't easily return it here if typed as Dict/Any
             # without parsing, but usually in Python we pass dicts via IPC bridge.
             return {"data": val} # Wrapper if not dict
-            
+
         if hasattr(result, "model_dump"):
             data = result.model_dump(mode="json")
 

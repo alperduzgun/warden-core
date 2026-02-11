@@ -1,9 +1,11 @@
-import sys
-import subprocess
-import importlib.metadata
 import asyncio
+import importlib.metadata
+import subprocess
+import sys
 from typing import List, Optional
+
 from rich.console import Console
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -18,7 +20,7 @@ class DependencyManager:
     @property
     def is_venv(self) -> bool:
         """Check if running inside a virtual environment."""
-        return (hasattr(sys, 'real_prefix') or 
+        return (hasattr(sys, 'real_prefix') or
                 (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix))
 
     def is_installed(self, package_name: str) -> bool:
@@ -29,17 +31,17 @@ class DependencyManager:
         except importlib.metadata.PackageNotFoundError:
             return False
 
-    async def install_packages_async(self, packages: List[str], timeout: int = 60, allow_system_break: bool = False) -> bool:
+    async def install_packages_async(self, packages: list[str], timeout: int = 60, allow_system_break: bool = False) -> bool:
         """
         idempotently install packages.
         Returns True if all packages are installed (either previously or just now).
         """
         missing = [pkg for pkg in packages if not self.is_installed(pkg)]
-        
+
         if not missing:
             logger.debug("all_dependencies_met", packages=packages)
             return True
-        
+
         # Determine if we should use --break-system-packages
         use_break = allow_system_break and not self.is_venv
 
@@ -53,9 +55,9 @@ class DependencyManager:
 
         if use_break:
             logger.info("installing_with_system_break", packages=missing)
-            
+
         logger.info("installing_dependencies", packages=missing)
-        
+
         try:
             # Prepare pip command
             cmd = [sys.executable, "-m", "pip", "install", *missing]
@@ -69,7 +71,7 @@ class DependencyManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            
+
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
             except asyncio.TimeoutError:

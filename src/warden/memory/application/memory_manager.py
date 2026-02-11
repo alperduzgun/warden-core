@@ -5,13 +5,14 @@ Manages the persistent knowledge graph (Warden Memory).
 """
 
 import json
-import aiofiles
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+import aiofiles
 import structlog
 
-from warden.memory.domain.models import KnowledgeGraph, Fact
-from datetime import datetime
+from warden.memory.domain.models import Fact, KnowledgeGraph
 
 logger = structlog.get_logger(__name__)
 
@@ -19,21 +20,21 @@ logger = structlog.get_logger(__name__)
 class MemoryManager:
     """
     Manages the persistent knowledge graph.
-    
+
     Responsibilities:
     1. Load/Save Knowledge Graph from/to JSON
     2. Provide interface for adding/querying facts
     3. Manage memory persistence lifecycle
     """
-    
+
     def __init__(self, project_root: Path):
         self.project_root = Path(project_root)
         self.memory_dir = self.project_root / ".warden" / "memory"
         self.memory_file = self.memory_dir / "knowledge_graph.json"
-        
+
         self.knowledge_graph = KnowledgeGraph()
         self._is_loaded = False
-        
+
     async def initialize_async(self) -> None:
         """Initialize memory system (ensure dirs exist, load existing)."""
         if not self.memory_dir.exists():
@@ -42,24 +43,24 @@ class MemoryManager:
             except Exception as e:
                 logger.error("memory_dir_creation_failed", error=str(e))
                 return
-                
+
         await self.load_async()
-        
+
     async def load_async(self) -> None:
         """Load knowledge graph from disk."""
         if not self.memory_file.exists():
             logger.info("no_existing_memory_found", path=str(self.memory_file))
             return
-            
+
         try:
-            async with aiofiles.open(self.memory_file, mode='r') as f:
+            async with aiofiles.open(self.memory_file) as f:
                 content = await f.read()
                 data = json.loads(content)
                 self.knowledge_graph = KnowledgeGraph.from_json(data)
                 self._is_loaded = True
-                
+
             logger.debug(
-                "memory_loaded", 
+                "memory_loaded",
                 fact_count=len(self.knowledge_graph.facts),
                 last_updated=self.knowledge_graph.last_updated
             )
@@ -67,22 +68,22 @@ class MemoryManager:
             logger.error("memory_load_failed", error=str(e))
             # Start with fresh graph on error
             self.knowledge_graph = KnowledgeGraph()
-            
+
     async def save_async(self) -> None:
         """Save knowledge graph to disk."""
         if not self.memory_dir.exists():
             self.memory_dir.mkdir(parents=True, exist_ok=True)
-            
+
         try:
             data = self.knowledge_graph.to_json()
             # Ensure pretty print for human readability/debug
             content = json.dumps(data, indent=2)
-            
+
             async with aiofiles.open(self.memory_file, mode='w') as f:
                 await f.write(content)
-                
+
             logger.debug(
-                "memory_saved", 
+                "memory_saved",
                 fact_count=len(self.knowledge_graph.facts),
                 path=str(self.memory_file)
             )
@@ -92,25 +93,25 @@ class MemoryManager:
     def add_fact(self, fact: Fact) -> None:
         """Add a fact to memory."""
         self.knowledge_graph.add_fact(fact)
-        
-    def get_facts_by_category(self, category: str) -> List[Fact]:
+
+    def get_facts_by_category(self, category: str) -> list[Fact]:
         """Get facts by category."""
         return self.knowledge_graph.get_facts_by_category(category)
 
-    def get_service_abstractions(self) -> List[Fact]:
+    def get_service_abstractions(self) -> list[Fact]:
         """Convenience method to get service abstraction facts."""
         return self.knowledge_graph.get_facts_by_category("service_abstraction")
 
-    def store_service_abstraction(self, abstraction: Dict[str, Any]) -> None:
+    def store_service_abstraction(self, abstraction: dict[str, Any]) -> None:
         """
         Store a detected service abstraction as a Fact.
-        
+
         Args:
             abstraction: Dictionary from ServiceAbstraction.to_dict()
         """
         # Create a unique ID based on class name to enable updates
         fact_id = f"service:{abstraction['name']}"
-        
+
         fact = Fact(
             id=fact_id,
             category="service_abstraction",
@@ -121,16 +122,16 @@ class MemoryManager:
             confidence=abstraction.get('confidence', 1.0),
             metadata=abstraction  # Store full abstraction data in metadata
         )
-        
+
         self.add_fact(fact)
 
-    def get_file_state(self, file_path: str) -> Optional[Dict[str, Any]]:
+    def get_file_state(self, file_path: str) -> dict[str, Any] | None:
         """
         Get stored state for a file (hash, findings, etc).
-        
+
         Args:
             file_path: Absolute path to the file
-            
+
         Returns:
             Dictionary with stored file state or None if not found
         """
@@ -138,19 +139,19 @@ class MemoryManager:
         fact = self.knowledge_graph.facts.get(fact_id)
         if fact:
             return fact.metadata
-                
+
         return None
 
     def update_file_state(
-        self, 
-        file_path: str, 
+        self,
+        file_path: str,
         content_hash: str,
         findings_count: int = 0,
-        context_data: Optional[Dict[str, Any]] = None
+        context_data: dict[str, Any] | None = None
     ) -> None:
         """
         Update stored state for a file.
-        
+
         Args:
             file_path: Absolute path to the file
             content_hash: SHA-256 hash of file content
@@ -158,7 +159,7 @@ class MemoryManager:
             context_data: Full context info (type, is_generated, weights, etc.)
         """
         fact_id = f"filestate:{file_path}"
-        
+
         # In a dictionary-based system, assignment is update/overwrite
         metadata = {
             "file_path": file_path,
@@ -169,7 +170,7 @@ class MemoryManager:
 
         if context_data:
             metadata["context_data"] = context_data
-        
+
         fact = Fact(
             id=fact_id,
             category="file_state",
@@ -180,17 +181,17 @@ class MemoryManager:
             confidence=1.0,
             metadata=metadata
         )
-        
+
         logger.debug("adding_file_state_fact", fact_id=fact_id)
         self.add_fact(fact)
 
-    def get_llm_cache(self, key: str) -> Optional[Any]:
+    def get_llm_cache(self, key: str) -> Any | None:
         """
         Get cached LLM response from memory.
-        
+
         Args:
             key: Cache key (usually hash of prompt/context)
-            
+
         Returns:
             Cached response data or None
         """
@@ -205,13 +206,13 @@ class MemoryManager:
     def set_llm_cache(self, key: str, value: Any) -> None:
         """
         Store LLM response in memory.
-        
+
         Args:
             key: Unique cache key
             value: Data to cache
         """
         fact_id = f"llmcache:{key}"
-        
+
         fact = Fact(
             id=fact_id,
             category="llm_cache",
@@ -226,10 +227,10 @@ class MemoryManager:
                 "cached_at": datetime.now().isoformat()
             }
         )
-        
+
         self.add_fact(fact)
 
-    def get_project_purpose(self) -> Optional[Dict[str, str]]:
+    def get_project_purpose(self) -> dict[str, str] | None:
         """
         Get stored project purpose and architecture description.
         """
@@ -243,21 +244,21 @@ class MemoryManager:
         return None
 
     def update_project_purpose(
-        self, 
-        purpose: str, 
+        self,
+        purpose: str,
         architecture_description: str = ""
     ) -> None:
         """
         Update stored project purpose.
         """
         fact_id = "project_purpose:global"
-        
+
         metadata = {
             "purpose": purpose,
             "architecture_description": architecture_description,
             "updated_at": datetime.now().isoformat()
         }
-        
+
         fact = Fact(
             id=fact_id,
             category="project_purpose",
@@ -268,10 +269,10 @@ class MemoryManager:
             confidence=1.0,
             metadata=metadata
         )
-        
+
         self.add_fact(fact)
 
-    def get_environment_hash(self) -> Optional[str]:
+    def get_environment_hash(self) -> str | None:
         """Get stored environment hash."""
         fact_id = "environment:global"
         fact = self.knowledge_graph.facts.get(fact_id)
@@ -301,7 +302,7 @@ class MemoryManager:
 
         self.add_fact(fact)
 
-    def get_module_map(self) -> Optional[Dict[str, Any]]:
+    def get_module_map(self) -> dict[str, Any] | None:
         """
         Get stored module map with risk classifications.
 
@@ -315,7 +316,7 @@ class MemoryManager:
             return fact.metadata.get("modules", {})
         return None
 
-    def update_module_map(self, module_map: Dict[str, Any]) -> None:
+    def update_module_map(self, module_map: dict[str, Any]) -> None:
         """
         Store module map with risk classifications.
 
@@ -356,7 +357,7 @@ class MemoryManager:
         self.add_fact(fact)
         logger.debug("module_map_stored", module_count=len(serialized_map))
 
-    def get_security_posture(self) -> Optional[str]:
+    def get_security_posture(self) -> str | None:
         """
         Get stored security posture for the project.
 

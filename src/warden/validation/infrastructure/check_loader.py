@@ -7,14 +7,15 @@ Discovers and loads checks from:
 3. Programmatic registration (frame.register_check())
 """
 
-import sys
-import yaml
 import importlib.util
+import sys
 from pathlib import Path
-from typing import List, Type, Dict
+from typing import Dict, List, Type
 
-from warden.validation.domain.check import ValidationCheck
+import yaml
+
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.check import ValidationCheck
 
 logger = get_logger(__name__)
 
@@ -37,9 +38,9 @@ class CheckLoader:
             frame_id: Frame identifier (e.g., "security", "chaos")
         """
         self.frame_id = frame_id
-        self.discovered_checks: List[Type[ValidationCheck]] = []
+        self.discovered_checks: list[type[ValidationCheck]] = []
 
-    def discover_all(self) -> List[Type[ValidationCheck]]:
+    def discover_all(self) -> list[type[ValidationCheck]]:
         """
         Discover all available checks for this frame.
 
@@ -88,7 +89,7 @@ class CheckLoader:
         self.discovered_checks = unique_checks
         return unique_checks
 
-    def _discover_entry_point_checks(self) -> List[Type[ValidationCheck]]:
+    def _discover_entry_point_checks(self) -> list[type[ValidationCheck]]:
         """
         Discover checks via Python entry points (PyPI packages).
 
@@ -101,7 +102,7 @@ class CheckLoader:
         Returns:
             List of ValidationCheck classes from entry points
         """
-        checks: List[Type[ValidationCheck]] = []
+        checks: list[type[ValidationCheck]] = []
 
         try:
             # Try importlib.metadata (Python 3.10+)
@@ -164,7 +165,7 @@ class CheckLoader:
 
         return checks
 
-    def _discover_local_checks(self) -> List[Type[ValidationCheck]]:
+    def _discover_local_checks(self) -> list[type[ValidationCheck]]:
         """
         Discover checks from local check directory.
 
@@ -178,7 +179,7 @@ class CheckLoader:
         Returns:
             List of ValidationCheck classes from local checks
         """
-        checks: List[Type[ValidationCheck]] = []
+        checks: list[type[ValidationCheck]] = []
 
         # Get check directory for this frame
         check_dir = Path.home() / ".warden" / "checks" / self.frame_id
@@ -229,7 +230,7 @@ class CheckLoader:
 
     def _load_local_check(
         self, check_path: Path, manifest_path: Path
-    ) -> Type[ValidationCheck]:
+    ) -> type[ValidationCheck]:
         """
         Load a single local check.
 
@@ -285,7 +286,7 @@ class CheckLoader:
 
         return check_class
 
-    def _validate_check_class(self, check_class: Type[ValidationCheck]) -> None:
+    def _validate_check_class(self, check_class: type[ValidationCheck]) -> None:
         """
         Validate that check class meets requirements.
 
@@ -310,8 +311,8 @@ class CheckLoader:
                 )
 
     def _deduplicate_checks(
-        self, checks: List[Type[ValidationCheck]]
-    ) -> List[Type[ValidationCheck]]:
+        self, checks: list[type[ValidationCheck]]
+    ) -> list[type[ValidationCheck]]:
         """
         Remove duplicate checks (by check.id).
 
@@ -321,7 +322,7 @@ class CheckLoader:
         Returns:
             Deduplicated list of check classes
         """
-        seen_ids: Dict[str, Type[ValidationCheck]] = {}
+        seen_ids: dict[str, type[ValidationCheck]] = {}
 
         for check_class in checks:
             # Get check_id (instantiate to call property)

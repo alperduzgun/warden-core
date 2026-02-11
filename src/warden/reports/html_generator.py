@@ -4,12 +4,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
+
 class HtmlReportGenerator:
     """Generate HTML reports."""
 
     def generate(
         self,
-        scan_results: Dict[str, Any],
+        scan_results: dict[str, Any],
         output_path: Path
     ) -> None:
         """
@@ -24,7 +25,7 @@ class HtmlReportGenerator:
         with open(output_path, 'w') as f:
             f.write(html_content)
 
-    def _create_html_content(self, scan_results: Dict[str, Any]) -> str:
+    def _create_html_content(self, scan_results: dict[str, Any]) -> str:
         """Create HTML content from scan results."""
         timestamp = scan_results.get('timestamp', datetime.now().isoformat())
         project_path = scan_results.get('project', 'Unknown Project')
@@ -62,7 +63,7 @@ class HtmlReportGenerator:
         for frame in frame_results:
             status_icon = "✅" if frame['passed'] else "❌"
             blocker_badge = '<span class="badge badge-danger">Blocker</span>' if frame['is_blocker'] else ''
-            
+
             # Using simple string concatenation for clarity and to avoid f-string nesting issues
             row = f"""
             <tr>

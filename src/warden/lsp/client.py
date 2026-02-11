@@ -1,32 +1,35 @@
 
 import asyncio
+import contextlib
 import json
 import os
+from collections.abc import Callable
+from typing import Any, Dict, List, Optional
+
 import structlog
-from typing import Optional, Dict, Any, Callable, List
 
 logger = structlog.get_logger()
 
 class LanguageServerClient:
     """
     Robust JSON-RPC Client over Stdio for communicating with Language Servers.
-    
+
     Features:
     - Async/Await Request/Response matching.
     - Notification handling via callbacks.
     - Content-Length header parsing.
     - Fail-fast process management.
     """
-    
+
     def __init__(self, binary_path: str, args: list[str], cwd: str):
         self.binary_path = binary_path
         self.args = args
         self.cwd = cwd
-        self.process: Optional[asyncio.subprocess.Process] = None
+        self.process: asyncio.subprocess.Process | None = None
         self._request_id = 0
-        self._pending_requests: Dict[int, asyncio.Future] = {}
-        self._notification_handlers: Dict[str, list[Callable]] = {}
-        self._reader_task: Optional[asyncio.Task] = None
+        self._pending_requests: dict[int, asyncio.Future] = {}
+        self._notification_handlers: dict[str, list[Callable]] = {}
+        self._reader_task: asyncio.Task | None = None
         self._shutdown_event = asyncio.Event()
 
     async def start_async(self):
@@ -34,7 +37,7 @@ class LanguageServerClient:
         try:
             full_cmd = [self.binary_path] + self.args
             logger.info("lsp_starting", cmd=full_cmd, cwd=self.cwd)
-            
+
             self.process = await asyncio.create_subprocess_exec(  # warden: ignore
                 *full_cmd,
                 cwd=self.cwd,
@@ -42,16 +45,16 @@ class LanguageServerClient:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            
+
             # Start background reader
             self._reader_task = asyncio.create_task(self._read_loop_async())
             logger.info("lsp_started", pid=self.process.pid)
-            
+
         except Exception as e:
             logger.error("lsp_start_failed", error=str(e))
             raise
 
-    async def initialize_async(self, root_path: str) -> Dict[str, Any]:
+    async def initialize_async(self, root_path: str) -> dict[str, Any]:
         """Send initialize request."""
         params = {
             "processId": os.getpid(),
@@ -90,26 +93,24 @@ class LanguageServerClient:
     async def shutdown_async(self):
         """Graceful shutdown."""
         if not self.process: return
-        
+
         try:
             logger.info("lsp_shutting_down")
             await self.send_request_async("shutdown", {})
             await self.send_notification_async("exit", {})
-            
+
             # Cancel reader
             if self._reader_task:
                 self._reader_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._reader_task
-                except asyncio.CancelledError:
-                    pass
-            
+
             if self.process.returncode is None:
                 self.process.terminate()
                 await self.process.wait()
-                
+
             logger.info("lsp_stopped")
-            
+
         except Exception as e:
             logger.error("lsp_shutdown_error", error=str(e))
             # Force kill if needed
@@ -123,18 +124,18 @@ class LanguageServerClient:
 
         self._request_id += 1
         req_id = self._request_id
-        
+
         request = {
             "jsonrpc": "2.0",
             "id": req_id,
             "method": method,
             "params": params
         }
-        
+
         # Create future for response
         future = asyncio.Future()
         self._pending_requests[req_id] = future
-        
+
         try:
             await self._write_message_async(request)
             # Timeout safety
@@ -194,7 +195,7 @@ class LanguageServerClient:
         line: int,
         character: int,
         include_declaration: bool = False
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Find all references to symbol at position.
 
@@ -221,7 +222,7 @@ class LanguageServerClient:
             logger.warning("lsp_find_references_failed", uri=uri, error=str(e))
             return []
 
-    async def get_document_symbols_async(self, file_path: str) -> List[Dict[str, Any]]:
+    async def get_document_symbols_async(self, file_path: str) -> list[dict[str, Any]]:
         """
         Get all symbols in a document.
 
@@ -245,7 +246,7 @@ class LanguageServerClient:
         file_path: str,
         line: int,
         character: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Go to definition of symbol at position.
 
@@ -277,7 +278,7 @@ class LanguageServerClient:
         file_path: str,
         line: int,
         character: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Prepare call hierarchy at a position.
 
@@ -299,8 +300,8 @@ class LanguageServerClient:
 
     async def get_incoming_calls_async(
         self,
-        call_hierarchy_item: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        call_hierarchy_item: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Get incoming calls (who calls this function).
 
@@ -323,8 +324,8 @@ class LanguageServerClient:
 
     async def get_outgoing_calls_async(
         self,
-        call_hierarchy_item: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        call_hierarchy_item: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Get outgoing calls (what does this function call).
 
@@ -354,7 +355,7 @@ class LanguageServerClient:
         file_path: str,
         line: int,
         character: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Prepare type hierarchy at a position.
 
@@ -376,8 +377,8 @@ class LanguageServerClient:
 
     async def get_supertypes_async(
         self,
-        type_hierarchy_item: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        type_hierarchy_item: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Get supertypes (parent classes/interfaces).
 
@@ -397,8 +398,8 @@ class LanguageServerClient:
 
     async def get_subtypes_async(
         self,
-        type_hierarchy_item: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        type_hierarchy_item: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Get subtypes (child classes/implementations).
 
@@ -423,7 +424,7 @@ class LanguageServerClient:
     async def get_workspace_symbols_async(
         self,
         query: str = ""
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for symbols across the workspace.
 
@@ -453,7 +454,7 @@ class LanguageServerClient:
         file_path: str,
         line: int,
         character: int
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get hover information (type info, docs) at position.
 
@@ -482,12 +483,10 @@ class LanguageServerClient:
     def remove_notification_handler(self, method: str, handler: Callable):
         """Remove a registered handler."""
         if method in self._notification_handlers:
-            try:
+            with contextlib.suppress(ValueError):
                 self._notification_handlers[method].remove(handler)
-            except ValueError:
-                pass
 
-    async def _write_message_async(self, msg: Dict[str, Any]):
+    async def _write_message_async(self, msg: dict[str, Any]):
         """Encode and write message to stdin."""
         body = json.dumps(msg)
         content = f"Content-Length: {len(body)}\r\n\r\n{body}"
@@ -503,19 +502,19 @@ class LanguageServerClient:
                 while True:
                     line = await self.process.stdout.readline()
                     if not line: raise EOFError("LSP process closed stdout")
-                    
+
                     line = line.decode('utf-8').strip()
                     if not line: break # End of headers
-                    
+
                     if line.lower().startswith("content-length:"):
                         content_length = int(line.split(":")[1].strip())
-                
+
                 # 2. Read Body
                 if content_length > 0:
                     body_bytes = await self.process.stdout.readexactly(content_length)
                     msg = json.loads(body_bytes.decode('utf-8'))
                     self._handle_message(msg)
-                    
+
         except asyncio.CancelledError:
             pass
         except EOFError:
@@ -526,7 +525,7 @@ class LanguageServerClient:
             if self.process and self.process.returncode is None:
                 logger.info("lsp_process_unexpectedly_terminated")
 
-    def _handle_message(self, msg: Dict[str, Any]):
+    def _handle_message(self, msg: dict[str, Any]):
         """Dispatcher for incoming messages."""
         # Response
         if "id" in msg and "method" not in msg:
@@ -541,7 +540,7 @@ class LanguageServerClient:
                 del self._pending_requests[req_id]
             else:
                 logger.debug("lsp_unknown_response_id", id=req_id)
-        
+
         # Notification or Request from Server
         elif "method" in msg:
             if "id" in msg:

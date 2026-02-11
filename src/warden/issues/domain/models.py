@@ -31,10 +31,10 @@ TypeScript:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Dict, Any, Type
+from typing import Any, Dict, List, Type
 
-from warden.shared.domain.base_model import BaseDomainModel
 from warden.issues.domain.enums import IssueSeverity, IssueState
+from warden.shared.domain.base_model import BaseDomainModel
 
 
 class StateTransition(BaseDomainModel):
@@ -51,7 +51,7 @@ class StateTransition(BaseDomainModel):
     comment: str
 
     @classmethod
-    def from_json(cls: Type[StateTransition], data: Dict[str, Any]) -> StateTransition:
+    def from_json(cls: type[StateTransition], data: dict[str, Any]) -> StateTransition:
         """Deserialize from Panel JSON (camelCase)."""
         return cls(
             from_state=IssueState(data["fromState"]),
@@ -80,11 +80,11 @@ class WardenIssue(BaseDomainModel):
     first_detected: datetime
     last_updated: datetime
     reopen_count: int
-    state_history: List[StateTransition]
+    state_history: list[StateTransition]
     confidence: float = 0.7  # Confidence score (0.0 - 1.0), default: 0.7
     line_number: int = 0  # Line number where issue occurs, default: 0 (extract from file_path)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize to Panel-compatible JSON (camelCase).
 
@@ -98,7 +98,7 @@ class WardenIssue(BaseDomainModel):
         return result
 
     @classmethod
-    def from_json(cls: Type[WardenIssue], data: Dict[str, Any]) -> WardenIssue:
+    def from_json(cls: type[WardenIssue], data: dict[str, Any]) -> WardenIssue:
         """Deserialize from Panel JSON (camelCase)."""
         return cls(
             id=data["id"],

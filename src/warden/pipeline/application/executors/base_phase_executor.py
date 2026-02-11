@@ -2,8 +2,9 @@
 Base Phase Executor module.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional, Callable
+from typing import Any, Optional
 
 from warden.pipeline.domain.models import PipelineConfig
 from warden.shared.infrastructure.logging import get_logger
@@ -16,12 +17,12 @@ class BasePhaseExecutor:
 
     def __init__(
         self,
-        config: Optional[PipelineConfig] = None,
-        progress_callback: Optional[Callable] = None,
-        project_root: Optional[Path] = None,
-        llm_service: Optional[Any] = None,
-        semantic_search_service: Optional[Any] = None,
-        rate_limiter: Optional[Any] = None,
+        config: PipelineConfig | None = None,
+        progress_callback: Callable | None = None,
+        project_root: Path | None = None,
+        llm_service: Any | None = None,
+        semantic_search_service: Any | None = None,
+        rate_limiter: Any | None = None,
     ):
         """
         Initialize base phase executor.

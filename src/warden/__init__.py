@@ -7,7 +7,7 @@ Global code analyzer with project-level architectural validation.
 try:
     from ._version import __version__
 except ImportError:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, version
     try:
         __version__ = version("warden-core")
     except PackageNotFoundError:

@@ -8,10 +8,11 @@ Performs vector similarity search on indexed code using an adapter.
 from __future__ import annotations
 
 import time
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import structlog
 
+from warden.semantic_search.adapters import VectorStoreAdapter
 from warden.semantic_search.embeddings import EmbeddingGenerator
 from warden.semantic_search.models import (
     ChunkType,
@@ -20,7 +21,6 @@ from warden.semantic_search.models import (
     SearchResponse,
     SearchResult,
 )
-from warden.semantic_search.adapters import VectorStoreAdapter
 
 logger = structlog.get_logger()
 
@@ -121,7 +121,7 @@ class SemanticSearcher:
                 search_duration_seconds=time.perf_counter() - start_time,
             )
 
-    def _build_where_filter(self, query: SearchQuery) -> Optional[Dict[str, Any]]:
+    def _build_where_filter(self, query: SearchQuery) -> dict[str, Any] | None:
         """
         Build metadata filter from search query.
 
@@ -163,7 +163,7 @@ class SemanticSearcher:
 
         return {"$and": filters}
 
-    def _convert_results(self, raw_results: Dict[str, Any], min_score: float = 0.5) -> List[SearchResult]:
+    def _convert_results(self, raw_results: dict[str, Any], min_score: float = 0.5) -> list[SearchResult]:
         """
         Convert raw query results to SearchResult objects.
 
@@ -175,7 +175,7 @@ class SemanticSearcher:
             List of search results
         """
         results = []
-        
+
         # Results are lists of lists because of batch support
         if not raw_results or not raw_results.get("ids") or not raw_results["ids"][0]:
             return []
@@ -188,14 +188,14 @@ class SemanticSearcher:
         for i in range(len(ids)):
             try:
                 metadata = metadatas[i]
-                
+
                 # ChromaDB distance is squared L2 or cosine distance.
                 # For cosine similarity, it's 1 - similarity.
                 # So score = 1 - distance.
                 # Ensure distance is float.
                 dist = float(distances[i])
                 score = 1.0 - dist
-                
+
                 if score < min_score:
                     continue
 
@@ -242,10 +242,10 @@ class SemanticSearcher:
     async def search_similar_code(
         self,
         code_snippet: str,
-        language: Optional[str] = None,
+        language: str | None = None,
         limit: int = 10,
         min_score: float = 0.5,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Find code similar to the given snippet."""
         query = SearchQuery(
             query_text=code_snippet,
@@ -260,10 +260,10 @@ class SemanticSearcher:
     async def search_by_description(
         self,
         description: str,
-        language: Optional[str] = None,
-        chunk_types: Optional[List[ChunkType]] = None,
+        language: str | None = None,
+        chunk_types: list[ChunkType] | None = None,
         limit: int = 10,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Find code matching a natural language description."""
         query = SearchQuery(
             query_text=description,

@@ -5,7 +5,7 @@ Endpoints: ExecutePipeline, ExecutePipelineStream
 """
 
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 try:
     from warden.grpc.generated import warden_pb2

@@ -5,12 +5,18 @@ Adds input validation checks to function parameters.
 Prevents malicious/invalid inputs from causing issues.
 """
 
-import structlog
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import Any, List, Optional
+
+import structlog
 
 from warden.fortification.domain.base import BaseFortifier
-from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
+from warden.fortification.domain.models import (
+    FortificationAction,
+    FortificationActionType,
+    FortificationResult,
+    FortifierPriority,
+)
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -38,7 +44,7 @@ class InputValidationFortifier(BaseFortifier):
     - JSON data
     """
 
-    def __init__(self, llm_service: Optional[Any] = None):
+    def __init__(self, llm_service: Any | None = None):
         """
         Initialize Input Validation Fortifier.
 
@@ -60,7 +66,7 @@ class InputValidationFortifier(BaseFortifier):
     async def fortify_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
+        cancellation_token: str | None = None,
     ) -> FortificationResult:
         """
         Fortify code by adding input validation.
@@ -146,7 +152,7 @@ class InputValidationFortifier(BaseFortifier):
                 fortifier_name=self.name,
             )
 
-    def _analyze_validation(self, code: str) -> List[ValidationSuggestion]:
+    def _analyze_validation(self, code: str) -> list[ValidationSuggestion]:
         """Analyze code for missing input validation."""
         suggestions = []
         lines = code.split("\n")
@@ -178,7 +184,7 @@ class InputValidationFortifier(BaseFortifier):
         return suggestions
 
     @staticmethod
-    def _extract_parameters(function_def: str) -> List[str]:
+    def _extract_parameters(function_def: str) -> list[str]:
         """Extract parameter names from function definition."""
         try:
             # Extract content between parentheses
@@ -209,7 +215,7 @@ class InputValidationFortifier(BaseFortifier):
 
     @staticmethod
     def _has_validation_for_param(
-        lines: List[str], func_line: int, param: str
+        lines: list[str], func_line: int, param: str
     ) -> bool:
         """Check if parameter has validation."""
         # Look in next 10 lines for validation
@@ -231,7 +237,7 @@ class InputValidationFortifier(BaseFortifier):
 
     @staticmethod
     def _build_validation_prompt(
-        code_file: CodeFile, suggestions: List[ValidationSuggestion]
+        code_file: CodeFile, suggestions: list[ValidationSuggestion]
     ) -> str:
         """Build LLM prompt for validation."""
         params_list = "\n".join(

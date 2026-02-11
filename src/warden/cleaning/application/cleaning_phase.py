@@ -6,15 +6,15 @@ Uses LLM to provide intelligent code cleaning recommendations.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from warden.validation.domain.frame import CodeFile
-from warden.shared.infrastructure.logging import get_logger
-from warden.cleaning.application.pattern_analyzer import PatternAnalyzer
 from warden.cleaning.application.llm_suggestion_generator import LLMSuggestionGenerator
+from warden.cleaning.application.pattern_analyzer import PatternAnalyzer
 from warden.cleaning.domain.models import Cleaning
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
-from pathlib import Path
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 # Try to import LLMService, use None if not available
 try:
@@ -29,10 +29,10 @@ logger = get_logger(__name__)
 class CleaningPhaseResult:
     """Result from cleaning phase execution."""
 
-    cleaning_suggestions: List[Dict[str, Any]]
-    refactorings: List[Dict[str, Any]]
+    cleaning_suggestions: list[dict[str, Any]]
+    refactorings: list[dict[str, Any]]
     quality_score_after: float
-    code_improvements: Dict[str, Any]
+    code_improvements: dict[str, Any]
     confidence: float = 0.0
 
 
@@ -50,11 +50,11 @@ class CleaningPhase:
 
     def __init__(
         self,
-        config: Optional[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None,
-        llm_service: Optional[LLMService] = None,
-        semantic_search_service: Optional[Any] = None,
-        rate_limiter: Optional[Any] = None,
+        config: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
+        llm_service: LLMService | None = None,
+        semantic_search_service: Any | None = None,
+        rate_limiter: Any | None = None,
     ):
         """
         Initialize cleaning phase.
@@ -70,7 +70,7 @@ class CleaningPhase:
         self.semantic_search_service = semantic_search_service
         self.rate_limiter = rate_limiter
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
-        
+
         # Initialize IgnoreMatcher
         project_root = getattr(self.context, 'project_root', None) or Path.cwd()
         if isinstance(self.context, dict):
@@ -78,7 +78,7 @@ class CleaningPhase:
             use_gitignore = self.context.get('use_gitignore', True)
         else:
             use_gitignore = getattr(self.context, 'use_gitignore', True)
-        
+
         self.ignore_matcher = IgnoreMatcher(Path(project_root), use_gitignore=use_gitignore)
 
         # Initialize analyzers
@@ -102,7 +102,7 @@ class CleaningPhase:
 
     async def execute_async(
         self,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> CleaningPhaseResult:
         """
         Execute cleaning phase.
@@ -118,10 +118,10 @@ class CleaningPhase:
         # Filter files based on ignore matcher
         original_count = len(code_files)
         code_files = [
-            cf for cf in code_files 
+            cf for cf in code_files
             if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "cleaning")
         ]
-        
+
         if len(code_files) < original_count:
              logger.info(
                 "cleaning_phase_files_ignored",
@@ -157,7 +157,7 @@ class CleaningPhase:
             # Run specialized cleaning orchestrator (Rule-Based, Fast)
             res = await orchestrator.analyze_async(code_file)
             all_suggestions.extend(res.suggestions)
-            
+
             # Map suggestions to cleanings for Panel
             for sug in res.suggestions:
                 all_cleanings.append(Cleaning(
@@ -170,13 +170,13 @@ class CleaningPhase:
             skip_llm_for_quality = False
             phase_results = self.context.get("phase_results", {}) if isinstance(self.context, dict) else getattr(self.context, "phase_results", {})
             file_metrics = phase_results.get("ANALYSIS", {}).get("metrics", {}).get(code_file.path)
-            
+
             if file_metrics:
                 overall_score = file_metrics.get("overall_score", 0.0)
                 if overall_score >= 7.0:
                     skip_llm_for_quality = True
                     logger.info("skipping_llm_cleaning_high_quality", file=code_file.path, score=overall_score)
-            
+
             if self.use_llm and not skip_llm_for_quality:
                 files_for_llm.append(code_file)
             else:
@@ -186,7 +186,7 @@ class CleaningPhase:
                  # Running here is fine as it's CPU bound and fast.
                  if not self.use_llm and skip_llm_for_quality:
                      logger.debug("falling_back_to_rules_due_to_high_quality", file=code_file.path)
-                 
+
                  sugs = await self._generate_rule_based_suggestions_async(code_file)
                  rule_based_suggestions[code_file.path] = sugs
 
@@ -195,18 +195,18 @@ class CleaningPhase:
         if files_for_llm and self.llm_generator:
             logger.info("cleaning_batch_llm_start", count=len(files_for_llm))
             llm_suggestions_map = await self.llm_generator.generate_batch_suggestions_async(files_for_llm)
-        
+
         # Merge Results
         for code_file in code_files:
             suggestions = llm_suggestions_map.get(code_file.path) or rule_based_suggestions.get(code_file.path) or {}
-            
+
             for sug in suggestions.get("cleanings", []):
                 all_cleanings.append(Cleaning(
                     id=f"leg-clean-{len(all_cleanings)}",
                     title=sug.get("title", "Cleaning Suggestion"),
                     detail=sug.get("detail", "")
                 ))
-            
+
             for ref in suggestions.get("refactorings", []):
                 all_refactorings.append(Cleaning(
                     id=f"ref-{len(all_refactorings)}",
@@ -240,7 +240,7 @@ class CleaningPhase:
     async def _generate_llm_suggestions_async(
         self,
         code_file: CodeFile,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate cleaning suggestions using LLM.
 
@@ -270,7 +270,7 @@ class CleaningPhase:
     async def _generate_rule_based_suggestions_async(
         self,
         code_file: CodeFile,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate cleaning suggestions using rules.
 
@@ -326,8 +326,8 @@ class CleaningPhase:
     def _calculate_improved_score(
         self,
         quality_score_before: float,
-        cleaning_suggestions: List,
-        refactorings: List,
+        cleaning_suggestions: list,
+        refactorings: list,
     ) -> float:
         """
         Calculate improved quality score.
@@ -373,9 +373,9 @@ class CleaningPhase:
 
     def _summarize_improvements(
         self,
-        cleaning_suggestions: List,
-        refactorings: List,
-    ) -> Dict[str, Any]:
+        cleaning_suggestions: list,
+        refactorings: list,
+    ) -> dict[str, Any]:
         """
         Summarize all improvements.
 
@@ -419,7 +419,7 @@ class CleaningPhase:
 
     def _format_findings(
         self,
-        findings: List[Dict[str, Any]],
+        findings: list[dict[str, Any]],
     ) -> str:
         """Format findings for prompt."""
         if not findings:

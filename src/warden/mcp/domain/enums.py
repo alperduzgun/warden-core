@@ -5,7 +5,7 @@ Protocol-defined status codes and type classifications.
 Following project conventions: IntEnum for status codes, str Enum for categories.
 """
 
-from enum import IntEnum, Enum
+from enum import Enum, IntEnum
 
 
 class MCPErrorCode(IntEnum):

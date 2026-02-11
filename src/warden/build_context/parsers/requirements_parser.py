@@ -6,7 +6,7 @@ Extracts dependencies from requirements.txt and related files.
 
 import re
 from pathlib import Path
-from typing import Optional, List, Set
+from typing import List, Optional, Set
 
 from warden.build_context.models import (
     BuildContext,
@@ -48,7 +48,7 @@ class RequirementsParser:
         """
         return self.requirements_path.exists()
 
-    def parse(self) -> Optional[BuildContext]:
+    def parse(self) -> BuildContext | None:
         """
         Parse requirements.txt and extract build context.
 
@@ -66,7 +66,7 @@ class RequirementsParser:
             )
 
             # Parse dev requirements if exists
-            dev_dependencies: List[Dependency] = []
+            dev_dependencies: list[Dependency] = []
             dev_paths = [
                 self.project_path / "requirements-dev.txt",
                 self.project_path / "requirements_dev.txt",
@@ -96,15 +96,15 @@ class RequirementsParser:
                 dev_dependencies=dev_dependencies,
             )
 
-        except IOError as e:
+        except OSError as e:
             print(f"Error parsing requirements.txt: {e}")
             return None
 
     def _parse_requirements_file(
         self,
         file_path: Path,
-        visited: Set[Path]
-    ) -> List[Dependency]:
+        visited: set[Path]
+    ) -> list[Dependency]:
         """
         Parse a single requirements file.
 
@@ -125,10 +125,10 @@ class RequirementsParser:
             return []
 
         visited.add(file_path)
-        dependencies: List[Dependency] = []
+        dependencies: list[Dependency] = []
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
 
@@ -160,12 +160,12 @@ class RequirementsParser:
                     if dep:
                         dependencies.append(dep)
 
-        except IOError:
+        except OSError:
             pass
 
         return dependencies
 
-    def _parse_requirement_line(self, line: str) -> Optional[Dependency]:
+    def _parse_requirement_line(self, line: str) -> Dependency | None:
         """
         Parse a single requirement line.
 
@@ -199,7 +199,7 @@ class RequirementsParser:
         version = match.group(3).strip() if match.group(3) else ""
 
         # Parse extras
-        extras: List[str] = []
+        extras: list[str] = []
         if extras_str:
             extras = [e.strip() for e in extras_str.split(",")]
 
@@ -215,7 +215,7 @@ class RequirementsParser:
             extras=extras
         )
 
-    def _parse_editable_requirement(self, line: str) -> Optional[Dependency]:
+    def _parse_editable_requirement(self, line: str) -> Dependency | None:
         """
         Parse editable requirement (-e flag).
 
@@ -254,7 +254,7 @@ class RequirementsParser:
 
         return None
 
-    def _detect_project_name(self) -> Optional[str]:
+    def _detect_project_name(self) -> str | None:
         """
         Try to detect project name from setup.py or directory.
 
@@ -270,7 +270,7 @@ class RequirementsParser:
                 match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', content)
                 if match:
                     return match.group(1)
-            except IOError:
+            except OSError:
                 pass
 
         # Try pyproject.toml
@@ -282,7 +282,7 @@ class RequirementsParser:
                 match = re.search(r'name\s*=\s*["\']([^"\']+)["\']', content)
                 if match:
                     return match.group(1)
-            except IOError:
+            except OSError:
                 pass
 
         # Fallback to directory name

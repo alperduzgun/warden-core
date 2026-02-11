@@ -11,7 +11,7 @@ Python internal format: snake_case
 """
 
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from warden.shared.domain.base_model import BaseDomainModel
 
@@ -60,10 +60,10 @@ class SuppressionEntry(BaseDomainModel):
 
     id: str
     type: SuppressionType
-    rules: List[str] = []  # Empty = suppress all
-    file: Optional[str] = None  # File path pattern (glob supported)
-    line: Optional[int] = None  # Line number (for inline suppressions)
-    reason: Optional[str] = None  # Justification for suppression
+    rules: list[str] = []  # Empty = suppress all
+    file: str | None = None  # File path pattern (glob supported)
+    line: int | None = None  # Line number (for inline suppressions)
+    reason: str | None = None  # Justification for suppression
     enabled: bool = True
 
     def matches_rule(self, rule: str) -> bool:
@@ -86,8 +86,8 @@ class SuppressionEntry(BaseDomainModel):
         # Check if rule is in the list
         return rule in self.rules
 
-    def matches_location(self, file_path: Optional[str] = None,
-                        line_number: Optional[int] = None) -> bool:
+    def matches_location(self, file_path: str | None = None,
+                        line_number: int | None = None) -> bool:
         """
         Check if this suppression applies to a specific location.
 
@@ -108,21 +108,16 @@ class SuppressionEntry(BaseDomainModel):
                 return True
             if '*' in self.file or '?' in self.file:
                 import fnmatch
-                if fnmatch.fnmatch(file_path, self.file):
-                    return True
-                return False
+                return bool(fnmatch.fnmatch(file_path, self.file))
 
         # Check line number if specified
         if self.line is not None and line_number is not None:
             return self.line == line_number
 
         # If no location constraints, it matches
-        if self.file is None and self.line is None:
-            return True
+        return bool(self.file is None and self.line is None)
 
-        return False
-
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         data = super().to_json()
         # Enum is automatically converted to int by BaseDomainModel
@@ -162,11 +157,11 @@ class SuppressionConfig(BaseDomainModel):
     """
 
     enabled: bool = True
-    entries: List[SuppressionEntry] = []
-    global_rules: List[str] = []
-    ignored_files: List[str] = []
+    entries: list[SuppressionEntry] = []
+    global_rules: list[str] = []
+    ignored_files: list[str] = []
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         data = super().to_json()
         # Convert entries
@@ -198,7 +193,7 @@ class SuppressionConfig(BaseDomainModel):
                 return True
         return False
 
-    def get_entry(self, entry_id: str) -> Optional[SuppressionEntry]:
+    def get_entry(self, entry_id: str) -> SuppressionEntry | None:
         """
         Get a suppression entry by ID.
 
@@ -227,10 +222,7 @@ class SuppressionConfig(BaseDomainModel):
             return False
 
         import fnmatch
-        for pattern in self.ignored_files:
-            if fnmatch.fnmatch(file_path, pattern):
-                return True
-        return False
+        return any(fnmatch.fnmatch(file_path, pattern) for pattern in self.ignored_files)
 
     def is_rule_globally_suppressed(self, rule: str) -> bool:
         """

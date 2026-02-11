@@ -1,14 +1,15 @@
 """Report generator for Warden scan results."""
 
-from pathlib import Path
-from typing import Any, Dict, Optional
+import fcntl
 import json
 import os
 import tempfile
-import fcntl
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 from .html_generator import HtmlReportGenerator
+
 
 @contextmanager
 def file_lock(lock_path: Path, timeout: float = 10.0):
@@ -30,6 +31,7 @@ def file_lock(lock_path: Path, timeout: float = 10.0):
         This prevents permanent deadlocks from ungraceful process termination.
     """
     import time
+
     from warden.shared.infrastructure.logging import get_logger
 
     logger = get_logger(__name__)
@@ -61,7 +63,7 @@ def file_lock(lock_path: Path, timeout: float = 10.0):
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break  # Lock acquired
-            except (IOError, OSError):
+            except OSError:
                 elapsed = time.time() - start_time
                 if elapsed > timeout:
                     raise TimeoutError(
@@ -82,10 +84,8 @@ def file_lock(lock_path: Path, timeout: float = 10.0):
                 # Clean up lock file AFTER unlock+close (chaos engineering principle)
                 # This prevents race where another process creates lock between unlink and close
                 if lock_path.exists():
-                    try:
+                    with suppress(OSError, FileNotFoundError):
                         lock_path.unlink()
-                    except (OSError, FileNotFoundError):
-                        pass
             except Exception as e:
                 # Defensive: Log but don't raise in finally block
                 logger = get_logger(__name__)
@@ -118,9 +118,9 @@ class ReportGenerator:
 
     def generate_json_report(
         self,
-        scan_results: Dict[str, Any],
+        scan_results: dict[str, Any],
         output_path: Path,
-        base_path: Optional[Path] = None
+        base_path: Path | None = None
     ) -> None:
         """
         Generate JSON report from scan results.
@@ -149,13 +149,11 @@ class ReportGenerator:
                 os.replace(temp_path, output_path)  # Atomic on Unix/Linux
             except Exception:
                 # Clean up temp file on failure
-                try:
+                with suppress(OSError):
                     os.unlink(temp_path)
-                except OSError:
-                    pass
                 raise
 
-    def _sanitize_paths(self, data: Any, base_path: Optional[Path] = None, inplace: bool = True) -> Any:
+    def _sanitize_paths(self, data: Any, base_path: Path | None = None, inplace: bool = True) -> Any:
         """
         Recursively convert absolute paths to relative paths using strict pathlib logic.
 
@@ -174,7 +172,7 @@ class ReportGenerator:
 
         # Resolving allow generic usage (Fail Fast logic: base_path must be valid if provided)
         root_path = base_path.resolve() if base_path else Path.cwd().resolve()
-        
+
         if isinstance(data, dict):
             for key, value in data.items():
                 if isinstance(value, (dict, list)):
@@ -189,9 +187,8 @@ class ReportGenerator:
             for i, item in enumerate(data):
                 if isinstance(item, (dict, list)):
                     self._sanitize_paths(item, base_path, inplace=True)
-                elif isinstance(item, str):
-                    if str(root_path) in item:
-                        data[i] = self._relativize_string(item, root_path)
+                elif isinstance(item, str) and str(root_path) in item:
+                    data[i] = self._relativize_string(item, root_path)
 
         return data
 
@@ -204,20 +201,20 @@ class ReportGenerator:
                 # Strict check: Is it actually inside the root?
                 if path_obj.resolve().is_relative_to(root_path):
                     return str(path_obj.resolve().relative_to(root_path))
-            
+
             # Case 2: String contains the path (e.g. "File found at /users/...")
             # This uses string replacement but constrained by the known root path
             return text.replace(str(root_path), ".")
-            
+
         except (ValueError, OSError):
              # On failure, return original (Fail Safe) or attempt minimal replacement
              return text.replace(str(root_path), ".")
 
     def generate_sarif_report(
         self,
-        scan_results: Dict[str, Any],
+        scan_results: dict[str, Any],
         output_path: Path,
-        base_path: Optional[Path] = None
+        base_path: Path | None = None
     ) -> None:
         """
         Generate SARIF report from scan results for GitHub integration.
@@ -254,20 +251,20 @@ class ReportGenerator:
                 }
             ]
         }
-        
+
         # Inject AI Advisories from Metadata
         metadata = scan_results.get('metadata', {})
-        advisories = metadata.get('advisories', []) 
+        advisories = metadata.get('advisories', [])
         # Fallback to check if it's in top-level for some reason
         if not advisories:
             advisories = scan_results.get('advisories', [])
-            
+
         if advisories:
             notifications = []
             for advice in advisories:
                 notifications.append({
                     "descriptor": {
-                        "id": "AI001", 
+                        "id": "AI001",
                         "name": "AI Advisor Note"
                     },
                     "message": {
@@ -276,35 +273,35 @@ class ReportGenerator:
                     "level": "note"
                 })
             sarif["runs"][0]["invocations"][0]["toolExecutionNotifications"] = notifications
-        
+
         # Add custom properties for LLM usage and metrics
         properties = {}
-        
+
         llm_usage = scan_results.get('llmUsage', {})
         if llm_usage:
             properties["llmUsage"] = llm_usage
-        
+
         llm_metrics = scan_results.get('llmMetrics', {})
         if llm_metrics:
             properties["llmMetrics"] = llm_metrics
-        
+
         if properties:
             sarif["runs"][0]["properties"] = properties
 
         run = sarif["runs"][0]
         rules_map = {}
-        
+
         # Support both snake_case (CLI) and camelCase (Panel)
         frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
-        
+
         for frame in frame_results:
             findings = self._get_val(frame, 'findings', [])
             frame_id = self._get_val(frame, 'frame_id', self._get_val(frame, 'frameId', 'generic'))
-            
+
             for finding in findings:
                 # Use finding ID or Fallback to frame ID
                 rule_id = str(self._get_val(finding, 'id', frame_id)).lower().replace(' ', '-')
-                
+
                 # Handle file path - Finding has 'location' usually as 'file:line'
                 location_str = self._get_val(finding, 'location', 'unknown')
                 file_path = location_str.split(':')[0] if ':' in location_str else location_str
@@ -333,7 +330,7 @@ class ReportGenerator:
                 # Create SARIF result
                 severity = self._get_val(finding, 'severity', 'warning').lower()
                 level = "error" if severity in ["critical", "high"] else "warning"
-                
+
                 result = {
                     "ruleId": rule_id,
                     "level": level,
@@ -354,10 +351,10 @@ class ReportGenerator:
                         }
                     ]
                 }
-                
+
                 # Add detail if available
                 detail = self._get_val(finding, 'detail', '')
-                
+
                 # Check for manual review flag in verification metadata
                 verification = self._get_val(finding, 'verification_metadata', {})
                 if self._get_val(verification, 'review_required'):
@@ -369,7 +366,7 @@ class ReportGenerator:
 
                 if detail:
                     result["message"]["text"] += f"\\n\\nDetails: {detail}"
-                    
+
                 run["results"].append(result)
 
         # Log suppressed findings
@@ -402,10 +399,8 @@ class ReportGenerator:
                 os.replace(temp_path, output_path)  # Atomic on Unix/Linux
             except Exception:
                 # Clean up temp file on failure
-                try:
+                with suppress(OSError):
                     os.unlink(temp_path)
-                except OSError:
-                    pass
                 raise
 
     def _to_relative_uri(self, file_path: str) -> str:
@@ -428,7 +423,7 @@ class ReportGenerator:
                     idx = parts.index("src")
                     # Reconstruct path from 'src' onwards
                     return str(Path(*parts[idx:]))
-                
+
                 # Last resort: just the filename to avoid "uri must be relative" error
                 return path_obj.name
             except Exception:
@@ -436,15 +431,15 @@ class ReportGenerator:
 
     def generate_svg_badge(
         self,
-        scan_results: Dict[str, Any],
+        scan_results: dict[str, Any],
         output_path: Path,
-        base_path: Optional[Path] = None
+        base_path: Path | None = None
     ) -> None:
         """
         Generate a premium, standalone SVG badge for the project quality.
         """
         from warden.shared.utils.quality_calculator import calculate_quality_score
-        
+
         # Extract findings
         all_findings = []
         frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
@@ -454,14 +449,14 @@ class ReportGenerator:
         all_findings.extend(manual)
 
         score = calculate_quality_score(all_findings, 10.0)
-        
+
         # Determine Color Gradient
         if score >= 9.0:
             gradient_start, gradient_end = "#10B981", "#059669" # Emerald
             status_text = "EXCELLENT"
         elif score >= 7.5:
             gradient_start, gradient_end = "#3B82F6", "#2563EB" # Blue
-            status_text = "GOOD" 
+            status_text = "GOOD"
         elif score >= 5.0:
             gradient_start, gradient_end = "#F59E0B", "#D97706" # Amber
             status_text = "WARNING"
@@ -478,10 +473,10 @@ class ReportGenerator:
         dash_array = f"{progress}, 100"
 
         # Calculate HMAC Signature (Simple MVP)
-        import hmac
         import hashlib
+        import hmac
         import time
-        
+
         timestamp = int(time.time())
         badge_secret = os.environ.get("WARDEN_BADGE_SECRET", "")
         if not badge_secret:
@@ -493,7 +488,7 @@ class ReportGenerator:
             )
             badge_secret = "warden-local-dev-only"  # warden: ignore
         secret_key = badge_secret.encode()
-        payload = f"{score:.1f}|{timestamp}|WARDEN_QUALITY".encode('utf-8')
+        payload = f"{score:.1f}|{timestamp}|WARDEN_QUALITY".encode()
         signature = hmac.new(secret_key, payload, hashlib.sha256).hexdigest()
 
         # Generate SVG with Link and Metadata
@@ -519,10 +514,10 @@ class ReportGenerator:
 
         <!-- Background Card -->
         <rect x="2" y="2" width="296" height="96" rx="16" fill="url(#cardGrad)" stroke="#3b3b4f" stroke-width="1" filter="url(#shadow)"/>
-        
+
         <!-- Header -->
         <text x="24" y="32" fill="#a1a1aa" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="11" font-weight="600" letter-spacing="1.5" style="text-transform: uppercase;">WARDEN QUALITY</text>
-        
+
         <!-- Score Display (Improved Alignment) -->
         <text x="24" y="72" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-weight="700">
             <tspan font-size="36">{score:.1f}</tspan>
@@ -551,17 +546,15 @@ class ReportGenerator:
                     f.write(svg_content)
                 os.replace(temp_path, output_path)
             except Exception:
-                try:
+                with suppress(OSError):
                     os.unlink(temp_path)
-                except OSError:
-                    pass
                 raise
 
     def generate_junit_report(
         self,
-        scan_results: Dict[str, Any],
+        scan_results: dict[str, Any],
         output_path: Path,
-        base_path: Optional[Path] = None
+        base_path: Path | None = None
     ) -> None:
         """
         Generate JUnit XML report for general CI/CD compatibility.
@@ -572,12 +565,12 @@ class ReportGenerator:
         sanitized_results = self._sanitize_paths(scan_results, base_path, inplace=False)
 
         testsuites = ET.Element("testsuites", name="Warden Scan")
-        
+
         frame_results = sanitized_results.get('frame_results', sanitized_results.get('frameResults', []))
-        
+
         testsuite = ET.SubElement(
-            testsuites, 
-            "testsuite", 
+            testsuites,
+            "testsuite",
             name="security_validation",
             tests=str(len(frame_results)),
             failures=str(sanitized_results.get('frames_failed', sanitized_results.get('framesFailed', 0))),
@@ -585,20 +578,20 @@ class ReportGenerator:
             skipped=str(sanitized_results.get('frames_skipped', sanitized_results.get('framesSkipped', 0))),
             time=str(sanitized_results.get('duration', 0))
         )
-        
+
         for frame in frame_results:
             name = frame.get('frame_name', frame.get('frameName', 'Unknown Frame'))
             classname = f"warden.{frame.get('frame_id', frame.get('frameId', 'generic'))}"
             duration = str(frame.get('duration', 0))
-            
+
             testcase = ET.SubElement(
-                testsuite, 
-                "testcase", 
+                testsuite,
+                "testcase",
                 name=name,
                 classname=classname,
                 time=duration
             )
-            
+
             status = frame.get('status')
             if status == "failed":
                 findings = frame.get('findings', [])
@@ -607,7 +600,7 @@ class ReportGenerator:
                     f"- [{f.get('severity')}] {f.get('location')}: {f.get('message')}"
                     for f in findings
                 ])
-                
+
                 failure = ET.SubElement(
                     testcase,
                     "failure",
@@ -632,17 +625,15 @@ class ReportGenerator:
             os.replace(temp_path, output_path)  # Atomic on Unix/Linux
         except Exception:
             # Clean up temp file on failure
-            try:
+            with suppress(OSError):
                 os.unlink(temp_path)
-            except OSError:
-                pass
             raise
 
     def generate_html_report(
         self,
-        scan_results: Dict[str, Any],
+        scan_results: dict[str, Any],
         output_path: Path,
-        base_path: Optional[Path] = None
+        base_path: Path | None = None
     ) -> None:
         """
         Generate HTML report from scan results.
@@ -659,9 +650,9 @@ class ReportGenerator:
 
     def generate_pdf_report(
         self,
-        scan_results: Dict[str, Any],
+        scan_results: dict[str, Any],
         output_path: Path,
-        base_path: Optional[Path] = None
+        base_path: Path | None = None
     ) -> None:
         """
         Generate PDF report from HTML.
@@ -692,7 +683,7 @@ class ReportGenerator:
 
         try:
             # Try to use WeasyPrint if available
-            from weasyprint import HTML, CSS
+            from weasyprint import CSS, HTML
         except ImportError:
             logger.error("pdf_generation_failed", reason="weasyprint_not_installed")
             raise RuntimeError(
@@ -722,10 +713,8 @@ class ReportGenerator:
             )
         except Exception as e:
             # Clean up temp file on failure
-            try:
+            with suppress(OSError):
                 os.unlink(temp_path)
-            except OSError:
-                pass
 
             # OBSERVABILITY: Log failure with context
             logger.error(

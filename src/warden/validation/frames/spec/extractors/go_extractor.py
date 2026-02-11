@@ -21,21 +21,21 @@ import re
 from pathlib import Path
 from typing import List, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -88,8 +88,8 @@ class GoExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("go_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -136,9 +136,9 @@ class GoExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """Extract route operations from Gin/Echo/Fiber."""
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Gin: r.GET("/path", handler)
         # Echo: e.GET("/path", handler)
@@ -190,7 +190,7 @@ class GoExtractor(BaseContractExtractor):
     def _enhance_operations_with_types(
         self,
         content: str,
-        operations: List[OperationDefinition],
+        operations: list[OperationDefinition],
     ) -> None:
         """Enhance operations with input/output types from handler functions."""
         for op in operations:
@@ -233,9 +233,9 @@ class GoExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """Extract Go struct definitions."""
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # type StructName struct { ... }
         struct_pattern = re.compile(
@@ -267,9 +267,9 @@ class GoExtractor(BaseContractExtractor):
         self,
         struct_body: str,
         file_path: Path,
-    ) -> List[FieldDefinition]:
+    ) -> list[FieldDefinition]:
         """Parse Go struct fields."""
-        fields: List[FieldDefinition] = []
+        fields: list[FieldDefinition] = []
 
         # FieldName FieldType `json:"field_name"`
         field_pattern = re.compile(
@@ -314,9 +314,9 @@ class GoExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[EnumDefinition]:
+    ) -> list[EnumDefinition]:
         """Extract Go const enums (iota pattern)."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
 
         # type Status int
         # const (

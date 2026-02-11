@@ -5,10 +5,11 @@ Manages registration and selection of AST providers with priority-based routing.
 """
 
 from typing import Dict, List, Optional
+
 import structlog
 
 from warden.ast.application.provider_interface import IASTProvider
-from warden.ast.domain.enums import CodeLanguage, ASTProviderPriority
+from warden.ast.domain.enums import ASTProviderPriority, CodeLanguage
 from warden.ast.domain.models import ASTProviderMetadata
 
 logger = structlog.get_logger(__name__)
@@ -39,8 +40,8 @@ class ASTProviderRegistry:
 
     def __init__(self) -> None:
         """Initialize empty registry."""
-        self._providers: Dict[str, IASTProvider] = {}
-        self._language_providers: Dict[CodeLanguage, List[IASTProvider]] = {}
+        self._providers: dict[str, IASTProvider] = {}
+        self._language_providers: dict[CodeLanguage, list[IASTProvider]] = {}
 
     def register(self, provider: IASTProvider) -> None:
         """
@@ -114,8 +115,8 @@ class ASTProviderRegistry:
     def get_provider(
         self,
         language: CodeLanguage,
-        preferred_priority: Optional[ASTProviderPriority] = None,
-    ) -> Optional[IASTProvider]:
+        preferred_priority: ASTProviderPriority | None = None,
+    ) -> IASTProvider | None:
         """
         Get best provider for a language.
 
@@ -146,7 +147,7 @@ class ASTProviderRegistry:
         # Silently select (provider_registered already logged on registration)
         return providers[0]
 
-    def get_all_providers(self, language: CodeLanguage) -> List[IASTProvider]:
+    def get_all_providers(self, language: CodeLanguage) -> list[IASTProvider]:
         """
         Get all providers for a language, sorted by priority.
 
@@ -158,7 +159,7 @@ class ASTProviderRegistry:
         """
         return self._language_providers.get(language, []).copy()
 
-    def list_providers(self) -> List[ASTProviderMetadata]:
+    def list_providers(self) -> list[ASTProviderMetadata]:
         """
         List all registered providers.
 
@@ -167,7 +168,7 @@ class ASTProviderRegistry:
         """
         return [provider.metadata for provider in self._providers.values()]
 
-    def list_supported_languages(self) -> List[CodeLanguage]:
+    def list_supported_languages(self) -> list[CodeLanguage]:
         """
         List all supported languages.
 
@@ -176,7 +177,7 @@ class ASTProviderRegistry:
         """
         return list(self._language_providers.keys())
 
-    def get_provider_by_name(self, provider_name: str) -> Optional[IASTProvider]:
+    def get_provider_by_name(self, provider_name: str) -> IASTProvider | None:
         """
         Get provider by exact name.
 

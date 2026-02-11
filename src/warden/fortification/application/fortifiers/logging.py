@@ -4,12 +4,18 @@ Logging Fortifier
 Adds structured logging (structlog) to functions and critical operations.
 """
 
-import structlog
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import Any, List, Optional
+
+import structlog
 
 from warden.fortification.domain.base import BaseFortifier
-from warden.fortification.domain.models import FortificationResult, FortifierPriority, FortificationAction, FortificationActionType
+from warden.fortification.domain.models import (
+    FortificationAction,
+    FortificationActionType,
+    FortificationResult,
+    FortifierPriority,
+)
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -37,7 +43,7 @@ class LoggingFortifier(BaseFortifier):
     - Database operations
     """
 
-    def __init__(self, llm_service: Optional[Any] = None):
+    def __init__(self, llm_service: Any | None = None):
         """
         Initialize Logging Fortifier.
 
@@ -59,7 +65,7 @@ class LoggingFortifier(BaseFortifier):
     async def fortify_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
+        cancellation_token: str | None = None,
     ) -> FortificationResult:
         """
         Fortify code by adding structured logging.
@@ -150,7 +156,7 @@ class LoggingFortifier(BaseFortifier):
                 fortifier_name=self.name,
             )
 
-    def _analyze_logging(self, code: str) -> List[LoggingSuggestion]:
+    def _analyze_logging(self, code: str) -> list[LoggingSuggestion]:
         """Analyze code for missing logging."""
         suggestions = []
         lines = code.split("\n")
@@ -188,22 +194,15 @@ class LoggingFortifier(BaseFortifier):
         return suggestions
 
     @staticmethod
-    def _has_logging_nearby(lines: List[str], line_index: int, window: int = 5) -> bool:
+    def _has_logging_nearby(lines: list[str], line_index: int, window: int = 5) -> bool:
         """Check if logging exists near a line."""
         start = max(0, line_index - window)
         end = min(len(lines), line_index + window)
 
-        for i in range(start, end):
-            if any(
-                keyword in lines[i]
-                for keyword in ["logger.", "logging.", "log."]
-            ):
-                return True
-
-        return False
+        return any(any(keyword in lines[i] for keyword in ["logger.", "logging.", "log."]) for i in range(start, end))
 
     @staticmethod
-    def _has_logging_in_block(lines: List[str], start_index: int) -> bool:
+    def _has_logging_in_block(lines: list[str], start_index: int) -> bool:
         """Check if logging exists in except block."""
         indent_level = len(lines[start_index]) - len(lines[start_index].lstrip())
 
@@ -223,7 +222,7 @@ class LoggingFortifier(BaseFortifier):
 
     @staticmethod
     def _build_logging_prompt(
-        code_file: CodeFile, suggestions: List[LoggingSuggestion]
+        code_file: CodeFile, suggestions: list[LoggingSuggestion]
     ) -> str:
         """Build LLM prompt for logging."""
         issues_list = "\n".join(

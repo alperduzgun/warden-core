@@ -52,16 +52,16 @@ class CodeChunk(BaseDomainModel):
     start_line: int  # Starting line number in file
     end_line: int  # Ending line number in file
     language: str  # Programming language (python, javascript, etc.)
-    metadata: Dict[str, Any] = {}  # Additional metadata
+    metadata: dict[str, Any] = {}  # Additional metadata
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         data["chunkType"] = self.chunk_type.value
         return data
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> CodeChunk:
+    def from_json(cls, data: dict[str, Any]) -> CodeChunk:
         """Deserialize from Panel JSON."""
         return cls(
             id=data["id"],
@@ -98,10 +98,10 @@ class EmbeddingMetadata(BaseDomainModel):
     token_count: int  # Tokens consumed
     generated_at: datetime
     provider: str  # Provider (openai, azure_openai, local)
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> EmbeddingMetadata:
+    def from_json(cls, data: dict[str, Any]) -> EmbeddingMetadata:
         """Deserialize from Panel JSON."""
         return cls(
             model_name=data["modelName"],
@@ -123,10 +123,10 @@ class SearchResult(BaseDomainModel):
     chunk: CodeChunk
     score: float  # Similarity score (0.0 to 1.0)
     rank: int  # Result rank in search results
-    embedding_metadata: Optional[EmbeddingMetadata] = None
-    metadata: Dict[str, Any] = {}
+    embedding_metadata: EmbeddingMetadata | None = None
+    metadata: dict[str, Any] = {}
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         data["chunk"] = self.chunk.to_json()
@@ -135,7 +135,7 @@ class SearchResult(BaseDomainModel):
         return data
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> SearchResult:
+    def from_json(cls, data: dict[str, Any]) -> SearchResult:
         """Deserialize from Panel JSON."""
         chunk = CodeChunk.from_json(data["chunk"])
         embedding_metadata = None
@@ -171,19 +171,19 @@ class SearchQuery(BaseDomainModel):
     query_text: str  # Natural language or code query
     limit: int = 10  # Maximum results to return
     min_score: float = 0.5  # Minimum similarity score threshold
-    file_filters: List[str] = []  # File path patterns to include
-    language_filters: List[str] = []  # Languages to search
-    chunk_type_filters: List[ChunkType] = []  # Chunk types to include
-    metadata: Dict[str, Any] = {}
+    file_filters: list[str] = []  # File path patterns to include
+    language_filters: list[str] = []  # Languages to search
+    chunk_type_filters: list[ChunkType] = []  # Chunk types to include
+    metadata: dict[str, Any] = {}
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         data["chunkTypeFilters"] = [ct.value for ct in self.chunk_type_filters]
         return data
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> SearchQuery:
+    def from_json(cls, data: dict[str, Any]) -> SearchQuery:
         """Deserialize from Panel JSON."""
         chunk_types = [ChunkType(ct) for ct in data.get("chunkTypeFilters", [])]
 
@@ -206,12 +206,12 @@ class SearchResponse(BaseDomainModel):
     """
 
     query: SearchQuery
-    results: List[SearchResult] = []
+    results: list[SearchResult] = []
     total_results: int = 0
     search_duration_seconds: float = 0.0
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         data["query"] = self.query.to_json()
@@ -219,7 +219,7 @@ class SearchResponse(BaseDomainModel):
         return data
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> SearchResponse:
+    def from_json(cls, data: dict[str, Any]) -> SearchResponse:
         """Deserialize from Panel JSON."""
         query = SearchQuery.from_json(data["query"])
         results = [SearchResult.from_json(r) for r in data.get("results", [])]
@@ -237,7 +237,7 @@ class SearchResponse(BaseDomainModel):
         """Check if search returned any results."""
         return len(self.results) > 0
 
-    def get_high_confidence_results(self) -> List[SearchResult]:
+    def get_high_confidence_results(self) -> list[SearchResult]:
         """Get only high-confidence results (score > 0.8)."""
         return [r for r in self.results if r.is_high_confidence]
 
@@ -250,15 +250,15 @@ class IndexStats(BaseDomainModel):
     """
 
     total_chunks: int = 0
-    chunks_by_language: Dict[str, int] = {}  # language -> count
-    chunks_by_type: Dict[str, int] = {}  # chunk_type -> count
+    chunks_by_language: dict[str, int] = {}  # language -> count
+    chunks_by_type: dict[str, int] = {}  # chunk_type -> count
     total_files_indexed: int = 0
     index_size_bytes: int = 0
-    last_indexed_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = {}
+    last_indexed_at: datetime | None = None
+    metadata: dict[str, Any] = {}
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> IndexStats:
+    def from_json(cls, data: dict[str, Any]) -> IndexStats:
         """Deserialize from Panel JSON."""
         last_indexed = None
         if data.get("lastIndexedAt"):
@@ -283,20 +283,20 @@ class RetrievalContext(BaseDomainModel):
     """
 
     query_text: str
-    relevant_chunks: List[CodeChunk] = []
+    relevant_chunks: list[CodeChunk] = []
     total_tokens: int = 0  # Estimated tokens in context
     total_characters: int = 0
-    search_scores: List[float] = []  # Corresponding scores
-    metadata: Dict[str, Any] = {}
+    search_scores: list[float] = []  # Corresponding scores
+    metadata: dict[str, Any] = {}
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         data = super().to_json()
         data["relevantChunks"] = [c.to_json() for c in self.relevant_chunks]
         return data
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> RetrievalContext:
+    def from_json(cls, data: dict[str, Any]) -> RetrievalContext:
         """Deserialize from Panel JSON."""
         chunks = [CodeChunk.from_json(c) for c in data.get("relevantChunks", [])]
 

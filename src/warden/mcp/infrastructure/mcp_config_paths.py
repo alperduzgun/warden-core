@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List
 
 
-def get_mcp_config_paths() -> Dict[str, Path]:
+def get_mcp_config_paths() -> dict[str, Path]:
     """
     Get all known MCP configuration file paths for AI tools.
 
@@ -28,7 +28,7 @@ def get_mcp_config_paths() -> Dict[str, Path]:
     }
 
 
-def get_mcp_config_paths_list() -> List[Path]:
+def get_mcp_config_paths_list() -> list[Path]:
     """
     Get list of MCP config paths (without tool names).
 
@@ -63,49 +63,49 @@ def is_safe_to_create_dir(path: Path) -> bool:
     try:
         path_resolved = path.resolve()
         home = Path.home().resolve()
-        
+
         # 1. Sandbox: Must be within user's home directory
         if not path_resolved.is_relative_to(home):
             return False
-            
+
         # 2. Strict Whitelist: Must be part of a known config file path
         # We only allow creating directories that lead to our known targets
         known_config_files = get_mcp_config_paths().values()
-        
+
         for config_file in known_config_files:
             # We compare with the parent directory of the config file (the folder we want to exist)
             # We use string comparison for the 'part of' check to handle parents safely
             # or better: check if the config_file's folder is relative to the path we are creating
             # e.g. if we create ~/.config, then ~/.config/Claude is relative to it.
-            
+
             # Using str check to avoid resolving issues if file doesn't exist
             # But here we are checking the PATH TO CREATE
-            
+
             try:
                 # Get the canonical path for the known config
                 target_dir = config_file.parent.resolve()
             except OSError:
-                # If target parent doesn't exist, we can't resolve it fully, 
+                # If target parent doesn't exist, we can't resolve it fully,
                 # but we can construct it from home + relative parts if defined that way.
                 # In get_mcp_config_paths, they are defined using Path.home() so they are absolute.
                 target_dir = config_file.parent
 
             # Check: Is the target_dir inside (or equal to) the path we are creating?
-            # No, we want to create 'path'. 
+            # No, we want to create 'path'.
             # So 'target_dir' should be 'path' (we are creating the final dir)
             # OR 'target_dir' should be inside 'path' (we are creating a parent)?
             # NO.
             # If we do `mkdir -p ~/.config/Claude`, we might be creating `~/.config` (parent).
             # So `target_dir` (~/.config/Claude) is relative to `path` (~/.config).
-            
+
             # Case 1: Creating the final dir (~/.cursor)
             if target_dir == path_resolved:
                 return True
-                
+
             # Case 2: Creating a parent (~/.config for ~/.config/Claude)
             if target_dir.is_relative_to(path_resolved):
                 return True
-                
+
         return False
     except Exception:
         return False

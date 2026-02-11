@@ -1,9 +1,11 @@
-from typing import Optional, List
 import asyncio
-from ..types import LlmProvider, LlmRequest, LlmResponse
-from .base import ILlmClient
+from typing import List, Optional
+
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import resilient
+
+from ..types import LlmProvider, LlmRequest, LlmResponse
+from .base import ILlmClient
 
 logger = get_logger(__name__)
 
@@ -11,7 +13,7 @@ logger = get_logger(__name__)
 class OrchestratedLlmClient(ILlmClient):
     """
     Proxy client implementing tiered LLM execution.
-    
+
     Routes:
     - use_fast_tier=True -> Routes to Fast Providers in priority order (e.g. [Ollama, Groq])
     - use_fast_tier=False -> Routes to Smart Provider (e.g. Azure/OpenAI)
@@ -21,9 +23,9 @@ class OrchestratedLlmClient(ILlmClient):
     def __init__(
         self,
         smart_client: ILlmClient,
-        fast_clients: Optional[List[ILlmClient]] = None,
-        smart_model: Optional[str] = None,
-        fast_model: Optional[str] = None,
+        fast_clients: list[ILlmClient] | None = None,
+        smart_model: str | None = None,
+        fast_model: str | None = None,
         metrics_collector = None
     ):
         """
@@ -44,13 +46,13 @@ class OrchestratedLlmClient(ILlmClient):
         self.fast_clients = fast_clients or []
         self.smart_model = smart_model
         self.fast_model = fast_model
-        
+
         # Initialize metrics collector
         if metrics_collector is None:
             from warden.llm.metrics import LLMMetricsCollector
             metrics_collector = LLMMetricsCollector()
         self.metrics = metrics_collector
-        
+
         if not self.fast_clients:
             logger.warning("orchestrated_client_no_fast_tier", message="Running in Smart-Only mode (slower, higher cost)")
         else:
@@ -97,7 +99,7 @@ class OrchestratedLlmClient(ILlmClient):
             In Smart-Only mode (no fast_clients), routes directly to smart tier.
         """
         import time
-        
+
         # 1. Determine initial target tier
         if request.use_fast_tier and self.fast_clients:
             # PARALLEL Fast Tier Execution (Global Optimization)
@@ -227,7 +229,7 @@ class OrchestratedLlmClient(ILlmClient):
         start_time = time.time()
         response = await self.smart_client.send_async(smart_request)
         duration_ms = int((time.time() - start_time) * 1000)
-        
+
         # Record metrics for smart tier
         self.metrics.record_request(
             tier="smart",

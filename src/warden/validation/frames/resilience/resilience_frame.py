@@ -17,23 +17,23 @@ Principles: KISS, DRY, SOLID, YAGNI, Fail-Fast, Idempotency
 import re
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Set
 from enum import Enum
+from typing import Any, Dict, List, Optional, Set
 
-from warden.validation.domain.frame import (
-    ValidationFrame,
-    FrameResult,
-    Finding,
-    CodeFile,
-)
+from warden.llm.providers.base import ILlmClient
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
+    FrameApplicability,
     FrameCategory,
     FramePriority,
     FrameScope,
-    FrameApplicability,
 )
-from warden.shared.infrastructure.logging import get_logger
-from warden.llm.providers.base import ILlmClient
+from warden.validation.domain.frame import (
+    CodeFile,
+    Finding,
+    FrameResult,
+    ValidationFrame,
+)
 
 logger = get_logger(__name__)
 
@@ -85,7 +85,7 @@ class ExtractedCall:
     """A function/method call extracted from code."""
     name: str
     line: int
-    module: Optional[str] = None
+    module: str | None = None
 
     def __hash__(self) -> int:
         return hash((self.name, self.line, self.module))
@@ -96,7 +96,7 @@ class ExtractedImport:
     """An import statement extracted from code."""
     module: str
     line: int
-    alias: Optional[str] = None
+    alias: str | None = None
 
 
 @dataclass
@@ -108,18 +108,18 @@ class ChaosContext:
     Passed to LLM for intelligent decision making.
     """
     # From Tree-sitter (structural)
-    imports: List[ExtractedImport] = field(default_factory=list)
-    function_calls: List[ExtractedCall] = field(default_factory=list)
-    async_functions: List[str] = field(default_factory=list)
+    imports: list[ExtractedImport] = field(default_factory=list)
+    function_calls: list[ExtractedCall] = field(default_factory=list)
+    async_functions: list[str] = field(default_factory=list)
     error_handlers: int = 0
 
     # From LSP (semantic)
-    callers: List[Dict[str, str]] = field(default_factory=list)
-    callees: List[Dict[str, str]] = field(default_factory=list)
+    callers: list[dict[str, str]] = field(default_factory=list)
+    callees: list[dict[str, str]] = field(default_factory=list)
 
     # From LLM (intelligent)
-    external_deps: List[str] = field(default_factory=list)
-    dep_types: Dict[str, DependencyType] = field(default_factory=dict)
+    external_deps: list[str] = field(default_factory=list)
+    dep_types: dict[str, DependencyType] = field(default_factory=dict)
 
     # Limits for LLM context (prevent token explosion)
     MAX_IMPORTS_IN_CONTEXT: int = 10
@@ -143,7 +143,7 @@ class ChaosContext:
             lines.append(f"Imports: {', '.join(import_list)}")
 
         if self.function_calls:
-            call_list = list(set(c.name for c in self.function_calls))[:self.MAX_CALLS_IN_CONTEXT]
+            call_list = list({c.name for c in self.function_calls})[:self.MAX_CALLS_IN_CONTEXT]
             lines.append(f"Function calls: {', '.join(call_list)}")
 
         if self.async_functions:
@@ -263,9 +263,9 @@ class ResilienceFrame(ValidationFrame):
 
     # Class-level circuit breaker state (shared across instances)
     _llm_failure_count: int = 0
-    _llm_circuit_opened_at: Optional[float] = None
+    _llm_circuit_opened_at: float | None = None
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize with optional config. Fail-fast on invalid config."""
         super().__init__(config)
 
@@ -297,7 +297,7 @@ class ResilienceFrame(ValidationFrame):
                    language=code_file.language,
                    size_bytes=code_file.size_bytes)
 
-        findings: List[Finding] = []
+        findings: list[Finding] = []
         context = ChaosContext()
 
         try:
@@ -452,7 +452,7 @@ class ResilienceFrame(ValidationFrame):
         for child in children:
             self._walk_ast_node(child, context, source)
 
-    def _extract_call_name(self, node: Any) -> Optional[str]:
+    def _extract_call_name(self, node: Any) -> str | None:
         """Extract function name from call node."""
         # Try common patterns
         for attr in ('function', 'callee', 'name', 'method'):
@@ -464,7 +464,7 @@ class ResilienceFrame(ValidationFrame):
                     return str(child.name)
         return None
 
-    def _extract_function_name(self, node: Any) -> Optional[str]:
+    def _extract_function_name(self, node: Any) -> str | None:
         """Extract function name from definition node."""
         name_node = getattr(node, 'name', None)
         if name_node:
@@ -577,7 +577,7 @@ class ResilienceFrame(ValidationFrame):
         self,
         code_file: CodeFile,
         context: ChaosContext
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for related resilience patterns using VectorDB.
 
@@ -589,7 +589,7 @@ class ResilienceFrame(ValidationFrame):
         Returns:
             List of related code snippets with resilience patterns
         """
-        related_patterns: List[Dict[str, Any]] = []
+        related_patterns: list[dict[str, Any]] = []
 
         # Check if semantic search service is available
         if not hasattr(self, 'semantic_search_service') or not self.semantic_search_service:
@@ -653,7 +653,7 @@ class ResilienceFrame(ValidationFrame):
 
         return related_patterns
 
-    def _format_related_patterns(self, patterns: List[Dict[str, Any]]) -> str:
+    def _format_related_patterns(self, patterns: list[dict[str, Any]]) -> str:
         """Format related patterns for LLM context."""
         if not patterns:
             return ""
@@ -711,8 +711,8 @@ class ResilienceFrame(ValidationFrame):
         self,
         code_file: CodeFile,
         context: ChaosContext,
-        related_patterns: Optional[List[Dict[str, Any]]] = None
-    ) -> List[Finding]:
+        related_patterns: list[dict[str, Any]] | None = None
+    ) -> list[Finding]:
         """
         Analyze with LLM for intelligent chaos engineering.
 
@@ -722,9 +722,10 @@ class ResilienceFrame(ValidationFrame):
         - What resilience patterns are missing
         """
         import asyncio
+
         from warden.llm.types import LlmRequest
 
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         try:
             # Format related patterns context
@@ -789,11 +790,11 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                           failures=ResilienceFrame._llm_failure_count,
                           reset_seconds=self.CIRCUIT_BREAKER_RESET_SECONDS)
 
-    def _parse_llm_response(self, content: str, file_path: str) -> List[Finding]:
+    def _parse_llm_response(self, content: str, file_path: str) -> list[Finding]:
         """Parse LLM JSON response into findings."""
         from warden.shared.utils.json_parser import parse_json_from_llm
 
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         try:
             data = parse_json_from_llm(content)
@@ -819,7 +820,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
     # Fallback: Basic Analysis (No LLM)
     # =========================================================================
 
-    def _basic_analysis(self, code_file: CodeFile, context: ChaosContext) -> List[Finding]:
+    def _basic_analysis(self, code_file: CodeFile, context: ChaosContext) -> list[Finding]:
         """
         Basic analysis without LLM.
 
@@ -827,7 +828,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
         - Async functions without try/catch
         - Many external calls, few error handlers
         """
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         # Heuristic: async functions should have error handling
         if context.async_functions and context.error_handlers == 0:
@@ -861,7 +862,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
     def _create_result(
         self,
         code_file: CodeFile,
-        findings: List[Finding],
+        findings: list[Finding],
         context: ChaosContext,
         start_time: float
     ) -> FrameResult:

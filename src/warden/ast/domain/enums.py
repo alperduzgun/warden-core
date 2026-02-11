@@ -4,7 +4,7 @@ AST domain enums.
 Defines AST provider priorities and node types.
 """
 
-from enum import IntEnum, Enum
+from enum import Enum, IntEnum
 
 
 class ASTProviderPriority(IntEnum):

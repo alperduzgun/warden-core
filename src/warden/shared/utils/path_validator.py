@@ -53,7 +53,7 @@ def validate_safe_path(
 
 def safe_read_file(
     file_path: str,
-    project_root: Optional[Path] = None
+    project_root: Path | None = None
 ) -> str:
     """
     Safely read file with path validation.
@@ -71,5 +71,5 @@ def safe_read_file(
     root = project_root or Path.cwd()
     safe_path = validate_safe_path(Path(file_path), root)
 
-    with open(safe_path, 'r') as f:
+    with open(safe_path) as f:
         return f.read()

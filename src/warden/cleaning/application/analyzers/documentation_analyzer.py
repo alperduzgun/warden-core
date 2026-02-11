@@ -11,16 +11,17 @@ Analyzes documentation quality and coverage:
 
 import ast
 import re
+from typing import Any, Dict, List, Optional
+
 import structlog
-from typing import List, Optional, Dict, Any
 
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
+    CleaningIssue,
+    CleaningIssueSeverity,
+    CleaningIssueType,
     CleaningResult,
     CleaningSuggestion,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -52,8 +53,8 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze documentation quality and coverage.
@@ -129,7 +130,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _calculate_documentation_coverage(self, code: str, ast_tree: Optional[Any] = None) -> Dict[str, Any]:
+    def _calculate_documentation_coverage(self, code: str, ast_tree: Any | None = None) -> dict[str, Any]:
         """
         Calculate documentation coverage metrics.
 
@@ -194,7 +195,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
             "comment_density": comment_density,
         }
 
-    def _analyze_documentation_quality(self, code: str, ast_tree: Optional[Any] = None) -> List[CleaningIssue]:
+    def _analyze_documentation_quality(self, code: str, ast_tree: Any | None = None) -> list[CleaningIssue]:
         """
         Analyze documentation quality issues.
 
@@ -226,7 +227,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _check_missing_docstrings(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _check_missing_docstrings(self, tree: ast.AST) -> list[CleaningIssue]:
         """Check for missing docstrings in public functions/classes."""
         issues = []
 
@@ -254,20 +255,19 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                             )
                         )
 
-            elif isinstance(node, ast.ClassDef):
-                if not ast.get_docstring(node):
-                    issues.append(
-                        CleaningIssue(
-                            issue_type=CleaningIssueType.MISSING_DOC,
-                            description=f"Class '{node.name}' missing docstring",
-                            line_number=node.lineno,
-                            severity=CleaningIssueSeverity.MEDIUM,
-                        )
+            elif isinstance(node, ast.ClassDef) and not ast.get_docstring(node):
+                issues.append(
+                    CleaningIssue(
+                        issue_type=CleaningIssueType.MISSING_DOC,
+                        description=f"Class '{node.name}' missing docstring",
+                        line_number=node.lineno,
+                        severity=CleaningIssueSeverity.MEDIUM,
                     )
+                )
 
         return issues
 
-    def _check_docstring_quality(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _check_docstring_quality(self, tree: ast.AST) -> list[CleaningIssue]:
         """Check quality of existing docstrings."""
         issues = []
 
@@ -324,7 +324,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _check_outdated_comments(self, code: str) -> List[CleaningIssue]:
+    def _check_outdated_comments(self, code: str) -> list[CleaningIssue]:
         """Check for potentially outdated comments."""
         issues = []
         lines = code.split('\n')
@@ -353,7 +353,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _check_unclear_names(self, tree: ast.AST) -> List[CleaningIssue]:
+    def _check_unclear_names(self, tree: ast.AST) -> list[CleaningIssue]:
         """Check for unclear or non-descriptive names."""
         issues = []
 
@@ -412,11 +412,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
 
     def _returns_none(self, node: ast.FunctionDef) -> bool:
         """Check if function returns None or has no return statement."""
-        for child in ast.walk(node):
-            if isinstance(child, ast.Return):
-                if child.value is not None:
-                    return False
-        return True
+        return all(not (isinstance(child, ast.Return) and child.value is not None) for child in ast.walk(node))
 
     def _create_suggestion(self, issue: CleaningIssue, code: str) -> CleaningSuggestion:
         """Create a cleanup suggestion from an issue."""

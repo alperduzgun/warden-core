@@ -7,8 +7,8 @@ Application service for resource access.
 from pathlib import Path
 from typing import Any, Dict, List
 
-from warden.mcp.domain.models import MCPResourceDefinition
 from warden.mcp.domain.errors import MCPResourceNotFoundError
+from warden.mcp.domain.models import MCPResourceDefinition
 from warden.mcp.infrastructure.file_resource_repo import FileResourceRepository
 
 
@@ -29,7 +29,7 @@ class ResourceProviderService:
         self.project_root = project_root
         self._repository = FileResourceRepository(project_root)
 
-    async def list_resources(self) -> List[MCPResourceDefinition]:
+    async def list_resources(self) -> list[MCPResourceDefinition]:
         """
         List all available resources.
 
@@ -38,7 +38,7 @@ class ResourceProviderService:
         """
         return await self._repository.list_available()
 
-    async def read_resource(self, uri: str) -> Dict[str, Any]:
+    async def read_resource(self, uri: str) -> dict[str, Any]:
         """
         Read resource content.
 
@@ -77,7 +77,7 @@ class ResourceProviderService:
         """
         return await self._repository.exists(uri)
 
-    def list_all_reports(self) -> List[Dict[str, Any]]:
+    def list_all_reports(self) -> list[dict[str, Any]]:
         """
         List all report files.
 

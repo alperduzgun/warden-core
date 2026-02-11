@@ -1,7 +1,9 @@
-import typer
 from typing import Optional
+
+import typer
 from rich.console import Console
 from rich.table import Table
+
 from warden.services.package_manager.registry import RegistryClient
 from warden.shared.infrastructure.logging import get_logger
 
@@ -21,15 +23,15 @@ def index_command():
     except ImportError:
         console.print("[red]Semantic Search dependencies not installed (run 'pip install .[semantic]').[/red]")
         return
-        
+
     console.print("[bold cyan]Warden Indexer[/bold cyan] - Building semantic index...")
-    
+
     # Use the high-level service for proper initialization
     from pathlib import Path
-    
+
     # Load config manually for standalone command
     import yaml
-    
+
     project_root = Path.cwd()
     legacy_config = project_root / ".warden" / "config.yaml"
     config_data = {}
@@ -37,12 +39,12 @@ def index_command():
         with open(legacy_config) as f:
             full_config = yaml.safe_load(f)
             config_data = full_config.get("semantic_search", {})
-    
+
     config_data["enabled"] = True
     config_data["project_root"] = str(project_root)
 
     service = SemanticSearchService(config_data)
-    
+
     if not service.is_available():
          console.print("[red]Error: Semantic Search service not available.[/red]")
          return
@@ -53,16 +55,16 @@ def index_command():
         files = []
         for ext in get_code_extensions():
             files.extend(list(project_root.glob(f"**/*{ext}")))
-        
+
         # Filter out venv, node_modules etc.
         files = [f for f in files if not any(p in str(f) for p in ['.venv', 'node_modules', '__pycache__'])]
-        
+
         console.print(f"Indexing {len(files)} files...")
         await service.index_project(project_root, files)
 
     import asyncio
     asyncio.run(_run_index())
-    
+
     console.print("[bold green]✔[/bold green] Semantic index updated.")
 
 def semantic_search_command(query: str):
@@ -72,11 +74,12 @@ def semantic_search_command(query: str):
     except ImportError:
         console.print("[red]Semantic Search dependencies not installed.[/red]")
         return
-        
+
     console.print(f"Searching for: [bold]{query}[/bold]...")
 
     async def _run_search():
         from pathlib import Path
+
         import yaml
         project_root = Path.cwd()
         legacy_config = project_root / ".warden" / "config.yaml"
@@ -85,7 +88,7 @@ def semantic_search_command(query: str):
             with open(legacy_config) as f:
                 full_config = yaml.safe_load(f)
                 config_data = full_config.get("semantic_search", {})
-        
+
         config_data.setdefault("enabled", True)
         config_data["project_root"] = str(project_root)
 
@@ -93,24 +96,24 @@ def semantic_search_command(query: str):
         if not service.is_available():
             console.print("[red]Error: Semantic Search service not available.[/red]")
             return None
-            
+
         return await service.search(query)
 
     import asyncio
     results = asyncio.run(_run_search())
-    
+
     if results is None:
         return
 
     if not results:
         console.print("[yellow]No semantic matches found.[/yellow]")
         return
-        
+
     table = Table(title=f"Semantic Results for '{query}'")
     table.add_column("File", style="cyan")
     table.add_column("Score", justify="right")
     table.add_column("Snippet", style="dim")
-    
+
     for r in results:
         table.add_row(
             r.chunk.relative_path,
@@ -122,7 +125,7 @@ def semantic_search_command(query: str):
 # --- Hub Search (The new functionality) ---
 
 def search_command(
-    query: Optional[str] = typer.Argument(None, help="Search query"),
+    query: str | None = typer.Argument(None, help="Search query"),
     local: bool = typer.Option(False, "--local", "-l", help="Search the local codebase semantically instead of the Hub")
 ):
     """
@@ -153,7 +156,7 @@ def search_command(
     for f in results:
         tier = f.get("tier", "optional").upper()
         tier_style = "bold green" if tier == "CORE" else "blue"
-        
+
         table.add_row(
             f["id"],
             f["name"],

@@ -10,14 +10,14 @@ Detects TODO/FIXME comments (technical debt markers):
 import re
 from typing import List
 
-from warden.ast.domain.models import ASTNode
 from warden.ast.domain.enums import CodeLanguage
+from warden.ast.domain.models import ASTNode
 from warden.validation.domain.frame import CodeFile
+from warden.validation.frames.antipattern.detectors.base import BaseDetector
 from warden.validation.frames.antipattern.types import (
     AntiPatternSeverity,
     AntiPatternViolation,
 )
-from warden.validation.frames.antipattern.detectors.base import BaseDetector
 
 
 class TodoDetector(BaseDetector):
@@ -28,9 +28,9 @@ class TodoDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
+        lines: list[str],
         ast_root: ASTNode,
-    ) -> List[AntiPatternViolation]:
+    ) -> list[AntiPatternViolation]:
         """Detect TODO/FIXME using regex (AST not needed for comments)."""
         return self._detect_todo_fixme(code_file, lines)
 
@@ -38,14 +38,14 @@ class TodoDetector(BaseDetector):
         self,
         code_file: CodeFile,
         language: CodeLanguage,
-        lines: List[str],
-    ) -> List[AntiPatternViolation]:
+        lines: list[str],
+    ) -> list[AntiPatternViolation]:
         """Detect TODO/FIXME comments."""
         return self._detect_todo_fixme(code_file, lines)
 
     def _detect_todo_fixme(
-        self, code_file: CodeFile, lines: List[str]
-    ) -> List[AntiPatternViolation]:
+        self, code_file: CodeFile, lines: list[str]
+    ) -> list[AntiPatternViolation]:
         """Detect TODO/FIXME comments (universal, regex-based)."""
         violations = []
 

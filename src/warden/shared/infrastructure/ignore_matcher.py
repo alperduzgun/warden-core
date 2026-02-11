@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 class IgnoreMatcher:
     """
     Matcher for ignore patterns from .warden/ignore.yaml.
-    
+
     Provides efficient pattern matching for:
     - Directory names (e.g., 'build', 'node_modules')
     - File patterns (e.g., '*.min.js', '*_pb2.py')
@@ -40,14 +40,14 @@ class IgnoreMatcher:
         self.gitignore_file = project_root / ".gitignore"
         self.wardenignore_file = project_root / ".wardenignore"
         self.use_gitignore = use_gitignore
-        
+
         # Loaded patterns
-        self._directories: Set[str] = set()
-        self._file_patterns: List[str] = []
-        self._path_patterns: List[str] = []
-        self._gitignore_patterns: List[str] = []
-        self._frame_ignores: Dict[str, List[str]] = {}
-        
+        self._directories: set[str] = set()
+        self._file_patterns: list[str] = []
+        self._path_patterns: list[str] = []
+        self._gitignore_patterns: list[str] = []
+        self._frame_ignores: dict[str, list[str]] = {}
+
         self._loaded = False
         self._load_patterns()
 
@@ -61,12 +61,12 @@ class IgnoreMatcher:
         try:
             with open(self.ignore_file) as f:
                 data = yaml.safe_load(f) or {}
-            
+
             self._directories = set(data.get("directories", []))
             self._file_patterns = data.get("file_patterns", [])
             self._path_patterns = data.get("path_patterns", [])
             self._frame_ignores = data.get("frames", {})
-            
+
             logger.info(
                 "ignore_patterns_loaded",
                 directories=len(self._directories),
@@ -74,14 +74,14 @@ class IgnoreMatcher:
                 path_patterns=len(self._path_patterns),
                 frame_rules=len(self._frame_ignores),
             )
-            
+
             # Also load .gitignore if enabled
             if self.use_gitignore:
                 self._load_gitignore()
-            
+
             # Load .wardenignore
             self._load_wardenignore()
-                
+
             self._loaded = True
 
         except Exception as e:
@@ -101,19 +101,19 @@ class IgnoreMatcher:
                     # Skip empty lines and comments
                     if not line or line.startswith("#"):
                         continue
-                    
+
                     # Normalize pattern
                     if line.endswith("/"):
                         line = line.rstrip("/")
                         # If it's a directory, we can treat it as a path pattern with **
                         patterns.append(f"**/{line}/**")
                         patterns.append(f"{line}/**")
-                    
+
                     patterns.append(line)
-            
+
             self._gitignore_patterns = patterns
             logger.info("gitignore_patterns_loaded", count=len(patterns))
-            
+
         except Exception as e:
             logger.warning("gitignore_load_failed", error=str(e))
 
@@ -130,18 +130,18 @@ class IgnoreMatcher:
                     # Skip empty lines and comments
                     if not line or line.startswith("#"):
                         continue
-                    
+
                     # Normalize pattern
                     if line.endswith("/"):
                         line = line.rstrip("/")
                         patterns.append(f"**/{line}/**")
                         patterns.append(f"{line}/**")
-                    
+
                     patterns.append(line)
-            
+
             self._path_patterns.extend(patterns)
             logger.info("wardenignore_patterns_loaded", count=len(patterns))
-            
+
         except Exception as e:
             logger.warning("wardenignore_load_failed", error=str(e))
 
@@ -158,13 +158,9 @@ class IgnoreMatcher:
         # Direct name match
         if dir_name in self._directories:
             return True
-        
+
         # Pattern match (for things like "*.egg-info")
-        for pattern in self._directories:
-            if "*" in pattern and fnmatch.fnmatch(dir_name, pattern):
-                return True
-        
-        return False
+        return any("*" in pattern and fnmatch.fnmatch(dir_name, pattern) for pattern in self._directories)
 
     def should_ignore_file(self, file_path: Path) -> bool:
         """
@@ -189,18 +185,18 @@ class IgnoreMatcher:
             True if path matches any ignore pattern
         """
         file_name = file_path.name
-        
+
         # Check file patterns
         for pattern in self._file_patterns:
             if fnmatch.fnmatch(file_name, pattern):
                 logger.debug("file_ignored", file=str(file_path), pattern=pattern)
                 return True
-        
+
         # Check path patterns (relative to project root)
         try:
             relative_path = file_path.relative_to(self.project_root)
             rel_str = str(relative_path)
-            
+
             # Check directory ignores (parent directories)
             for part in relative_path.parts[:-1]:
                 if self.should_ignore_directory(part):
@@ -211,7 +207,7 @@ class IgnoreMatcher:
                 if self._match_path_pattern(rel_str, pattern):
                     logger.debug("path_ignored", file=rel_str, pattern=pattern)
                     return True
-            
+
             # Check gitignore patterns
             for pattern in self._gitignore_patterns:
                 if self._match_path_pattern(rel_str, pattern):
@@ -220,7 +216,7 @@ class IgnoreMatcher:
         except ValueError:
             # File not under project root
             pass
-        
+
         return False
 
     def should_ignore_for_frame(
@@ -239,16 +235,16 @@ class IgnoreMatcher:
         # Check global ignores first
         if self.should_ignore_file(file_path):
             return True
-        
+
         # Check frame-specific ignores
         frame_patterns = self._frame_ignores.get(frame_id, [])
         if not frame_patterns:
             return False
-        
+
         try:
             relative_path = file_path.relative_to(self.project_root)
             rel_str = str(relative_path)
-            
+
             for pattern in frame_patterns:
                 if self._match_path_pattern(rel_str, pattern):
                     logger.debug(
@@ -260,7 +256,7 @@ class IgnoreMatcher:
                     return True
         except ValueError:
             pass
-        
+
         return False
 
     def _match_path_pattern(self, path: str, pattern: str) -> bool:
@@ -277,7 +273,7 @@ class IgnoreMatcher:
         # Normalize separators
         path = path.replace("\\", "/")
         pattern = pattern.replace("\\", "/")
-        
+
         # Handle ** patterns
         if "**" in pattern:
             # Convert ** to regex-like matching
@@ -286,7 +282,7 @@ class IgnoreMatcher:
                 prefix, suffix = parts
                 prefix = prefix.rstrip("/")
                 suffix = suffix.lstrip("/")
-                
+
                 # Check if path starts with prefix (if any)
                 if prefix and not path.startswith(prefix.rstrip("*")):
                     # Try fnmatch for prefix with wildcards
@@ -300,7 +296,7 @@ class IgnoreMatcher:
                                 return False
                     else:
                         return False
-                
+
                 # Check if path ends with suffix (if any)
                 if suffix:
                     if suffix.endswith("/**"):
@@ -312,13 +308,13 @@ class IgnoreMatcher:
                         # Check filename match
                         if not any(fnmatch.fnmatch(p, suffix.strip("/")) for p in path.split("/")):
                             return False
-                
+
                 return True
-        
+
         # Simple fnmatch for non-** patterns
         return fnmatch.fnmatch(path, pattern)
 
-    def get_frame_ignores(self, frame_id: str) -> List[str]:
+    def get_frame_ignores(self, frame_id: str) -> list[str]:
         """Get ignore patterns for a specific frame."""
         return self._frame_ignores.get(frame_id, [])
 

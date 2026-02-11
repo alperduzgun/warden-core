@@ -4,8 +4,9 @@ Warden Baseline Commands.
 Commands for managing and inspecting the baseline.
 """
 
-import typer
 from pathlib import Path
+
+import typer
 from rich.console import Console
 from rich.table import Table
 

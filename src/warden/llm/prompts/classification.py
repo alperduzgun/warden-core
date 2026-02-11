@@ -54,7 +54,7 @@ Return your analysis in this JSON format:
 """
 
 
-def generate_classification_request(code: str, language: str, file_path: Optional[str] = None) -> str:
+def generate_classification_request(code: str, language: str, file_path: str | None = None) -> str:
     """
     Generate classification request for code file
 

@@ -5,12 +5,14 @@ Persists LLM matching decisions to disk to avoid redundant API calls
 and improve performance on subsequent runs.
 """
 
+import contextlib
 import json
 import os
-import threading
 import tempfile
+import threading
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -41,7 +43,7 @@ class SpecDecisionCache:
 
     def __init__(self, cache_file: Path = Path(".warden/memory/spec_matches.json")):
         self.cache_file = cache_file
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._lock = threading.Lock()  # Thread safety for cache operations
         self._load_cache()
 
@@ -98,10 +100,8 @@ class SpecDecisionCache:
 
             except Exception as e:
                 # Clean up temp file on error
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(temp_path)
-                except OSError:
-                    pass
                 raise e
 
         except Exception as e:
@@ -111,7 +111,7 @@ class SpecDecisionCache:
         """Normalize key for lookup."""
         return f"MatchV1:{consumer_op}:{provider_op}"
 
-    def get_decision(self, consumer_op: str, provider_op: str) -> Optional[Dict[str, Any]]:
+    def get_decision(self, consumer_op: str, provider_op: str) -> dict[str, Any] | None:
         """
         Get cached decision in a thread-safe manner.
 

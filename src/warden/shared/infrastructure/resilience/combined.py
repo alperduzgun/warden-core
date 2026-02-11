@@ -1,18 +1,20 @@
 """Combined Resilience Operation."""
 
 import functools
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
+
+from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitState
+from .retry import RetryConfig, with_retry_async
 from .timeout import with_timeout_async
-from .retry import with_retry_async, RetryConfig
-from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitState, CircuitBreakerOpen
 
 T = TypeVar("T")
 
 @dataclass
 class ResilienceConfig:
     """Combined resilience configuration."""
-    timeout_seconds: Optional[float] = 30.0
+    timeout_seconds: float | None = 30.0
     retry_enabled: bool = True
     retry_max_attempts: int = 3
     retry_initial_delay: float = 1.0
@@ -24,7 +26,7 @@ class ResilienceConfig:
 
 class ResilientOperation(Generic[T]):
     """Combines multiple resilience patterns."""
-    def __init__(self, name: str, config: Optional[ResilienceConfig] = None):
+    def __init__(self, name: str, config: ResilienceConfig | None = None):
         self.name = name
         self.config = config or ResilienceConfig()
         if self.config.circuit_breaker_enabled:
@@ -70,7 +72,7 @@ class ResilientOperation(Generic[T]):
             raise
 
 def resilient(
-    name: Optional[str] = None,
+    name: str | None = None,
     timeout_seconds: float = 30.0,
     retry_max_attempts: int = 3,
     circuit_breaker_enabled: bool = True,

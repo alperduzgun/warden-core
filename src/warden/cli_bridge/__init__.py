@@ -7,15 +7,14 @@ Features graceful degradation when Warden validation framework is not available.
 """
 
 # Protocol classes are always available (no dependencies)
-from warden.cli_bridge.protocol import (
-    IPCRequest,
-    IPCResponse,
-    IPCError,
-    ErrorCode,
-)
-
 # Minimal bridge is always available (no dependencies)
 from warden.cli_bridge.bridge_minimal import MinimalWardenBridge
+from warden.cli_bridge.protocol import (
+    ErrorCode,
+    IPCError,
+    IPCRequest,
+    IPCResponse,
+)
 
 # Try to import full bridge and server (requires Warden dependencies)
 try:

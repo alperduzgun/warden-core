@@ -7,8 +7,8 @@ Issue #25 Fix: Privacy-aware logging with redaction support
 """
 
 import logging
-import sys
 import re
+import sys
 from typing import Any, Dict
 
 import structlog
@@ -16,7 +16,7 @@ import structlog
 from warden.shared.infrastructure.config import settings
 
 
-def privacy_redactor(logger: Any, method_name: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
+def privacy_redactor(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Redact sensitive information from logs (Issue #25).
 
@@ -57,7 +57,7 @@ def privacy_redactor(logger: Any, method_name: str, event_dict: Dict[str, Any]) 
         return text
 
     # Recursively redact all string values
-    def redact_dict(d: Dict) -> Dict:
+    def redact_dict(d: dict) -> dict:
         """Recursively redact dictionary values."""
         return {
             k: (

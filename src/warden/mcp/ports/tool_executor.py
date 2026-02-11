@@ -24,7 +24,7 @@ class IToolExecutor(ABC):
     async def execute_async(
         self,
         tool: MCPToolDefinition,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """
         Execute a tool and return results.

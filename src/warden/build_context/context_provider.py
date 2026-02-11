@@ -51,7 +51,7 @@ class BuildContextProvider:
             raise ValueError(f"Project path is not a directory: {project_path}")
 
         # Initialize parsers
-        self.parsers: List[object] = [
+        self.parsers: list[object] = [
             PackageJsonParser(str(self.project_path)),
             PyprojectParser(str(self.project_path)),
             RequirementsParser(str(self.project_path)),
@@ -130,13 +130,9 @@ class BuildContextProvider:
             "requirements.txt",
         ]
 
-        for config_file in config_files:
-            if (self.project_path / config_file).exists():
-                return True
+        return any((self.project_path / config_file).exists() for config_file in config_files)
 
-        return False
-
-    def get_config_files(self) -> List[str]:
+    def get_config_files(self) -> list[str]:
         """
         Get list of existing build configuration files.
 
@@ -156,7 +152,7 @@ class BuildContextProvider:
             "setup.cfg",
         ]
 
-        found_files: List[str] = []
+        found_files: list[str] = []
 
         for config_file in config_files:
             if (self.project_path / config_file).exists():

@@ -19,7 +19,7 @@ from typing import Optional
 
 # Try to import logging
 try:
-    from warden.shared.infrastructure.logging import get_logger, configure_logging
+    from warden.shared.infrastructure.logging import configure_logging, get_logger
     # Initial configuration for MCP to ensure logs go to stderr early
     configure_logging(stream=sys.stderr)
     logger = get_logger(__name__)
@@ -33,7 +33,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 
-async def main_async(project_root: Optional[Path] = None) -> None:
+async def main_async(project_root: Path | None = None) -> None:
     """
     Start the MCP server.
 
@@ -74,7 +74,7 @@ async def main_async(project_root: Optional[Path] = None) -> None:
         logger.info("mcp_server_stopped")
 
 
-def run(project_root: Optional[str] = None) -> None:
+def run(project_root: str | None = None) -> None:
     """
     Synchronous entry point for CLI.
 

@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 import structlog
+import yaml
 
 from warden.config.language_templates import (
+    GENERIC_TEMPLATE,
     LanguageTemplate,
     get_language_template,
-    GENERIC_TEMPLATE,
 )
 
 logger = structlog.get_logger(__name__)
@@ -38,7 +38,7 @@ class ConfigGenerator:
         sdk_version: str | None = None,
         project_type: str | None = None,
         interactive: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate config.yaml content from language template.
 
@@ -107,7 +107,7 @@ class ConfigGenerator:
         sdk_version: str | None,
         framework: str | None,
         project_type: str | None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Build base configuration from template with full project metadata.
 
@@ -151,7 +151,7 @@ class ConfigGenerator:
 
         return config
 
-    def _build_llm_config(self) -> Dict[str, Any]:
+    def _build_llm_config(self) -> dict[str, Any]:
         """
         Build default LLM configuration with Azure OpenAI.
 
@@ -178,8 +178,8 @@ class ConfigGenerator:
         }
 
     def _apply_framework_tweaks(
-        self, config: Dict[str, Any], framework: str, language: str
-    ) -> Dict[str, Any]:
+        self, config: dict[str, Any], framework: str, language: str
+    ) -> dict[str, Any]:
         """
         Apply framework-specific configuration adjustments.
 
@@ -256,7 +256,7 @@ class ConfigGenerator:
 
         return config
 
-    async def save_config(self, config: Dict[str, Any]) -> Path:
+    async def save_config(self, config: dict[str, Any]) -> Path:
         """
         Save configuration to .warden/config.yaml.
 
@@ -286,7 +286,7 @@ class ConfigGenerator:
 
         return config_path
 
-    def _format_yaml(self, config: Dict[str, Any]) -> str:
+    def _format_yaml(self, config: dict[str, Any]) -> str:
         """
         Format configuration as readable YAML.
 

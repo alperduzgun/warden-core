@@ -22,21 +22,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -93,8 +93,8 @@ class NestJSExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("nestjs_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -160,7 +160,7 @@ class NestJSExtractor(BaseContractExtractor):
         content: str,
         file_path: Path,
         base_path: str,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """
         Extract operations from NestJS controller methods.
 
@@ -174,7 +174,7 @@ class NestJSExtractor(BaseContractExtractor):
             @Get(':id')
             async findOne(@Param('id') id: string): Promise<User> { ... }
         """
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for HTTP method decorators
         # @Get(), @Get(':id'), @Post('create')
@@ -240,7 +240,7 @@ class NestJSExtractor(BaseContractExtractor):
             parts.append(action_path.strip("/"))
         return "/".join(parts)
 
-    def _extract_body_param(self, params: str) -> Optional[str]:
+    def _extract_body_param(self, params: str) -> str | None:
         """Extract type from @Body() parameter."""
         # @Body() dto: CreateUserDto
         # @Body() createUserDto: CreateUserDto
@@ -261,7 +261,7 @@ class NestJSExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """
         Extract DTOs and entities from NestJS.
 
@@ -279,7 +279,7 @@ class NestJSExtractor(BaseContractExtractor):
                 name: string;
             }
         """
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Pattern for class definition
         class_pattern = re.compile(
@@ -318,7 +318,7 @@ class NestJSExtractor(BaseContractExtractor):
 
             class_body = content[start:end]
 
-            fields: List[FieldDefinition] = []
+            fields: list[FieldDefinition] = []
 
             for prop_match in property_pattern.finditer(class_body):
                 prop_name = prop_match.group(1)
@@ -368,9 +368,9 @@ class NestJSExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[EnumDefinition]:
+    ) -> list[EnumDefinition]:
         """Extract TypeScript enums."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
 
         enum_pattern = re.compile(
             r"export\s+enum\s+(\w+)\s*\{([^}]+)\}",
@@ -381,7 +381,7 @@ class NestJSExtractor(BaseContractExtractor):
             enum_name = enum_match.group(1)
             enum_body = enum_match.group(2)
 
-            values: List[str] = []
+            values: list[str] = []
             value_pattern = re.compile(r"(\w+)\s*(?:=\s*[^,]+)?")
 
             for value_match in value_pattern.finditer(enum_body):

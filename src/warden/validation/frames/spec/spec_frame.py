@@ -32,37 +32,37 @@ Version: 1.0.0
 
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-from warden.validation.domain.frame import (
-    ValidationFrame,
-    FrameResult,
-    Finding,
-    CodeFile,
+from warden.shared.infrastructure.logging import get_logger
+from warden.shared.infrastructure.resilience import (
+    OperationTimeoutError,
+    with_timeout,
 )
-from warden.validation.domain.mixins import Cleanable, ProjectContextAware
 from warden.validation.domain.enums import (
+    FrameApplicability,
     FrameCategory,
     FramePriority,
     FrameScope,
-    FrameApplicability,
+)
+from warden.validation.domain.frame import (
+    CodeFile,
+    Finding,
+    FrameResult,
+    ValidationFrame,
+)
+from warden.validation.domain.mixins import Cleanable, ProjectContextAware
+from warden.validation.frames.spec.analyzer import GapAnalyzer, GapAnalyzerConfig
+from warden.validation.frames.spec.extractors.base import (
+    ExtractorResilienceConfig,
+    get_extractor,
 )
 from warden.validation.frames.spec.models import (
     Contract,
+    ContractGap,
     PlatformConfig,
     PlatformRole,
-    ContractGap,
     SpecAnalysisResult,
-)
-from warden.validation.frames.spec.extractors.base import (
-    get_extractor,
-    ExtractorResilienceConfig,
-)
-from warden.validation.frames.spec.analyzer import GapAnalyzer, GapAnalyzerConfig
-from warden.shared.infrastructure.logging import get_logger
-from warden.shared.infrastructure.resilience import (
-    with_timeout,
-    OperationTimeoutError,
 )
 
 logger = get_logger(__name__)
@@ -102,7 +102,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
     requires_config = ["platforms"]  # Need platforms configuration
     requires_context = ["project_context"]  # Required for monorepo auto-detection
 
-    def __init__(self, config: Dict[str, Any] | None = None, llm_service: Optional[Any] = None, semantic_search_service: Optional[Any] = None):
+    def __init__(self, config: dict[str, Any] | None = None, llm_service: Any | None = None, semantic_search_service: Any | None = None):
         """
         Initialize SpecFrame.
 
@@ -114,7 +114,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         self.semantic_search_service = semantic_search_service
         self.project_context: Any | None = None  # Set via set_project_context
         # Parse platform configurations
-        self.platforms: List[PlatformConfig] = []
+        self.platforms: list[PlatformConfig] = []
         self._parse_platforms_config()
         # Load suppressions from config
         self._load_suppressions()
@@ -162,7 +162,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         # Check for monorepo auto-detection
         if self.project_context:
             from warden.analysis.domain.project_context import ProjectType
-            
+
             if self.project_context.project_type == ProjectType.MONOREPO:
                 logger.info(
                     "monorepo_detected_auto_scanning",
@@ -171,7 +171,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                 # Auto-detect platforms asynchronously
                 # Note: This will be called from execute_async, so we defer to there
                 return
-        
+
         # Fallback to manual config
         if not self.config:
             return
@@ -226,7 +226,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
             - "spec:type_mismatch:getUserById"
             - "spec:*:*" (suppress all spec gaps)
         """
-        self.suppressions: List[Dict[str, Any]] = []
+        self.suppressions: list[dict[str, Any]] = []
         if not self.config:
             return
 
@@ -354,7 +354,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         # Auto-detect platforms for monorepos if not already configured
         if self.project_context and not self.platforms:
             from warden.analysis.domain.project_context import ProjectType
-            
+
             if self.project_context.project_type == ProjectType.MONOREPO:
                 logger.info("monorepo_auto_detection_starting")
                 await self._auto_detect_platforms()
@@ -364,8 +364,8 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         if validation_result:
             return validation_result
 
-        findings: List[Finding] = []
-        metadata: Dict[str, Any] = {
+        findings: list[Finding] = []
+        metadata: dict[str, Any] = {
             "platforms_analyzed": [],
             "contracts_extracted": 0,
             "gaps_found": 0,
@@ -384,8 +384,8 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                 )
 
             # Extract contracts from each platform
-            contracts: Dict[str, Contract] = {}
-            all_gaps: List[ContractGap] = []
+            contracts: dict[str, Contract] = {}
+            all_gaps: list[ContractGap] = []
 
             for platform in self.platforms:
                 contract = await self._extract_contract(platform)
@@ -548,7 +548,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         logger.warning("project_root_not_found", fallback=str(Path.cwd()))
         return Path.cwd()
 
-    def _validate_configuration(self) -> Optional[FrameResult]:
+    def _validate_configuration(self) -> FrameResult | None:
         """
         Validate frame configuration.
 
@@ -605,7 +605,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
             },
         )
 
-    async def _extract_contract(self, platform: PlatformConfig) -> Optional[Contract]:
+    async def _extract_contract(self, platform: PlatformConfig) -> Contract | None:
         """
         Extract contract from a platform with resilience patterns.
 
@@ -836,38 +836,39 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
     async def _auto_detect_platforms(self) -> None:
         """
         Auto-detect platforms in monorepo using PlatformDetector.
-        
+
         Scans subdirectories for platform signatures (pubspec.yaml, package.json, etc.)
         and automatically configures detected platforms.
         """
-        from warden.validation.frames.spec.platform_detector import PlatformDetector
         from pathlib import Path
-        
+
+        from warden.validation.frames.spec.platform_detector import PlatformDetector
+
         if not self.project_context:
             logger.warning("auto_detect_platforms_no_context")
             return
-        
+
         project_root = Path(self.project_context.project_root)
-        
+
         logger.info(
             "platform_auto_detection_started",
             project_root=str(project_root),
         )
-        
+
         try:
             detector = PlatformDetector(
                 max_depth=2,  # Don't scan too deep
                 min_confidence=0.6,  # Require reasonable confidence
             )
-            
+
             detected = await detector.detect_projects_async(project_root)
-            
+
             logger.info(
                 "platforms_detected",
                 count=len(detected),
                 platforms=[{"name": p.name, "type": p.platform_type.value, "role": p.role.value} for p in detected],
             )
-            
+
             # Convert detected projects to PlatformConfig
             for project in detected:
                 platform = PlatformConfig(
@@ -877,7 +878,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                     role=project.role,
                 )
                 self.platforms.append(platform)
-                
+
                 logger.debug(
                     "platform_auto_configured",
                     name=project.name,
@@ -885,7 +886,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                     role=project.role.value,
                     confidence=project.confidence,
                 )
-        
+
         except Exception as e:
             logger.error(
                 "platform_auto_detection_failed",
@@ -895,19 +896,19 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
 
     def enrich_project_context(
         self,
-        contracts: Dict[str, Contract],
-        gaps: List[ContractGap],
-        metadata: Dict[str, Any],
+        contracts: dict[str, Contract],
+        gaps: list[ContractGap],
+        metadata: dict[str, Any],
     ) -> None:
         """
         Enrich project_context with SpecFrame findings.
-        
+
         Writes back discovered information to project_context so downstream
         frames can access:
         - Detected platforms and their metadata
         - Extracted API contracts
         - Contract gaps and drift analysis
-        
+
         Args:
             contracts: Extracted contracts by platform name
             gaps: Detected contract gaps
@@ -915,7 +916,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         """
         if not self.project_context:
             return
-        
+
         # Create spec_analysis section in project_context
         spec_data = {
             "platforms": [
@@ -973,10 +974,10 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
             ],
             "metadata": metadata,
         }
-        
+
         # Store in project_context
         self.project_context.spec_analysis = spec_data
-        
+
         logger.info(
             "project_context_enriched",
             platforms=len(self.platforms),

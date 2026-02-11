@@ -5,10 +5,10 @@ Cleaning Phase Executor.
 import time
 from typing import List
 
-from warden.pipeline.domain.pipeline_context import PipelineContext
-from warden.validation.domain.frame import CodeFile
-from warden.shared.infrastructure.logging import get_logger
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
+from warden.pipeline.domain.pipeline_context import PipelineContext
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
@@ -19,7 +19,7 @@ class CleaningExecutor(BasePhaseExecutor):
     async def execute_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute CLEANING phase."""
         logger.info("executing_phase", phase="CLEANING")
@@ -55,14 +55,14 @@ class CleaningExecutor(BasePhaseExecutor):
             # Optimization: Filter out unchanged files
             files_to_clean = []
             file_contexts = getattr(context, 'file_contexts', {})
-            
+
             for cf in code_files:
                 f_info = file_contexts.get(cf.path)
                 # If no context info or not marked unchanged, we clean it
                 # Note: is_unchanged is only True if content hash matches AND file is not impacted
                 if not f_info or not getattr(f_info, 'is_unchanged', False):
                     files_to_clean.append(cf)
-            
+
             if not files_to_clean:
                  logger.info("cleaning_phase_skipped_optimization", reason="all_files_unchanged")
                  from warden.cleaning.application.cleaning_phase import CleaningPhaseResult
@@ -110,5 +110,5 @@ class CleaningExecutor(BasePhaseExecutor):
             }
             # Cleaning doesn't use LLM by default yet in this version, but if we add it:
             # if self.llm_service and ...: cleaning_data["llm_used"] = True
-            
+
             self.progress_callback("phase_completed", cleaning_data)

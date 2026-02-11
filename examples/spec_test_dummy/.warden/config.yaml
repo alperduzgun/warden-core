@@ -14,18 +14,15 @@ advanced:
 frames:
 - config
 - security
-- environmentsecurity
 - resilience
 - fuzz
 - orphan
-- stress
-- demosecurity
-- architecturalconsistency
+- architectural
 - property
 - antipattern
 - spec
 frames_config:
-  architecturalconsistency:
+  architectural:
     enabled: true
     priority: low
     suppressions:
@@ -42,12 +39,6 @@ frames_config:
       - src/warden/mcp/infrastructure/mcp_config_paths.py
       reason: Constants-only module with no runtime logic requiring logging
   config:
-    enabled: true
-  demosecurity:
-    check_hardcoded_passwords: true
-    enabled: true
-    severity_level: high
-  environmentsecurity:
     enabled: true
   orphan:
     enabled: true
@@ -67,18 +58,6 @@ frames_config:
     enabled: true
     is_blocker: false
     priority: critical
-  stress:
-    checks:
-    - api_load_testing
-    - async_performance
-    enabled: true
-    suppressions:
-    - rule: stress-unclosed_file
-      files:
-      - src/warden/cli_bridge/handlers/pipeline_handler.py
-      - src/warden/secrets/application/template_resolver.py
-      - src/warden/mcp/ports/transport.py
-      - src/warden/mcp/infrastructure/stdio_transport.py
   resilience:
     checks:
     - timeout_handling
@@ -142,9 +121,9 @@ llm:
   tpm_limit: 10000
   rpm_limit: 60
   provider: claude_code
-  model: qwen2.5-coder:0.5b
+  model: claude-sonnet-4-20250514
   timeout: 300
-  smart_model: qwen2.5-coder:0.5b
+  smart_model: claude-sonnet-4-20250514
   fast_model: qwen2.5-coder:0.5b
 project:
   description: Warden configuration for warden-core

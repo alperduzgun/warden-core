@@ -23,11 +23,12 @@ Usage:
     children = await analyzer.get_child_classes_async(file_path, line, char)
 """
 
-import structlog
 import threading
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import structlog
 
 from warden.lsp.manager import LSPManager
 
@@ -44,7 +45,7 @@ class SymbolInfo:
     character: int
 
     @classmethod
-    def from_lsp(cls, item: Dict[str, Any]) -> 'SymbolInfo':
+    def from_lsp(cls, item: dict[str, Any]) -> 'SymbolInfo':
         """Create from LSP CallHierarchyItem or TypeHierarchyItem."""
         uri = item.get("uri", "")
         file_path = uri.replace("file://", "") if uri.startswith("file://") else uri
@@ -78,7 +79,7 @@ class CallInfo:
     """Call relationship information."""
     caller: SymbolInfo
     callee: SymbolInfo
-    call_sites: List[Dict[str, int]]  # [{line, character}, ...]
+    call_sites: list[dict[str, int]]  # [{line, character}, ...]
 
 
 class SemanticAnalyzer:
@@ -95,7 +96,7 @@ class SemanticAnalyzer:
     _lock: threading.Lock = threading.Lock()
 
     # File extension to language mapping
-    EXTENSION_MAP: Dict[str, str] = {
+    EXTENSION_MAP: dict[str, str] = {
         ".py": "python",
         ".ts": "typescript",
         ".tsx": "typescript",
@@ -139,7 +140,7 @@ class SemanticAnalyzer:
 
     def __init__(self) -> None:
         self._lsp_manager = LSPManager.get_instance()
-        self._opened_files: Dict[str, str] = {}  # file_path -> language
+        self._opened_files: dict[str, str] = {}  # file_path -> language
 
     @classmethod
     def get_instance(cls) -> 'SemanticAnalyzer':
@@ -158,7 +159,7 @@ class SemanticAnalyzer:
                 cls._instance = SemanticAnalyzer()
             return cls._instance
 
-    def _get_language(self, file_path: str) -> Optional[str]:
+    def _get_language(self, file_path: str) -> str | None:
         """Get language from file extension."""
         ext = Path(file_path).suffix.lower()
         return self.EXTENSION_MAP.get(ext)
@@ -166,8 +167,8 @@ class SemanticAnalyzer:
     async def _ensure_file_open_async(
         self,
         file_path: str,
-        content: Optional[str] = None
-    ) -> Optional[Any]:
+        content: str | None = None
+    ) -> Any | None:
         """
         Ensure file is opened in LSP and return client.
 
@@ -222,8 +223,8 @@ class SemanticAnalyzer:
         file_path: str,
         line: int,
         character: int,
-        content: Optional[str] = None
-    ) -> List[SymbolInfo]:
+        content: str | None = None
+    ) -> list[SymbolInfo]:
         """
         Get all functions/methods that call the symbol at position.
 
@@ -256,8 +257,8 @@ class SemanticAnalyzer:
         file_path: str,
         line: int,
         character: int,
-        content: Optional[str] = None
-    ) -> List[SymbolInfo]:
+        content: str | None = None
+    ) -> list[SymbolInfo]:
         """
         Get all functions/methods called by the symbol at position.
 
@@ -288,8 +289,8 @@ class SemanticAnalyzer:
         file_path: str,
         line: int,
         character: int,
-        content: Optional[str] = None
-    ) -> Optional[bool]:
+        content: str | None = None
+    ) -> bool | None:
         """
         Check if symbol at position is used anywhere (not dead code).
 
@@ -319,8 +320,8 @@ class SemanticAnalyzer:
         file_path: str,
         line: int,
         character: int,
-        content: Optional[str] = None
-    ) -> List[SymbolInfo]:
+        content: str | None = None
+    ) -> list[SymbolInfo]:
         """
         Get parent classes/interfaces of class at position.
 
@@ -346,8 +347,8 @@ class SemanticAnalyzer:
         file_path: str,
         line: int,
         character: int,
-        content: Optional[str] = None
-    ) -> List[SymbolInfo]:
+        content: str | None = None
+    ) -> list[SymbolInfo]:
         """
         Get child classes/implementations of class/interface at position.
 
@@ -376,7 +377,7 @@ class SemanticAnalyzer:
         self,
         query: str,
         project_root: str
-    ) -> List[SymbolInfo]:
+    ) -> list[SymbolInfo]:
         """
         Search for symbols matching query across project.
 
@@ -422,8 +423,8 @@ class SemanticAnalyzer:
         file_path: str,
         line: int,
         character: int,
-        content: Optional[str] = None
-    ) -> Optional[str]:
+        content: str | None = None
+    ) -> str | None:
         """
         Get type information for symbol at position.
 

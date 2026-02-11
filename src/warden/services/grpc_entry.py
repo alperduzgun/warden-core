@@ -5,8 +5,8 @@ Warden gRPC Server Service
 Launched via: python -m warden.services.grpc_entry
 """
 
-import asyncio
 import argparse
+import asyncio
 import signal
 from pathlib import Path
 
@@ -30,7 +30,7 @@ async def main_async(port: int = 50051):
 
     # Project root calculation (up 3 levels from services/grpc_entry.py)
     project_root = Path(__file__).parents[3]
-    
+
     server = GrpcServer(port=port, project_root=project_root)
 
     # Handle shutdown signals

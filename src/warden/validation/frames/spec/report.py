@@ -21,7 +21,6 @@ from warden.validation.frames.spec.models import (
     SpecAnalysisResult,
 )
 
-
 # SARIF severity mapping
 SEVERITY_TO_SARIF_LEVEL = {
     GapSeverity.CRITICAL: "error",
@@ -139,8 +138,8 @@ class SarifReportGenerator:
     def generate(
         self,
         result: SpecAnalysisResult,
-        project_root: Optional[Path] = None,
-    ) -> Dict[str, Any]:
+        project_root: Path | None = None,
+    ) -> dict[str, Any]:
         """
         Generate SARIF report from analysis result.
 
@@ -194,7 +193,7 @@ class SarifReportGenerator:
 
         return sarif
 
-    def _build_rules(self, gaps: List[ContractGap]) -> List[Dict[str, Any]]:
+    def _build_rules(self, gaps: list[ContractGap]) -> list[dict[str, Any]]:
         """Build SARIF rules from gaps."""
         seen_rule_ids = set()
         rules = []
@@ -234,16 +233,16 @@ class SarifReportGenerator:
 
     def _build_results(
         self,
-        gaps: List[ContractGap],
-        project_root: Optional[Path],
-    ) -> List[Dict[str, Any]]:
+        gaps: list[ContractGap],
+        project_root: Path | None,
+    ) -> list[dict[str, Any]]:
         """Build SARIF results from gaps."""
         results = []
 
         for gap in gaps:
             rule_info = GAP_TYPE_RULES.get(gap.gap_type, {"id": f"SPEC999-{gap.gap_type}"})
 
-            result_entry: Dict[str, Any] = {
+            result_entry: dict[str, Any] = {
                 "ruleId": rule_info["id"],
                 "level": SEVERITY_TO_SARIF_LEVEL.get(gap.severity, "warning"),
                 "message": {
@@ -304,10 +303,10 @@ class SarifReportGenerator:
     def _build_location(
         self,
         file_path: str,
-        line: Optional[int],
-        project_root: Optional[Path],
+        line: int | None,
+        project_root: Path | None,
         description: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build SARIF location object."""
         # Make path relative if project_root provided
         if project_root:
@@ -319,7 +318,7 @@ class SarifReportGenerator:
         else:
             uri = file_path
 
-        location: Dict[str, Any] = {
+        location: dict[str, Any] = {
             "physicalLocation": {
                 "artifactLocation": {
                     "uri": uri,
@@ -337,7 +336,7 @@ class SarifReportGenerator:
 
         return location
 
-    def _build_invocation(self, result: SpecAnalysisResult) -> Dict[str, Any]:
+    def _build_invocation(self, result: SpecAnalysisResult) -> dict[str, Any]:
         """Build SARIF invocation object."""
         return {
             "executionSuccessful": True,
@@ -350,7 +349,7 @@ class SarifReportGenerator:
 
     def save(
         self,
-        sarif: Dict[str, Any],
+        sarif: dict[str, Any],
         output_path: str | Path,
         indent: int = 2,
     ) -> None:
@@ -366,7 +365,7 @@ class SarifReportGenerator:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(sarif, f, indent=indent)
 
-    def to_json(self, sarif: Dict[str, Any], indent: int = 2) -> str:
+    def to_json(self, sarif: dict[str, Any], indent: int = 2) -> str:
         """
         Convert SARIF report to JSON string.
 
@@ -382,9 +381,9 @@ class SarifReportGenerator:
 
 def generate_sarif_report(
     result: SpecAnalysisResult,
-    output_path: Optional[str | Path] = None,
-    project_root: Optional[Path] = None,
-) -> Dict[str, Any]:
+    output_path: str | Path | None = None,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
     """
     Convenience function to generate SARIF report.
 

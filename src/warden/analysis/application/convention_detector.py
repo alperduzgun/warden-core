@@ -6,6 +6,7 @@ Detects project conventions and patterns during PRE-ANALYSIS phase.
 
 from pathlib import Path
 from typing import Dict, List, Set
+
 import structlog
 
 from warden.analysis.domain.project_context import ProjectConventions
@@ -23,9 +24,9 @@ class ConventionDetector:
     def __init__(
         self,
         project_root: Path,
-        config_files: Dict[str, str],
-        special_dirs: Dict[str, List[str]],
-        file_extensions: Set[str],
+        config_files: dict[str, str],
+        special_dirs: dict[str, list[str]],
+        file_extensions: set[str],
     ):
         """
         Initialize convention detector.
@@ -123,7 +124,7 @@ class ConventionDetector:
         type_hint_count = 0
         for py_file in py_files:
             try:
-                with open(py_file, 'r', encoding='utf-8', errors='ignore') as f:
+                with open(py_file, encoding='utf-8', errors='ignore') as f:
                     content = f.read(5000)  # Read first 5000 chars
                     # Look for type hints patterns
                     if "-> " in content or ": " in content:
@@ -166,11 +167,11 @@ class ConventionDetector:
         pyproject_path = self.project_root / "pyproject.toml"
         if pyproject_path.exists():
             try:
-                with open(pyproject_path, 'r', encoding='utf-8') as f:
+                with open(pyproject_path, encoding='utf-8') as f:
                     content = f.read()
                     if "[tool.black]" in content or "[tool.ruff]" in content:
                         return True
-            except (FileNotFoundError, PermissionError, IOError, UnicodeDecodeError):
+            except (OSError, FileNotFoundError, PermissionError, UnicodeDecodeError):
                 pass
 
         return False

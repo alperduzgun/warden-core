@@ -40,16 +40,16 @@ def get_git_author() -> str:
 def check_restricted_keywords(text: str, source: str) -> bool:
     \"\"\"Check for restricted keywords in text.\"\"\"
     restricted_words = ["Claude", "Gemini"]
-    
+
     # Case insensitive check
     text_lower = text.lower()
-    
+
     for word in restricted_words:
         if word.lower() in text_lower:
             print(f"❌ Error: Restricted keyword '{word}' found in {source}.")
             print(f"   PLEASE: Do not use '{word}' in your git {source}.")
             return False
-            
+
     return True
 
 
@@ -59,22 +59,22 @@ def main() -> int:
     author = get_git_author()
     if not check_restricted_keywords(author, "Author Name"):
         return 1
-        
+
     # 2. Check Commit Message
     try:
         commit_msg_file = sys.argv[1]
         with open(commit_msg_file, 'r') as f:
             commit_msg = f.read()
-            
+
         if not check_restricted_keywords(commit_msg, "Commit Message"):
             return 1
-            
+
     except IndexError:
         # Should not happen if called by git
         pass
     except Exception as e:
         print(f"⚠️ Warning: Could not read commit message: {e}")
-        
+
     return 0
 
 

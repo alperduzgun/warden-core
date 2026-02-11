@@ -1,12 +1,14 @@
 import json
 import os
+from typing import Any, Dict, List, Optional
+
 import psutil
-from typing import List, Dict, Any, Optional
-from warden.shared.infrastructure.logging import get_logger
+
 from warden.llm.providers.base import ILlmClient
 from warden.memory.application.memory_manager import MemoryManager
-from warden.shared.utils.retry_utils import async_retry
+from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.finding_utils import get_finding_attribute
+from warden.shared.utils.retry_utils import async_retry
 
 logger = get_logger(__name__)
 
@@ -29,23 +31,23 @@ class FindingVerificationService:
         set_finding_attribute(obj, key, value)
 
     def __init__(
-        self, 
-        llm_client: ILlmClient, 
-        memory_manager: Optional[MemoryManager] = None,
+        self,
+        llm_client: ILlmClient,
+        memory_manager: MemoryManager | None = None,
         enabled: bool = True
     ):
         self.llm = llm_client
         self.memory_manager = memory_manager
         self.enabled = enabled
-        
+
         # Detect Local LLM (Ollama / Local HTTP)
         provider = str(getattr(llm_client, 'provider', '')).upper()
         endpoint = str(getattr(llm_client, 'endpoint', getattr(llm_client, '_endpoint', '')))
         self.is_local = (
-            'OLLAMA' in provider or 
-            'localhost' in endpoint or 
-            '127.0.0.1' in endpoint or 
-            '::1' in endpoint or 
+            'OLLAMA' in provider or
+            'localhost' in endpoint or
+            '127.0.0.1' in endpoint or
+            '::1' in endpoint or
             '0:0:0:0:0:0:0:1' in endpoint
         )
 
@@ -72,7 +74,7 @@ Return ONLY a JSON object:
 }
 """
 
-    async def verify_findings_async(self, findings: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
+    async def verify_findings_async(self, findings: list[dict[str, Any]], context: Any = None) -> list[dict[str, Any]]:
         """
         Filters out false positives from the findings list using:
         Heuristic Filter -> Cache -> Batch LLM Verification.
@@ -92,7 +94,7 @@ Return ONLY a JSON object:
                 continue
 
             code_snippet = (self._get(finding, 'code') or '').strip()
-            
+
             # Skip verification for Linter findings (User request: Don't waste tokens on linters)
             detail = self._get(finding, 'detail') or ""
             if "(Ruff)" in detail or self._get(finding, 'id', '').startswith("lint_"):
@@ -104,11 +106,11 @@ Return ONLY a JSON object:
                 continue
 
             if self._is_obvious_false_positive(finding, code_snippet):
-                logger.info("heuristic_filter_rejected_finding", 
+                logger.info("heuristic_filter_rejected_finding",
                             finding_id=self._get(finding, 'id'),
                             rule=self._get(finding, 'rule_id'))
                 continue
-            
+
             candidates_to_verify.append(finding)
 
         if not candidates_to_verify:
@@ -119,7 +121,7 @@ Return ONLY a JSON object:
         for finding in candidates_to_verify:
             cache_key = self._generate_key(finding)
             cached_result = self._check_cache(cache_key)
-            
+
             if cached_result:
                 # SAFE ACCESS: cached_result might be a dict or potentially an object from older cache
                 self._set(cached_result, 'cached', True)
@@ -127,7 +129,7 @@ Return ONLY a JSON object:
                     self._set(finding, 'verification_metadata', cached_result)
                     verified_findings.append(finding)
                 continue
-            
+
             remaining_after_cache.append(finding)
 
         if not remaining_after_cache:
@@ -142,10 +144,10 @@ Return ONLY a JSON object:
             # Dynamic resource-check
             batch_size = self._get_safe_batch_size(requested_batch_size)
             batch = remaining_after_cache[i : i + batch_size]
-            
+
             try:
                 batch_results = await self._verify_batch_with_llm_async(batch, context)
-                
+
                 for idx, result in enumerate(batch_results):
                     finding = batch[idx]
                     cache_key = self._generate_key(finding)
@@ -153,7 +155,7 @@ Return ONLY a JSON object:
 
                     # SAFE ACCESS: result might be a dict or object depending on LLM response/mock
                     is_tp = self._get(result, 'is_true_positive', True)
-                    
+
                     if is_tp:
                         self._set(finding, 'verification_metadata', result)
                         verified_findings.append(finding)
@@ -170,14 +172,14 @@ Return ONLY a JSON object:
                         "fallback": True
                     })
                 verified_findings.extend(batch)
-            
+
             i += len(batch)
 
-        logger.info("verification_summary", 
-                    initial=initial_count, 
+        logger.info("verification_summary",
+                    initial=initial_count,
                     final=len(verified_findings),
                     reduction=f"{((initial_count - len(verified_findings))/initial_count)*100:.1f}%" if initial_count > 0 else "0%")
-        
+
         return verified_findings
 
     def _is_obvious_false_positive(self, finding: Any, code: str) -> bool:
@@ -185,7 +187,7 @@ Return ONLY a JSON object:
         # 1. Comment/Docstring check
         if code.startswith(('#', '//', '/*', '"""', "'''")) or 'docstring' in (self._get(finding, 'message') or '').lower():
             return True
-            
+
         # 2. Type Hint check (common FP in Python/TS)
         # e.g. "Optional[str]", "List[int]"
         if '[' in code and ']' in code and '(' not in code:
@@ -198,13 +200,10 @@ Return ONLY a JSON object:
 
         # 4. Dummy/Example data in Test files
         location = (self._get(finding, 'location') or '').lower()
-        if ('test' in location or 'example' in location) and any(d in code.lower() for d in ['dummy', 'mock', 'fake', 'test_password', 'secret123']):
-            return True
-
-        return False
+        return bool(('test' in location or 'example' in location) and any(d in code.lower() for d in ['dummy', 'mock', 'fake', 'test_password', 'secret123']))
 
     @async_retry(retries=2, initial_delay=1.0, backoff_factor=2.0)
-    async def _verify_batch_with_llm_async(self, batch: List[Dict[str, Any]], context: Any = None) -> List[Dict[str, Any]]:
+    async def _verify_batch_with_llm_async(self, batch: list[dict[str, Any]], context: Any = None) -> list[dict[str, Any]]:
         """Verifies a batch of findings in a single LLM request."""
         context_prompt = ""
         if context and hasattr(context, 'get_llm_context_prompt'):
@@ -218,7 +217,7 @@ Return ONLY a JSON object:
                 f_rule = self._get(f, 'rule_id', 'unknown')
                 f_msg = self._get(f, 'message', 'unknown')
                 f_code = self._get(f, 'code', 'N/A')
-                
+
                 findings_summary += f"""
 FINDING #{i}:
 - ID: {f_id}
@@ -258,17 +257,17 @@ Return ONLY a JSON array of objects in the EXACT order:
             model = getattr(context.llm_config, 'smart_model', None)
 
         response = await self.llm.complete_async(prompt, self.system_prompt, model=model, use_fast_tier=True)
-        
+
         try:
             if not response.success or not response.content:
                 raise ValueError(f"LLM request failed: {response.error_message}")
-            
+
             content = response.content.strip()
             if '```json' in content:
                 content = content.split('```json')[1].split('```')[0].strip()
             elif '```' in content:
                 content = content.split('```')[1].strip()
-            
+
             results = json.loads(content)
             # Ensure results match batch size and are in order (or mapped by idx)
             # For simplicity, we trust the LLM order but could sort by 'idx' if needed
@@ -277,7 +276,7 @@ Return ONLY a JSON array of objects in the EXACT order:
             logger.warning("batch_llm_parsing_failed", error=str(e))
             # Fallback: Mark for manual review due to parsing error
             return [{
-                "is_true_positive": True, 
+                "is_true_positive": True,
                 "confidence": 0.4, # Slightly lower confidence for parse errors
                 "reason": "LLM responded but output parsing failed. Manual Review recommended.",
                 "review_required": True
@@ -289,11 +288,11 @@ Return ONLY a JSON array of objects in the EXACT order:
         loc = self._get(finding, 'location') or ''
         finding_id = self._get(finding, 'id')
         code = self._get(finding, 'code') or ''
-        
+
         unique_str = f"{finding_id}:{code}:{loc}"
         return hashlib.sha256(unique_str.encode()).hexdigest()
 
-    def _check_cache(self, key: str) -> Optional[Dict]:
+    def _check_cache(self, key: str) -> dict | None:
         try:
             if self.memory_manager:
                 return self.memory_manager.get_llm_cache(f"verify:{key}")
@@ -301,7 +300,7 @@ Return ONLY a JSON array of objects in the EXACT order:
             logger.warning("cache_lookup_failed", key=key, error=str(e))
         return None
 
-    def _save_cache(self, key: str, data: Dict) -> None:
+    def _save_cache(self, key: str, data: dict) -> None:
         try:
             if self.memory_manager:
                 self.memory_manager.set_llm_cache(f"verify:{key}", data)

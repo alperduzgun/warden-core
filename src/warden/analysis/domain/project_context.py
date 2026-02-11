@@ -5,9 +5,10 @@ Provides comprehensive project structure understanding and context detection
 for the context-aware analysis system.
 """
 
-from pydantic import Field
 from enum import Enum
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
+from pydantic import Field
 
 from warden.shared.domain.base_model import BaseDomainModel
 
@@ -141,12 +142,13 @@ class BuildTool(Enum):
     UNKNOWN = "unknown"
 
 
-from warden.ast.domain.enums import CodeLanguage
 from warden.analysis.domain.intelligence import (
     ModuleInfo,
-    SecurityPosture,
     RiskLevel,
+    SecurityPosture,
 )
+from warden.ast.domain.enums import CodeLanguage
+
 
 class ProjectStatistics(BaseDomainModel):
     """
@@ -163,19 +165,19 @@ class ProjectStatistics(BaseDomainModel):
     documentation_files: int = 0
 
     # Language distribution (language -> file count)
-    language_distribution: Dict[CodeLanguage, int] = Field(default_factory=dict)
-    language_bytes: Dict[CodeLanguage, int] = Field(default_factory=dict) # byte counts (GitHub style)
+    language_distribution: dict[CodeLanguage, int] = Field(default_factory=dict)
+    language_bytes: dict[CodeLanguage, int] = Field(default_factory=dict) # byte counts (GitHub style)
 
     # Directory statistics
     max_depth: int = 0  # Maximum directory depth
     average_file_size: float = 0.0  # Average file size in lines
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> 'ProjectStatistics':
+    def from_json(cls, data: dict[str, Any]) -> 'ProjectStatistics':
         """Create from JSON dict."""
         return cls.model_validate(data)
 
@@ -209,12 +211,12 @@ class ProjectConventions(BaseDomainModel):
     uses_linter: bool = False  # Linter configuration detected
     uses_formatter: bool = False  # Formatter configuration detected
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> 'ProjectConventions':
+    def from_json(cls, data: dict[str, Any]) -> 'ProjectConventions':
         """Create from JSON dict."""
         return cls.model_validate(data)
 
@@ -231,27 +233,27 @@ class ProjectContext(BaseDomainModel):
     project_root: str = ""
     project_name: str = ""
     primary_language: str = ""  # e.g., "python", "typescript"
-    detected_languages: List[str] = Field(default_factory=list)  # e.g., ["python", "rust"]
-    language_breakdown: Dict[str, float] = Field(default_factory=dict)  # e.g., {"python": 95.5, "rust": 4.5}
-    sdk_versions: Dict[str, str] = Field(default_factory=dict)  # e.g., {"python": "3.11", "node": "18.0"}
+    detected_languages: list[str] = Field(default_factory=list)  # e.g., ["python", "rust"]
+    language_breakdown: dict[str, float] = Field(default_factory=dict)  # e.g., {"python": 95.5, "rust": 4.5}
+    sdk_versions: dict[str, str] = Field(default_factory=dict)  # e.g., {"python": "3.11", "node": "18.0"}
 
     # Project characteristics
     project_type: ProjectType = ProjectType.UNKNOWN
     framework: Framework = Framework.NONE
     architecture: Architecture = Architecture.UNKNOWN
-    
+
     # High-level semantic discovery
     purpose: str = ""  # General purpose of the project
     architecture_description: str = ""  # High-level architectural summary
 
     # Intelligence fields (populated by PreAnalysisPhase)
     security_posture: SecurityPosture = SecurityPosture.STANDARD
-    module_map: Dict[str, ModuleInfo] = Field(default_factory=dict)
+    module_map: dict[str, ModuleInfo] = Field(default_factory=dict)
     # e.g., {"auth": ModuleInfo(name="auth", risk_level=P0_CRITICAL, ...)}
 
     # Development tools
     test_framework: TestFramework = TestFramework.NONE
-    build_tools: List[BuildTool] = Field(default_factory=list)
+    build_tools: list[BuildTool] = Field(default_factory=list)
 
     # Detected conventions
     conventions: ProjectConventions = Field(default_factory=ProjectConventions)
@@ -260,10 +262,10 @@ class ProjectContext(BaseDomainModel):
     statistics: ProjectStatistics = Field(default_factory=ProjectStatistics)
 
     # Configuration files detected
-    config_files: Dict[str, str] = Field(default_factory=dict)  # filename -> type
+    config_files: dict[str, str] = Field(default_factory=dict)  # filename -> type
 
     # Special directories
-    special_dirs: Dict[str, List[str]] = Field(default_factory=dict)
+    special_dirs: dict[str, list[str]] = Field(default_factory=dict)
     # e.g., {"vendor": ["node_modules/", "vendor/"], "generated": ["gen/", "build/"]}
 
     # Context confidence (0.0 to 1.0)
@@ -271,21 +273,21 @@ class ProjectContext(BaseDomainModel):
 
     # Detection metadata
     detection_time: float = 0.0  # Time taken for detection in seconds
-    detection_warnings: List[str] = Field(default_factory=list)
-    
+    detection_warnings: list[str] = Field(default_factory=list)
+
     # Service abstractions detected in the project
     # Maps class name to abstraction info (e.g., {"SecretManager": ServiceAbstraction})
-    service_abstractions: Dict[str, Any] = Field(default_factory=dict)
+    service_abstractions: dict[str, Any] = Field(default_factory=dict)
 
     # Spec analysis results (populated by SpecFrame)
-    spec_analysis: Dict[str, Any] = Field(default_factory=dict)
+    spec_analysis: dict[str, Any] = Field(default_factory=dict)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> 'ProjectContext':
+    def from_json(cls, data: dict[str, Any]) -> 'ProjectContext':
         """Create from JSON dict."""
         return cls.model_validate(data)
 
@@ -335,7 +337,7 @@ class ProjectContext(BaseDomainModel):
 
         return self.project_type in strict_types
 
-    def get_ignored_paths(self) -> List[str]:
+    def get_ignored_paths(self) -> list[str]:
         """
         Get list of paths that should be ignored in analysis.
 

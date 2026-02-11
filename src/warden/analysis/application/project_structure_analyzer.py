@@ -6,29 +6,33 @@ and other characteristics for the PRE-ANALYSIS phase.
 """
 
 import asyncio
+import json
 import re
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Any
-import json
+from typing import Any, Dict, List, Optional, Set
+
 import structlog
+
 try:
     import tomllib  # Python 3.11+
 except ImportError:
     import tomli as tomllib  # Fallback for older versions
 
+import contextlib
+
+from warden.analysis.application.discovery.gitignore_filter import create_gitignore_filter
 from warden.analysis.domain.project_context import (
-    ProjectContext,
-    ProjectType,
-    Framework,
     Architecture,
-    TestFramework,
     BuildTool,
-    ProjectStatistics,
+    Framework,
+    ProjectContext,
     ProjectConventions,
+    ProjectStatistics,
+    ProjectType,
+    TestFramework,
 )
 from warden.llm.config import LlmConfiguration
-from warden.analysis.application.discovery.gitignore_filter import create_gitignore_filter
 
 logger = structlog.get_logger()
 
@@ -41,15 +45,15 @@ class ProjectStructureAnalyzer:
     """
 
     def __init__(
-        self, 
-        project_root: Path, 
-        llm_config: Optional[LlmConfiguration] = None,
-        analysis_level: Optional[Any] = None,
-        llm_service: Optional[Any] = None
+        self,
+        project_root: Path,
+        llm_config: LlmConfiguration | None = None,
+        analysis_level: Any | None = None,
+        llm_service: Any | None = None
     ) -> None:
         """
         Initialize analyzer with project root.
-        
+
         Args:
             project_root: Root directory of the project to analyze
             llm_config: Optional LLM configuration
@@ -58,21 +62,21 @@ class ProjectStructureAnalyzer:
         self.project_root = Path(project_root)
         self.llm_config = llm_config
         self.llm_service = llm_service
-        self.config_files: Dict[str, str] = {}
-        self.special_dirs: Dict[str, List[str]] = {}
-        self.file_extensions: Set[str] = set()
-        self.directory_structure: Dict[str, int] = {}  # dir -> file count
+        self.config_files: dict[str, str] = {}
+        self.special_dirs: dict[str, list[str]] = {}
+        self.file_extensions: set[str] = set()
+        self.directory_structure: dict[str, int] = {}  # dir -> file count
         self.framework = None  # Will be set during analysis
         self.analysis_level = analysis_level
-        self._injected_files: Optional[List[Path]] = None
-        
+        self._injected_files: list[Path] | None = None
+
         # Initialize Gitignore Filter
         self.gitignore_filter = create_gitignore_filter(self.project_root)
 
     async def analyze_async(
-        self, 
-        initial_context: Optional[ProjectContext] = None,
-        all_files: Optional[List[Path]] = None
+        self,
+        initial_context: ProjectContext | None = None,
+        all_files: list[Path] | None = None
     ) -> ProjectContext:
         """
         Analyze project structure and detect characteristics.
@@ -80,7 +84,7 @@ class ProjectStructureAnalyzer:
         Args:
             initial_context: Optional pre-initialized context (e.g. from memory)
             all_files: Optional list of pre-discovered files to avoid redundant disk walk
-            
+
         Returns:
             ProjectContext with detected information
         """
@@ -127,7 +131,7 @@ class ProjectStructureAnalyzer:
             # results[2] -> _collect_statistics_async (ProjectStatistics)
             if len(results) > 2 and not isinstance(results[2], Exception):
                 context.statistics = results[2]
-            
+
             context.config_files = self.config_files
             context.special_dirs = self.special_dirs
 
@@ -138,11 +142,11 @@ class ProjectStructureAnalyzer:
             context.test_framework = self._detect_test_framework()
             context.build_tools = self._detect_build_tools()
             context.conventions = self._detect_conventions()
-            
+
             # Detect language and SDKs
             context.primary_language, context.detected_languages, context.language_breakdown = self._detect_languages(context.statistics)
             context.sdk_versions = self._detect_sdk_versions()
-            
+
             # Detect service abstractions
             context.service_abstractions = await self._detect_service_abstractions_async(context)
 
@@ -171,10 +175,10 @@ class ProjectStructureAnalyzer:
             context.detection_time = time.perf_counter() - start_time
             return context
 
-    def get_all_files(self) -> List[Path]:
+    def get_all_files(self) -> list[Path]:
         """
         Get all files in the project, respecting gitignore rules.
-        
+
         Returns:
             List of Path objects for all valid files.
         """
@@ -222,7 +226,7 @@ class ProjectStructureAnalyzer:
             "nuxt.config.js": "javascript-nuxt",
             "angular.json": "javascript-angular",
             "vue.config.js": "javascript-vue",
-            
+
             # Dart/Flutter
             "pubspec.yaml": "dart-pub",
             "pubspec.lock": "dart-pub-lock",
@@ -314,13 +318,13 @@ class ProjectStructureAnalyzer:
         collector = StatisticsCollector(self.project_root, self.special_dirs)
         return await collector.collect_async(all_files=self._injected_files)
 
-    def _detect_languages(self, stats: ProjectStatistics) -> tuple[str, List[str], Dict[str, float]]:
+    def _detect_languages(self, stats: ProjectStatistics) -> tuple[str, list[str], dict[str, float]]:
         """
         Detect all languages using pre-calculated statistics (DRY).
         """
         detected_languages_set = set()
         config_detected_languages = set()
-        
+
         # 1. Config Files (Intent) - Unchanged
         if "go.mod" in self.config_files: config_detected_languages.add("go")
         if "Cargo.toml" in self.config_files: config_detected_languages.add("rust")
@@ -336,18 +340,18 @@ class ProjectStructureAnalyzer:
         # Use Byte Counts (GitHub Style) if available, else File Counts
         breakdown = {}
         counts = {}
-        
+
         use_bytes = bool(stats.language_bytes) # Check if we have byte data
         source_data = stats.language_bytes if use_bytes else stats.language_distribution
-        
+
         total_value = sum(source_data.values()) if source_data else 1
-        
+
         for lang_enum, value in source_data.items():
             lang_id = lang_enum.value
-            
+
             # Skip if value is 0
             if value == 0: continue
-            
+
             counts[lang_id] = value
             percent = (value / total_value) * 100
             breakdown[lang_id] = round(percent, 1)
@@ -358,7 +362,7 @@ class ProjectStructureAnalyzer:
         for lang, percent in breakdown.items():
             if percent >= threshold_percent or lang == dominant_lang:
                 detected_languages_set.add(lang)
-        
+
         # Always include config-based
         detected_languages_set.update(config_detected_languages)
 
@@ -373,13 +377,13 @@ class ProjectStructureAnalyzer:
                 if l in config_detected_languages:
                     primary_lang = l
                     break
-            if primary_lang == "unknown": primary_lang = sorted(list(config_detected_languages))[0]
+            if primary_lang == "unknown": primary_lang = sorted(config_detected_languages)[0]
         elif dominant_lang:
             primary_lang = dominant_lang
 
         return primary_lang, list(detected_languages_set), breakdown
 
-    def _detect_sdk_versions(self) -> Dict[str, str]:
+    def _detect_sdk_versions(self) -> dict[str, str]:
         """Detect SDK versions from configuration files."""
         versions = {}
 
@@ -400,7 +404,7 @@ class ProjectStructureAnalyzer:
             try:
                 with open(self.project_root / ".python-version") as f:
                     versions["python"] = f.read().strip()
-            except (FileNotFoundError, PermissionError, IOError):
+            except (OSError, FileNotFoundError, PermissionError):
                 pass  # Graceful degradation
 
         # Node.js version
@@ -417,7 +421,7 @@ class ProjectStructureAnalyzer:
             try:
                 with open(self.project_root / ".nvmrc") as f:
                     versions["node"] = f.read().strip()
-            except (FileNotFoundError, PermissionError, IOError):
+            except (OSError, FileNotFoundError, PermissionError):
                 pass  # Graceful degradation
 
         # Java - from pom.xml or build.gradle
@@ -427,7 +431,7 @@ class ProjectStructureAnalyzer:
                 java_match = re.search(r'<java\.version>(\d+[\.\d]*)</java\.version>', content)
                 if java_match:
                     versions["java"] = java_match.group(1)
-            except (FileNotFoundError, PermissionError, IOError):
+            except (OSError, FileNotFoundError, PermissionError):
                 pass
 
         # Go - from go.mod
@@ -437,7 +441,7 @@ class ProjectStructureAnalyzer:
                 go_match = re.search(r'^go\s+([\d.]+)', content, re.MULTILINE)
                 if go_match:
                     versions["go"] = go_match.group(1)
-            except (FileNotFoundError, PermissionError, IOError):
+            except (OSError, FileNotFoundError, PermissionError):
                 pass
 
         # Rust - from Cargo.toml (rust-version field)
@@ -447,15 +451,13 @@ class ProjectStructureAnalyzer:
                 rust_match = re.search(r'rust-version\s*=\s*"([\d.]+)"', content)
                 if rust_match:
                     versions["rust"] = rust_match.group(1)
-            except (FileNotFoundError, PermissionError, IOError):
+            except (OSError, FileNotFoundError, PermissionError):
                 pass
 
         # Python - prefer .python-version if not already set
         if "python" not in versions and ".python-version" in self.config_files:
-            try:
+            with contextlib.suppress(OSError, FileNotFoundError, PermissionError):
                 versions["python"] = (self.project_root / ".python-version").read_text().strip()
-            except (FileNotFoundError, PermissionError, IOError):
-                pass
 
         # Dart/Flutter - from pubspec.yaml
         if "pubspec.yaml" in self.config_files:
@@ -464,7 +466,7 @@ class ProjectStructureAnalyzer:
                 dart_match = re.search(r'sdk:\s*["\']?>=?([\d.]+)', content)
                 if dart_match:
                     versions["dart"] = dart_match.group(1)
-            except (FileNotFoundError, PermissionError, IOError):
+            except (OSError, FileNotFoundError, PermissionError):
                 pass
 
         # .NET - from *.csproj
@@ -476,7 +478,7 @@ class ProjectStructureAnalyzer:
                     if net_match:
                         versions["dotnet"] = net_match.group(1)
                         break
-                except (FileNotFoundError, PermissionError, IOError):
+                except (OSError, FileNotFoundError, PermissionError):
                     pass
 
         return versions
@@ -621,7 +623,7 @@ class ProjectStructureAnalyzer:
 
         return TestFramework.NONE
 
-    def _detect_build_tools(self) -> List[BuildTool]:
+    def _detect_build_tools(self) -> list[BuildTool]:
         """Detect build and dependency management tools."""
         tools = []
 
@@ -730,42 +732,42 @@ class ProjectStructureAnalyzer:
         # Normalize confidence
         return min(1.0, confidence) if factors > 0 else 0.0
 
-    async def _detect_service_abstractions_async(self, context: ProjectContext) -> Dict[str, Any]:
+    async def _detect_service_abstractions_async(self, context: ProjectContext) -> dict[str, Any]:
         """
         Detect service abstractions in the project.
-        
+
         Args:
             context: Current project context
-            
+
         Returns:
             Dictionary mapping class name to ServiceAbstraction data
         """
         from warden.analysis.application.service_abstraction_detector import ServiceAbstractionDetector
-        
+
         try:
             detector = ServiceAbstractionDetector(
-                self.project_root, 
+                self.project_root,
                 project_context=context,
                 llm_config=self.llm_config,
                 analysis_level=self.analysis_level,
                 llm_service=self.llm_service
             )
             abstractions = await detector.detect_async(all_files=self._injected_files)
-            
+
             # Convert to serializable dict
             result = {}
             for name, abstraction in abstractions.items():
                 result[name] = abstraction.to_dict()
-            
+
             if result:
                 logger.info(
                     "service_abstractions_detected",
                     count=len(result),
                     services=list(result.keys()),
                 )
-            
+
             return result
-            
+
         except Exception as e:
             logger.warning(
                 "service_abstraction_detection_failed",

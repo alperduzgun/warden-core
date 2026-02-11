@@ -21,21 +21,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -94,8 +94,8 @@ class FastAPIExtractor(BaseContractExtractor):
         files = self._find_files()
         logger.info("fastapi_files_found", count=len(files))
 
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -142,7 +142,7 @@ class FastAPIExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """
         Extract operations from FastAPI route decorators.
 
@@ -153,7 +153,7 @@ class FastAPIExtractor(BaseContractExtractor):
             @router.post("/users", response_model=User)
             async def create_user(user: UserCreate) -> User:
         """
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for route decorators
         # @app.get("/path"), @router.post("/path", ...)
@@ -211,7 +211,7 @@ class FastAPIExtractor(BaseContractExtractor):
 
         return operations
 
-    def _extract_body_param(self, params: str) -> Optional[str]:
+    def _extract_body_param(self, params: str) -> str | None:
         """Extract type from Body parameter or Pydantic model parameter."""
         # Pattern: param: TypeName or param: TypeName = Body(...)
         # Look for non-primitive types that are likely request bodies
@@ -245,7 +245,7 @@ class FastAPIExtractor(BaseContractExtractor):
 
         return None
 
-    def _split_params(self, params: str) -> List[str]:
+    def _split_params(self, params: str) -> list[str]:
         """Split function parameters handling nested brackets."""
         result = []
         current = ""
@@ -274,7 +274,7 @@ class FastAPIExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """
         Extract Pydantic models from Python code.
 
@@ -283,7 +283,7 @@ class FastAPIExtractor(BaseContractExtractor):
                 name: str
                 email: Optional[str] = None
         """
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Pattern for Pydantic model class
         class_pattern = re.compile(
@@ -315,7 +315,7 @@ class FastAPIExtractor(BaseContractExtractor):
 
             class_body = content[start:end]
 
-            fields: List[FieldDefinition] = []
+            fields: list[FieldDefinition] = []
 
             for field_match in field_pattern.finditer(class_body):
                 field_name = field_match.group(1)
@@ -370,9 +370,9 @@ class FastAPIExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[EnumDefinition]:
+    ) -> list[EnumDefinition]:
         """Extract enums from Python code."""
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
 
         # Pattern for Enum class
         # class Status(str, Enum): or class Status(Enum):
@@ -401,7 +401,7 @@ class FastAPIExtractor(BaseContractExtractor):
 
             enum_body = content[start:end]
 
-            values: List[str] = []
+            values: list[str] = []
             for value_match in value_pattern.finditer(enum_body):
                 value_name = value_match.group(1)
                 # Skip private and dunder

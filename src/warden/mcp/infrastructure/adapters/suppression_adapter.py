@@ -5,14 +5,14 @@ MCP adapter for issue suppression management.
 Maps to gRPC SuppressionMixin functionality.
 """
 
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
-import uuid
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class SuppressionAdapter(BaseWardenAdapter):
@@ -38,9 +38,9 @@ class SuppressionAdapter(BaseWardenAdapter):
         """Initialize suppression adapter with state."""
         super().__init__(project_root, bridge)
         # In-memory suppression state
-        self._suppressions: Dict[str, Dict[str, Any]] = {}
+        self._suppressions: dict[str, dict[str, Any]] = {}
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get suppression tool definitions."""
         return [
             self._create_tool_definition(
@@ -119,7 +119,7 @@ class SuppressionAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute suppression tool."""
         handlers = {
@@ -134,7 +134,7 @@ class SuppressionAdapter(BaseWardenAdapter):
             return await handler(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
-    async def _add_suppression_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _add_suppression_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Add a suppression rule."""
         rule_id = arguments.get("rule_id")
         justification = arguments.get("justification")
@@ -168,7 +168,7 @@ class SuppressionAdapter(BaseWardenAdapter):
             "suppression": suppression,
         })
 
-    async def _remove_suppression_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _remove_suppression_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Remove a suppression rule."""
         suppression_id = arguments.get("suppression_id")
 
@@ -185,14 +185,14 @@ class SuppressionAdapter(BaseWardenAdapter):
             "message": f"Suppression {suppression_id} removed",
         })
 
-    async def _get_suppressions_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _get_suppressions_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get all suppression rules."""
         return MCPToolResult.json_result({
             "suppressions": list(self._suppressions.values()),
             "total_count": len(self._suppressions),
         })
 
-    async def _check_suppression_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _check_suppression_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Check if an issue is suppressed."""
         rule_id = arguments.get("rule_id")
         file_path = arguments.get("file_path")
@@ -237,9 +237,8 @@ class SuppressionAdapter(BaseWardenAdapter):
                 continue
 
             # Check line match (if specified)
-            if supp.get("line_number") and line_number:
-                if supp["line_number"] != line_number:
-                    continue
+            if supp.get("line_number") and line_number and supp["line_number"] != line_number:
+                continue
 
             return MCPToolResult.json_result({
                 "is_suppressed": True,

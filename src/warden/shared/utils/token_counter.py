@@ -1,5 +1,7 @@
 """Real token counting with tiktoken (ID 22)."""
 import tiktoken
+
+
 class TokenCounter:
     def __init__(self):
         self.enc = tiktoken.get_encoding("cl100k_base")

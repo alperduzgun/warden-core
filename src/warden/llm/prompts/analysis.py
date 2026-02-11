@@ -102,7 +102,7 @@ Your mission: Provide ACCURATE analysis that developers can trust. Reduce false 
 """
 
 
-def generate_analysis_request(code: str, language: str, file_path: Optional[str] = None) -> str:
+def generate_analysis_request(code: str, language: str, file_path: str | None = None) -> str:
     """
     Generate analysis request for code file (with prompt injection protection)
 

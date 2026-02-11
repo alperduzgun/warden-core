@@ -7,18 +7,19 @@ from directory structure, dependencies, and code samples.
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
+
 import structlog
 
-from warden.llm.factory import create_client
-from warden.llm.config import LlmConfiguration
-from warden.llm.types import LlmRequest
 from warden.analysis.domain.intelligence import (
+    FileException,
     ModuleInfo,
     RiskLevel,
     SecurityPosture,
-    FileException,
 )
+from warden.llm.config import LlmConfiguration
+from warden.llm.factory import create_client
+from warden.llm.types import LlmRequest
 
 logger = structlog.get_logger()
 
@@ -34,27 +35,27 @@ CRITICAL_KEYWORDS = {
 class ProjectPurposeDetector:
     """
     Detects the semantic purpose and architecture of a project.
-    
+
     Used during Phase 0 (Pre-Analysis) to provide high-level context
     to subsequent analysis frames, reducing token usage by avoiding
     redundant project-wide explanations.
     """
 
-    def __init__(self, project_root: Path, llm_config: Optional[LlmConfiguration] = None, llm_service: Optional[Any] = None):
+    def __init__(self, project_root: Path, llm_config: LlmConfiguration | None = None, llm_service: Any | None = None):
         """
         Initialize the detector.
-        
+
         Args:
             project_root: Root directory of the project.
             llm_config: Optional LLM configuration.
             llm_service: Optional shared LLM service.
         """
         self.project_root = Path(project_root).resolve()
-        
+
         if not self.project_root.exists():
             logger.warning("project_root_does_not_exist", path=str(self.project_root))
         self.llm = llm_service
-        
+
         if not self.llm:
             try:
                 # We use the default client if no config is provided
@@ -65,9 +66,9 @@ class ProjectPurposeDetector:
 
     async def detect_async(
         self,
-        file_list: List[Path],
-        config_files: Dict[str, str]
-    ) -> Tuple[str, str, Dict[str, ModuleInfo]]:
+        file_list: list[Path],
+        config_files: dict[str, str]
+    ) -> tuple[str, str, dict[str, ModuleInfo]]:
         """
         Analyze the project and return (purpose, architecture_description, module_map).
 
@@ -202,10 +203,10 @@ Return strictly JSON:
             logger.error("project_purpose_discovery_failed", error=str(e))
             return "Discovery failed", "Manual architectural analysis required", {}
 
-    async def _create_discovery_canvas_async(self, file_list: List[Path], config_files: Dict[str, str]) -> str:
+    async def _create_discovery_canvas_async(self, file_list: list[Path], config_files: dict[str, str]) -> str:
         """Collect project metadata for the LLM discovery prompt."""
         # 1. Directory Structure (trimmed for token safety)
-        dirs = sorted(list(set(str(f.parent.relative_to(self.project_root)) for f in file_list[:500])))
+        dirs = sorted({str(f.parent.relative_to(self.project_root)) for f in file_list[:500]})
         dir_tree = "\n".join(f"- {d}" for d in dirs[:40])
 
         # 2. Dependency Summary
@@ -215,14 +216,14 @@ Return strictly JSON:
         samples = ""
         # Common entry points across languages
         entry_patterns = ["main.py", "app.py", "index.ts", "setup.py", "pyproject.toml", "manage.py", "index.js", "main.go", "Cargo.toml"]
-        
+
         found_entries = []
         for pattern in entry_patterns:
             for f in file_list:
                 if f.name == pattern:
                     found_entries.append(f)
                     break
-        
+
         # Take first 3 found entries for sampling
         for f in found_entries[:3]:
             try:
@@ -232,7 +233,7 @@ Return strictly JSON:
                 content = full_content[:3000]
                 if len(full_content) > 3000:
                     content += "\n...[TRUNCATED]"
-                
+
                 samples += f"\nFILE: {f.name}\n```\n{content}\n```\n"
             except Exception as e:
                 logger.debug("sample_read_failed", file=str(f), error=str(e))
@@ -248,7 +249,7 @@ CONFIGURATION & DEPENDENCIES:
 CODE SAMPLES (Entry Points/Configs):
 {samples}"""
 
-    def _parse_json(self, content: str) -> Dict[str, Any]:
+    def _parse_json(self, content: str) -> dict[str, Any]:
         """Extract and parse JSON from LLM response content."""
         try:
             # Try finding JSON block
@@ -262,9 +263,9 @@ CODE SAMPLES (Entry Points/Configs):
 
     def _build_module_map(
         self,
-        raw_module_map: Dict[str, Any],
-        file_list: List[Path]
-    ) -> Dict[str, ModuleInfo]:
+        raw_module_map: dict[str, Any],
+        file_list: list[Path]
+    ) -> dict[str, ModuleInfo]:
         """
         Convert raw LLM module map to ModuleInfo objects.
 
@@ -275,7 +276,7 @@ CODE SAMPLES (Entry Points/Configs):
         Returns:
             Dictionary mapping module names to ModuleInfo objects.
         """
-        module_map: Dict[str, ModuleInfo] = {}
+        module_map: dict[str, ModuleInfo] = {}
 
         for name, data in raw_module_map.items():
             if not isinstance(data, dict):
@@ -316,10 +317,10 @@ CODE SAMPLES (Entry Points/Configs):
 
     def _apply_keyword_overrides(
         self,
-        module_map: Dict[str, ModuleInfo],
-        file_list: List[Path],
-        critical_files: List[Dict[str, Any]]
-    ) -> Dict[str, ModuleInfo]:
+        module_map: dict[str, ModuleInfo],
+        file_list: list[Path],
+        critical_files: list[dict[str, Any]]
+    ) -> dict[str, ModuleInfo]:
         """
         Apply keyword-based risk overrides for files that contain critical patterns.
 

@@ -5,10 +5,11 @@ Provides file-level context detection for false positive prevention
 and context-aware weight adjustment.
 """
 
-from pydantic import Field
-from enum import Enum
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import Field
 
 from warden.shared.domain.base_model import BaseDomainModel
 
@@ -45,7 +46,7 @@ class ContextWeight(BaseDomainModel):
     weight: float  # 0.0 to 1.0
     reason: str  # Why this weight was chosen
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')
 
@@ -58,7 +59,7 @@ class ContextWeights(BaseDomainModel):
     """
 
     context: FileContext
-    weights: Dict[str, float] = Field(default_factory=dict)
+    weights: dict[str, float] = Field(default_factory=dict)
     # Default weights: complexity, duplication, maintainability, naming, documentation, testability
 
     def model_post_init(self, __context: Any) -> None:
@@ -66,7 +67,7 @@ class ContextWeights(BaseDomainModel):
         if not self.weights:
             self.weights = self._get_default_weights()
 
-    def _get_default_weights(self) -> Dict[str, float]:
+    def _get_default_weights(self) -> dict[str, float]:
         """Get default weights based on context."""
         # Context-specific weight configurations
         weight_configs = {
@@ -134,7 +135,7 @@ class ContextWeights(BaseDomainModel):
             weight_configs[FileContext.PRODUCTION]
         )
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')
 
@@ -153,22 +154,22 @@ class FileContextInfo(BaseDomainModel):
     weights: ContextWeights = Field(default_factory=lambda: ContextWeights(context=FileContext.PRODUCTION))
 
     # Suppression configuration
-    suppressed_issues: List[str] = Field(default_factory=list)  # Issue types to suppress
-    suppression_reason: Optional[str] = None
+    suppressed_issues: list[str] = Field(default_factory=list)  # Issue types to suppress
+    suppression_reason: str | None = None
 
     # Additional metadata
     is_entry_point: bool = False  # Main file, app.py, index.js, etc.
     is_generated: bool = False  # Auto-generated file
     is_vendor: bool = False  # Third-party code
     has_ignore_marker: bool = False  # Has "warden-ignore" comment
-    
+
     # Caching / Incremental Scan Support
-    content_hash: Optional[str] = None
-    last_scan_timestamp: Optional[datetime] = None
+    content_hash: str | None = None
+    last_scan_timestamp: datetime | None = None
     is_unchanged: bool = False  # If True, analysis can be skipped (cached)
     is_impacted: bool = False  # If True, re-analysis is triggered by a dependency change
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')
 
@@ -252,16 +253,15 @@ class FileContextInfo(BaseDomainModel):
             return severity_map.get(original_severity.lower(), original_severity)
 
         # Production files: keep or upgrade severity
-        if self.context == FileContext.PRODUCTION:
-            if self.is_entry_point:
-                # Entry points are more critical
-                severity_map = {
-                    "critical": "critical",
-                    "high": "critical",
-                    "medium": "high",
-                    "low": "medium",
-                }
-                return severity_map.get(original_severity.lower(), original_severity)
+        if self.context == FileContext.PRODUCTION and self.is_entry_point:
+            # Entry points are more critical
+            severity_map = {
+                "critical": "critical",
+                "high": "critical",
+                "medium": "high",
+                "low": "medium",
+            }
+            return severity_map.get(original_severity.lower(), original_severity)
 
         return original_severity
 
@@ -277,20 +277,20 @@ class PreAnalysisResult(BaseDomainModel):
     project_context: Any  # ProjectContext (avoiding circular import)
 
     # File-level contexts
-    file_contexts: Dict[str, FileContextInfo] = Field(default_factory=dict)  # path -> context
+    file_contexts: dict[str, FileContextInfo] = Field(default_factory=dict)  # path -> context
 
     # Analysis statistics
     total_files_analyzed: int = 0
-    files_by_context: Dict[str, int] = Field(default_factory=dict)  # context -> count
+    files_by_context: dict[str, int] = Field(default_factory=dict)  # context -> count
 
     # Suppression statistics
     total_suppressions_configured: int = 0
-    suppression_by_context: Dict[str, int] = Field(default_factory=dict)
+    suppression_by_context: dict[str, int] = Field(default_factory=dict)
 
     # Performance metrics
     analysis_duration: float = 0.0  # seconds
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return self.model_dump(by_alias=True, mode='json')
 
@@ -311,7 +311,7 @@ class PreAnalysisResult(BaseDomainModel):
 
         return " | ".join(summary_parts)
 
-    def get_production_files(self) -> List[str]:
+    def get_production_files(self) -> list[str]:
         """
         Get list of production files.
 
@@ -324,7 +324,7 @@ class PreAnalysisResult(BaseDomainModel):
             if info.context == FileContext.PRODUCTION
         ]
 
-    def get_test_files(self) -> List[str]:
+    def get_test_files(self) -> list[str]:
         """
         Get list of test files.
 
@@ -361,7 +361,4 @@ class PreAnalysisResult(BaseDomainModel):
             return False
 
         # Skip files with ignore markers
-        if context_info.has_ignore_marker:
-            return False
-
-        return True
+        return not context_info.has_ignore_marker

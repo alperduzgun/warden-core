@@ -5,17 +5,19 @@ Coordinates all cleanup analyzers to detect code cleanup opportunities.
 Executes analyzers in priority order and combines results.
 """
 
-import structlog
 from typing import List, Optional
 
-from warden.cleaning.domain.base import BaseCleaningAnalyzer
-from warden.cleaning.domain.models import CleaningResult, CleaningSuggestion
+import structlog
+
 from warden.cleaning.application.analyzers import (
-    NamingAnalyzer,
+    CodeSimplifierAnalyzer,
+    ComplexityAnalyzer,
     DuplicationAnalyzer,
     MagicNumberAnalyzer,
-    ComplexityAnalyzer,
+    NamingAnalyzer,
 )
+from warden.cleaning.domain.base import BaseCleaningAnalyzer
+from warden.cleaning.domain.models import CleaningResult, CleaningSuggestion
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -35,7 +37,7 @@ class CleaningOrchestrator:
     This analyzer ONLY detects and reports issues, NEVER modifies code.
     """
 
-    def __init__(self, analyzers: Optional[List[BaseCleaningAnalyzer]] = None):
+    def __init__(self, analyzers: list[BaseCleaningAnalyzer] | None = None):
         """
         Initialize Cleanup Analyzer.
 
@@ -47,6 +49,7 @@ class CleaningOrchestrator:
             self._analyzers = [
                 NamingAnalyzer(),
                 ComplexityAnalyzer(),
+                CodeSimplifierAnalyzer(),
                 DuplicationAnalyzer(),
                 MagicNumberAnalyzer(),
             ]
@@ -65,7 +68,7 @@ class CleaningOrchestrator:
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
+        cancellation_token: str | None = None,
     ) -> CleaningResult:
         """
         Analyze code for cleanup opportunities.
@@ -95,9 +98,9 @@ class CleaningOrchestrator:
                 analyzer_name="CleaningOrchestrator"
             )
 
-        all_suggestions: List[CleaningSuggestion] = []
-        failed_analyzers: List[str] = []
-        skipped_analyzers: List[str] = []
+        all_suggestions: list[CleaningSuggestion] = []
+        failed_analyzers: list[str] = []
+        skipped_analyzers: list[str] = []
         total_issues = 0
         analyzer_metrics = {}
 
@@ -177,7 +180,7 @@ class CleaningOrchestrator:
 
     def _calculate_combined_score(
         self,
-        suggestions: List[CleaningSuggestion],
+        suggestions: list[CleaningSuggestion],
         code: str
     ) -> float:
         """
@@ -218,7 +221,7 @@ class CleaningOrchestrator:
         return round(score, 2)
 
     @staticmethod
-    def _build_summary(total_issues: int, failed_analyzers: List[str]) -> str:
+    def _build_summary(total_issues: int, failed_analyzers: list[str]) -> str:
         """
         Build human-readable summary.
 
@@ -244,7 +247,7 @@ class CleaningOrchestrator:
 
         return "\n".join(lines)
 
-    def get_analyzers(self) -> List[BaseCleaningAnalyzer]:
+    def get_analyzers(self) -> list[BaseCleaningAnalyzer]:
         """Get list of registered analyzers."""
         return self._analyzers.copy()
 

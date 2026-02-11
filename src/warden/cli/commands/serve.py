@@ -1,14 +1,16 @@
-import typer
 import asyncio
+import contextlib
 import json
+import os
 import shutil
 import tempfile
-import os
 from pathlib import Path
 from typing import Optional
 
-from warden.services.ipc_entry import main_async as ipc_main
+import typer
+
 from warden.services.grpc_entry import main_async as grpc_main
+from warden.services.ipc_entry import main_async as ipc_main
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,22 +34,18 @@ def mcp_callback(ctx: typer.Context):
 @serve_app.command("ipc")
 def serve_ipc():
     """Start the IPC server (used by CLI/GUI integration)."""
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(ipc_main())
-    except KeyboardInterrupt:
-        pass
 
 @serve_app.command("grpc")
 def serve_grpc(port: int = typer.Option(50051, help="Port to listen on")):
     """Start the gRPC server (for C#/.NET integration)."""
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(grpc_main(port))
-    except KeyboardInterrupt:
-        pass
 
 @mcp_app.command("start")
 def serve_mcp(
-    project_root: Optional[str] = typer.Option(
+    project_root: str | None = typer.Option(
         None,
         "--project-root",
         "-p",
@@ -80,10 +78,8 @@ def serve_mcp(
         raise typer.Exit(code=1)
 
     from warden.mcp.entry import run as mcp_run
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         mcp_run(str(root))
-    except KeyboardInterrupt:
-        pass
 
 
 @mcp_app.command("register")
@@ -104,6 +100,7 @@ def mcp_register():
       - Gemini (Antigravity)
     """
     from rich.console import Console
+
     from warden.mcp.infrastructure.mcp_config_paths import (
         get_mcp_config_paths,
         is_safe_to_create_dir,
@@ -173,7 +170,7 @@ def mcp_register():
     console.print()
 
 
-def _find_warden_executable() -> Optional[str]:
+def _find_warden_executable() -> str | None:
     """
     Find the warden executable path.
 
@@ -208,11 +205,11 @@ def _register_mcp_for_tool(
 ) -> str:
     """
     Register Warden MCP for a single AI tool using the domain service.
-    
+
     Args:
         tool_name: Display name of the tool
         config_path: Path to the tool's MCP config file
-        mcp_config: MCP configuration dict (unused here, kept for signature compat if needed, 
+        mcp_config: MCP configuration dict (unused here, kept for signature compat if needed,
                    but service constructs its own)
         warden_path: Path to warden executable
         console: Rich console for output
@@ -221,31 +218,31 @@ def _register_mcp_for_tool(
         "registered", "skipped", or "error"
     """
     from warden.mcp.domain.services.mcp_registration_service import MCPRegistrationService
-    
+
     # Initialize service
     service = MCPRegistrationService(warden_path)
-    
+
     # Call service to register single tool (service method needs to be exposed or we use register_all)
     # Since existing architecture iterates, we expose the single registration logic via the service
     # or better, refactor the caller.
-    # For minimum friction, we'll use the service's internal method if accessible, 
+    # For minimum friction, we'll use the service's internal method if accessible,
     # or instantiate the service and call the public method for this specific tool.
-    
-    # Actually, the loop is in the caller `mcp_register`. 
+
+    # Actually, the loop is in the caller `mcp_register`.
     # Let's adapt this function to use the service.
-    
+
     result = service._register_single_tool(tool_name, config_path, mcp_config)
-    
+
     if result.status == "registered":
         logger.info("mcp_register_success", tool=tool_name, path=str(config_path))
         console.print(f"  [green]✓ {tool_name}[/green]: {config_path}")
         return "registered"
-        
+
     elif result.status == "skipped":
         logger.debug("mcp_register_skipped", tool=tool_name, reason=result.message)
         console.print(f"  [dim]• {tool_name}: {result.message}[/dim]")
         return "skipped"
-        
+
     else: # error
         logger.error("mcp_register_failed", tool=tool_name, error=result.message)
         console.print(f"  [red]✗ {tool_name}[/red]: {result.message}")
@@ -268,7 +265,7 @@ def _read_mcp_config_safe(config_path: Path, tool_name: str, console) -> dict:
         return {}
 
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding='utf-8') as f:
             content = f.read().strip()
             if not content:
                 return {}
@@ -321,10 +318,8 @@ def _write_mcp_config_atomic(config_path: Path, data: dict) -> None:
         logger.debug("mcp_config_written", path=str(config_path))
     except Exception:
         # Clean up temp file on failure (dispose properly)
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(temp_path)
-        except OSError:
-            pass
         raise
 
 
@@ -340,7 +335,7 @@ def _verify_mcp_registration(config_path: Path, expected_command: str) -> bool:
         True if verification passes, False otherwise
     """
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding='utf-8') as f:
             data = json.load(f)
         warden_config = data.get("mcpServers", {}).get("warden", {})
         return warden_config.get("command") == expected_command
@@ -355,6 +350,7 @@ def mcp_status():
     """
     from rich.console import Console
     from rich.table import Table
+
     from warden.mcp.infrastructure.mcp_config_paths import get_mcp_config_paths
 
     console = Console()
@@ -379,7 +375,7 @@ def mcp_status():
             continue
 
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, encoding='utf-8') as f:
                 data = json.load(f)
 
             # Type-safe check

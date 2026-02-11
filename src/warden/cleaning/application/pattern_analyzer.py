@@ -12,8 +12,8 @@ Detects common code patterns that need cleaning:
 import re
 from typing import Any, Dict, List
 
-from warden.validation.domain.frame import CodeFile
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ class PatternAnalyzer:
     def analyze_code_patterns(
         self,
         code_file: CodeFile,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze code for common quality issues.
 
@@ -77,7 +77,7 @@ class PatternAnalyzer:
     def _find_duplicate_code(
         self,
         content: str,
-    ) -> List:
+    ) -> list:
         """
         Find duplicate lines of code.
 
@@ -106,7 +106,7 @@ class PatternAnalyzer:
     def _find_complex_functions(
         self,
         content: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Find overly complex functions.
 
@@ -179,7 +179,7 @@ class PatternAnalyzer:
     def _find_naming_issues(
         self,
         content: str,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Find poor variable names.
 
@@ -206,7 +206,7 @@ class PatternAnalyzer:
     def _find_dead_code(
         self,
         content: str,
-    ) -> Dict[str, List[str]]:
+    ) -> dict[str, list[str]]:
         """
         Find dead code and unused imports.
 
@@ -259,8 +259,8 @@ class PatternAnalyzer:
 
     def create_duplication_suggestion(
         self,
-        duplicates: List,
-    ) -> Dict[str, Any]:
+        duplicates: list,
+    ) -> dict[str, Any]:
         """Create suggestion for duplicate code."""
         return {
             "title": "Remove Code Duplication",
@@ -273,8 +273,8 @@ class PatternAnalyzer:
 
     def create_complexity_suggestion(
         self,
-        complex_functions: List,
-    ) -> Dict[str, Any]:
+        complex_functions: list,
+    ) -> dict[str, Any]:
         """Create suggestion for complex functions."""
         func_names = [f["name"] for f in complex_functions[:3]]
         return {
@@ -296,8 +296,8 @@ class PatternAnalyzer:
 
     def create_naming_suggestion(
         self,
-        bad_names: List,
-    ) -> Dict[str, Any]:
+        bad_names: list,
+    ) -> dict[str, Any]:
         """Create suggestion for naming issues."""
         return {
             "title": "Improve Variable Naming",
@@ -310,8 +310,8 @@ class PatternAnalyzer:
 
     def create_dead_code_suggestion(
         self,
-        dead_code: Dict,
-    ) -> Dict[str, Any]:
+        dead_code: dict,
+    ) -> dict[str, Any]:
         """Create suggestion for dead code."""
         unused_imports = dead_code.get("unused_imports", [])
         unused_vars = dead_code.get("unused_variables", [])
@@ -333,8 +333,8 @@ class PatternAnalyzer:
 
     def create_import_suggestion(
         self,
-        import_issues: Dict,
-    ) -> Dict[str, Any]:
+        import_issues: dict,
+    ) -> dict[str, Any]:
         """Create suggestion for import organization."""
         return {
             "title": "Organize Imports",

@@ -5,15 +5,15 @@ MCP adapter for configuration management tools.
 Maps to gRPC ConfigurationMixin functionality.
 """
 
+import os
+from pathlib import Path
 from typing import Any, Dict, List
 
-from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
-from warden.mcp.domain.enums import ToolCategory
-from pathlib import Path
 import yaml
-import os
+
+from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 
 class ConfigAdapter(BaseWardenAdapter):
@@ -33,14 +33,12 @@ class ConfigAdapter(BaseWardenAdapter):
         "warden_get_available_providers",
         "warden_get_configuration",
         "warden_update_configuration",
-        "warden_get_configuration",
-        "warden_update_configuration",
         "warden_update_frame_status",
         "warden_configure",
     })
     TOOL_CATEGORY = ToolCategory.CONFIG
 
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get configuration tool definitions."""
         return [
             self._create_tool_definition(
@@ -114,7 +112,7 @@ class ConfigAdapter(BaseWardenAdapter):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """Execute configuration tool."""
         if tool_name == "warden_get_available_frames":
@@ -171,7 +169,7 @@ class ConfigAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to get configuration: {e}")
 
-    async def _update_configuration_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _update_configuration_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Update configuration settings."""
         settings = arguments.get("settings", {})
 
@@ -188,7 +186,7 @@ class ConfigAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to update configuration: {e}")
 
-    async def _update_frame_status_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _update_frame_status_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Update frame enabled status."""
         frame_id = arguments.get("frame_id")
         enabled = arguments.get("enabled")
@@ -207,13 +205,13 @@ class ConfigAdapter(BaseWardenAdapter):
         except Exception as e:
             return MCPToolResult.error(f"Failed to update frame status: {e}")
 
-    async def _configure_warden_async(self, arguments: Dict[str, Any]) -> MCPToolResult:
+    async def _configure_warden_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """
         Configure Warden settings safely (Atomic & Idempotent).
-        
+
         Args:
             arguments: Tool arguments
-            
+
         Returns:
             MCPToolResult: Success or failure
         """
@@ -223,7 +221,7 @@ class ConfigAdapter(BaseWardenAdapter):
         vector_db = arguments.get("vector_db", "local")
 
         valid_providers = {
-            "ollama", "openai", "anthropic", "gemini", 
+            "ollama", "openai", "anthropic", "gemini",
             "azure_openai", "deepseek", "groq", "openrouter"
         }
 
@@ -231,7 +229,7 @@ class ConfigAdapter(BaseWardenAdapter):
             return MCPToolResult.error(f"Invalid provider: {provider}. Must be one of: {', '.join(valid_providers)}")
 
         # 1. Update .env (Atomic-ish)
-        # We read lines, update/append, and write back. 
+        # We read lines, update/append, and write back.
         # Ideally this should use a proper parser but for minimal deps this is standard.
         env_updates = {}
         if api_key:
@@ -246,18 +244,18 @@ class ConfigAdapter(BaseWardenAdapter):
             }
             if provider in key_map:
                 env_updates[key_map[provider]] = api_key
-        
+
         if env_updates:
             try:
                 env_path = self.project_root / ".env"
                 current_lines = []
                 if env_path.exists():
-                    with open(env_path, "r") as f:
+                    with open(env_path) as f:
                         current_lines = f.readlines()
-                
+
                 new_lines = []
                 processed_keys = set()
-                
+
                 for line in current_lines:
                     # simplistic parsing
                     parts = line.split('=')
@@ -268,16 +266,16 @@ class ConfigAdapter(BaseWardenAdapter):
                             processed_keys.add(key)
                             continue
                     new_lines.append(line)
-                
+
                 for key, val in env_updates.items():
                     if key not in processed_keys:
                         if new_lines and not new_lines[-1].endswith('\n'):
                             new_lines.append('\n')
                         new_lines.append(f"{key}={val}\n")
-                        
+
                 with open(env_path, "w") as f:
                     f.writelines(new_lines)
-                    
+
             except Exception as e:
                 return MCPToolResult.error(f"Failed to update .env: {e}")
 
@@ -291,26 +289,26 @@ class ConfigAdapter(BaseWardenAdapter):
                 return MCPToolResult.error(f"Failed to create .warden directory: {e}")
 
         config_path = warden_dir / "config.yaml"
-        
+
         config_data = {}
         if config_path.exists():
             try:
-                with open(config_path, "r") as f:
+                with open(config_path) as f:
                     config_data = yaml.safe_load(f) or {}
             except Exception:
                 config_data = {} # Fail safe, overwrite if corrupt
-        
+
         # Ensure section exists
         if "llm" not in config_data:
             config_data["llm"] = {}
-        
+
         config_data["llm"]["provider"] = provider
         if model:
             config_data["llm"]["smart_model"] = model
             # For simplicity, set fast model to same if not defined, or smart defaults
             if "fast_model" not in config_data["llm"]:
                  config_data["llm"]["fast_model"] = model # simplified
-        
+
         config_data["vector_db"] = {"provider": vector_db}
 
         try:
@@ -325,7 +323,7 @@ class ConfigAdapter(BaseWardenAdapter):
             # Simplified mock config for generation
             gen_config = {
                 "provider": provider,
-                "model": model, 
+                "model": model,
                 "vector_db": vector_db
             }
             generate_ai_tool_files(self.project_root, gen_config)

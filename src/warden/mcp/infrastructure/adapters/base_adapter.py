@@ -10,10 +10,10 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from warden.mcp.ports.tool_executor import IToolExecutor
-from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.errors import MCPToolExecutionError
+from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
+from warden.mcp.ports.tool_executor import IToolExecutor
 
 # Optional imports for bridge functionality
 try:
@@ -57,7 +57,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
     def __init__(
         self,
         project_root: Path,
-        bridge: Optional[Any] = None,
+        bridge: Any | None = None,
     ) -> None:
         """
         Initialize adapter.
@@ -71,7 +71,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         self._bridge_initialized = bridge is not None
 
     @property
-    def bridge(self) -> Optional[Any]:
+    def bridge(self) -> Any | None:
         """
         Get WardenBridge instance (lazy initialization).
 
@@ -106,7 +106,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         return tool_name in self.SUPPORTED_TOOLS
 
     @abstractmethod
-    def get_tool_definitions(self) -> List[MCPToolDefinition]:
+    def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """
         Get all tool definitions for this adapter.
 
@@ -119,7 +119,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
     async def _execute_tool_async(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """
         Execute a specific tool.
@@ -136,7 +136,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
     async def execute_async(
         self,
         tool: MCPToolDefinition,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
     ) -> MCPToolResult:
         """
         Execute a tool and return results.
@@ -188,8 +188,8 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         self,
         name: str,
         description: str,
-        properties: Optional[Dict[str, Any]] = None,
-        required: Optional[List[str]] = None,
+        properties: dict[str, Any] | None = None,
+        required: list[str] | None = None,
     ) -> MCPToolDefinition:
         """
         Helper to create tool definitions with consistent structure.
@@ -203,7 +203,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         Returns:
             MCPToolDefinition instance
         """
-        input_schema: Dict[str, Any] = {
+        input_schema: dict[str, Any] = {
             "type": "object",
             "properties": properties or {},
             "required": required or [],

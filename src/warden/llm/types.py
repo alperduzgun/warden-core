@@ -7,8 +7,10 @@ All types designed for Panel JSON compatibility (camelCase ↔ snake_case).
 
 
 from enum import Enum
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import Field
+
 from warden.shared.domain.base_model import BaseDomainModel
 
 
@@ -30,7 +32,7 @@ class LlmRequest(BaseDomainModel):
     """Request to LLM provider"""
     system_prompt: str
     user_message: str
-    model: Optional[str] = None
+    model: str | None = None
     temperature: float = 0.0  # Idempotency: deterministic outputs
     max_tokens: int = 4000
     timeout_seconds: int = 60
@@ -41,14 +43,14 @@ class LlmResponse(BaseDomainModel):
     """Response from LLM provider"""
     content: str
     success: bool
-    error_message: Optional[str] = None
-    provider: Optional[LlmProvider] = None
-    model: Optional[str] = None
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
-    total_tokens: Optional[int] = None
+    error_message: str | None = None
+    provider: LlmProvider | None = None
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
     duration_ms: int = 0
-    overall_confidence: Optional[float] = None
+    overall_confidence: float | None = None
 
 
 class AnalysisIssue(BaseDomainModel):
@@ -69,8 +71,8 @@ class AnalysisResult(BaseDomainModel):
     score: float
     confidence: float
     summary: str
-    scenarios_simulated: List[str] = Field(default_factory=list)
-    issues: List[AnalysisIssue] = Field(default_factory=list)
+    scenarios_simulated: list[str] = Field(default_factory=list)
+    issues: list[AnalysisIssue] = Field(default_factory=list)
 
 
 class ClassificationCharacteristics(BaseDomainModel):
@@ -91,6 +93,6 @@ class ClassificationCharacteristics(BaseDomainModel):
 class ClassificationResult(BaseDomainModel):
     """LLM classification result"""
     characteristics: ClassificationCharacteristics
-    recommended_frames: List[str]
+    recommended_frames: list[str]
     summary: str
 

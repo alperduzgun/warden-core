@@ -6,13 +6,13 @@ Supports vendor-agnostic fetching via configured commands.
 Now supports module-based baseline structure for CI optimization.
 """
 
-import json
 import hashlib
+import json
 import shlex
 import subprocess
-from pathlib import Path
-from typing import Dict, Optional, Any, List, Set, Tuple
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.finding_utils import get_finding_attribute
@@ -23,16 +23,16 @@ logger = get_logger(__name__)
 class ModuleBaseline:
     """Represents a per-module baseline with debt tracking."""
 
-    def __init__(self, module_name: str, data: Dict[str, Any] = None):
+    def __init__(self, module_name: str, data: dict[str, Any] = None):
         self.module_name = module_name
         self.data = data or {}
-        self.findings: List[Dict[str, Any]] = self.data.get("findings", [])
+        self.findings: list[dict[str, Any]] = self.data.get("findings", [])
         self.created_at = self.data.get("created_at")
         self.updated_at = self.data.get("updated_at")
-        self.debt_items: List[Dict[str, Any]] = self.data.get("debt_items", [])
+        self.debt_items: list[dict[str, Any]] = self.data.get("debt_items", [])
 
     @property
-    def fingerprints(self) -> Set[str]:
+    def fingerprints(self) -> set[str]:
         """Get all fingerprints for findings in this module."""
         fps = set()
         for f in self.findings:
@@ -67,7 +67,7 @@ class ModuleBaseline:
             return age.days
         return 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dict for JSON storage."""
         return {
             "module": self.module_name,
@@ -83,7 +83,7 @@ class ModuleBaseline:
 class BaselineMeta:
     """Metadata for the baseline directory."""
 
-    def __init__(self, data: Dict[str, Any] = None):
+    def __init__(self, data: dict[str, Any] = None):
         self.data = data or {}
         self.version = self.data.get("version", "2.0")
         self.created_at = self.data.get("created_at")
@@ -93,7 +93,7 @@ class BaselineMeta:
         self.total_debt = self.data.get("total_debt", 0)
         self.migrated_from_legacy = self.data.get("migrated_from_legacy", False)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dict for JSON storage."""
         return {
             "version": self.version,
@@ -110,22 +110,22 @@ class BaselineManager:
     Manages the lifecycle of the baseline.json file.
     """
 
-    def __init__(self, project_root: Path, config: Dict[str, Any] = None):
+    def __init__(self, project_root: Path, config: dict[str, Any] = None):
         self.project_root = project_root
         self.config = config or {}
-        
+
         # Default Config
         self.baseline_config = self.config.get('baseline', {})
         self.enabled = self.baseline_config.get('enabled', False)
-        
+
         # Resolve baseline path
         raw_path = self.baseline_config.get('path', '.warden/baseline.json')
         self.baseline_path = self.project_root / raw_path
-        
+
         self.fetch_command = self.baseline_config.get('fetch_command')
         self.auto_fetch = self.baseline_config.get('auto_fetch', False)
 
-    def fetch_latest_baseline(self) -> Optional[Path]:
+    def fetch_latest_baseline(self) -> Path | None:
         """
         Fetches the latest baseline using the configured command.
         Returns the path if successful, None otherwise.
@@ -135,11 +135,11 @@ class BaselineManager:
             return None
 
         logger.info("baseline_fetch_start", command=self.fetch_command)
-        
+
         try:
             # Create parent dir if needed
             self.baseline_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Security: Use shlex.split to avoid shell injection.
             # Complex shell commands (pipes, etc.) should be wrapped in a script.
             shell_chars = set('|><&;$`')
@@ -159,14 +159,14 @@ class BaselineManager:
                 capture_output=True,
                 text=True
             )
-            
+
             if self.baseline_path.exists():
                 logger.info("baseline_fetch_success", path=str(self.baseline_path))
                 return self.baseline_path
             else:
                 logger.warning("baseline_fetch_completed_but_file_missing", path=str(self.baseline_path))
                 return None
-                
+
         except subprocess.CalledProcessError as e:
             logger.warning("baseline_fetch_failed", error=str(e), stderr=e.stderr)
             return None
@@ -174,15 +174,15 @@ class BaselineManager:
             logger.error("baseline_fetch_error", error=str(e))
             return None
 
-    def load_baseline(self) -> Optional[Dict[str, Any]]:
+    def load_baseline(self) -> dict[str, Any] | None:
         """
         Loads the baseline from disk.
         """
         if not self.baseline_path.exists():
             return None
-            
+
         try:
-            with open(self.baseline_path, 'r', encoding='utf-8') as f:
+            with open(self.baseline_path, encoding='utf-8') as f:
                 data = json.load(f)
                 return data
         except Exception as e:
@@ -195,7 +195,7 @@ class BaselineManager:
         """
         if not self.baseline_path.exists():
             return True
-            
+
         mtime = datetime.fromtimestamp(self.baseline_path.stat().st_mtime)
         age = datetime.now() - mtime
         return age > timedelta(hours=max_age_hours)
@@ -204,13 +204,13 @@ class BaselineManager:
         """
         Returns a set of fingerprints for all findings in the baseline.
         Fingerprint formation: hash(rule_id + file_path + line_context_hash + message)
-        
+
         Note: File paths in baseline are relative to project root.
         """
         data = self.load_baseline()
         if not data:
             return set()
-            
+
         findings = []
         # Handle structured report with frameResults
         if 'frameResults' in data:
@@ -219,7 +219,7 @@ class BaselineManager:
         # Handle flat list or legacy format
         elif 'findings' in data:
             findings = data['findings']
-             
+
         fingerprints = set()
         for f in findings:
             fp = f.get('fingerprint')
@@ -228,19 +228,19 @@ class BaselineManager:
             else:
                 # Dynamic fingerprint generation if missing in baseline
                 rule = f.get('id') or f.get('rule_id') or f.get('ruleId', 'unknown')
-                
+
                 # Extract path from location "file:line" or similar
                 location = f.get('location', '')
                 path = f.get('file_path') or f.get('path') or f.get('file')
                 if not path and location:
                     path = location.split(':')[0]
-                
+
                 path = path or 'unknown'
                 msg = f.get('message', '')
-                
+
                 # Include code snippet to distinguish findings in same file
                 snippet = f.get('code_snippet') or f.get('codeSnippet') or f.get('code', '')
-                
+
                 # We can't easily reproduce context hash without code, so rely on these
                 composite = f"{rule}:{path}:{msg}:{snippet}"
                 if composite:
@@ -269,13 +269,13 @@ class BaselineManager:
         safe_name = module_name.replace("/", "_").replace("\\", "_")
         return self.baseline_dir / f"{safe_name}.json"
 
-    def load_meta(self) -> Optional[BaselineMeta]:
+    def load_meta(self) -> BaselineMeta | None:
         """Load baseline metadata."""
         if not self.meta_path.exists():
             return None
 
         try:
-            with open(self.meta_path, "r", encoding="utf-8") as f:
+            with open(self.meta_path, encoding="utf-8") as f:
                 data = json.load(f)
             return BaselineMeta(data)
         except Exception as e:
@@ -293,14 +293,14 @@ class BaselineManager:
             logger.error("baseline_meta_save_failed", error=str(e))
             return False
 
-    def load_module_baseline(self, module_name: str) -> Optional[ModuleBaseline]:
+    def load_module_baseline(self, module_name: str) -> ModuleBaseline | None:
         """Load a specific module's baseline."""
         module_path = self.get_module_path(module_name)
         if not module_path.exists():
             return None
 
         try:
-            with open(module_path, "r", encoding="utf-8") as f:
+            with open(module_path, encoding="utf-8") as f:
                 data = json.load(f)
             return ModuleBaseline(module_name, data)
         except Exception as e:
@@ -326,7 +326,7 @@ class BaselineManager:
             logger.error("module_baseline_save_failed", module=module_baseline.module_name, error=str(e))
             return False
 
-    def list_modules(self) -> List[str]:
+    def list_modules(self) -> list[str]:
         """List all modules with baselines."""
         if not self.baseline_dir.exists():
             return []
@@ -339,21 +339,21 @@ class BaselineManager:
                 modules.append(module_name)
         return modules
 
-    def get_module_fingerprints(self, module_name: str) -> Set[str]:
+    def get_module_fingerprints(self, module_name: str) -> set[str]:
         """Get fingerprints for a specific module."""
         module_baseline = self.load_module_baseline(module_name)
         if module_baseline:
             return module_baseline.fingerprints
         return set()
 
-    def get_all_fingerprints_by_module(self) -> Dict[str, Set[str]]:
+    def get_all_fingerprints_by_module(self) -> dict[str, set[str]]:
         """Get fingerprints organized by module."""
         result = {}
         for module_name in self.list_modules():
             result[module_name] = self.get_module_fingerprints(module_name)
         return result
 
-    def migrate_from_legacy(self, module_map: Dict[str, Any] = None) -> bool:
+    def migrate_from_legacy(self, module_map: dict[str, Any] = None) -> bool:
         """
         Migrate from legacy single-file baseline to module-based structure.
 
@@ -379,7 +379,7 @@ class BaselineManager:
             all_findings = legacy_data["findings"]
 
         # Categorize findings by module
-        module_findings: Dict[str, List[Dict[str, Any]]] = {}
+        module_findings: dict[str, list[dict[str, Any]]] = {}
 
         for finding in all_findings:
             # Determine module from file path
@@ -426,7 +426,7 @@ class BaselineManager:
 
         return True
 
-    def _determine_module(self, file_path: str, module_map: Dict[str, Any] = None) -> str:
+    def _determine_module(self, file_path: str, module_map: dict[str, Any] = None) -> str:
         """Determine which module a file belongs to."""
         if not file_path or file_path == "unknown":
             return "unknown"
@@ -451,7 +451,7 @@ class BaselineManager:
 
     # === Debt Tracking Methods (Phase 4.3) ===
 
-    def update_debt(self, module_name: str, current_findings: List[Dict[str, Any]]) -> Tuple[int, int, int]:
+    def update_debt(self, module_name: str, current_findings: list[dict[str, Any]]) -> tuple[int, int, int]:
         """
         Update debt tracking for a module based on current scan findings.
 
@@ -534,7 +534,7 @@ class BaselineManager:
 
         return new_debt, resolved_debt, module_baseline.debt_count
 
-    def get_debt_report(self) -> Dict[str, Any]:
+    def get_debt_report(self) -> dict[str, Any]:
         """
         Generate a comprehensive debt report across all modules.
 
@@ -591,10 +591,10 @@ class BaselineManager:
 
     def update_baseline_for_modules(
         self,
-        scan_results: Dict[str, Any],
-        modules_to_update: Optional[List[str]] = None,
-        module_map: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        scan_results: dict[str, Any],
+        modules_to_update: list[str] | None = None,
+        module_map: dict[str, Any] = None
+    ) -> dict[str, Any]:
         """
         Update baseline for specific modules based on scan results.
 
@@ -620,7 +620,7 @@ class BaselineManager:
             all_findings = scan_results["findings"]
 
         # Group findings by module
-        findings_by_module: Dict[str, List[Dict[str, Any]]] = {}
+        findings_by_module: dict[str, list[dict[str, Any]]] = {}
         for finding in all_findings:
             file_path = finding.get("file_path") or finding.get("path") or finding.get("file", "unknown")
             module_name = self._determine_module(file_path, module_map)

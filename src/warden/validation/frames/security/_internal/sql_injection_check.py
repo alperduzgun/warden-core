@@ -8,13 +8,13 @@ Detects potential SQL injection vulnerabilities:
 """
 
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from warden.validation.domain.check import (
-    ValidationCheck,
-    CheckResult,
     CheckFinding,
+    CheckResult,
     CheckSeverity,
+    ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -77,7 +77,7 @@ class SQLInjectionCheck(ValidationCheck):
         ),
     ]
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize SQL injection check."""
         super().__init__(config)
 
@@ -103,7 +103,7 @@ class SQLInjectionCheck(ValidationCheck):
         Returns:
             CheckResult with findings
         """
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         # Check each pre-compiled pattern
         for compiled_pattern, description in self._compiled_patterns:

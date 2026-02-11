@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -13,13 +13,13 @@ class LanguageTemplate:
     language: str
     """Programming language name."""
 
-    recommended_frames: List[str]
+    recommended_frames: list[str]
     """Recommended validation frames for this language."""
 
-    required_ast_providers: List[str]
+    required_ast_providers: list[str]
     """Required AST provider packages (built-in or PyPI)."""
 
-    default_rules: Dict[str, Any]
+    default_rules: dict[str, Any]
     """Default frame configuration and rules."""
 
     llm_recommended: bool
@@ -388,7 +388,7 @@ GENERIC_TEMPLATE = LanguageTemplate(
 
 
 # Template Registry
-LANGUAGE_TEMPLATES: Dict[str, LanguageTemplate] = {
+LANGUAGE_TEMPLATES: dict[str, LanguageTemplate] = {
     "python": PYTHON_TEMPLATE,
     "javascript": JAVASCRIPT_TEMPLATE,
     "typescript": JAVASCRIPT_TEMPLATE,  # Same as JS
@@ -419,9 +419,9 @@ def get_language_template(language: str) -> LanguageTemplate:
     return LANGUAGE_TEMPLATES.get(language.lower(), GENERIC_TEMPLATE)
 
 
-def get_supported_languages() -> List[str]:
+def get_supported_languages() -> list[str]:
     """Get list of languages with specific templates."""
     return [
-        lang for lang in LANGUAGE_TEMPLATES.keys()
+        lang for lang in LANGUAGE_TEMPLATES
         if LANGUAGE_TEMPLATES[lang] != GENERIC_TEMPLATE
     ]

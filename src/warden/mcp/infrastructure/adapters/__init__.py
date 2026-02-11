@@ -13,32 +13,32 @@ Architecture:
 Total: 12 adapters exposing 51 tools
 """
 
+from warden.mcp.infrastructure.adapters.analysis_adapter import AnalysisAdapter
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
-# Core adapters
-from warden.mcp.infrastructure.adapters.pipeline_adapter import PipelineAdapter
+# CI/CD adapter
+from warden.mcp.infrastructure.adapters.ci_adapter import CIAdapter
+from warden.mcp.infrastructure.adapters.cleanup_adapter import CleanupAdapter
 from warden.mcp.infrastructure.adapters.config_adapter import ConfigAdapter
+
+# Discovery & Analysis adapters
+from warden.mcp.infrastructure.adapters.discovery_adapter import DiscoveryAdapter
+from warden.mcp.infrastructure.adapters.fortification_adapter import FortificationAdapter
 from warden.mcp.infrastructure.adapters.health_adapter import HealthAdapter
 
 # Issue & Suppression adapters
 from warden.mcp.infrastructure.adapters.issue_adapter import IssueAdapter
-from warden.mcp.infrastructure.adapters.suppression_adapter import SuppressionAdapter
-
-# Search & LLM adapters
-from warden.mcp.infrastructure.adapters.search_adapter import SearchAdapter
 from warden.mcp.infrastructure.adapters.llm_adapter import LlmAdapter
 
-# Discovery & Analysis adapters
-from warden.mcp.infrastructure.adapters.discovery_adapter import DiscoveryAdapter
-from warden.mcp.infrastructure.adapters.analysis_adapter import AnalysisAdapter
+# Core adapters
+from warden.mcp.infrastructure.adapters.pipeline_adapter import PipelineAdapter
 
 # Report, Cleanup, Fortification adapters
 from warden.mcp.infrastructure.adapters.report_adapter import ReportAdapter
-from warden.mcp.infrastructure.adapters.cleanup_adapter import CleanupAdapter
-from warden.mcp.infrastructure.adapters.fortification_adapter import FortificationAdapter
 
-# CI/CD adapter
-from warden.mcp.infrastructure.adapters.ci_adapter import CIAdapter
+# Search & LLM adapters
+from warden.mcp.infrastructure.adapters.search_adapter import SearchAdapter
+from warden.mcp.infrastructure.adapters.suppression_adapter import SuppressionAdapter
 
 __all__ = [
     # Base

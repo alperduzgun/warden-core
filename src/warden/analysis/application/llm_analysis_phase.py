@@ -58,7 +58,7 @@ Adjust scores based on file context:
 
 Return a JSON object with scores for each metric."""
 
-    def format_user_prompt(self, context: Dict[str, Any]) -> str:
+    def format_user_prompt(self, context: dict[str, Any]) -> str:
         """Format user prompt for quality analysis."""
         code = context.get("code", "")
         file_path = context.get("file_path", "unknown")
@@ -107,7 +107,7 @@ Return as JSON."""
 
         return prompt
 
-    def parse_llm_response(self, response: str) -> Dict[str, Any]:
+    def parse_llm_response(self, response: str) -> dict[str, Any]:
         """Parse LLM quality analysis response."""
         try:
             # Extract JSON from response
@@ -176,9 +176,9 @@ Return as JSON."""
         code: str,
         file_path: Path,
         file_context: FileContext,
-        initial_metrics: Optional[Dict[str, float]] = None,
+        initial_metrics: dict[str, float] | None = None,
         is_impacted: bool = False,
-    ) -> Tuple[QualityMetrics, float]:
+    ) -> tuple[QualityMetrics, float]:
         """
         Analyze code quality with LLM enhancement.
 
@@ -249,9 +249,9 @@ Return as JSON."""
 
     async def analyze_batch_async(
         self,
-        files: List[Tuple[str, Path, FileContext, bool]],
-        initial_metrics: Optional[Dict[Path, Dict[str, float]]] = None,
-    ) -> Dict[Path, Tuple[QualityMetrics, float]]:
+        files: list[tuple[str, Path, FileContext, bool]],
+        initial_metrics: dict[Path, dict[str, float]] | None = None,
+    ) -> dict[Path, tuple[QualityMetrics, float]]:
         """
         Analyze multiple files in batch using True LLM Batching.
         """
@@ -267,33 +267,33 @@ Return as JSON."""
             return results
 
         # Initial requested batch size
-        requested_batch_size = 5 
-        
+        requested_batch_size = 5
+
         i = 0
         while i < len(files):
             # Dynamically adjust batch size based on system resources
             batch_size = self._get_realtime_safe_batch_size(requested_batch_size)
             batch_items = files[i : i + batch_size]
-            
+
             try:
                 # Prepare Batch Prompt
                 prompt = self._format_batch_user_prompt(batch_items, initial_metrics)
-                
+
                 # Call LLM
                 response = await self.llm.complete_async(
-                    prompt, 
+                    prompt,
                     self.get_system_prompt(),
                     use_fast_tier=True  # Use Qwen for cost optimization (Phase 1 migration)
                 )
-                
+
                 # Parse Batch Results
                 batch_results = self._parse_batch_llm_response(response.content, len(batch_items))
-                
+
                 # Map back to paths
                 for idx, item in enumerate(batch_items):
                     _, path, file_context, _ = item
                     llm_data = batch_results[idx] if idx < len(batch_results) else None
-                    
+
                     if llm_data:
                         metrics = QualityMetrics(
                             complexity_score=llm_data.get("complexity_score", 5.0),
@@ -322,7 +322,7 @@ Return as JSON."""
 
         return results
 
-    def _format_batch_user_prompt(self, batch_items: List[Tuple[str, Path, FileContext, bool]], initial_metrics: Any) -> str:
+    def _format_batch_user_prompt(self, batch_items: list[tuple[str, Path, FileContext, bool]], initial_metrics: Any) -> str:
         batch_summary = ""
         for i, (code, path, ctx, impacted) in enumerate(batch_items):
             metrics = initial_metrics.get(path, {}) if initial_metrics else {}
@@ -338,7 +338,7 @@ Code Snippet:
 ```
 ---
 """
-        return f"""Analyze the quality of {len(batch_items)} files. 
+        return f"""Analyze the quality of {len(batch_items)} files.
 Return a JSON array of objects with the following schema for EACH file:
 {{
   "idx": int,
@@ -356,7 +356,7 @@ FILES TO ANALYZE:
 {batch_summary}
 """
 
-    def _parse_batch_llm_response(self, response: str, count: int) -> List[Dict[str, Any]]:
+    def _parse_batch_llm_response(self, response: str, count: int) -> list[dict[str, Any]]:
         try:
             # Extract JSON array
             if "```json" in response:
@@ -377,7 +377,7 @@ FILES TO ANALYZE:
         """Detect programming language from file path."""
         return get_language_from_path(file_path).value
 
-    def _get_context_weights(self, file_context: FileContext) -> Dict[str, float]:
+    def _get_context_weights(self, file_context: FileContext) -> dict[str, float]:
         """Get weights based on file context."""
         context_weights = {
             FileContext.PRODUCTION: {
@@ -412,7 +412,7 @@ FILES TO ANALYZE:
 
     def _create_metrics_from_rules(
         self,
-        rule_metrics: Dict[str, float],
+        rule_metrics: dict[str, float],
         file_context: FileContext,
     ) -> QualityMetrics:
         """Create QualityMetrics from rule-based analysis."""
@@ -462,7 +462,7 @@ FILES TO ANALYZE:
             technical_debt_hours=0.0,
         )
 
-    async def execute_async(self, code_files: List[Any], pipeline_context: Optional[Any] = None, impacted_files: List[str] = None) -> QualityMetrics:
+    async def execute_async(self, code_files: list[Any], pipeline_context: Any | None = None, impacted_files: list[str] = None) -> QualityMetrics:
         """
         Execute LLM-enhanced analysis phase with True Batching.
         """
@@ -480,7 +480,7 @@ FILES TO ANALYZE:
         for code_file in code_files:
             file_path = Path(code_file.path) if hasattr(code_file, 'path') else Path("unknown")
             code = code_file.content if hasattr(code_file, 'content') else ""
-            
+
             # Use FileContext from context if available, else default to PRODUCTION
             # In a real scenario, we'd get this from the PreAnalysis phase
             file_context = FileContext.PRODUCTION
@@ -500,7 +500,7 @@ FILES TO ANALYZE:
 
         # Aggregate results (for the whole project score)
         all_metrics = [m for m, _ in batch_results.values()]
-        
+
         avg_metrics = QualityMetrics(
             complexity_score=sum(m.complexity_score for m in all_metrics) / len(all_metrics),
             duplication_score=sum(m.duplication_score for m in all_metrics) / len(all_metrics),
@@ -521,14 +521,14 @@ FILES TO ANALYZE:
 
         return avg_metrics
 
-    async def _retrieve_and_format_context(self, file_path: Path, code: str) -> Optional[str]:
+    async def _retrieve_and_format_context(self, file_path: Path, code: str) -> str | None:
         """
         Retrieve and format related code context from semantic search.
-        
+
         Args:
             file_path: Path of the file being analyzed
             code: Content of the file
-            
+
         Returns:
             Formatted context string or None
         """
@@ -536,15 +536,15 @@ FILES TO ANALYZE:
         query = f"Code quality analysis for {file_path.name}: {code[:300]}"
         # Detect language for filtering if possible
         lang_str = self._detect_language(file_path)
-        
+
         retrieval = await self.semantic_search_service.get_context(query, language=lang_str)
-        
+
         if not retrieval or not retrieval.relevant_chunks:
             return None
-            
+
         formatted_context = ""
         relevant_count = 0
-        
+
         for chunk in retrieval.relevant_chunks:
             # Skip self if matched (using robust path comparison)
             # Assuming chunk.relative_path is relative to project root
@@ -554,12 +554,12 @@ FILES TO ANALYZE:
             if chunk.relative_path.endswith(file_path.name):
                 # Potential self-match, check content overlap or skip to be safe
                 continue
-                
+
             formatted_context += f"\n--- Related File: {chunk.relative_path} (Lines {chunk.start_line}-{chunk.end_line}) ---\n"
             formatted_context += f"{chunk.content}\n"
             relevant_count += 1
-            
+
         if relevant_count > 0:
             return formatted_context
-            
+
         return None

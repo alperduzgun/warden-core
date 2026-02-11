@@ -1,8 +1,9 @@
+import platform
 import shutil
 import subprocess
-import platform
-import typer
 from pathlib import Path
+
+import typer
 from rich.console import Console
 
 console = Console()
@@ -25,7 +26,7 @@ class GitHubCli:
         """
         system = platform.system().lower()
         console.print(f"[yellow]GitHub CLI (gh) not found on {system}.[/yellow]")
-        
+
         install_cmd = None
         pkg_manager = "Manual"
 
@@ -40,31 +41,29 @@ class GitHubCli:
             elif shutil.which("choco"):
                 install_cmd = ["choco", "install", "gh"]
                 pkg_manager = "Chocolatey"
-        elif system == "linux":
-            if shutil.which("snap"):
-                install_cmd = ["snap", "install", "gh"]
-                pkg_manager = "Snap"
+        elif system == "linux" and shutil.which("snap"):
+            install_cmd = ["snap", "install", "gh"]
+            pkg_manager = "Snap"
 
-        if install_cmd:
-            if typer.confirm(f"Do you want to install it via {pkg_manager}?", default=True):
-                try:
-                    console.print(f"[dim]Installing via {pkg_manager}... (Timeout: {GitHubCli.CMD_TIMEOUT * 2}s)[/dim]")
-                    subprocess.run(install_cmd, check=True, timeout=GitHubCli.CMD_TIMEOUT * 2)
-                    console.print("✅ [green]GitHub CLI installed successfully.[/green]")
-                    
-                    if not shutil.which("gh"):
-                        console.print("[red]Installation appeared successful but 'gh' is not in PATH yet.[/red]")
-                        if system == "windows":
-                            console.print("[yellow]Hint: You may need to restart your terminal/PowerShell.[/yellow]")
-                        return False
-                    return True
-                except subprocess.TimeoutExpired:
-                    console.print("[red]Installation timed out.[/red]")
-                except subprocess.CalledProcessError:
-                    console.print(f"[red]Failed to install gh via {pkg_manager}.[/red]")
-                except Exception as e:
-                    console.print(f"[red]Error during installation:[/red] {e}")
-        
+        if install_cmd and typer.confirm(f"Do you want to install it via {pkg_manager}?", default=True):
+            try:
+                console.print(f"[dim]Installing via {pkg_manager}... (Timeout: {GitHubCli.CMD_TIMEOUT * 2}s)[/dim]")
+                subprocess.run(install_cmd, check=True, timeout=GitHubCli.CMD_TIMEOUT * 2)
+                console.print("✅ [green]GitHub CLI installed successfully.[/green]")
+
+                if not shutil.which("gh"):
+                    console.print("[red]Installation appeared successful but 'gh' is not in PATH yet.[/red]")
+                    if system == "windows":
+                        console.print("[yellow]Hint: You may need to restart your terminal/PowerShell.[/yellow]")
+                    return False
+                return True
+            except subprocess.TimeoutExpired:
+                console.print("[red]Installation timed out.[/red]")
+            except subprocess.CalledProcessError:
+                console.print(f"[red]Failed to install gh via {pkg_manager}.[/red]")
+            except Exception as e:
+                console.print(f"[red]Error during installation:[/red] {e}")
+
         GitHubCli._print_manual_instructions()
         return False
 
@@ -116,5 +115,5 @@ class GitHubCli:
             console.print("[red]Failed to download artifact.[/red] (Maybe no successful run yet?)")
         except Exception as e:
             console.print(f"[red]Error downloading artifact:[/red] {e}")
-            
+
         return False

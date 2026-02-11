@@ -1,7 +1,7 @@
 """
 Parallel Batch Executor - Global Resilience utility.
 
-Standardizes parallel task execution across frames and core components 
+Standardizes parallel task execution across frames and core components
 with built-in Chaos Engineering protection:
 1. Micro-Timeouts: Each task in the batch has its own timeout.
 2. Concurrency Control: Semaphore-based throughput limiting.
@@ -10,7 +10,9 @@ with built-in Chaos Engineering protection:
 
 import asyncio
 import time
-from typing import List, Callable, Any, Optional, TypeVar, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any, List, Optional, TypeVar
+
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -22,10 +24,10 @@ class ParallelBatchExecutor:
     """
     Executes a batch of async tasks with standardized resilience guardrails.
     """
-    
+
     def __init__(
-        self, 
-        concurrency_limit: int = 4, 
+        self,
+        concurrency_limit: int = 4,
         item_timeout: float = 30.0,
         return_exceptions: bool = False
     ):
@@ -34,18 +36,18 @@ class ParallelBatchExecutor:
         self.return_exceptions = return_exceptions
 
     async def execute_batch(
-        self, 
-        items: List[T], 
+        self,
+        items: list[T],
         task_fn: Callable[[T], Coroutine[Any, Any, R]],
         batch_name: str = "batch"
-    ) -> List[Optional[R]]:
+    ) -> list[R | None]:
         """
         Executes a function across a list of items in parallel with guardrails.
         """
         start_time = time.time()
         logger.debug("parallel_batch_started", batch=batch_name, count=len(items))
 
-        async def _safe_execute(item: T) -> Optional[R]:
+        async def _safe_execute(item: T) -> R | None:
             async with self.semaphore:
                 try:
                     return await asyncio.wait_for(
@@ -63,16 +65,16 @@ class ParallelBatchExecutor:
 
         # Build tasks
         tasks = [_safe_execute(item) for item in items]
-        
+
         # Execute all
         results = await asyncio.gather(*tasks, return_exceptions=self.return_exceptions)
-        
+
         duration = int((time.time() - start_time) * 1000)
         logger.info(
-            "parallel_batch_completed", 
-            batch=batch_name, 
-            count=len(items), 
+            "parallel_batch_completed",
+            batch=batch_name,
+            count=len(items),
             duration_ms=duration
         )
-        
+
         return results

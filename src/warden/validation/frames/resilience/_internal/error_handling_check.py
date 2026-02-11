@@ -12,10 +12,10 @@ import re
 from typing import List
 
 from warden.validation.domain.check import (
-    ValidationCheck,
-    CheckResult,
     CheckFinding,
+    CheckResult,
     CheckSeverity,
+    ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -81,7 +81,7 @@ class ErrorHandlingCheck(ValidationCheck):
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute error handling check."""
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         # Check for risky error handling patterns
         for pattern_str, description, suggestion in self.RISKY_PATTERNS:

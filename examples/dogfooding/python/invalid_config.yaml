@@ -8,16 +8,19 @@ project:
 
 frames:
 - security          # ✓ Valid
-- chaos             # ✓ Valid 
+- resilience        # ✓ Valid
 - orphan            # ✓ Valid
-- architectural     # ❌ INVALID - should be 'architecturalconsistency'
-- env-security      # ❌ INVALID - should be 'environmentsecurity'
-- demo-security     # ❌ INVALID - should be 'demosecurity'
+- architectural     # ✓ Valid
+- stress            # ❌ INVALID - frame does not exist
+- demosecurity      # ❌ INVALID - frame does not exist
+- env-security      # ❌ INVALID - frame does not exist
 - typo-frame        # ❌ INVALID - does not exist
 - fuz               # ❌ INVALID - typo, should be 'fuzz'
 
 frames_config:
   securityy:        # ❌ INVALID - typo
     enabled: true
-  architectural:    # ❌ INVALID - should be 'architecturalconsistency'
+  stress:           # ❌ INVALID - frame does not exist
+    enabled: true
+  demosecurity:     # ❌ INVALID - frame does not exist
     enabled: true

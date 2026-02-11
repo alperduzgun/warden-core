@@ -1,46 +1,47 @@
 
-from typing import List, Dict, Any, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
+
 import structlog
 
 logger = structlog.get_logger()
 
 class VectorStoreAdapter(Protocol):
     """Protocol for vector store adapters."""
-    
+
     async def upsert(
-        self, 
-        ids: List[str], 
-        embeddings: List[List[float]], 
-        metadatas: List[Dict[str, Any]], 
-        documents: List[str]
+        self,
+        ids: list[str],
+        embeddings: list[list[float]],
+        metadatas: list[dict[str, Any]],
+        documents: list[str]
     ) -> bool:
         """Upsert vectors into the store."""
         ...
 
     async def query(
-        self, 
-        query_embeddings: List[List[float]], 
-        n_results: int = 5, 
-        where: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self,
+        query_embeddings: list[list[float]],
+        n_results: int = 5,
+        where: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Query the store."""
         ...
 
     def delete_collection(self) -> bool:
         """Delete the collection."""
         ...
-        
+
     def count(self) -> int:
         """Count items in collection."""
         ...
 
-    def get_existing_file_hash(self, file_path: str) -> Optional[str]:
+    def get_existing_file_hash(self, file_path: str) -> str | None:
         """Get file hash from metadata."""
         ...
 
 class ChromaDBAdapter(VectorStoreAdapter):
     """Adapter for ChromaDB (Local)."""
-    
+
     def __init__(self, chroma_path: str, collection_name: str):
         try:
             import chromadb
@@ -69,7 +70,7 @@ class ChromaDBAdapter(VectorStoreAdapter):
             logger.error("chroma_upsert_failed", error=str(e))
             return False
 
-    async def query(self, query_embeddings, n_results=5, where=None) -> Dict[str, Any]:
+    async def query(self, query_embeddings, n_results=5, where=None) -> dict[str, Any]:
         try:
             return self.collection.query(
                 query_embeddings=query_embeddings,
@@ -91,7 +92,7 @@ class ChromaDBAdapter(VectorStoreAdapter):
     def count(self) -> int:
         return self.collection.count()
 
-    def get_existing_file_hash(self, file_path: str) -> Optional[str]:
+    def get_existing_file_hash(self, file_path: str) -> str | None:
         try:
             results = self.collection.get(
                 where={"file_path": file_path},
@@ -106,14 +107,14 @@ class ChromaDBAdapter(VectorStoreAdapter):
 
 class QdrantAdapter(VectorStoreAdapter):
     """Adapter for Qdrant (Cloud/Remote)."""
-    
+
     def __init__(self, url: str, api_key: str, collection_name: str, vector_size: int = 768):
         try:
             from qdrant_client import QdrantClient
             from qdrant_client.http import models
             self.client = QdrantClient(url=url, api_key=api_key)
             self.collection_name = collection_name
-            
+
             # Ensure Collection Exists
             if not self.client.collection_exists(collection_name):
                  self.client.create_collection(
@@ -134,13 +135,13 @@ class QdrantAdapter(VectorStoreAdapter):
                 # Qdrant payload is metadata + document content
                 payload = metadatas[i].copy()
                 payload["document"] = documents[i]
-                
+
                 points.append(models.PointStruct(
                     id=_id, # Qdrant prefers UUIDs or ints, ensure these are UUIDs upstream!
                     vector=embeddings[i],
                     payload=payload
                 ))
-            
+
             self.client.upsert(
                 collection_name=self.collection_name,
                 points=points
@@ -150,7 +151,7 @@ class QdrantAdapter(VectorStoreAdapter):
             logger.error("qdrant_upsert_failed", error=str(e))
             return False
 
-    def _translate_where_to_filter(self, where: Optional[Dict[str, Any]]):
+    def _translate_where_to_filter(self, where: dict[str, Any] | None):
         """
         Translate ChromaDB-style where dict to Qdrant Filter.
 
@@ -249,7 +250,7 @@ class QdrantAdapter(VectorStoreAdapter):
 
         return conditions
 
-    async def query(self, query_embeddings, n_results=5, where=None) -> Dict[str, Any]:
+    async def query(self, query_embeddings, n_results=5, where=None) -> dict[str, Any]:
         """
         Maps Qdrant search result to Chroma-like structure for compatibility.
         """
@@ -339,7 +340,7 @@ class QdrantAdapter(VectorStoreAdapter):
     def count(self) -> int:
         return self.client.count(self.collection_name).count
 
-    def get_existing_file_hash(self, file_path: str) -> Optional[str]:
+    def get_existing_file_hash(self, file_path: str) -> str | None:
         try:
             from qdrant_client.http import models
             # Filter by file_path

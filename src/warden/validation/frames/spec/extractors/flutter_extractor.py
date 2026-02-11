@@ -21,21 +21,21 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set
 
+from warden.ast.domain.enums import CodeLanguage
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.extractors.base import (
     BaseContractExtractor,
     ExtractorRegistry,
 )
 from warden.validation.frames.spec.models import (
     Contract,
-    OperationDefinition,
-    ModelDefinition,
-    FieldDefinition,
     EnumDefinition,
-    PlatformType,
+    FieldDefinition,
+    ModelDefinition,
+    OperationDefinition,
     OperationType,
+    PlatformType,
 )
-from warden.ast.domain.enums import CodeLanguage
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -103,8 +103,8 @@ class FlutterExtractor(BaseContractExtractor):
         logger.info("flutter_files_found", count=len(files))
 
         # Track extracted items to avoid duplicates
-        seen_operations: Set[str] = set()
-        seen_models: Set[str] = set()
+        seen_operations: set[str] = set()
+        seen_models: set[str] = set()
 
         for file_path in files:
             try:
@@ -159,7 +159,7 @@ class FlutterExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """
         Extract operations from Retrofit-style annotations.
 
@@ -170,7 +170,7 @@ class FlutterExtractor(BaseContractExtractor):
             @POST('/api/users')
             Future<User> createUser(@Body() CreateUserRequest request);
         """
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for Retrofit annotations
         # @GET('/path') or @GET("/path")
@@ -229,7 +229,7 @@ class FlutterExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[OperationDefinition]:
+    ) -> list[OperationDefinition]:
         """
         Extract operations from Dio/http package calls.
 
@@ -238,7 +238,7 @@ class FlutterExtractor(BaseContractExtractor):
             dio.post('/api/users', data: userData)
             http.get(Uri.parse('$baseUrl/api/users'))
         """
-        operations: List[OperationDefinition] = []
+        operations: list[OperationDefinition] = []
 
         # Pattern for dio calls — \s* handles multiline split between method call and path
         dio_pattern = re.compile(
@@ -290,7 +290,7 @@ class FlutterExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[ModelDefinition]:
+    ) -> list[ModelDefinition]:
         """
         Extract data models from Dart classes.
 
@@ -299,7 +299,7 @@ class FlutterExtractor(BaseContractExtractor):
             @freezed class User with _$User { ... }
             @JsonSerializable() class User { ... }
         """
-        models: List[ModelDefinition] = []
+        models: list[ModelDefinition] = []
 
         # Pattern for class with fields
         # class ClassName { final Type field; ... }
@@ -347,7 +347,7 @@ class FlutterExtractor(BaseContractExtractor):
             class_body = content[start:end]
 
             # Extract fields
-            fields: List[FieldDefinition] = []
+            fields: list[FieldDefinition] = []
             for field_match in field_pattern.finditer(class_body):
                 field_type = field_match.group(1)
                 field_name = field_match.group(2)
@@ -393,14 +393,14 @@ class FlutterExtractor(BaseContractExtractor):
         self,
         content: str,
         file_path: Path,
-    ) -> List[EnumDefinition]:
+    ) -> list[EnumDefinition]:
         """
         Extract enums from Dart code.
 
         Pattern:
             enum Status { pending, active, completed }
         """
-        enums: List[EnumDefinition] = []
+        enums: list[EnumDefinition] = []
 
         # Pattern for enum definition
         enum_pattern = re.compile(
@@ -414,7 +414,7 @@ class FlutterExtractor(BaseContractExtractor):
 
             # Extract enum values
             # Handle both simple (value,) and complex (value(1),) syntax
-            values: List[str] = []
+            values: list[str] = []
             value_pattern = re.compile(r"(\w+)(?:\([^)]*\))?\s*[,;]?")
 
             for value_match in value_pattern.finditer(enum_body):
@@ -434,7 +434,7 @@ class FlutterExtractor(BaseContractExtractor):
 
         return enums
 
-    def _extract_body_param(self, params: str) -> Optional[str]:
+    def _extract_body_param(self, params: str) -> str | None:
         """Extract type from @Body() parameter."""
         # Pattern: @Body() TypeName paramName
         body_pattern = re.compile(r"@Body\(\)\s*(\w+)")

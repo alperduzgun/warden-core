@@ -3,16 +3,17 @@ Initialization Helpers for Warden CLI.
 Handles interactive configuration prompts with improved UX.
 """
 
-import os
-import sys
-import subprocess
-import shutil
 import json
-from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
 from datetime import datetime
+from pathlib import Path
+
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
 from rich.panel import Panel
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 console = Console()
@@ -193,7 +194,7 @@ def configure_ollama() -> tuple[dict, dict]:
     ollama_path = shutil.which("ollama")
 
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
-    
+
     if not ollama_path:
         console.print("[yellow]⚠️  Ollama is not installed.[/yellow]")
 
@@ -283,9 +284,8 @@ def configure_claude_code() -> tuple[dict, dict]:
         console.print("[dim]Install it from: https://docs.anthropic.com/en/docs/claude-code[/dim]")
         console.print("[dim]Or run: npm install -g @anthropic-ai/claude-code[/dim]")
 
-        if is_interactive:
-            if Confirm.ask("Try a different provider?", default=True):
-                return _fallback_to_cloud_provider()
+        if is_interactive and Confirm.ask("Try a different provider?", default=True):
+            return _fallback_to_cloud_provider()
 
         # Non-interactive: return with disabled config
         return {"provider": "claude_code", "enabled": False}, {}
@@ -383,7 +383,7 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
 
         while True:
             api_key = Prompt.ask(f"Enter {provider_name} API Key", password=True)
-            
+
             # FAST FAIL: Check prefix
             if key_prefix and not api_key.startswith(key_prefix):
                  console.print(f"[yellow]⚠️  Key must start with '{key_prefix}'[/yellow]")
@@ -505,7 +505,7 @@ def select_ci_provider() -> dict:
     console.print()
 
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
-    
+
     choice = "3" # Default: skip
     if is_interactive:
         choice = Prompt.ask(
@@ -670,7 +670,7 @@ def generate_ai_tool_files(project_root: Path, llm_config: dict) -> None:
     # 1. Create/Update CLAUDE.md in project root
     try:
         claude_md_path = project_root / "CLAUDE.md"
-        
+
         # Post-Setup Content: How to USE Warden
         claude_content = """# Role: Warden Security Expert
 
@@ -787,11 +787,11 @@ def configure_vector_db() -> dict:
     """Configure Vector Database settings interactively."""
     console.print("\n[bold cyan]🗄️  Vector Database Configuration[/bold cyan]")
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
-    
+
     vector_db_choice = "local (chromadb)"
     if is_interactive:
         vector_db_choice = Prompt.ask("Select Vector Database Provider", choices=["local (chromadb)", "cloud (qdrant/pinecone)"], default="local (chromadb)")
-        
+
     safe_name = "".join(c if c.isalnum() else "_" for c in Path.cwd().name).lower()
     collection_name = f"warden_{safe_name}"
 

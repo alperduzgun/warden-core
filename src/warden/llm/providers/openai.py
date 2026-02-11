@@ -4,18 +4,20 @@ OpenAI GPT LLM Client (supports both OpenAI and Azure OpenAI)
 Based on C# OpenAIClient.cs
 """
 
-import httpx
-import time
 import json
-from typing import Dict, Any, Optional
+import time
+from functools import partial
+from typing import Any, Dict, Optional
+
+import httpx
+
+from warden.shared.infrastructure.exceptions import ExternalServiceError
+from warden.shared.infrastructure.resilience import resilient
 
 from ..config import ProviderConfig
+from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
-from warden.shared.infrastructure.resilience import resilient
-from warden.shared.infrastructure.exceptions import ExternalServiceError
-from ..registry import ProviderRegistry
-from functools import partial
 
 
 class OpenAIClient(ILlmClient):
@@ -49,7 +51,7 @@ class OpenAIClient(ILlmClient):
     def provider(self) -> LlmProvider:
         return self._provider
 
-    def get_usage(self) -> Dict[str, int]:
+    def get_usage(self) -> dict[str, int]:
         """Get cumulative token usage."""
         return self._usage.copy()
 
@@ -163,7 +165,7 @@ class OpenAIClient(ILlmClient):
         except (ValueError, AttributeError):
             return False
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: Optional[str] = None) -> LlmResponse:
+    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
@@ -194,51 +196,134 @@ class OpenAIClient(ILlmClient):
 
         return response
 
-    async def stream_completion_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant."):
+    async def stream_completion_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None):
         """
-        Streaming completion method.
+        Streaming completion method using Server-Sent Events (SSE).
 
         Args:
             prompt: User prompt
             system_prompt: System prompt (optional)
+            model: Model name override (optional)
 
         Yields:
-            Completion chunks as they arrive
+            Completion chunks as they arrive from the API
 
         Note:
-            OpenAI streaming requires SSE parsing. For now, we'll simulate streaming
-            by yielding the full response in chunks.
+            Falls back to simulated streaming if true streaming fails
         """
-        # For now, use non-streaming and simulate chunks
-        # TODO: Implement true streaming with SSE
-        response = await self.complete_async(prompt, system_prompt)
-        full_response = response.content
+        try:
+            # Attempt true streaming
+            async for chunk in self._stream_with_sse(prompt, system_prompt, model):
+                yield chunk
+        except Exception as e:
+            # Fallback to simulated streaming on error
+            from warden.shared.infrastructure.logging import get_logger
+            logger = get_logger(__name__)
+            logger.warning(
+                "openai_streaming_fallback",
+                error=str(e),
+                provider=self._provider.value
+            )
 
-        # Simulate streaming by yielding in chunks
-        chunk_size = 20
-        for i in range(0, len(full_response), chunk_size):
-            chunk = full_response[i:i + chunk_size]
-            yield chunk
+            # Use non-streaming as fallback
+            response = await self.complete_async(prompt, system_prompt, model)
+            full_response = response.content
 
-    async def analyze_security_async(self, code_content: str, language: str) -> Dict[str, Any]:
+            # Simulate streaming by yielding in chunks
+            chunk_size = 20
+            for i in range(0, len(full_response), chunk_size):
+                chunk = full_response[i:i + chunk_size]
+                yield chunk
+
+    async def _stream_with_sse(self, prompt: str, system_prompt: str, model: str | None = None):
+        """
+        Internal method for true SSE streaming.
+
+        Args:
+            prompt: User prompt
+            system_prompt: System prompt
+            model: Model name override (optional)
+
+        Yields:
+            Content chunks from the streaming response
+        """
+        headers = {"Content-Type": "application/json"}
+
+        # Azure vs OpenAI authentication
+        if self._provider == LlmProvider.AZURE_OPENAI:
+            headers["api-key"] = self._api_key
+            url = f"{self._base_url}/openai/deployments/{model or self._default_model}/chat/completions?api-version={self._api_version}"
+        else:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+            url = f"{self._base_url}/chat/completions"
+
+        payload = {
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.0,
+            "max_tokens": 2000,
+            "stream": True  # Enable streaming
+        }
+
+        # Add model for non-Azure
+        if self._provider != LlmProvider.AZURE_OPENAI:
+            payload["model"] = model or self._default_model
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as response:
+                response.raise_for_status()
+
+                # Process SSE stream
+                async for line in response.aiter_lines():
+                    line = line.strip()
+
+                    # Skip empty lines and comments
+                    if not line or line.startswith(":"):
+                        continue
+
+                    # SSE format: "data: {json}"
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remove "data: " prefix
+
+                        # Stream termination signal
+                        if data_str == "[DONE]":
+                            break
+
+                        try:
+                            chunk_data = json.loads(data_str)
+
+                            # Extract content from delta
+                            choices = chunk_data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    yield content
+                        except json.JSONDecodeError:
+                            # Skip malformed JSON chunks
+                            continue
+
+    async def analyze_security_async(self, code_content: str, language: str) -> dict[str, Any]:
         """
         Analyze code for security vulnerabilities using LLM.
-        
+
         Args:
             code_content: Source code to analyze
             language: Language of the code
-            
+
         Returns:
             Dict containing findings list
         """
         from warden.shared.utils.json_parser import parse_json_from_llm
-        
+
         prompt = f"""
         You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
         Target vulnerabilities: SQL Injection, XSS, Hardcoded Secrets/Credentials, SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, and Command Injection.
-        
+
         Ignore stylistic issues. Focus only on exploitable security flaws.
-        
+
         Return a JSON object in this exact format:
         {{
             "findings": [
@@ -250,20 +335,20 @@ class OpenAIClient(ILlmClient):
                 }}
             ]
         }}
-        
+
         If no issues found, return {{ "findings": [] }}.
-        
+
         Code:
         ```{language}
         {code_content[:4000]}
         ```
         """
-        
+
         try:
             response = await self.complete_async(prompt, system_prompt="You are a strict security auditor. Output valid JSON only.")
             if not response.success:
                 return {"findings": []}
-                
+
             parsed = parse_json_from_llm(response.content)
             return parsed or {"findings": []}
         except (RuntimeError, ValueError, json.JSONDecodeError) as e:

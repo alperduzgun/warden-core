@@ -10,19 +10,20 @@ Detects complex and long methods:
 Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-import structlog
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
+import structlog
+
+from warden.ast.domain.models import ASTNode
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
+    CleaningIssue,
+    CleaningIssueSeverity,
+    CleaningIssueType,
     CleaningResult,
     CleaningSuggestion,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
-from warden.ast.domain.models import ASTNode
 
 logger = structlog.get_logger()
 
@@ -65,8 +66,8 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze code for complexity issues using Universal AST.
@@ -153,7 +154,7 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_complexity_universal(self, ast_root: ASTNode, code: str) -> List[CleaningIssue]:
+    def _analyze_complexity_universal(self, ast_root: ASTNode, code: str) -> list[CleaningIssue]:
         """
         Analyze code for complexity issues using Universal AST.
 
@@ -179,8 +180,8 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
     def _check_function_complexity_universal(
         self,
         node: ASTNode,
-        lines: List[str]
-    ) -> List[CleaningIssue]:
+        lines: list[str]
+    ) -> list[CleaningIssue]:
         """
         Check a function for complexity issues using Universal AST.
 

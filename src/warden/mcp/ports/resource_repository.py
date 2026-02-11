@@ -20,7 +20,7 @@ class IResourceRepository(ABC):
     """
 
     @abstractmethod
-    async def list_available(self) -> List[MCPResourceDefinition]:
+    async def list_available(self) -> list[MCPResourceDefinition]:
         """
         List all available (existing) resources.
 
@@ -32,7 +32,7 @@ class IResourceRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_content(self, uri: str) -> Optional[str]:
+    async def get_content(self, uri: str) -> str | None:
         """
         Get resource content by URI.
 
@@ -61,7 +61,7 @@ class IResourceRepository(ABC):
         ...
 
     @abstractmethod
-    def get_definition(self, uri: str) -> Optional[MCPResourceDefinition]:
+    def get_definition(self, uri: str) -> MCPResourceDefinition | None:
         """
         Get resource definition by URI (without checking existence).
 

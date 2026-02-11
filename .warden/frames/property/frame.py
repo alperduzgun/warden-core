@@ -12,7 +12,7 @@ Priority: HIGH
 
 import time
 import re
-from typing import List
+from typing import List, Dict, Any
 
 from warden.validation.domain.frame import (
     ValidationFrame,
@@ -69,13 +69,13 @@ class PropertyFrame(ValidationFrame):
         },
         "state_change_no_validation": {
             "pattern": r'self\.\w+\s*=|this\.\w+\s*=',
-            "severity": "low",
+            "severity": "medium",
             "message": "State change without validation",
             "suggestion": "Validate state transitions to maintain invariants",
         },
         "division_no_zero_check": {
-            "pattern": r'(?<!\/)\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))',
-            "severity": "medium",
+            "pattern": r'\/\s*\w+(?!\s*(?:if|&&|\|\||\?|assert))',
+            "severity": "high",
             "message": "Division operation without zero check",
             "suggestion": "Check divisor is not zero before division",
         },
@@ -153,7 +153,7 @@ Output must be a valid JSON object with the following structure:
                 
         return all_results
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute(self, code_file: CodeFile) -> FrameResult:
         """
         Execute property testing checks on code file.
 
@@ -319,14 +319,13 @@ Output must be a valid JSON object with the following structure:
         function_count = len(re.findall(function_pattern, code_file.content))
 
         # If many functions but no assertions, warn
-        # If many functions but no assertions, warn
-        if function_count > 10 and assertion_count == 0:
+        if function_count > 5 and assertion_count == 0:
             finding = Finding(
                 id=f"{self.frame_id}-no-assertions",
                 severity="low",
                 message=f"File has {function_count} functions but no assertions",
                 location=f"{code_file.path}:1",
-                detail="Consider adding assertions or Pydantic validation to validate invariants and preconditions",
+                detail="Consider adding assertions to validate invariants and preconditions",
                 code=None,
             )
             findings.append(finding)
@@ -369,8 +368,7 @@ Output must be a valid JSON object with the following structure:
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
                 user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
-                temperature=0.1,
-                use_fast_tier=True
+                temperature=0.1
             )
             
             response = await client.send_async(request)

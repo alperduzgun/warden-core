@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.frames.spec.decision_cache import SpecDecisionCache
 from warden.validation.frames.spec.models import (
     Contract,
     ContractGap,
@@ -28,8 +30,6 @@ from warden.validation.frames.spec.models import (
     OperationDefinition,
     SpecAnalysisResult,
 )
-from warden.validation.frames.spec.decision_cache import SpecDecisionCache
-from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -39,7 +39,7 @@ class MatchResult:
     """Result of matching an operation."""
 
     matched: bool
-    provider_operation: Optional[OperationDefinition] = None
+    provider_operation: OperationDefinition | None = None
     similarity_score: float = 0.0
     match_type: str = "none"  # "exact", "normalized", "fuzzy", "none"
 
@@ -80,7 +80,7 @@ class GapAnalyzer:
             print(f"{gap.severity}: {gap.message}")
     """
 
-    def __init__(self, config: Optional[GapAnalyzerConfig] = None, llm_service: Optional[Any] = None, semantic_search_service: Optional[Any] = None):
+    def __init__(self, config: GapAnalyzerConfig | None = None, llm_service: Any | None = None, semantic_search_service: Any | None = None):
         """Initialize analyzer with optional config."""
         self.config = config or GapAnalyzerConfig()
         self.llm_service = llm_service
@@ -97,8 +97,8 @@ class GapAnalyzer:
         self,
         consumer: Contract,
         provider: Contract,
-        consumer_platform: Optional[str] = None,
-        provider_platform: Optional[str] = None,
+        consumer_platform: str | None = None,
+        provider_platform: str | None = None,
     ) -> SpecAnalysisResult:
         """
         Analyze gaps between consumer and provider contracts.
@@ -136,7 +136,7 @@ class GapAnalyzer:
         provider_enums_map = {e.name: e for e in provider.enums}
 
         # Track matched provider operations
-        matched_provider_ops: Set[str] = set()
+        matched_provider_ops: set[str] = set()
 
         # 1. Check consumer operations against provider
         for consumer_op in consumer.operations:
@@ -218,10 +218,10 @@ class GapAnalyzer:
 
     def _build_operation_map(
         self,
-        operations: List[OperationDefinition],
-    ) -> Dict[str, OperationDefinition]:
+        operations: list[OperationDefinition],
+    ) -> dict[str, OperationDefinition]:
         """Build a map of operations with normalized names."""
-        op_map: Dict[str, OperationDefinition] = {}
+        op_map: dict[str, OperationDefinition] = {}
         for op in operations:
             # Store with original name
             op_map[op.name] = op
@@ -234,7 +234,7 @@ class GapAnalyzer:
     async def _match_operation(
         self,
         consumer_op: OperationDefinition,
-        provider_ops: Dict[str, OperationDefinition],
+        provider_ops: dict[str, OperationDefinition],
     ) -> MatchResult:
         """
         Try to match a consumer operation to a provider operation.
@@ -295,7 +295,7 @@ class GapAnalyzer:
 
         return name
 
-    def _sanitize_operation_name(self, operation_name: str) -> Optional[str]:
+    def _sanitize_operation_name(self, operation_name: str) -> str | None:
         """
         Sanitize operation name to prevent prompt injection attacks.
 
@@ -398,8 +398,8 @@ class GapAnalyzer:
     async def _semantic_match_operation(
         self,
         consumer_op: OperationDefinition,
-        provider_ops: Dict[str, OperationDefinition],
-    ) -> Optional[MatchResult]:
+        provider_ops: dict[str, OperationDefinition],
+    ) -> MatchResult | None:
         """
         Use LLM to find semantic match with caching and RAG context.
 
@@ -514,7 +514,7 @@ class GapAnalyzer:
 
         return None
 
-    def _get_verb_category(self, name: str) -> Optional[str]:
+    def _get_verb_category(self, name: str) -> str | None:
         """Get the CRUD verb category of an operation name."""
         lower = name.lower()
         for prefix in self._prefixes:
@@ -534,11 +534,11 @@ class GapAnalyzer:
     def _fuzzy_match(
         self,
         consumer_name: str,
-        provider_ops: Dict[str, OperationDefinition],
-    ) -> Optional[MatchResult]:
+        provider_ops: dict[str, OperationDefinition],
+    ) -> MatchResult | None:
         """Find best fuzzy match for operation name."""
         best_score = 0.0
-        best_op: Optional[OperationDefinition] = None
+        best_op: OperationDefinition | None = None
 
         consumer_normalized = self._normalize_operation_name(consumer_name).lower()
         consumer_category = self._get_verb_category(consumer_name)
@@ -574,10 +574,10 @@ class GapAnalyzer:
     def _get_missing_op_detail(
         self,
         consumer_op: OperationDefinition,
-        provider_ops: Dict[str, OperationDefinition],
+        provider_ops: dict[str, OperationDefinition],
     ) -> str:
         """Get detail message for missing operation, suggesting similar ones."""
-        suggestions: List[Tuple[str, float]] = []
+        suggestions: list[tuple[str, float]] = []
         consumer_normalized = self._normalize_operation_name(consumer_op.name).lower()
 
         for name in provider_ops:
@@ -598,12 +598,12 @@ class GapAnalyzer:
         self,
         consumer_op: OperationDefinition,
         provider_op: OperationDefinition,
-        provider_models: Dict[str, ModelDefinition],
-        consumer_platform: Optional[str],
-        provider_platform: Optional[str],
-    ) -> List[ContractGap]:
+        provider_models: dict[str, ModelDefinition],
+        consumer_platform: str | None,
+        provider_platform: str | None,
+    ) -> list[ContractGap]:
         """Check type compatibility between matched operations."""
-        gaps: List[ContractGap] = []
+        gaps: list[ContractGap] = []
 
         # Check input type
         if self.config.check_input_types:
@@ -705,13 +705,13 @@ class GapAnalyzer:
 
     def _check_models(
         self,
-        consumer_models: List[ModelDefinition],
-        provider_models: Dict[str, ModelDefinition],
-        consumer_platform: Optional[str],
-        provider_platform: Optional[str],
-    ) -> List[ContractGap]:
+        consumer_models: list[ModelDefinition],
+        provider_models: dict[str, ModelDefinition],
+        consumer_platform: str | None,
+        provider_platform: str | None,
+    ) -> list[ContractGap]:
         """Check model compatibility."""
-        gaps: List[ContractGap] = []
+        gaps: list[ContractGap] = []
 
         for consumer_model in consumer_models:
             provider_model = self._find_model_match(consumer_model.name, provider_models)
@@ -738,8 +738,8 @@ class GapAnalyzer:
     def _find_model_match(
         self,
         consumer_model_name: str,
-        provider_models: Dict[str, ModelDefinition],
-    ) -> Optional[ModelDefinition]:
+        provider_models: dict[str, ModelDefinition],
+    ) -> ModelDefinition | None:
         """Find matching model in provider."""
         # Exact match
         if consumer_model_name in provider_models:
@@ -766,11 +766,11 @@ class GapAnalyzer:
         self,
         consumer_model: ModelDefinition,
         provider_model: ModelDefinition,
-        consumer_platform: Optional[str],
-        provider_platform: Optional[str],
-    ) -> List[ContractGap]:
+        consumer_platform: str | None,
+        provider_platform: str | None,
+    ) -> list[ContractGap]:
         """Check field compatibility between models."""
-        gaps: List[ContractGap] = []
+        gaps: list[ContractGap] = []
 
         provider_fields = {f.name: f for f in provider_model.fields}
 
@@ -824,13 +824,13 @@ class GapAnalyzer:
 
     def _check_enums(
         self,
-        consumer_enums: List[EnumDefinition],
-        provider_enums: Dict[str, EnumDefinition],
-        consumer_platform: Optional[str],
-        provider_platform: Optional[str],
-    ) -> List[ContractGap]:
+        consumer_enums: list[EnumDefinition],
+        provider_enums: dict[str, EnumDefinition],
+        consumer_platform: str | None,
+        provider_platform: str | None,
+    ) -> list[ContractGap]:
         """Check enum compatibility."""
-        gaps: List[ContractGap] = []
+        gaps: list[ContractGap] = []
 
         if not self.config.check_enum_values:
             return gaps
@@ -884,7 +884,7 @@ class GapAnalyzer:
 async def analyze_contracts(
     consumer: Contract,
     provider: Contract,
-    config: Optional[GapAnalyzerConfig] = None,
+    config: GapAnalyzerConfig | None = None,
 ) -> SpecAnalysisResult:
     """
     Convenience function to analyze contracts.

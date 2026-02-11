@@ -28,7 +28,7 @@ DEFAULT_STORAGE_PATH = ".warden/grpc/suppressions.json"
 
 
 class FileSuppressionRepository(
-    BaseFileRepository[Dict[str, Any]], ISuppressionRepository
+    BaseFileRepository[dict[str, Any]], ISuppressionRepository
 ):
     """
     File-based suppression repository implementation.
@@ -45,7 +45,7 @@ class FileSuppressionRepository(
     }
     """
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         """
         Initialize suppression repository.
 
@@ -59,17 +59,17 @@ class FileSuppressionRepository(
             "suppression_repository_initialized", storage_path=str(storage_path)
         )
 
-    async def get_async(self, id: str) -> Optional[Dict[str, Any]]:
+    async def get_async(self, id: str) -> dict[str, Any] | None:
         """Get suppression by ID."""
         data = await self._read_data_async()
         return data.get("entities", {}).get(id)
 
-    async def get_all_async(self) -> List[Dict[str, Any]]:
+    async def get_all_async(self) -> list[dict[str, Any]]:
         """Get all suppressions."""
         data = await self._read_data_async()
         return list(data.get("entities", {}).values())
 
-    async def save_async(self, entity: Dict[str, Any]) -> Dict[str, Any]:
+    async def save_async(self, entity: dict[str, Any]) -> dict[str, Any]:
         """Save or update suppression."""
         data = await self._read_data_async()
 
@@ -111,12 +111,12 @@ class FileSuppressionRepository(
         data = await self._read_data_async()
         return len(data.get("entities", {}))
 
-    async def get_enabled_async(self) -> List[Dict[str, Any]]:
+    async def get_enabled_async(self) -> list[dict[str, Any]]:
         """Get all enabled suppressions."""
         all_suppressions = await self.get_all_async()
         return [s for s in all_suppressions if s.get("enabled", True)]
 
-    async def get_for_file_async(self, file_path: str) -> List[Dict[str, Any]]:
+    async def get_for_file_async(self, file_path: str) -> list[dict[str, Any]]:
         """Get suppressions applicable to a file path."""
         import fnmatch
 
@@ -131,15 +131,12 @@ class FileSuppressionRepository(
             if file_pattern is None:
                 # Global suppression, applies to all files
                 result.append(suppression)
-            elif file_pattern == file_path:
+            elif file_pattern == file_path or ("*" in file_pattern or "?" in file_pattern) and fnmatch.fnmatch(file_path, file_pattern):
                 result.append(suppression)
-            elif "*" in file_pattern or "?" in file_pattern:
-                if fnmatch.fnmatch(file_path, file_pattern):
-                    result.append(suppression)
 
         return result
 
-    async def get_for_rule_async(self, rule_id: str) -> List[Dict[str, Any]]:
+    async def get_for_rule_async(self, rule_id: str) -> list[dict[str, Any]]:
         """Get suppressions for a specific rule."""
         all_suppressions = await self.get_all_async()
         result = []
@@ -162,19 +159,19 @@ class FileSuppressionRepository(
         await self.save_async(entry.to_json())
         return entry
 
-    async def get_entry_async(self, id: str) -> Optional[SuppressionEntry]:
+    async def get_entry_async(self, id: str) -> SuppressionEntry | None:
         """Get suppression as SuppressionEntry model."""
         data = await self.get_async(id)
         if data is None:
             return None
         return self._dict_to_entry(data)
 
-    async def get_all_entries_async(self) -> List[SuppressionEntry]:
+    async def get_all_entries_async(self) -> list[SuppressionEntry]:
         """Get all suppressions as SuppressionEntry models."""
         all_data = await self.get_all_async()
         return [self._dict_to_entry(d) for d in all_data]
 
-    def _dict_to_entry(self, data: Dict[str, Any]) -> SuppressionEntry:
+    def _dict_to_entry(self, data: dict[str, Any]) -> SuppressionEntry:
         """Convert dict to SuppressionEntry."""
         type_value = data.get("type", 1)
         if isinstance(type_value, int):

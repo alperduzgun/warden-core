@@ -44,11 +44,11 @@ class IssueManagementMixin:
             issues = list(self._issues.values())
 
             if request.states:
-                state_values = [s for s in request.states]
+                state_values = list(request.states)
                 issues = [i for i in issues if i.get("state") in state_values]
 
             if request.severities:
-                sev_values = [s for s in request.severities]
+                sev_values = list(request.severities)
                 issues = [i for i in issues if i.get("severity") in sev_values]
 
             if request.frame_ids:

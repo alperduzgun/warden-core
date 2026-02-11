@@ -11,10 +11,10 @@ import re
 from typing import List
 
 from warden.validation.domain.check import (
-    ValidationCheck,
-    CheckResult,
     CheckFinding,
+    CheckResult,
     CheckSeverity,
+    ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
 
@@ -50,7 +50,7 @@ class CircuitBreakerCheck(ValidationCheck):
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute circuit breaker check."""
-        findings: List[CheckFinding] = []
+        findings: list[CheckFinding] = []
 
         # Check if file has external calls but no circuit breaker
         has_external_calls = self._has_external_calls(code_file.content)

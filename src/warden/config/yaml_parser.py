@@ -35,18 +35,19 @@ edges:
 ```
 """
 
-from typing import Dict, Any, List
 from pathlib import Path
+from typing import Any, Dict, List
+
 import yaml
 
 from warden.config.domain.models import (
-    PipelineConfig,
-    PipelineNode,
-    PipelineEdge,
-    PipelineSettings,
-    ProjectSummary,
-    Position,
     CustomRule,
+    PipelineConfig,
+    PipelineEdge,
+    PipelineNode,
+    PipelineSettings,
+    Position,
+    ProjectSummary,
 )
 from warden.validation.domain.frame import get_frame_by_id
 
@@ -56,7 +57,7 @@ class YAMLParseError(Exception):
     pass
 
 
-def load_yaml(file_path: str) -> Dict[str, Any]:
+def load_yaml(file_path: str) -> dict[str, Any]:
     """
     Load YAML file safely.
 
@@ -89,7 +90,7 @@ def load_yaml(file_path: str) -> Dict[str, Any]:
 
     # Load YAML
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = yaml.safe_load(f)
 
         if not isinstance(data, dict):
@@ -103,7 +104,7 @@ def load_yaml(file_path: str) -> Dict[str, Any]:
         raise YAMLParseError(f"Failed to load YAML: {e}")
 
 
-def parse_simple_format(data: Dict[str, Any]) -> PipelineConfig:
+def parse_simple_format(data: dict[str, Any]) -> PipelineConfig:
     """
     Parse simple CLI-friendly YAML format.
 
@@ -142,7 +143,7 @@ def parse_simple_format(data: Dict[str, Any]) -> PipelineConfig:
     )
 
     # Generate nodes
-    nodes: List[PipelineNode] = []
+    nodes: list[PipelineNode] = []
 
     # Start node
     nodes.append(PipelineNode(
@@ -182,7 +183,7 @@ def parse_simple_format(data: Dict[str, Any]) -> PipelineConfig:
     ))
 
     # Generate edges (linear)
-    edges: List[PipelineEdge] = []
+    edges: list[PipelineEdge] = []
     for i in range(len(nodes) - 1):
         edges.append(PipelineEdge(
             id=f'e{i}',
@@ -200,7 +201,7 @@ def parse_simple_format(data: Dict[str, Any]) -> PipelineConfig:
     )
 
 
-def parse_full_format(data: Dict[str, Any]) -> PipelineConfig:
+def parse_full_format(data: dict[str, Any]) -> PipelineConfig:
     """
     Parse full visual builder YAML format.
 
@@ -225,7 +226,7 @@ def parse_full_format(data: Dict[str, Any]) -> PipelineConfig:
         )
 
     # Parse nodes
-    nodes: List[PipelineNode] = []
+    nodes: list[PipelineNode] = []
     for node_data in data['nodes']:
         pos_data = node_data['position']
         nodes.append(PipelineNode(
@@ -236,7 +237,7 @@ def parse_full_format(data: Dict[str, Any]) -> PipelineConfig:
         ))
 
     # Parse edges
-    edges: List[PipelineEdge] = []
+    edges: list[PipelineEdge] = []
     for edge_data in data['edges']:
         edges.append(PipelineEdge(
             id=edge_data['id'],
@@ -250,7 +251,7 @@ def parse_full_format(data: Dict[str, Any]) -> PipelineConfig:
         ))
 
     # Parse global rules
-    global_rules: List[CustomRule] = []
+    global_rules: list[CustomRule] = []
     for rule_data in data.get('global_rules', []):
         global_rules.append(CustomRule(
             id=rule_data['id'],

@@ -8,8 +8,8 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
-from warden.validation.domain.frame import CodeFile
 from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile
 
 # Try to import LLMService, use None if not available
 try:
@@ -33,9 +33,9 @@ class LLMSuggestionGenerator:
     def __init__(
         self,
         llm_service: LLMService,
-        context: Optional[Dict[str, Any]] = None,
-        semantic_search_service: Optional[Any] = None,
-        rate_limiter: Optional[Any] = None,
+        context: dict[str, Any] | None = None,
+        semantic_search_service: Any | None = None,
+        rate_limiter: Any | None = None,
     ):
         """
         Initialize LLM suggestion generator.
@@ -64,7 +64,7 @@ class LLMSuggestionGenerator:
     async def generate_suggestions_async(
         self,
         code_file: CodeFile,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate cleaning suggestions using LLM.
 
@@ -163,12 +163,12 @@ class LLMSuggestionGenerator:
 
         # Include relevant findings from validation
         findings = self.context.get("findings", [])
-        
+
         def get_file_path(f):
             if isinstance(f, dict):
                 return f.get("file_path")
             return getattr(f, "path", getattr(f, "file_path", None))
-            
+
         [f for f in findings if get_file_path(f) == code_file.path]
 
         # Truncate code for prompt (first 3000 chars)
@@ -241,7 +241,7 @@ class LLMSuggestionGenerator:
         self,
         response: str,
         code_file: CodeFile,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Parse LLM response into cleaning suggestions.
 
@@ -298,10 +298,10 @@ class LLMSuggestionGenerator:
 
     def _parse_suggestions(
         self,
-        suggestion_list: List[Dict],
+        suggestion_list: list[dict],
         file_path: str,
         suggestion_category: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Parse and validate suggestion list.
 
@@ -350,7 +350,7 @@ class LLMSuggestionGenerator:
 
     def _validate_impact(
         self,
-        impact: Optional[str],
+        impact: str | None,
     ) -> str:
         """
         Validate and normalize impact level.
@@ -368,7 +368,7 @@ class LLMSuggestionGenerator:
 
     def _validate_effort(
         self,
-        effort: Optional[str],
+        effort: str | None,
     ) -> str:
         """
         Validate and normalize effort level.
@@ -388,7 +388,7 @@ class LLMSuggestionGenerator:
         self,
         file_path: str,
         response: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a fallback suggestion when parsing fails.
 
@@ -412,7 +412,7 @@ class LLMSuggestionGenerator:
 
     def _format_findings(
         self,
-        findings: List[Dict[str, Any]],
+        findings: list[dict[str, Any]],
     ) -> str:
         """
         Format security findings for prompt.
@@ -432,16 +432,16 @@ class LLMSuggestionGenerator:
             finding_type = self._get_val(finding, 'type', 'issue')
             message = self._get_val(finding, 'message', 'Security issue')
             line = self._get_val(finding, 'line_number', 'unknown')
-            
+
             formatted.append(f"- {finding_type}: {message} (line {line})")
 
         return "\n".join(formatted)
 
     async def generate_batch_suggestions_async(
         self,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
         batch_size: int = 5,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         """
         Generate suggestions for multiple files in batches.
 
@@ -468,7 +468,7 @@ class LLMSuggestionGenerator:
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Map results to file paths
-            for code_file, result in zip(batch, batch_results):
+            for code_file, result in zip(batch, batch_results, strict=False):
                 if isinstance(result, Exception):
                     logger.error(
                         "batch_suggestion_error",

@@ -5,11 +5,11 @@ Provides a minimal bridge implementation with NO Warden dependencies.
 Used for CLI testing and development without full Warden installation.
 """
 
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from warden.cli_bridge.protocol import IPCError, ErrorCode
+from warden.cli_bridge.protocol import ErrorCode, IPCError
 
 
 class MinimalWardenBridge:
@@ -49,7 +49,7 @@ class MinimalWardenBridge:
             },
         ]
 
-    async def execute_pipeline_async(self, file_path: str, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def execute_pipeline_async(self, file_path: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Mock pipeline execution
 
@@ -141,7 +141,7 @@ class MinimalWardenBridge:
             },
         }
 
-    async def get_config_async(self) -> Dict[str, Any]:
+    async def get_config_async(self) -> dict[str, Any]:
         """
         Get mock Warden configuration
 
@@ -170,7 +170,7 @@ class MinimalWardenBridge:
             "mock_mode": True,
         }
 
-    async def ping_async(self) -> Dict[str, str]:
+    async def ping_async(self) -> dict[str, str]:
         """
         Health check endpoint
 
@@ -184,7 +184,7 @@ class MinimalWardenBridge:
             "mode": "minimal",
         }
 
-    async def get_available_frames_async(self) -> List[Dict[str, Any]]:
+    async def get_available_frames_async(self) -> list[dict[str, Any]]:
         """
         Get list of mock validation frames
 

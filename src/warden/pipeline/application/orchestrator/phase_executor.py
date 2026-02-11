@@ -4,21 +4,22 @@ Phase executor for individual pipeline phases.
 Refactored to delegate to specific phase executors.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, List, Optional, Callable
+from typing import Any, List, Optional
 
-from warden.pipeline.domain.pipeline_context import PipelineContext
-from warden.pipeline.domain.models import PipelineConfig
-from warden.validation.domain.frame import CodeFile, ValidationFrame
-from warden.shared.infrastructure.logging import get_logger
+from warden.analysis.application.triage_phase import TriagePhase  # Phase 0.5
+from warden.pipeline.application.executors.analysis_executor import AnalysisExecutor
+from warden.pipeline.application.executors.classification_executor import ClassificationExecutor
+from warden.pipeline.application.executors.cleaning_executor import CleaningExecutor
+from warden.pipeline.application.executors.fortification_executor import FortificationExecutor
 
 # Import specific executors
 from warden.pipeline.application.executors.pre_analysis_executor import PreAnalysisExecutor
-from warden.pipeline.application.executors.analysis_executor import AnalysisExecutor
-from warden.pipeline.application.executors.classification_executor import ClassificationExecutor
-from warden.pipeline.application.executors.fortification_executor import FortificationExecutor
-from warden.pipeline.application.executors.cleaning_executor import CleaningExecutor
-from warden.analysis.application.triage_phase import TriagePhase # Phase 0.5
+from warden.pipeline.domain.models import PipelineConfig
+from warden.pipeline.domain.pipeline_context import PipelineContext
+from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import CodeFile, ValidationFrame
 
 logger = get_logger(__name__)
 
@@ -26,19 +27,19 @@ logger = get_logger(__name__)
 class PhaseExecutor:
     """
     Executes individual pipeline phases.
-    
+
     Acts as a facade delegating to specific phase executors.
     """
 
     def __init__(
         self,
-        config: Optional[PipelineConfig] = None,
-        progress_callback: Optional[Callable] = None,
-        project_root: Optional[Path] = None,
-        llm_service: Optional[Any] = None,
-        frames: Optional[List[ValidationFrame]] = None,
-        semantic_search_service: Optional[Any] = None,
-        rate_limiter: Optional[Any] = None,
+        config: PipelineConfig | None = None,
+        progress_callback: Callable | None = None,
+        project_root: Path | None = None,
+        llm_service: Any | None = None,
+        frames: list[ValidationFrame] | None = None,
+        semantic_search_service: Any | None = None,
+        rate_limiter: Any | None = None,
     ):
         """
         Initialize phase executor.
@@ -110,14 +111,14 @@ class PhaseExecutor:
             semantic_search_service=self.semantic_search_service,
             rate_limiter=self.rate_limiter
         )
-    
+
     @property
-    def progress_callback(self) -> Optional[Callable]:
+    def progress_callback(self) -> Callable | None:
         """Get progress callback."""
         return self._progress_callback
 
     @progress_callback.setter
-    def progress_callback(self, value: Optional[Callable]) -> None:
+    def progress_callback(self, value: Callable | None) -> None:
         """Set progress callback and propagate to sub-executors."""
         self._progress_callback = value
         self.pre_analysis_executor.progress_callback = value
@@ -130,7 +131,7 @@ class PhaseExecutor:
     async def execute_pre_analysis_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute PRE-ANALYSIS phase."""
         await self.pre_analysis_executor.execute_async(context, code_files)
@@ -138,7 +139,7 @@ class PhaseExecutor:
     async def execute_triage_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute TRIAGE phase (adaptive hybrid triage)."""
         await self.triage_phase.execute_async(code_files, context)
@@ -146,7 +147,7 @@ class PhaseExecutor:
     async def execute_analysis_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute ANALYSIS phase."""
         await self.analysis_executor.execute_async(context, code_files)
@@ -154,7 +155,7 @@ class PhaseExecutor:
     async def execute_classification_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute CLASSIFICATION phase."""
         await self.classification_executor.execute_async(context, code_files)
@@ -162,7 +163,7 @@ class PhaseExecutor:
     async def execute_fortification_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute FORTIFICATION phase."""
         await self.fortification_executor.execute_async(context, code_files)
@@ -170,7 +171,7 @@ class PhaseExecutor:
     async def execute_cleaning_async(
         self,
         context: PipelineContext,
-        code_files: List[CodeFile],
+        code_files: list[CodeFile],
     ) -> None:
         """Execute CLEANING phase."""
         await self.cleaning_executor.execute_async(context, code_files)

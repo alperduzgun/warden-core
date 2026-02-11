@@ -5,19 +5,21 @@ Exposes Warden's Python backend functionality to the Ink CLI through JSON-RPC.
 Refactored into modular handlers to maintain < 500 lines per core rules.
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional, AsyncIterator, Union
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-from warden.shared.infrastructure.logging import get_logger
+from pydantic import ValidationError
+
 from warden.cli_bridge.handlers.config_handler import ConfigHandler
-from warden.cli_bridge.handlers.pipeline_handler import PipelineHandler
 from warden.cli_bridge.handlers.llm_handler import LLMHandler
+from warden.cli_bridge.handlers.pipeline_handler import PipelineHandler
 from warden.cli_bridge.handlers.tool_handler import ToolHandler
 from warden.cli_bridge.utils import serialize_pipeline_result
-from warden.shared.utils.path_utils import sanitize_path
 from warden.pipeline.validators.input_validator import CodeFileInput, FrameExecutionInput, PipelineInput
-from pydantic import ValidationError
+from warden.shared.infrastructure.logging import get_logger
+from warden.shared.utils.path_utils import sanitize_path
 
 logger = get_logger(__name__)
 
@@ -27,7 +29,7 @@ class WardenBridge:
     Delegates implementation to specialized handlers for modularity.
     """
 
-    def __init__(self, project_root: Optional[Path] = None, config_path: Optional[str] = None) -> None:
+    def __init__(self, project_root: Path | None = None, config_path: str | None = None) -> None:
         """
         Initialize Warden Bridge with configuration and handlers.
 
@@ -39,7 +41,7 @@ class WardenBridge:
             Exception: If critical initialization fails (logged as warning)
         """
         self.project_root = Path(project_root) if project_root else Path.cwd()
-        
+
         # Initialize basic handlers
         self.config_handler = ConfigHandler(self.project_root)
         self.tool_handler = ToolHandler()
@@ -67,8 +69,9 @@ class WardenBridge:
             llm_service = None
 
         # Initialize Rate Limiter (Centralized to prevent Event Loop issues)
-        from warden.llm.rate_limiter import RateLimiter, RateLimitConfig
         import os
+
+        from warden.llm.rate_limiter import RateLimitConfig, RateLimiter
 
         # FAIL-SAFE: Parse env vars with fallback (chaos engineering principle)
         def _parse_env_int(key: str, default: int) -> int:
@@ -112,10 +115,10 @@ class WardenBridge:
             available_frames=config_data["available_frames"],
             rate_limiter=self.rate_limiter
         )
-        
+
         self.pipeline_handler = PipelineHandler(self.orchestrator, self.project_root)
         self.config_handler.validate_consistency()
-        
+
         # Store LLM service for semantic tools
         self.llm_service = llm_service
 
@@ -123,7 +126,7 @@ class WardenBridge:
 
     # --- Semantic Fixes ---
 
-    async def request_fix_async(self, file_path: str, line_number: int, issue_type: str, context_code: str = "") -> Dict[str, Any]:
+    async def request_fix_async(self, file_path: str, line_number: int, issue_type: str, context_code: str = "") -> dict[str, Any]:
         """
         Request a semantic fix for a vulnerability.
 
@@ -151,7 +154,7 @@ class WardenBridge:
         safe_path = sanitize_path(file_path, self.project_root)
         if safe_path is None or not safe_path.exists():
             raise ValueError(f"Invalid or inaccessible file path: {file_path}")
-        
+
         # Create minimal context for fortification
         context = {
             "project_root": self.project_root,
@@ -159,7 +162,7 @@ class WardenBridge:
             "project_type": "unknown", # Could be detected
             "framework": "unknown"     # Could be detected
         }
-        
+
         # Create minimal finding representation
         finding = {
             "type": issue_type,
@@ -170,26 +173,26 @@ class WardenBridge:
             "code_snippet": context_code,
             "id": "manual-request"
         }
-        
+
         # Generate fix directly using generator logic
         # We access the internal generator for a single targeted fix
         from warden.fortification.application.llm_fortification_generator import LLMFortificationGenerator
         generator = LLMFortificationGenerator(self.llm_service)
-        
+
         fix = await generator.generate_fortification_async(
             finding=finding,
             code_context=context_code,
             framework=context["framework"],
             language=context["language"]
         )
-        
+
         if fix:
             return fix.to_json()
         return {"error": "Could not generate fix"}
 
     # --- Pipeline Execution ---
 
-    async def execute_pipeline_async(self, file_path: str, frames: Optional[List[str]] = None, analysis_level: str = "standard") -> Dict[str, Any]:
+    async def execute_pipeline_async(self, file_path: str, frames: list[str] | None = None, analysis_level: str = "standard") -> dict[str, Any]:
         """Execute validation pipeline on a file."""
         # Validate inputs
         try:
@@ -204,7 +207,7 @@ class WardenBridge:
         serialized["context_summary"] = context.get_summary()
         return serialized
 
-    async def execute_pipeline_stream_async(self, file_path: Union[str, List[str]], frames: Optional[List[str]] = None, verbose: bool = False, analysis_level: str = "standard", ci_mode: bool = False) -> AsyncIterator[Dict[str, Any]]:
+    async def execute_pipeline_stream_async(self, file_path: str | list[str], frames: list[str] | None = None, verbose: bool = False, analysis_level: str = "standard", ci_mode: bool = False) -> AsyncIterator[dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         # Validate inputs
         try:
@@ -229,7 +232,7 @@ class WardenBridge:
                 }
             yield event
 
-    async def scan_async(self, path: str, frames: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def scan_async(self, path: str, frames: list[str] | None = None) -> dict[str, Any]:
         """Legacy scan implementation (for compatibility)."""
         # Simplified scan: execute on directory and return summary
         all_issues = []
@@ -250,7 +253,7 @@ class WardenBridge:
                             "line": f.get("line", 0),
                             "frame": fr.get("frame_id")
                         })
-        
+
         if not all_issues and not last_summary:
             return {"success": False, "error": "Scan failed or no files found"}
 
@@ -261,13 +264,13 @@ class WardenBridge:
             "duration": last_duration
         }
 
-    async def analyze_async(self, filePath: str) -> Dict[str, Any]:
+    async def analyze_async(self, filePath: str) -> dict[str, Any]:
         """Alias for execute_pipeline."""
         return await self.execute_pipeline_async(filePath)
 
     # --- Configuration & Metadata ---
 
-    async def get_config_async(self) -> Dict[str, Any]:
+    async def get_config_async(self) -> dict[str, Any]:
         """Get Warden and LLM configuration."""
         providers = []
         if self.llm_config:
@@ -296,12 +299,12 @@ class WardenBridge:
             "config_name": self.active_config_name
         }
 
-    async def get_available_frames_async(self) -> List[Dict[str, Any]]:
+    async def get_available_frames_async(self) -> list[dict[str, Any]]:
         """List all currently active frames with metadata."""
         config = await self.get_config_async()
         return config["frames"]
 
-    async def update_frame_status_async(self, frame_id: str, enabled: bool) -> Dict[str, Any]:
+    async def update_frame_status_async(self, frame_id: str, enabled: bool) -> dict[str, Any]:
         """Update frame status in project config."""
         from warden.cli_bridge.config_manager import ConfigManager
         config_mgr = ConfigManager(self.project_root)
@@ -310,7 +313,7 @@ class WardenBridge:
 
     # --- LLM Analysis ---
 
-    async def analyze_with_llm_async(self, prompt: str, provider: Optional[str] = None, stream: bool = True) -> AsyncIterator[str]:
+    async def analyze_with_llm_async(self, prompt: str, provider: str | None = None, stream: bool = True) -> AsyncIterator[str]:
         """
         Stream LLM analysis response.
 
@@ -337,15 +340,15 @@ class WardenBridge:
 
     # --- Tooling & Diagnostics ---
 
-    async def get_available_providers_async(self) -> List[Dict[str, Any]]:
+    async def get_available_providers_async(self) -> list[dict[str, Any]]:
         """List discoverable AST/LSP providers."""
         return await self.tool_handler.get_available_providers_async()
 
-    async def test_provider_async(self, language: str) -> Dict[str, Any]:
+    async def test_provider_async(self, language: str) -> dict[str, Any]:
         """Test a specific language provider."""
         return await self.tool_handler.test_provider(language)
 
-    async def ping_async(self) -> Dict[str, str]:
+    async def ping_async(self) -> dict[str, str]:
         """Health check."""
         return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 

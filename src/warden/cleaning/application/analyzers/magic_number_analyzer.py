@@ -9,20 +9,21 @@ Detects magic numbers that should be constants:
 Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-import structlog
-from typing import List, Optional, Set, Any
+from typing import Any, List, Optional, Set
 
+import structlog
+
+from warden.ast.domain.enums import ASTNodeType
+from warden.ast.domain.models import ASTNode
 from warden.cleaning.domain.base import BaseCleaningAnalyzer, CleaningAnalyzerPriority
 from warden.cleaning.domain.models import (
+    CleaningIssue,
+    CleaningIssueSeverity,
+    CleaningIssueType,
     CleaningResult,
     CleaningSuggestion,
-    CleaningIssue,
-    CleaningIssueType,
-    CleaningIssueSeverity,
 )
 from warden.validation.domain.frame import CodeFile
-from warden.ast.domain.models import ASTNode
-from warden.ast.domain.enums import ASTNodeType
 
 logger = structlog.get_logger()
 
@@ -31,7 +32,7 @@ ACCEPTABLE_NUMBERS = {
     0, 1, -1, 2, 3, 4, 5, 8, 10, 12, 16, 24, 32, 60, 64, 100, 128, 180,
     255, 256, 360, 365, 500, 512, 1000, 1024, 2048, 4096, 8080, 8192,
     # Common fractions/percentages
-    0.0, 0.1, 0.25, 0.5, 0.75, 1.0, 2.0,
+    0.1, 0.25, 0.5, 0.75, 2.0,
 }
 
 # Acceptable string literals (common patterns)
@@ -74,8 +75,8 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
     async def analyze_async(
         self,
         code_file: CodeFile,
-        cancellation_token: Optional[str] = None,
-        ast_tree: Optional[Any] = None,
+        cancellation_token: str | None = None,
+        ast_tree: Any | None = None,
     ) -> CleaningResult:
         """
         Analyze code for magic numbers using Universal AST.
@@ -161,7 +162,7 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_magic_numbers_universal(self, ast_root: ASTNode) -> List[CleaningIssue]:
+    def _analyze_magic_numbers_universal(self, ast_root: ASTNode) -> list[CleaningIssue]:
         """
         Analyze code for magic numbers using Universal AST.
 
@@ -195,18 +196,17 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
                     )
 
             # Check string literals (only flag long config-like strings)
-            elif isinstance(value, str):
-                if (len(value) > 10 and
-                    value not in ACCEPTABLE_STRINGS and
-                    self._looks_like_config_value(value)):
-                    issues.append(
-                        CleaningIssue(
-                            issue_type=CleaningIssueType.MAGIC_NUMBER,
-                            description=f"Magic string '{value[:30]}...' should be a named constant",
-                            line_number=line_number,
-                            severity=CleaningIssueSeverity.INFO,
-                        )
+            elif isinstance(value, str) and (len(value) > 10 and
+                value not in ACCEPTABLE_STRINGS and
+                self._looks_like_config_value(value)):
+                issues.append(
+                    CleaningIssue(
+                        issue_type=CleaningIssueType.MAGIC_NUMBER,
+                        description=f"Magic string '{value[:30]}...' should be a named constant",
+                        line_number=line_number,
+                        severity=CleaningIssueSeverity.INFO,
                     )
+                )
 
         return issues
 
@@ -230,9 +230,7 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
         if any(x in value.lower() for x in ['host=', 'port=', 'user=', 'password=']):
             return True
         # Email patterns
-        if '@' in value and '.' in value:
-            return True
-        return False
+        return bool('@' in value and '.' in value)
 
     def _create_suggestion(self, issue: CleaningIssue, code: str) -> CleaningSuggestion:
         """Create a cleanup suggestion from an issue."""

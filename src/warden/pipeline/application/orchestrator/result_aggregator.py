@@ -4,12 +4,13 @@ Result aggregator module for validation results.
 Handles result storage, aggregation, and false positive detection.
 """
 
-from typing import Dict, Any, List
-from warden.pipeline.domain.pipeline_context import PipelineContext
+from typing import Any, Dict, List
+
 from warden.pipeline.domain.models import ValidationPipeline
-from warden.validation.domain.frame import Finding
+from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.finding_utils import get_finding_attribute
+from warden.validation.domain.frame import Finding
 
 logger = get_logger(__name__)
 
@@ -70,7 +71,7 @@ class ResultAggregator:
                 finding_dict,
                 getattr(context, 'suppression_rules', [])
             )
-            
+
             if not is_fp:
                 validated_issues.append(finding_dict)
             else:
@@ -94,8 +95,8 @@ class ResultAggregator:
 
     def _is_false_positive(
         self,
-        finding: Dict[str, Any],
-        suppression_rules: List[Dict[str, Any]],
+        finding: dict[str, Any],
+        suppression_rules: list[dict[str, Any]],
     ) -> bool:
         """
         Check if a finding is a false positive based on suppression rules.
@@ -118,7 +119,7 @@ class ResultAggregator:
                 finding_type = get_finding_attribute(finding, "type")
                 rule_context = rule.get("file_context")
                 finding_context = get_finding_attribute(finding, "file_context")
-                
+
                 if rule_type == finding_type and rule_context == finding_context:
                     return True
             elif isinstance(rule, str):
@@ -149,7 +150,7 @@ class ResultAggregator:
     def aggregate_frame_results(
         self,
         context: PipelineContext
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Aggregate results from all executed frames.
 

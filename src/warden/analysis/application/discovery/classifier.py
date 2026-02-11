@@ -18,7 +18,7 @@ class FileClassifier:
     """
 
     # Common non-code files to skip
-    SKIP_EXTENSIONS: Set[str] = {
+    SKIP_EXTENSIONS: set[str] = {
         # Images
         ".png",
         ".jpg",
@@ -129,13 +129,13 @@ class FileClassifier:
         return file_type.is_analyzable
 
     @classmethod
-    def get_supported_extensions(cls) -> Set[str]:
+    def get_supported_extensions(cls) -> set[str]:
         """Get all supported file extensions."""
         from warden.shared.utils.language_utils import get_supported_extensions
         return set(get_supported_extensions())
 
     @classmethod
-    def get_analyzable_extensions(cls) -> Set[str]:
+    def get_analyzable_extensions(cls) -> set[str]:
         """Get file extensions that can be analyzed."""
         from warden.shared.utils.language_utils import get_code_extensions
         return get_code_extensions()

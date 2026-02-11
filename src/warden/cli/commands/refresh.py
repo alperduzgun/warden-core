@@ -5,9 +5,10 @@ Regenerates project intelligence for CI optimization without running a full init
 """
 
 import asyncio
-import typer
 from pathlib import Path
 from typing import Optional, Set
+
+import typer
 from rich.console import Console
 
 console = Console()
@@ -16,7 +17,7 @@ console = Console()
 async def _refresh_intelligence_async(
     root: Path,
     force: bool = False,
-    module: Optional[str] = None,
+    module: str | None = None,
     quick: bool = False
 ) -> bool:
     """
@@ -31,11 +32,12 @@ async def _refresh_intelligence_async(
     Returns:
         True if intelligence was regenerated, False otherwise.
     """
+    from datetime import datetime, timedelta, timezone
+
+    from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
+    from warden.analysis.domain.intelligence import ModuleInfo, RiskLevel, SecurityPosture
     from warden.analysis.services.intelligence_loader import IntelligenceLoader
     from warden.analysis.services.intelligence_saver import IntelligenceSaver
-    from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
-    from warden.analysis.domain.intelligence import SecurityPosture, ModuleInfo, RiskLevel
-    from datetime import datetime, timedelta, timezone
 
     # Check if intelligence exists and is recent
     loader = IntelligenceLoader(root)
@@ -68,12 +70,12 @@ async def _refresh_intelligence_async(
 
     # Filter files based on module or quick mode
     files = all_files
-    existing_file_set: Set[str] = set()
+    existing_file_set: set[str] = set()
 
     # Load existing intelligence for comparison and filtering
     old_modules = {}
     if loader.load():
-        old_modules = {name: info for name, info in loader.get_module_map().items()}
+        old_modules = dict(loader.get_module_map().items())
         intel = loader._intelligence
         if intel:
             # Track existing files for quick mode
@@ -193,7 +195,7 @@ def refresh_command(
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration even if recent"),
     no_intelligence: bool = typer.Option(False, "--no-intelligence", help="Skip intelligence refresh"),
     baseline: bool = typer.Option(False, "--baseline", "-b", help="Also refresh baseline (runs scan)"),
-    module: Optional[str] = typer.Option(None, "--module", "-m", help="Refresh only specific module"),
+    module: str | None = typer.Option(None, "--module", "-m", help="Refresh only specific module"),
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick mode: only analyze new files"),
 ) -> None:
     """

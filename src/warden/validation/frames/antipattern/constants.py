@@ -11,68 +11,65 @@ from typing import Any, Dict, List, Set
 # =============================================================================
 
 # Tree-sitter node types that represent try-catch/exception handling
-TRY_CATCH_NODE_TYPES: Set[str] = {
+TRY_CATCH_NODE_TYPES: set[str] = {
     # Python
     "try_statement", "except_clause",
     # JavaScript/TypeScript
-    "try_statement", "catch_clause",
+    "catch_clause",
     # Java/Kotlin
-    "try_statement", "catch_clause", "try_with_resources_statement",
+    "try_with_resources_statement",
     # C#
-    "try_statement", "catch_clause", "catch_declaration",
+    "catch_declaration",
     # Go (error handling is different but we check for patterns)
     "if_statement",  # if err != nil {...}
     # Ruby
     "begin", "rescue", "rescue_block",
     # PHP
-    "try_statement", "catch_clause",
     # Rust (Result/Option handling)
     "match_expression", "if_let_expression",
     # Swift
-    "do_statement", "catch_clause",
-    # Scala
-    "try_expression", "catch_clause",
+    "do_statement", # Scala
+    "try_expression",
 }
 
 # Tree-sitter node types for class definitions
-CLASS_NODE_TYPES: Set[str] = {
+CLASS_NODE_TYPES: set[str] = {
     # Python
     "class_definition",
     # JavaScript/TypeScript
     "class_declaration", "class",
     # Java
-    "class_declaration", "interface_declaration",
+    "interface_declaration",
     # C#
-    "class_declaration", "interface_declaration", "struct_declaration",
+    "struct_declaration",
     # Go
     "type_declaration", "type_spec",  # struct
     # Rust
     "struct_item", "impl_item", "trait_item",
     # Ruby
-    "class", "module",
+    "module",
     # PHP
-    "class_declaration", "interface_declaration",
     # Kotlin
-    "class_declaration", "object_declaration",
+    "object_declaration",
     # Swift
-    "class_declaration", "struct_declaration", "protocol_declaration",
+    "protocol_declaration",
     # Scala
-    "class_definition", "object_definition", "trait_definition",
+    "object_definition", "trait_definition",
 }
 
 # Tree-sitter node types for function calls (debug output detection)
-CALL_NODE_TYPES: Set[str] = {
+CALL_NODE_TYPES: set[str] = {
     "call_expression", "call", "invocation_expression",
     "method_invocation", "function_call", "application",
 }
 
 # Debug function names by category (language-agnostic where possible)
-DEBUG_FUNCTION_NAMES: Set[str] = {
+DEBUG_FUNCTION_NAMES: set[str] = {
     # Python
     "print", "pprint",
     # JavaScript/TypeScript (console methods detected separately)
     # Java
-    "println", "print", "printStackTrace",
+    "println", "printStackTrace",
     # Go
     "Println", "Printf", "Print",
     # Rust
@@ -82,19 +79,15 @@ DEBUG_FUNCTION_NAMES: Set[str] = {
     # PHP
     "var_dump", "print_r", "dd", "dump", "die",
     # Kotlin
-    "println", "print",
     # Swift
-    "print", "debugPrint", "dump",
-    # Scala
-    "println", "print",
+    "debugPrint", # Scala
     # Dart
-    "print", "debugPrint",
     # C/C++
     "printf", "fprintf", "cout",
 }
 
 # Debug member access patterns (e.g., console.log, System.out.println)
-DEBUG_MEMBER_PATTERNS: Dict[str, Set[str]] = {
+DEBUG_MEMBER_PATTERNS: dict[str, set[str]] = {
     "console": {"log", "debug", "info", "warn", "error", "trace"},
     "System.out": {"print", "println", "printf"},
     "System.err": {"print", "println", "printf"},
@@ -112,7 +105,7 @@ DEBUG_MEMBER_PATTERNS: Dict[str, Set[str]] = {
 # LANGUAGE-SPECIFIC PATTERNS
 # =============================================================================
 
-def get_exception_patterns(language: str) -> Dict[str, Any]:
+def get_exception_patterns(language: str) -> dict[str, Any]:
     """Get exception handling patterns for a language."""
     patterns = {
         "python": {
@@ -164,7 +157,7 @@ def get_exception_patterns(language: str) -> Dict[str, Any]:
     return patterns.get(language, {})
 
 
-def get_debug_patterns(language: str) -> List[str]:
+def get_debug_patterns(language: str) -> list[str]:
     """Get debug output patterns for a language."""
     patterns = {
         "python": [r"print\s*\("],

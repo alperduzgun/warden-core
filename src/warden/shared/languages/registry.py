@@ -6,6 +6,7 @@ Provides unified access to language metadata and discovery.
 
 from pathlib import Path
 from typing import Dict, List, Optional, Set
+
 from warden.ast.domain.enums import CodeLanguage
 from warden.shared.languages.definitions import LANGUAGE_DEFINITIONS, LanguageDefinition
 
@@ -16,8 +17,8 @@ class LanguageRegistry:
     Unifies extension mapping, aliasing, and metadata.
     """
 
-    _definitions: Dict[CodeLanguage, LanguageDefinition] = {d.id: d for d in LANGUAGE_DEFINITIONS}
-    _extension_map: Dict[str, CodeLanguage] = {}
+    _definitions: dict[CodeLanguage, LanguageDefinition] = {d.id: d for d in LANGUAGE_DEFINITIONS}
+    _extension_map: dict[str, CodeLanguage] = {}
 
     @classmethod
     def _initialize_maps(cls):
@@ -32,12 +33,12 @@ class LanguageRegistry:
         cls._initialize_maps()
         if not path:
             return CodeLanguage.UNKNOWN
-            
+
         ext = Path(path).suffix.lower()
         return cls._extension_map.get(ext, CodeLanguage.UNKNOWN)
 
     @classmethod
-    def get_definition(cls, lang: CodeLanguage) -> Optional[LanguageDefinition]:
+    def get_definition(cls, lang: CodeLanguage) -> LanguageDefinition | None:
         """Get rich metadata for a language."""
         return cls._definitions.get(lang)
 
@@ -48,13 +49,13 @@ class LanguageRegistry:
         return defn.primary_extension if defn else ""
 
     @classmethod
-    def get_all_supported_extensions(cls) -> Set[str]:
+    def get_all_supported_extensions(cls) -> set[str]:
         """Get all extensions supported by Warden."""
         cls._initialize_maps()
         return set(cls._extension_map.keys())
 
     @classmethod
-    def get_code_languages(cls) -> List[CodeLanguage]:
+    def get_code_languages(cls) -> list[CodeLanguage]:
         """Get all languages classified as code."""
         return list(cls._definitions.keys())
 

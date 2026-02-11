@@ -10,23 +10,23 @@ Tests code behavior with unexpected/malformed inputs:
 Priority: MEDIUM
 """
 
-import time
 import re
-from typing import List, Dict, Any
+import time
+from typing import Any, Dict, List
 
-from warden.validation.domain.frame import (
-    ValidationFrame,
-    FrameResult,
-    Finding,
-    CodeFile,
-)
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
+    FrameApplicability,
     FrameCategory,
     FramePriority,
     FrameScope,
-    FrameApplicability,
 )
-from warden.shared.infrastructure.logging import get_logger
+from warden.validation.domain.frame import (
+    CodeFile,
+    Finding,
+    FrameResult,
+    ValidationFrame,
+)
 
 logger = get_logger(__name__)
 
@@ -113,7 +113,7 @@ Output must be a valid JSON object with the following structure:
     ]
 }"""
 
-    def __init__(self, config: Dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize FuzzFrame.
 
@@ -195,7 +195,7 @@ Output must be a valid JSON object with the following structure:
         severity: str,
         message: str,
         suggestion: str | None = None,
-    ) -> List[Finding]:
+    ) -> list[Finding]:
         """
         Check for pattern matches in code.
 
@@ -210,7 +210,7 @@ Output must be a valid JSON object with the following structure:
         Returns:
             List of findings
         """
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         try:
             lines = code_file.content.split("\n")
@@ -241,13 +241,13 @@ Output must be a valid JSON object with the following structure:
 
         return findings
 
-    async def _analyze_with_llm(self, code_file: CodeFile) -> List[Finding]:
+    async def _analyze_with_llm(self, code_file: CodeFile) -> list[Finding]:
         """
         Analyze code using LLM for deeper fuzzing insights.
         """
-        findings: List[Finding] = []
+        findings: list[Finding] = []
         try:
-            from warden.llm.types import LlmRequest, AnalysisResult
+            from warden.llm.types import AnalysisResult, LlmRequest
 
             logger.info("fuzz_llm_analysis_started", file=code_file.path)
 

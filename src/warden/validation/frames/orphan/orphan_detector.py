@@ -15,12 +15,13 @@ import abc
 import ast
 import os
 from dataclasses import dataclass
-from typing import List, Dict, Set, Tuple, Optional, Any
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from warden.ast.domain.models import ASTNode
-from warden.ast.domain.enums import ASTNodeType, CodeLanguage
-from warden.ast.application.provider_registry import ASTProviderRegistry
 import structlog
+
+from warden.ast.application.provider_registry import ASTProviderRegistry
+from warden.ast.domain.enums import ASTNodeType, CodeLanguage
+from warden.ast.domain.models import ASTNode
 
 # Try to import Rust extension
 try:
@@ -68,7 +69,7 @@ class AbstractOrphanDetector(abc.ABC):
         self.lines = code.split("\n")
 
     @abc.abstractmethod
-    def detect_all(self) -> List[OrphanFinding]:
+    def detect_all(self) -> list[OrphanFinding]:
         """
         Detect all orphan code issues.
 
@@ -99,21 +100,21 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
     def __init__(self, code: str, file_path: str) -> None:
         super().__init__(code, file_path)
-        
+
         # Parse AST
         try:
             self.tree = ast.parse(code)
         except SyntaxError:
             self.tree = None  # Invalid syntax - can't analyze
 
-    def detect_all(self) -> List[OrphanFinding]:
+    def detect_all(self) -> list[OrphanFinding]:
         """
         Detect all orphan code issues using Python AST.
         """
         if self.tree is None:
             return []  # Can't analyze invalid syntax
 
-        findings: List[OrphanFinding] = []
+        findings: list[OrphanFinding] = []
 
         # Detect unused imports
         findings.extend(self.detect_unused_imports())
@@ -126,25 +127,23 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
         return findings
 
-    def detect_unused_imports(self) -> List[OrphanFinding]:
+    def detect_unused_imports(self) -> list[OrphanFinding]:
         """Detect unused imports."""
         if self.tree is None:
             return []
 
-        findings: List[OrphanFinding] = []
+        findings: list[OrphanFinding] = []
 
         # Find TYPE_CHECKING blocks (imports there are for type hints only)
-        type_checking_lines: Set[int] = set()
+        type_checking_lines: set[int] = set()
         for node in ast.walk(self.tree):
             if isinstance(node, ast.If):
                 test = node.test
                 # Check for `if TYPE_CHECKING:` or `if typing.TYPE_CHECKING:`
                 is_type_checking = False
-                if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
+                if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING" or isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING":
                     is_type_checking = True
-                elif isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING":
-                    is_type_checking = True
-                
+
                 if is_type_checking:
                     # Mark all lines in the body as type checking imports
                     for stmt in node.body:
@@ -153,7 +152,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                                 type_checking_lines.add(child.lineno)
 
         # Collect all imports (excluding TYPE_CHECKING blocks)
-        imports: Dict[str, Tuple[int, str]] = {}  # name -> (line_num, full_import)
+        imports: dict[str, tuple[int, str]] = {}  # name -> (line_num, full_import)
 
         for node in ast.walk(self.tree):
             if isinstance(node, ast.Import):
@@ -181,7 +180,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                     )
 
         # Extract __all__ list if present (for re-export detection)
-        all_exports: Set[str] = set()
+        all_exports: set[str] = set()
         for node in ast.walk(self.tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:
@@ -194,7 +193,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                                     all_exports.add(elt.s)
 
         # Collect all name references (excluding import statements)
-        references: Set[str] = set()
+        references: set[str] = set()
 
         for node in ast.walk(self.tree):
             # Skip import nodes
@@ -215,11 +214,11 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                     references.add(base.id)
 
         # Find unused imports (but skip if in __all__ - they're re-exports)
-        for import_name, (line_num, import_stmt) in imports.items():
+        for import_name, (line_num, _import_stmt) in imports.items():
             # Skip if name is in __all__ (re-exported)
             if import_name in all_exports:
                 continue
-            
+
             if import_name not in references:
                 code_snippet = self._get_line(line_num)
                 findings.append(
@@ -234,15 +233,15 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
         return findings
 
-    def detect_unreferenced_definitions(self) -> List[OrphanFinding]:
+    def detect_unreferenced_definitions(self) -> list[OrphanFinding]:
         """Detect unreferenced functions and classes."""
         if self.tree is None:
             return []
 
-        findings: List[OrphanFinding] = []
+        findings: list[OrphanFinding] = []
 
         # Collect all function/class definitions
-        definitions: Dict[str, Tuple[int, str, str, ast.AST]] = {}  # name -> (line, type, code, node)
+        definitions: dict[str, tuple[int, str, str, ast.AST]] = {}  # name -> (line, type, code, node)
 
         for node in ast.walk(self.tree):
             if isinstance(node, ast.FunctionDef):
@@ -254,11 +253,11 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 definitions[node.name] = (line_num, "class", f"class {node.name}", node)
 
         # Collect all name references (excluding the definitions themselves)
-        references: Set[str] = set()
+        references: set[str] = set()
 
         class ReferenceCollector(ast.NodeVisitor):
             def __init__(self) -> None:
-                self.refs: Set[str] = set()
+                self.refs: set[str] = set()
                 self.in_definition = False
                 self.current_def_name = ""
 
@@ -291,7 +290,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
         references = collector.refs
 
         # Find unreferenced definitions
-        for def_name, (line_num, def_type, def_code, node) in definitions.items():
+        for def_name, (line_num, def_type, _def_code, node) in definitions.items():
             if def_name not in references:
                 # Check if it's a special method/function (skip those)
                 if def_name in ["main", "__init__", "__str__", "__repr__"]:
@@ -299,7 +298,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
                 # Get accurate snippet including decorators
                 code_snippet = self._get_definition_snippet(node)
-                
+
                 findings.append(
                     OrphanFinding(
                         orphan_type=f"unreferenced_{def_type}",
@@ -318,44 +317,44 @@ class PythonOrphanDetector(AbstractOrphanDetector):
         """
         if not hasattr(node, 'lineno'):
             return ""
-            
+
         start_line = node.lineno
         end_line = getattr(node, 'end_lineno', start_line)
-        
+
         # Include decorators if present
         if hasattr(node, 'decorator_list') and node.decorator_list:
             # Find the earliest line among decorators
             for dec in node.decorator_list:
                 if hasattr(dec, 'lineno'):
                     start_line = min(start_line, dec.lineno)
-        
+
         lines = []
         # Get lines from start_line to end_line (or limit to 20 lines)
         max_lines = 20
         current_line = start_line
-        
+
         while current_line <= len(self.lines) and len(lines) < max_lines:
             line = self.lines[current_line - 1] # 0-indexed list
             lines.append(line)
-            
+
             # Stop if we reach the end of the node
             if end_line and current_line >= end_line:
                 break
-                
+
             current_line += 1
-            
+
         return "\n".join(lines).strip()
 
-    def detect_dead_code(self) -> List[OrphanFinding]:
+    def detect_dead_code(self) -> list[OrphanFinding]:
         """Detect dead code (unreachable statements)."""
         if self.tree is None:
             return []
 
-        findings: List[OrphanFinding] = []
+        findings: list[OrphanFinding] = []
 
         class DeadCodeFinder(ast.NodeVisitor):
             def __init__(self, detector: "PythonOrphanDetector") -> None:
-                self.findings: List[OrphanFinding] = []
+                self.findings: list[OrphanFinding] = []
                 self.detector = detector
 
             def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -381,7 +380,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 self._check_block(node.orelse)
                 self.generic_visit(node)
 
-            def _check_block(self, statements: List[ast.stmt]) -> None:
+            def _check_block(self, statements: list[ast.stmt]) -> None:
                 """
                 Check a block of statements for dead code.
                 """
@@ -436,19 +435,19 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         super().__init__(code, file_path)
         self.ast_root = ast_root
 
-    def detect_all(self) -> List[OrphanFinding]:
+    def detect_all(self) -> list[OrphanFinding]:
         """
         Detect all orphan code issues using Universal AST.
         """
-        findings: List[OrphanFinding] = []
+        findings: list[OrphanFinding] = []
 
         # 1. Collect all definitions (functions, classes, interfaces)
         definitions = self._collect_definitions(self.ast_root)
 
         # 2. Collect node IDs to exclude (definition sites) - using id() since ASTNode isn't hashable
-        exclude_node_ids = set(
+        exclude_node_ids = {
             id(node) for _, (_, _, node) in definitions.items()
-        )
+        }
 
         # 3. Collect all identifier references
         references = self._collect_references(self.ast_root, exclude_node_ids=exclude_node_ids)
@@ -473,12 +472,12 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
 
         return findings
 
-    def _collect_definitions(self, root: ASTNode) -> Dict[str, Tuple[int, str, ASTNode]]:
+    def _collect_definitions(self, root: ASTNode) -> dict[str, tuple[int, str, ASTNode]]:
         """
         Collect function, class, and interface definitions.
         """
-        definitions: Dict[str, Tuple[int, str, ASTNode]] = {}
-        
+        definitions: dict[str, tuple[int, str, ASTNode]] = {}
+
         # Types we consider as "definitions" that can be orphans
         target_types = {
             ASTNodeType.FUNCTION,
@@ -496,18 +495,18 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
                         node.node_type.value.capitalize(),
                         node
                     )
-            
+
             for child in node.children:
                 walk(child)
 
         walk(root)
         return definitions
 
-    def _collect_references(self, root: ASTNode, exclude_node_ids: Set[int]) -> Set[str]:
+    def _collect_references(self, root: ASTNode, exclude_node_ids: set[int]) -> set[str]:
         """
         Collect all identifier references, excluding definition sites.
         """
-        references: Set[str] = set()
+        references: set[str] = set()
 
         def is_excluded(node: ASTNode) -> bool:
             # Check if this node's id is in the exclusion set
@@ -517,10 +516,9 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
             if is_excluded(node):
                 return
 
-            if node.node_type == ASTNodeType.IDENTIFIER:
-                if node.name:
-                    references.add(node.name)
-            
+            if node.node_type == ASTNodeType.IDENTIFIER and node.name:
+                references.add(node.name)
+
             for child in node.children:
                 walk(child)
 
@@ -538,10 +536,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         # In many languages (TS, Go), anything exported is effectively "used"
         # We check metadata if available (use getattr for safety)
         metadata = getattr(node, 'metadata', None) or {}
-        if isinstance(metadata, dict) and metadata.get("is_exported"):
-            return True
-
-        return False
+        return bool(isinstance(metadata, dict) and metadata.get("is_exported"))
 
     def _get_node_snippet(self, node: ASTNode) -> str:
         """
@@ -549,10 +544,10 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         """
         if not node.location:
             return ""
-        
+
         start = node.location.start_line - 1
         end = min(node.location.end_line, start + 5)
-        
+
         lines = self.lines[start:end]
         return "\n".join(lines).strip()
 
@@ -566,42 +561,42 @@ class TreeSitterOrphanDetector(AbstractOrphanDetector):
 class RustOrphanDetector(AbstractOrphanDetector):
     """
     High-performance orphan detector using Rust + Tree-sitter.
-    
+
     Delegates parsing and extraction to the Rust extension (warden_core_rust).
     """
-    
-    def detect_all(self) -> List[OrphanFinding]:
+
+    def detect_all(self) -> list[OrphanFinding]:
         if not warden_core_rust:
             logger.warning("rust_orhan_detector_unavailable", reason="Extension not loaded")
             return []
 
-        findings: List[OrphanFinding] = []
-        
+        findings: list[OrphanFinding] = []
+
         # Use central Registry for language ID
         from warden.shared.languages.registry import LanguageRegistry
         lang_enum = LanguageRegistry.get_language_from_path(self.file_path)
         language = lang_enum.value if lang_enum != CodeLanguage.UNKNOWN else None
-        
+
         if not language:
             return []
 
         try:
             # 1. Get Metadata (Definitions + References) from Rust
             meta = warden_core_rust.get_ast_metadata(self.code, language)
-            
+
             # 2. Convert reference list to counts for fast lookup
             # This is a heuristic: "If name appears <= 1 time, it might be unused"
             # (1 time = the definition itself).
             from collections import Counter
             ref_counts = Counter(meta.references)
-            
+
             # 3. Check Functions
             for func in meta.functions:
                 if self._is_orphan(func.name, ref_counts):
                      # Double check specific suppression (e.g. main)
                     if self._should_skip(func.name):
                         continue
-                        
+
                     findings.append(OrphanFinding(
                         orphan_type="unreferenced_function",
                         name=func.name,
@@ -640,10 +635,10 @@ class RustOrphanDetector(AbstractOrphanDetector):
 
         except Exception as e:
             logger.error("rust_orphan_detection_failed", file=self.file_path, error=str(e))
-            
+
         return findings
 
-    def _is_orphan(self, name: str, ref_counts: Dict[str, int]) -> bool:
+    def _is_orphan(self, name: str, ref_counts: dict[str, int]) -> bool:
         """
         Check if a name is likely an orphan.
         Heuristic: If count <= 1, it's unused (only the definition/import site).
@@ -683,9 +678,9 @@ class LSPOrphanDetector(AbstractOrphanDetector):
         super().__init__(code, file_path)
         self.lsp_client = lsp_client
         self.language = language
-        self._symbols_cache: Optional[List[Dict]] = None
+        self._symbols_cache: list[dict] | None = None
 
-    def detect_all(self) -> List[OrphanFinding]:
+    def detect_all(self) -> list[OrphanFinding]:
         """
         Detect orphans using LSP - requires async wrapper.
 
@@ -697,7 +692,7 @@ class LSPOrphanDetector(AbstractOrphanDetector):
         logger.warning("lsp_orphan_detector_sync_call", hint="use detect_all_async")
         return []
 
-    async def detect_all_async(self) -> List[OrphanFinding]:
+    async def detect_all_async(self) -> list[OrphanFinding]:
         """
         Detect all orphan code using LSP references.
 
@@ -707,7 +702,7 @@ class LSPOrphanDetector(AbstractOrphanDetector):
         3. For each symbol, find references
         4. If ref_count <= 1 (only definition), it's orphan
         """
-        findings: List[OrphanFinding] = []
+        findings: list[OrphanFinding] = []
 
         try:
             # 1. Open document
@@ -780,7 +775,7 @@ class LSPOrphanDetector(AbstractOrphanDetector):
 
         return findings
 
-    def _flatten_symbols(self, symbols: List[Dict]) -> List[Dict]:
+    def _flatten_symbols(self, symbols: list[dict]) -> list[dict]:
         """Flatten nested DocumentSymbol structure."""
         result = []
         for symbol in symbols:
@@ -812,6 +807,7 @@ class LSPOrphanDetector(AbstractOrphanDetector):
 
 # Type hint for LSP client (avoid circular import)
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from warden.lsp.client import LanguageServerClient
 
@@ -833,7 +829,7 @@ class OrphanDetectorFactory:
     """
 
     # Language to LSP language ID mapping
-    LANGUAGE_ID_MAP: Dict[str, str] = {
+    LANGUAGE_ID_MAP: dict[str, str] = {
         ".py": "python",
         ".ts": "typescript",
         ".tsx": "typescript",
@@ -848,8 +844,8 @@ class OrphanDetectorFactory:
         code: str,
         file_path: str,
         use_lsp: bool = False,
-        project_root: Optional[str] = None
-    ) -> Optional[AbstractOrphanDetector]:
+        project_root: str | None = None
+    ) -> AbstractOrphanDetector | None:
         """
         Create detector instance based on file type and available backends.
 
@@ -914,7 +910,7 @@ class OrphanDetectorFactory:
         file_path: str,
         ext: str,
         project_root: str
-    ) -> Optional[LSPOrphanDetector]:
+    ) -> LSPOrphanDetector | None:
         """
         Try to create an LSP-based detector.
 

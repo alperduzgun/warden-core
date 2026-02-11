@@ -9,9 +9,9 @@ Provides service-level components for the analysis module:
 - LinterService: Orchestrates linting operations
 """
 
+from warden.analysis.services.finding_verifier import FindingVerificationService
 from warden.analysis.services.intelligence_loader import IntelligenceLoader
 from warden.analysis.services.intelligence_saver import IntelligenceSaver
-from warden.analysis.services.finding_verifier import FindingVerificationService
 from warden.analysis.services.linter_runner import LinterRunner
 from warden.analysis.services.linter_service import LinterService
 

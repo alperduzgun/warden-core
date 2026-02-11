@@ -6,7 +6,8 @@ Parses .gitignore files and filters file paths accordingly.
 
 import re
 from pathlib import Path
-from typing import List, Pattern
+from re import Pattern
+from typing import List
 
 
 class GitignoreFilter:
@@ -24,8 +25,8 @@ class GitignoreFilter:
             root_path: Root directory of the project
         """
         self.root_path = root_path
-        self.patterns: List[Pattern[str]] = []
-        self.raw_patterns: List[str] = []
+        self.patterns: list[Pattern[str]] = []
+        self.raw_patterns: list[str] = []
 
         # Default patterns to always ignore
         self._add_default_patterns()
@@ -100,7 +101,7 @@ class GitignoreFilter:
             return
 
         try:
-            with open(gitignore_path, "r", encoding="utf-8") as f:
+            with open(gitignore_path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
 
@@ -109,7 +110,7 @@ class GitignoreFilter:
                         continue
 
                     self.add_pattern(line)
-        except (IOError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             # If we can't read the file, just skip it
             pass
 
@@ -209,13 +210,9 @@ class GitignoreFilter:
         path_str = str(relative_path).replace("\\", "/")
 
         # Check against all patterns
-        for pattern in self.patterns:
-            if pattern.search(path_str):
-                return True
+        return any(pattern.search(path_str) for pattern in self.patterns)
 
-        return False
-
-    def filter_files(self, file_paths: List[Path]) -> List[Path]:
+    def filter_files(self, file_paths: list[Path]) -> list[Path]:
         """
         Filter a list of file paths, removing ignored files.
 
@@ -234,7 +231,7 @@ class GitignoreFilter:
         """
         return [path for path in file_paths if not self.should_ignore(path)]
 
-    def get_patterns(self) -> List[str]:
+    def get_patterns(self) -> list[str]:
         """
         Get all loaded patterns.
 
@@ -270,7 +267,7 @@ def create_gitignore_filter(project_root: Path) -> GitignoreFilter:
     # Load .gitignore from project root
     gitignore_path = project_root / ".gitignore"
     git_filter.load_gitignore(gitignore_path)
-    
+
     # Load .wardenignore from project root (explicit override)
     wardenignore_path = project_root / ".wardenignore"
     git_filter.load_gitignore(wardenignore_path)

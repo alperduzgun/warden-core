@@ -1,6 +1,6 @@
 llm:
-  fast_model: gemini-1.5-pro
+  fast_model: qwen2.5-coder:0.5b
   provider: ollama
-  smart_model: qwen2.5-coder
+  smart_model: qwen2.5-coder:32b
 vector_db:
   provider: local

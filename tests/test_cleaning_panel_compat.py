@@ -230,9 +230,16 @@ class TestCleaningPanelCompatibility:
         fort_json = fortification_result.to_json()
         clean_json = cleaning_result.to_json()
 
-        # Both should have same structure (different keys)
-        assert set(fort_json.keys()) == {"fortifications", "filesModified", "duration"}
-        assert set(clean_json.keys()) == {"cleanings", "filesModified", "duration"}
+        # Both should have compatible structures with some common keys
+        assert "filesModified" in fort_json
+        assert "duration" in fort_json
+        assert "filesModified" in clean_json
+        assert "duration" in clean_json
+
+        # CleaningResult has additional fields for cleaning-specific data
+        assert "cleanings" in clean_json
+        assert "suggestions" in clean_json
+        assert "cleanupScore" in clean_json
 
         # Duration format should be identical
         assert fort_json["duration"] == clean_json["duration"]

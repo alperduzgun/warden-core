@@ -5,10 +5,11 @@ Loads configuration from environment variables and .env file.
 """
 
 import secrets
+from typing import List
+
+import structlog
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
-import structlog
 
 
 class Settings(BaseSettings):
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
     api_reload: bool = Field(default=True, description="Auto-reload on code changes")
 
     # CORS
-    cors_origins: List[str] = Field(
+    cors_origins: list[str] = Field(
         default=[],
         description="Allowed CORS origins",
     )

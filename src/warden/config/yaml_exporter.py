@@ -5,8 +5,9 @@ Exports PipelineConfig models to YAML format.
 Preserves node positions for visual builder compatibility.
 """
 
-from typing import Dict, Any
 from pathlib import Path
+from typing import Any, Dict
+
 import yaml
 
 from warden.config.domain.models import PipelineConfig
@@ -17,7 +18,7 @@ class YAMLExportError(Exception):
     pass
 
 
-def export_to_dict(config: PipelineConfig, simple_format: bool = False) -> Dict[str, Any]:
+def export_to_dict(config: PipelineConfig, simple_format: bool = False) -> dict[str, Any]:
     """
     Export PipelineConfig to dictionary.
 
@@ -34,7 +35,7 @@ def export_to_dict(config: PipelineConfig, simple_format: bool = False) -> Dict[
         return export_full_format(config)
 
 
-def export_simple_format(config: PipelineConfig) -> Dict[str, Any]:
+def export_simple_format(config: PipelineConfig) -> dict[str, Any]:
     """
     Export to simple CLI-friendly format.
 
@@ -49,7 +50,7 @@ def export_simple_format(config: PipelineConfig) -> Dict[str, Any]:
                 frame_ids.append(frame_id)
 
     # Build simple YAML
-    data: Dict[str, Any] = {
+    data: dict[str, Any] = {
         'version': config.version,
         'name': config.name,
         'frames': frame_ids,
@@ -75,13 +76,13 @@ def export_simple_format(config: PipelineConfig) -> Dict[str, Any]:
     return data
 
 
-def export_full_format(config: PipelineConfig) -> Dict[str, Any]:
+def export_full_format(config: PipelineConfig) -> dict[str, Any]:
     """
     Export to full visual builder format.
 
     Includes all nodes, edges, positions, rules, etc.
     """
-    data: Dict[str, Any] = {
+    data: dict[str, Any] = {
         'version': config.version,
         'id': config.id,
         'name': config.name,
@@ -108,7 +109,7 @@ def export_full_format(config: PipelineConfig) -> Dict[str, Any]:
 
     # Add nodes with positions
     for node in config.nodes:
-        node_dict: Dict[str, Any] = {
+        node_dict: dict[str, Any] = {
             'id': node.id,
             'type': node.type,
             'position': {
@@ -122,7 +123,7 @@ def export_full_format(config: PipelineConfig) -> Dict[str, Any]:
 
     # Add edges
     for edge in config.edges:
-        edge_dict: Dict[str, Any] = {
+        edge_dict: dict[str, Any] = {
             'id': edge.id,
             'source': edge.source,
             'target': edge.target

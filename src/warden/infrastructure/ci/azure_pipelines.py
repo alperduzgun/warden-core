@@ -5,8 +5,8 @@ Generates Azure Pipelines YAML files for running Warden in CI/CD.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
 
 
 @dataclass
@@ -14,13 +14,13 @@ class AzurePipelinesConfig:
     """Configuration for Azure Pipelines."""
 
     pipeline_name: str = "Warden Analysis"
-    trigger_branches: List[str] = None
+    trigger_branches: list[str] = None
     pool: str = "ubuntu-latest"
     python_version: str = "3.11"
-    warden_version: Optional[str] = None
+    warden_version: str | None = None
     fail_on_issues: bool = True
     publish_artifacts: bool = True
-    frames: Optional[List[str]] = None
+    frames: list[str] | None = None
 
     def __post_init__(self):
         if self.trigger_branches is None:
@@ -110,7 +110,7 @@ steps:
         return template
 
     @staticmethod
-    def _generate_triggers(branches: List[str]) -> str:
+    def _generate_triggers(branches: list[str]) -> str:
         """Generate trigger section."""
         if len(branches) == 1:
             return f"trigger:\n  - {branches[0]}"
@@ -171,10 +171,7 @@ steps:
             if "steps" not in data:
                 return False
 
-            if not isinstance(data["steps"], list):
-                return False
-
-            return True
+            return isinstance(data["steps"], list)
 
         except Exception:
             return False

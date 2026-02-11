@@ -12,11 +12,11 @@ from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
     LLMPhaseConfig,
 )
-from warden.classification.application.classification_prompts import (
-    get_classification_system_prompt,
-    format_classification_user_prompt,
-)
 from warden.analysis.domain.project_context import Framework, ProjectType
+from warden.classification.application.classification_prompts import (
+    format_classification_user_prompt,
+    get_classification_system_prompt,
+)
 from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -41,10 +41,10 @@ class LLMClassificationPhase(LLMPhaseBase):
     Intelligently selects validation frames and suppresses false positives.
     """
 
-    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: List[Any] = None, context: Dict[str, Any] = None, semantic_search_service: Any = None, memory_manager: Any = None, rate_limiter: Any = None) -> None:
+    def __init__(self, config: LLMPhaseConfig, llm_service: Any, available_frames: list[Any] = None, context: dict[str, Any] = None, semantic_search_service: Any = None, memory_manager: Any = None, rate_limiter: Any = None) -> None:
         """
         Initialize LLM classification phase.
-        
+
         Args:
             config: Phase configuration
             llm_service: LLM service instance
@@ -68,18 +68,18 @@ class LLMClassificationPhase(LLMPhaseBase):
         """Get classification system prompt."""
         return get_classification_system_prompt(self.available_frames)
 
-    def format_user_prompt(self, context: Dict[str, Any]) -> str:
+    def format_user_prompt(self, context: dict[str, Any]) -> str:
         """Format user prompt for classification."""
         return format_classification_user_prompt(context)
 
-    def parse_llm_response(self, response: str) -> Dict[str, Any]:
+    def parse_llm_response(self, response: str) -> dict[str, Any]:
         """Parse LLM classification response."""
         try:
             from warden.shared.utils.json_parser import parse_json_from_llm
             result = parse_json_from_llm(response)
             if not result:
                 raise ValueError("No valid JSON found in response")
-            
+
             # Ensure it's a dict
             if not isinstance(result, dict):
                  raise ValueError(f"Expected dict, got {type(result)}")
@@ -121,10 +121,10 @@ class LLMClassificationPhase(LLMPhaseBase):
         self,
         project_type: ProjectType,
         framework: Framework,
-        files: List[str],
-        file_contexts: Dict[str, Dict[str, Any]],
-        previous_issues: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Tuple[List[str], Dict[str, Any], float]]:
+        files: list[str],
+        file_contexts: dict[str, dict[str, Any]],
+        previous_issues: list[dict[str, Any]] | None = None,
+    ) -> dict[str, tuple[list[str], dict[str, Any], float]]:
         """
         Classify multiple files in batch for frame selection.
         """
@@ -142,29 +142,29 @@ class LLMClassificationPhase(LLMPhaseBase):
 
         # Initial requested batch size
         requested_batch_size = 2
-        
+
         i = 0
         while i < len(files):
             # Dynamically adjust batch size based on system resources
             batch_size = self._get_realtime_safe_batch_size(requested_batch_size)
             batch_files = files[i : i + batch_size]
-            
+
             try:
                 # Prepare Batch Prompt
                 prompt = self._format_classification_batch_user_prompt(
                     project_type, framework, batch_files, file_contexts, previous_issues
                 )
-                
+
                 # Call LLM via Base Retry Logic (Enables Complexity Routing & Rate Limiting)
                 response = await self._call_llm_with_retry_async(
                     system_prompt=self.get_system_prompt(),
                     user_prompt=prompt,
                     use_fast_tier=True
                 )
-                
+
                 # Parse Batch Results
                 batch_results = self._parse_classification_batch_response(response.content, len(batch_files))
-                
+
                 # Map back
                 for idx, file_path in enumerate(batch_files):
                     llm_data = batch_results[idx] if idx < len(batch_results) else None
@@ -172,7 +172,7 @@ class LLMClassificationPhase(LLMPhaseBase):
                         selected_frames = llm_data.get("selected_frames", ["security", "chaos", "orphan"])
                         # Normalize
                         selected_frames = [f.lower().replace("frame", "").strip() for f in selected_frames]
-                        
+
                         suppression_config = {
                             "rules": llm_data.get("suppression_rules", []),
                             "priorities": llm_data.get("priorities", {}),
@@ -220,7 +220,7 @@ FILES TO ANALYZE:
 {{batch_summary}}
 """
 
-    def _parse_classification_batch_response(self, response: str, count: int) -> List[Dict[str, Any]]:
+    def _parse_classification_batch_response(self, response: str, count: int) -> list[dict[str, Any]]:
         try:
             from warden.shared.utils.json_parser import parse_json_from_llm
             result = parse_json_from_llm(response)
@@ -236,9 +236,9 @@ FILES TO ANALYZE:
 
     async def generate_suppression_rules_async(
         self,
-        findings: List[Dict[str, Any]],
-        file_contexts: Dict[str, Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        findings: list[dict[str, Any]],
+        file_contexts: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         # ... (unchanged) ...
         return await super().generate_suppression_rules_async(findings, file_contexts) # Reverting to original flow if not needed
         # Actually I need to keep the method, I just won't touch it.
@@ -254,9 +254,9 @@ FILES TO ANALYZE:
 
     async def generate_suppression_rules_async(
         self,
-        findings: List[Dict[str, Any]],
-        file_contexts: Dict[str, Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        findings: list[dict[str, Any]],
+        file_contexts: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """
         Generate suppression rules for false positives.
 
@@ -302,9 +302,9 @@ Return as JSON list of suppression rules."""
 
     async def learn_from_feedback_async(
         self,
-        false_positive_ids: List[str],
-        true_positive_ids: List[str],
-        findings: List[Dict[str, Any]],
+        false_positive_ids: list[str],
+        true_positive_ids: list[str],
+        findings: list[dict[str, Any]],
     ) -> None:
         """
         Learn from user feedback on findings.
@@ -358,8 +358,8 @@ Return patterns as JSON."""
         self,
         project_type: ProjectType,
         framework: Framework,
-        file_contexts: Dict[str, Dict[str, Any]],
-    ) -> List[str]:
+        file_contexts: dict[str, dict[str, Any]],
+    ) -> list[str]:
         """Rule-based frame selection fallback."""
         selected = []
 
@@ -386,8 +386,8 @@ Return patterns as JSON."""
 
     def _default_suppression_config(
         self,
-        file_contexts: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        file_contexts: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
         """Generate default suppression configuration."""
         rules = []
 
@@ -425,9 +425,9 @@ Return patterns as JSON."""
 
     def _rule_based_suppression(
         self,
-        findings: List[Dict[str, Any]],
-        file_contexts: Dict[str, Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        findings: list[dict[str, Any]],
+        file_contexts: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Rule-based suppression generation."""
         suppression_rules = []
 
@@ -457,7 +457,7 @@ Return patterns as JSON."""
 
         return suppression_rules
 
-    async def execute_async(self, code_files: List[Any]) -> Any:
+    async def execute_async(self, code_files: list[Any]) -> Any:
         """
         Execute LLM-enhanced classification phase with True Batching.
         """
@@ -473,7 +473,7 @@ Return patterns as JSON."""
         # Prepare context
         project_type_str = self.context.get("project_type", ProjectType.APPLICATION.value)
         framework_str = self.context.get("framework", Framework.NONE.value)
-        
+
         def get_enum_safe(enum_cls, value, default):
             try:
                 return enum_cls(value)
@@ -482,7 +482,7 @@ Return patterns as JSON."""
 
         project_type = get_enum_safe(ProjectType, project_type_str, ProjectType.APPLICATION)
         framework = get_enum_safe(Framework, framework_str, Framework.NONE)
-        
+
         raw_file_contexts = self.context.get("file_contexts", {})
         file_contexts = {}
         for path, ctx in raw_file_contexts.items():
@@ -519,7 +519,7 @@ Return patterns as JSON."""
         all_reasoning = []
         all_advisories = []
 
-        for file_path, (frames, suppression_config, confidence) in batch_results.items():
+        for file_path, (frames, suppression_config, _confidence) in batch_results.items():
             all_frames.update(frames)
             all_suppression_rules.extend(suppression_config.get("rules", []))
             all_priorities.update(suppression_config.get("priorities", {}))
@@ -541,12 +541,12 @@ Return patterns as JSON."""
         from dataclasses import dataclass
         @dataclass
         class ClassificationResult:
-            selected_frames: List[str]
-            suppression_rules: List[Dict[str, Any]]
-            frame_priorities: Dict[str, str]
+            selected_frames: list[str]
+            suppression_rules: list[dict[str, Any]]
+            frame_priorities: dict[str, str]
             reasoning: str
-            learned_patterns: List[Dict[str, Any]]
-            advisories: List[str]
+            learned_patterns: list[dict[str, Any]]
+            advisories: list[str]
 
         return ClassificationResult(
             selected_frames=list(all_frames),
@@ -557,20 +557,20 @@ Return patterns as JSON."""
             advisories=list(set(all_advisories))[:20] # Cap and dedup
         )
 
-    def _create_default_result(self, frames: List[str]) -> Any:
+    def _create_default_result(self, frames: list[str]) -> Any:
         from dataclasses import dataclass
         @dataclass
         class ClassificationResult:
-            selected_frames: List[str]
-            suppression_rules: List[Dict[str, Any]]
-            frame_priorities: Dict[str, str]
+            selected_frames: list[str]
+            suppression_rules: list[dict[str, Any]]
+            frame_priorities: dict[str, str]
             reasoning: str
-            learned_patterns: List[Dict[str, Any]]
-            
+            learned_patterns: list[dict[str, Any]]
+
         return ClassificationResult(
             selected_frames=frames,
             suppression_rules=[],
-            frame_priorities={f: "HIGH" for f in frames},
+            frame_priorities=dict.fromkeys(frames, "HIGH"),
             reasoning="Default frames (fallback)",
             learned_patterns=[]
         )
