@@ -53,6 +53,8 @@ temp/
 .warden/backend.pid
 .warden/memory/
 .warden/reports/
+.warden/staging/
+warden.lock
 
 # Python build artifacts
 *.egg-info/

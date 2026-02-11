@@ -208,14 +208,14 @@ class ConfigGenerator:
                 config["frames_config"]["security"]["checks"] = list(set(checks))
 
         elif framework == "fastapi":
-            # Add async validation and stress testing
-            if "stress" not in config["frames"]:
-                config["frames"].append("stress")
+            # Add async-specific resilience checks
             if "frames_config" not in config:
                 config["frames_config"] = {}
-            config["frames_config"]["stress"] = {
+            if "resilience" not in config.get("frames", []):
+                config["frames"].append("resilience")
+            config["frames_config"]["resilience"] = {
                 "enabled": True,
-                "checks": ["api_load_testing", "async_performance"],
+                "checks": ["timeout_handling", "retry_logic", "error_recovery"],
             }
 
         elif framework == "flask":
