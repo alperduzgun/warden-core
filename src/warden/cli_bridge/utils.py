@@ -39,22 +39,15 @@ def serialize_pipeline_result(result: Any) -> dict[str, Any]:
 
             # First try from result.frame_results (might be objects)
             if hasattr(result, 'frame_results') and result.frame_results:
-                import sys
-                print(f"DEBUG: Processing {len(result.frame_results)} frame_results", file=sys.stderr)
                 for frame_res in result.frame_results:
-                    # If FrameResult object, access findings attribute directly
                     if hasattr(frame_res, 'findings') and frame_res.findings:
-                        print(f"DEBUG: Frame {getattr(frame_res, 'frame_id', 'unknown')} has {len(frame_res.findings)} findings", file=sys.stderr)
-                        # findings is a list of Finding objects
                         for finding in frame_res.findings:
-                            # Convert Finding to dict
                             if hasattr(finding, 'to_dict'):
                                 all_findings.append(finding.to_dict())
                             elif hasattr(finding, 'to_json'):
                                 all_findings.append(finding.to_json())
                             elif isinstance(finding, dict):
                                 all_findings.append(finding)
-                print(f"DEBUG: Total findings aggregated: {len(all_findings)}", file=sys.stderr)
 
             # Fallback: try from serialized data
             elif 'frame_results' in data and isinstance(data['frame_results'], list):

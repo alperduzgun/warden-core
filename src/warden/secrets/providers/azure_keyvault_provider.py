@@ -159,7 +159,7 @@ class AzureKeyVaultProvider(ISecretProvider):
         try:
             # Convert key format
             secret_name = self._convert_key_to_vault_name(key)
-            secret = client.get_secret_async(secret_name)
+            secret = client.get_secret(secret_name)
 
             logger.debug(
                 "azure_keyvault_secret_retrieved",

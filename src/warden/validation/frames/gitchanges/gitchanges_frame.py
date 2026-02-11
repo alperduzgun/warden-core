@@ -250,6 +250,7 @@ class GitChangesFrame(ValidationFrame):
             text=True,
             check=True,
             cwd=str(Path(file_path).parent.absolute()),
+            timeout=30,
         )
 
         return result.stdout

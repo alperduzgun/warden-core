@@ -76,6 +76,10 @@ class GeminiClient(ILlmClient):
             }
 
         try:
+            from warden.llm.global_rate_limiter import GlobalRateLimiter
+            limiter = await GlobalRateLimiter.get_instance()
+            await limiter.acquire("gemini", tokens=request.max_tokens)
+
             # Prepare headers with API key (secure method)
             headers = {
                 "Content-Type": "application/json",
@@ -134,7 +138,7 @@ class GeminiClient(ILlmClient):
             return LlmResponse(
                 content="",
                 success=False,
-                error_message=f"HTTP {e.response.status_code}: {e.response.text}",
+                error_message=f"HTTP {e.response.status_code}: {(e.response.text[:200] if e.response.text else 'No response body')}",
                 provider=self.provider,
                 duration_ms=duration_ms
             )

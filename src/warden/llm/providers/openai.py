@@ -60,6 +60,11 @@ class OpenAIClient(ILlmClient):
         start_time = time.time()
 
         try:
+            from warden.llm.global_rate_limiter import GlobalRateLimiter
+            limiter = await GlobalRateLimiter.get_instance()
+            provider_name = "azure" if self._provider == LlmProvider.AZURE_OPENAI else "openai"
+            await limiter.acquire(provider_name, tokens=request.max_tokens)
+
             headers = {"Content-Type": "application/json"}
 
             # Azure uses api-key header, OpenAI uses Authorization

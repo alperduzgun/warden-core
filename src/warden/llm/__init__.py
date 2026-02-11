@@ -43,25 +43,20 @@ __all__ = [
 
     # Types
     "LlmProvider",
-    "LlmConfig",
     "LlmRequest",
     "LlmResponse",
-    "ContextWindow",
-    "TokenUsage",
     "AnalysisIssue",
     "AnalysisResult",
     "ClassificationCharacteristics",
     "ClassificationResult",
     "LlmConfiguration",
+    "ProviderConfig",
 
     # Config
     "load_llm_config",
 
     # Providers
     "ILlmClient",
-
-    # Factory
-    # "LlmClientFactory",  # Removed in favor of functional factory
 
     # Prompts
     "ANALYSIS_SYSTEM_PROMPT",

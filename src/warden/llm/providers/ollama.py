@@ -50,6 +50,10 @@ class OllamaClient(ILlmClient):
         model = request.model or self._default_model
 
         try:
+            from warden.llm.global_rate_limiter import GlobalRateLimiter
+            limiter = await GlobalRateLimiter.get_instance()
+            await limiter.acquire("ollama", tokens=request.max_tokens)
+
             payload = {
                 "model": model,
                 "messages": [
