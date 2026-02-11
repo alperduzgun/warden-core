@@ -1,0 +1,14 @@
+name: Warden Scan
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Warden
+        run: warden scan --ci --format sarif
