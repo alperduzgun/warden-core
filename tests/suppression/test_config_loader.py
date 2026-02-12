@@ -12,10 +12,6 @@ Tests coverage:
 import pytest
 from pathlib import Path
 
-# Skip if suppression modules are not implemented yet
-config_loader = pytest.importorskip("warden.suppression.config_loader")
-models = pytest.importorskip("warden.suppression.models")
-
 from warden.suppression.config_loader import (
     load_suppression_config,
     save_suppression_config,

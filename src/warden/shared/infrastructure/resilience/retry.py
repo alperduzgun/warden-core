@@ -44,6 +44,9 @@ async def with_retry_async(
         try:
             return await coro_factory()
         except config.retryable_exceptions as e:
+            # Don't retry permanent failures (marked with non_retryable=True)
+            if getattr(e, 'non_retryable', False):
+                raise
             last_error = e
             if attempt >= config.max_attempts:
                 logger.error(

@@ -45,8 +45,21 @@ class ConfigHandler(BaseHandler):
             config_data = config_mgr.read_config()
         except Exception as e:
             logger.warning("config_read_failed_falling_back", error=str(e))
-            with open(config_file) as f:
-                config_data = yaml.safe_load(f)
+            try:
+                with open(config_file) as f:
+                    config_data = yaml.safe_load(f)
+            except yaml.YAMLError as ye:
+                logger.error("config_yaml_parse_failed", error=str(ye), path=str(config_file))
+                return {
+                    "config": self._get_default_pipeline_config(),
+                    "frames": self.get_default_frames(),
+                    "available_frames": self.get_available_frames_async(),
+                    "name": "default-fallback"
+                }
+
+        if config_data is None:
+            logger.warning("config_yaml_empty", path=str(config_file))
+            config_data = {}
 
         rules_data = {}
         try:

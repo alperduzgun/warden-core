@@ -105,8 +105,26 @@ app.command(name="doctor")(doctor_command)
 app.command(name="update")(update_command)
 app.command(name="refresh")(refresh_command)
 
+def _normalize_color_env() -> None:
+    """Normalize FORCE_COLOR / NO_COLOR for Rich/Typer compatibility.
+
+    Rich interprets any non-empty FORCE_COLOR as "force colors on".
+    The convention FORCE_COLOR=0 means "don't force color", but Rich
+    sees the string "0" as truthy.  We translate it to NO_COLOR=1 so
+    Rich and Typer both honour the intent.
+    """
+    import os
+
+    force_color = os.environ.get("FORCE_COLOR", "")
+    if force_color in ("0", "false", "no"):
+        os.environ.setdefault("NO_COLOR", "1")
+        os.environ.pop("FORCE_COLOR", None)
+
+
 def main():
     """Entry point for setuptools."""
+    _normalize_color_env()
+
     # Let Typer and Asyncio handle signals naturally
     # We do NOT want a global signal handler because it conflicts
     # with asyncio.run() which manages its own loop lifecycle.

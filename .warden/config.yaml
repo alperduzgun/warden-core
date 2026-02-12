@@ -17,7 +17,6 @@ frames:
 - resilience
 - fuzz
 - orphan
-- architectural
 - property
 - antipattern
 - spec
@@ -153,7 +152,7 @@ settings:
   enable_pre_analysis: true
   enable_validation: true
   enable_issue_validation: true
-  enable_suppression: false
+  enable_suppression: true
   fail_fast: false
   frame_timeout: 120
   min_severity: high

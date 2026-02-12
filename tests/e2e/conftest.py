@@ -49,6 +49,11 @@ def _check_warden_importable() -> bool:
         return False
 
 
+def _check_warden_binary() -> bool:
+    """Check if ``warden`` binary is available on PATH."""
+    return shutil.which("warden") is not None
+
+
 def _check_fixture_integrity() -> list[str]:
     """Validate fixture project has required files. Returns list of errors."""
     errors = []
@@ -83,6 +88,7 @@ def _check_fixture_integrity() -> list[str]:
 _OLLAMA_AVAILABLE: bool | None = None
 _GIT_AVAILABLE: bool | None = None
 _WARDEN_IMPORTABLE: bool | None = None
+_WARDEN_BINARY: bool | None = None
 
 
 def _get_ollama_available() -> bool:
@@ -106,12 +112,20 @@ def _get_warden_importable() -> bool:
     return _WARDEN_IMPORTABLE
 
 
+def _get_warden_binary() -> bool:
+    global _WARDEN_BINARY
+    if _WARDEN_BINARY is None:
+        _WARDEN_BINARY = _check_warden_binary()
+    return _WARDEN_BINARY
+
+
 # ---------------------------------------------------------------------------
 # Pytest hooks
 # ---------------------------------------------------------------------------
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "e2e: end-to-end tests")
+    config.addinivalue_line("markers", "acceptance: subprocess-based acceptance tests")
     config.addinivalue_line("markers", "requires_ollama: test needs Ollama running locally")
     config.addinivalue_line("markers", "requires_git: test needs git CLI")
     config.addinivalue_line("markers", "requires_network: test needs network access")
@@ -139,6 +153,7 @@ def pytest_sessionstart(session):
         if fixture_errors or session.config.option.verbose >= 1:
             print("\n--- E2E Pre-flight Checks ---")
             print(f"  warden import : {'OK' if _get_warden_importable() else 'FAIL'}")
+            print(f"  warden binary : {'OK' if _get_warden_binary() else 'MISSING (acceptance tests will skip)'}")
             print(f"  git CLI       : {'OK' if _get_git_available() else 'MISSING'}")
             print(f"  ollama        : {'OK' if _get_ollama_available() else 'UNAVAILABLE (LLM tests will skip)'}")
             print(f"  fixture files : {'OK' if not fixture_errors else 'ERRORS'}")

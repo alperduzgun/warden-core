@@ -120,10 +120,15 @@ class WardenDoctor:
         return CheckStatus.SUCCESS, ".warden directory exists."
 
     def check_env(self) -> tuple[CheckStatus, str]:
-        # Settings already loads .env in config.py
-        missing = []
+        # Read provider from project config to tailor checks
+        configured_provider = self._get_configured_provider()
 
-        # Check for at least one LLM/Embedding provider key
+        if configured_provider == "ollama":
+            return self._check_ollama_env()
+        elif configured_provider == "claude_code":
+            return self._check_claude_code_env()
+
+        # Cloud providers — check for at least one API key
         has_key = any([
             settings.openai_api_key,
             settings.azure_openai_api_key,
@@ -131,20 +136,69 @@ class WardenDoctor:
         ])
 
         if not has_key:
-            missing.append("LLM API Key (OpenAI/Azure/DeepSeek)")
-
-        if missing:
-            # LLM is not strictly required for basic static analysis, but required for advanced features
-            return CheckStatus.WARNING, f"Missing: {', '.join(missing)}. Zombie Mode (Offline) active. Intelligence reduced."
+            return CheckStatus.WARNING, "Missing: LLM API Key (OpenAI/Azure/DeepSeek). Zombie Mode (Offline) active. Intelligence reduced."
         return CheckStatus.SUCCESS, "Environment variables loaded and API keys present."
+
+    def _get_configured_provider(self) -> str:
+        """Read the LLM provider from the project config."""
+        if not self.config_path.exists():
+            return ""
+        try:
+            with open(self.config_path) as f:
+                data = yaml.safe_load(f) or {}
+            return data.get("llm", {}).get("provider", "")
+        except Exception:
+            return ""
+
+    def _check_ollama_env(self) -> tuple[CheckStatus, str]:
+        """Check Ollama availability and model status."""
+        import os
+
+        ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        try:
+            import urllib.request
+            resp = urllib.request.urlopen(f"{ollama_host}/api/tags", timeout=3)
+            import json
+            models = [m["name"] for m in json.loads(resp.read()).get("models", [])]
+
+            # Check configured model is installed
+            configured_model = ""
+            try:
+                with open(self.config_path) as f:
+                    data = yaml.safe_load(f) or {}
+                configured_model = data.get("llm", {}).get("model", "")
+            except Exception:
+                pass
+
+            if configured_model and configured_model not in models:
+                return CheckStatus.WARNING, (
+                    f"Ollama running ({len(models)} models) but configured model "
+                    f"'{configured_model}' not installed. Run: ollama pull {configured_model}"
+                )
+
+            return CheckStatus.SUCCESS, f"Ollama running at {ollama_host} ({len(models)} models available)."
+        except Exception:
+            return CheckStatus.WARNING, f"Ollama not reachable at {ollama_host}. Start with: ollama serve"
+
+    def _check_claude_code_env(self) -> tuple[CheckStatus, str]:
+        """Check Claude Code CLI availability."""
+        claude_path = shutil.which("claude")
+        if not claude_path:
+            return CheckStatus.WARNING, "Claude Code CLI not found on PATH. Install: npm install -g @anthropic-ai/claude-code"
+        return CheckStatus.SUCCESS, f"Claude Code CLI found at {claude_path}."
 
     def check_frames(self) -> tuple[CheckStatus, str]:
         if not self.config_path.exists():
             return CheckStatus.ERROR, "Cannot check frames without warden.yaml"
 
-        with open(self.config_path) as f:
-            config = yaml.safe_load(f)
+        try:
+            with open(self.config_path) as f:
+                config = yaml.safe_load(f)
+            if not isinstance(config, dict):
+                return CheckStatus.ERROR, "Cannot check frames — config.yaml is not a valid mapping."
             deps = config.get("dependencies", {})
+        except Exception:
+            return CheckStatus.ERROR, "Cannot check frames — config.yaml is invalid."
 
         missing_frames = []
         drifted_frames = []
@@ -181,8 +235,13 @@ class WardenDoctor:
         if not self.config_path.exists():
             return CheckStatus.WARNING, "Skipping rule check (no config)."
 
-        with open(self.config_path) as f:
-            config = yaml.safe_load(f) or {}
+        try:
+            with open(self.config_path) as f:
+                config = yaml.safe_load(f)
+            if not isinstance(config, dict):
+                return CheckStatus.ERROR, "Cannot check rules — config.yaml is not a valid mapping."
+        except Exception:
+            return CheckStatus.ERROR, "Cannot check rules — config.yaml is invalid."
 
         # 1. Check Global Custom Rules (root level)
         custom_rules = config.get("custom_rules", [])

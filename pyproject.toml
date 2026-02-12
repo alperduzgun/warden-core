@@ -146,6 +146,7 @@ markers = [
     "integration: marks tests requiring external services",
     "live: marks tests requiring live API keys",
     "security: marks security-focused tests",
+    "acceptance: subprocess-based end-user acceptance tests",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:chromadb.*",

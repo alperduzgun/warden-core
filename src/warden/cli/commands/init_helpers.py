@@ -242,21 +242,61 @@ def configure_ollama() -> tuple[dict, dict]:
         console.print(f"[yellow]⚠️  Ollama server not running at {ollama_host}[/yellow]")
         console.print("[dim]Start with: ollama serve[/dim]")
 
-    # Model selection
-    default_model = "qwen2.5-coder:7b"
+    # Query installed models to pick smart defaults
+    installed_models: list[str] = []
+    try:
+        import json
+        import urllib.request as req
+        resp = req.urlopen(f"{ollama_host}/api/tags", timeout=3)
+        installed_models = [m["name"] for m in json.loads(resp.read()).get("models", [])]
+    except Exception:
+        pass
+
+    # Pick best smart model from installed models (prefer larger coder models)
+    smart_candidates = [
+        "qwen2.5-coder:7b", "qwen2.5-coder:3b", "qwen2.5-coder:1.5b",
+        "codellama:7b", "deepseek-coder:6.7b", "starcoder2:7b",
+    ]
+    default_model = "qwen2.5-coder:7b"  # fallback if nothing installed
+    for candidate in smart_candidates:
+        if candidate in installed_models:
+            default_model = candidate
+            break
+
+    # Fast model default
+    fast_candidates = ["qwen2.5-coder:0.5b", "qwen2.5-coder:1.5b"]
+    default_fast = "qwen2.5-coder:0.5b"
+    for candidate in fast_candidates:
+        if candidate in installed_models:
+            default_fast = candidate
+            break
+
     model = default_model
     if is_interactive:
         model = Prompt.ask("Select model", default=default_model)
 
-    # Check if model is available
-    console.print(f"[dim]Tip: Run 'ollama pull {model}' if not already downloaded.[/dim]")
+    # Check if selected models are actually installed and warn prominently
+    missing_models = []
+    if model not in installed_models:
+        missing_models.append(model)
+    if default_fast not in installed_models:
+        missing_models.append(default_fast)
+
+    if missing_models and installed_models:
+        console.print(f"\n[bold yellow]⚠️  Missing models: {', '.join(missing_models)}[/bold yellow]")
+        for m in missing_models:
+            console.print(f"[yellow]   Run: ollama pull {m}[/yellow]")
+    elif missing_models:
+        console.print(f"\n[yellow]⚠️  Tip: Run 'ollama pull {model}' to download the model.[/yellow]")
+    else:
+        console.print(f"[green]✓ Model '{model}' is installed[/green]")
 
     llm_config = {
         "provider": "ollama",
         "model": model,
         "timeout": 300,
         "use_local_llm": True,
-        "fast_model": "qwen2.5-coder:0.5b"
+        "fast_model": default_fast
     }
 
     env_vars = {

@@ -34,6 +34,7 @@ from warden.services.ci_manager import (
     SecurityError,
     ValidationError,
 )
+from warden.services.ci_manager.provider_detection import detect_provider
 
 console = Console()
 
@@ -147,7 +148,7 @@ def ci_init(
     ci_provider = _parse_provider(provider)
 
     if not ci_provider:
-        detected = manager._detect_provider()
+        detected = detect_provider(manager.project_root)
         if detected:
             ci_provider = detected
             console.print(f"[dim]Detected provider: {ci_provider.value}[/dim]")

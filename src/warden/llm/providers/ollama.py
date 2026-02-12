@@ -19,6 +19,15 @@ from .base import ILlmClient
 logger = get_logger(__name__)
 
 
+class ModelNotFoundError(Exception):
+    """Raised when the requested Ollama model is not installed (HTTP 404).
+
+    This is a permanent failure — retrying won't help.
+    """
+
+    non_retryable = True
+
+
 class OllamaClient(ILlmClient):
     """
     Ollama client for local LLM execution.
@@ -29,6 +38,8 @@ class OllamaClient(ILlmClient):
         # Ollama doesn't require an API key by default
         self._endpoint = config.endpoint or "http://localhost:11434"
         self._default_model = config.default_model or "qwen2.5-coder:0.5b"
+        # Cache of models confirmed missing — prevents repeated 404s
+        self._missing_models: set[str] = set()
 
         logger.debug(
             "ollama_client_initialized",
@@ -40,7 +51,7 @@ class OllamaClient(ILlmClient):
     def provider(self) -> LlmProvider:
         return LlmProvider.OLLAMA
 
-    @resilient(name="provider_send", timeout_seconds=60.0)
+    @resilient(name="provider_send", timeout_seconds=30.0, retry_max_attempts=2)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Send a request to the local Ollama instance.
@@ -48,6 +59,16 @@ class OllamaClient(ILlmClient):
         """
         start_time = time.time()
         model = request.model or self._default_model
+
+        # Fail-fast: skip rate limiter + HTTP call for known-missing models
+        if model in self._missing_models:
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"Model '{model}' not found. Run 'ollama pull {model}'.",
+                provider=self.provider,
+                duration_ms=0,
+            )
 
         try:
             from warden.llm.global_rate_limiter import GlobalRateLimiter
@@ -95,10 +116,19 @@ class OllamaClient(ILlmClient):
 
         except httpx.HTTPStatusError as e:
             duration_ms = int((time.time() - start_time) * 1000)
-            error_msg = str(e)
             if e.response.status_code == 404:
-                error_msg = f"Model '{model}' NOT FOUND on this Ollama instance. Please run 'ollama pull {model}'."
+                # Cache the missing model to fail-fast on subsequent calls
+                self._missing_models.add(model)
+                error_msg = f"Model '{model}' not found. Run 'ollama pull {model}'."
+                logger.error(
+                    "ollama_model_not_found",
+                    model=model,
+                    duration_ms=duration_ms
+                )
+                # Raise non-retryable error to prevent retry/timeout overhead
+                raise ModelNotFoundError(error_msg) from e
 
+            error_msg = str(e)
             logger.error(
                 "ollama_request_failed",
                 status_code=e.response.status_code,
@@ -113,6 +143,8 @@ class OllamaClient(ILlmClient):
                 provider=self.provider,
                 duration_ms=duration_ms
             )
+        except ModelNotFoundError:
+            raise  # Don't wrap in generic handler
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             logger.error(

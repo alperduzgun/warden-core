@@ -303,6 +303,12 @@ def scan_command(
     except KeyboardInterrupt:
         console.print("\n[yellow]⚠️  Scan interrupted by user[/yellow]")
         raise typer.Exit(130)
+    except (SystemExit, typer.Exit):
+        raise
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {e}")
+        console.print("[yellow]💡 Tip:[/yellow] Run [bold cyan]warden doctor[/bold cyan] to check your setup, or [bold cyan]warden init --force[/bold cyan] to reconfigure.")
+        raise typer.Exit(1)
 
 
 async def _run_scan_async(
@@ -663,8 +669,8 @@ async def _run_scan_async(
                                         generator.generate_pdf_report(final_result_data, out_path)
                                         console.print(f"  ✅ [cyan]PDF[/cyan]: {path_str}")
                                     elif fmt == 'shield':
-                                        generator.generate_shield_report(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]SHIELD (JSON)[/cyan]: {path_str}")
+                                        generator.generate_svg_badge(final_result_data, out_path)
+                                        console.print(f"  ✅ [cyan]SHIELD (SVG)[/cyan]: {path_str}")
                                     elif fmt == 'badge':
                                         generator.generate_svg_badge(final_result_data, out_path)
                                         console.print(f"  ✅ [cyan]BADGE (SVG)[/cyan]: {path_str}")
@@ -701,7 +707,7 @@ async def _run_scan_async(
                 elif format == "pdf":
                     generator.generate_pdf_report(final_result_data, out_path)
                 elif format == "shield":
-                    generator.generate_shield_report(final_result_data, out_path)
+                    generator.generate_svg_badge(final_result_data, out_path)
                 elif format == "badge":
                     generator.generate_svg_badge(final_result_data, out_path)
 

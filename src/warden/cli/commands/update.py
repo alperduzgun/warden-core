@@ -18,7 +18,7 @@ def update_command() -> None:
     console.print("[bold cyan]🔄 Updating Warden Hub catalog...[/bold cyan]")
 
     async def run_sync():
-        return await registry.sync()
+        return await registry.sync_async()
 
     success = asyncio.run(run_sync())
 

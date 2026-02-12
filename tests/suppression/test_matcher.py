@@ -10,12 +10,6 @@ Tests coverage:
 - Adding/removing inline suppressions
 """
 
-import pytest
-
-# Skip if suppression modules are not implemented yet
-matcher = pytest.importorskip("warden.suppression.matcher")
-models = pytest.importorskip("warden.suppression.models")
-
 from warden.suppression.matcher import SuppressionMatcher
 from warden.suppression.models import (
     SuppressionConfig,

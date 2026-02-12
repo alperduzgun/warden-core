@@ -87,8 +87,14 @@ class FortificationExecutor(BasePhaseExecutor):
                 elif isinstance(f, dict):
                      validated_issues.append(f)
 
-            if validated_issues is None:
-                validated_issues = []
+            if not validated_issues:
+                logger.info("fortification_skipped", reason="no_findings_to_fortify")
+                context.add_phase_result("FORTIFICATION", {
+                    "fortifications_count": 0,
+                    "critical_fixes": 0,
+                    "auto_fixable": 0,
+                })
+                return
 
             result = await phase.execute_async(validated_issues)
 
