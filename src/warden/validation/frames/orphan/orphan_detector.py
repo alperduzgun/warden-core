@@ -844,7 +844,8 @@ class OrphanDetectorFactory:
         code: str,
         file_path: str,
         use_lsp: bool = False,
-        project_root: str | None = None
+        project_root: str | None = None,
+        ast_cache: dict | None = None,
     ) -> AbstractOrphanDetector | None:
         """
         Create detector instance based on file type and available backends.
@@ -891,7 +892,13 @@ class OrphanDetectorFactory:
                 ]:
                     return RustOrphanDetector(code, file_path)
 
-                # Fallback to Universal AST
+                # Fallback to Universal AST (check cache first)
+                cached = None
+                if ast_cache and file_path in ast_cache:
+                    cached = ast_cache[file_path]
+                if cached and cached.ast_root:
+                    return UniversalOrphanDetector(code, file_path, cached.ast_root)
+
                 registry = ASTProviderRegistry()
                 provider = registry.get_provider(language)
                 if provider:

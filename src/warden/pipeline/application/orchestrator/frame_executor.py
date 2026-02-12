@@ -20,6 +20,7 @@ from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile, ValidationFrame
 
+from .ast_pre_parser import ASTPreParser
 from .file_filter import FileFilter
 from .frame_matcher import FrameMatcher
 from .frame_runner import FrameRunner
@@ -123,6 +124,10 @@ class FrameExecutor:
 
             if not hasattr(context, 'frame_results') or context.frame_results is None:
                 context.frame_results = {}
+
+            # Pre-parse ASTs for all files (centralized cache)
+            ast_pre_parser = ASTPreParser()
+            await ast_pre_parser.pre_parse_all_async(context, filtered_files)
 
             await self.rust_pre_filter.run_async(context, filtered_files)
 

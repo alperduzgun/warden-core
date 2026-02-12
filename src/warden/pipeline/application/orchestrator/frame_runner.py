@@ -161,6 +161,14 @@ class FrameRunner:
             })
 
         try:
+            # Inject cached AST parse results into code file metadata
+            if context.ast_cache:
+                for cf in code_files:
+                    if cf.path in context.ast_cache:
+                        if cf.metadata is None:
+                            cf.metadata = {}
+                        cf.metadata["_cached_parse_result"] = context.ast_cache[cf.path]
+
             frame_findings = []
             files_scanned = 0
             execution_errors = 0

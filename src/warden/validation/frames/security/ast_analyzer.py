@@ -45,23 +45,26 @@ async def extract_ast_context(code_file: Any) -> dict[str, Any]:
             logger.debug("ast_unsupported_language", language=code_file.language)
             return ast_context
 
-        # Get AST provider
-        registry = ASTProviderRegistry()
-        provider = registry.get_provider(lang)
+        # Cache-first: use pre-parsed result if available
+        cached = code_file.metadata.get('_cached_parse_result') if code_file.metadata else None
+        if cached and cached.ast_root:
+            result = cached
+        else:
+            # Fallback: on-demand parse
+            registry = ASTProviderRegistry()
+            provider = registry.get_provider(lang)
 
-        if not provider:
-            logger.debug("ast_no_provider", language=lang)
-            return ast_context
+            if not provider:
+                logger.debug("ast_no_provider", language=lang)
+                return ast_context
 
-        # Ensure grammar is available (auto-install if needed)
-        if hasattr(provider, 'ensure_grammar'):
-            await provider.ensure_grammar(lang)
+            if hasattr(provider, 'ensure_grammar'):
+                await provider.ensure_grammar(lang)
 
-        # Parse with timeout
-        result = await asyncio.wait_for(
-            provider.parse(code_file.content, lang),
-            timeout=5.0
-        )
+            result = await asyncio.wait_for(
+                provider.parse(code_file.content, lang),
+                timeout=5.0
+            )
 
         if not result.ast_root:
             return ast_context

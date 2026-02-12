@@ -380,19 +380,22 @@ class ResilienceFrame(ValidationFrame):
         except ValueError:
             raise ValueError(f"Unsupported language: {code_file.language}")
 
-        # Get AST provider
-        registry = ASTProviderRegistry()
-        provider = registry.get_provider(lang)
+        # Cache-first: use pre-parsed result if available
+        cached = code_file.metadata.get('_cached_parse_result') if code_file.metadata else None
+        if cached and cached.ast_root:
+            result = cached
+        else:
+            # Fallback: on-demand parse
+            registry = ASTProviderRegistry()
+            provider = registry.get_provider(lang)
 
-        if not provider:
-            raise ValueError(f"No AST provider for {lang}")
+            if not provider:
+                raise ValueError(f"No AST provider for {lang}")
 
-        # Try to ensure grammar is available (auto-install if needed)
-        if hasattr(provider, 'ensure_grammar'):
-            await provider.ensure_grammar(lang)
+            if hasattr(provider, 'ensure_grammar'):
+                await provider.ensure_grammar(lang)
 
-        # Parse (this will also try auto-install as fallback)
-        result = await provider.parse(code_file.content, lang)
+            result = await provider.parse(code_file.content, lang)
 
         if not result.ast_root:
             raise ValueError("AST parsing returned no result")
