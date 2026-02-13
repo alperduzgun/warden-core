@@ -9,7 +9,6 @@ from typing import Optional
 
 import typer
 
-from warden.services.grpc_entry import main_async as grpc_main
 from warden.services.ipc_entry import main_async as ipc_main
 from warden.shared.infrastructure.logging import get_logger
 
@@ -40,6 +39,18 @@ def serve_ipc():
 @serve_app.command("grpc")
 def serve_grpc(port: int = typer.Option(50051, help="Port to listen on")):
     """Start the gRPC server (for C#/.NET integration)."""
+    # Lazy import — grpc is optional dependency
+    try:
+        from warden.services.grpc_entry import main_async as grpc_main
+    except ImportError as e:
+        typer.secho(
+            f"Error: gRPC dependencies not installed.\n"
+            f"Install with: pip install warden-core[grpc]\n"
+            f"Details: {e}",
+            fg=typer.colors.RED
+        )
+        raise typer.Exit(code=1)
+
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(grpc_main(port))
 
