@@ -1,0 +1,74 @@
+{
+  "module": "unknown",
+  "findings": [
+    {
+      "id": "py-subprocess-shell",
+      "severity": "high",
+      "message": "Avoid shell=True in subprocess calls. Use list arguments instead",
+      "location": "src/vulnerable.py:18",
+      "detail": null,
+      "code": "subprocess.call(user_input, shell=True)",
+      "line": 18,
+      "column": 5,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "5fdc2c97bc84d0f01e0ff2a8f76ff4cf22ff85540b798273a6c472ec5bfce034"
+    },
+    {
+      "id": "py-no-eval",
+      "severity": "critical",
+      "message": "Using eval() is dangerous. Consider using ast.literal_eval() for safe evaluation",
+      "location": "src/vulnerable.py:22",
+      "detail": null,
+      "code": "return eval(expression)",
+      "line": 22,
+      "column": 12,
+      "isBlocker": true,
+      "remediation": null,
+      "fingerprint": "91ed555a53acca2f00a5ba4d559492919a6610a55f770b299450719d702d8807"
+    },
+    {
+      "id": "js-eval-usage",
+      "severity": "critical",
+      "message": "eval() is dangerous. Use JSON.parse() or other safe alternatives",
+      "location": "src/vulnerable.py:22",
+      "detail": null,
+      "code": "return eval(expression)",
+      "line": 22,
+      "column": 12,
+      "isBlocker": true,
+      "remediation": null,
+      "fingerprint": "b212990f9ad3a0a74ae102bd7c40a369ed86edc9c561746aa0f2fbb996e775d6"
+    }
+  ],
+  "debt_items": [
+    {
+      "fingerprint": "5fdc2c97bc84d0f01e0ff2a8f76ff4cf22ff85540b798273a6c472ec5bfce034",
+      "first_seen": "2026-02-13T11:35:50.098830+00:00",
+      "rule_id": "py-subprocess-shell",
+      "file_path": null,
+      "message": "Avoid shell=True in subprocess calls. Use list arguments instead",
+      "severity": "high"
+    },
+    {
+      "fingerprint": "91ed555a53acca2f00a5ba4d559492919a6610a55f770b299450719d702d8807",
+      "first_seen": "2026-02-13T11:35:50.098830+00:00",
+      "rule_id": "py-no-eval",
+      "file_path": null,
+      "message": "Using eval() is dangerous. Consider using ast.literal_eval() for safe evaluation",
+      "severity": "critical"
+    },
+    {
+      "fingerprint": "b212990f9ad3a0a74ae102bd7c40a369ed86edc9c561746aa0f2fbb996e775d6",
+      "first_seen": "2026-02-13T11:35:50.098830+00:00",
+      "rule_id": "js-eval-usage",
+      "file_path": null,
+      "message": "eval() is dangerous. Use JSON.parse() or other safe alternatives",
+      "severity": "critical"
+    }
+  ],
+  "created_at": "2026-02-13T11:35:50.098820+00:00",
+  "updated_at": "2026-02-13T11:35:58.391831+00:00",
+  "debt_count": 3,
+  "oldest_debt_age_days": 0
+}
