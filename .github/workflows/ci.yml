@@ -53,7 +53,13 @@ jobs:
         continue-on-error: false
 
       - name: Run Ruff Formatter Check
-        run: ruff format src/ --check --diff
+        run: |
+          echo "Running ruff format check..."
+          ruff format src/ --check --diff || {
+            echo "❌ Formatting issues found. Files that need formatting:"
+            ruff format src/ --check 2>&1 | grep "would be reformatted" || true
+            exit 1
+          }
         continue-on-error: false
 
   # ============================================================
