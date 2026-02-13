@@ -33,6 +33,7 @@ class ExecutionStrategy(Enum):
     SEQUENTIAL = "sequential"  # Execute frames one by one
     PARALLEL = "parallel"  # Execute independent frames concurrently
     FAIL_FAST = "fail_fast"  # Stop on first blocker failure
+    PIPELINE = "pipeline"  # Dependency-aware execution with FIRST_COMPLETED
 
 
 class FramePriority(Enum):

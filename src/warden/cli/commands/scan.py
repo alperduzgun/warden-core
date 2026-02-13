@@ -155,6 +155,44 @@ def _display_llm_summary(metrics: dict):
                     console.print(f"      → {rec}")
 
 
+def _display_frame_cost_breakdown():
+    """Display per-frame LLM cost breakdown table."""
+    from warden.llm.metrics import get_global_metrics_collector
+    collector = get_global_metrics_collector()
+    frame_metrics = collector.get_frame_metrics()
+
+    if not frame_metrics:
+        console.print("\n[dim]No per-frame metrics available.[/dim]")
+        return
+
+    table = Table(title="Per-Frame LLM Cost Breakdown")
+    table.add_column("Frame", style="cyan")
+    table.add_column("LLM Calls", justify="right")
+    table.add_column("Input Tokens", justify="right")
+    table.add_column("Output Tokens", justify="right")
+    table.add_column("Duration", justify="right")
+    table.add_column("Est. Cost", justify="right", style="green")
+    table.add_column("Errors", justify="right", style="red")
+
+    total_cost = 0.0
+    for fm in frame_metrics:
+        total_cost += fm.estimated_cost_usd
+        table.add_row(
+            fm.frame_name,
+            str(fm.llm_calls),
+            f"{fm.input_tokens:,}",
+            f"{fm.output_tokens:,}",
+            f"{fm.total_duration_ms / 1000:.1f}s",
+            f"${fm.estimated_cost_usd:.4f}",
+            str(fm.errors) if fm.errors > 0 else "-"
+        )
+
+    table.add_section()
+    table.add_row("TOTAL", "", "", "", "", f"${total_cost:.4f}", "")
+
+    console.print("\n", table)
+
+
 def _display_memory_stats(snapshot) -> None:
     """Display memory profiling statistics."""
     console.print("\n[bold cyan]🧠 Memory Profiling Results[/bold cyan]")
@@ -192,6 +230,9 @@ def scan_command(
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
     base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
     no_update_baseline: bool = typer.Option(False, "--no-update-baseline", help="Skip baseline update after scan"),
+    cost_report: bool = typer.Option(False, "--cost-report", help="Display per-frame LLM cost breakdown"),
+    auto_fix: bool = typer.Option(False, "--auto-fix", help="Apply auto-fixable fortification fixes"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview fixes without applying (use with --auto-fix)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -288,7 +329,10 @@ def scan_command(
         exit_code = asyncio.run(_run_scan_async(
             paths, frames, format, output, verbose, level,
             memory_profile, ci, baseline_fingerprints, intelligence_context,
-            update_baseline=not no_update_baseline
+            update_baseline=not no_update_baseline,
+            cost_report=cost_report,
+            auto_fix=auto_fix,
+            dry_run=dry_run
         ))
 
         # Display memory stats if profiling was enabled
@@ -322,7 +366,10 @@ async def _run_scan_async(
     ci_mode: bool = False,
     baseline_fingerprints: dict[str, str] | None = None,
     intelligence_context: dict | None = None,
-    update_baseline: bool = False
+    update_baseline: bool = False,
+    cost_report: bool = False,
+    auto_fix: bool = False,
+    dry_run: bool = False
 ) -> int:
     """Async implementation of scan command."""
 
@@ -604,6 +651,10 @@ async def _run_scan_async(
                         if llm_metrics:
                             _display_llm_summary(llm_metrics)
 
+                        # Display per-frame cost breakdown if requested
+                        if cost_report:
+                            _display_frame_cost_breakdown()
+
                         # Status check (COMPLETED=2)
                         status_raw = res.get('status')
                         # Handle both integer and string statuses (Enums are often serialized to name or value)
@@ -793,6 +844,30 @@ Updated: {scan_time}
                 if verbose:
                     import traceback
                     traceback.print_exc()
+
+        # Auto-fix (after scan results, before exit code)
+        if auto_fix and final_result_data:
+            try:
+                from warden.fortification.application.auto_fixer import AutoFixer
+
+                fixer = AutoFixer(project_root=Path.cwd(), dry_run=dry_run)
+                fortifications = final_result_data.get('fortifications', [])
+
+                if fortifications:
+                    mode = "DRY RUN" if dry_run else "APPLYING"
+                    console.print(f"\n[bold blue]🔧 Auto-Fix ({mode})...[/bold blue]")
+
+                    fix_result = await fixer.apply_fixes(fortifications)
+
+                    console.print(f"[green]✓ {fix_result.summary}[/green]")
+
+                    if fix_result.applied and not dry_run:
+                        console.print("[dim]Review changes with: git diff[/dim]")
+                        console.print("[dim]Reject all with: git checkout .[/dim]")
+                else:
+                    console.print("\n[dim]No auto-fixable items found.[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]⚠️  Auto-fix failed: {e}[/yellow]")
 
         # Final exit code decision
         # 1. Check pipeline status (must be valid and completed)

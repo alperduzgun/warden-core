@@ -160,208 +160,214 @@ class FrameRunner:
                 "frame_name": frame.name,
             })
 
-        try:
-            frame_findings = []
-            files_scanned = 0
-            execution_errors = 0
+        # Get metrics collector for per-frame cost attribution
+        from warden.llm.metrics import get_global_metrics_collector
+        metrics_collector = get_global_metrics_collector()
 
-            async def execute_single_file_async(c_file: CodeFile) -> FrameResult | None:
-                file_context = context.file_contexts.get(c_file.path)
-                if file_context and getattr(file_context, 'is_unchanged', False):
-                    logger.debug("skipping_unchanged_file", file=c_file.path, frame=frame.frame_id)
-                    return None
+        # Wrap the entire frame execution in frame_scope for automatic LLM attribution
+        with metrics_collector.frame_scope(frame.frame_id):
+            try:
+                frame_findings = []
+                files_scanned = 0
+                execution_errors = 0
 
-                try:
-                    result = await frame.execute_async(c_file)
+                async def execute_single_file_async(c_file: CodeFile) -> FrameResult | None:
+                    file_context = context.file_contexts.get(c_file.path)
+                    if file_context and getattr(file_context, 'is_unchanged', False):
+                        logger.debug("skipping_unchanged_file", file=c_file.path, frame=frame.frame_id)
+                        return None
 
-                    if self.progress_callback:
-                        self.progress_callback("progress_update", {
-                            "increment": 1,
-                            "frame_id": frame.frame_id,
-                            "file": c_file.path
-                        })
-                    return result
-                except Exception as ex:
-                    logger.error("frame_file_execution_error",
-                                frame=frame.frame_id,
-                                file=c_file.path,
-                                error=str(ex))
-                    if self.progress_callback:
-                        self.progress_callback("progress_update", {
-                            "increment": 1,
-                            "error": True
-                        })
-                    return None
-
-            if code_files:
-                if len(code_files) > 1:
-                    logger.debug(
-                        "frame_batch_execution_start",
-                        frame_id=frame.frame_id,
-                        files_to_scan=len(code_files)
-                    )
-
-                files_to_scan = []
-                cached_files = 0
-
-                for cf in code_files:
-                    ctx = context.file_contexts.get(cf.path)
-                    if ctx and getattr(ctx, 'is_unchanged', False):
-                        cached_files += 1
-                        logger.debug("skipping_unchanged_file_batch", file=cf.path, frame=frame.frame_id)
-                    else:
-                        files_to_scan.append(cf)
-
-                if cached_files > 0:
-                     log_func = logger.info if len(files_to_scan) > 0 else logger.debug
-                     log_func("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
-
-                     if self.progress_callback:
-                         self.progress_callback("progress_update", {
-                             "increment": cached_files,
-                             "frame_id": frame.frame_id,
-                             "details": f"Skipped {cached_files} cached files"
-                         })
-
-                if not files_to_scan:
-                     logger.debug("all_files_cached_skipping_batch", frame=frame.frame_id)
-                     f_results = []
-                else:
                     try:
-                        if isinstance(frame, BatchExecutable):
-                            f_results = []
-                            total_files_to_scan = len(files_to_scan)
-                            CHUNK_SIZE = 5
+                        result = await frame.execute_async(c_file)
 
-                            for i in range(0, total_files_to_scan, CHUNK_SIZE):
-                                chunk = files_to_scan[i:i+CHUNK_SIZE]
-                                chunk_results = await asyncio.wait_for(
-                                    frame.execute_batch_async(chunk),
-                                    timeout=getattr(self.config, 'frame_timeout', 300.0)
-                                )
-                                if chunk_results:
-                                    f_results.extend(chunk_results)
-                                    if self.progress_callback:
-                                        self.progress_callback("progress_update", {
-                                            "increment": len(chunk_results),
-                                            "frame_id": frame.frame_id,
-                                            "phase": f"Validating {frame.name}"
-                                        })
-                        else:
-                            f_results = []
-                            for cf in files_to_scan:
-                                result = await execute_single_file_async(cf)
-                                if result:
-                                    f_results.append(result)
-
-                        if isinstance(frame, Cleanable):
-                            await frame.cleanup()
-
-                        if f_results:
-                            files_scanned = len(f_results)
-                            total_findings_from_batch = sum(len(res.findings) if res and res.findings else 0 for res in f_results)
-
-                            logger.info(
-                                "frame_batch_execution_complete",
-                                frame_id=frame.frame_id,
-                                results_count=files_scanned,
-                                total_findings=total_findings_from_batch
-                            )
-
-                            for res in f_results:
-                                if res and res.findings:
-                                    frame_findings.extend(res.findings)
-
-                    except asyncio.TimeoutError:
-                        logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
-                        execution_errors += 1
+                        if self.progress_callback:
+                            self.progress_callback("progress_update", {
+                                "increment": 1,
+                                "frame_id": frame.frame_id,
+                                "file": c_file.path
+                            })
+                        return result
                     except Exception as ex:
-                        logger.error("frame_batch_execution_error", frame=frame.frame_id, error=str(ex))
-                        execution_errors += 1
+                        logger.error("frame_file_execution_error",
+                                    frame=frame.frame_id,
+                                    file=c_file.path,
+                                    error=str(ex))
+                        if self.progress_callback:
+                            self.progress_callback("progress_update", {
+                                "increment": 1,
+                                "error": True
+                            })
+                        return None
 
-            status = "passed"
-            if any(f.severity == 'critical' for f in frame_findings):
-                status = "failed"
-            elif any(f.severity == 'high' for f in frame_findings):
-                status = "warning"
+                if code_files:
+                    if len(code_files) > 1:
+                        logger.debug(
+                            "frame_batch_execution_start",
+                            frame_id=frame.frame_id,
+                            files_to_scan=len(code_files)
+                        )
 
-            frame_duration = time.perf_counter() - frame_start_time
+                    files_to_scan = []
+                    cached_files = 0
 
-            coverage = self._calculate_coverage(code_files, frame_findings)
+                    for cf in code_files:
+                        ctx = context.file_contexts.get(cf.path)
+                        if ctx and getattr(ctx, 'is_unchanged', False):
+                            cached_files += 1
+                            logger.debug("skipping_unchanged_file_batch", file=cf.path, frame=frame.frame_id)
+                        else:
+                            files_to_scan.append(cf)
 
-            result_metadata = {
-                "files_scanned": files_scanned,
-                "execution_errors": execution_errors,
-                "coverage": coverage,
-                "findings_found": len(frame_findings),
-                "findings_fixed": 0,
-                "trend": 0,
-            }
+                    if cached_files > 0:
+                         log_func = logger.info if len(files_to_scan) > 0 else logger.debug
+                         log_func("smart_caching_active", skipped=cached_files, remaining=len(files_to_scan), frame=frame.frame_id)
 
-            if hasattr(frame, 'batch_summary') and frame.batch_summary:
-                result_metadata["llm_filter_summary"] = frame.batch_summary
+                         if self.progress_callback:
+                             self.progress_callback("progress_update", {
+                                 "increment": cached_files,
+                                 "frame_id": frame.frame_id,
+                                 "details": f"Skipped {cached_files} cached files"
+                             })
 
-            if hasattr(frame, 'config') and frame.config and 'suppressions' in frame.config:
-                suppressions = frame.config['suppressions']
-                if suppressions and frame_findings:
-                     findings_before = len(frame_findings)
-                     frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions)
-                     findings_after = len(frame_findings)
+                    if not files_to_scan:
+                         logger.debug("all_files_cached_skipping_batch", frame=frame.frame_id)
+                         f_results = []
+                    else:
+                        try:
+                            if isinstance(frame, BatchExecutable):
+                                f_results = []
+                                total_files_to_scan = len(files_to_scan)
+                                CHUNK_SIZE = 5
 
-                     if findings_before != findings_after:
-                         logger.info("suppression_applied",
+                                for i in range(0, total_files_to_scan, CHUNK_SIZE):
+                                    chunk = files_to_scan[i:i+CHUNK_SIZE]
+                                    chunk_results = await asyncio.wait_for(
+                                        frame.execute_batch_async(chunk),
+                                        timeout=getattr(self.config, 'frame_timeout', 300.0)
+                                    )
+                                    if chunk_results:
+                                        f_results.extend(chunk_results)
+                                        if self.progress_callback:
+                                            self.progress_callback("progress_update", {
+                                                "increment": len(chunk_results),
+                                                "frame_id": frame.frame_id,
+                                                "phase": f"Validating {frame.name}"
+                                            })
+                            else:
+                                f_results = []
+                                for cf in files_to_scan:
+                                    result = await execute_single_file_async(cf)
+                                    if result:
+                                        f_results.append(result)
+
+                            if isinstance(frame, Cleanable):
+                                await frame.cleanup()
+
+                            if f_results:
+                                files_scanned = len(f_results)
+                                total_findings_from_batch = sum(len(res.findings) if res and res.findings else 0 for res in f_results)
+
+                                logger.info(
+                                    "frame_batch_execution_complete",
+                                    frame_id=frame.frame_id,
+                                    results_count=files_scanned,
+                                    total_findings=total_findings_from_batch
+                                )
+
+                                for res in f_results:
+                                    if res and res.findings:
+                                        frame_findings.extend(res.findings)
+
+                        except asyncio.TimeoutError:
+                            logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
+                            execution_errors += 1
+                        except Exception as ex:
+                            logger.error("frame_batch_execution_error", frame=frame.frame_id, error=str(ex))
+                            execution_errors += 1
+
+                status = "passed"
+                if any(f.severity == 'critical' for f in frame_findings):
+                    status = "failed"
+                elif any(f.severity == 'high' for f in frame_findings):
+                    status = "warning"
+
+                frame_duration = time.perf_counter() - frame_start_time
+
+                coverage = self._calculate_coverage(code_files, frame_findings)
+
+                result_metadata = {
+                    "files_scanned": files_scanned,
+                    "execution_errors": execution_errors,
+                    "coverage": coverage,
+                    "findings_found": len(frame_findings),
+                    "findings_fixed": 0,
+                    "trend": 0,
+                }
+
+                if hasattr(frame, 'batch_summary') and frame.batch_summary:
+                    result_metadata["llm_filter_summary"] = frame.batch_summary
+
+                if hasattr(frame, 'config') and frame.config and 'suppressions' in frame.config:
+                    suppressions = frame.config['suppressions']
+                    if suppressions and frame_findings:
+                         findings_before = len(frame_findings)
+                         frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions)
+                         findings_after = len(frame_findings)
+
+                         if findings_before != findings_after:
+                             logger.info("suppression_applied",
+                                   frame_id=frame.frame_id,
+                                   suppressed=findings_before - findings_after)
+
+                frame_result = FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status=status,
+                    duration=frame_duration,
+                    issues_found=len(frame_findings),
+                    is_blocker=frame.is_blocker and status == "failed",
+                    findings=frame_findings,
+                    metadata=result_metadata
+                )
+
+                pipeline.frames_executed += 1
+                if status == "failed":
+                    pipeline.frames_failed += 1
+                else:
+                    pipeline.frames_passed += 1
+
+                if files_scanned > 0 or len(frame_result.findings) > 0:
+                    logger.info("frame_executed_successfully",
                                frame_id=frame.frame_id,
-                               suppressed=findings_before - findings_after)
+                               files_scanned=files_scanned,
+                               findings=len(frame_result.findings))
+                else:
+                    logger.debug("frame_executed_successfully",
+                               frame_id=frame.frame_id,
+                               files_scanned=files_scanned,
+                               findings=0)
 
-            frame_result = FrameResult(
-                frame_id=frame.frame_id,
-                frame_name=frame.name,
-                status=status,
-                duration=frame_duration,
-                issues_found=len(frame_findings),
-                is_blocker=frame.is_blocker and status == "failed",
-                findings=frame_findings,
-                metadata=result_metadata
-            )
-
-            pipeline.frames_executed += 1
-            if status == "failed":
+            except asyncio.TimeoutError:
+                logger.error("frame_timeout", frame_id=frame.frame_id)
+                frame_result = FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="timeout",
+                    findings=[],
+                )
                 pipeline.frames_failed += 1
-            else:
-                pipeline.frames_passed += 1
-
-            if files_scanned > 0 or len(frame_result.findings) > 0:
-                logger.info("frame_executed_successfully",
-                           frame_id=frame.frame_id,
-                           files_scanned=files_scanned,
-                           findings=len(frame_result.findings))
-            else:
-                logger.debug("frame_executed_successfully",
-                           frame_id=frame.frame_id,
-                           files_scanned=files_scanned,
-                           findings=0)
-
-        except asyncio.TimeoutError:
-            logger.error("frame_timeout", frame_id=frame.frame_id)
-            frame_result = FrameResult(
-                frame_id=frame.frame_id,
-                frame_name=frame.name,
-                status="timeout",
-                findings=[],
-            )
-            pipeline.frames_failed += 1
-        except Exception as e:
-            logger.error("frame_execution_error",
-                        frame_id=frame.frame_id,
-                        error=str(e),
-                        error_type=type(e).__name__)
-            frame_result = FrameResult(
-                frame_id=frame.frame_id,
-                frame_name=frame.name,
-                status="error",
-                findings=[],
-            )
-            pipeline.frames_failed += 1
+            except Exception as e:
+                logger.error("frame_execution_error",
+                            frame_id=frame.frame_id,
+                            error=str(e),
+                            error_type=type(e).__name__)
+                frame_result = FrameResult(
+                    frame_id=frame.frame_id,
+                    frame_name=frame.name,
+                    status="error",
+                    findings=[],
+                )
+                pipeline.frames_failed += 1
 
         post_violations = []
         if frame_rules and frame_rules.post_rules:

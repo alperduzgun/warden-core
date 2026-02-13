@@ -1,0 +1,5 @@
+## Evidence Requirements
+- ACCURACY > PARANOIA: Only report issues you can verify
+- EVIDENCE REQUIRED: Quote exact code for every issue
+- BE CONFIDENT: Rate your confidence (0.0-1.0) for each finding
+- VERIFY BEFORE REPORTING: If uncertain, mark confidence < 0.7 or skip

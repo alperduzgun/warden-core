@@ -2,7 +2,7 @@
 Security Frame - Main frame class.
 
 Detects SQL injection, XSS, secrets, and other security vulnerabilities.
-Uses AST analysis, data flow tracking, and LLM verification.
+Uses AST analysis, taint tracking, data flow analysis, and LLM verification.
 """
 
 import asyncio
@@ -57,7 +57,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
     priority = FramePriority.CRITICAL
     scope = FrameScope.FILE_LEVEL
     is_blocker = True  # Block PR if critical security issues found
-    version = "2.1.0"  # v2.1: Added Tree-sitter AST + LSP data flow for full pipeline
+    version = "2.2.0"  # v2.2: Added source-to-sink taint analysis
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]  # Applies to all languages
 
@@ -201,6 +201,18 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
         except Exception as e:
             logger.debug("ast_extraction_failed", error=str(e))
 
+        # STEP 2.5: Taint Analysis (Source-to-Sink tracking)
+        taint_paths: list = []
+        if code_file.language == "python":
+            try:
+                from ._internal.taint_analyzer import TaintAnalyzer
+                taint_analyzer = TaintAnalyzer()
+                taint_paths = taint_analyzer.analyze(code_file.content, code_file.language)
+                if taint_paths:
+                    logger.info("taint_paths_detected", count=len(taint_paths), file=code_file.path)
+            except Exception as e:
+                logger.debug("taint_analysis_failed", error=str(e))
+
         # STEP 3: LSP Data Flow Analysis (Taint Tracking)
         data_flow_context: dict[str, Any] = {}
         if check_results:  # Only analyze if we have findings
@@ -325,6 +337,14 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                 "dangerous_calls_found": len(ast_context.get("dangerous_calls", [])),
                 "sql_queries_found": len(ast_context.get("sql_queries", [])),
                 "input_sources_found": len(ast_context.get("input_sources", [])),
+            }
+
+        # Add taint analysis results
+        if taint_paths:
+            metadata["taint_analysis"] = {
+                "paths_found": len(taint_paths),
+                "unsanitized": len([p for p in taint_paths if not p.is_sanitized]),
+                "paths": [p.to_json() for p in taint_paths[:10]],  # Top 10
             }
 
         # Add data flow analysis results if available

@@ -123,14 +123,20 @@ class OrchestratedLlmClient(ILlmClient):
                 response = await client.send_async(provider_request)
                 duration_ms = int((time.time() - start_time) * 1000)
 
-                # Record metrics
+                # Extract token counts from response
+                input_tokens = getattr(response, 'prompt_tokens', 0) or 0
+                output_tokens = getattr(response, 'completion_tokens', 0) or 0
+
+                # Record metrics with token information
                 self.metrics.record_request(
                     tier="fast",
                     provider=client.provider.value,
                     model=target_model or "default",
                     success=response.success,
                     duration_ms=duration_ms,
-                    error=response.error_message
+                    error=response.error_message,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens
                 )
 
                 return client, response
@@ -230,14 +236,20 @@ class OrchestratedLlmClient(ILlmClient):
         response = await self.smart_client.send_async(smart_request)
         duration_ms = int((time.time() - start_time) * 1000)
 
-        # Record metrics for smart tier
+        # Extract token counts from response
+        input_tokens = getattr(response, 'prompt_tokens', 0) or 0
+        output_tokens = getattr(response, 'completion_tokens', 0) or 0
+
+        # Record metrics for smart tier with token information
         self.metrics.record_request(
             tier="smart",
             provider=self.smart_client.provider.value,
             model=target_model or "default",
             success=response.success,
             duration_ms=duration_ms,
-            error=response.error_message
+            error=response.error_message,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens
         )
 
         # CORE RESILIENCE: Raise exception on failure so Circuit Breaker can track it

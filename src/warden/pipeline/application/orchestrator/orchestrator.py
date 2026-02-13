@@ -284,6 +284,9 @@ class PhaseOrchestrator:
                 if self.config.enable_pre_analysis:
                     await self.phase_executor.execute_pre_analysis_async(context, code_files)
 
+                    # Populate ProjectIntelligence from AST context (zero LLM cost)
+                    self._populate_project_intelligence(context, code_files)
+
                 # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
                 # Only run if LLM is enabled and level is not BASIC
                 from warden.pipeline.domain.enums import AnalysisLevel
@@ -479,6 +482,89 @@ class PhaseOrchestrator:
                 pass  # Don't mask original exception if unbind fails
 
         return context
+
+    def _populate_project_intelligence(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
+        """
+        Populate ProjectIntelligence from AST analysis (zero LLM cost).
+
+        Scans code files for input sources, critical sinks, and project metadata.
+        This runs during PRE-ANALYSIS and the result is shared with all frames.
+        """
+        from warden.pipeline.domain.intelligence import ProjectIntelligence
+
+        intel = ProjectIntelligence()
+        intel.total_files = len(code_files)
+
+        # Language distribution
+        lang_counts: dict[str, int] = {}
+        for cf in code_files:
+            lang = cf.language or "unknown"
+            lang_counts[lang] = lang_counts.get(lang, 0) + 1
+            intel.total_lines += cf.line_count
+
+            # Detect entry points
+            path_lower = cf.path.lower()
+            if any(p in path_lower for p in ["main.py", "app.py", "wsgi.py", "asgi.py", "manage.py", "index."]):
+                intel.entry_points.append(cf.path)
+
+            # Detect test files
+            if any(p in path_lower for p in ["test_", "_test.", "tests/", "spec/"]):
+                intel.test_files.append(cf.path)
+
+            # Detect config files
+            if any(p in path_lower for p in ["config", "settings", ".env", ".yaml", ".yml", ".toml"]):
+                intel.config_files.append(cf.path)
+
+        intel.file_types = lang_counts
+        if lang_counts:
+            intel.primary_language = max(lang_counts, key=lang_counts.get)
+
+        # Extract from AST cache if available
+        for cf in code_files:
+            ast_data = context.ast_cache.get(cf.path, {})
+
+            # Input sources from AST
+            for src in ast_data.get("input_sources", []):
+                intel.input_sources.append({
+                    "source": src.get("source", ""),
+                    "file": cf.path,
+                    "line": src.get("line", 0),
+                })
+
+            # Critical sinks from AST
+            for call in ast_data.get("dangerous_calls", []):
+                func_name = call.get("function", "").lower()
+                sink_type = "CMD"
+                if any(s in func_name for s in ["execute", "query", "cursor", "raw"]):
+                    sink_type = "SQL"
+                elif any(s in func_name for s in ["render", "html", "template"]):
+                    sink_type = "HTML"
+
+                intel.critical_sinks.append({
+                    "sink": call.get("function", ""),
+                    "type": sink_type,
+                    "file": cf.path,
+                    "line": call.get("line", 0),
+                })
+
+            for q in ast_data.get("sql_queries", []):
+                intel.critical_sinks.append({
+                    "sink": q.get("function", ""),
+                    "type": "SQL",
+                    "file": cf.path,
+                    "line": q.get("line", 0),
+                })
+
+        context.project_intelligence = intel
+
+        logger.info(
+            "project_intelligence_populated",
+            total_files=intel.total_files,
+            input_sources=len(intel.input_sources),
+            critical_sinks=len(intel.critical_sinks),
+            entry_points=len(intel.entry_points),
+            primary_language=intel.primary_language,
+        )
 
     def _calculate_total_work_units(self, context: PipelineContext, code_files: list[CodeFile]) -> int:
         """Calculate total work units for progress reporting."""

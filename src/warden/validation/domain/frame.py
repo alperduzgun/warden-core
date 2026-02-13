@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
@@ -52,6 +52,69 @@ class Remediation:
 
 
 @dataclass
+class MachineContext:
+    """
+    Structured machine-readable context for automated consumption.
+
+    Provides structured vulnerability metadata for Fortification phase
+    and SARIF report enrichment. Replaces text-parsing of finding descriptions.
+    """
+    vulnerability_class: str          # "sql-injection", "xss-reflected", "cmd-injection"
+    source: str | None = None         # "request.args['id']"
+    sink: str | None = None           # "cursor.execute()"
+    sink_type: str | None = None      # "SQL-value", "CMD-argument", "HTML-content"
+    data_flow_path: list[str] = field(default_factory=list)
+    sanitizers_applied: list[str] = field(default_factory=list)
+    suggested_fix_type: str | None = None  # "parameterized_query", "input_validation"
+    related_files: list[str] = field(default_factory=list)
+
+    def to_json(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"vulnerability_class": self.vulnerability_class}
+        if self.source is not None:
+            result["source"] = self.source
+        if self.sink is not None:
+            result["sink"] = self.sink
+        if self.sink_type is not None:
+            result["sink_type"] = self.sink_type
+        if self.data_flow_path:
+            result["data_flow_path"] = self.data_flow_path
+        if self.sanitizers_applied:
+            result["sanitizers_applied"] = self.sanitizers_applied
+        if self.suggested_fix_type is not None:
+            result["suggested_fix_type"] = self.suggested_fix_type
+        if self.related_files:
+            result["related_files"] = self.related_files
+        return result
+
+
+@dataclass
+class ExploitEvidence:
+    """
+    Witness payload and exploit evidence for a finding.
+
+    Contains proof-of-concept data showing HOW a vulnerability can be exploited.
+    WARNING: Witness payloads are for advisory purposes only -- never execute them.
+    """
+    witness_payload: str              # "' OR 1=1 --"
+    attack_vector: str                # "URL parameter 'id'"
+    data_flow_path: list[str] = field(default_factory=list)
+    sink_type: str | None = None      # "SQL-value"
+    why_exploitable: str = ""
+    confidence: float = 0.0
+
+    def to_json(self) -> dict[str, Any]:
+        import html as html_module
+        return {
+            "witness_payload": html_module.escape(self.witness_payload),
+            "attack_vector": html_module.escape(self.attack_vector),
+            "data_flow_path": self.data_flow_path,
+            "sink_type": self.sink_type,
+            "why_exploitable": self.why_exploitable,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass
 class Finding:
     """
     A single validation finding (issue/warning).
@@ -75,12 +138,14 @@ class Finding:
     code: str | None = None  # Code snippet
     line: int = 0  # Line number (1-based)
     column: int = 0  # Column number (1-based)
-    is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
-    remediation: Remediation | None = None  # 🛡️ NEW: Suggested fix
+    is_blocker: bool = False  # Individual blocker status
+    remediation: Remediation | None = None  # Suggested fix
+    machine_context: MachineContext | None = None  # Structured vulnerability context
+    exploit_evidence: ExploitEvidence | None = None  # Witness payload evidence
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""
-        return {
+        result = {
             "id": self.id,
             "severity": self.severity,
             "message": self.message,
@@ -89,10 +154,14 @@ class Finding:
             "code": self.code,
             "line": self.line,
             "column": self.column,
-
-            "isBlocker": self.is_blocker,  # Exposed to UI/Report
+            "isBlocker": self.is_blocker,
             "remediation": self.remediation.to_json() if self.remediation else None,
         }
+        if self.machine_context:
+            result["machineContext"] = self.machine_context.to_json()
+        if self.exploit_evidence:
+            result["exploitEvidence"] = self.exploit_evidence.to_json()
+        return result
 
     def to_dict(self) -> dict[str, Any]:
         """Alias for to_json for compatibility."""
@@ -128,7 +197,7 @@ class FrameResult:
     findings: list[Finding]
     metadata: dict[str, Any] | None = None
 
-    # ⭐ NEW: Pre/Post Rules Support
+    # Pre/Post Rules Support
     pre_rules: list[CustomRule] | None = None
     post_rules: list[CustomRule] | None = None
     pre_rule_violations: list[CustomRuleViolation] | None = None

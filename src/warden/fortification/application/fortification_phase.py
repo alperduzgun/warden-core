@@ -374,6 +374,23 @@ class FortificationPhase:
         Returns:
             Fortification suggestion or None
         """
+        # Use machine_context for strategy selection if available
+        machine_context = issue.get("machineContext") or issue.get("machine_context")
+        if machine_context and isinstance(machine_context, dict):
+            suggested = machine_context.get("suggested_fix_type")
+            if suggested:
+                # Map suggested_fix_type to issue_type for template lookup
+                fix_type_map = {
+                    "parameterized_query": "sql_injection",
+                    "input_validation": "xss",
+                    "html_escape": "xss",
+                    "env_variable": "hardcoded_secret",
+                    "path_sanitization": "path_traversal",
+                }
+                mapped_type = fix_type_map.get(suggested)
+                if mapped_type:
+                    issue_type = mapped_type
+
         fix_templates = {
             "sql_injection": {
                 "title": "Use Parameterized Queries",

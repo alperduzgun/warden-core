@@ -1,0 +1,5 @@
+## Confidence Scoring Rules
+- **0.9-1.0**: Issue is CERTAIN — verified by multiple signals (AST + pattern + data flow)
+- **0.7-0.9**: Very likely issue — strong evidence from at least one source
+- **0.5-0.7**: Possible issue — some indicators but uncertain
+- **< 0.5**: UNCERTAIN — DO NOT REPORT

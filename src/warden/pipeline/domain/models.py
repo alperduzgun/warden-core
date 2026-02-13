@@ -50,7 +50,7 @@ class PipelineConfig(BaseDomainModel):
     Defines how frames should be executed.
     """
 
-    strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL  # SEQUENTIAL, PARALLEL, or FAIL_FAST execution modes
+    strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL  # SEQUENTIAL, PARALLEL, FAIL_FAST, or PIPELINE execution modes
     fail_fast: bool = True
     timeout: int = 300  # Total pipeline timeout in seconds
     frame_timeout: int = 120  # Per-frame timeout in seconds
@@ -114,6 +114,22 @@ class PipelineConfig(BaseDomainModel):
 
 # Alias for backwards compatibility
 PipelineOrchestratorConfig = PipelineConfig
+
+
+class FrameChain(BaseDomainModel):
+    """
+    Defines a frame chain for PIPELINE execution strategy.
+
+    Frames execute based on dependency ordering with skip conditions.
+    """
+    frame: str                                    # Frame ID to execute
+    on_complete: list[str] = Field(default_factory=list)  # Frame IDs to trigger after completion
+    skip_if: str | None = None                    # Condition name to skip (e.g., "no_sql_sinks")
+    priority: int = 1                             # Execution priority (lower = sooner)
+
+    def to_json(self) -> dict[str, Any]:
+        data = super().to_json()
+        return data
 
 
 class ValidationPipeline(BaseDomainModel):
@@ -495,5 +511,3 @@ class PipelineRun(BaseDomainModel):
         # Status is already a string, no conversion needed
         # summary.to_json() is called automatically by BaseDomainModel
         return data
-
-

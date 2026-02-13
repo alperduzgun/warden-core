@@ -124,6 +124,9 @@ class PipelineContext:
     # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)
     ast_cache: dict[str, Any] = field(default_factory=dict)
 
+    # Shared Project Intelligence (populated in PRE-ANALYSIS, consumed by frames)
+    project_intelligence: Any | None = None  # ProjectIntelligence instance
+
     # State Tracking
     completed_phases: set[str] = field(default_factory=set)
 
@@ -252,7 +255,7 @@ class PipelineContext:
                 "technical_debt_hours": self.technical_debt_hours,
             })
 
-        # VALIDATION gets CLASSIFICATION results too
+        # VALIDATION gets CLASSIFICATION results too + project intelligence
         if phase in ["VALIDATION", "FORTIFICATION", "CLEANING"]:
             context.update({
                 "selected_frames": self.selected_frames,
@@ -260,6 +263,7 @@ class PipelineContext:
                 "frame_priorities": self.frame_priorities,
                 "classification_reasoning": self.classification_reasoning,
                 "learned_patterns": self.learned_patterns,
+                "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
             })
 
         # FORTIFICATION gets VALIDATION results too
@@ -394,6 +398,7 @@ class PipelineContext:
             "cleaning_suggestions_count": len(self.cleaning_suggestions),
             "llm_interactions": len(self.llm_history),
             "llm_requests": self.request_count,
+            "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
             "metadata": self.metadata,
         }
 

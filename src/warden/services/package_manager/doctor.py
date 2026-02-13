@@ -84,9 +84,22 @@ class WardenDoctor:
 
     def check_config(self) -> tuple[CheckStatus, str]:
         """
-        Validates that warden.yaml exists and is parseable YAML.
-        Note: No schema validation is performed as config structure is flexible.
+        Validates that warden.yaml exists, is parseable YAML, and conforms
+        to the expected structure. Checks for required keys, unknown keys,
+        and correct value types for known top-level keys.
         """
+        KNOWN_TOP_LEVEL_KEYS = {
+            "project", "frames", "dependencies", "llm", "frames_config",
+            "custom_rules", "ci", "advanced", "spec", "analysis",
+            "suppression", "fortification", "cleaning", "pipeline",
+        }
+
+        EXPECTED_TYPES = {
+            "project": dict,
+            "frames": list,
+            "dependencies": dict,
+        }
+
         if not self.config_path.exists():
             return CheckStatus.ERROR, "warden.yaml not found at root. Run 'warden init' to start."
 
@@ -100,12 +113,42 @@ class WardenDoctor:
             if not isinstance(data, dict):
                 return CheckStatus.ERROR, "warden.yaml must contain a YAML mapping (dictionary)."
 
-            # Basic sanity checks for required top-level keys
+            # Collect warnings — return the first one found at the end
+            warnings: list[str] = []
+
+            # 1. Basic sanity checks for required top-level keys
             required_keys = ["project", "frames"]
             missing_keys = [key for key in required_keys if key not in data]
 
             if missing_keys:
-                return CheckStatus.WARNING, f"warden.yaml missing recommended keys: {', '.join(missing_keys)}"
+                msg = f"warden.yaml missing recommended keys: {', '.join(missing_keys)}"
+                logger.warning("config_missing_recommended_keys", missing_keys=missing_keys)
+                warnings.append(msg)
+
+            # 2. Unknown key detection
+            unknown_keys = sorted(set(data.keys()) - KNOWN_TOP_LEVEL_KEYS)
+
+            if unknown_keys:
+                msg = f"warden.yaml contains unknown top-level keys: {', '.join(unknown_keys)}"
+                logger.warning("config_unknown_keys", unknown_keys=unknown_keys)
+                warnings.append(msg)
+
+            # 3. Type validation for known keys
+            type_mismatches = []
+            for key, expected_type in EXPECTED_TYPES.items():
+                if key in data and not isinstance(data[key], expected_type):
+                    actual_type = type(data[key]).__name__
+                    expected_name = expected_type.__name__
+                    type_mismatches.append(f"'{key}' should be {expected_name}, got {actual_type}")
+
+            if type_mismatches:
+                msg = f"warden.yaml type mismatches: {'; '.join(type_mismatches)}"
+                logger.warning("config_type_mismatches", mismatches=type_mismatches)
+                warnings.append(msg)
+
+            # Return the first warning if any were collected
+            if warnings:
+                return CheckStatus.WARNING, warnings[0]
 
             return CheckStatus.SUCCESS, "warden.yaml is valid YAML with expected structure."
 

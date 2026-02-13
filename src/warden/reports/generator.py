@@ -367,6 +367,13 @@ class ReportGenerator:
                 if detail:
                     result["message"]["text"] += f"\\n\\nDetails: {detail}"
 
+                # Add exploit evidence if available
+                exploit_evidence = self._get_val(finding, 'exploitEvidence', None)
+                if exploit_evidence:
+                    if "properties" not in result:
+                        result["properties"] = {}
+                    result["properties"]["exploitEvidence"] = exploit_evidence
+
                 run["results"].append(result)
 
         # Log suppressed findings

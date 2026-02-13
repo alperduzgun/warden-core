@@ -133,6 +133,8 @@ class FrameExecutor:
                     await self._execute_frames_parallel_async(context, filtered_files, frames_to_execute, pipeline)
                 elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
                     await self._execute_frames_fail_fast_async(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.PIPELINE:
+                    await self._execute_frames_pipeline_async(context, filtered_files, frames_to_execute, pipeline)
                 else:
                     await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
 
@@ -241,3 +243,109 @@ class FrameExecutor:
             if result and hasattr(result, 'has_blocker_issues') and result.has_blocker_issues:
                 logger.info("stopping_on_blocker", frame_id=frame.frame_id)
                 break
+
+    async def _execute_frames_pipeline_async(
+        self,
+        context: PipelineContext,
+        code_files: list[CodeFile],
+        frames_to_execute: list[ValidationFrame],
+        pipeline: ValidationPipeline,
+    ) -> None:
+        """
+        Execute frames with dependency-aware PIPELINE strategy.
+
+        Uses asyncio.wait(FIRST_COMPLETED) to maximize throughput while
+        respecting frame dependencies. Frames with met dependencies execute
+        in parallel up to parallel_limit.
+        """
+        logger.info("executing_frames_pipeline", count=len(frames_to_execute))
+
+        # Build dependency graph from frame metadata
+        frame_map = {f.frame_id: f for f in frames_to_execute}
+        completed: set[str] = set()
+        pending: set[str] = {f.frame_id for f in frames_to_execute}
+        running: dict[str, asyncio.Task] = {}
+
+        parallel_limit = self.config.parallel_limit or 4
+
+        def _dependencies_met(frame: ValidationFrame) -> bool:
+            """Check if all required frames have completed."""
+            requires = getattr(frame, 'requires_frames', [])
+            return all(dep in completed for dep in requires)
+
+        while pending or running:
+            # Find ready frames (dependencies met, not running)
+            ready = [
+                fid for fid in pending
+                if fid in frame_map and _dependencies_met(frame_map[fid])
+            ]
+
+            # Launch ready frames up to parallel limit
+            available_slots = parallel_limit - len(running)
+            for fid in ready[:available_slots]:
+                frame = frame_map[fid]
+                pending.discard(fid)
+
+                task = asyncio.create_task(
+                    self.frame_runner.execute_frame_with_rules_async(
+                        context, frame, code_files, pipeline
+                    ),
+                    name=f"frame-{fid}"
+                )
+                running[fid] = task
+                logger.debug("pipeline_frame_launched", frame_id=fid)
+
+            if not running:
+                if pending:
+                    # Deadlock: pending frames but none can run
+                    logger.error(
+                        "pipeline_deadlock_detected",
+                        pending=list(pending),
+                        completed=list(completed)
+                    )
+                    # Fail-fast: skip remaining frames
+                    for fid in pending:
+                        logger.warning("pipeline_frame_skipped_deadlock", frame_id=fid)
+                    break
+                else:
+                    break
+
+            # Wait for first completion
+            done, _ = await asyncio.wait(
+                running.values(),
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=self.config.frame_timeout
+            )
+
+            if not done:
+                # Timeout -- cancel all running
+                logger.warning("pipeline_timeout", running=list(running.keys()))
+                for task in running.values():
+                    task.cancel()
+                break
+
+            # Process completed tasks
+            for task in done:
+                # Find which frame this task belongs to
+                finished_fid = None
+                for fid, t in running.items():
+                    if t is task:
+                        finished_fid = fid
+                        break
+
+                if finished_fid:
+                    del running[finished_fid]
+                    completed.add(finished_fid)
+
+                    try:
+                        result = task.result()
+                        logger.debug("pipeline_frame_completed", frame_id=finished_fid,
+                                    status=getattr(result, 'status', 'unknown'))
+                    except Exception as e:
+                        logger.error("pipeline_frame_failed", frame_id=finished_fid, error=str(e))
+
+        logger.info(
+            "pipeline_execution_complete",
+            completed=len(completed),
+            total=len(frames_to_execute)
+        )
