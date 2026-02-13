@@ -3224,3 +3224,197 @@ class TestEnvVarOverrides:
             f"Invalid provider crashed: rc={r.returncode}\n{r.stderr}"
         )
         assert "Traceback" not in r.stdout + r.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 41. Edge Cases — Symlinks, Large Files, Negative Config (#45)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestEdgeCases:
+    """Tier 2 edge cases: symlinks, large files, negative config values."""
+
+    def test_symlink_cycle_no_crash(self, initialized_project):
+        """Symlink cycle (A->B->A) should not hang or crash the scanner."""
+        dir_a = initialized_project / "dir_a"
+        dir_b = initialized_project / "dir_b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+
+        # Create a real Python file so there's something to scan
+        (dir_a / "real.py").write_text("x = 1\n")
+
+        # Create symlink cycle: dir_a/link_b -> dir_b, dir_b/link_a -> dir_a
+        (dir_a / "link_b").symlink_to(dir_b)
+        (dir_b / "link_a").symlink_to(dir_a)
+
+        r = run_warden(
+            "scan", "--level", "basic", str(dir_a),
+            cwd=str(initialized_project), timeout=60,
+        )
+        # Must not hang or crash with signal
+        assert r.returncode in (0, 1, 2), (
+            f"Symlink cycle crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+    def test_large_file_scanning(self, initialized_project):
+        """1MB+ Python file should be handled without crash or OOM."""
+        large_file = initialized_project / "large.py"
+        # Generate ~1.2MB of repetitive but valid Python
+        lines = ["# Large file test\n"]
+        for i in range(40000):
+            lines.append(f"variable_name_{i} = {i}  # padding line number {i}\n")
+        large_file.write_text("".join(lines))
+
+        file_size = large_file.stat().st_size
+        assert file_size > 1_000_000, f"File too small: {file_size} bytes"
+
+        r = run_warden(
+            "scan", "--level", "basic", str(large_file),
+            cwd=str(initialized_project), timeout=120,
+        )
+        assert r.returncode in (0, 1, 2), (
+            f"Large file scan crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+    def test_negative_timeout_config_no_crash(self, initialized_project):
+        """Negative timeout in config should not crash the scanner."""
+        config_path = initialized_project / ".warden" / "config.yaml"
+        config = yaml.safe_load(config_path.read_text()) or {}
+        config.setdefault("settings", {})["timeout"] = -10
+        config_path.write_text(yaml.dump(config, default_flow_style=False))
+
+        vuln = initialized_project / "test.py"
+        vuln.write_text("x = 1\n")
+
+        r = run_warden(
+            "scan", "--level", "basic", str(vuln),
+            cwd=str(initialized_project), timeout=60,
+        )
+        # Should not crash -- may use default timeout or fail gracefully
+        assert r.returncode in (0, 1, 2), (
+            f"Negative timeout crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+    def test_binary_file_in_scan_path(self, initialized_project):
+        """Binary file mixed with Python should not crash scanner."""
+        (initialized_project / "image.png").write_bytes(
+            b"\x89PNG\r\n\x1a\n" + b"\x00" * 1024
+        )
+        (initialized_project / "code.py").write_text("x = 1\n")
+
+        r = run_warden(
+            "scan", "--level", "basic",
+            cwd=str(initialized_project), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+    def test_deeply_nested_directory(self, initialized_project):
+        """Deeply nested directory structure should not crash."""
+        deep = initialized_project
+        for i in range(20):
+            deep = deep / f"level_{i}"
+        deep.mkdir(parents=True)
+        (deep / "deep.py").write_text("x = eval(input())\n")
+
+        r = run_warden(
+            "scan", "--level", "basic", str(initialized_project),
+            cwd=str(initialized_project), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 42. Untested Commands — serve, chat, index, status (#45)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestUntestedCommands:
+    """Functional smoke tests for commands that only had --help coverage."""
+
+    def test_serve_ipc_help(self):
+        """serve ipc --help should exit 0."""
+        r = run_warden("serve", "ipc", "--help", timeout=10)
+        assert r.returncode == 0
+        assert "ipc" in (r.stdout + r.stderr).lower()
+
+    def test_serve_grpc_help(self):
+        """serve grpc --help should exit 0."""
+        r = run_warden("serve", "grpc", "--help", timeout=10)
+        assert r.returncode == 0
+        assert "grpc" in (r.stdout + r.stderr).lower()
+
+    def test_chat_help(self):
+        """chat --help should exit 0."""
+        r = run_warden("chat", "--help", timeout=10)
+        assert r.returncode == 0
+        out = (r.stdout + r.stderr).lower()
+        assert "chat" in out or "interactive" in out
+
+    def test_index_on_initialized_project(self, initialized_project):
+        """index should run without crash on an initialized project."""
+        (initialized_project / "app.py").write_text(
+            "def main():\n    print('hello')\n"
+        )
+
+        r = run_warden(
+            "index",
+            cwd=str(initialized_project), timeout=30,
+        )
+        # May succeed or fail (missing dependencies), but no crash
+        assert r.returncode in (0, 1), (
+            f"index crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+    def test_status_without_report(self, initialized_project):
+        """status without prior scan should not crash."""
+        r = run_warden(
+            "status",
+            cwd=str(initialized_project), timeout=15,
+        )
+        assert r.returncode in (0, 1), (
+            f"status crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+    def test_status_after_scan(self, initialized_project):
+        """status after a scan should show results."""
+        vuln = initialized_project / "vuln.py"
+        vuln.write_text("x = eval(input())\n")
+
+        run_warden(
+            "scan", "--level", "basic", str(vuln),
+            cwd=str(initialized_project), timeout=60,
+        )
+
+        r = run_warden(
+            "status",
+            cwd=str(initialized_project), timeout=15,
+        )
+        assert r.returncode in (0, 1)
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
+
+    def test_status_fetch_no_crash(self, initialized_project):
+        """status --fetch should not crash (may fail without CI)."""
+        r = run_warden(
+            "status", "--fetch",
+            cwd=str(initialized_project), timeout=30,
+        )
+        # Will likely fail (no CI configured) but should not crash
+        assert r.returncode in (0, 1), (
+            f"status --fetch crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        combined = r.stdout + r.stderr
+        assert "Traceback" not in combined
