@@ -8,6 +8,9 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, mock_open
 
+# Skip entire module if grpcio not installed
+grpc = pytest.importorskip("grpc", reason="grpcio required for gRPC tests")
+
 from warden.grpc.server import GrpcServer
 
 

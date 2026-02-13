@@ -7,9 +7,15 @@ Total: 51 endpoints
 
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from grpc import aio
+# Lazy import grpc (optional dependency)
+try:
+    from grpc import aio
+    GRPC_AVAILABLE = True
+except ImportError:
+    aio = None  # type: ignore
+    GRPC_AVAILABLE = False
 
 # Import generated protobuf code
 try:
@@ -69,14 +75,23 @@ class GrpcServer:
             tls_cert_path: Path to TLS certificate file (optional, enables TLS)
             tls_key_path: Path to TLS private key file (optional, required with cert)
             tls_ca_path: Path to TLS CA certificate for client auth (optional)
+
+        Raises:
+            RuntimeError: If grpcio not installed
         """
+        if not GRPC_AVAILABLE:
+            raise RuntimeError(
+                "gRPC dependencies not installed. "
+                "Install with: pip install warden-core[grpc]"
+            )
+
         self.port = port
         self.project_root = project_root or Path.cwd()
         self.bridge = bridge
         self.tls_cert_path = tls_cert_path
         self.tls_key_path = tls_key_path
         self.tls_ca_path = tls_ca_path
-        self.server: aio.Server | None = None
+        self.server: "aio.Server | None" = None  # type: ignore
         self.servicer: WardenServicer | None = None
 
         tls_enabled = bool(tls_cert_path and tls_key_path)
