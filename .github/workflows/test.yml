@@ -98,6 +98,3 @@ jobs:
 
       # Coverage disabled — pytest-cov not in dependencies
       # Re-enable when needed: add pytest-cov to pyproject.toml dev deps
-          flags: unittests
-          name: codecov-umbrella
-        continue-on-error: true
