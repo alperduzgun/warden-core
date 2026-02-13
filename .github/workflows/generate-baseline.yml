@@ -40,7 +40,7 @@ jobs:
         cache: 'pip'
 
     - name: Cache Warden Storage
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           .warden/memory
@@ -50,7 +50,7 @@ jobs:
           warden-storage-${{ runner.os }}-
 
     - name: Cache AI Models
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.ollama
         key: ollama-models-${{ runner.os }}-${{ hashFiles('.warden/config.yaml') }}
