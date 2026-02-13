@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -94,6 +95,31 @@ def _extract_json(stdout: str) -> dict:
         except json.JSONDecodeError:
             pass
     raise ValueError(f"No valid JSON found in output:\n{stdout[:500]}")
+
+
+def _make_vuln_file(project_dir: Path, name: str = "vuln.py") -> Path:
+    """Create a minimal vulnerable Python file for testing."""
+    vuln = project_dir / name
+    vuln.write_text("x = eval(input())  # code injection\n")
+    return vuln
+
+
+def _assert_no_crash(
+    r: subprocess.CompletedProcess[str],
+    *,
+    allowed: tuple[int, ...] = (0, 1, 2),
+    context: str = "",
+) -> None:
+    """Assert process didn't crash (no traceback, exit code in allowed set)."""
+    assert r.returncode in allowed, (
+        f"{context + ': ' if context else ''}"
+        f"Expected exit code in {allowed}, got {r.returncode}\n"
+        f"stdout: {r.stdout[-500:]}\nstderr: {r.stderr[-500:]}"
+    )
+    combined = r.stdout + r.stderr
+    assert "Traceback" not in combined, (
+        f"{context + ': ' if context else ''}Traceback found in output:\n{combined[-1000:]}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -298,8 +324,6 @@ class TestExitCodeSemantics:
         )
         # Verify no critical/blocker findings
         assert "Critical Issues" in r.stdout, "Missing metrics output"
-        # Extract the critical issues count - should be 0
-        import re
         critical_match = re.search(r"Critical Issues\s+│\s+(\d+)", r.stdout)
         if critical_match:
             critical_count = int(critical_match.group(1))
@@ -381,7 +405,6 @@ class TestExitCodeSemantics:
             f"stdout: {r.stdout}\nstderr: {r.stderr}"
         )
         # Verify critical or blocker findings were detected
-        import re
         critical_match = re.search(r"Critical Issues\s+│\s+(\d+)", r.stdout)
         blocker_match = re.search(r"Blocker Issues\s+│\s+(\d+)", r.stdout)
 
@@ -459,11 +482,9 @@ class TestOutputSchemaValidation:
             "src/vulnerable.py",
             cwd=str(isolated_sample), timeout=60,
         )
-        # Accept 0 (clean), 1 (error), or 2 (policy fail)
-        assert r.returncode in (0, 1, 2)
-
-        # Only validate schema if scan completed successfully
-        if r.returncode in (0, 2):
+        _assert_no_crash(r, context="JSON schema validation")
+        if r.returncode == 1:
+            pytest.skip("Pipeline error — cannot validate JSON schema")
             try:
                 data = _extract_json(r.stdout)
             except ValueError:
@@ -484,9 +505,9 @@ class TestOutputSchemaValidation:
             "src/vulnerable.py",
             cwd=str(isolated_sample), timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
-
-        if r.returncode in (0, 2):
+        _assert_no_crash(r, context="JSON findings schema")
+        if r.returncode == 1:
+            pytest.skip("Pipeline error — cannot validate findings schema")
             try:
                 data = _extract_json(r.stdout)
             except ValueError:
@@ -514,9 +535,9 @@ class TestOutputSchemaValidation:
             "src/vulnerable.py",
             cwd=str(isolated_sample), timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
-
-        if r.returncode in (0, 2):
+        _assert_no_crash(r, context="SARIF schema")
+        if r.returncode == 1:
+            pytest.skip("Pipeline error — cannot validate SARIF schema")
             try:
                 sarif = _extract_json(r.stdout)
             except ValueError:
@@ -554,9 +575,9 @@ class TestOutputSchemaValidation:
             "src/vulnerable.py",
             cwd=str(isolated_sample), timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
-
-        if r.returncode in (0, 2):
+        _assert_no_crash(r, context="JSON frame_results schema")
+        if r.returncode == 1:
+            pytest.skip("Pipeline error — cannot validate frame_results schema")
             try:
                 data = _extract_json(r.stdout)
             except ValueError:
@@ -2873,9 +2894,10 @@ class TestMultiFileScan:
                         elif "location" in finding and "file" in finding["location"]:
                             files_processed.add(finding["location"]["file"])
 
-                # We should have processed multiple files (at least 2+)
-                assert len(files_processed) >= 2 or len(frame_results) > 0, (
-                    f"Expected multiple files processed, got {len(files_processed)}"
+                # Fixture has 10+ files; at least 2 should appear in findings
+                assert len(files_processed) >= 2, (
+                    f"Expected findings from at least 2 files, got {len(files_processed)}. "
+                    f"Files: {files_processed}"
                 )
 
     def test_scan_counts_exceed_single_file(self, isolated_sample):
@@ -2910,8 +2932,10 @@ class TestMultiFileScan:
 
             dir_count = count_findings(data_dir)
 
-            # Directory scan should produce some results
-            assert dir_count >= 0, "Directory scan should produce some results"
+            # Directory scan should find at least one finding from fixture's vulnerable files
+            assert dir_count > 0, (
+                f"Directory scan should find findings from fixture files, got {dir_count}"
+            )
 
     def test_fixture_has_minimum_file_count(self, isolated_sample):
         """Verify the fixture has at least 10 Python files."""
@@ -2929,7 +2953,7 @@ class TestMultiFileScan:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 38. Config Edge Cases
+# 39. Config Edge Cases
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestConfigEdgeCases:
@@ -2956,22 +2980,18 @@ class TestConfigEdgeCases:
         legacy_cfg["settings"] = {"mode": "vibe"}
         legacy_config.write_text(yaml.dump(legacy_cfg, default_flow_style=False))
 
-        # Run scan which will read config fresh and show active config
-        # The scan should use frames from warden.yaml (security, resilience)
+        # Run config list to verify which config is active
         r = run_warden(
-            "scan", "--level", "basic", "--dry-run",
+            "config", "list",
             cwd=str(initialized_project), timeout=30,
         )
+        _assert_no_crash(r, allowed=(0, 1), context="config list")
 
-        # Verify warden.yaml was used by checking that the config was read
-        # Since warden.yaml exists, it should take precedence
-        assert r.returncode in (0, 1, 2), f"scan failed unexpectedly: {r.stderr}"
-
-        # Verify root config exists and has the expected content
-        assert root_config.exists(), "warden.yaml should exist"
-        root_data = yaml.safe_load(root_config.read_text())
-        assert root_data.get("frames") == ["security", "resilience"], (
-            "warden.yaml should contain security and resilience frames"
+        # The output should reflect warden.yaml values (strict mode),
+        # not legacy config values (vibe mode)
+        output = r.stdout + r.stderr
+        assert "strict" in output.lower() or "security" in output.lower(), (
+            f"Config output should reflect warden.yaml settings, got:\n{output[:500]}"
         )
 
     def test_init_ollama_unreachable_no_crash(self, initialized_project):
@@ -3023,7 +3043,7 @@ class TestConfigEdgeCases:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 39. Baseline Workflow E2E (#41)
+# 40. Baseline Workflow E2E (#41)
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestBaselineWorkflow:
@@ -3098,17 +3118,20 @@ class TestBaselineWorkflow:
         )
         assert r.returncode in (0, 1, 2)
 
-        # Baseline should be unchanged
-        for f in baseline_dir.glob("*.json"):
-            if f.name in baseline_before:
-                assert f.read_text() == baseline_before[f.name], (
-                    f"Baseline file {f.name} was modified despite --no-update-baseline"
-                )
+        # Baseline should be unchanged: same files, same content
+        baseline_after = {f.name: f.read_text() for f in baseline_dir.glob("*.json")}
+        assert set(baseline_after.keys()) == set(baseline_before.keys()), (
+            f"Baseline files changed despite --no-update-baseline. "
+            f"Before: {sorted(baseline_before.keys())}, After: {sorted(baseline_after.keys())}"
+        )
+        for name, content in baseline_before.items():
+            assert baseline_after[name] == content, (
+                f"Baseline file {name} was modified despite --no-update-baseline"
+            )
 
     def test_baseline_status_runs(self, initialized_project):
         """baseline status should report health without crashing."""
-        vuln = initialized_project / "vuln.py"
-        vuln.write_text("x = eval(input())\n")
+        vuln = _make_vuln_file(initialized_project)
 
         # Create baseline via scan
         run_warden(
@@ -3127,8 +3150,7 @@ class TestBaselineWorkflow:
 
     def test_baseline_debt_runs(self, initialized_project):
         """baseline debt should report debt without crashing."""
-        vuln = initialized_project / "vuln.py"
-        vuln.write_text("x = eval(input())\n")
+        vuln = _make_vuln_file(initialized_project)
 
         run_warden(
             "scan", "--level", "basic", str(vuln),
@@ -3146,7 +3168,7 @@ class TestBaselineWorkflow:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 40. Environment Variable Overrides (#42)
+# 41. Environment Variable Overrides (#42)
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestEnvVarOverrides:
@@ -3154,8 +3176,7 @@ class TestEnvVarOverrides:
 
     def test_warden_provider_env_override(self, initialized_project):
         """WARDEN_PROVIDER env var should override config.yaml provider setting."""
-        vuln = initialized_project / "vuln.py"
-        vuln.write_text("x = eval(input())\n")
+        vuln = _make_vuln_file(initialized_project)
 
         # Run scan with WARDEN_PROVIDER override to a known provider
         r = run_warden(
@@ -3171,8 +3192,7 @@ class TestEnvVarOverrides:
 
     def test_warden_model_env_override(self, initialized_project):
         """WARDEN_MODEL env var should be accepted without crash."""
-        vuln = initialized_project / "vuln.py"
-        vuln.write_text("x = eval(input())\n")
+        vuln = _make_vuln_file(initialized_project)
 
         r = run_warden(
             "scan", "--level", "basic", str(vuln),
@@ -3189,8 +3209,7 @@ class TestEnvVarOverrides:
         config_path = initialized_project / ".warden" / "config.yaml"
         config_before = config_path.read_text()
 
-        vuln = initialized_project / "vuln.py"
-        vuln.write_text("x = eval(input())\n")
+        vuln = _make_vuln_file(initialized_project)
 
         # Run scan with env var overrides
         run_warden(
@@ -3211,8 +3230,7 @@ class TestEnvVarOverrides:
 
     def test_invalid_provider_env_no_crash(self, initialized_project):
         """Invalid WARDEN_PROVIDER should fail gracefully, not crash."""
-        vuln = initialized_project / "vuln.py"
-        vuln.write_text("x = eval(input())\n")
+        vuln = _make_vuln_file(initialized_project)
 
         r = run_warden(
             "scan", "--level", "basic", str(vuln),
@@ -3227,7 +3245,7 @@ class TestEnvVarOverrides:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 41. Edge Cases — Symlinks, Large Files, Negative Config (#45)
+# 42. Edge Cases — Symlinks, Large Files, Negative Config (#45)
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestEdgeCases:
@@ -3334,7 +3352,7 @@ class TestEdgeCases:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 42. Untested Commands — serve, chat, index, status (#45)
+# 43. Untested Commands — serve, chat, index, status (#45)
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestUntestedCommands:
@@ -3390,8 +3408,7 @@ class TestUntestedCommands:
 
     def test_status_after_scan(self, initialized_project):
         """status after a scan should show results."""
-        vuln = initialized_project / "vuln.py"
-        vuln.write_text("x = eval(input())\n")
+        vuln = _make_vuln_file(initialized_project)
 
         run_warden(
             "scan", "--level", "basic", str(vuln),
