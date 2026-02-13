@@ -82,7 +82,8 @@ src = ["src"]
 
 [tool.ruff.lint]
 # Phase 1: Critical runtime errors (DONE)
-# Phase 2: Code quality and modernization (ENABLED)
+# Phase 2: Code quality and modernization (DONE)
+# Phase 3: Ruff-specific + performance (ENABLED)
 select = [
     "E9",     # Runtime errors only (most critical)
     "F63",    # Invalid print syntax
@@ -95,29 +96,42 @@ select = [
     "C4",     # flake8-comprehensions (better comprehensions)
     "UP",     # pyupgrade (modern Python patterns)
     "SIM",    # flake8-simplify (code simplification)
+    # Phase 3 rules:
+    "RUF",    # ruff-specific rules (implicit optional, f-string, etc.)
+    "PERF",   # performance anti-patterns
 ]
 ignore = [
-    # Ignore some overly strict rules:
-    "B008",   # function-call-in-default-argument (common in CLI apps)
-    "SIM108", # if-else-block-instead-of-if-exp (sometimes clearer)
-    "UP035",  # typing.List/Dict deprecation (gradual migration)
-    "SIM102", # collapsible-if (sometimes clearer as separate ifs)
-    "SIM105", # suppressible-exception (contextlib.suppress not always clearer)
-    "B904",   # raise-without-from (error context preserved in logs/output)
+    # Phase 2 ignores:
+    "B005",   # strip-with-multi-characters (intentional for path handling)
     "B007",   # unused-loop-control-variable (often intentional unpacking)
+    "B008",   # function-call-in-default-argument (common in CLI apps)
+    "B027",   # empty-method-without-abstract-decorator (default implementations)
+    "B904",   # raise-without-from (error context preserved in logs/output)
+    "SIM102", # collapsible-if (sometimes clearer as separate ifs)
     "SIM103", # needless-bool (sometimes clearer for readability)
+    "SIM105", # suppressible-exception (contextlib.suppress not always clearer)
+    "SIM108", # if-else-block-instead-of-if-exp (sometimes clearer)
     "SIM115", # open-file-with-context-handler (special cases exist)
     "SIM116", # if-else-block-instead-of-dict-lookup (not always clearer)
     "SIM117", # multiple-with-statements (async contexts can't always combine)
-    "B005",   # strip-with-multi-characters (intentional for path handling)
-    "B027",   # empty-method-without-abstract-decorator (default implementations)
+    "UP035",  # typing.List/Dict deprecation (gradual migration)
+    # Phase 3 ignores:
+    "RUF001", # ambiguous-unicode-character-string (Turkish chars in strings)
+    "RUF002", # ambiguous-unicode-character-docstring (Turkish chars in docstrings)
+    "RUF012", # mutable-class-default (dataclass fields are fine)
+    "RUF013", # implicit-optional (gradual migration, low risk)
+    "RUF022", # unsorted-dunder-all (cosmetic, low priority)
+    "RUF005", # collection-literal-concatenation (readability preference)
+    "RUF006", # asyncio-dangling-task (fire-and-forget servers are intentional)
+    "RUF059", # unused-unpacked-variable (intentional destructuring)
+    "PERF102", # incorrect-dict-iterator (minor perf, readability tradeoff)
+    "PERF203", # try-except-in-loop (necessary for graceful error handling per-file)
+    "PERF401", # manual-list-comprehension (sometimes clearer as loop)
+    "PERF403", # manual-dict-comprehension (sometimes clearer as loop)
 ]
-# TODO: Gradually enable Phase 3, 4:
-# Phase 3: "N" (pep8-naming), "D" (pydocstyle)
-# Phase 4: "RUF" (ruff-specific), "PL" (pylint), "PERF"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["B", "SIM"]
+"tests/**/*.py" = ["B", "SIM", "RUF", "PERF"]
 "__init__.py" = ["F401"]
 # gRPC code has undefined references (incomplete/experimental feature)
 "src/warden/grpc/**/*.py" = ["F821"]
