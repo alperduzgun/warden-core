@@ -119,7 +119,7 @@ class GitCheckpointManager:
         Returns:
             True if syntax is valid.
         """
-        if not file_path.suffix == ".py":
+        if file_path.suffix != ".py":
             return True  # Non-Python files skip validation
 
         try:

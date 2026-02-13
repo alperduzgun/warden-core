@@ -59,9 +59,7 @@ class AutoFixer:
         Returns:
             AutoFixResult with counts of applied/skipped/failed.
         """
-        from warden.fortification.infrastructure.git_checkpoint import (
-            GitCheckpointManager, GitCheckpointError
-        )
+        from warden.fortification.infrastructure.git_checkpoint import GitCheckpointError, GitCheckpointManager
 
         result = AutoFixResult()
         result.dry_run = self.dry_run

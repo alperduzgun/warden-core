@@ -7,7 +7,7 @@ Total: 51 endpoints
 
 import asyncio
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 # Lazy import grpc (optional dependency)
 try:
@@ -91,7 +91,7 @@ class GrpcServer:
         self.tls_cert_path = tls_cert_path
         self.tls_key_path = tls_key_path
         self.tls_ca_path = tls_ca_path
-        self.server: "aio.Server | None" = None  # type: ignore
+        self.server: aio.Server | None = None  # type: ignore
         self.servicer: WardenServicer | None = None
 
         tls_enabled = bool(tls_cert_path and tls_key_path)
