@@ -1,0 +1,65 @@
+# Warden CI v1.0.0
+# Generated: 2026-02-03 09:10:05
+# Do not edit sections marked WARDEN-MANAGED
+
+name: Warden PR Security Scan
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  warden:
+    name: PR Security Scan
+    runs-on: ubuntu-latest
+
+    env:
+      CI_LLM_PROVIDER: azure_openai
+      BASE_REF: ${{ github.base_ref }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for diff
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Warden
+        run: pip install .
+
+      - name: Run Warden PR Scan
+        run: |
+          # CI mode with diff - only scan changed files
+          # Output SARIF for GitHub Code Scanning integration
+          mkdir -p .warden/reports
+          EXIT_CODE=0
+          warden scan --ci --diff --base "$BASE_REF" --format sarif --output .warden/reports/warden-report.sarif || EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 2 ]; then
+            echo "::error::Warden found blocker issues. See SARIF report for details."
+            exit 1
+          elif [ $EXIT_CODE -ne 0 ]; then
+            echo "::warning::Warden scan exited with code $EXIT_CODE"
+          fi
+
+      - name: Upload SARIF Report
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .warden/reports/warden-report.sarif
+        continue-on-error: true
+
+      - name: Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-pr-reports
+          path: .warden/reports/

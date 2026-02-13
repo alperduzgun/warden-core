@@ -1,0 +1,535 @@
+rules:
+  - id: env-var-api-keys
+    name: API Keys Must Use Environment Variables
+    category: security
+    severity: critical
+    isBlocker: true
+    description: All API keys must be loaded from environment variables, never hardcoded
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - AZURE_OPENAI_API_KEY\s*=\s*["']?[^$\s][A-Za-z0-9+/]{30,}["']?
+          - AZURE_OPENAI_ENDPOINT\s*=\s*["']?https://[^\s"']+["']?
+          - GROQ_API_KEY\s*=\s*["']?gsk_[A-Za-z0-9]{30,}["']?
+          - OPENAI_API_KEY\s*=\s*["']?sk-[A-Za-z0-9]{20,}["']?
+          - DEEPSEEK_API_KEY\s*=\s*["']?sk-[A-Za-z0-9]{20,}["']?
+          - api[_-]?key\s*=\s*["']?(sk-|gsk_|key-)[A-Za-z0-9+/_-]{15,}["']?
+    examples:
+      invalid:
+        - AZURE_OPENAI_API_KEY = "3QESZxaQXEKI0a4z..."
+        - api_key = "sk-1234567890abcdef"
+        - groq_key = "gsk_KdgDwd7ne6..."
+      valid:
+        - api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        - api_key = ${AZURE_OPENAI_API_KEY}
+        - azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    message: API keys must use environment variables (os.getenv) or config templates
+      (${VAR}). Never hardcode secrets!
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - .env.example
+      - '*.example.*'
+      - '**/examples/**'
+      - '**/docs/**'
+
+  - id: no-secrets
+    name: No Secrets or Credentials in Code
+    category: security
+    severity: critical
+    isBlocker: true
+    description: Detects common secret patterns (passwords, tokens, private keys)
+      that should never be committed
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - password\s*=\s*["'][^$\s][^"']{6,}["']
+          - passwd\s*=\s*["'][^$\s][^"']{6,}["']
+          - pwd\s*=\s*["'][^$\s][^"']{6,}["']
+          - token\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - auth_token\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - access_token\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - BEGIN\s+(RSA|DSA|EC|OPENSSH)\s+PRIVATE\s+KEY
+          - private_key\s*=\s*["'][^$\s][A-Za-z0-9+/=]{40,}["']
+          - AWS_SECRET_ACCESS_KEY\s*=\s*["']?[^$\s][A-Za-z0-9+/]{40}["']?
+          - aws_secret_access_key\s*=\s*["']?[^$\s][A-Za-z0-9+/]{40}["']?
+          - (mysql|postgresql|mongodb)://[^:]+:[^@]+@
+          - secret\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+          - client_secret\s*=\s*["'][^$\s][A-Za-z0-9+/]{20,}["']
+    examples:
+      invalid:
+        - password = "MySecretPass123"
+        - token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        - AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        - db_url = "postgresql://user:password@localhost/db"
+        - '-----BEGIN RSA PRIVATE KEY-----'
+      valid:
+        - password = os.getenv("DB_PASSWORD")
+        - token = ${AUTH_TOKEN}
+        - aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        - db_url = os.getenv("DATABASE_URL")
+    message: Secrets, passwords, tokens, or private keys detected. Use environment
+      variables or secret management instead!
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - .env.example
+      - '*.example.*'
+      - '**/examples/**'
+      - '**/docs/**'
+
+  - id: input-validation-check
+    name: Input Validation Must Be Present
+    category: security
+    severity: high
+    isBlocker: true
+    description: Ensures functions that accept user input have validation/sanitization logic
+    enabled: true
+    type: security
+    conditions:
+      patterns:
+        must_have_nearby:
+          - pattern: 'def\s+\w+\([^)]*(?:input|user_input|data|payload|request)[^)]*\):'
+            requires_within_lines: 10
+            any_of:
+              - validate
+              - sanitize
+              - clean
+              - escape
+              - strip
+              - isinstance
+              - type\s*==
+              - if\s+not\s+
+              - raise\s+ValueError
+              - raise\s+TypeError
+    examples:
+      invalid:
+        - |
+          def process_user_input(user_input: str):
+              return user_input.upper()  # No validation!
+        - |
+          def handle_data(data: dict):
+              name = data['name']  # No checking if 'name' exists
+      valid:
+        - |
+          def process_user_input(user_input: str):
+              if not isinstance(user_input, str):
+                  raise TypeError("Input must be string")
+              sanitized = user_input.strip()
+              return sanitized.upper()
+        - |
+          def handle_data(data: dict):
+              if 'name' not in data:
+                  raise ValueError("Missing 'name' field")
+              return data['name']
+    message: Functions accepting user input must validate/sanitize inputs. Add type
+      checks, None checks, or validation logic.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - '**/tests/**'
+      - '**/models.py'
+      - '**/schemas.py'
+
+  - id: security-audit
+    name: Common Vulnerability Patterns
+    category: security
+    severity: high
+    isBlocker: true
+    description: Detects common security vulnerabilities (SQL injection, XSS,
+      command injection, path traversal)
+    enabled: true
+    type: security
+    conditions:
+      patterns:
+        - execute\s*\([^)]*["'].*%s.*["']\s*%
+        - execute\s*\([^)]*f["'].*\{.*\}.*["']
+        - \+\s*["']SELECT\s+
+        - os\.system\s*\([^)]*\+[^)]*\)
+        - subprocess\.call\s*\([^)]*\+[^)]*\)
+        - eval\s*\(
+        - exec\s*\(
+        - open\s*\([^)]*\.\.\/[^)]*\)
+        - Path\s*\([^)]*\.\.\/[^)]*\)
+        - innerHTML\s*=
+        - dangerouslySetInnerHTML
+        - pickle\.loads\s*\([^)]*input[^)]*\)
+        - yaml\.load\s*\([^)]*\)
+    examples:
+      invalid:
+        - cursor.execute("SELECT * FROM users WHERE id = %s" % user_id)
+        - cursor.execute(f"SELECT * FROM users WHERE name = {name}")
+        - os.system("rm -rf " + user_path)
+        - eval(user_input)
+        - file = open("data/" + "../etc/passwd")
+        - data = pickle.loads(request.data)
+        - config = yaml.load(file)
+      valid:
+        - cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        - subprocess.run(["rm", "-rf", user_path], check=True)
+        - 'ast.literal_eval(user_input)  # Safe alternative'
+        - file = open(Path("data") / sanitized_filename)
+        - data = json.loads(request.data)
+        - config = yaml.safe_load(file)
+    message: Potential security vulnerability detected. Use parameterized queries,
+      avoid eval/exec, validate file paths, and use safe deserialization.
+    language:
+      - python
+      - javascript
+      - typescript
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - test_*.py
+      - '*.test.py'
+      - '**/tests/**'
+
+  - id: backend-manager-use-project-root
+    name: Backend Manager Must Use PROJECT_ROOT for cwd
+    category: backend-ipc
+    severity: critical
+    isBlocker: true
+    description: When spawning backend processes (IPC server), always use
+      PROJECT_ROOT as working directory, not process.cwd(). This ensures .env
+      and config files are found.
+    enabled: true
+    type: security
+    conditions:
+      patterns:
+        - cwd:\s*process\.cwd\(\)
+    examples:
+      invalid:
+        - |
+          // WRONG: Using process.cwd() as working directory
+          this.process = spawn('python3', [BACKEND_SCRIPT], {
+            detached: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            cwd: process.cwd(),  // ❌ Backend won't find .env!
+          });
+        - |
+          // WRONG: Backend script relative to current dir
+          spawn('python3', ['start_ipc_server.py'], {
+            cwd: process.cwd()  // ❌ Wrong directory!
+          });
+      valid:
+        - |
+          // CORRECT: Using PROJECT_ROOT as working directory
+          this.process = spawn('python3', [BACKEND_SCRIPT], {
+            detached: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            cwd: PROJECT_ROOT,  // ✅ Backend finds .env at project root
+          });
+        - |
+          // CORRECT: Explicit project root
+          const PROJECT_ROOT = findProjectRoot();
+          spawn('python3', [BACKEND_SCRIPT], {
+            cwd: PROJECT_ROOT  // ✅ Correct!
+          });
+    message: |
+      Backend Manager spawn() using wrong working directory!
+
+      Problem: Using process.cwd() instead of PROJECT_ROOT
+      Impact: Backend can't find .env file, timeout on startup
+
+      Why this happens:
+      - CLI runs from cli/ directory (process.cwd() = /path/warden-core/cli)
+      - Backend needs project root to find .env (/path/warden-core/.env)
+      - Using process.cwd() makes backend look in cli/ directory
+
+      Fix:
+      1. Define PROJECT_ROOT constant (use findProjectRoot() helper)
+      2. Use cwd: PROJECT_ROOT in spawn() options
+      3. Never use cwd: process.cwd() for backend processes
+
+      Example fix:
+      const PROJECT_ROOT = findProjectRoot();
+      spawn('python3', [BACKEND_SCRIPT], {
+        cwd: PROJECT_ROOT  // ✅ Backend finds .env
+      });
+
+      This was a production bug in Sprint 1 - backend timeout on first start!
+    language:
+      - typescript
+      - javascript
+    exceptions:
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+
+  - id: llm-azure-deployment-name-usage
+    name: Azure OpenAI Must Use deploymentName Field
+    category: security
+    severity: critical
+    isBlocker: true
+    description: Azure OpenAI API calls must use deploymentName field in URLs, not
+      model field. The deployment name and model name are different in Azure.
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - /deployments/\$\{[^}]*\.model
+          - deployments/\$\{this\.config\.model
+          - deployments/\$\{config\.model
+    examples:
+      invalid:
+        - |
+          # WRONG: Using model field for deployment name
+          const response = await fetch(
+            `${this.config.endpoint}/openai/deployments/${this.config.model}/chat/completions`
+          );
+        - |
+          # WRONG: Using model in URL
+          fetch(`${endpoint}/openai/deployments/${config.model}/chat/completions`)
+      valid:
+        - |
+          # CORRECT: Using deploymentName field
+          const deploymentName = this.config.deploymentName || this.config.model;
+          const response = await fetch(
+            `${this.config.endpoint}/openai/deployments/${deploymentName}/chat/completions`
+          );
+        - |
+          # CORRECT: Separate deploymentName field
+          fetch(`${endpoint}/openai/deployments/${config.deploymentName}/chat/completions`)
+    message: |
+      Azure OpenAI deployment name error detected!
+
+      Problem: Using 'model' field for deployment name in API URL
+      Solution: Use 'deploymentName' field instead
+
+      Why: In Azure OpenAI, deployment name (e.g., 'gpt-4o') is different from model name.
+      The deployment name is what you created in Azure Portal, not the model identifier.
+
+      Fix:
+      1. Add deploymentName field to your LLMConfig interface
+      2. Load from AZURE_OPENAI_DEPLOYMENT_NAME environment variable
+      3. Use deploymentName in API URLs, not model
+
+      Example:
+      const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+      fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+    language:
+      - typescript
+      - javascript
+    exceptions:
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+      - '**/test/**'
+
+  - id: llm-azure-deployment-env-required
+    name: AZURE_OPENAI_DEPLOYMENT_NAME Environment Variable Required
+    category: security
+    severity: critical
+    isBlocker: true
+    description: When using Azure OpenAI, AZURE_OPENAI_DEPLOYMENT_NAME must be
+      loaded from environment variables
+    enabled: false
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - process\.env\.AZURE_OPENAI_API_KEY
+          - process\.env\.AZURE_OPENAI_ENDPOINT
+    examples:
+      invalid:
+        - |
+          # WRONG: Missing deployment name env var
+          const azureKey = process.env.AZURE_OPENAI_API_KEY;
+          const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+          // Missing: const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+        - |
+          # WRONG: Only loading key and endpoint
+          if (azureKey && azureEndpoint) {
+            this.config = { provider: 'azure', apiKey: azureKey, endpoint: azureEndpoint };
+          }
+      valid:
+        - |
+          # CORRECT: Loading all three required variables
+          const azureKey = process.env.AZURE_OPENAI_API_KEY;
+          const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+          const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+        - |
+          # CORRECT: Checking deployment in config
+          if (azureKey && azureEndpoint && azureDeployment) {
+            this.config = {
+              provider: 'azure',
+              apiKey: azureKey,
+              endpoint: azureEndpoint,
+              deploymentName: azureDeployment
+            };
+          }
+    message: |
+      Missing AZURE_OPENAI_DEPLOYMENT_NAME environment variable!
+
+      Problem: Code loads AZURE_OPENAI_API_KEY but not AZURE_OPENAI_DEPLOYMENT_NAME
+      Solution: Load deployment name from environment variables
+
+      Required environment variables for Azure OpenAI:
+      - AZURE_OPENAI_API_KEY ✅ (found)
+      - AZURE_OPENAI_ENDPOINT ✅ (found)
+      - AZURE_OPENAI_DEPLOYMENT_NAME ❌ (missing!)
+
+      Add to your code:
+      const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+
+      Add to your .env file:
+      AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+    language:
+      - typescript
+      - javascript
+    exceptions:
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+
+  - id: llm-no-hardcoded-deployment-names
+    name: No Hardcoded LLM Deployment Names
+    category: security
+    severity: critical
+    isBlocker: true
+    description: LLM deployment names must come from environment variables or
+      configuration, never hardcoded in URLs
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - deployments/gpt-4
+          - deployments/gpt-35-turbo
+          - deployments/text-embedding
+          - deployments/whisper
+          - deployments/["']gpt
+          - deployments/["']text-
+    examples:
+      invalid:
+        - |
+          # WRONG: Hardcoded deployment name
+          fetch(`${endpoint}/openai/deployments/gpt-4o/chat/completions`)
+        - |
+          # WRONG: Hardcoded in template
+          const url = `https://my-resource.openai.azure.com/openai/deployments/gpt-35-turbo/chat/completions`;
+        - |
+          # WRONG: String literal
+          await fetch(endpoint + '/openai/deployments/text-embedding-ada-002/embeddings');
+      valid:
+        - |
+          # CORRECT: From environment variable
+          const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+        - |
+          # CORRECT: From config
+          const deployment = this.config.deploymentName;
+          const url = `${endpoint}/openai/deployments/${deployment}/chat/completions`;
+        - |
+          # CORRECT: From variable
+          await fetch(`${endpoint}/openai/deployments/${deploymentName}/embeddings`);
+    message: |
+      Hardcoded LLM deployment name detected!
+
+      Problem: Deployment name is hardcoded in the URL
+      Solution: Use environment variables or configuration
+
+      Why this is bad:
+      - Deployment names vary by environment (dev, staging, prod)
+      - Hardcoding makes it impossible to change without code changes
+      - Creates security and configuration management issues
+
+      Fix:
+      1. Move deployment name to .env file
+      2. Load via process.env.AZURE_OPENAI_DEPLOYMENT_NAME
+      3. Use variable in URL construction
+
+      .env file:
+      AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+
+      Code:
+      const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+      fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+    language:
+      - typescript
+      - javascript
+    exceptions:
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+      - '**/*.md'
+      - '**/docs/**'
+
+  - id: llm-azure-url-pattern-valid
+    name: Azure OpenAI URL Must Include api-version
+    category: security
+    severity: critical
+    isBlocker: true
+    description: All Azure OpenAI API URLs must include api-version query parameter
+    enabled: true
+    type: security
+    conditions:
+      secrets:
+        patterns:
+          - /openai/deployments/.*/chat/completions[^?]
+          - /openai/deployments/.*/embeddings[^?]
+          - openai\.azure\.com
+    examples:
+      invalid:
+        - |
+          # WRONG: Missing api-version parameter
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions`)
+        - |
+          # WRONG: URL without query params
+          const url = `${endpoint}/openai/deployments/gpt-4o/chat/completions`;
+        - |
+          # WRONG: Other params but no api-version
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions?timeout=30`)
+      valid:
+        - |
+          # CORRECT: Includes api-version
+          fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-02-15-preview`)
+        - |
+          # CORRECT: Latest API version
+          const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+        - |
+          # CORRECT: With additional params
+          fetch(`${endpoint}/openai/deployments/${deployment}/embeddings?api-version=2024-02-01&timeout=30`)
+    message: |
+      Azure OpenAI URL missing required api-version parameter!
+
+      Problem: API call to Azure OpenAI without api-version in URL
+      Solution: Add ?api-version=YYYY-MM-DD-preview to all Azure OpenAI URLs
+
+      Why this is required:
+      - Azure OpenAI requires api-version for all requests
+      - Different API versions have different features and behaviors
+      - Missing api-version causes 400 Bad Request errors
+
+      Recommended API versions:
+      - 2024-08-01-preview (latest, for GPT-4o)
+      - 2024-02-15-preview (stable)
+      - 2024-02-01 (for embeddings)
+
+      Fix:
+      fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-02-15-preview`)
+
+      Common mistake we fixed in Sprint 1:
+      ❌ /openai/deployments/${this.config.model}/chat/completions
+      ✅ /openai/deployments/${deploymentName}/chat/completions?api-version=2024-02-15-preview
+    language:
+      - typescript
+      - javascript
+    exceptions:
+      - '**/*.test.ts'
+      - '**/*.spec.ts'
+      - '**/tests/**'
+      - '**/docs/**'

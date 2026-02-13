@@ -1,0 +1,176 @@
+advanced:
+  debug: true
+  frame_timeout: 300
+  max_workers: 4
+  enabled: true
+  fail_on_blocker: true
+  output:
+  - format: markdown
+    path: .warden/reports/WARDEN_REPORT.md
+  - format: json
+    path: .warden/reports/warden-report.json
+  - format: sarif
+    path: .warden/reports/warden-report.sarif
+frames:
+- config
+- security
+- resilience
+- fuzz
+- orphan
+- architectural
+- property
+- antipattern
+- spec
+frames_config:
+  architectural:
+    enabled: true
+    priority: low
+    suppressions:
+    - rule: custom_no-print
+      files:
+      - src/warden/cli/commands/serve.py
+      reason: Uses Rich console.print() for CLI output, not built-in print()
+    - rule: no-empty-except
+      files:
+      - src/warden/cli/commands/serve.py
+      reason: KeyboardInterrupt:pass is intentional for graceful CLI shutdown
+    - rule: mandatory_logger_init
+      files:
+      - src/warden/mcp/infrastructure/mcp_config_paths.py
+      reason: Constants-only module with no runtime logic requiring logging
+  config:
+    enabled: true
+  orphan:
+    enabled: true
+    ignore_imports:
+    - annotations
+    - TYPE_CHECKING
+    ignore_private: false
+    ignore_test_files: true
+    use_llm_filter: true
+  security:
+    checks:
+    - sql-injection
+    - xss
+    - secrets
+    - command-injection
+    - path-traversal
+    enabled: true
+    is_blocker: false
+    priority: critical
+  resilience:
+    checks:
+    - timeout_handling
+    - retry_logic
+    - circuit_breaker
+    - error_recovery
+    enabled: true
+    priority: high
+    is_blocker: false
+    suppressions:
+    - rule: '*'
+      files:
+      - src/warden/shared/utils/retry_utils.py
+      - src/warden/analysis/services/finding_verifier.py
+      - src/warden/pipeline/application/orchestrator/orchestrator.py
+  antipattern:
+    enabled: true
+    priority: high
+    is_blocker: true
+    check_bare_except: true
+    check_god_class: true
+    check_singleton: true
+    check_generic_exception: true
+    check_debug_print: true
+    check_todo_fixme: true
+    check_builtin_shadow: true
+    check_missing_await: true
+    max_class_lines: 500
+    max_function_lines: 100
+    ignore_test_files: true
+  spec:
+    platforms:
+      - name: mobile
+        path: /Users/alper/Documents/Development/Personal/OhMyLove
+        type: flutter
+        role: consumer
+      - name: backend
+        path: /Users/alper/Documents/Development/Personal/OhMyLove/functions
+        type: express
+        role: provider
+    gap_analysis:
+      enable_fuzzy: true
+      fuzzy_threshold: 0.8
+llm:
+  azure:
+    api_key: ${AZURE_OPENAI_API_KEY}
+    api_version: ${AZURE_OPENAI_API_VERSION}
+    deployment_name: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+    endpoint: ${AZURE_OPENAI_ENDPOINT}
+  fallback:
+    api_key: ${GROQ_API_KEY}
+    provider: groq
+  ollama:
+    enabled: true
+    base_url: http://localhost:11434
+  fast_tier_providers:
+  - claude_code
+  - ollama
+  - groq
+  max_retries: 2
+  tpm_limit: 10000
+  rpm_limit: 60
+  provider: claude_code
+  model: claude-sonnet-4-20250514
+  timeout: 300
+  smart_model: claude-sonnet-4-20250514
+  fast_model: qwen2.5-coder:0.5b
+project:
+  description: Warden configuration for warden-core
+  detected_at: '2025-12-24T16:35:53.922859'
+  framework: fastapi
+  frameworks: []
+  language: python
+  name: warden-core
+  project_type: monorepo
+  sdk_version: '3.11'
+  type: microservice
+semantic_search:
+  chroma_path: .warden/embeddings
+  collection_name: warden_warden_core
+  database: chromadb
+  enabled: true
+  max_context_tokens: 4000
+  model: all-MiniLM-L6-v2
+  provider: local
+settings:
+  enable_analysis: true
+  enable_classification: true
+  enable_cleaning: true
+  enable_fortification: true
+  enable_pre_analysis: true
+  enable_validation: true
+  enable_issue_validation: true
+  enable_suppression: false
+  fail_fast: false
+  frame_timeout: 120
+  min_severity: high
+  mode: normal
+  pre_analysis_config:
+    batch_size: 10
+    cache_enabled: true
+    llm_threshold: 0.7
+    use_llm: false
+  classification_config:
+    enabled: true
+    model: qwen2.5-coder:0.5b
+    batch_size: 2
+  timeout: 300
+custom_rules:
+- .warden/rules/my_custom_rules.yaml
+- .warden/rules/warden_core_rules.yaml
+- .warden/rules/self_awareness.yaml
+baseline:
+  enabled: true
+  path: .warden/baseline.json
+  auto_fetch: false

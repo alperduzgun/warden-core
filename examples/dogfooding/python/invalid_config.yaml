@@ -1,0 +1,26 @@
+# Invalid Config Example for Testing ConfigValidationFrame
+#
+# This file simulates a config.yaml with INVALID frame IDs
+# to demonstrate that Warden can detect configuration mistakes.
+
+project:
+  name: test-project
+
+frames:
+- security          # ✓ Valid
+- resilience        # ✓ Valid
+- orphan            # ✓ Valid
+- architectural     # ✓ Valid
+- stress            # ❌ INVALID - frame does not exist
+- demosecurity      # ❌ INVALID - frame does not exist
+- env-security      # ❌ INVALID - frame does not exist
+- typo-frame        # ❌ INVALID - does not exist
+- fuz               # ❌ INVALID - typo, should be 'fuzz'
+
+frames_config:
+  securityy:        # ❌ INVALID - typo
+    enabled: true
+  stress:           # ❌ INVALID - frame does not exist
+    enabled: true
+  demosecurity:     # ❌ INVALID - frame does not exist
+    enabled: true

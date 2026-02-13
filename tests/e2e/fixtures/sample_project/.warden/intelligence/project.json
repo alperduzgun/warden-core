@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "project_name": "e2e-test-project",
+  "language": "python",
+  "framework": null,
+  "quality_score": 45,
+  "security_posture": "moderate",
+  "modules": {
+    "src/vulnerable.py": {
+      "risk": "P0",
+      "complexity": "low",
+      "lines": 24
+    },
+    "src/clean.py": {
+      "risk": "P3",
+      "complexity": "low",
+      "lines": 18
+    }
+  },
+  "generated_at": "2026-02-10T00:00:00Z"
+}

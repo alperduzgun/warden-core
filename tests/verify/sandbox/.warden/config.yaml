@@ -1,0 +1,6 @@
+llm:
+  fast_model: qwen2.5-coder:0.5b
+  provider: ollama
+  smart_model: qwen2.5-coder:32b
+vector_db:
+  provider: local

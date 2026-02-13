@@ -1,0 +1,19 @@
+version: "2.0"
+project:
+  name: "e2e-test-project"
+  type: "backend"
+  language: "python"
+
+llm:
+  provider: "ollama"
+  model: "qwen2.5-coder:0.5b"
+  fast_model: "qwen2.5-coder:0.5b"
+
+analysis:
+  level: "basic"
+
+frames:
+  enabled:
+    - security
+    - antipattern
+    - property

@@ -1,0 +1,227 @@
+# Warden Configuration File - Example
+# Copy this file to .warden.yml and customize for your project
+
+# Project metadata
+project:
+  name: "my-project"
+  description: "Project description"
+
+# LLM Configuration (used by LLM-powered frames)
+llm:
+  # Provider: anthropic, openai, groq, deepseek, qwencode
+  provider: "anthropic"
+
+  # Model name
+  model: "claude-3-5-sonnet-20241022"
+
+  # API key (use environment variable)
+  # ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
+  # api_key: "${ANTHROPIC_API_KEY}"
+
+  # Request timeout (seconds)
+  timeout: 300
+
+  # Max retries on failure
+  max_retries: 2
+
+# Validation Frames (flat list of enabled frame names)
+frames:
+  - config
+  - security
+  - resilience
+  - orphan
+  - fuzz
+  - stress
+  - architecturalconsistency
+  - property
+  - antipattern
+
+# Frame-specific configuration
+frames_config:
+  # ============================================
+  # ORPHAN CODE DETECTOR (LLM-POWERED)
+  # ============================================
+  orphan:
+    enabled: true
+    # Uses LLM to filter false positives (~<10% false positive rate)
+    use_llm_filter: true
+    ignore_private: false
+    ignore_test_files: true
+    ignore_imports:
+      - "annotations"
+      - "TYPE_CHECKING"
+
+  # ============================================
+  # SECURITY FRAME
+  # ============================================
+  security:
+    enabled: true
+    priority: "critical"
+    is_blocker: true
+    checks:
+      - sql-injection
+      - xss
+      - secrets
+      - command-injection
+      - path-traversal
+
+  # ============================================
+  # RESILIENCE FRAME
+  # ============================================
+  resilience:
+    enabled: true
+    priority: "high"
+    is_blocker: false
+    checks:
+      - timeout_handling
+      - retry_logic
+      - circuit_breaker
+      - error_recovery
+
+  # ============================================
+  # FUZZ TESTING FRAME
+  # ============================================
+  fuzz:
+    enabled: true
+    priority: "medium"
+    is_blocker: false
+    checks:
+      - null_handling
+      - empty_string
+      - max_length
+      - unicode_edge_cases
+      - malformed_input
+
+  # ============================================
+  # PROPERTY-BASED TESTING FRAME
+  # ============================================
+  property:
+    enabled: true
+    priority: "medium"
+    is_blocker: false
+    checks:
+      - idempotency
+      - commutativity
+      - associativity
+      - round_trip
+
+  # ============================================
+  # STRESS TESTING FRAME
+  # ============================================
+  stress:
+    enabled: true
+    priority: "low"
+    is_blocker: false
+    checks:
+      - memory_leak
+      - performance_under_load
+      - concurrent_access
+
+  # ============================================
+  # ARCHITECTURAL CONSISTENCY FRAME
+  # ============================================
+  architecturalconsistency:
+    enabled: false  # Optional
+    priority: "low"
+    is_blocker: false
+    checks:
+      - design_pattern_adherence
+      - dependency_rules
+      - layer_boundaries
+
+  # ============================================
+  # ANTI-PATTERN FRAME
+  # ============================================
+  antipattern:
+    enabled: true
+    priority: "high"
+    is_blocker: true
+    check_bare_except: true
+    check_god_class: true
+    check_generic_exception: true
+    check_debug_print: true
+    max_class_lines: 500
+    max_function_lines: 100
+
+  # ============================================
+  # API CONTRACT SPEC FRAME
+  # ============================================
+  spec:
+    enabled: false  # Optional - enable for multi-platform projects
+    priority: "low"
+    is_blocker: false
+
+    # Platform configurations (at least 2 required: consumer + provider)
+    platforms:
+      - name: mobile
+        path: ../my-mobile-app
+        type: flutter  # flutter, react, react-native, angular, vue, swift, kotlin
+        role: consumer  # consumer, provider, both
+
+      - name: backend
+        path: ../my-backend
+        type: spring  # spring, nestjs, express, fastapi, django, aspnetcore, go
+        role: provider
+
+    # Gap analysis configuration
+    gap_analysis:
+      enable_fuzzy: true  # Enable fuzzy matching for operation names
+      fuzzy_threshold: 0.8  # Similarity threshold (0.0-1.0)
+
+    # Suppression rules for contract gaps
+    suppressions:
+      # Exact operation suppression
+      - rule: "spec:missing_operation:createUser"
+        reason: "Legacy endpoint, being refactored"
+
+      # Wildcard for gap type (suppress all type mismatches)
+      - rule: "spec:type_mismatch:*"
+        files: ["legacy/*.py"]
+        reason: "Type system migration in progress"
+
+      # Suppress all spec gaps in specific files
+      - rule: "spec:*:*"
+        files: ["vendor/*", "third-party/*"]
+        reason: "Third-party code"
+
+# Global Suppression Rules
+suppression:
+  # Suppress specific issues globally
+  global:
+    - id: "orphan-unused-import-annotations"
+      reason: "False positive - used in type hints"
+
+  # Suppress by file pattern
+  files:
+    - pattern: "**/__init__.py"
+      suppress: ["orphan-unused-import"]
+      reason: "Re-exports for public API"
+
+    - pattern: "**/test_*.py"
+      suppress: ["orphan-unreferenced-function"]
+      reason: "Test functions called by pytest"
+
+# CI/CD Integration
+ci:
+  enabled: true
+
+  # Fail build on blockers
+  fail_on_blocker: true
+
+  # Report formats
+  output:
+    - format: "markdown"
+      path: "./WARDEN_REPORT.md"
+    - format: "json"
+      path: "./warden-report.json"
+
+# Advanced Options
+advanced:
+  # Parallel execution
+  max_workers: 4
+
+  # Timeout per frame (seconds)
+  frame_timeout: 300
+
+  # Enable debug logging
+  debug: false

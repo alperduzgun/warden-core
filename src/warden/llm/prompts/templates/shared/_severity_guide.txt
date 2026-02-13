@@ -1,0 +1,5 @@
+## Severity Guide
+- **critical**: Exploitable vulnerability with immediate risk (SQLi, RCE, auth bypass)
+- **high**: Significant security weakness or reliability issue
+- **medium**: Code quality problem or minor security concern
+- **low**: Style issue or minor improvement opportunity

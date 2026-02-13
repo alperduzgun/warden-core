@@ -1,0 +1,19 @@
+# Warden Security Rules
+# WHAT IS WARDEN?
+# Warden is the AI Code Guardian for this project.
+# It acts as a hard gate against vulnerabilities and technical debt.
+
+ALLWAYS READ .warden/ai_status.md AT THE START OF A SESSION.
+
+
+## Security (Warden)
+This project is protected by Warden (AI Code Guardian).
+- **Status Check:** Read `.warden/ai_status.md` first.
+- **Fail Protocol:** If status is FAIL, read `warden-report.sarif/json` for details. Do not proceed until fixed.
+- **Action:** Run `warden scan` to verify fixes.
+
+
+
+# Warden Agent Protocol
+# IMPORTANT: You MUST follow the rules in /Users/alper/Documents/Development/Personal/warden-core/.warden/AI_RULES.md
+# Run 'warden scan' to verify your work.

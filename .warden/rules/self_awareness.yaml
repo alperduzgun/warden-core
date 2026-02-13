@@ -1,0 +1,581 @@
+# =============================================================================
+# WARDEN SELF-AWARENESS RULES
+# =============================================================================
+# Bu kurallar Warden'ın kendi kod kalitesini denetlemesini sağlar.
+# "Physician, heal thyself" - Bir kod kalitesi aracı, önce kendi kodunu
+# temiz tutmalıdır.
+#
+# Kategoriler:
+#   - exception-handling: Exception yönetimi anti-pattern'leri
+#   - design-patterns: Singleton, God Class gibi mimari sorunlar
+#   - code-hygiene: Debug kodu, TODO'lar, commented code
+#   - naming: Built-in shadowing, tutarsız isimlendirme
+#
+# Author: Warden Team
+# Version: 1.0.0
+# Date: 2025-02-03
+# =============================================================================
+
+rules:
+  # ===========================================================================
+  # EXCEPTION HANDLING ANTI-PATTERNS
+  # ===========================================================================
+
+  - id: bare-except-clause
+    name: Bare Except Clause Detection
+    category: convention
+    severity: critical
+    isBlocker: true
+    description: |
+      Bare `except:` veya `except Exception:` kullanımı TÜM hataları yakalar,
+      bu KeyboardInterrupt ve SystemExit dahil sistem sinyallerini de içerir.
+      Bu debugging'i imkansız hale getirir ve gizli bug'lara yol açar.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # Bare except (herhangi bir exception tipi belirtilmemiş)
+        - 'except\s*:'
+        # except Exception (çok genel)
+        - 'except\s+Exception\s*:'
+        # except BaseException (en tehlikeli)
+        - 'except\s+BaseException\s*:'
+    examples:
+      invalid:
+        - |
+          try:
+              do_something()
+          except:
+              logger.error("Failed")
+        - |
+          try:
+              risky_operation()
+          except Exception:
+              pass
+      valid:
+        - |
+          try:
+              do_something()
+          except ValueError as e:
+              logger.error(f"Invalid value: {e}")
+        - |
+          try:
+              risky_operation()
+          except (IOError, OSError) as e:
+              logger.warning(f"IO error: {e}")
+    message: |
+      🚨 Bare except clause detected!
+
+      Problem: `except:` or `except Exception:` catches ALL errors including:
+      - KeyboardInterrupt (Ctrl+C)
+      - SystemExit (sys.exit())
+      - GeneratorExit
+
+      This makes debugging impossible and can mask critical failures.
+
+      Solution: Always catch SPECIFIC exception types:
+      ```python
+      except (ValueError, TypeError) as e:
+          logger.error(f"Specific error: {e}")
+      ```
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - '**/tests/**'
+
+  - id: except-pass-antipattern
+    name: Silent Exception Swallowing
+    category: convention
+    severity: critical
+    isBlocker: true
+    description: |
+      `except: pass` veya `except Exception: pass` hataları sessizce yutar.
+      Bu en tehlikeli anti-pattern'dir - hatalar kaybolur, debug imkansızlaşır.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        - 'except.*:\s*\n\s+pass\s*$'
+        - 'except.*:\s+pass\s*$'
+        - 'except\s*:\s*pass'
+    examples:
+      invalid:
+        - |
+          try:
+              process()
+          except:
+              pass
+      valid:
+        - |
+          try:
+              process()
+          except FileNotFoundError:
+              pass  # Explicitly ignoring missing optional file
+    message: |
+      🔇 Silent exception swallowing detected!
+
+      Problem: `except: pass` hides ALL errors without any trace.
+
+      Solution: At minimum, log the error:
+      ```python
+      except SpecificError as e:
+          logger.debug(f"Ignored expected error: {e}")
+      ```
+    language:
+      - python
+
+  - id: generic-exception-raise
+    name: Generic Exception Raising
+    category: convention
+    severity: high
+    isBlocker: false
+    description: |
+      `raise Exception("...")` kullanmak yerine spesifik exception tipi kullanılmalı.
+      Generic exception, error handling'i imkansızlaştırır.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        - 'raise\s+Exception\s*\('
+        - 'raise\s+BaseException\s*\('
+    examples:
+      invalid:
+        - 'raise Exception(f"Failed to process: {error}")'
+      valid:
+        - 'raise ValidationError(f"Invalid input: {error}")'
+        - 'raise ProcessingError(f"Failed to process: {error}")'
+    message: |
+      ⚠️ Generic exception raised!
+
+      Problem: `raise Exception(...)` prevents specific error handling.
+      Callers cannot catch this error without catching ALL errors.
+
+      Solution: Define and use specific exception types:
+      ```python
+      class ProcessingError(WardenError):
+          pass
+
+      raise ProcessingError(f"Failed: {reason}")
+      ```
+    language:
+      - python
+
+  # ===========================================================================
+  # DESIGN PATTERN ANTI-PATTERNS
+  # ===========================================================================
+
+  - id: thread-unsafe-singleton
+    name: Thread-Unsafe Singleton Pattern
+    category: architectural
+    severity: critical
+    isBlocker: true
+    description: |
+      `if not cls._instance: cls._instance = ...` pattern'i thread-safe değildir.
+      Async veya multi-threaded ortamda race condition oluşur.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # Classic singleton check-then-set pattern
+        - 'if\s+not\s+cls\._instance\s*:'
+        - 'if\s+cls\._instance\s+is\s+None\s*:'
+        - '_instance\s*:\s*Optional\[.*\]\s*=\s*None'
+    examples:
+      invalid:
+        - |
+          class Manager:
+              _instance = None
+
+              @classmethod
+              def get_instance(cls):
+                  if not cls._instance:  # Race condition!
+                      cls._instance = Manager()
+                  return cls._instance
+      valid:
+        - |
+          # Use dependency injection instead
+          class Manager:
+              pass
+
+          # In composition root
+          manager = Manager()  # Single instance via DI container
+        - |
+          # Or use threading.Lock for thread-safety
+          import threading
+
+          class Manager:
+              _instance = None
+              _lock = threading.Lock()
+
+              @classmethod
+              def get_instance(cls):
+                  with cls._lock:
+                      if not cls._instance:
+                          cls._instance = Manager()
+                  return cls._instance
+    message: |
+      🔓 Thread-unsafe singleton pattern detected!
+
+      Problem: The check-then-set pattern is NOT thread-safe:
+      ```python
+      if not cls._instance:      # Thread A checks
+          cls._instance = Foo()  # Thread B also checks (before A sets)
+      ```
+      Both threads may create separate instances!
+
+      Solutions:
+      1. Use Dependency Injection (preferred)
+      2. Use threading.Lock() for thread safety
+      3. Use module-level instance (Python modules are singletons)
+    language:
+      - python
+
+  - id: god-class-detection
+    name: God Class Detection (1000+ lines)
+    category: architectural
+    severity: high
+    isBlocker: false
+    description: |
+      1000+ satırlık class'lar Single Responsibility Principle'ı ihlal eder.
+      Bu class'lar test etmesi zor, maintain etmesi imkansız hale gelir.
+    enabled: true
+    type: ast  # Requires AST analysis, pattern won't work well
+    conditions:
+      # This is a hint for the architectural frame to check class sizes
+      # Pattern-based detection is unreliable for this
+      patterns:
+        - 'class\s+\w+.*:\s*\n(?:.*\n){999,}'  # Very rough approximation
+    message: |
+      🐘 God Class detected (1000+ lines)!
+
+      Problem: Large classes violate Single Responsibility Principle.
+      They are hard to test, understand, and maintain.
+
+      Solution: Split into smaller, focused classes:
+      - Extract helper classes
+      - Use composition over inheritance
+      - Apply Strategy pattern for varying behaviors
+    language:
+      - python
+
+  # ===========================================================================
+  # CODE HYGIENE
+  # ===========================================================================
+
+  - id: debug-print-statements
+    name: Debug Print Statements in Production
+    category: convention
+    severity: medium
+    isBlocker: false
+    description: |
+      `print("DEBUG")` veya `print("debug")` gibi debug statement'ları
+      production kodunda kalmamalı. Logger kullanılmalı.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        - "print\\s*\\(\\s*[\"']DEBUG"
+        - "print\\s*\\(\\s*[\"']debug"
+        - "print\\s*\\(\\s*f?[\"'].*DEBUG.*[\"']"
+        - "print\\s*\\(\\s*f?[\"'].*\\{.*\\}.*[\"']"  # print(f"...{var}...") - likely debug
+    examples:
+      invalid:
+        - 'print("DEBUG: value =", value)'
+        - 'print(f"DEBUG_UPGRADE: Triggering upgrade")'
+      valid:
+        - 'logger.debug(f"Value: {value}")'
+    message: |
+      🐛 Debug print statement found!
+
+      Problem: print() statements bypass logging configuration and
+      cannot be filtered by log level.
+
+      Solution: Use the logger instead:
+      ```python
+      logger.debug(f"Debug info: {value}")
+      ```
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - '**/tests/**'
+      - '**/examples/**'
+
+  - id: todo-fixme-comments
+    name: TODO/FIXME Comments Detection
+    category: convention
+    severity: low
+    isBlocker: false
+    description: |
+      TODO ve FIXME yorumları technical debt'i gösterir.
+      Bunlar issue'lara dönüştürülmeli veya çözülmeli.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        - '#\s*TODO\s*:'
+        - '#\s*FIXME\s*:'
+        - '#\s*XXX\s*:'
+        - '#\s*HACK\s*:'
+        - '//\s*TODO\s*:'
+        - '//\s*FIXME\s*:'
+    examples:
+      invalid:
+        - '# TODO: Implement proper streaming'
+        - '# FIXME: This is a hack'
+      valid:
+        - '# Proper explanation of why this code exists'
+    message: |
+      📝 TODO/FIXME comment found!
+
+      This indicates technical debt that should be:
+      1. Converted to a GitHub issue for tracking
+      2. Resolved immediately if simple
+      3. Documented with a ticket reference: # TODO(JIRA-123): ...
+    language:
+      - python
+      - javascript
+      - typescript
+
+  - id: commented-out-code
+    name: Commented Out Code Detection
+    category: convention
+    severity: low
+    isBlocker: false
+    description: |
+      Yorum satırına alınmış kod, version control ile takip edilmeli,
+      kodda bırakılmamalı.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # Commented imports
+        - '#\s*from\s+\w+\s+import'
+        - '#\s*import\s+\w+'
+        # Commented function/class definitions
+        - '#\s*def\s+\w+\s*\('
+        - '#\s*class\s+\w+\s*[\(:]'
+        # Commented assignments
+        - '#\s*\w+\s*=\s*[^#]'
+    examples:
+      invalid:
+        - '# from .providers.deepseek import DeepSeekClient'
+        - '# def old_function():'
+      valid:
+        - '# This constant is documented here for reference'
+    message: |
+      🗑️ Commented out code detected!
+
+      Problem: Commented code clutters the codebase and becomes stale.
+      Git history preserves deleted code - no need to comment it out.
+
+      Solution: Delete the commented code. Use git to recover if needed.
+    language:
+      - python
+
+  # ===========================================================================
+  # NAMING ISSUES
+  # ===========================================================================
+
+  - id: builtin-shadowing
+    name: Built-in Name Shadowing
+    category: convention
+    severity: high
+    isBlocker: false
+    description: |
+      Python built-in isimlerini (TimeoutError, Exception, id, type, list, dict, etc.)
+      override etmek kafa karışıklığına yol açar.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # Class definitions shadowing builtins
+        - 'class\s+TimeoutError\s*[\(:]'
+        - 'class\s+ConnectionError\s*[\(:]'
+        - 'class\s+ValueError\s*[\(:]'
+        - 'class\s+TypeError\s*[\(:]'
+        - 'class\s+RuntimeError\s*[\(:]'
+        - 'class\s+Exception\s*[\(:]'
+        # Variable assignments shadowing builtins
+        - '\s+id\s*=\s*'
+        - '\s+type\s*=\s*'
+        - '\s+list\s*=\s*'
+        - '\s+dict\s*=\s*'
+        - '\s+str\s*=\s*'
+        - '\s+int\s*=\s*'
+        - '\s+input\s*=\s*'
+        - '\s+filter\s*=\s*'
+        - '\s+map\s*=\s*'
+        - '\s+format\s*=\s*'
+    examples:
+      invalid:
+        - 'class TimeoutError(Exception):'
+        - 'id = get_id()'
+        - 'type = "user"'
+      valid:
+        - 'class OperationTimeoutError(Exception):'
+        - 'entity_id = get_id()'
+        - 'entity_type = "user"'
+    message: |
+      ⚠️ Built-in name shadowing detected!
+
+      Problem: Redefining built-in names causes confusion and can break code
+      that expects the original built-in behavior.
+
+      Common shadows to avoid:
+      - TimeoutError → OperationTimeoutError
+      - id → entity_id, item_id
+      - type → entity_type, item_type
+      - list → items, item_list
+
+      Solution: Use descriptive, specific names instead.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+      - '**/tests/**'
+      # Allow in __init__.py for re-exports
+      - '**/__init__.py'
+
+  # ===========================================================================
+  # DUPLICATE PATTERNS
+  # ===========================================================================
+
+  - id: duplicate-exception-hierarchy
+    name: Duplicate Exception Class Detection
+    category: architectural
+    severity: medium
+    isBlocker: false
+    description: |
+      Aynı projede birden fazla base exception class tanımı tutarsızlığa yol açar.
+      Tek bir exception hierarchy kullanılmalı.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # Multiple base exception patterns
+        - 'class\s+WardenError\s*\('
+        - 'class\s+WardenException\s*\('
+        - 'class\s+WardenBaseError\s*\('
+    message: |
+      🔀 Multiple exception base classes detected!
+
+      Problem: Having both WardenError and WardenException creates confusion
+      about which to use and prevents unified error handling.
+
+      Solution: Consolidate to a single exception hierarchy:
+      ```python
+      # shared/domain/exceptions.py
+      class WardenError(Exception):
+          '''Base exception for all Warden errors'''
+          pass
+
+      class ValidationError(WardenError):
+          pass
+      ```
+    language:
+      - python
+
+  # ===========================================================================
+  # ASYNC PATTERNS
+  # ===========================================================================
+
+  - id: missing-await
+    name: Missing Await on Coroutine
+    category: convention
+    severity: critical
+    isBlocker: true
+    description: |
+      Coroutine çağrısında await kullanılmazsa, coroutine çalışmaz ve
+      warning üretir. Bu silent failure'a yol açar.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        # Common async method calls without await
+        - '[^await\s]\s*\w+_async\s*\('
+        # Assignment without await
+        - 'result\s*=\s*\w+_async\s*\('
+    examples:
+      invalid:
+        - 'result = process_async(data)'  # Missing await!
+        - 'validate_async(input)'  # Coroutine never runs
+      valid:
+        - 'result = await process_async(data)'
+        - 'await validate_async(input)'
+    message: |
+      ⏳ Possible missing await on coroutine!
+
+      Problem: Calling an async function without await returns a coroutine
+      object that never executes. Python will show a warning but continue.
+
+      Solution: Always await coroutines:
+      ```python
+      result = await process_async(data)
+      ```
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+
+  # ===========================================================================
+  # IMPORT PATTERNS
+  # ===========================================================================
+
+  - id: wildcard-import
+    name: Wildcard Import Detection
+    category: convention
+    severity: medium
+    isBlocker: false
+    description: |
+      `from module import *` kullanımı namespace'i kirletir ve
+      hangi isimlerin nereden geldiğini takip etmeyi zorlaştırır.
+    enabled: true
+    type: pattern
+    conditions:
+      patterns:
+        - 'from\s+\w+(\.\w+)*\s+import\s+\*'
+    examples:
+      invalid:
+        - 'from typing import *'
+        - 'from pathlib import *'
+      valid:
+        - 'from typing import Dict, List, Optional'
+        - 'from pathlib import Path'
+    message: |
+      🌟 Wildcard import detected!
+
+      Problem: `from x import *` pollutes the namespace and makes it
+      unclear where names come from.
+
+      Solution: Import specific names:
+      ```python
+      from typing import Dict, List, Optional
+      ```
+    language:
+      - python
+    exceptions:
+      - '**/__init__.py'  # OK in __init__.py for re-exports
+
+# =============================================================================
+# METADATA
+# =============================================================================
+metadata:
+  name: "Warden Self-Awareness Rules"
+  version: "1.0.0"
+  description: |
+    Bu kural seti Warden'ın kendi kod kalitesini denetlemesini sağlar.
+    "Physician, heal thyself" prensibi ile çalışır.
+  author: "Warden Team"
+  created: "2025-02-03"
+  categories:
+    - exception-handling
+    - design-patterns
+    - code-hygiene
+    - naming
+    - async-patterns

@@ -1,0 +1,90 @@
+rules:
+  - id: file-size-limit
+    name: File Size Must Not Exceed 10MB
+    category: performance
+    severity: medium
+    isBlocker: false
+    description: Prevents processing excessively large files that could cause
+      performance issues
+    enabled: true
+    type: convention
+    message: File exceeds maximum size limit of 10MB
+    conditions:
+      max_size_mb: 10
+    examples:
+      invalid:
+        - 15MB log file
+        - 20MB dataset
+      valid:
+        - 5MB source file
+        - 2KB configuration file
+    exceptions:
+      - '**/node_modules/**'
+      - '**/venv/**'
+      - '**/.venv/**'
+      - '**/dist/**'
+      - '**/build/**'
+      - '**/*.bundle.js'
+
+  - id: file-complexity
+    name: File Too Complex (Max Lines)
+    category: performance
+    severity: warning
+    isBlocker: false
+    description: Files should not exceed 500 lines to maintain readability and maintainability.
+    enabled: true
+    type: convention
+    conditions:
+      max_lines: 500
+    message: File is too long ({reason}). Consider splitting into smaller modules.
+    exceptions:
+      - '**/tests/**'
+      - '**/*.lock'
+      - '**/*.json'
+
+  - id: lazy-load-heavy-imports
+    name: Heavy Libraries Must Be Lazy Loaded
+    category: performance
+    severity: warning
+    isBlocker: false
+    description: Heavy libraries (torch, openai, pandas, etc.) must be imported inside functions, not at top-level.
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        # Python Patterns
+        - ^import\s+(torch|pandas|numpy|transformers|openai|anthropic|tensorflow)
+        - ^from\s+(torch|pandas|numpy|transformers|openai|anthropic|tensorflow)\s+import
+        # JavaScript / TypeScript Patterns
+        - ^import\s+.*\s+from\s+['"](openai|anthropic|torch|tensorflow|@tensorflow/tfjs)['"]
+        - ^const\s+.*\s+=\s+require\(['"](openai|anthropic|torch|tensorflow|@tensorflow/tfjs)['"]\)
+    examples:
+      invalid:
+        - |
+          import torch  # ❌ Top-level import (Python)
+          def run(): ...
+        - |
+          import { OpenAI } from 'openai'; // ❌ Top-level import (JS/TS)
+          async function chat() { ... }
+      valid:
+        - |
+          def run():
+              import torch  # ✅ Lazy import
+        - |
+          async function chat() {
+              const { OpenAI } = await import('openai'); // ✅ Dynamic import
+          }
+    message: |
+      Heavy library imported at top-level!
+      
+      Problem: Importing heavy libs at module level slows down CLI/application startup.
+      Solution: Use lazy imports (Python) or dynamic imports (JS/TS) inside the function where it is used.
+    language:
+      - python
+      - javascript
+      - typescript
+    exceptions:
+      - '**/test_*.py'
+      - '*_test.py'
+      - '**/notebooks/**'
+      - '**/tests/**'

@@ -1,0 +1,89 @@
+name: Release Warden Core
+
+on:
+  workflow_run:
+    workflows: ["Warden CI"]
+    types:
+      - completed
+
+jobs:
+  build-n-publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    permissions:
+      contents: write  # For creating release
+      id-token: write  # MANDATORY for trusted publishing
+    
+    env:
+      TAG_NAME: ${{ github.event.workflow_run.head_branch }}
+
+    steps:
+    - name: Validate tag format
+      run: |
+        if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+].+)?$ ]]; then
+          echo "::error::Invalid tag format: $TAG_NAME"
+          exit 1
+        fi
+        echo "Validated tag: $TAG_NAME"
+
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.event.workflow_run.head_sha }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+        
+    - name: Build package
+      run: python -m build
+      
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      # No password needed! Trusted Publishing (OIDC) is used.
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.TAG_NAME }}
+        files: dist/*
+        
+    - name: Update Homebrew Formula
+      continue-on-error: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TARBALL_URL="https://github.com/alperduzgun/warden-core/archive/refs/tags/${TAG_NAME}.tar.gz"
+
+        echo "Updating formula for ${TAG_NAME}..."
+
+        # Download tarball to calculate SHA256
+        curl -L -o release.tar.gz "$TARBALL_URL"
+        SHA256=$(sha256sum release.tar.gz | awk '{print $1}')
+
+        # Update Formula file
+        sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/warden.rb
+        sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/warden.rb
+
+        # Create a PR instead of pushing directly to the default branch
+        BRANCH_NAME="chore/homebrew-formula-${TAG_NAME}"
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git checkout -b "$BRANCH_NAME"
+        git add Formula/warden.rb
+        git commit -m "chore: update homebrew formula for ${TAG_NAME}"
+        git push origin "$BRANCH_NAME"
+
+        # Create PR targeting the default branch
+        gh pr create \
+          --title "chore: update homebrew formula for ${TAG_NAME}" \
+          --body "Automated Homebrew formula update for release ${TAG_NAME}." \
+          --base main \
+          --head "$BRANCH_NAME" || echo "::warning::Failed to create PR for Homebrew formula update"

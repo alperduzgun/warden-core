@@ -1,0 +1,12 @@
+version: "1.0"
+directories:
+  - __pycache__
+  - .git
+  - node_modules
+  - .venv
+file_patterns:
+  - "*.pyc"
+  - "*.pyo"
+  - ".DS_Store"
+path_patterns:
+  - "tests/fixtures/**"

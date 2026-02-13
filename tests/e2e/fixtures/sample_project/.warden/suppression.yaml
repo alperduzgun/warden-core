@@ -1,0 +1,8 @@
+enabled: true
+entries:
+  - id: "suppress-test-secret"
+    type: config
+    rules:
+      - "hardcoded-secret"
+    file: "src/clean.py"
+    reason: "No secrets in clean.py - test suppression entry"

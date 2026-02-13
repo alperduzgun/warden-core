@@ -1,0 +1,25 @@
+rules:
+  - id: "custom-no-print"
+    name: "No print statements"
+    description: "Use logging instead of print()"
+    category: convention
+    severity: warning
+    isBlocker: false
+    enabled: true
+    type: pattern
+    pattern: "print\\("
+    language:
+      - python
+    conditions: {}
+  - id: "custom-no-hardcoded-url"
+    name: "No hardcoded URLs"
+    description: "URLs should come from config or environment"
+    category: security
+    severity: info
+    isBlocker: false
+    enabled: true
+    type: pattern
+    pattern: "https?://[^\\s]+"
+    language:
+      - python
+    conditions: {}

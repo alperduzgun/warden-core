@@ -1,0 +1,167 @@
+rules:
+  - id: orchestrator-total-frames-check
+    name: Orchestrator total_frames Calculation Regression
+    category: architectural
+    severity: critical
+    isBlocker: true
+    description: Prevent regression where total_frames is calculated from static selected_frames list instead of actual execution count
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - total_frames\s*=\s*len\(
+        - total_frames\s*=\s*len\(getattr
+    examples:
+      invalid:
+        - "total_frames = len(getattr(context, 'selected_frames', []))"
+        - "total_frames = len(self.frames)"
+      valid:
+        - "total_frames = max(actual_total, planned_total)"
+        - "total_frames = frames_passed + frames_failed"
+    message: |
+      Regression detected in total_frames calculation!
+      
+      Problem: Calculating total_frames from static 'selected_frames' list ignores dynamic/mandatory frames.
+      Solution: Calculate total based on ACTUAL execution counts (passed + failed + skipped) or max(actual, planned).
+      
+      This caused a bug where report showed 5 total frames but 8 passed frames.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+
+  - id: enum-consistency-check
+    name: Enum Values Must Be Defined Before Use
+    category: consistency
+    severity: critical
+    isBlocker: true
+    description: When using enum values in code, ensure they are defined in the enum class
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - CleanupIssueType\.POOR_DOC
+        - CleanupIssueType\.[\w]+
+    examples:
+      invalid:
+        - |
+          # Using undefined enum value
+          issue = CleanupIssue(
+              issue_type=CleanupIssueType.POOR_DOC,  # ❌ POOR_DOC not defined
+              description="Poor documentation"
+          )
+      valid:
+        - |
+          # First define in enum
+          class CleanupIssueType(Enum):
+              POOR_DOC = "poor_doc"
+          # Then use it
+          issue = CleanupIssue(issue_type=CleanupIssueType.POOR_DOC, ...)
+    message: |
+      Enum value used but not defined in enum class!
+
+      Problem: Using CleanupIssueType.{value} but it's not defined
+      Solution: Add the missing enum value to the enum class definition
+
+      This prevents AttributeError at runtime.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+      - '*_test.py'
+
+  - id: attribute-existence-check
+    name: Object Attributes Must Exist Before Access
+    category: consistency
+    severity: critical
+    isBlocker: true
+    description: Ensure objects have required attributes before accessing them
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - self\.pipeline\.frames_executed
+        - self\.pipeline\.frames_passed
+        - self\.pipeline\.frames_failed
+    examples:
+      invalid:
+        - |
+          # Accessing undefined attributes
+          self.pipeline.frames_executed += 1  # ❌ frames_executed not in ValidationPipeline
+      valid:
+        - |
+          # Define in class first
+          @dataclass
+          class ValidationPipeline:
+              frames_executed: int = 0
+              frames_passed: int = 0
+              frames_failed: int = 0
+    message: |
+      Accessing undefined attribute on object!
+
+      Problem: Object doesn't have this attribute defined
+      Solution: Add the attribute to the class definition
+
+      This prevents AttributeError at runtime.
+    language:
+      - python
+    exceptions:
+      - '*/test_*.py'
+
+  - id: phase-context-compatibility
+    name: Phase Context Must Match Expected Structure
+    category: consistency
+    severity: high
+    isBlocker: false
+    description: Ensure phase contexts are accessed correctly based on their actual
+      structure
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - result\.framework\.name
+        - result\.project_metadata
+        - result\.confidence
+    examples:
+      invalid:
+        - |
+          # Accessing non-existent attributes
+          context.framework = result.framework  # ❌ result has project_context.framework
+          name = result.framework.name  # ❌ framework is enum, not object
+      valid:
+        - |
+          # Correct access pattern
+          context.framework = result.project_context.framework if result.project_context else None
+          name = result.project_context.framework.value if result.project_context else None
+    message: |
+      Phase result attribute access error!
+
+      Problem: Accessing attributes that don't exist or have different structure
+      Solution: Check actual object structure and access correctly
+
+      Common mistakes:
+      - result.framework → result.project_context.framework
+      - framework.name → framework.value (for enums)
+      - result.confidence → result.project_context.confidence
+    language:
+      - python
+
+  - id: method-name-consistency
+    name: Method Names Must Match Implementation
+    category: consistency
+    severity: critical
+    isBlocker: true
+    description: Method calls must use correct method names (e.g., analyze_async not
+      analyze)
+    enabled: true
+    type: convention
+    conditions:
+      patterns:
+        - self\.project_analyzer\.analyze\(\)
+        - await\s+\w+\.execute\(
+    examples:
+      invalid:
+        - |
+          # Wrong method name
+          result = await self.project_analyzer.analyze()  # ❌ Method is analyze_async

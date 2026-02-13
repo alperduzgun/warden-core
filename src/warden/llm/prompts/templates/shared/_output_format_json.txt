@@ -1,0 +1,2 @@
+## Output Format
+Respond with valid JSON only. No markdown, no explanations outside JSON.

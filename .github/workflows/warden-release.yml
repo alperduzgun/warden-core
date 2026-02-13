@@ -1,0 +1,78 @@
+# Warden CI v1.0.0
+# Generated: 2026-02-03 09:10:05
+# Do not edit sections marked WARDEN-MANAGED
+
+name: Warden Release Security Scan
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      strict_mode:
+        description: 'Run in strict mode (fail on any issue)'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  warden:
+    name: Release Security Audit
+    runs-on: ubuntu-latest
+
+    env:
+      CI_LLM_PROVIDER: azure_openai
+
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Warden
+        run: pip install .
+
+      - name: Refresh Intelligence
+        run: warden refresh --force
+
+      - name: Run Strict Security Audit
+        run: |
+          # Full scan with strict settings for release
+          mkdir -p .warden/reports
+          warden scan --level deep --format sarif --output .warden/reports/warden-report.sarif
+
+      - name: Check Technical Debt
+        run: |
+          echo "## Technical Debt Report" >> $GITHUB_STEP_SUMMARY
+          warden baseline debt >> $GITHUB_STEP_SUMMARY 2>&1 || true
+
+      - name: Upload SARIF Report
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .warden/reports/warden-report.sarif
+        continue-on-error: true
+
+      - name: Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-release-reports
+          path: .warden/reports/
+
+      - name: Create Security Summary
+        if: always()
+        run: |
+          echo "## Warden Security Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f .warden/ai_status.md ]; then
+            cat .warden/ai_status.md >> $GITHUB_STEP_SUMMARY
+          fi

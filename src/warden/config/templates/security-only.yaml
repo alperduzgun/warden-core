@@ -1,0 +1,20 @@
+# Security-Only Pipeline Template
+# Focus: Security vulnerabilities and secrets detection
+# Use case: Quick security scan before commits
+
+version: "1.0"
+name: "Security Scanner"
+
+# Files to scan (optional - can be specified via CLI)
+# files:
+#   - "src/**/*.py"
+#   - "src/**/*.ts"
+
+# Only security frame
+frames:
+  - security
+
+settings:
+  fail_fast: true  # Stop on first critical security issue
+  timeout: 120     # 2 minutes timeout
+  parallel: false  # Sequential execution

@@ -1,0 +1,52 @@
+"""Enums for custom rules system.
+
+This module defines enumerations for rule categories and severities.
+All enum values MUST match Panel TypeScript types exactly.
+"""
+
+from enum import Enum
+
+
+class RuleCategory(Enum):
+    """Category of custom rule.
+
+    Must match Panel TypeScript: 'security' | 'convention' | 'performance' | 'custom'
+    """
+
+    SECURITY = "security"
+    CONVENTION = "convention"
+    PERFORMANCE = "performance"
+    ARCHITECTURAL = "architectural"
+    CONSISTENCY = "consistency"
+    BACKEND_IPC = "backend-ipc"
+    LOGIC = "logic"
+    CUSTOM = "custom"
+
+
+class RuleSeverity(Enum):
+    """Severity level of rule violation.
+
+    Must match Panel TypeScript: 'critical' | 'high' | 'medium' | 'low'
+    """
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    ERROR = "error"
+    WARNING = "warning"
+    INFO = "info"
+
+
+class RuleType(Enum):
+    """Type of custom rule execution logic.
+
+    Determines how the rule is evaluated.
+    """
+
+    SECURITY = "security"
+    CONVENTION = "convention"
+    PATTERN = "pattern"
+    SCRIPT = "script"
+    AI = "ai"
+

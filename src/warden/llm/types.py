@@ -1,0 +1,98 @@
+"""
+LLM Type Definitions - Panel Compatible
+
+Multi-provider LLM support with fallback chain.
+All types designed for Panel JSON compatibility (camelCase ↔ snake_case).
+"""
+
+
+from enum import Enum
+from typing import List, Optional
+
+from pydantic import Field
+
+from warden.shared.domain.base_model import BaseDomainModel
+
+
+class LlmProvider(str, Enum):
+    """LLM provider types (matches C# LlmProvider enum)"""
+    DEEPSEEK = "deepseek"
+    QWENCODE = "qwencode"
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    AZURE_OPENAI = "azure_openai"
+    GROQ = "groq"
+    OPENROUTER = "openrouter"
+    OLLAMA = "ollama"
+    GEMINI = "gemini"
+    CLAUDE_CODE = "claude_code"  # Local Claude Code CLI/SDK integration
+
+
+class LlmRequest(BaseDomainModel):
+    """Request to LLM provider"""
+    system_prompt: str
+    user_message: str
+    model: str | None = None
+    temperature: float = 0.0  # Idempotency: deterministic outputs
+    max_tokens: int = 4000
+    timeout_seconds: int = 60
+    use_fast_tier: bool = False  # If True, use local/fast model if available
+
+
+class LlmResponse(BaseDomainModel):
+    """Response from LLM provider"""
+    content: str
+    success: bool
+    error_message: str | None = None
+    provider: LlmProvider | None = None
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    duration_ms: int = 0
+    overall_confidence: float | None = None
+
+
+class AnalysisIssue(BaseDomainModel):
+    """Single issue from LLM analysis"""
+    severity: str
+    category: str
+    title: str
+    description: str
+    line: int
+    confidence: float
+    evidence_quote: str = Field(default="")
+    code_snippet: str = Field(default="")
+    suggestion: str = Field(default="")
+
+
+class AnalysisResult(BaseDomainModel):
+    """LLM analysis result"""
+    score: float
+    confidence: float
+    summary: str
+    scenarios_simulated: list[str] = Field(default_factory=list)
+    issues: list[AnalysisIssue] = Field(default_factory=list)
+
+
+class ClassificationCharacteristics(BaseDomainModel):
+    """Code characteristics detected by classification"""
+    has_async_operations: bool = False
+    has_external_api_calls: bool = False
+    has_user_input: bool = False
+    has_database_operations: bool = False
+    has_file_operations: bool = False
+    has_financial_calculations: bool = False
+    has_collection_processing: bool = False
+    has_network_operations: bool = False
+    has_authentication_logic: bool = False
+    has_cryptographic_operations: bool = False
+    complexity_score: int = 0
+
+
+class ClassificationResult(BaseDomainModel):
+    """LLM classification result"""
+    characteristics: ClassificationCharacteristics
+    recommended_frames: list[str]
+    summary: str
+

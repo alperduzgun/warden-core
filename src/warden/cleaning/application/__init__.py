@@ -1,0 +1,1 @@
+"""Cleaning application module."""

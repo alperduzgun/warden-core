@@ -1,0 +1,18 @@
+# Example Custom Rule Definition
+# Check https://github.com/warden-ai/docs for full syntax
+
+rules:
+  - id: "company-no-print"
+    name: "No Print Statements"
+    description: "Do not use print statements in production code"
+    severity: "warning"
+    category: "convention"
+    type: "convention"
+    isBlocker: false
+    enabled: true
+    conditions:
+      patterns:
+        - "print("
+    exclude:
+      - "tests/**"
+      - "scripts/**"
