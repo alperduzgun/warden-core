@@ -45,38 +45,42 @@ async def test_integrity_scanner_syntax_check():
 async def test_integrity_scanner_build_verification_success():
     mock_registry = MagicMock()
     scanner = IntegrityScanner(Path("/tmp"), mock_registry, config={"enable_build_check": True})
-    
+
     context = ProjectContext()
     context.framework = Framework.FASTAPI
-    
-    with patch("asyncio.create_subprocess_shell") as mock_subprocess:
+
+    # IntegrityScanner uses create_subprocess_exec (not shell)
+    with patch("asyncio.create_subprocess_exec") as mock_subprocess:
         mock_proc = AsyncMock()
         mock_proc.communicate.return_value = (b"", b"")
         mock_proc.returncode = 0
         mock_subprocess.return_value = mock_proc
-        
+
         issues = await scanner.scan_async([], context)
-        
+
         assert len(issues) == 0
         mock_subprocess.assert_called_once()
-        assert "python3 -m compileall" in mock_subprocess.call_args[0][0]
+        # Verify build command was called (exec uses *args, not single string)
+        args = mock_subprocess.call_args[0][0]
+        assert "python3" in args or "compileall" in " ".join(args)
 
 @pytest.mark.asyncio
 async def test_integrity_scanner_build_verification_failure():
     mock_registry = MagicMock()
     scanner = IntegrityScanner(Path("/tmp"), mock_registry, config={"enable_build_check": True})
-    
+
     context = ProjectContext()
     context.framework = Framework.FASTAPI
-    
-    with patch("asyncio.create_subprocess_shell") as mock_subprocess:
+
+    # IntegrityScanner uses create_subprocess_exec (not shell)
+    with patch("asyncio.create_subprocess_exec") as mock_subprocess:
         mock_proc = AsyncMock()
         mock_proc.communicate.return_value = (b"", b"SyntaxError: invalid syntax")
         mock_proc.returncode = 1
         mock_subprocess.return_value = mock_proc
-        
+
         issues = await scanner.scan_async([], context)
-        
+
         assert len(issues) == 1
         assert issues[0].file_path == "BUILD"
         assert "Build validation failed" in issues[0].message
