@@ -27,7 +27,7 @@ jobs:
         fi
         echo "Validated tag: $TAG_NAME"
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
         ref: ${{ github.event.workflow_run.head_sha }}
