@@ -53,7 +53,6 @@ def __getattr__(name: str):
             return getattr(module, name)
         except ImportError as e:
             raise ImportError(
-                f"'{name}' requires optional dependencies. "
-                f"Install with: pip install warden-core[semantic]"
+                f"'{name}' requires optional dependencies. Install with: pip install warden-core[semantic]"
             ) from e
     raise AttributeError(f"module 'warden.semantic_search' has no attribute '{name}'")

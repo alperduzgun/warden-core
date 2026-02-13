@@ -33,6 +33,7 @@ except ImportError:
 LSP_AVAILABLE = False
 try:
     from warden.lsp.manager import LSPManager
+
     LSP_AVAILABLE = True
 except ImportError:
     pass
@@ -141,14 +142,16 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 test = node.test
                 # Check for `if TYPE_CHECKING:` or `if typing.TYPE_CHECKING:`
                 is_type_checking = False
-                if (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"):
+                if (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+                    isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+                ):
                     is_type_checking = True
 
                 if is_type_checking:
                     # Mark all lines in the body as type checking imports
                     for stmt in node.body:
                         for child in ast.walk(stmt):
-                            if hasattr(child, 'lineno'):
+                            if hasattr(child, "lineno"):
                                 type_checking_lines.add(child.lineno)
 
         # Collect all imports (excluding TYPE_CHECKING blocks)
@@ -315,17 +318,17 @@ class PythonOrphanDetector(AbstractOrphanDetector):
         """
         Get full definition snippet including decorators.
         """
-        if not hasattr(node, 'lineno'):
+        if not hasattr(node, "lineno"):
             return ""
 
         start_line = node.lineno
-        end_line = getattr(node, 'end_lineno', start_line)
+        end_line = getattr(node, "end_lineno", start_line)
 
         # Include decorators if present
-        if hasattr(node, 'decorator_list') and node.decorator_list:
+        if hasattr(node, "decorator_list") and node.decorator_list:
             # Find the earliest line among decorators
             for dec in node.decorator_list:
-                if hasattr(dec, 'lineno'):
+                if hasattr(dec, "lineno"):
                     start_line = min(start_line, dec.lineno)
 
         lines = []
@@ -334,7 +337,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
         current_line = start_line
 
         while current_line <= len(self.lines) and len(lines) < max_lines:
-            line = self.lines[current_line - 1] # 0-indexed list
+            line = self.lines[current_line - 1]  # 0-indexed list
             lines.append(line)
 
             # Stop if we reach the end of the node
@@ -414,16 +417,13 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
             def _is_terminal(self, stmt: ast.stmt) -> bool:
                 """Check if statement terminates execution."""
-                return isinstance(
-                    stmt, (ast.Return, ast.Break, ast.Continue, ast.Raise)
-                )
+                return isinstance(stmt, (ast.Return, ast.Break, ast.Continue, ast.Raise))
 
         finder = DeadCodeFinder(self)
         finder.visit(self.tree)
         findings.extend(finder.findings)
 
         return findings
-
 
 
 class UniversalOrphanDetector(AbstractOrphanDetector):
@@ -445,9 +445,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         definitions = self._collect_definitions(self.ast_root)
 
         # 2. Collect node IDs to exclude (definition sites) - using id() since ASTNode isn't hashable
-        exclude_node_ids = {
-            id(node) for _, (_, _, node) in definitions.items()
-        }
+        exclude_node_ids = {id(node) for _, (_, _, node) in definitions.items()}
 
         # 3. Collect all identifier references
         references = self._collect_references(self.ast_root, exclude_node_ids=exclude_node_ids)
@@ -479,12 +477,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         definitions: dict[str, tuple[int, str, ASTNode]] = {}
 
         # Types we consider as "definitions" that can be orphans
-        target_types = {
-            ASTNodeType.FUNCTION,
-            ASTNodeType.CLASS,
-            ASTNodeType.INTERFACE,
-            ASTNodeType.METHOD
-        }
+        target_types = {ASTNodeType.FUNCTION, ASTNodeType.CLASS, ASTNodeType.INTERFACE, ASTNodeType.METHOD}
 
         def walk(node: ASTNode):
             if node.node_type in target_types:
@@ -493,7 +486,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
                     definitions[name] = (
                         node.location.start_line if node.location else 0,
                         node.node_type.value.capitalize(),
-                        node
+                        node,
                     )
 
             for child in node.children:
@@ -535,7 +528,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
 
         # In many languages (TS, Go), anything exported is effectively "used"
         # We check metadata if available (use getattr for safety)
-        metadata = getattr(node, 'metadata', None) or {}
+        metadata = getattr(node, "metadata", None) or {}
         return bool(isinstance(metadata, dict) and metadata.get("is_exported"))
 
     def _get_node_snippet(self, node: ASTNode) -> str:
@@ -550,7 +543,6 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
 
         lines = self.lines[start:end]
         return "\n".join(lines).strip()
-
 
 
 class TreeSitterOrphanDetector(AbstractOrphanDetector):
@@ -574,6 +566,7 @@ class RustOrphanDetector(AbstractOrphanDetector):
 
         # Use central Registry for language ID
         from warden.shared.languages.registry import LanguageRegistry
+
         lang_enum = LanguageRegistry.get_language_from_path(self.file_path)
         language = lang_enum.value if lang_enum != CodeLanguage.UNKNOWN else None
 
@@ -588,33 +581,38 @@ class RustOrphanDetector(AbstractOrphanDetector):
             # This is a heuristic: "If name appears <= 1 time, it might be unused"
             # (1 time = the definition itself).
             from collections import Counter
+
             ref_counts = Counter(meta.references)
 
             # 3. Check Functions
             for func in meta.functions:
                 if self._is_orphan(func.name, ref_counts):
-                     # Double check specific suppression (e.g. main)
+                    # Double check specific suppression (e.g. main)
                     if self._should_skip(func.name):
                         continue
 
-                    findings.append(OrphanFinding(
-                        orphan_type="unreferenced_function",
-                        name=func.name,
-                        line_number=func.line_number,
-                        code_snippet=func.code_snippet,
-                        reason=f"Function '{func.name}' appears unused (ref_count={ref_counts[func.name]})"
-                    ))
+                    findings.append(
+                        OrphanFinding(
+                            orphan_type="unreferenced_function",
+                            name=func.name,
+                            line_number=func.line_number,
+                            code_snippet=func.code_snippet,
+                            reason=f"Function '{func.name}' appears unused (ref_count={ref_counts[func.name]})",
+                        )
+                    )
 
             # 4. Check Classes
             for cls in meta.classes:
                 if self._is_orphan(cls.name, ref_counts):
-                    findings.append(OrphanFinding(
-                        orphan_type="unreferenced_class",
-                        name=cls.name,
-                        line_number=cls.line_number,
-                        code_snippet=cls.code_snippet,
-                        reason=f"Class '{cls.name}' appears unused (ref_count={ref_counts[cls.name]})"
-                    ))
+                    findings.append(
+                        OrphanFinding(
+                            orphan_type="unreferenced_class",
+                            name=cls.name,
+                            line_number=cls.line_number,
+                            code_snippet=cls.code_snippet,
+                            reason=f"Class '{cls.name}' appears unused (ref_count={ref_counts[cls.name]})",
+                        )
+                    )
 
             # 5. Check Imports
             # Imports are tricky because "references" captures ALL identifiers.
@@ -625,13 +623,15 @@ class RustOrphanDetector(AbstractOrphanDetector):
                 # Import names can be "os" or "join" (from os.path).
                 # Tree-sitter query captures the local name.
                 if self._is_orphan(imp.name, ref_counts):
-                     findings.append(OrphanFinding(
-                        orphan_type="unused_import",
-                        name=imp.name,
-                        line_number=imp.line_number,
-                        code_snippet=imp.code_snippet,
-                        reason=f"Import '{imp.name}' appears unused"
-                    ))
+                    findings.append(
+                        OrphanFinding(
+                            orphan_type="unused_import",
+                            name=imp.name,
+                            line_number=imp.line_number,
+                            code_snippet=imp.code_snippet,
+                            reason=f"Import '{imp.name}' appears unused",
+                        )
+                    )
 
         except Exception as e:
             logger.error("rust_orphan_detection_failed", file=self.file_path, error=str(e))
@@ -668,13 +668,7 @@ class LSPOrphanDetector(AbstractOrphanDetector):
         - Slower than AST-based detection (needs to index project)
     """
 
-    def __init__(
-        self,
-        code: str,
-        file_path: str,
-        lsp_client: 'LanguageServerClient',
-        language: str
-    ) -> None:
+    def __init__(self, code: str, file_path: str, lsp_client: "LanguageServerClient", language: str) -> None:
         super().__init__(code, file_path)
         self.lsp_client = lsp_client
         self.language = language
@@ -706,11 +700,7 @@ class LSPOrphanDetector(AbstractOrphanDetector):
 
         try:
             # 1. Open document
-            await self.lsp_client.open_document_async(
-                self.file_path,
-                self.language,
-                self.code
-            )
+            await self.lsp_client.open_document_async(self.file_path, self.language, self.code)
 
             # 2. Get symbols
             symbols = await self.lsp_client.get_document_symbols_async(self.file_path)
@@ -742,25 +732,27 @@ class LSPOrphanDetector(AbstractOrphanDetector):
                     self.file_path,
                     line,
                     character,
-                    include_declaration=False  # Don't count definition itself
+                    include_declaration=False,  # Don't count definition itself
                 )
 
                 # 5. If no references (excluding declaration), it's orphan
                 if len(refs) == 0:
                     orphan_type = self._get_orphan_type(symbol_kind)
-                    findings.append(OrphanFinding(
-                        orphan_type=orphan_type,
-                        name=symbol_name,
-                        line_number=line + 1,  # Convert to 1-indexed
-                        code_snippet=self._get_line(line + 1),
-                        reason=f"{orphan_type.replace('_', ' ').title()} '{symbol_name}' has no references in codebase"
-                    ))
+                    findings.append(
+                        OrphanFinding(
+                            orphan_type=orphan_type,
+                            name=symbol_name,
+                            line_number=line + 1,  # Convert to 1-indexed
+                            code_snippet=self._get_line(line + 1),
+                            reason=f"{orphan_type.replace('_', ' ').title()} '{symbol_name}' has no references in codebase",
+                        )
+                    )
 
             logger.info(
                 "lsp_orphan_detection_complete",
                 file=self.file_path,
                 symbols_checked=len(symbols),
-                orphans_found=len(findings)
+                orphans_found=len(findings),
             )
 
         except Exception as e:
@@ -798,9 +790,20 @@ class LSPOrphanDetector(AbstractOrphanDetector):
     def _should_skip(self, name: str) -> bool:
         """Skip special methods and entry points."""
         skip_names = {
-            "main", "__init__", "__str__", "__repr__", "__eq__", "__hash__",
-            "__enter__", "__exit__", "__aenter__", "__aexit__",
-            "setup", "teardown", "setUp", "tearDown",
+            "main",
+            "__init__",
+            "__str__",
+            "__repr__",
+            "__eq__",
+            "__hash__",
+            "__enter__",
+            "__exit__",
+            "__aenter__",
+            "__aexit__",
+            "setup",
+            "teardown",
+            "setUp",
+            "tearDown",
         }
         return name in skip_names or name.startswith("test_")
 
@@ -864,9 +867,7 @@ class OrphanDetectorFactory:
 
         # 1. Try LSP if enabled and available
         if use_lsp and LSP_AVAILABLE and project_root:
-            lsp_detector = await OrphanDetectorFactory._try_create_lsp_detector(
-                code, file_path, ext, project_root
-            )
+            lsp_detector = await OrphanDetectorFactory._try_create_lsp_detector(code, file_path, ext, project_root)
             if lsp_detector:
                 return lsp_detector
 
@@ -880,6 +881,7 @@ class OrphanDetectorFactory:
         # 3. Non-Python uses Rust or Universal AST
         try:
             from warden.shared.languages.registry import LanguageRegistry
+
             language = LanguageRegistry.get_language_from_path(file_path)
 
             if language != CodeLanguage.UNKNOWN:
@@ -888,7 +890,7 @@ class OrphanDetectorFactory:
                     CodeLanguage.TYPESCRIPT,
                     CodeLanguage.JAVASCRIPT,
                     CodeLanguage.GO,
-                    CodeLanguage.JAVA
+                    CodeLanguage.JAVA,
                 ]:
                     return RustOrphanDetector(code, file_path)
 
@@ -913,10 +915,7 @@ class OrphanDetectorFactory:
 
     @staticmethod
     async def _try_create_lsp_detector(
-        code: str,
-        file_path: str,
-        ext: str,
-        project_root: str
+        code: str, file_path: str, ext: str, project_root: str
     ) -> LSPOrphanDetector | None:
         """
         Try to create an LSP-based detector.

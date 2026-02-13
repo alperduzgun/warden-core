@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 @dataclass
 class LinterMetrics:
     """Standardized linter metrics."""
+
     tool: str
     total_errors: int
     blocker_count: int
@@ -49,7 +50,6 @@ class ILinterProvider(Protocol):
     async def run_findings_async(self, files: list[Path]) -> list[Finding]:
         """Detailed scan for actionable findings."""
         ...
-
 
 
 class FrameLinterAdapter:
@@ -86,7 +86,7 @@ class FrameLinterAdapter:
 
     async def detect_async(self, context: ProjectContext) -> bool:
         """Delegate to frame.detect_async if available, else True."""
-        if hasattr(self.frame, 'detect_async'):
+        if hasattr(self.frame, "detect_async"):
             return await self.frame.detect_async()
         return True
 
@@ -94,12 +94,18 @@ class FrameLinterAdapter:
         """Helper to create CodeFile with simple language guess."""
         ext = path.suffix.lower()
         lang = "unknown"
-        if ext == ".py": lang = "python"
-        elif ext == ".js": lang = "javascript"
-        elif ext == ".ts": lang = "typescript"
-        elif ext == ".rs": lang = "rust"
-        elif ext == ".go": lang = "go"
-        elif ext == ".java": lang = "java"
+        if ext == ".py":
+            lang = "python"
+        elif ext == ".js":
+            lang = "javascript"
+        elif ext == ".ts":
+            lang = "typescript"
+        elif ext == ".rs":
+            lang = "rust"
+        elif ext == ".go":
+            lang = "go"
+        elif ext == ".java":
+            lang = "java"
         # ... add more as needed or rely on frame to check path
 
         return CodeFile(path=str(path), content="", language=lang)
@@ -112,7 +118,7 @@ class FrameLinterAdapter:
         start_time = asyncio.get_event_loop().time()
 
         # Call execute_batch_async if available (recommended for performance)
-        if hasattr(self.frame, 'execute_batch_async'):
+        if hasattr(self.frame, "execute_batch_async"):
             results = await self.frame.execute_batch_async(code_files)
         else:
             # Fallback to serial execute_async for each file
@@ -131,22 +137,22 @@ class FrameLinterAdapter:
         total_blockers = 0
         for res in results:
             total_issues += res.issues_found
-            total_blockers += sum(1 for f in res.findings if getattr(f, 'is_blocker', False))
+            total_blockers += sum(1 for f in res.findings if getattr(f, "is_blocker", False))
 
         return LinterMetrics(
             tool=self.name,
             total_errors=total_issues,
             blocker_count=total_blockers,
-            fixable_count=0, # Not reported yet
+            fixable_count=0,  # Not reported yet
             scan_duration=duration,
-            is_available=True
+            is_available=True,
         )
 
     async def run_findings_async(self, files: list[Path]) -> list[Finding]:
         """Run frame and return findings."""
         code_files = [self._path_to_codefile(p) for p in files]
 
-        if hasattr(self.frame, 'execute_batch_async'):
+        if hasattr(self.frame, "execute_batch_async"):
             results = await self.frame.execute_batch_async(code_files)
             all_findings = []
             for res in results:
@@ -245,8 +251,13 @@ class LinterService:
             except Exception as e:
                 logger.error("linter_metrics_failed", provider=provider.name, error=str(e))
                 metrics[provider.name] = LinterMetrics(
-                    tool=provider.name, total_errors=0, blocker_count=0, fixable_count=0, scan_duration=0.0,
-                    is_available=False, error_message=str(e)
+                    tool=provider.name,
+                    total_errors=0,
+                    blocker_count=0,
+                    fixable_count=0,
+                    scan_duration=0.0,
+                    is_available=False,
+                    error_message=str(e),
                 )
 
         return metrics

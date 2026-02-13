@@ -8,16 +8,16 @@ from typing import Any
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
 async def batch_verify_security_findings(
-    findings_map: dict[str, list[Any]],
-    code_files: list[Any],
-    llm_service: Any
+    findings_map: dict[str, list[Any]], code_files: list[Any], llm_service: Any
 ) -> dict[str, list[Any]]:
     """
     Batch LLM verification of security findings.
@@ -37,11 +37,7 @@ async def batch_verify_security_findings(
     for file_path, findings in findings_map.items():
         code_file = next((f for f in code_files if f.path == file_path), None)
         for finding in findings:
-            all_findings_with_context.append({
-                "finding": finding,
-                "file_path": file_path,
-                "code_file": code_file
-            })
+            all_findings_with_context.append({"finding": finding, "file_path": file_path, "code_file": code_file})
 
     if not all_findings_with_context:
         return findings_map
@@ -51,16 +47,14 @@ async def batch_verify_security_findings(
     BATCH_SIZE = 10
     batches = _smart_batch_findings(all_findings_with_context, BATCH_SIZE, MAX_SAFE_TOKENS)
 
-    logger.info("security_batch_llm_verification",
-               total_findings=len(all_findings_with_context),
-               batches=len(batches))
+    logger.info("security_batch_llm_verification", total_findings=len(all_findings_with_context), batches=len(batches))
 
     # Process each batch
     verified_findings_map: dict[str, list[Any]] = {path: [] for path in findings_map}
 
     for i, batch in enumerate(batches):
         try:
-            logger.debug(f"Processing security batch {i+1}/{len(batches)}")
+            logger.debug(f"Processing security batch {i + 1}/{len(batches)}")
             verified_batch = await _verify_security_batch(batch, code_files, llm_service)
 
             # Map back to files
@@ -79,9 +73,7 @@ async def batch_verify_security_findings(
 
 
 def _smart_batch_findings(
-    findings_with_context: list[dict[str, Any]],
-    max_batch_size: int,
-    max_tokens: int
+    findings_with_context: list[dict[str, Any]], max_batch_size: int, max_tokens: int
 ) -> list[list[dict[str, Any]]]:
     """Token-aware batching for findings."""
     batches = []
@@ -95,8 +87,7 @@ def _smart_batch_findings(
         if finding.code:
             estimated_tokens += len(finding.code.split()) * 1.5
 
-        if (current_tokens + estimated_tokens > max_tokens or
-            len(current_batch) >= max_batch_size):
+        if current_tokens + estimated_tokens > max_tokens or len(current_batch) >= max_batch_size:
             if current_batch:
                 batches.append(current_batch)
             current_batch = [item]
@@ -112,9 +103,7 @@ def _smart_batch_findings(
 
 
 async def _verify_security_batch(
-    batch: list[dict[str, Any]],
-    code_files: list[Any],
-    llm_service: Any
+    batch: list[dict[str, Any]], code_files: list[Any], llm_service: Any
 ) -> list[dict[str, Any]]:
     """
     Single LLM call for multiple security findings.
@@ -134,7 +123,7 @@ async def _verify_security_batch(
         finding = item["finding"]
         code_file = item["code_file"]
 
-        prompt_parts.append(f"Finding #{i+1}:")
+        prompt_parts.append(f"Finding #{i + 1}:")
         prompt_parts.append(f"File: {item['file_path']}")
         prompt_parts.append(f"Severity: {finding.severity}")
         prompt_parts.append(f"Message: {finding.message}")
@@ -159,11 +148,12 @@ Return JSON array with verification results:
     try:
         response = await llm_service.send_async(
             prompt=full_prompt,
-            system="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives."
+            system="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives.",
         )
 
         # Parse LLM response and filter false positives
         import json
+
         try:
             content = response.get("content", "")
             parsed = json.loads(content)
@@ -178,24 +168,18 @@ Return JSON array with verification results:
 
                 if invalid_ids:
                     # Filter out invalid findings (0-based indexing in batch)
-                    verified = [
-                        batch[i] for i in range(len(batch))
-                        if (i + 1) not in invalid_ids
-                    ]
+                    verified = [batch[i] for i in range(len(batch)) if (i + 1) not in invalid_ids]
                     logger.info(
                         "security_llm_filtered",
                         total=len(batch),
                         filtered=len(batch) - len(verified),
-                        remaining=len(verified)
+                        remaining=len(verified),
                     )
                     return verified
 
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             logger.warning(
-                "security_llm_parse_failed",
-                error=str(e),
-                error_type=type(e).__name__,
-                fallback="keeping_all_findings"
+                "security_llm_parse_failed", error=str(e), error_type=type(e).__name__, fallback="keeping_all_findings"
             )
 
         # Fallback: keep all findings if parsing fails or no invalid findings found

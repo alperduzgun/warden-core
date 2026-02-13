@@ -95,7 +95,7 @@ class CleaningOrchestrator:
                 suggestions=[],
                 cleanup_score=100.0,
                 summary="Skipped empty file",
-                analyzer_name="CleaningOrchestrator"
+                analyzer_name="CleaningOrchestrator",
             )
 
         all_suggestions: list[CleaningSuggestion] = []
@@ -163,11 +163,7 @@ class CleaningOrchestrator:
             suggestions=all_suggestions,
             cleanup_score=cleanup_score,
             summary=summary,
-            error_message=(
-                f"Failed analyzers: {', '.join(failed_analyzers)}"
-                if failed_analyzers
-                else None
-            ),
+            error_message=(f"Failed analyzers: {', '.join(failed_analyzers)}" if failed_analyzers else None),
             analyzer_name="CleaningOrchestrator",
             metrics={
                 "total_analyzers": len(self._analyzers),
@@ -178,11 +174,7 @@ class CleaningOrchestrator:
             },
         )
 
-    def _calculate_combined_score(
-        self,
-        suggestions: list[CleaningSuggestion],
-        code: str
-    ) -> float:
+    def _calculate_combined_score(self, suggestions: list[CleaningSuggestion], code: str) -> float:
         """
         Calculate combined cleanup score.
 
@@ -203,10 +195,10 @@ class CleaningOrchestrator:
         # Weight issues by severity
         severity_weights = {
             0: 10.0,  # CRITICAL
-            1: 5.0,   # HIGH
-            2: 2.0,   # MEDIUM
-            3: 1.0,   # LOW
-            4: 0.5,   # INFO
+            1: 5.0,  # HIGH
+            2: 2.0,  # MEDIUM
+            3: 1.0,  # LOW
+            4: 0.5,  # INFO
         }
 
         total_weight = 0.0

@@ -124,16 +124,30 @@ class ConventionDetector:
         type_hint_count = 0
         for py_file in py_files:
             try:
-                with open(py_file, encoding='utf-8', errors='ignore') as f:
+                with open(py_file, encoding="utf-8", errors="ignore") as f:
                     content = f.read(5000)  # Read first 5000 chars
                     # Look for type hints patterns
                     if "-> " in content or ": " in content:
-                        if any(pattern in content for pattern in [
-                            ": str", ": int", ": bool", ": float",
-                            ": Dict", ": List", ": Optional", ": Any",
-                            "-> str", "-> int", "-> bool", "-> None",
-                            "-> Dict", "-> List", "-> Optional",
-                        ]):
+                        if any(
+                            pattern in content
+                            for pattern in [
+                                ": str",
+                                ": int",
+                                ": bool",
+                                ": float",
+                                ": Dict",
+                                ": List",
+                                ": Optional",
+                                ": Any",
+                                "-> str",
+                                "-> int",
+                                "-> bool",
+                                "-> None",
+                                "-> Dict",
+                                "-> List",
+                                "-> Optional",
+                            ]
+                        ):
                             type_hint_count += 1
             except Exception as e:
                 logger.debug("type_hint_detection_error", file=str(py_file), error=str(e))
@@ -145,8 +159,14 @@ class ConventionDetector:
     def _detect_linter(self) -> bool:
         """Detect if linter configuration exists."""
         linter_configs = [
-            ".flake8", ".eslintrc.json", "ruff.toml", ".ruff.toml",
-            ".pylintrc", "tslint.json", ".eslintrc.js", ".eslintrc.yml",
+            ".flake8",
+            ".eslintrc.json",
+            "ruff.toml",
+            ".ruff.toml",
+            ".pylintrc",
+            "tslint.json",
+            ".eslintrc.js",
+            ".eslintrc.yml",
         ]
 
         return any(config in self.config_files for config in linter_configs)
@@ -154,9 +174,15 @@ class ConventionDetector:
     def _detect_formatter(self) -> bool:
         """Detect if formatter configuration exists."""
         formatter_configs = [
-            ".prettierrc", "pyproject.toml", ".style.yapf",
-            ".prettierrc.json", ".prettierrc.js", ".prettierrc.yml",
-            ".editorconfig", "black", ".blackrc",
+            ".prettierrc",
+            "pyproject.toml",
+            ".style.yapf",
+            ".prettierrc.json",
+            ".prettierrc.js",
+            ".prettierrc.yml",
+            ".editorconfig",
+            "black",
+            ".blackrc",
         ]
 
         # Check direct config files
@@ -167,7 +193,7 @@ class ConventionDetector:
         pyproject_path = self.project_root / "pyproject.toml"
         if pyproject_path.exists():
             try:
-                with open(pyproject_path, encoding='utf-8') as f:
+                with open(pyproject_path, encoding="utf-8") as f:
                     content = f.read()
                     if "[tool.black]" in content or "[tool.ruff]" in content:
                         return True

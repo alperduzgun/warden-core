@@ -18,6 +18,7 @@ from warden.mcp.ports.tool_executor import IToolExecutor
 # Optional imports for bridge functionality
 try:
     from warden.cli_bridge.bridge import WardenBridge
+
     BRIDGE_AVAILABLE = True
 except ImportError:
     BRIDGE_AVAILABLE = False
@@ -26,9 +27,11 @@ except ImportError:
 # Optional logging
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 

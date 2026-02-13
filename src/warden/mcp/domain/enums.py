@@ -15,6 +15,7 @@ class MCPErrorCode(IntEnum):
     Standard JSON-RPC errors: -32700 to -32600
     MCP-specific errors: -32001 to -32099
     """
+
     # Standard JSON-RPC errors
     PARSE_ERROR = -32700
     INVALID_REQUEST = -32600
@@ -36,6 +37,7 @@ class ServerStatus(str, Enum):
 
     Tracks the server state from initialization to shutdown.
     """
+
     INITIALIZING = "initializing"
     READY = "ready"
     RUNNING = "running"
@@ -48,6 +50,7 @@ class MessageType(str, Enum):
     """
     MCP message types per JSON-RPC 2.0.
     """
+
     REQUEST = "request"
     RESPONSE = "response"
     NOTIFICATION = "notification"
@@ -59,6 +62,7 @@ class ResourceType(str, Enum):
 
     Categories for different report and configuration resources.
     """
+
     REPORT_SARIF = "report_sarif"
     REPORT_JSON = "report_json"
     REPORT_HTML = "report_html"
@@ -74,6 +78,7 @@ class ToolCategory(str, Enum):
     Helps clients understand tool capabilities.
     Maps to gRPC servicer mixin categories for full feature parity.
     """
+
     # Core categories (existing)
     STATUS = "status"
     SCAN = "scan"
@@ -81,12 +86,12 @@ class ToolCategory(str, Enum):
     REPORT = "report"
 
     # Extended categories (gRPC parity)
-    PIPELINE = "pipeline"          # Pipeline execution
-    SEARCH = "search"              # Semantic code search
-    LLM = "llm"                    # LLM operations
-    ISSUE = "issue"                # Issue management
-    DISCOVERY = "discovery"        # File discovery
-    ANALYSIS = "analysis"          # Result analysis
-    CLEANUP = "cleanup"            # Code cleanup
+    PIPELINE = "pipeline"  # Pipeline execution
+    SEARCH = "search"  # Semantic code search
+    LLM = "llm"  # LLM operations
+    ISSUE = "issue"  # Issue management
+    DISCOVERY = "discovery"  # File discovery
+    ANALYSIS = "analysis"  # Result analysis
+    CLEANUP = "cleanup"  # Code cleanup
     FORTIFICATION = "fortification"  # Security fortification
-    SUPPRESSION = "suppression"    # Suppression rules
+    SUPPRESSION = "suppression"  # Suppression rules

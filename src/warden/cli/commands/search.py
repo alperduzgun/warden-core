@@ -15,6 +15,7 @@ console = Console()
 
 # --- Semantic Search Commands ---
 
+
 def index_command():
     """Build or update the semantic code index."""
     try:
@@ -46,26 +47,29 @@ def index_command():
     service = SemanticSearchService(config_data)
 
     if not service.is_available():
-         console.print("[red]Error: Semantic Search service not available.[/red]")
-         return
+        console.print("[red]Error: Semantic Search service not available.[/red]")
+        return
 
     async def _run_index():
         from warden.shared.utils.language_utils import get_code_extensions
+
         # Discover files to index
         files = []
         for ext in get_code_extensions():
             files.extend(list(project_root.glob(f"**/*{ext}")))
 
         # Filter out venv, node_modules etc.
-        files = [f for f in files if not any(p in str(f) for p in ['.venv', 'node_modules', '__pycache__'])]
+        files = [f for f in files if not any(p in str(f) for p in [".venv", "node_modules", "__pycache__"])]
 
         console.print(f"Indexing {len(files)} files...")
         await service.index_project(project_root, files)
 
     import asyncio
+
     asyncio.run(_run_index())
 
     console.print("[bold green]✔[/bold green] Semantic index updated.")
+
 
 def semantic_search_command(query: str):
     """Search your local codebase semantically."""
@@ -81,6 +85,7 @@ def semantic_search_command(query: str):
         from pathlib import Path
 
         import yaml
+
         project_root = Path.cwd()
         legacy_config = project_root / ".warden" / "config.yaml"
         config_data = {}
@@ -100,6 +105,7 @@ def semantic_search_command(query: str):
         return await service.search(query)
 
     import asyncio
+
     results = asyncio.run(_run_search())
 
     if results is None:
@@ -115,18 +121,18 @@ def semantic_search_command(query: str):
     table.add_column("Snippet", style="dim")
 
     for r in results:
-        table.add_row(
-            r.chunk.relative_path,
-            f"{r.score:.2f}",
-            r.chunk.content[:100].replace("\n", " ") + "..."
-        )
+        table.add_row(r.chunk.relative_path, f"{r.score:.2f}", r.chunk.content[:100].replace("\n", " ") + "...")
     console.print(table)
+
 
 # --- Hub Search (The new functionality) ---
 
+
 def search_command(
     query: str | None = typer.Argument(None, help="Search query"),
-    local: bool = typer.Option(False, "--local", "-l", help="Search the local codebase semantically instead of the Hub")
+    local: bool = typer.Option(
+        False, "--local", "-l", help="Search the local codebase semantically instead of the Hub"
+    ),
 ):
     """
     Search for frames in the Warden Hub or search local codebase semantically.
@@ -163,7 +169,7 @@ def search_command(
             f"[{tier_style}]{tier}[/{tier_style}]",
             f.get("category", "N/A"),
             f.get("version", "1.0.0"),
-            f.get("description", "")
+            f.get("description", ""),
         )
 
     console.print(table)

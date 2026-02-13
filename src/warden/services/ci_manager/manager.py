@@ -34,9 +34,11 @@ from .workflow_definitions import (
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -391,12 +393,14 @@ class CIManager:
                     with atomic_write(target_path, self._project_root) as f:
                         f.write(new_content)
 
-                result["updated"].append({
-                    "path": wf.target_path,
-                    "old_version": wf_status.version,
-                    "new_version": CURRENT_TEMPLATE_VERSION,
-                    "preserved_custom": wf_status.has_custom_sections and preserve_custom,
-                })
+                result["updated"].append(
+                    {
+                        "path": wf.target_path,
+                        "old_version": wf_status.version,
+                        "new_version": CURRENT_TEMPLATE_VERSION,
+                        "preserved_custom": wf_status.has_custom_sections and preserve_custom,
+                    }
+                )
 
                 logger.info(
                     "ci_workflow_updated",
@@ -470,19 +474,11 @@ class CIManager:
                     continue
 
                 # Update CI_LLM_PROVIDER
-                content = re.sub(
-                    r'CI_LLM_PROVIDER:\s*\w+',
-                    f'CI_LLM_PROVIDER: {provider_id}',
-                    content
-                )
+                content = re.sub(r"CI_LLM_PROVIDER:\s*\w+", f"CI_LLM_PROVIDER: {provider_id}", content)
 
                 # Update version timestamp
                 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-                content = re.sub(
-                    r'# Generated:.*',
-                    f'# Generated: {timestamp} (synced)',
-                    content
-                )
+                content = re.sub(r"# Generated:.*", f"# Generated: {timestamp} (synced)", content)
 
                 with atomic_write(target_path, self._project_root) as f:
                     f.write(content)

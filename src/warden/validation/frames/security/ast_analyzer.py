@@ -9,9 +9,11 @@ from typing import Any
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -46,7 +48,7 @@ async def extract_ast_context(code_file: Any) -> dict[str, Any]:
             return ast_context
 
         # Cache-first: use pre-parsed result if available
-        cached = code_file.metadata.get('_cached_parse_result') if code_file.metadata else None
+        cached = code_file.metadata.get("_cached_parse_result") if code_file.metadata else None
         if cached and cached.ast_root:
             result = cached
         else:
@@ -58,13 +60,10 @@ async def extract_ast_context(code_file: Any) -> dict[str, Any]:
                 logger.debug("ast_no_provider", language=lang)
                 return ast_context
 
-            if hasattr(provider, 'ensure_grammar'):
+            if hasattr(provider, "ensure_grammar"):
                 await provider.ensure_grammar(lang)
 
-            result = await asyncio.wait_for(
-                provider.parse(code_file.content, lang),
-                timeout=5.0
-            )
+            result = await asyncio.wait_for(provider.parse(code_file.content, lang), timeout=5.0)
 
         if not result.ast_root:
             return ast_context
@@ -76,7 +75,7 @@ async def extract_ast_context(code_file: Any) -> dict[str, Any]:
             "ast_security_context_extracted",
             dangerous_calls=len(ast_context["dangerous_calls"]),
             sql_queries=len(ast_context["sql_queries"]),
-            input_sources=len(ast_context["input_sources"])
+            input_sources=len(ast_context["input_sources"]),
         )
 
     except asyncio.TimeoutError:
@@ -92,67 +91,53 @@ def _walk_ast_for_security(node: Any, context: dict[str, Any], source: str) -> N
     if node is None:
         return
 
-    node_type = getattr(node, 'type', '') or ''
+    node_type = getattr(node, "type", "") or ""
 
     # Detect dangerous function calls
-    if node_type in ('call_expression', 'call'):
+    if node_type in ("call_expression", "call"):
         call_name = _get_call_name(node)
         if call_name:
             # Check for dangerous functions
-            dangerous_funcs = {'eval', 'exec', 'compile', 'subprocess', 'shell',
-                               'system', 'popen', 'spawn', 'execfile'}
+            dangerous_funcs = {"eval", "exec", "compile", "subprocess", "shell", "system", "popen", "spawn", "execfile"}
             if any(d in call_name.lower() for d in dangerous_funcs):
-                line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
-                context["dangerous_calls"].append({
-                    "function": call_name,
-                    "line": line,
-                    "risk": "high"
-                })
+                line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
+                context["dangerous_calls"].append({"function": call_name, "line": line, "risk": "high"})
 
             # Check for SQL-related calls
-            sql_funcs = {'execute', 'executemany', 'raw', 'query', 'cursor'}
+            sql_funcs = {"execute", "executemany", "raw", "query", "cursor"}
             if any(s in call_name.lower() for s in sql_funcs):
-                line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
-                context["sql_queries"].append({
-                    "function": call_name,
-                    "line": line
-                })
+                line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
+                context["sql_queries"].append({"function": call_name, "line": line})
 
     # Detect string concatenation in potentially dangerous contexts
-    if node_type in ('binary_expression', 'binary_operator') and hasattr(node, 'text'):
+    if node_type in ("binary_expression", "binary_operator") and hasattr(node, "text"):
         text = node.text.decode() if isinstance(node.text, bytes) else str(node.text)
-        if '+' in text and ('"' in text or "'" in text):
-            line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
-            context["string_concatenations"].append({
-                "line": line,
-                "snippet": text[:100]
-            })
+        if "+" in text and ('"' in text or "'" in text):
+            line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
+            context["string_concatenations"].append({"line": line, "snippet": text[:100]})
 
     # Detect input sources
-    if node_type in ('call_expression', 'call', 'attribute'):
-        call_name = _get_call_name(node) or ''
-        input_patterns = {'request', 'input', 'argv', 'stdin', 'getenv', 'form', 'params'}
+    if node_type in ("call_expression", "call", "attribute"):
+        call_name = _get_call_name(node) or ""
+        input_patterns = {"request", "input", "argv", "stdin", "getenv", "form", "params"}
         if any(p in call_name.lower() for p in input_patterns):
-            line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
-            context["input_sources"].append({
-                "source": call_name,
-                "line": line
-            })
+            line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
+            context["input_sources"].append({"source": call_name, "line": line})
 
     # Recurse into children
-    children = getattr(node, 'children', []) or []
+    children = getattr(node, "children", []) or []
     for child in children:
         _walk_ast_for_security(child, context, source)
 
 
 def _get_call_name(node: Any) -> str | None:
     """Extract function/method name from call node."""
-    for attr in ('function', 'callee', 'name', 'method'):
+    for attr in ("function", "callee", "name", "method"):
         child = getattr(node, attr, None)
         if child:
-            if hasattr(child, 'text'):
+            if hasattr(child, "text"):
                 return child.text.decode() if isinstance(child.text, bytes) else str(child.text)
-            if hasattr(child, 'name'):
+            if hasattr(child, "name"):
                 return str(child.name)
     return None
 

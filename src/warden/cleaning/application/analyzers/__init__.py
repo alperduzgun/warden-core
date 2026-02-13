@@ -16,6 +16,7 @@ from warden.cleaning.application.analyzers.testability_analyzer import Testabili
 # LSP analyzer has import issues - import conditionally
 try:
     from warden.cleaning.application.analyzers.lsp_diagnostics_analyzer import LSPDiagnosticsAnalyzer
+
     _LSP_AVAILABLE = True
 except ImportError:
     _LSP_AVAILABLE = False

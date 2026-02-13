@@ -1,28 +1,21 @@
-
 from typing import Any, Dict, List, Optional, Protocol
 
 import structlog
 
 logger = structlog.get_logger()
 
+
 class VectorStoreAdapter(Protocol):
     """Protocol for vector store adapters."""
 
     async def upsert(
-        self,
-        ids: list[str],
-        embeddings: list[list[float]],
-        metadatas: list[dict[str, Any]],
-        documents: list[str]
+        self, ids: list[str], embeddings: list[list[float]], metadatas: list[dict[str, Any]], documents: list[str]
     ) -> bool:
         """Upsert vectors into the store."""
         ...
 
     async def query(
-        self,
-        query_embeddings: list[list[float]],
-        n_results: int = 5,
-        where: dict[str, Any] | None = None
+        self, query_embeddings: list[list[float]], n_results: int = 5, where: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Query the store."""
         ...
@@ -39,17 +32,18 @@ class VectorStoreAdapter(Protocol):
         """Get file hash from metadata."""
         ...
 
+
 class ChromaDBAdapter(VectorStoreAdapter):
     """Adapter for ChromaDB (Local)."""
 
     def __init__(self, chroma_path: str, collection_name: str):
         try:
             import chromadb
+
             self.client = chromadb.PersistentClient(path=chroma_path)
             self.collection_name = collection_name
             self.collection = self.client.get_or_create_collection(
-                name=collection_name,
-                metadata={"hnsw:space": "cosine"}
+                name=collection_name, metadata={"hnsw:space": "cosine"}
             )
         except ImportError:
             raise ImportError("chromadb not installed.")
@@ -59,12 +53,7 @@ class ChromaDBAdapter(VectorStoreAdapter):
 
     async def upsert(self, ids, embeddings, metadatas, documents) -> bool:
         try:
-            self.collection.upsert(
-                ids=ids,
-                embeddings=embeddings,
-                metadatas=metadatas,
-                documents=documents
-            )
+            self.collection.upsert(ids=ids, embeddings=embeddings, metadatas=metadatas, documents=documents)
             return True
         except Exception as e:
             logger.error("chroma_upsert_failed", error=str(e))
@@ -72,11 +61,7 @@ class ChromaDBAdapter(VectorStoreAdapter):
 
     async def query(self, query_embeddings, n_results=5, where=None) -> dict[str, Any]:
         try:
-            return self.collection.query(
-                query_embeddings=query_embeddings,
-                n_results=n_results,
-                where=where
-            )
+            return self.collection.query(query_embeddings=query_embeddings, n_results=n_results, where=where)
         except Exception as e:
             logger.error("chroma_query_failed", error=str(e))
             return {}
@@ -94,16 +79,13 @@ class ChromaDBAdapter(VectorStoreAdapter):
 
     def get_existing_file_hash(self, file_path: str) -> str | None:
         try:
-            results = self.collection.get(
-                where={"file_path": file_path},
-                include=["metadatas"],
-                limit=1
-            )
+            results = self.collection.get(where={"file_path": file_path}, include=["metadatas"], limit=1)
             if results and results["metadatas"]:
                 return results["metadatas"][0].get("file_hash")
         except (ValueError, TypeError, RuntimeError):  # Vector store operation
             pass
         return None
+
 
 class QdrantAdapter(VectorStoreAdapter):
     """Adapter for Qdrant (Cloud/Remote)."""
@@ -112,15 +94,16 @@ class QdrantAdapter(VectorStoreAdapter):
         try:
             from qdrant_client import QdrantClient
             from qdrant_client.http import models
+
             self.client = QdrantClient(url=url, api_key=api_key)
             self.collection_name = collection_name
 
             # Ensure Collection Exists
             if not self.client.collection_exists(collection_name):
-                 self.client.create_collection(
-                     collection_name=collection_name,
-                     vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE)
-                 )
+                self.client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
+                )
         except ImportError:
             raise ImportError("qdrant-client not installed. Run 'pip install warden-core[cloud]'")
         except Exception as e:
@@ -130,22 +113,22 @@ class QdrantAdapter(VectorStoreAdapter):
     async def upsert(self, ids, embeddings, metadatas, documents) -> bool:
         try:
             from qdrant_client.http import models
+
             points = []
             for i, _id in enumerate(ids):
                 # Qdrant payload is metadata + document content
                 payload = metadatas[i].copy()
                 payload["document"] = documents[i]
 
-                points.append(models.PointStruct(
-                    id=_id, # Qdrant prefers UUIDs or ints, ensure these are UUIDs upstream!
-                    vector=embeddings[i],
-                    payload=payload
-                ))
+                points.append(
+                    models.PointStruct(
+                        id=_id,  # Qdrant prefers UUIDs or ints, ensure these are UUIDs upstream!
+                        vector=embeddings[i],
+                        payload=payload,
+                    )
+                )
 
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=points
-            )
+            self.client.upsert(collection_name=self.collection_name, points=points)
             return True
         except Exception as e:
             logger.error("qdrant_upsert_failed", error=str(e))
@@ -191,10 +174,7 @@ class QdrantAdapter(VectorStoreAdapter):
 
         except Exception as e:
             logger.warning(
-                "filter_translation_failed",
-                error=str(e),
-                error_type=type(e).__name__,
-                where=str(where)[:200]
+                "filter_translation_failed", error=str(e), error_type=type(e).__name__, where=str(where)[:200]
             )
             return None
 
@@ -216,37 +196,17 @@ class QdrantAdapter(VectorStoreAdapter):
             # Handle operators: {"$eq": val}, {"$ne": val}, {"$in": [vals]}
             for op, val in value.items():
                 if op == "$eq":
-                    conditions.append(
-                        models.FieldCondition(
-                            key=key,
-                            match=models.MatchValue(value=val)
-                        )
-                    )
+                    conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=val)))
                 elif op == "$ne":
                     # Qdrant uses must_not for negation
-                    conditions.append(
-                        models.FieldCondition(
-                            key=key,
-                            match=models.MatchExcept(**{"except": [val]})
-                        )
-                    )
+                    conditions.append(models.FieldCondition(key=key, match=models.MatchExcept(**{"except": [val]})))
                 elif op == "$in":
-                    conditions.append(
-                        models.FieldCondition(
-                            key=key,
-                            match=models.MatchAny(any=val)
-                        )
-                    )
+                    conditions.append(models.FieldCondition(key=key, match=models.MatchAny(any=val)))
                 else:
                     logger.warning("unsupported_filter_operator", operator=op, key=key)
         else:
             # Simple equality: {"language": "python"}
-            conditions.append(
-                models.FieldCondition(
-                    key=key,
-                    match=models.MatchValue(value=value)
-                )
-            )
+            conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
 
         return conditions
 
@@ -263,7 +223,7 @@ class QdrantAdapter(VectorStoreAdapter):
                 collection=self.collection_name,
                 n_results=n_results,
                 has_filter=query_filter is not None,
-                where=str(where)[:200] if where else None
+                where=str(where)[:200] if where else None,
             )
 
             # Query with filter
@@ -271,21 +231,16 @@ class QdrantAdapter(VectorStoreAdapter):
                 collection_name=self.collection_name,
                 query=query_embeddings[0],
                 query_filter=query_filter,
-                limit=n_results
+                limit=n_results,
             ).points
 
             # Map back to Chroma format: {'ids': [[]], 'metadatas': [[]], 'documents': [[]], 'distances': [[]]}
             ids = [[point.id for point in search_result]]
-            metadatas = [[point.payload for point in search_result]] # NOTE: remove 'document' key if needed?
-            documents = [[point.payload.get('document') for point in search_result]]
+            metadatas = [[point.payload for point in search_result]]  # NOTE: remove 'document' key if needed?
+            documents = [[point.payload.get("document") for point in search_result]]
             distances = [[point.score for point in search_result]]
 
-            return {
-                "ids": ids,
-                "metadatas": metadatas,
-                "documents": documents,
-                "distances": distances
-            }
+            return {"ids": ids, "metadatas": metadatas, "documents": documents, "distances": distances}
 
         except Exception as e:
             # If filter translation or query fails, try fallback without filter
@@ -293,36 +248,29 @@ class QdrantAdapter(VectorStoreAdapter):
                 "qdrant_query_with_filter_failed_attempting_fallback",
                 error=str(e),
                 error_type=type(e).__name__,
-                has_filter=where is not None
+                has_filter=where is not None,
             )
 
             # Fallback: try query without filter
             try:
                 if where is not None:
                     search_result = self.client.query_points(
-                        collection_name=self.collection_name,
-                        query=query_embeddings[0],
-                        limit=n_results
+                        collection_name=self.collection_name, query=query_embeddings[0], limit=n_results
                     ).points
 
                     ids = [[point.id for point in search_result]]
                     metadatas = [[point.payload for point in search_result]]
-                    documents = [[point.payload.get('document') for point in search_result]]
+                    documents = [[point.payload.get("document") for point in search_result]]
                     distances = [[point.score for point in search_result]]
 
                     logger.info("qdrant_fallback_query_succeeded", results_count=len(search_result))
 
-                    return {
-                        "ids": ids,
-                        "metadatas": metadatas,
-                        "documents": documents,
-                        "distances": distances
-                    }
+                    return {"ids": ids, "metadatas": metadatas, "documents": documents, "distances": distances}
             except Exception as fallback_error:
                 logger.error(
                     "qdrant_fallback_query_also_failed",
                     error=str(fallback_error),
-                    error_type=type(fallback_error).__name__
+                    error_type=type(fallback_error).__name__,
                 )
 
             # Complete failure
@@ -343,19 +291,15 @@ class QdrantAdapter(VectorStoreAdapter):
     def get_existing_file_hash(self, file_path: str) -> str | None:
         try:
             from qdrant_client.http import models
+
             # Filter by file_path
             scroll_result = self.client.scroll(
                 collection_name=self.collection_name,
                 scroll_filter=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="file_path",
-                            match=models.MatchValue(value=file_path)
-                        )
-                    ]
+                    must=[models.FieldCondition(key="file_path", match=models.MatchValue(value=file_path))]
                 ),
                 limit=1,
-                with_payload=True
+                with_payload=True,
             )
             points, _ = scroll_result
             if points:

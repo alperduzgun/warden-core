@@ -38,6 +38,7 @@ logger = structlog.get_logger()
 @dataclass
 class SymbolInfo:
     """Simplified symbol information."""
+
     name: str
     kind: str  # function, class, variable, etc.
     file_path: str
@@ -45,7 +46,7 @@ class SymbolInfo:
     character: int
 
     @classmethod
-    def from_lsp(cls, item: dict[str, Any]) -> 'SymbolInfo':
+    def from_lsp(cls, item: dict[str, Any]) -> "SymbolInfo":
         """Create from LSP CallHierarchyItem or TypeHierarchyItem."""
         uri = item.get("uri", "")
         file_path = uri.replace("file://", "") if uri.startswith("file://") else uri
@@ -56,13 +57,32 @@ class SymbolInfo:
 
         # Map LSP SymbolKind to string
         kind_map = {
-            1: "file", 2: "module", 3: "namespace", 4: "package",
-            5: "class", 6: "method", 7: "property", 8: "field",
-            9: "constructor", 10: "enum", 11: "interface", 12: "function",
-            13: "variable", 14: "constant", 15: "string", 16: "number",
-            17: "boolean", 18: "array", 19: "object", 20: "key",
-            21: "null", 22: "enum_member", 23: "struct", 24: "event",
-            25: "operator", 26: "type_parameter"
+            1: "file",
+            2: "module",
+            3: "namespace",
+            4: "package",
+            5: "class",
+            6: "method",
+            7: "property",
+            8: "field",
+            9: "constructor",
+            10: "enum",
+            11: "interface",
+            12: "function",
+            13: "variable",
+            14: "constant",
+            15: "string",
+            16: "number",
+            17: "boolean",
+            18: "array",
+            19: "object",
+            20: "key",
+            21: "null",
+            22: "enum_member",
+            23: "struct",
+            24: "event",
+            25: "operator",
+            26: "type_parameter",
         }
 
         return cls(
@@ -70,13 +90,14 @@ class SymbolInfo:
             kind=kind_map.get(item.get("kind", 0), "unknown"),
             file_path=file_path,
             line=start.get("line", 0),
-            character=start.get("character", 0)
+            character=start.get("character", 0),
         )
 
 
 @dataclass
 class CallInfo:
     """Call relationship information."""
+
     caller: SymbolInfo
     callee: SymbolInfo
     call_sites: list[dict[str, int]]  # [{line, character}, ...]
@@ -92,7 +113,7 @@ class SemanticAnalyzer:
     Thread Safety: Thread-safe via double-checked locking pattern.
     """
 
-    _instance: Optional['SemanticAnalyzer'] = None
+    _instance: Optional["SemanticAnalyzer"] = None
     _lock: threading.Lock = threading.Lock()
 
     # File extension to language mapping
@@ -143,7 +164,7 @@ class SemanticAnalyzer:
         self._opened_files: dict[str, str] = {}  # file_path -> language
 
     @classmethod
-    def get_instance(cls) -> 'SemanticAnalyzer':
+    def get_instance(cls) -> "SemanticAnalyzer":
         """
         Get singleton instance (thread-safe).
 
@@ -164,11 +185,7 @@ class SemanticAnalyzer:
         ext = Path(file_path).suffix.lower()
         return self.EXTENSION_MAP.get(ext)
 
-    async def _ensure_file_open_async(
-        self,
-        file_path: str,
-        content: str | None = None
-    ) -> Any | None:
+    async def _ensure_file_open_async(self, file_path: str, content: str | None = None) -> Any | None:
         """
         Ensure file is opened in LSP and return client.
 
@@ -219,11 +236,7 @@ class SemanticAnalyzer:
     # ============================================================
 
     async def get_callers_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int,
-        content: str | None = None
+        self, file_path: str, line: int, character: int, content: str | None = None
     ) -> list[SymbolInfo]:
         """
         Get all functions/methods that call the symbol at position.
@@ -248,16 +261,11 @@ class SemanticAnalyzer:
             if from_item:
                 callers.append(SymbolInfo.from_lsp(from_item))
 
-        logger.debug("semantic_callers_found",
-                    file=file_path, line=line, count=len(callers))
+        logger.debug("semantic_callers_found", file=file_path, line=line, count=len(callers))
         return callers
 
     async def get_callees_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int,
-        content: str | None = None
+        self, file_path: str, line: int, character: int, content: str | None = None
     ) -> list[SymbolInfo]:
         """
         Get all functions/methods called by the symbol at position.
@@ -280,16 +288,11 @@ class SemanticAnalyzer:
             if to_item:
                 callees.append(SymbolInfo.from_lsp(to_item))
 
-        logger.debug("semantic_callees_found",
-                    file=file_path, line=line, count=len(callees))
+        logger.debug("semantic_callees_found", file=file_path, line=line, count=len(callees))
         return callees
 
     async def is_symbol_used_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int,
-        content: str | None = None
+        self, file_path: str, line: int, character: int, content: str | None = None
     ) -> bool | None:
         """
         Check if symbol at position is used anywhere (not dead code).
@@ -303,10 +306,7 @@ class SemanticAnalyzer:
         if not client:
             return None
 
-        refs = await client.find_references_async(
-            file_path, line, character,
-            include_declaration=False
-        )
+        refs = await client.find_references_async(file_path, line, character, include_declaration=False)
 
         # More than 0 references means it's used
         return len(refs) > 0
@@ -316,11 +316,7 @@ class SemanticAnalyzer:
     # ============================================================
 
     async def get_parent_classes_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int,
-        content: str | None = None
+        self, file_path: str, line: int, character: int, content: str | None = None
     ) -> list[SymbolInfo]:
         """
         Get parent classes/interfaces of class at position.
@@ -338,16 +334,11 @@ class SemanticAnalyzer:
         supertypes = await client.get_supertypes_async(items[0])
 
         parents = [SymbolInfo.from_lsp(t) for t in supertypes]
-        logger.debug("semantic_parents_found",
-                    file=file_path, line=line, count=len(parents))
+        logger.debug("semantic_parents_found", file=file_path, line=line, count=len(parents))
         return parents
 
     async def get_child_classes_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int,
-        content: str | None = None
+        self, file_path: str, line: int, character: int, content: str | None = None
     ) -> list[SymbolInfo]:
         """
         Get child classes/implementations of class/interface at position.
@@ -365,19 +356,14 @@ class SemanticAnalyzer:
         subtypes = await client.get_subtypes_async(items[0])
 
         children = [SymbolInfo.from_lsp(t) for t in subtypes]
-        logger.debug("semantic_children_found",
-                    file=file_path, line=line, count=len(children))
+        logger.debug("semantic_children_found", file=file_path, line=line, count=len(children))
         return children
 
     # ============================================================
     # Symbol Search
     # ============================================================
 
-    async def find_symbol_async(
-        self,
-        query: str,
-        project_root: str
-    ) -> list[SymbolInfo]:
+    async def find_symbol_async(self, query: str, project_root: str) -> list[SymbolInfo]:
         """
         Search for symbols matching query across project.
 
@@ -402,16 +388,17 @@ class SemanticAnalyzer:
             range_data = location.get("range", {})
             start = range_data.get("start", {})
 
-            results.append(SymbolInfo(
-                name=sym.get("name", ""),
-                kind=str(sym.get("kind", 0)),
-                file_path=file_path,
-                line=start.get("line", 0),
-                character=start.get("character", 0)
-            ))
+            results.append(
+                SymbolInfo(
+                    name=sym.get("name", ""),
+                    kind=str(sym.get("kind", 0)),
+                    file_path=file_path,
+                    line=start.get("line", 0),
+                    character=start.get("character", 0),
+                )
+            )
 
-        logger.debug("semantic_symbol_search",
-                    query=query, count=len(results))
+        logger.debug("semantic_symbol_search", query=query, count=len(results))
         return results
 
     # ============================================================
@@ -419,11 +406,7 @@ class SemanticAnalyzer:
     # ============================================================
 
     async def get_type_info_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int,
-        content: str | None = None
+        self, file_path: str, line: int, character: int, content: str | None = None
     ) -> str | None:
         """
         Get type information for symbol at position.

@@ -19,11 +19,7 @@ class ProviderRegistry:
     _providers: dict[LlmProvider, Callable[[ProviderConfig], ILlmClient]] = {}
 
     @classmethod
-    def register(
-        cls,
-        provider: LlmProvider,
-        factory: Callable[[ProviderConfig], ILlmClient]
-    ) -> None:
+    def register(cls, provider: LlmProvider, factory: Callable[[ProviderConfig], ILlmClient]) -> None:
         """
         Register a provider factory function.
 
@@ -53,10 +49,7 @@ class ProviderRegistry:
         """
         if provider not in cls._providers:
             available = [p.value for p in cls.available()]
-            raise ValueError(
-                f"No provider registered for: {provider.value}. "
-                f"Available: {available}"
-            )
+            raise ValueError(f"No provider registered for: {provider.value}. Available: {available}")
 
         factory = cls._providers[provider]
         return factory(config)

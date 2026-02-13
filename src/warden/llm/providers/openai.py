@@ -40,12 +40,7 @@ class OpenAIClient(ILlmClient):
         else:
             self._base_url = config.endpoint or "https://api.openai.com/v1"
 
-        self._usage = {
-            "total_tokens": 0,
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "request_count": 0
-        }
+        self._usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "request_count": 0}
 
     @property
     def provider(self) -> LlmProvider:
@@ -61,6 +56,7 @@ class OpenAIClient(ILlmClient):
 
         try:
             from warden.llm.global_rate_limiter import GlobalRateLimiter
+
             limiter = await GlobalRateLimiter.get_instance()
             provider_name = "azure" if self._provider == LlmProvider.AZURE_OPENAI else "openai"
             await limiter.acquire(provider_name, tokens=request.max_tokens)
@@ -78,10 +74,10 @@ class OpenAIClient(ILlmClient):
             payload = {
                 "messages": [
                     {"role": "system", "content": request.system_prompt},
-                    {"role": "user", "content": request.user_message}
+                    {"role": "user", "content": request.user_message},
                 ],
                 "temperature": request.temperature,
-                "max_tokens": request.max_tokens
+                "max_tokens": request.max_tokens,
             }
 
             if self._provider != LlmProvider.AZURE_OPENAI:
@@ -100,7 +96,7 @@ class OpenAIClient(ILlmClient):
                     success=False,
                     error_message="No response from OpenAI",
                     provider=self.provider,
-                    duration_ms=duration_ms
+                    duration_ms=duration_ms,
                 )
 
             usage = result.get("usage", {})
@@ -122,7 +118,7 @@ class OpenAIClient(ILlmClient):
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=total_tokens,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
 
         except (httpx.HTTPStatusError, httpx.RequestError) as e:
@@ -132,7 +128,7 @@ class OpenAIClient(ILlmClient):
                 success=False,
                 error_message=f"HTTP error: {e!s}",
                 provider=self.provider,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
         except (json.JSONDecodeError, KeyError) as e:
             duration_ms = int((time.time() - start_time) * 1000)
@@ -141,7 +137,7 @@ class OpenAIClient(ILlmClient):
                 success=False,
                 error_message=f"JSON/Data error: {e!s}",
                 provider=self.provider,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
         except Exception as e:
             # Last resort for truly unexpected errors
@@ -151,7 +147,7 @@ class OpenAIClient(ILlmClient):
                 success=False,
                 error_message=f"Unexpected error: {e!s}",
                 provider=self.provider,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
 
     async def is_available_async(self) -> bool:
@@ -170,7 +166,9 @@ class OpenAIClient(ILlmClient):
         except (ValueError, AttributeError):
             return False
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None) -> LlmResponse:
+    async def complete_async(
+        self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None
+    ) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
@@ -191,7 +189,7 @@ class OpenAIClient(ILlmClient):
             model=model or self._default_model,
             temperature=0.0,  # Idempotency
             max_tokens=2000,
-            timeout_seconds=30.0
+            timeout_seconds=30.0,
         )
 
         response = await self.send_async(request)
@@ -201,7 +199,9 @@ class OpenAIClient(ILlmClient):
 
         return response
 
-    async def stream_completion_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None):
+    async def stream_completion_async(
+        self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None
+    ):
         """
         Streaming completion method using Server-Sent Events (SSE).
 
@@ -223,12 +223,9 @@ class OpenAIClient(ILlmClient):
         except Exception as e:
             # Fallback to simulated streaming on error
             from warden.shared.infrastructure.logging import get_logger
+
             logger = get_logger(__name__)
-            logger.warning(
-                "openai_streaming_fallback",
-                error=str(e),
-                provider=self._provider.value
-            )
+            logger.warning("openai_streaming_fallback", error=str(e), provider=self._provider.value)
 
             # Use non-streaming as fallback
             response = await self.complete_async(prompt, system_prompt, model)
@@ -237,7 +234,7 @@ class OpenAIClient(ILlmClient):
             # Simulate streaming by yielding in chunks
             chunk_size = 20
             for i in range(0, len(full_response), chunk_size):
-                chunk = full_response[i:i + chunk_size]
+                chunk = full_response[i : i + chunk_size]
                 yield chunk
 
     async def _stream_with_sse(self, prompt: str, system_prompt: str, model: str | None = None):
@@ -263,13 +260,10 @@ class OpenAIClient(ILlmClient):
             url = f"{self._base_url}/chat/completions"
 
         payload = {
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ],
+            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
             "temperature": 0.0,
             "max_tokens": 2000,
-            "stream": True  # Enable streaming
+            "stream": True,  # Enable streaming
         }
 
         # Add model for non-Azure
@@ -350,7 +344,9 @@ class OpenAIClient(ILlmClient):
         """
 
         try:
-            response = await self.complete_async(prompt, system_prompt="You are a strict security auditor. Output valid JSON only.")
+            response = await self.complete_async(
+                prompt, system_prompt="You are a strict security auditor. Output valid JSON only."
+            )
             if not response.success:
                 return {"findings": []}
 
@@ -359,6 +355,7 @@ class OpenAIClient(ILlmClient):
         except (RuntimeError, ValueError, json.JSONDecodeError) as e:
             # Fallback to empty findings on failure to prevent crash
             from warden.shared.infrastructure.logging import get_logger
+
             logger = get_logger(__name__)
             logger.error("llm_security_analysis_failed", error=str(e))
             return {"findings": []}
@@ -366,11 +363,5 @@ class OpenAIClient(ILlmClient):
 
 # Self-register with the registry
 # OpenAI provider handles both OPENAI and AZURE_OPENAI with provider parameter
-ProviderRegistry.register(
-    LlmProvider.OPENAI,
-    lambda config: OpenAIClient(config, LlmProvider.OPENAI)
-)
-ProviderRegistry.register(
-    LlmProvider.AZURE_OPENAI,
-    lambda config: OpenAIClient(config, LlmProvider.AZURE_OPENAI)
-)
+ProviderRegistry.register(LlmProvider.OPENAI, lambda config: OpenAIClient(config, LlmProvider.OPENAI))
+ProviderRegistry.register(LlmProvider.AZURE_OPENAI, lambda config: OpenAIClient(config, LlmProvider.AZURE_OPENAI))

@@ -49,17 +49,19 @@ class DebugDetector(BaseDetector):
 
                 if func_name and self._is_debug_function(func_name):
                     line = node.location.start_line if node.location else 0
-                    violations.append(AntiPatternViolation(
-                        pattern_id="debug-output",
-                        pattern_name="Debug Output",
-                        severity=AntiPatternSeverity.MEDIUM,
-                        message=f"Debug output statement: {func_name}",
-                        file_path=code_file.path,
-                        line=line,
-                        code_snippet=self.get_line(lines, line),
-                        suggestion=self._get_logging_suggestion(language),
-                        is_blocker=False,
-                    ))
+                    violations.append(
+                        AntiPatternViolation(
+                            pattern_id="debug-output",
+                            pattern_name="Debug Output",
+                            severity=AntiPatternSeverity.MEDIUM,
+                            message=f"Debug output statement: {func_name}",
+                            file_path=code_file.path,
+                            line=line,
+                            code_snippet=self.get_line(lines, line),
+                            suggestion=self._get_logging_suggestion(language),
+                            is_blocker=False,
+                        )
+                    )
 
             for child in node.children:
                 walk(child)
@@ -84,24 +86,26 @@ class DebugDetector(BaseDetector):
 
         for pattern in patterns:
             for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
-                line_num = content[:match.start()].count("\n") + 1
+                line_num = content[: match.start()].count("\n") + 1
                 line_content = self.get_line(lines, line_num)
 
                 # Skip if in a comment
                 if self.is_in_comment(line_content, lang_str):
                     continue
 
-                violations.append(AntiPatternViolation(
-                    pattern_id="debug-output",
-                    pattern_name="Debug Output",
-                    severity=AntiPatternSeverity.MEDIUM,
-                    message=f"Debug output statement found ({lang_str})",
-                    file_path=code_file.path,
-                    line=line_num,
-                    code_snippet=line_content,
-                    suggestion=self._get_logging_suggestion(language),
-                    is_blocker=False,
-                ))
+                violations.append(
+                    AntiPatternViolation(
+                        pattern_id="debug-output",
+                        pattern_name="Debug Output",
+                        severity=AntiPatternSeverity.MEDIUM,
+                        message=f"Debug output statement found ({lang_str})",
+                        file_path=code_file.path,
+                        line=line_num,
+                        code_snippet=line_content,
+                        suggestion=self._get_logging_suggestion(language),
+                        is_blocker=False,
+                    )
+                )
 
         return violations
 

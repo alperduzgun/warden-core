@@ -76,9 +76,7 @@ class EmbeddingGenerator:
 
         elif provider == "azure_openai":
             if not api_key or not azure_endpoint or not azure_deployment:
-                raise ValueError(
-                    "api_key, azure_endpoint, and azure_deployment required for Azure OpenAI"
-                )
+                raise ValueError("api_key, azure_endpoint, and azure_deployment required for Azure OpenAI")
             self.client = AsyncAzureOpenAI(
                 api_key=api_key,
                 azure_endpoint=azure_endpoint,
@@ -100,10 +98,7 @@ class EmbeddingGenerator:
             try:
                 logger.debug("attempting_local_cache_load", model=model_name)
                 self.client = SentenceTransformer(
-                    model_name,
-                    trust_remote_code=trust_remote_code,
-                    device=device,
-                    local_files_only=True
+                    model_name, trust_remote_code=trust_remote_code, device=device, local_files_only=True
                 )
                 logger.info("local_embedding_model_loaded_from_cache", model=model_name, device=device)
             except Exception as e:
@@ -112,7 +107,7 @@ class EmbeddingGenerator:
                 self.client = SentenceTransformer(
                     model_name,
                     trust_remote_code=trust_remote_code,
-                    device=device
+                    device=device,
                     # local_files_only=False (default)
                 )
                 logger.info("local_embedding_model_loaded_online", model=model_name, device=device)
@@ -171,7 +166,7 @@ class EmbeddingGenerator:
             if self.provider == "azure_openai":
                 kwargs["model"] = self.azure_deployment
                 if self.dimensions and self.dimensions != 1536:
-                     kwargs["dimensions"] = self.dimensions
+                    kwargs["dimensions"] = self.dimensions
 
                 response = await self.client.embeddings.create(**kwargs)
                 embedding_vector = response.data[0].embedding
@@ -180,7 +175,7 @@ class EmbeddingGenerator:
             elif self.provider == "openai":
                 kwargs["model"] = self.model_name
                 if self.dimensions and self.dimensions != 1536:
-                     kwargs["dimensions"] = self.dimensions
+                    kwargs["dimensions"] = self.dimensions
 
                 response = await self.client.embeddings.create(**kwargs)
                 embedding_vector = response.data[0].embedding
@@ -188,12 +183,12 @@ class EmbeddingGenerator:
             elif self.provider == "local":
                 # SentenceTransformer encode is synchronous/blocking. Offload to thread.
                 import asyncio
+
                 loop = asyncio.get_running_loop()
                 embedding_vector = await loop.run_in_executor(
-                    None,
-                    lambda: self.client.encode(text, device=self.device).tolist()
+                    None, lambda: self.client.encode(text, device=self.device).tolist()
                 )
-                token_count = len(text.split()) # Rough estimate
+                token_count = len(text.split())  # Rough estimate
             else:
                 raise ValueError(f"Invalid provider: {self.provider}")
 
@@ -225,9 +220,7 @@ class EmbeddingGenerator:
             )
             raise
 
-    async def generate_chunk_embedding(
-        self, chunk: CodeChunk
-    ) -> tuple[list[float], EmbeddingMetadata]:
+    async def generate_chunk_embedding(self, chunk: CodeChunk) -> tuple[list[float], EmbeddingMetadata]:
         """
         Generate embedding for a code chunk.
 
@@ -291,6 +284,7 @@ class EmbeddingGenerator:
             List of (chunk, embedding_vector, metadata) tuples
         """
         import asyncio
+
         semaphore = asyncio.Semaphore(max_concurrency)
         results = []
 
@@ -316,13 +310,11 @@ class EmbeddingGenerator:
                 batch_number=i // batch_size + 1,
                 batch_size=len(batch),
                 total_chunks=len(chunks),
-                concurrency=max_concurrency
+                concurrency=max_concurrency,
             )
 
             # Parallelize within batch
-            batch_results = await asyncio.gather(
-                *[_embed_with_semaphore(chunk) for chunk in batch]
-            )
+            batch_results = await asyncio.gather(*[_embed_with_semaphore(chunk) for chunk in batch])
 
             # Filter failed ones
             results.extend([r for r in batch_results if r is not None])

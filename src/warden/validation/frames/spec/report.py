@@ -206,28 +206,32 @@ class SarifReportGenerator:
                 if rule_id in seen_rule_ids:
                     continue
                 seen_rule_ids.add(rule_id)
-                rules.append({
-                    "id": rule_id,
-                    "name": gap.gap_type,
-                    "shortDescription": {"text": f"Contract gap: {gap.gap_type}"},
-                    "defaultConfiguration": {
-                        "level": SEVERITY_TO_SARIF_LEVEL.get(gap.severity, "warning"),
-                    },
-                })
+                rules.append(
+                    {
+                        "id": rule_id,
+                        "name": gap.gap_type,
+                        "shortDescription": {"text": f"Contract gap: {gap.gap_type}"},
+                        "defaultConfiguration": {
+                            "level": SEVERITY_TO_SARIF_LEVEL.get(gap.severity, "warning"),
+                        },
+                    }
+                )
             else:
                 if rule_info["id"] in seen_rule_ids:
                     continue
                 seen_rule_ids.add(rule_info["id"])
-                rules.append({
-                    "id": rule_info["id"],
-                    "name": rule_info["name"],
-                    "shortDescription": {"text": rule_info["shortDescription"]},
-                    "fullDescription": {"text": rule_info["fullDescription"]},
-                    "helpUri": rule_info["helpUri"],
-                    "defaultConfiguration": {
-                        "level": SEVERITY_TO_SARIF_LEVEL.get(gap.severity, "warning"),
-                    },
-                })
+                rules.append(
+                    {
+                        "id": rule_info["id"],
+                        "name": rule_info["name"],
+                        "shortDescription": {"text": rule_info["shortDescription"]},
+                        "fullDescription": {"text": rule_info["fullDescription"]},
+                        "helpUri": rule_info["helpUri"],
+                        "defaultConfiguration": {
+                            "level": SEVERITY_TO_SARIF_LEVEL.get(gap.severity, "warning"),
+                        },
+                    }
+                )
 
         return rules
 

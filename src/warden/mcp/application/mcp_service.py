@@ -25,9 +25,11 @@ from warden.mcp.ports.transport import ITransport
 # Optional logging
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -69,6 +71,7 @@ class MCPService:
         # Register Setup Resource Adapter
         # This provides the Agentry Protocol
         from warden.mcp.infrastructure.adapters.setup_resource_adapter import SetupResourceAdapter
+
         self._setup_adapter = SetupResourceAdapter(self.project_root)
 
         # Background tasks
@@ -121,9 +124,7 @@ class MCPService:
             await self.transport.close()
             logger.info("mcp_service_stopped")
 
-    async def _process_message_async(
-        self, raw: str, session: MCPSession
-    ) -> str | None:
+    async def _process_message_async(self, raw: str, session: MCPSession) -> str | None:
         """Process incoming message and return response."""
         try:
             data = json.loads(raw)
@@ -161,9 +162,7 @@ class MCPService:
     # Handler Methods
     # =========================================================================
 
-    async def _handle_initialize_async(
-        self, params: dict | None, session: MCPSession
-    ) -> dict:
+    async def _handle_initialize_async(self, params: dict | None, session: MCPSession) -> dict:
         """Handle initialize request."""
         return {
             "protocolVersion": str(self._protocol_version),
@@ -171,23 +170,17 @@ class MCPService:
             "serverInfo": self._server_info.to_dict(),
         }
 
-    async def _handle_initialized_async(
-        self, params: dict | None, session: MCPSession
-    ) -> None:
+    async def _handle_initialized_async(self, params: dict | None, session: MCPSession) -> None:
         """Handle initialized notification."""
         session.mark_initialized(params)
         logger.info("mcp_client_initialized")
         return None
 
-    async def _handle_ping_async(
-        self, params: dict | None, session: MCPSession
-    ) -> dict:
+    async def _handle_ping_async(self, params: dict | None, session: MCPSession) -> dict:
         """Handle ping request."""
         return {}
 
-    async def _handle_resources_list_async(
-        self, params: dict | None, session: MCPSession
-    ) -> dict:
+    async def _handle_resources_list_async(self, params: dict | None, session: MCPSession) -> dict:
         """Handle resources/list request."""
         resources = await self.resource_provider.list_resources()
 
@@ -197,9 +190,7 @@ class MCPService:
         all_resources = [r.to_mcp_format() for r in resources] + [r.to_mcp_format() for r in protocol_resources]
         return {"resources": all_resources}
 
-    async def _handle_resources_read_async(
-        self, params: dict | None, session: MCPSession
-    ) -> dict:
+    async def _handle_resources_read_async(self, params: dict | None, session: MCPSession) -> dict:
         """Handle resources/read request."""
         if not params or "uri" not in params:
             raise MCPProtocolError("Missing required parameter: uri")
@@ -208,21 +199,17 @@ class MCPService:
         # Check Protocol Resources first
         protocol_content = self._setup_adapter.read_resource(uri)
         if protocol_content:
-             return {"contents": [{"uri": uri, "mimeType": "text/markdown", "text": protocol_content}]}
+            return {"contents": [{"uri": uri, "mimeType": "text/markdown", "text": protocol_content}]}
 
         content = await self.resource_provider.read_resource(uri)
         return {"contents": [content]}
 
-    async def _handle_tools_list_async(
-        self, params: dict | None, session: MCPSession
-    ) -> dict:
+    async def _handle_tools_list_async(self, params: dict | None, session: MCPSession) -> dict:
         """Handle tools/list request."""
         tools = self._tool_registry.list_all(self.tool_executor.bridge_available)
         return {"tools": [t.to_mcp_format() for t in tools]}
 
-    async def _handle_tools_call_async(
-        self, params: dict | None, session: MCPSession
-    ) -> dict:
+    async def _handle_tools_call_async(self, params: dict | None, session: MCPSession) -> dict:
         """Handle tools/call request."""
         if not params or "name" not in params:
             raise MCPProtocolError("Missing required parameter: name")
@@ -247,11 +234,13 @@ class MCPService:
         if not self.transport.is_open:
             return
 
-        message = json.dumps({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-        })
+        message = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params,
+            }
+        )
         await self.transport.write_message(message)
 
     async def _watch_report_file_async(self) -> None:
@@ -263,9 +252,9 @@ class MCPService:
 
         # Check alternate location if default doesn't exist
         if not report_path.exists():
-             alternate = self.project_root / "warden_report.json"
-             if alternate.exists():
-                 report_path = alternate
+            alternate = self.project_root / "warden_report.json"
+            if alternate.exists():
+                report_path = alternate
 
         last_mtime = 0.0
 
@@ -292,8 +281,7 @@ class MCPService:
 
                         # Notify clients that reports resource has changed
                         await self.send_notification_async(
-                            "notifications/resources/updated",
-                            {"uri": "warden://reports/latest"}
+                            "notifications/resources/updated", {"uri": "warden://reports/latest"}
                         )
                 except OSError as e:
                     logger.warning("mcp_watcher_error", error=str(e))
@@ -311,18 +299,20 @@ class MCPService:
 
     def _success_response(self, request_id: Any, result: Any) -> str:
         """Create success response JSON."""
-        return json.dumps({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": result,
-        })
+        return json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": result,
+            }
+        )
 
-    def _error_response(
-        self, request_id: Any, code: MCPErrorCode, message: str
-    ) -> str:
+    def _error_response(self, request_id: Any, code: MCPErrorCode, message: str) -> str:
         """Create error response JSON."""
-        return json.dumps({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "error": {"code": int(code), "message": message},
-        })
+        return json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": int(code), "message": message},
+            }
+        )

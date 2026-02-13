@@ -19,6 +19,7 @@ from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger(__name__)
 
+
 class TriageService:
     """
     Service for determining the analysis depth (Lane) for a code file.
@@ -52,14 +53,14 @@ class TriageService:
         self.llm = llm_client
 
         # Detect Local LLM (Ollama / Local HTTP)
-        provider = str(getattr(llm_client, 'provider', '')).upper()
-        endpoint = str(getattr(llm_client, 'endpoint', getattr(llm_client, '_endpoint', '')))
+        provider = str(getattr(llm_client, "provider", "")).upper()
+        endpoint = str(getattr(llm_client, "endpoint", getattr(llm_client, "_endpoint", "")))
         self.is_local = (
-            'OLLAMA' in provider or
-            'localhost' in endpoint or
-            '127.0.0.1' in endpoint or
-            '::1' in endpoint or
-            '0:0:0:0:0:0:0:1' in endpoint
+            "OLLAMA" in provider
+            or "localhost" in endpoint
+            or "127.0.0.1" in endpoint
+            or "::1" in endpoint
+            or "0:0:0:0:0:0:0:1" in endpoint
         )
 
     async def batch_assess_risk_async(self, code_files: list[CodeFile]) -> dict[str, TriageDecision]:
@@ -123,7 +124,7 @@ class TriageService:
                             file_path=str(cf.path),
                             lane=lane,
                             risk_score=risk,
-                            processing_time_ms=(time.time() - start_time) * 1000
+                            processing_time_ms=(time.time() - start_time) * 1000,
                         )
             except Exception as e:
                 logger.error("triage_batch_failed", error=str(e), chunk_size=len(chunk))
@@ -160,7 +161,7 @@ FILES:
             user_message=prompt,
             use_fast_tier=True,
             temperature=0.01,
-            max_tokens=1500
+            max_tokens=1500,
         )
 
         response = await self.llm.send_async(request)
@@ -194,7 +195,8 @@ FILES:
                         continue
 
                     # Normalize keys if needed (LLM might lowercase them)
-                    if "risk_score" in score_data: score_data = score_data["risk_score"]
+                    if "risk_score" in score_data:
+                        score_data = score_data["risk_score"]
                     results[path] = RiskScore(**score_data)
                 except Exception as e:
                     logger.warning("triage_batch_item_parse_failed", path=path, error=str(e))
@@ -209,14 +211,16 @@ FILES:
         path = str(code_file.path).lower()
 
         # Safe extensions
-        if path.endswith(('.md', '.txt', '.json', '.yaml', '.yml', '.css', '.scss', '.html', '.xml', '.csv', '.lock')):
+        if path.endswith((".md", ".txt", ".json", ".yaml", ".yml", ".css", ".scss", ".html", ".xml", ".csv", ".lock")):
             return True
 
         # Safe directories
-        if any(x in path for x in ['/tests/', '/test/', '/docs/', '/migrations/', '/node_modules/', '/dist/', '/build/']):
+        if any(
+            x in path for x in ["/tests/", "/test/", "/docs/", "/migrations/", "/node_modules/", "/dist/", "/build/"]
+        ):
             return True
 
-        if 'config' in path or 'settings' in path:
+        if "config" in path or "settings" in path:
             return True
 
         # Small files
@@ -224,18 +228,14 @@ FILES:
             return True
 
         # Complexity Heuristic (Simple line count proxy)
-        return bool(hasattr(code_file, 'line_count') and code_file.line_count < 30)
+        return bool(hasattr(code_file, "line_count") and code_file.line_count < 30)
 
     async def _get_llm_score_async(self, code_file: CodeFile) -> RiskScore:
         """Calls Local LLM to get risk score."""
         prompt = f"File Path: {code_file.path}\n\nCode:\n```{code_file.language}\n{code_file.content[:3000]}```"
 
         request = LlmRequest(
-            system_prompt=self.SYSTEM_PROMPT,
-            user_message=prompt,
-            use_fast_tier=True,
-            temperature=0.1,
-            max_tokens=250
+            system_prompt=self.SYSTEM_PROMPT, user_message=prompt, use_fast_tier=True, temperature=0.1, max_tokens=250
         )
 
         response = await self.llm.send_async(request)
@@ -253,7 +253,7 @@ FILES:
 
             # 2. Sanitization: Remove dangerous characters that break json.loads
             # (Sometimes Qwen adds control characters)
-            json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
+            json_str = re.sub(r"[\x00-\x1F\x7F]", "", json_str)
 
             data = json.loads(json_str)
 
@@ -263,17 +263,12 @@ FILES:
         except Exception as e:
             logger.warning("triage_parse_failed", content=content[:200], error=str(e))
             # Fallback score (Safe enough for middle lane, high enough for attention)
-            return RiskScore(
-                score=5.0,
-                confidence=0.0,
-                reasoning=f"Parsing Error: {e!s}",
-                category="chaos_fallback"
-            )
+            return RiskScore(score=5.0, confidence=0.0, reasoning=f"Parsing Error: {e!s}", category="chaos_fallback")
 
     def _extract_json(self, text: str) -> str:
         """Regex-based JSON extraction to ignore LLM chatter."""
         # Simple balanced brace search
-        match = re.search(r'(\{.*\})', text, re.DOTALL)
+        match = re.search(r"(\{.*\})", text, re.DOTALL)
         if match:
             return match.group(1)
 
@@ -287,7 +282,7 @@ FILES:
         try:
             mem = psutil.virtual_memory()
             available_gb = mem.available / (1024**3)
-            mem_limit = max(1, int(available_gb // 2.0)) # Triage is simpler, 2GB per item
+            mem_limit = max(1, int(available_gb // 2.0))  # Triage is simpler, 2GB per item
 
             cpu_load = psutil.cpu_percent(interval=None)
             cpu_limit = 1 if cpu_load > 80 else max_allowed
@@ -306,10 +301,12 @@ FILES:
         else:
             return TriageLane.DEEP
 
-    def _create_decision(self, code_file: CodeFile, lane: TriageLane, score: int, reason: str, start_time: float) -> TriageDecision:
+    def _create_decision(
+        self, code_file: CodeFile, lane: TriageLane, score: int, reason: str, start_time: float
+    ) -> TriageDecision:
         return TriageDecision(
             file_path=str(code_file.path),
             lane=lane,
             risk_score=RiskScore(score=score, confidence=1.0, reasoning=reason, category="heuristic"),
-            processing_time_ms=(time.time() - start_time) * 1000
+            processing_time_ms=(time.time() - start_time) * 1000,
         )

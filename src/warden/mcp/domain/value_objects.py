@@ -14,6 +14,7 @@ class ProtocolVersion:
 
     Represents the MCP specification version supported by the server.
     """
+
     version: str = "2024-11-05"
 
     def __str__(self) -> str:
@@ -32,8 +33,9 @@ class ResourceUri:
 
     Warden resources use the "warden://" scheme.
     """
+
     scheme: str  # "warden"
-    path: str    # e.g., "reports/sarif"
+    path: str  # e.g., "reports/sarif"
 
     @classmethod
     def parse(cls, uri: str) -> "ResourceUri":
@@ -76,6 +78,7 @@ class ServerInfo:
 
     Announced during MCP initialization.
     """
+
     name: str = "warden-mcp"
     version: str = "1.0.0"
 
@@ -91,6 +94,7 @@ class ServerCapabilities:
 
     Announced during MCP initialization.
     """
+
     resources: bool = True
     tools: bool = True
     prompts: bool = False

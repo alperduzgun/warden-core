@@ -21,16 +21,16 @@ class Fact(BaseDomainModel):
     """
 
     category: str  # e.g., "service_abstraction", "rule", "architectural_pattern"
-    subject: str   # e.g., "SecretManager"
-    predicate: str # e.g., "handles", "is_located_in", "bypassed_by"
-    object: str    # e.g., "secret_management", "src/warden/secrets", "os.getenv"
+    subject: str  # e.g., "SecretManager"
+    predicate: str  # e.g., "handles", "is_located_in", "bypassed_by"
+    object: str  # e.g., "secret_management", "src/warden/secrets", "os.getenv"
 
     # Unique identifier
     id: str = Field(default_factory=lambda: str(uuid4()))
 
     # Metadata (provenance, confidence, etc.)
-    source: str = "analysis"   # e.g., "analysis", "user", "llm"
-    confidence: float = 1.0    # 0.0 to 1.0
+    source: str = "analysis"  # e.g., "analysis", "user", "llm"
+    confidence: float = 1.0  # 0.0 to 1.0
     created_at: float = Field(default_factory=time.time)
     updated_at: float = Field(default_factory=time.time)
 
@@ -39,10 +39,10 @@ class Fact(BaseDomainModel):
 
     def to_json(self) -> dict[str, Any]:
         """Convert to JSON-compatible dict."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> 'Fact':
+    def from_json(cls, data: dict[str, Any]) -> "Fact":
         """Create from JSON dict."""
         return cls.model_validate(data)
 
@@ -80,7 +80,7 @@ class KnowledgeGraph(BaseDomainModel):
         }
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> 'KnowledgeGraph':
+    def from_json(cls, data: dict[str, Any]) -> "KnowledgeGraph":
         """Create from JSON dict."""
         # Handle the fact that "facts" in JSON is a list but in model it's a dict
         facts_list = data.get("facts", [])
@@ -90,7 +90,5 @@ class KnowledgeGraph(BaseDomainModel):
             facts_dict[f.id] = f
 
         return cls(
-            version=data.get("version", "1.0.0"),
-            last_updated=data.get("lastUpdated", time.time()),
-            facts=facts_dict
+            version=data.get("version", "1.0.0"), last_updated=data.get("lastUpdated", time.time()), facts=facts_dict
         )

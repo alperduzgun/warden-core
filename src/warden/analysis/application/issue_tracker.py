@@ -180,19 +180,11 @@ class IssueTracker:
 
     def get_open_issues(self) -> list[WardenIssue]:
         """Get all open issues."""
-        return [
-            issue
-            for issue in self.issues_by_hash.values()
-            if issue.state == IssueState.OPEN
-        ]
+        return [issue for issue in self.issues_by_hash.values() if issue.state == IssueState.OPEN]
 
     def get_resolved_issues(self) -> list[WardenIssue]:
         """Get all resolved issues."""
-        return [
-            issue
-            for issue in self.issues_by_hash.values()
-            if issue.state == IssueState.RESOLVED
-        ]
+        return [issue for issue in self.issues_by_hash.values() if issue.state == IssueState.RESOLVED]
 
     def get_issue_count_by_state(self) -> dict[IssueState, int]:
         """Get issue count by state."""

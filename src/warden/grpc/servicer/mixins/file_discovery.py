@@ -16,9 +16,11 @@ from warden.grpc.converters import ProtoConverters
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -30,17 +32,15 @@ class FileDiscoveryMixin:
         logger.info("grpc_discover_files", path=request.path)
 
         try:
-            if hasattr(self.bridge, 'discover_files'):
+            if hasattr(self.bridge, "discover_files"):
                 result = await self.bridge.discover_files(
-                    path=request.path,
-                    max_depth=request.max_depth or 0,
-                    use_gitignore=request.use_gitignore
+                    path=request.path, max_depth=request.max_depth or 0, use_gitignore=request.use_gitignore
                 )
 
                 response = warden_pb2.DiscoverResponse(
                     success=True,
                     total_files=result.get("total_files", 0),
-                    analyzable_files=result.get("analyzable_files", 0)
+                    analyzable_files=result.get("analyzable_files", 0),
                 )
 
                 for file in result.get("files", []):
@@ -53,24 +53,15 @@ class FileDiscoveryMixin:
 
             path = Path(request.path)
             if not path.exists():
-                return warden_pb2.DiscoverResponse(
-                    success=False,
-                    error_message=f"Path not found: {request.path}"
-                )
+                return warden_pb2.DiscoverResponse(success=False, error_message=f"Path not found: {request.path}")
 
             files = []
             for p in path.rglob("*"):
                 if p.is_file():
-                    files.append({
-                        "path": str(p),
-                        "size_bytes": p.stat().st_size,
-                        "language": self._detect_language(p)
-                    })
+                    files.append({"path": str(p), "size_bytes": p.stat().st_size, "language": self._detect_language(p)})
 
             response = warden_pb2.DiscoverResponse(
-                success=True,
-                total_files=len(files),
-                analyzable_files=len([f for f in files if f["language"]])
+                success=True, total_files=len(files), analyzable_files=len([f for f in files if f["language"]])
             )
 
             for file in files[:1000]:
@@ -80,10 +71,7 @@ class FileDiscoveryMixin:
 
         except Exception as e:
             logger.error("grpc_discover_files_error: %s", str(e))
-            return warden_pb2.DiscoverResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.DiscoverResponse(success=False, error_message=str(e))
 
     async def GetFilesByType(self, request, context) -> "warden_pb2.DiscoverResponse":
         """Get files filtered by type."""
@@ -103,7 +91,7 @@ class FileDiscoveryMixin:
                 warden_pb2.PHP: ".php",
                 warden_pb2.KOTLIN: ".kt",
                 warden_pb2.SWIFT: ".swift",
-                warden_pb2.SCALA: ".scala"
+                warden_pb2.SCALA: ".scala",
             }
 
             extensions = [type_to_ext.get(t) for t in request.types if t in type_to_ext]
@@ -114,17 +102,9 @@ class FileDiscoveryMixin:
             for ext in extensions:
                 for p in path.rglob(f"*{ext}"):
                     if p.is_file():
-                        files.append({
-                            "path": str(p),
-                            "size_bytes": p.stat().st_size,
-                            "language": ext[1:]
-                        })
+                        files.append({"path": str(p), "size_bytes": p.stat().st_size, "language": ext[1:]})
 
-            response = warden_pb2.DiscoverResponse(
-                success=True,
-                total_files=len(files),
-                analyzable_files=len(files)
-            )
+            response = warden_pb2.DiscoverResponse(success=True, total_files=len(files), analyzable_files=len(files))
 
             for file in files[:1000]:
                 response.files.append(ProtoConverters.convert_discovered_file(file))
@@ -133,17 +113,14 @@ class FileDiscoveryMixin:
 
         except Exception as e:
             logger.error("grpc_get_files_by_type_error: %s", str(e))
-            return warden_pb2.DiscoverResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.DiscoverResponse(success=False, error_message=str(e))
 
     async def DetectFrameworks(self, request, context) -> "warden_pb2.DiscoverResponse":
         """Detect frameworks used in project."""
         logger.info("grpc_detect_frameworks", path=request.path)
 
         try:
-            if hasattr(self.bridge, 'detect_frameworks'):
+            if hasattr(self.bridge, "detect_frameworks"):
                 result = await self.bridge.detect_frameworks(path=request.path)
 
                 response = warden_pb2.DiscoverResponse(success=True)
@@ -157,29 +134,13 @@ class FileDiscoveryMixin:
             frameworks = []
 
             if (path / "requirements.txt").exists() or (path / "setup.py").exists():
-                frameworks.append({
-                    "name": "Python",
-                    "language": "python",
-                    "confidence": 0.9
-                })
+                frameworks.append({"name": "Python", "language": "python", "confidence": 0.9})
             if (path / "package.json").exists():
-                frameworks.append({
-                    "name": "Node.js",
-                    "language": "javascript",
-                    "confidence": 0.9
-                })
+                frameworks.append({"name": "Node.js", "language": "javascript", "confidence": 0.9})
             if (path / "Cargo.toml").exists():
-                frameworks.append({
-                    "name": "Rust",
-                    "language": "rust",
-                    "confidence": 0.9
-                })
+                frameworks.append({"name": "Rust", "language": "rust", "confidence": 0.9})
             if (path / "go.mod").exists():
-                frameworks.append({
-                    "name": "Go",
-                    "language": "go",
-                    "confidence": 0.9
-                })
+                frameworks.append({"name": "Go", "language": "go", "confidence": 0.9})
 
             response = warden_pb2.DiscoverResponse(success=True)
             for fw in frameworks:
@@ -189,10 +150,7 @@ class FileDiscoveryMixin:
 
         except Exception as e:
             logger.error("grpc_detect_frameworks_error: %s", str(e))
-            return warden_pb2.DiscoverResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.DiscoverResponse(success=False, error_message=str(e))
 
     async def GetProjectStats(self, request, context) -> "warden_pb2.ProjectStats":
         """Get project statistics."""
@@ -208,7 +166,7 @@ class FileDiscoveryMixin:
             total_files = 0
 
             for p in path.rglob("*"):
-                if p.is_file() and not any(part.startswith('.') for part in p.parts):
+                if p.is_file() and not any(part.startswith(".") for part in p.parts):
                     lang = self._detect_language(p)
                     if lang:
                         total_files += 1
@@ -216,18 +174,14 @@ class FileDiscoveryMixin:
                         files_by_language[lang] = files_by_language.get(lang, 0) + 1
 
                         try:
-                            line_count = len(p.read_text(errors='ignore').splitlines())
+                            line_count = len(p.read_text(errors="ignore").splitlines())
                             total_lines += line_count
-                            lines_by_language[lang] = (
-                                lines_by_language.get(lang, 0) + line_count
-                            )
+                            lines_by_language[lang] = lines_by_language.get(lang, 0) + line_count
                         except (OSError, ValueError):  # File discovery is best-effort
                             pass
 
             stats = warden_pb2.ProjectStats(
-                total_files=total_files,
-                total_lines=total_lines,
-                total_size_bytes=total_size
+                total_files=total_files, total_lines=total_lines, total_size_bytes=total_size
             )
             stats.files_by_language.update(files_by_language)
             stats.lines_by_language.update(lines_by_language)
@@ -241,5 +195,6 @@ class FileDiscoveryMixin:
     def _detect_language(self, path: Path) -> str:
         """Detect language using central LanguageRegistry."""
         from warden.shared.languages.registry import LanguageRegistry
+
         lang_enum = LanguageRegistry.get_language_from_path(path)
         return lang_enum.value if lang_enum != CodeLanguage.UNKNOWN else ""

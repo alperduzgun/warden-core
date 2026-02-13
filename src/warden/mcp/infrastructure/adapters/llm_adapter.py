@@ -24,13 +24,15 @@ class LlmAdapter(BaseWardenAdapter):
         - warden_validate_llm_config: Validate config
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_analyze_with_llm",
-        "warden_classify_code",
-        "warden_test_llm_provider",
-        "warden_get_available_models",
-        "warden_validate_llm_config",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_analyze_with_llm",
+            "warden_classify_code",
+            "warden_test_llm_provider",
+            "warden_get_available_models",
+            "warden_validate_llm_config",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.LLM
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -157,11 +159,13 @@ class LlmAdapter(BaseWardenAdapter):
                 else:
                     response_text += str(chunk)
 
-            return MCPToolResult.json_result({
-                "success": True,
-                "response": response_text,
-                "provider": provider or "default",
-            })
+            return MCPToolResult.json_result(
+                {
+                    "success": True,
+                    "response": response_text,
+                    "provider": provider or "default",
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"LLM analysis failed: {e}")
 
@@ -222,11 +226,13 @@ class LlmAdapter(BaseWardenAdapter):
             else:
                 return MCPToolResult.error("Provider testing not available")
         except Exception as e:
-            return MCPToolResult.json_result({
-                "success": False,
-                "provider": provider,
-                "error_message": str(e),
-            })
+            return MCPToolResult.json_result(
+                {
+                    "success": False,
+                    "provider": provider,
+                    "error_message": str(e),
+                }
+            )
 
     async def _get_available_models_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get available models for provider."""
@@ -283,8 +289,10 @@ class LlmAdapter(BaseWardenAdapter):
         if not config.get("api_key") and provider.lower() in ["anthropic", "openai"]:
             errors.append(f"API key required for {provider}")
 
-        return MCPToolResult.json_result({
-            "valid": len(errors) == 0,
-            "errors": errors,
-            "warnings": warnings,
-        })
+        return MCPToolResult.json_result(
+            {
+                "valid": len(errors) == 0,
+                "errors": errors,
+                "warnings": warnings,
+            }
+        )

@@ -120,19 +120,13 @@ class RustASTProvider(IASTProvider):
         children: list[ASTNode] = []
 
         for func in meta.functions:
-            children.append(
-                _make_node(ASTNodeType.FUNCTION, func, file_path)
-            )
+            children.append(_make_node(ASTNodeType.FUNCTION, func, file_path))
 
         for cls in meta.classes:
-            children.append(
-                _make_node(ASTNodeType.CLASS, cls, file_path)
-            )
+            children.append(_make_node(ASTNodeType.CLASS, cls, file_path))
 
         for imp in meta.imports:
-            children.append(
-                _make_node(ASTNodeType.IMPORT, imp, file_path)
-            )
+            children.append(_make_node(ASTNodeType.IMPORT, imp, file_path))
 
         root = ASTNode(
             node_type=ASTNodeType.MODULE,
@@ -155,9 +149,7 @@ class RustASTProvider(IASTProvider):
             file_path=file_path,
         )
 
-    def extract_dependencies(
-        self, source_code: str, language: CodeLanguage
-    ) -> list[str]:
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> list[str]:
         if not _RUST_AVAILABLE or language not in _SUPPORTED_LANGUAGES:
             return []
 

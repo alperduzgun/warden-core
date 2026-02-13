@@ -17,9 +17,9 @@ from typing import Any, Dict, List, Literal, Optional
 from warden.shared.domain.base_model import BaseDomainModel
 
 # Type aliases for Panel compatibility
-PipelineNodeType = Literal['start', 'end', 'frame', 'globalRule', 'rule']
-EdgeHandle = Literal['pre-execution', 'post-execution', 'output']
-OnFailAction = Literal['stop', 'continue']
+PipelineNodeType = Literal["start", "end", "frame", "globalRule", "rule"]
+EdgeHandle = Literal["pre-execution", "post-execution", "output"]
+OnFailAction = Literal["stop", "continue"]
 
 
 @dataclass
@@ -91,22 +91,22 @@ class PipelineSettings(BaseDomainModel):
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON (camelCase)."""
         return {
-            'failFast': self.fail_fast,
-            'timeout': self.timeout,
-            'parallel': self.parallel,
-            'enableLlm': self.enable_llm,
-            'llmProvider': self.llm_provider
+            "failFast": self.fail_fast,
+            "timeout": self.timeout,
+            "parallel": self.parallel,
+            "enableLlm": self.enable_llm,
+            "llmProvider": self.llm_provider,
         }
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> 'PipelineSettings':
+    def from_json(cls, data: dict[str, Any]) -> "PipelineSettings":
         """Parse Panel JSON to Python model."""
         return cls(
-            fail_fast=data.get('failFast', True),
-            timeout=data.get('timeout'),
-            parallel=data.get('parallel', False),
-            enable_llm=data.get('enableLlm', True),
-            llm_provider=data.get('llmProvider', 'deepseek')
+            fail_fast=data.get("failFast", True),
+            timeout=data.get("timeout"),
+            parallel=data.get("parallel", False),
+            enable_llm=data.get("enableLlm", True),
+            llm_provider=data.get("llmProvider", "deepseek"),
         )
 
 
@@ -129,7 +129,7 @@ class CustomRule(BaseDomainModel):
 
     id: str
     content: str
-    severity: Literal['critical', 'high', 'medium', 'low']
+    severity: Literal["critical", "high", "medium", "low"]
 
 
 @dataclass
@@ -151,21 +151,21 @@ class FrameNodeData(BaseDomainModel):
     """
 
     frame_id: str  # Reference to frame (e.g., "security", "chaos")
-    type: Literal['frame'] = 'frame'
+    type: Literal["frame"] = "frame"
     pre_rules: list[CustomRule] = field(default_factory=list)  # Execute before frame
     post_rules: list[CustomRule] = field(default_factory=list)  # Execute after frame
-    on_fail: OnFailAction = 'stop'
+    on_fail: OnFailAction = "stop"
     config: dict[str, Any] = field(default_factory=dict)  # Frame-specific config
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return {
-            'type': self.type,
-            'frameId': self.frame_id,
-            'preRules': [rule.to_json() for rule in self.pre_rules],
-            'postRules': [rule.to_json() for rule in self.post_rules],
-            'onFail': self.on_fail,
-            'config': self.config
+            "type": self.type,
+            "frameId": self.frame_id,
+            "preRules": [rule.to_json() for rule in self.pre_rules],
+            "postRules": [rule.to_json() for rule in self.post_rules],
+            "onFail": self.on_fail,
+            "config": self.config,
         }
 
 
@@ -177,22 +177,22 @@ class GlobalRuleNodeData(BaseDomainModel):
     Applied to all frames.
     """
 
-    type: Literal['globalRule'] = 'globalRule'
-    rule: CustomRule = field(default_factory=lambda: CustomRule(id='', content='', severity='medium'))
+    type: Literal["globalRule"] = "globalRule"
+    rule: CustomRule = field(default_factory=lambda: CustomRule(id="", content="", severity="medium"))
 
 
 @dataclass
 class StartNodeData(BaseDomainModel):
     """Start node data."""
 
-    type: Literal['start'] = 'start'
+    type: Literal["start"] = "start"
 
 
 @dataclass
 class EndNodeData(BaseDomainModel):
     """End node data."""
 
-    type: Literal['end'] = 'end'
+    type: Literal["end"] = "end"
 
 
 @dataclass
@@ -219,10 +219,10 @@ class PipelineNode(BaseDomainModel):
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         return {
-            'id': self.id,
-            'type': self.type,
-            'position': self.position.to_json(),
-            'data': self.data  # Already in correct format
+            "id": self.id,
+            "type": self.type,
+            "position": self.position.to_json(),
+            "data": self.data,  # Already in correct format
         }
 
 
@@ -247,9 +247,9 @@ class EdgeStyle(BaseDomainModel):
         """Convert to Panel-compatible JSON."""
         result = {}
         if self.stroke:
-            result['stroke'] = self.stroke
+            result["stroke"] = self.stroke
         if self.stroke_width is not None:
-            result['strokeWidth'] = self.stroke_width
+            result["strokeWidth"] = self.stroke_width
         return result
 
 
@@ -279,7 +279,7 @@ class PipelineEdge(BaseDomainModel):
     target: str  # Target node ID
     source_handle: str | None = None
     target_handle: EdgeHandle | None = None
-    type: str = 'smoothstep'  # Edge type (smoothstep, straight, step)
+    type: str = "smoothstep"  # Edge type (smoothstep, straight, step)
     animated: bool = True  # Dashed animation
     style: EdgeStyle | None = None
     label: str | None = None
@@ -287,21 +287,21 @@ class PipelineEdge(BaseDomainModel):
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         result: dict[str, Any] = {
-            'id': self.id,
-            'source': self.source,
-            'target': self.target,
-            'type': self.type,
-            'animated': self.animated
+            "id": self.id,
+            "source": self.source,
+            "target": self.target,
+            "type": self.type,
+            "animated": self.animated,
         }
 
         if self.source_handle:
-            result['sourceHandle'] = self.source_handle
+            result["sourceHandle"] = self.source_handle
         if self.target_handle:
-            result['targetHandle'] = self.target_handle
+            result["targetHandle"] = self.target_handle
         if self.style:
-            result['style'] = self.style.to_json()
+            result["style"] = self.style.to_json()
         if self.label:
-            result['label'] = self.label
+            result["label"] = self.label
 
         return result
 
@@ -340,37 +340,37 @@ class PipelineConfig(BaseDomainModel):
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
         result: dict[str, Any] = {
-            'id': self.id,
-            'name': self.name,
-            'version': self.version,
-            'nodes': [node.to_json() for node in self.nodes],
-            'edges': [edge.to_json() for edge in self.edges],
-            'globalRules': [rule.to_json() for rule in self.global_rules],
-            'settings': self.settings.to_json()
+            "id": self.id,
+            "name": self.name,
+            "version": self.version,
+            "nodes": [node.to_json() for node in self.nodes],
+            "edges": [edge.to_json() for edge in self.edges],
+            "globalRules": [rule.to_json() for rule in self.global_rules],
+            "settings": self.settings.to_json(),
         }
 
         if self.project:
-            result['project'] = self.project.to_json()
+            result["project"] = self.project.to_json()
 
         return result
 
     def get_start_node(self) -> PipelineNode | None:
         """Find the start node."""
         for node in self.nodes:
-            if node.type == 'start':
+            if node.type == "start":
                 return node
         return None
 
     def get_end_node(self) -> PipelineNode | None:
         """Find the end node."""
         for node in self.nodes:
-            if node.type == 'end':
+            if node.type == "end":
                 return node
         return None
 
     def get_frame_nodes(self) -> list[PipelineNode]:
         """Get all frame nodes."""
-        return [node for node in self.nodes if node.type == 'frame']
+        return [node for node in self.nodes if node.type == "frame"]
 
     def get_execution_order(self, respect_priority: bool = True) -> list[str]:
         """
@@ -411,7 +411,7 @@ class PipelineConfig(BaseDomainModel):
 
             # Collect frame nodes
             node = next((n for n in self.nodes if n.id == node_id), None)
-            if node and node.type == 'frame':
+            if node and node.type == "frame":
                 frame_nodes.append(node)
 
             # Add neighbors to queue
@@ -424,7 +424,7 @@ class PipelineConfig(BaseDomainModel):
             # Get frame definitions to access priority
             frames_with_priority = []
             for node in frame_nodes:
-                frame_id = node.data.get('frameId')
+                frame_id = node.data.get("frameId")
                 if frame_id:
                     frame_def = get_frame_by_id(frame_id)
                     if frame_def:
@@ -433,8 +433,7 @@ class PipelineConfig(BaseDomainModel):
             # Sort by frame priority
             sorted_pairs = sorted(
                 frames_with_priority,
-                key=lambda pair: get_frames_by_priority([pair[1]])[0].priority
-                if pair[1] else 'medium'
+                key=lambda pair: get_frames_by_priority([pair[1]])[0].priority if pair[1] else "medium",
             )
 
             return [node.id for node, _ in sorted_pairs]
@@ -460,7 +459,7 @@ class PipelineConfig(BaseDomainModel):
         frames = []
         node_map = {}  # frame_id → node_id mapping
         for node in frame_nodes:
-            frame_id = node.data.get('frameId')
+            frame_id = node.data.get("frameId")
             if frame_id:
                 frame_def = get_frame_by_id(frame_id)
                 if frame_def:

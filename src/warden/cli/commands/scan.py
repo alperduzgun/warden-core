@@ -22,6 +22,7 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
         # We can reuse the bridge check or try to instantiate a lightweight client
         from warden.llm.factory import create_client
         from warden.shared.utils.prompt_sanitizer import PromptSanitizer
+
         client = create_client()
 
         # 1. Check availability first (Fail fast)
@@ -33,18 +34,18 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
 
         # 2. Aggregate Findings
         findings = []
-        frame_results = result_data.get('frame_results', result_data.get('frameResults', []))
+        frame_results = result_data.get("frame_results", result_data.get("frameResults", []))
         for frame in frame_results:
-            findings.extend(frame.get('findings', []))
+            findings.extend(frame.get("findings", []))
         categories = {}
 
         # If too many findings, limit to critical ones
-        critical_findings = [f for f in findings if str(f.get('severity')).upper() == 'CRITICAL']
+        critical_findings = [f for f in findings if str(f.get("severity")).upper() == "CRITICAL"]
         if not critical_findings:
-            critical_findings = findings[:50] # Fallback to top 50 if no explicit critical tag
+            critical_findings = findings[:50]  # Fallback to top 50 if no explicit critical tag
 
         for f in critical_findings:
-            cat = f.get('category', 'General')
+            cat = f.get("category", "General")
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append(f)
@@ -54,10 +55,10 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
             f"Scan Failed.",
             f"Stats: {critical_count} critical issues, {frames_failed} failed frames.",
             "",
-            "Top Issue Categories:"
+            "Top Issue Categories:",
         ]
 
-        for cat, items in list(categories.items())[:5]: # Top 5 categories
+        for cat, items in list(categories.items())[:5]:  # Top 5 categories
             check = items[0]
             # Sanitize all user-controlled strings (category, message, file_path)
             # Fail-safe: If sanitizer fails, redact entirely
@@ -67,16 +68,16 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
                 safe_cat = "[REDACTED_CATEGORY]"
 
             try:
-                safe_msg = PromptSanitizer.escape_prompt_injection(str(check.get('message', '')))
+                safe_msg = PromptSanitizer.escape_prompt_injection(str(check.get("message", "")))
             except Exception:
                 safe_msg = "[REDACTED_MESSAGE]"
 
             try:
-                safe_path = PromptSanitizer.escape_prompt_injection(str(check.get('file_path', '')))
+                safe_path = PromptSanitizer.escape_prompt_injection(str(check.get("file_path", "")))
             except Exception:
                 safe_path = "[REDACTED_PATH]"
 
-            line_num = check.get('line_number', 0)
+            line_num = check.get("line_number", 0)
 
             context_parts.append(f"\n- {safe_cat} ({len(items)} occurrences)")
             context_parts.append(f"  Example: {safe_msg} at {safe_path}:{line_num}")
@@ -99,9 +100,9 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
             client.complete_async(
                 prompt,
                 system_prompt="You are a warm, helpful DevSecOps assistant. Explain failures clearly.",
-                use_fast_tier=True # Force Fast Tier (Qwen)
+                use_fast_tier=True,  # Force Fast Tier (Qwen)
             ),
-            timeout=5.0
+            timeout=5.0,
         )
 
         console.print("\n[bold red]🤖 Qwen Analysis:[/bold red]")
@@ -113,6 +114,7 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
         # Silent fail - this is an enhancement, not a critical path
         # console.print(f"[dim]AI Analysis unavailable: {e}[/dim]")
         pass
+
 
 def _display_llm_summary(metrics: dict):
     """Display LLM performance summary in CLI."""
@@ -130,7 +132,7 @@ def _display_llm_summary(metrics: dict):
         console.print(f"    Success Rate: {fast['successRate']}%")
         console.print(f"    Avg Response: {fast['avgResponseTime']}")
         console.print(f"    Total Time: {fast['totalTime']} ({fast['timePercentage']}% of total)")
-        if fast.get('timeouts', 0) > 0:
+        if fast.get("timeouts", 0) > 0:
             console.print(f"    [yellow]⚠️  Timeouts: {fast['timeouts']}[/yellow]")
 
     if metrics.get("smartTier"):
@@ -150,14 +152,15 @@ def _display_llm_summary(metrics: dict):
         console.print("\n  [yellow]⚠️  Performance Issues:[/yellow]")
         for issue in metrics["issues"]:
             console.print(f"    - {issue['message']}")
-            if issue.get('recommendations'):
-                for rec in issue['recommendations']:
+            if issue.get("recommendations"):
+                for rec in issue["recommendations"]:
                     console.print(f"      → {rec}")
 
 
 def _display_frame_cost_breakdown():
     """Display per-frame LLM cost breakdown table."""
     from warden.llm.metrics import get_global_metrics_collector
+
     collector = get_global_metrics_collector()
     frame_metrics = collector.get_frame_metrics()
 
@@ -184,7 +187,7 @@ def _display_frame_cost_breakdown():
             f"{fm.output_tokens:,}",
             f"{fm.total_duration_ms / 1000:.1f}s",
             f"${fm.estimated_cost_usd:.4f}",
-            str(fm.errors) if fm.errors > 0 else "-"
+            str(fm.errors) if fm.errors > 0 else "-",
         )
 
     table.add_section()
@@ -198,7 +201,7 @@ def _display_memory_stats(snapshot) -> None:
     console.print("\n[bold cyan]🧠 Memory Profiling Results[/bold cyan]")
 
     # Get top 10 memory consumers
-    top_stats = snapshot.statistics('lineno')[:10]
+    top_stats = snapshot.statistics("lineno")[:10]
 
     console.print("\n[bold]Top 10 Memory Allocations:[/bold]")
     for index, stat in enumerate(top_stats, 1):
@@ -206,7 +209,7 @@ def _display_memory_stats(snapshot) -> None:
         console.print(f"     Size: {stat.size / 1024 / 1024:.2f} MB ({stat.count} blocks)")
 
     # Total memory usage
-    total = sum(stat.size for stat in snapshot.statistics('filename'))
+    total = sum(stat.size for stat in snapshot.statistics("filename"))
     console.print(f"\n[bold]Total Memory Usage:[/bold] {total / 1024 / 1024:.2f} MB")
 
     # Check for potential leaks (allocations > 10MB)
@@ -220,7 +223,9 @@ def _display_memory_stats(snapshot) -> None:
 def scan_command(
     paths: list[str] | None = typer.Argument(None, help="Files or directories to scan"),
     frames: list[str] | None = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
-    format: str = typer.Option("text", "--format", help="Output format: text, json, sarif, junit, html, pdf, shield/badge"),
+    format: str = typer.Option(
+        "text", "--format", help="Output format: text, json, sarif, junit, html, pdf, shield/badge"
+    ),
     output: str | None = typer.Option(None, "--output", "-o", help="Output file path"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
@@ -242,6 +247,7 @@ def scan_command(
     # Start memory profiling if requested
     if memory_profile:
         import tracemalloc
+
         tracemalloc.start()
         console.print("[dim]🧠 Memory profiling enabled[/dim]\n")
 
@@ -271,6 +277,7 @@ def scan_command(
         if diff:
             try:
                 from warden.cli.commands.helpers.git_helper import GitHelper
+
                 console.print(f"[dim]🔍 Detecting changed files relative to '{base}'...[/dim]")
                 git_helper = GitHelper(Path.cwd())
                 changed_files = git_helper.get_changed_files(base_branch=base)
@@ -289,6 +296,7 @@ def scan_command(
         # Load baseline fingerprints if available
         try:
             from warden.cli.commands.helpers.baseline_manager import BaselineManager
+
             baseline_mgr = BaselineManager(Path.cwd())
             baseline_fingerprints = baseline_mgr.get_fingerprints()
             if baseline_fingerprints:
@@ -301,13 +309,16 @@ def scan_command(
         if ci:
             try:
                 from warden.analysis.services.intelligence_loader import IntelligenceLoader
+
                 intel_loader = IntelligenceLoader(Path.cwd())
                 if intel_loader.load():
                     intelligence_context = intel_loader.to_context_dict()
                     quality = intel_loader.get_quality_score()
                     modules = len(intel_loader.get_module_map())
                     posture = intel_loader.get_security_posture().value
-                    console.print(f"[dim]🧠 Intelligence loaded: {modules} modules, quality={quality}/100, posture={posture}[/dim]")
+                    console.print(
+                        f"[dim]🧠 Intelligence loaded: {modules} modules, quality={quality}/100, posture={posture}[/dim]"
+                    )
 
                     # Show risk distribution for changed files in diff mode
                     if diff and paths:
@@ -318,26 +329,41 @@ def scan_command(
                         critical = risk_counts["P0"] + risk_counts["P1"]
                         low_risk = risk_counts["P3"]
                         if critical > 0:
-                            console.print(f"[dim]   ⚠️  {critical} critical (P0/P1) + {low_risk} low-risk (P3) files changed[/dim]")
+                            console.print(
+                                f"[dim]   ⚠️  {critical} critical (P0/P1) + {low_risk} low-risk (P3) files changed[/dim]"
+                            )
                 else:
-                    console.print("[yellow]⚠️  No pre-computed intelligence found. Run 'warden init' first for optimal CI performance.[/yellow]")
+                    console.print(
+                        "[yellow]⚠️  No pre-computed intelligence found. Run 'warden init' first for optimal CI performance.[/yellow]"
+                    )
             except ImportError:
                 console.print("[dim]Intelligence loader not available[/dim]")
             except Exception as e:
                 console.print(f"[yellow]⚠️  Intelligence load failed: {e}[/yellow]")
 
-        exit_code = asyncio.run(_run_scan_async(
-            paths, frames, format, output, verbose, level,
-            memory_profile, ci, baseline_fingerprints, intelligence_context,
-            update_baseline=not no_update_baseline,
-            cost_report=cost_report,
-            auto_fix=auto_fix,
-            dry_run=dry_run
-        ))
+        exit_code = asyncio.run(
+            _run_scan_async(
+                paths,
+                frames,
+                format,
+                output,
+                verbose,
+                level,
+                memory_profile,
+                ci,
+                baseline_fingerprints,
+                intelligence_context,
+                update_baseline=not no_update_baseline,
+                cost_report=cost_report,
+                auto_fix=auto_fix,
+                dry_run=dry_run,
+            )
+        )
 
         # Display memory stats if profiling was enabled
         if memory_profile:
             import tracemalloc
+
             snapshot = tracemalloc.take_snapshot()
             _display_memory_stats(snapshot)
             tracemalloc.stop()
@@ -351,7 +377,9 @@ def scan_command(
         raise
     except Exception as e:
         console.print(f"\n[bold red]Error:[/bold red] {e}")
-        console.print("[yellow]💡 Tip:[/yellow] Run [bold cyan]warden doctor[/bold cyan] to check your setup, or [bold cyan]warden init --force[/bold cyan] to reconfigure.")
+        console.print(
+            "[yellow]💡 Tip:[/yellow] Run [bold cyan]warden doctor[/bold cyan] to check your setup, or [bold cyan]warden init --force[/bold cyan] to reconfigure."
+        )
         raise typer.Exit(1)
 
 
@@ -389,56 +417,66 @@ async def _process_stream_events(
             event_type = event.get("type")
 
             if event_type == "progress":
-                evt = event['event']
-                data = event.get('data', {})
+                evt = event["event"]
+                data = event.get("data", {})
 
                 if verbose:
                     console.print(f"[dim]Progress Event: {evt} - {data}[/dim]")
 
                 if evt == "discovery_complete":
-                    total_units = data.get('total_files', 0)
-                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})")
+                    total_units = data.get("total_files", 0)
+                    status.update(
+                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})"
+                    )
 
                 elif evt == "pipeline_started":
                     if total_units <= 0:
-                        total_units = data.get('file_count', 0)
-                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Starting pipeline...[/dim] (0/{total_units})")
+                        total_units = data.get("file_count", 0)
+                    status.update(
+                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Starting pipeline...[/dim] (0/{total_units})"
+                    )
 
                 elif evt == "progress_init":
-                    new_total = data.get('total_units', 0)
+                    new_total = data.get("total_units", 0)
                     if new_total > 0:
                         total_units = new_total
-                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    status.update(
+                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})"
+                    )
 
                 elif evt == "progress_update":
-                    increment = data.get('increment', 0)
+                    increment = data.get("increment", 0)
                     if increment > 0:
                         processed_units += increment
                     elif "frame_id" in data:
                         processed_units += 1
 
-                    new_status = data.get('status', data.get('phase'))
+                    new_status = data.get("status", data.get("phase"))
                     if new_status:
                         current_phase = new_status
 
                     if total_units > 0 and processed_units > total_units:
                         processed_units = total_units
 
-                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    status.update(
+                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})"
+                    )
 
                 elif evt == "phase_started":
-                    current_phase = data.get('phase', current_phase)
-                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    current_phase = data.get("phase", current_phase)
+                    status.update(
+                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})"
+                    )
                     if verbose:
                         console.print(f"[bold blue]▶ Phase:[/bold blue] {current_phase}")
 
                 elif evt == "frame_completed":
                     frame_stats["total"] += 1
-                    name = data.get('frame_name', data.get('frame_id'))
-                    frame_status = data.get('status', 'unknown')
+                    name = data.get("frame_name", data.get("frame_id"))
+                    frame_status = data.get("status", "unknown")
                     icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️"
                     style = "green" if frame_status == "passed" else "red" if frame_status == "failed" else "yellow"
-                    findings_count = data.get('findings', data.get('issues_found', 0))
+                    findings_count = data.get("findings", data.get("issues_found", 0))
 
                     if frame_status == "passed":
                         frame_stats["passed"] += 1
@@ -448,10 +486,12 @@ async def _process_stream_events(
                         frame_stats["skipped"] += 1
 
                     if verbose:
-                        console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
+                        console.print(
+                            f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues"
+                        )
 
             elif event_type == "result":
-                final_result_data = event['data']
+                final_result_data = event["data"]
 
     return final_result_data, frame_stats, total_units
 
@@ -460,89 +500,94 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
     """Render scan results as a Rich text report to the console."""
     # Classify findings into core vs linter
     all_findings = (
-        res.get('validated_issues')
-        or res.get('findings')
-        or res.get('true_positives')
-        or res.get('verified_findings')
+        res.get("validated_issues")
+        or res.get("findings")
+        or res.get("true_positives")
+        or res.get("verified_findings")
         or []
     )
 
     for f in all_findings:
-        detail = f.get('detail') or ""
-        if "(Ruff)" in detail or str(f.get('id', '')).startswith("lint_"):
+        detail = f.get("detail") or ""
+        if "(Ruff)" in detail or str(f.get("id", "")).startswith("lint_"):
             pass  # linter finding (counted but not separately displayed yet)
 
     # Calculate metrics
     total_findings = len(all_findings)
     security_issues = sum(
-        1 for f in all_findings
-        if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets']
+        1
+        for f in all_findings
+        if f.get("category", "").lower() in ["security", "authentication", "authorization", "encryption", "secrets"]
     )
     quality_issues = total_findings - security_issues
-    blocker_issues = sum(1 for f in all_findings if f.get('isBlocker', False) is True)
+    blocker_issues = sum(1 for f in all_findings if f.get("isBlocker", False) is True)
     critical_blockers = sum(
-        1 for f in all_findings
-        if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical'
+        1 for f in all_findings if f.get("isBlocker", False) is True and str(f.get("severity")).lower() == "critical"
     )
 
     total_files_scanned = res.get(
-        'file_count',
-        res.get('total_files_scanned', total_units if total_units > 0 else len({f.get('file_path') for f in all_findings if f.get('file_path')})),
+        "file_count",
+        res.get(
+            "total_files_scanned",
+            total_units if total_units > 0 else len({f.get("file_path") for f in all_findings if f.get("file_path")}),
+        ),
     )
 
-    baseline_info = res.get('baseline_update', {})
-    technical_debt = baseline_info.get('total_debt', total_findings)
-    new_debt_added = baseline_info.get('new_debt', total_findings)
+    baseline_info = res.get("baseline_update", {})
+    technical_debt = baseline_info.get("total_debt", total_findings)
+    new_debt_added = baseline_info.get("new_debt", total_findings)
 
     # Fallback: try pipeline summary fields when no findings objects exist
     if total_findings == 0:
-        if 'total_issues_found' in res:
-            total_findings = res['total_issues_found']
-        elif 'final_issue_count' in res:
-            total_findings = res['final_issue_count']
-        elif 'issues_found' in res:
-            total_findings = res['issues_found']
-        elif 'pipeline_summary' in res and isinstance(res['pipeline_summary'], dict):
-            pipeline_summary = res['pipeline_summary']
-            if 'issues_found' in pipeline_summary:
-                total_findings = pipeline_summary['issues_found']
-            elif 'findings_count' in pipeline_summary:
-                total_findings = pipeline_summary['findings_count']
+        if "total_issues_found" in res:
+            total_findings = res["total_issues_found"]
+        elif "final_issue_count" in res:
+            total_findings = res["final_issue_count"]
+        elif "issues_found" in res:
+            total_findings = res["issues_found"]
+        elif "pipeline_summary" in res and isinstance(res["pipeline_summary"], dict):
+            pipeline_summary = res["pipeline_summary"]
+            if "issues_found" in pipeline_summary:
+                total_findings = pipeline_summary["issues_found"]
+            elif "findings_count" in pipeline_summary:
+                total_findings = pipeline_summary["findings_count"]
 
     # Re-check with validated/verified findings
     validated_findings = (
-        res.get('validated_issues', [])
-        or res.get('true_positives', [])
-        or res.get('verified_findings', [])
-        or res.get('verified_issues', [])
-        or res.get('validated_findings', [])
+        res.get("validated_issues", [])
+        or res.get("true_positives", [])
+        or res.get("verified_findings", [])
+        or res.get("verified_issues", [])
+        or res.get("validated_findings", [])
         or all_findings
     )
     if validated_findings and validated_findings != all_findings:
         total_findings = len(validated_findings)
         security_issues = sum(
-            1 for f in validated_findings
-            if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets']
+            1
+            for f in validated_findings
+            if f.get("category", "").lower() in ["security", "authentication", "authorization", "encryption", "secrets"]
         )
         quality_issues = total_findings - security_issues
-        blocker_issues = sum(1 for f in validated_findings if f.get('isBlocker', False) is True)
+        blocker_issues = sum(1 for f in validated_findings if f.get("isBlocker", False) is True)
         critical_blockers = sum(
-            1 for f in validated_findings
-            if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical'
+            1
+            for f in validated_findings
+            if f.get("isBlocker", False) is True and str(f.get("severity")).lower() == "critical"
         )
 
     # Final fallback: check verified count fields
     if total_findings == 0:
         verified_count = res.get(
-            'verified_count',
-            res.get('total_verified', res.get('final_findings_count', res.get('issues_found', 0))),
+            "verified_count",
+            res.get("total_verified", res.get("final_findings_count", res.get("issues_found", 0))),
         )
         if verified_count > 0:
             total_findings = verified_count
-            security_issues = res.get('security_issues_count', res.get('security_findings', 0))
+            security_issues = res.get("security_issues_count", res.get("security_findings", 0))
             quality_issues = total_findings - security_issues
-            blocker_issues = res.get('blocker_issues_count', res.get('blocker_findings', 0))
-            critical_blockers = res.get('critical_blocker_count', res.get('critical_findings', 0))
+            blocker_issues = res.get("blocker_issues_count", res.get("blocker_findings", 0))
+            critical_blockers = res.get("critical_blocker_count", res.get("critical_findings", 0))
 
     # Build Rich table
     table = Table(title="Scan Results")
@@ -550,7 +595,7 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
     table.add_column("Value", style="magenta")
 
     table.add_row("Total Files Scanned", str(total_files_scanned))
-    table.add_row("Total Frames", str(res.get('total_frames', 0)))
+    table.add_row("Total Frames", str(res.get("total_frames", 0)))
     table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
     table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
 
@@ -570,13 +615,13 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
     console.print("\n", table)
 
     # Missing tool hints
-    frame_results = res.get('results', [])
+    frame_results = res.get("results", [])
     missing_tools = []
     for fr in frame_results:
-        meta = fr.get('metadata', {}) or {}
-        if meta.get('status') == 'skipped_tool_missing':
-            hint = meta.get('install_hint')
-            frame_name = fr.get('frame_name', 'Unknown Frame')
+        meta = fr.get("metadata", {}) or {}
+        if meta.get("status") == "skipped_tool_missing":
+            hint = meta.get("install_hint")
+            frame_name = fr.get("frame_name", "Unknown Frame")
             if hint:
                 missing_tools.append((frame_name, hint))
 
@@ -587,12 +632,12 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
         console.print("")
 
     # LLM metrics
-    llm_metrics = res.get('llmMetrics', {})
+    llm_metrics = res.get("llmMetrics", {})
     if llm_metrics:
         _display_llm_summary(llm_metrics)
 
     # Success/fail banner
-    status_raw = res.get('status')
+    status_raw = res.get("status")
     is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
 
     if verbose:
@@ -620,9 +665,9 @@ def _generate_configured_reports(final_result_data: dict, verbose: bool) -> None
         with open(config_path) as f:
             config = yaml.safe_load(f)
 
-        ci_config = config.get('ci', {})
-        advanced_config = config.get('advanced', {})
-        outputs = ci_config.get('output', []) or advanced_config.get('output', [])
+        ci_config = config.get("ci", {})
+        advanced_config = config.get("advanced", {})
+        outputs = ci_config.get("output", []) or advanced_config.get("output", [])
 
         if not outputs:
             return
@@ -632,8 +677,8 @@ def _generate_configured_reports(final_result_data: dict, verbose: bool) -> None
         generator = ReportGenerator()
 
         for out in outputs:
-            fmt = out.get('format')
-            path_str = out.get('path')
+            fmt = out.get("format")
+            path_str = out.get("path")
             if not fmt or not path_str:
                 continue
 
@@ -641,27 +686,27 @@ def _generate_configured_reports(final_result_data: dict, verbose: bool) -> None
             out_path.parent.mkdir(parents=True, exist_ok=True)
 
             try:
-                if fmt == 'json':
+                if fmt == "json":
                     generator.generate_json_report(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]JSON[/cyan]: {path_str}")
-                elif fmt == 'markdown' or fmt == 'md':
+                elif fmt == "markdown" or fmt == "md":
                     pass
-                elif fmt == 'sarif':
+                elif fmt == "sarif":
                     generator.generate_sarif_report(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]SARIF[/cyan]: {path_str}")
-                elif fmt == 'junit':
+                elif fmt == "junit":
                     generator.generate_junit_report(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]JUnit[/cyan]: {path_str}")
-                elif fmt == 'html':
+                elif fmt == "html":
                     generator.generate_html_report(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]HTML[/cyan]: {path_str}")
-                elif fmt == 'pdf':
+                elif fmt == "pdf":
                     generator.generate_pdf_report(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]PDF[/cyan]: {path_str}")
-                elif fmt == 'shield':
+                elif fmt == "shield":
                     generator.generate_svg_badge(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]SHIELD (SVG)[/cyan]: {path_str}")
-                elif fmt == 'badge':
+                elif fmt == "badge":
                     generator.generate_svg_badge(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]BADGE (SVG)[/cyan]: {path_str}")
 
@@ -674,6 +719,7 @@ def _generate_configured_reports(final_result_data: dict, verbose: bool) -> None
         console.print(f"\n[red]⚠️  Report generation failed: {e}[/red]")
         if verbose:
             import traceback
+
             traceback.print_exc()
 
 
@@ -684,11 +730,11 @@ def _write_ai_status_file(final_result_data: dict) -> None:
         if not warden_dir.exists():
             return
 
-        status_raw = final_result_data.get('status')
+        status_raw = final_result_data.get("status")
         is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
         status_icon = "✅ PASS" if is_success else "❌ FAIL"
-        critical_count = final_result_data.get('critical_findings', 0)
-        total_count = final_result_data.get('total_findings', 0)
+        critical_count = final_result_data.get("critical_findings", 0)
+        total_count = final_result_data.get("total_findings", 0)
         scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         status_content = f"""# Warden Security Status
@@ -717,6 +763,7 @@ def _update_baseline(
     """Update baseline with scan results and display debt report."""
     try:
         from warden.cli.commands.helpers.baseline_manager import BaselineManager
+
         console.print("\n[bold blue]📉 Updating Baseline...[/bold blue]")
 
         baseline_mgr = BaselineManager(Path.cwd())
@@ -737,24 +784,21 @@ def _update_baseline(
         console.print(f"[green]✓ Baseline updated![/green]")
         console.print(f"[dim]   Modules updated: {update_stats['modules_updated']}[/dim]")
 
-        if update_stats['total_new_debt'] > 0:
+        if update_stats["total_new_debt"] > 0:
             console.print(f"[yellow]   New debt items: {update_stats['total_new_debt']}[/yellow]")
-        if update_stats['total_resolved_debt'] > 0:
+        if update_stats["total_resolved_debt"] > 0:
             console.print(f"[green]   Resolved debt: {update_stats['total_resolved_debt']}[/green]")
 
         debt_report = baseline_mgr.get_debt_report()
         for warning in debt_report.get("warnings", []):
-            level_color = {
-                "critical": "red",
-                "warning": "yellow",
-                "info": "dim"
-            }.get(warning.get("level"), "dim")
+            level_color = {"critical": "red", "warning": "yellow", "info": "dim"}.get(warning.get("level"), "dim")
             console.print(f"[{level_color}]   ⚠️  {warning['message']}[/{level_color}]")
 
     except Exception as e:
         console.print(f"[yellow]⚠️  Baseline update failed: {e}[/yellow]")
         if verbose:
             import traceback
+
             traceback.print_exc()
 
 
@@ -777,11 +821,11 @@ async def _run_scan_async(
     update_baseline: bool = False,
     cost_report: bool = False,
     auto_fix: bool = False,
-    dry_run: bool = False
+    dry_run: bool = False,
 ) -> int:
     """Async implementation of scan command."""
 
-    display_paths = f"{paths[0]} + {len(paths)-1} others" if len(paths) > 1 else str(paths[0])
+    display_paths = f"{paths[0]} + {len(paths) - 1} others" if len(paths) > 1 else str(paths[0])
     console.print("[bold cyan]🛡️  Warden Scanner[/bold cyan]")
     console.print(f"[dim]Scanning: {display_paths}[/dim]")
 
@@ -819,6 +863,7 @@ async def _run_scan_async(
         # 4. Generate explicit --output report
         if output and final_result_data:
             from warden.reports.generator import ReportGenerator
+
             generator = ReportGenerator()
             out_path = Path(output)
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -857,7 +902,7 @@ async def _run_scan_async(
                 from warden.fortification.application.auto_fixer import AutoFixer
 
                 fixer = AutoFixer(project_root=Path.cwd(), dry_run=dry_run)
-                fortifications = final_result_data.get('fortifications', [])
+                fortifications = final_result_data.get("fortifications", [])
 
                 if fortifications:
                     mode = "DRY RUN" if dry_run else "APPLYING"
@@ -876,18 +921,23 @@ async def _run_scan_async(
                 console.print(f"[yellow]⚠️  Auto-fix failed: {e}[/yellow]")
 
         # 7. Exit code decision
-        status_val = final_result_data.get('status') if final_result_data else None
+        status_val = final_result_data.get("status") if final_result_data else None
         pipeline_ok = final_result_data and str(status_val).upper() in [
-            "2", "5", "SUCCESS", "COMPLETED", "COMPLETED_WITH_FAILURES",
-            "PIPELINESTATUS.COMPLETED", "PIPELINESTATUS.COMPLETED_WITH_FAILURES",
+            "2",
+            "5",
+            "SUCCESS",
+            "COMPLETED",
+            "COMPLETED_WITH_FAILURES",
+            "PIPELINESTATUS.COMPLETED",
+            "PIPELINESTATUS.COMPLETED_WITH_FAILURES",
         ]
 
-        critical_count = final_result_data.get('critical_findings', 0) if final_result_data else 0
-        frames_failed = final_result_data.get('frames_failed', 0) if final_result_data else 0
+        critical_count = final_result_data.get("critical_findings", 0) if final_result_data else 0
+        frames_failed = final_result_data.get("frames_failed", 0) if final_result_data else 0
 
         if not pipeline_ok:
-             console.print("[bold red]❌ Pipeline did not complete successfully.[/bold red]")
-             return 1
+            console.print("[bold red]❌ Pipeline did not complete successfully.[/bold red]")
+            return 1
 
         if critical_count > 0:
             console.print(f"[bold red]❌ Scan failed: {critical_count} critical issues found.[/bold red]")
@@ -912,5 +962,6 @@ async def _run_scan_async(
 
         if verbose:
             import traceback
+
             traceback.print_exc()
         return 1

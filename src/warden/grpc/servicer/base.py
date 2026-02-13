@@ -76,15 +76,11 @@ class WardenServicerBase:
         self.total_findings = 0
 
         # Initialize repositories (dependency injection pattern)
-        self._issue_repo: IIssueRepository = issue_repository or FileIssueRepository(
+        self._issue_repo: IIssueRepository = issue_repository or FileIssueRepository(self._project_root)
+        self._suppression_repo: ISuppressionRepository = suppression_repository or FileSuppressionRepository(
             self._project_root
         )
-        self._suppression_repo: ISuppressionRepository = (
-            suppression_repository or FileSuppressionRepository(self._project_root)
-        )
-        self._history_repo: IIssueHistoryRepository = (
-            history_repository or FileHistoryRepository(self._project_root)
-        )
+        self._history_repo: IIssueHistoryRepository = history_repository or FileHistoryRepository(self._project_root)
 
         # In-memory cache for backward compatibility with mixins
         # These will be synced with repositories
@@ -243,9 +239,7 @@ class WardenServicerBase:
         else:
             # Update existing issue
             existing_issue["last_seen"] = datetime.now().isoformat()
-            existing_issue["occurrence_count"] = (
-                existing_issue.get("occurrence_count", 0) + 1
-            )
+            existing_issue["occurrence_count"] = existing_issue.get("occurrence_count", 0) + 1
             issue_data = existing_issue
 
             # Log occurrence event

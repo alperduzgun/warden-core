@@ -7,6 +7,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class RegistryClient:
     """
     Client for interacting with the Warden Hub/Registry.
@@ -36,6 +37,7 @@ class RegistryClient:
             config_path = Path.home() / ".warden" / "config.yaml"
             if config_path.exists():
                 import yaml
+
                 with open(config_path) as f:
                     config = yaml.safe_load(f)
                     return config.get("hub", {}).get("url")
@@ -64,7 +66,7 @@ class RegistryClient:
         logger.info("syncing_registry_catalog", url=self.registry_url)
 
         try:
-            timeout_seconds = 10 # Fail Fast principle
+            timeout_seconds = 10  # Fail Fast principle
 
             if not (self.hub_dir / ".git").exists():
                 # Initial clone
@@ -73,7 +75,7 @@ class RegistryClient:
                     ["git", "clone", "--depth", "1", self.registry_url, str(self.hub_dir)],
                     check=True,
                     capture_output=True,
-                    timeout=timeout_seconds
+                    timeout=timeout_seconds,
                 )
             else:
                 # Update existing
@@ -82,7 +84,7 @@ class RegistryClient:
                     ["git", "-C", str(self.hub_dir), "pull", "origin", "master"],
                     check=True,
                     capture_output=True,
-                    timeout=timeout_seconds
+                    timeout=timeout_seconds,
                 )
 
             # Refresh cache
@@ -108,9 +110,11 @@ class RegistryClient:
         q = query.lower()
         results = []
         for frame in self._catalog_cache:
-            if (q in frame["name"].lower() or
-                q in frame.get("description", "").lower() or
-                q in frame.get("category", "").lower()):
+            if (
+                q in frame["name"].lower()
+                or q in frame.get("description", "").lower()
+                or q in frame.get("category", "").lower()
+            ):
                 results.append(frame)
         return results
 
@@ -159,12 +163,11 @@ class RegistryClient:
 
             # Heuristic 2: Name contains lang
             fname = frame["name"].lower()
-            if f" {lang} " in f" {fname} ": # Boundary check
+            if f" {lang} " in f" {fname} ":  # Boundary check
                 suggestions.append(frame["id"])
                 continue
 
             # Heuristic 3: Check description for "For Python" etc.
             # Keeping it strict for now to avoid noise.
 
-        return list(set(suggestions)) # Unique
-
+        return list(set(suggestions))  # Unique

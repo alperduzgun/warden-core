@@ -26,13 +26,15 @@ class AnalysisAdapter(BaseWardenAdapter):
         - warden_get_quality_score: Quality score
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_analyze_results",
-        "warden_get_trends",
-        "warden_get_frame_stats",
-        "warden_get_severity_stats",
-        "warden_get_quality_score",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_analyze_results",
+            "warden_get_trends",
+            "warden_get_frame_stats",
+            "warden_get_severity_stats",
+            "warden_get_quality_score",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.ANALYSIS
 
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
@@ -40,6 +42,7 @@ class AnalysisAdapter(BaseWardenAdapter):
         super().__init__(project_root, bridge)
         # Historical data for trends (bounded to prevent memory leaks in long-running processes)
         from collections import deque
+
         self._history: deque = deque(maxlen=1000)
         self._last_result: dict[str, Any] = {}
 
@@ -127,16 +130,18 @@ class AnalysisAdapter(BaseWardenAdapter):
         # Calculate quality score
         quality_score = self._calculate_quality_score(self._last_result)
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "run_id": run_id,
-            "trend": trend,
-            "quality_score": quality_score,
-            "new_issues": self._last_result.get("new_issues", 0),
-            "resolved_issues": self._last_result.get("resolved_issues", 0),
-            "persistent_issues": self._last_result.get("persistent_issues", 0),
-            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "run_id": run_id,
+                "trend": trend,
+                "quality_score": quality_score,
+                "new_issues": self._last_result.get("new_issues", 0),
+                "resolved_issues": self._last_result.get("resolved_issues", 0),
+                "persistent_issues": self._last_result.get("persistent_issues", 0),
+                "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     async def _get_trends_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get trend data over time."""
@@ -158,11 +163,13 @@ class AnalysisAdapter(BaseWardenAdapter):
         else:
             overall_trend = "STABLE"
 
-        return MCPToolResult.json_result({
-            "points": points,
-            "overall_trend": overall_trend,
-            "total_points": len(points),
-        })
+        return MCPToolResult.json_result(
+            {
+                "points": points,
+                "overall_trend": overall_trend,
+                "total_points": len(points),
+            }
+        )
 
     async def _get_frame_stats_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get per-frame statistics."""
@@ -195,14 +202,16 @@ class AnalysisAdapter(BaseWardenAdapter):
         # Calculate weighted score
         weighted = critical * 10 + high * 5 + medium * 2 + low * 1
 
-        return MCPToolResult.json_result({
-            "critical": critical,
-            "high": high,
-            "medium": medium,
-            "low": low,
-            "info": info,
-            "weighted_score": weighted,
-        })
+        return MCPToolResult.json_result(
+            {
+                "critical": critical,
+                "high": high,
+                "medium": medium,
+                "low": low,
+                "info": info,
+                "weighted_score": weighted,
+            }
+        )
 
     async def _get_quality_score_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get overall quality score."""
@@ -227,11 +236,13 @@ class AnalysisAdapter(BaseWardenAdapter):
             "maintainability": max(0, 100 - self._last_result.get("low_findings", 0) * 2),
         }
 
-        return MCPToolResult.json_result({
-            "score": score,
-            "grade": grade,
-            "breakdown": breakdown,
-        })
+        return MCPToolResult.json_result(
+            {
+                "score": score,
+                "grade": grade,
+                "breakdown": breakdown,
+            }
+        )
 
     def _calculate_quality_score(self, result: dict[str, Any]) -> float:
         """Calculate quality score from result."""
@@ -248,9 +259,11 @@ class AnalysisAdapter(BaseWardenAdapter):
     def record_result(self, result: dict[str, Any]) -> None:
         """Record a pipeline result for trend tracking."""
         self._last_result = result
-        self._history.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "total_issues": result.get("total_findings", 0),
-            "quality_score": self._calculate_quality_score(result),
-            **result,
-        })
+        self._history.append(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "total_issues": result.get("total_findings", 0),
+                "quality_score": self._calculate_quality_score(result),
+                **result,
+            }
+        )

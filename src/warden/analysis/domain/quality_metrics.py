@@ -166,7 +166,7 @@ class QualityMetrics(BaseDomainModel):
                 details={
                     "cyclomatic": self.cyclomatic_complexity,
                     "cognitive": self.cognitive_complexity,
-                }
+                },
             ),
             MetricBreakdown(
                 name="duplication",
@@ -175,7 +175,7 @@ class QualityMetrics(BaseDomainModel):
                 details={
                     "duplicate_blocks": self.duplicate_blocks,
                     "duplicate_lines": self.duplicate_lines,
-                }
+                },
             ),
             MetricBreakdown(
                 name="maintainability",
@@ -183,21 +183,16 @@ class QualityMetrics(BaseDomainModel):
                 weight=0.20,
                 details={
                     "lines_of_code": self.lines_of_code,
-                }
+                },
             ),
-            MetricBreakdown(
-                name="naming",
-                score=self.naming_score,
-                weight=0.15,
-                details={}
-            ),
+            MetricBreakdown(name="naming", score=self.naming_score, weight=0.15, details={}),
             MetricBreakdown(
                 name="documentation",
                 score=self.documentation_score,
                 weight=0.10,
                 details={
                     "coverage": f"{self.documentation_coverage:.1f}%",
-                }
+                },
             ),
             MetricBreakdown(
                 name="testability",
@@ -205,7 +200,7 @@ class QualityMetrics(BaseDomainModel):
                 weight=0.10,
                 details={
                     "test_coverage": f"{self.test_coverage:.1f}%",
-                }
+                },
             ),
         ]
 
@@ -274,7 +269,6 @@ class QualityMetrics(BaseDomainModel):
         data = {
             "overallScore": round(self.overall_score, 1),
             "qualityGrade": self.quality_grade,
-
             # Individual scores
             "scores": {
                 "complexity": round(self.complexity_score, 1),
@@ -284,7 +278,6 @@ class QualityMetrics(BaseDomainModel):
                 "documentation": round(self.documentation_score, 1),
                 "testability": round(self.testability_score, 1),
             },
-
             # Detailed metrics
             "metrics": {
                 "cyclomaticComplexity": self.cyclomatic_complexity,
@@ -295,22 +288,17 @@ class QualityMetrics(BaseDomainModel):
                 "testCoverage": round(self.test_coverage, 1),
                 "documentationCoverage": round(self.documentation_coverage, 1),
             },
-
             # Technical debt
             "technicalDebt": self.technical_debt_formatted,
             "technicalDebtHours": round(self.technical_debt_hours, 2),
-
             # Problem areas
             "hotspots": [h.to_json() for h in self.hotspots],
             "hotspotsCount": len(self.hotspots),
-
             # Quick wins
             "quickWins": [qw.to_json() for qw in self.quick_wins],
             "quickWinsCount": len(self.quick_wins),
-
             # Metric breakdowns
             "metricBreakdowns": [mb.to_json() for mb in self.metric_breakdowns],
-
             # Metadata
             "analyzedAt": self.analyzed_at,
             "analysisDuration": round(self.analysis_duration, 2),

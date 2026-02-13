@@ -101,9 +101,7 @@ class ProjectContext:
         self.all_files = list(self.root_path.rglob("*.py"))
 
         # Find all directories
-        self.all_directories = [
-            d for d in self.root_path.rglob("*") if d.is_dir()
-        ]
+        self.all_directories = [d for d in self.root_path.rglob("*") if d.is_dir()]
 
     def _discover_modules(self) -> None:
         """Discover Python modules (directories with __init__.py)."""
@@ -121,9 +119,7 @@ class ProjectContext:
                 module_name = self._get_module_name(directory)
 
                 # Calculate total lines
-                line_count = sum(
-                    len(f.read_text().splitlines()) for f in files if f.exists()
-                )
+                line_count = sum(len(f.read_text().splitlines()) for f in files if f.exists())
 
                 module = ModuleInfo(
                     path=directory,
@@ -279,9 +275,7 @@ class ProjectContext:
         has_tui = self._has_module_pattern("tui")
 
         # Check for web framework imports (heuristic)
-        has_web_framework = self._has_module_pattern("fastapi") or self._has_module_pattern(
-            "flask"
-        )
+        has_web_framework = self._has_module_pattern("fastapi") or self._has_module_pattern("flask")
 
         return (has_cli or has_tui) and not has_web_framework
 
@@ -299,9 +293,7 @@ class ProjectContext:
             "total_directories": len(self.all_directories),
             "total_lines": sum(m.line_count for m in self.modules),
             "average_module_size": (
-                sum(m.line_count for m in self.modules) // len(self.modules)
-                if self.modules
-                else 0
+                sum(m.line_count for m in self.modules) // len(self.modules) if self.modules else 0
             ),
         }
 

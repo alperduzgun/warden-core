@@ -15,10 +15,7 @@ console = Console()
 
 
 async def _refresh_intelligence_async(
-    root: Path,
-    force: bool = False,
-    module: str | None = None,
-    quick: bool = False
+    root: Path, force: bool = False, module: str | None = None, quick: bool = False
 ) -> bool:
     """
     Refresh project intelligence.
@@ -48,13 +45,16 @@ async def _refresh_intelligence_async(
         if last_modified:
             age = datetime.now(timezone.utc) - last_modified
             if age < timedelta(hours=24):
-                console.print(f"[dim]Intelligence is recent ({age.seconds // 3600}h old). Use --force to regenerate.[/dim]")
+                console.print(
+                    f"[dim]Intelligence is recent ({age.seconds // 3600}h old). Use --force to regenerate.[/dim]"
+                )
                 return False
 
     # Get all code files for analysis
-    code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.dart'}
+    code_extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".cpp", ".c", ".h", ".dart"}
     all_files = [
-        f for f in root.rglob("*")
+        f
+        for f in root.rglob("*")
         if f.is_file()
         and f.suffix in code_extensions
         and "node_modules" not in str(f)
@@ -85,10 +85,7 @@ async def _refresh_intelligence_async(
     # Filter by module if specified
     if module:
         console.print(f"[dim]Filtering for module: {module}[/dim]")
-        files = [
-            f for f in all_files
-            if module in str(f.relative_to(root))
-        ]
+        files = [f for f in all_files if module in str(f.relative_to(root))]
         if not files:
             console.print(f"[yellow]No files found for module '{module}'[/yellow]")
             return False
@@ -109,7 +106,9 @@ async def _refresh_intelligence_async(
             console.print("[dim]No new files found. Use --force for full refresh.[/dim]")
             return False
 
-        console.print(f"[dim]Quick mode: analyzing {len(new_files)} new files (skipping {len(files) - len(new_files)} existing)[/dim]")
+        console.print(
+            f"[dim]Quick mode: analyzing {len(new_files)} new files (skipping {len(files) - len(new_files)} existing)[/dim]"
+        )
         files = new_files
 
     console.print(f"[dim]Analyzing {len(files)} files...[/dim]")
@@ -153,7 +152,7 @@ async def _refresh_intelligence_async(
         architecture=architecture,
         security_posture=security_posture,
         module_map=merged_module_map,
-        project_name=root.name
+        project_name=root.name,
     )
 
     if success:
@@ -162,8 +161,7 @@ async def _refresh_intelligence_async(
         added = set(new_modules_dict.keys()) - set(old_modules_dict.keys())
         removed = set(old_modules_dict.keys()) - set(new_modules_dict.keys()) if not (module or quick) else set()
         changed = {
-            k for k in new_modules_dict.keys() & old_modules_dict.keys()
-            if new_modules_dict[k] != old_modules_dict[k]
+            k for k in new_modules_dict.keys() & old_modules_dict.keys() if new_modules_dict[k] != old_modules_dict[k]
         }
 
         if added or removed or changed:
@@ -184,7 +182,9 @@ async def _refresh_intelligence_async(
 
         console.print(f"\n[green]✓ Intelligence refreshed![/green]")
         console.print(f"[dim]Modules: {len(merged_module_map)} | Posture: {security_posture.value}[/dim]")
-        console.print(f"[dim]Risk: P0={risk_counts['P0']}, P1={risk_counts['P1']}, P2={risk_counts['P2']}, P3={risk_counts['P3']}[/dim]")
+        console.print(
+            f"[dim]Risk: P0={risk_counts['P0']}, P1={risk_counts['P1']}, P2={risk_counts['P2']}, P3={risk_counts['P3']}[/dim]"
+        )
         return True
 
     return False
@@ -249,6 +249,7 @@ def refresh_command(
         console.print("[dim]Running scan to update baseline...[/dim]")
         try:
             from warden.cli.commands.init import _create_baseline_async
+
             config_path = warden_dir / "config.yaml"
             asyncio.run(_create_baseline_async(root, config_path))
         except Exception as e:

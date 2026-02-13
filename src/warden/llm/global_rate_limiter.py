@@ -39,13 +39,11 @@ class GlobalRateLimiter:
             # Fast tier providers (high limits)
             "qwen": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
             "ollama": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
-
             # Smart tier providers (conservative limits)
             "openai": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
             "azure": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
             "anthropic": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
             "gemini": RateLimiter(RateLimitConfig(rpm=15, tpm=30000)),
-
             # Default fallback
             "default": RateLimiter(RateLimitConfig(rpm=10, tpm=10000)),
         }

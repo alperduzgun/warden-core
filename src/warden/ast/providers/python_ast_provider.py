@@ -123,7 +123,9 @@ class PythonASTProvider(IASTProvider):
                         start_column=e.offset or 0,
                         end_line=e.lineno or 0,
                         end_column=(e.offset or 0) + 1,
-                    ) if e.lineno else None,
+                    )
+                    if e.lineno
+                    else None,
                     error_code="E0001",
                     severity="error",
                 )
@@ -273,7 +275,7 @@ class PythonASTProvider(IASTProvider):
                     base_names.append(base.id)
                 elif isinstance(base, ast.Attribute):
                     # Handle cases like enum.Enum
-                    base_names.append(getattr(base, 'attr', ''))
+                    base_names.append(getattr(base, "attr", ""))
             attributes["bases"] = base_names
         elif isinstance(py_node, ast.AnnAssign):
             # Store type annotation for field type extraction
@@ -283,7 +285,9 @@ class PythonASTProvider(IASTProvider):
                 elif isinstance(py_node.annotation, ast.Constant):
                     attributes["type_annotation"] = str(py_node.annotation.value)
                 else:
-                    attributes["type_annotation"] = ast.unparse(py_node.annotation) if hasattr(ast, 'unparse') else "Any"
+                    attributes["type_annotation"] = (
+                        ast.unparse(py_node.annotation) if hasattr(ast, "unparse") else "Any"
+                    )
 
         return ASTNode(
             node_type=node_type,
@@ -317,10 +321,10 @@ class PythonASTProvider(IASTProvider):
                 if isinstance(base, ast.Name):
                     base_name = base.id
                 elif isinstance(base, ast.Attribute):
-                    base_name = getattr(base, 'attr', '')
+                    base_name = getattr(base, "attr", "")
 
                 # Check if base is an Enum type
-                if base_name in ('Enum', 'IntEnum', 'StrEnum', 'Flag', 'IntFlag'):
+                if base_name in ("Enum", "IntEnum", "StrEnum", "Flag", "IntFlag"):
                     return ASTNodeType.ENUM
 
             # Regular class

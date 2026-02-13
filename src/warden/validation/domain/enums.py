@@ -45,7 +45,7 @@ class FramePriority(IntEnum):
             FramePriority.HIGH: "high",
             FramePriority.MEDIUM: "medium",
             FramePriority.LOW: "low",
-            FramePriority.INFORMATIONAL: "low"  # Map to low
+            FramePriority.INFORMATIONAL: "low",  # Map to low
         }
         return mapping[self]
 
@@ -63,12 +63,7 @@ class FramePriority(IntEnum):
         Raises:
             ValueError: If value is not a valid priority string
         """
-        mapping = {
-            "critical": cls.CRITICAL,
-            "high": cls.HIGH,
-            "medium": cls.MEDIUM,
-            "low": cls.LOW
-        }
+        mapping = {"critical": cls.CRITICAL, "high": cls.HIGH, "medium": cls.MEDIUM, "low": cls.LOW}
         if value not in mapping:
             raise ValueError(f"Invalid panel priority string: {value}")
         return mapping[value]
@@ -132,6 +127,7 @@ class FindingCategory(str, Enum):
     """
     Categorization for findings.
     """
+
     SECURITY = "security"
     QUALITY = "quality"
     MAINTAINABILITY = "maintainability"

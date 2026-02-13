@@ -108,9 +108,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
                     controller_name = self._extract_controller_name(content)
 
                     # Extract operations from controller actions
-                    operations = self._extract_operations(
-                        content, file_path, controller_route, controller_name
-                    )
+                    operations = self._extract_operations(content, file_path, controller_route, controller_name)
                     for op in operations:
                         if op.name not in seen_operations:
                             contract.operations.append(op)
@@ -148,17 +146,11 @@ class AspNetCoreExtractor(BaseContractExtractor):
 
     def _is_controller(self, content: str) -> bool:
         """Check if file contains an API controller."""
-        return (
-            "[ApiController]" in content
-            or ": ControllerBase" in content
-            or ": Controller" in content
-        )
+        return "[ApiController]" in content or ": ControllerBase" in content or ": Controller" in content
 
     def _extract_controller_name(self, content: str) -> str:
         """Extract controller class name."""
-        pattern = re.compile(
-            r"class\s+(\w+)(?:Controller)?\s*:\s*(?:Controller|ControllerBase)"
-        )
+        pattern = re.compile(r"class\s+(\w+)(?:Controller)?\s*:\s*(?:Controller|ControllerBase)")
         match = pattern.search(content)
         if match:
             name = match.group(1)
@@ -240,21 +232,19 @@ class AspNetCoreExtractor(BaseContractExtractor):
                     output_type = self._clean_type(return_type)
 
                     # Generate operation name
-                    op_name = self._generate_operation_name(
-                        method_name, http_method, controller_name
-                    )
+                    op_name = self._generate_operation_name(method_name, http_method, controller_name)
 
-                    operations.append(OperationDefinition(
-                        name=op_name,
-                        operation_type=self.HTTP_ATTRIBUTES.get(
-                            http_method, OperationType.QUERY
-                        ),
-                        input_type=input_type,
-                        output_type=output_type,
-                        description=f"{http_method.replace('Http', '')} {full_path}",
-                        source_file=str(file_path),
-                        source_line=i + 1,
-                    ))
+                    operations.append(
+                        OperationDefinition(
+                            name=op_name,
+                            operation_type=self.HTTP_ATTRIBUTES.get(http_method, OperationType.QUERY),
+                            input_type=input_type,
+                            output_type=output_type,
+                            description=f"{http_method.replace('Http', '')} {full_path}",
+                            source_file=str(file_path),
+                            source_line=i + 1,
+                        )
+                    )
 
         return operations
 
@@ -320,11 +310,23 @@ class AspNetCoreExtractor(BaseContractExtractor):
             class_name = class_match.group(1)
 
             # Skip common non-model classes
-            if any(suffix in class_name for suffix in [
-                "Controller", "Service", "Repository", "Handler",
-                "Middleware", "Filter", "Attribute", "Extension",
-                "Builder", "Factory", "Provider", "Context",
-            ]):
+            if any(
+                suffix in class_name
+                for suffix in [
+                    "Controller",
+                    "Service",
+                    "Repository",
+                    "Handler",
+                    "Middleware",
+                    "Filter",
+                    "Attribute",
+                    "Extension",
+                    "Builder",
+                    "Factory",
+                    "Provider",
+                    "Context",
+                ]
+            ):
                 continue
 
             # Find class body
@@ -350,24 +352,23 @@ class AspNetCoreExtractor(BaseContractExtractor):
                 prop_type = prop_match.group(1)
                 prop_name = prop_match.group(2)
 
-                is_optional = "?" in content[
-                    class_match.start() + prop_match.start():
-                    class_match.start() + prop_match.end()
-                ]
+                is_optional = (
+                    "?" in content[class_match.start() + prop_match.start() : class_match.start() + prop_match.end()]
+                )
                 is_array = prop_type.startswith("List<") or prop_type.endswith("[]")
 
-                fields.append(FieldDefinition(
-                    name=prop_name,
-                    type_name=self._clean_type(prop_type),
-                    is_optional=is_optional,
-                    is_array=is_array,
-                    source_file=str(file_path),
-                ))
+                fields.append(
+                    FieldDefinition(
+                        name=prop_name,
+                        type_name=self._clean_type(prop_type),
+                        is_optional=is_optional,
+                        is_array=is_array,
+                        source_file=str(file_path),
+                    )
+                )
 
             # Check for record parameters
-            record_match = record_param_pattern.search(
-                content[class_match.start():class_match.end() + 100]
-            )
+            record_match = record_param_pattern.search(content[class_match.start() : class_match.end() + 100])
             if record_match:
                 params = record_match.group(1)
                 for param in params.split(","):
@@ -376,22 +377,26 @@ class AspNetCoreExtractor(BaseContractExtractor):
                     if len(parts) >= 2:
                         param_type = parts[0]
                         param_name = parts[1]
-                        fields.append(FieldDefinition(
-                            name=param_name,
-                            type_name=self._clean_type(param_type),
-                            is_optional="?" in param_type,
-                            is_array="List<" in param_type or "[]" in param_type,
-                            source_file=str(file_path),
-                        ))
+                        fields.append(
+                            FieldDefinition(
+                                name=param_name,
+                                type_name=self._clean_type(param_type),
+                                is_optional="?" in param_type,
+                                is_array="List<" in param_type or "[]" in param_type,
+                                source_file=str(file_path),
+                            )
+                        )
 
             if fields:
-                line_num = content[:class_match.start()].count("\n") + 1
-                models.append(ModelDefinition(
-                    name=class_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: class_match.start()].count("\n") + 1
+                models.append(
+                    ModelDefinition(
+                        name=class_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return models
 
@@ -424,13 +429,15 @@ class AspNetCoreExtractor(BaseContractExtractor):
                     values.append(value)
 
             if values:
-                line_num = content[:enum_match.start()].count("\n") + 1
-                enums.append(EnumDefinition(
-                    name=enum_name,
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: enum_match.start()].count("\n") + 1
+                enums.append(
+                    EnumDefinition(
+                        name=enum_name,
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return enums
 
@@ -459,7 +466,7 @@ class AspNetCoreExtractor(BaseContractExtractor):
         # Remove IEnumerable<>, ICollection<>
         for prefix in ["IEnumerable<", "ICollection<", "IList<"]:
             if type_str.startswith(prefix) and type_str.endswith(">"):
-                inner = type_str[len(prefix):-1]
+                inner = type_str[len(prefix) : -1]
                 return self._clean_type(inner)
 
         # Remove array notation

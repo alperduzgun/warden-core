@@ -174,13 +174,15 @@ class GoExtractor(BaseContractExtractor):
                         path = prefix.rstrip("/") + "/" + path.lstrip("/")
                         break
 
-                operations.append(OperationDefinition(
-                    name=handler_name,
-                    operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
-                    description=f"{method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+                operations.append(
+                    OperationDefinition(
+                        name=handler_name,
+                        operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
+                        description=f"{method.upper()} {path}",
+                        source_file=str(file_path),
+                        source_line=i + 1,
+                    )
+                )
 
         # Also find handler functions to extract input/output types
         self._enhance_operations_with_types(content, operations)
@@ -254,12 +256,14 @@ class GoExtractor(BaseContractExtractor):
             fields = self._parse_struct_fields(struct_body, file_path)
 
             if fields:
-                models.append(ModelDefinition(
-                    name=struct_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=content[:match.start()].count("\n") + 1,
-                ))
+                models.append(
+                    ModelDefinition(
+                        name=struct_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=content[: match.start()].count("\n") + 1,
+                    )
+                )
 
         return models
 
@@ -292,21 +296,29 @@ class GoExtractor(BaseContractExtractor):
             is_optional = field_type.startswith("*")
             is_array = field_type.startswith("[]")
 
-            fields.append(FieldDefinition(
-                name=display_name,
-                type_name=self._clean_type(field_type),
-                is_optional=is_optional,
-                is_array=is_array,
-                source_file=str(file_path),
-            ))
+            fields.append(
+                FieldDefinition(
+                    name=display_name,
+                    type_name=self._clean_type(field_type),
+                    is_optional=is_optional,
+                    is_array=is_array,
+                    source_file=str(file_path),
+                )
+            )
 
         return fields
 
     def _should_skip_struct(self, name: str) -> bool:
         """Check if struct should be skipped."""
         skip_suffixes = [
-            "Handler", "Controller", "Service", "Repository",
-            "Config", "Server", "Router", "Middleware",
+            "Handler",
+            "Controller",
+            "Service",
+            "Repository",
+            "Config",
+            "Server",
+            "Router",
+            "Middleware",
         ]
         return any(name.endswith(s) for s in skip_suffixes)
 
@@ -344,12 +356,14 @@ class GoExtractor(BaseContractExtractor):
                     values = [m.group(1) for m in value_pattern.finditer(block_content)]
 
                     if values:
-                        enums.append(EnumDefinition(
-                            name=type_name,
-                            values=values,
-                            source_file=str(file_path),
-                            source_line=content[:block_match.start()].count("\n") + 1,
-                        ))
+                        enums.append(
+                            EnumDefinition(
+                                name=type_name,
+                                values=values,
+                                source_file=str(file_path),
+                                source_line=content[: block_match.start()].count("\n") + 1,
+                            )
+                        )
 
         return enums
 

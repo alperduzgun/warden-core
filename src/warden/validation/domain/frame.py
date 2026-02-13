@@ -39,16 +39,13 @@ class Remediation:
     """
     Suggested fix for a finding.
     """
+
     description: str
     code: str  # The replacement code
     unified_diff: str | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return {
-            "description": self.description,
-            "code": self.code,
-            "unified_diff": self.unified_diff
-        }
+        return {"description": self.description, "code": self.code, "unified_diff": self.unified_diff}
 
 
 @dataclass
@@ -59,10 +56,11 @@ class MachineContext:
     Provides structured vulnerability metadata for Fortification phase
     and SARIF report enrichment. Replaces text-parsing of finding descriptions.
     """
-    vulnerability_class: str          # "sql-injection", "xss-reflected", "cmd-injection"
-    source: str | None = None         # "request.args['id']"
-    sink: str | None = None           # "cursor.execute()"
-    sink_type: str | None = None      # "SQL-value", "CMD-argument", "HTML-content"
+
+    vulnerability_class: str  # "sql-injection", "xss-reflected", "cmd-injection"
+    source: str | None = None  # "request.args['id']"
+    sink: str | None = None  # "cursor.execute()"
+    sink_type: str | None = None  # "SQL-value", "CMD-argument", "HTML-content"
     data_flow_path: list[str] = field(default_factory=list)
     sanitizers_applied: list[str] = field(default_factory=list)
     suggested_fix_type: str | None = None  # "parameterized_query", "input_validation"
@@ -95,15 +93,17 @@ class ExploitEvidence:
     Contains proof-of-concept data showing HOW a vulnerability can be exploited.
     WARNING: Witness payloads are for advisory purposes only -- never execute them.
     """
-    witness_payload: str              # "' OR 1=1 --"
-    attack_vector: str                # "URL parameter 'id'"
+
+    witness_payload: str  # "' OR 1=1 --"
+    attack_vector: str  # "URL parameter 'id'"
     data_flow_path: list[str] = field(default_factory=list)
-    sink_type: str | None = None      # "SQL-value"
+    sink_type: str | None = None  # "SQL-value"
     why_exploitable: str = ""
     confidence: float = 0.0
 
     def to_json(self) -> dict[str, Any]:
         import html as html_module
+
         return {
             "witness_payload": html_module.escape(self.witness_payload),
             "attack_vector": html_module.escape(self.attack_vector),

@@ -100,14 +100,10 @@ class IPCRequest:
             IPCError if invalid, None if valid
         """
         if self.jsonrpc != "2.0":
-            return IPCError(
-                code=ErrorCode.INVALID_REQUEST, message="Invalid JSON-RPC version (must be 2.0)"
-            )
+            return IPCError(code=ErrorCode.INVALID_REQUEST, message="Invalid JSON-RPC version (must be 2.0)")
 
         if not self.method or not isinstance(self.method, str):
-            return IPCError(
-                code=ErrorCode.INVALID_REQUEST, message="Method must be a non-empty string"
-            )
+            return IPCError(code=ErrorCode.INVALID_REQUEST, message="Method must be a non-empty string")
 
         if self.params is not None and not isinstance(self.params, (dict, list)):
             return IPCError(
@@ -174,9 +170,7 @@ class IPCResponse:
         return IPCResponse(jsonrpc="2.0", result=result, id=request_id)
 
     @staticmethod
-    def create_error(
-        error_obj: IPCError, request_id: str | int | None = None
-    ) -> "IPCResponse":
+    def create_error(error_obj: IPCError, request_id: str | int | None = None) -> "IPCResponse":
         """Create error response"""
         return IPCResponse(jsonrpc="2.0", error=error_obj, id=request_id)
 

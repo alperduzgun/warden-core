@@ -29,16 +29,13 @@ class RulesYAMLLoader:
             rules_path = project_root / ".warden" / "rules"
 
         if not rules_path.exists():
-             return ProjectRuleConfig(
-                project_name="unknown",
-                language="unknown",
-                rules=[],
-                global_rules=[],
-                frame_rules={}
+            return ProjectRuleConfig(
+                project_name="unknown", language="unknown", rules=[], global_rules=[], frame_rules={}
             )
 
         if rules_path.is_dir():
             from warden.shared.utils.yaml_merger import YAMLMerger
+
             merged_data = YAMLMerger.merge_directory(rules_path)
             return RulesYAMLLoader._parse_yaml_data(merged_data, str(rules_path))
 
@@ -64,7 +61,7 @@ class RulesYAMLLoader:
             raise FileNotFoundError(f"Rules path not found: {file_path}")
 
         if file_path.is_dir():
-             return await RulesYAMLLoader._load_from_directory_async(file_path)
+            return await RulesYAMLLoader._load_from_directory_async(file_path)
 
         return await RulesYAMLLoader._load_single_file_async(file_path)
 
@@ -89,7 +86,7 @@ class RulesYAMLLoader:
         merged_data = YAMLMerger.merge_directory(dir_path)
 
         if not merged_data["rules"] and not merged_data["frame_rules"]:
-             logger.warning("no_rules_found_in_directory", directory=str(dir_path))
+            logger.warning("no_rules_found_in_directory", directory=str(dir_path))
 
         logger.info("merged_rules_config", directory=str(dir_path), total_rules=len(merged_data["rules"]))
         return RulesYAMLLoader._parse_yaml_data(merged_data, str(dir_path))
@@ -293,7 +290,9 @@ class RulesYAMLLoader:
         """Validate git condition structure."""
         valid_fields = {"authorNameBlacklist", "authorEmailBlacklist", "commitMessagePattern"}
         if not any(field in condition for field in valid_fields):
-            raise ValueError("git condition requires at least one of: authorNameBlacklist, authorEmailBlacklist, commitMessagePattern")
+            raise ValueError(
+                "git condition requires at least one of: authorNameBlacklist, authorEmailBlacklist, commitMessagePattern"
+            )
 
         if "authorEmailBlacklist" in condition and not isinstance(condition["authorEmailBlacklist"], list):
             raise ValueError("git.authorEmailBlacklist must be a list")
@@ -325,7 +324,9 @@ class RulesYAMLLoader:
         """Validate naming condition structure."""
         valid_fields = {"asyncMethodSuffix", "interfacePrefix", "privateFieldPrefix"}
         if not any(field in condition for field in valid_fields):
-            raise ValueError("naming condition requires at least one of: asyncMethodSuffix, interfacePrefix, privateFieldPrefix")
+            raise ValueError(
+                "naming condition requires at least one of: asyncMethodSuffix, interfacePrefix, privateFieldPrefix"
+            )
 
     @staticmethod
     def _parse_frame_rules(config_data: dict[str, Any], all_rules: list[CustomRule]) -> dict[str, FrameRules]:

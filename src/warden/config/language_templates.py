@@ -33,9 +33,9 @@ class LanguageTemplate:
 PYTHON_TEMPLATE = LanguageTemplate(
     language="python",
     recommended_frames=[
-        "security",        # SQL injection, secrets detection
-        "chaos",          # Error handling, resilience
-        "orphan",         # Unused code detection (LLM-powered)
+        "security",  # SQL injection, secrets detection
+        "chaos",  # Error handling, resilience
+        "orphan",  # Unused code detection (LLM-powered)
         "architectural",  # Design pattern consistency
     ],
     required_ast_providers=["python-native"],  # Built-in Python AST
@@ -84,8 +84,8 @@ JAVASCRIPT_TEMPLATE = LanguageTemplate(
     language="javascript",
     recommended_frames=[
         "security",  # XSS, injection attacks
-        "chaos",     # Async error handling
-        "fuzz",      # Edge cases, type coercion
+        "chaos",  # Async error handling
+        "fuzz",  # Edge cases, type coercion
     ],
     required_ast_providers=["tree-sitter"],  # Universal parser
     default_rules={
@@ -132,8 +132,8 @@ JAVA_TEMPLATE = LanguageTemplate(
     language="java",
     recommended_frames=[
         "security",  # SQL injection, deserialization
-        "chaos",     # Exception handling
-        "stress",    # Performance, memory leaks
+        "chaos",  # Exception handling
+        "stress",  # Performance, memory leaks
     ],
     required_ast_providers=["warden-ast-java"],  # External provider from PyPI
     default_rules={
@@ -179,7 +179,7 @@ GO_TEMPLATE = LanguageTemplate(
     recommended_frames=[
         "security",  # Command injection, path traversal
         "property",  # Idempotency, pure functions
-        "stress",    # Goroutine leaks, race conditions
+        "stress",  # Goroutine leaks, race conditions
     ],
     required_ast_providers=["warden-ast-go"],
     default_rules={
@@ -223,7 +223,7 @@ RUST_TEMPLATE = LanguageTemplate(
     language="rust",
     recommended_frames=[
         "property",  # Ownership, borrowing rules
-        "stress",    # Performance, unsafe blocks
+        "stress",  # Performance, unsafe blocks
     ],
     required_ast_providers=["warden-ast-rust"],
     default_rules={
@@ -421,7 +421,4 @@ def get_language_template(language: str) -> LanguageTemplate:
 
 def get_supported_languages() -> list[str]:
     """Get list of languages with specific templates."""
-    return [
-        lang for lang in LANGUAGE_TEMPLATES
-        if LANGUAGE_TEMPLATES[lang] != GENERIC_TEMPLATE
-    ]
+    return [lang for lang in LANGUAGE_TEMPLATES if LANGUAGE_TEMPLATES[lang] != GENERIC_TEMPLATE]

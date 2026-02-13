@@ -35,7 +35,7 @@ class BaseDomainModel(BaseModel):
 
         Backward compatibility wrapper for model_dump().
         """
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
     def to_dict(self) -> dict[str, Any]:
         """Alias for to_json."""

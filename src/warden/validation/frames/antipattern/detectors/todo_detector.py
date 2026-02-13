@@ -43,9 +43,7 @@ class TodoDetector(BaseDetector):
         """Detect TODO/FIXME comments."""
         return self._detect_todo_fixme(code_file, lines)
 
-    def _detect_todo_fixme(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[AntiPatternViolation]:
+    def _detect_todo_fixme(self, code_file: CodeFile, lines: list[str]) -> list[AntiPatternViolation]:
         """Detect TODO/FIXME comments (universal, regex-based)."""
         violations = []
 
@@ -58,16 +56,18 @@ class TodoDetector(BaseDetector):
                 marker = match.group(2).upper()
                 description = match.group(3).strip()[:50]
 
-                violations.append(AntiPatternViolation(
-                    pattern_id="todo-fixme",
-                    pattern_name=f"{marker} Comment",
-                    severity=AntiPatternSeverity.LOW,
-                    message=f"{marker}: {description}..." if description else f"{marker} marker found",
-                    file_path=code_file.path,
-                    line=line_num,
-                    code_snippet=line.strip(),
-                    suggestion="Convert to tracked issue or resolve",
-                    is_blocker=False,
-                ))
+                violations.append(
+                    AntiPatternViolation(
+                        pattern_id="todo-fixme",
+                        pattern_name=f"{marker} Comment",
+                        severity=AntiPatternSeverity.LOW,
+                        message=f"{marker}: {description}..." if description else f"{marker} marker found",
+                        file_path=code_file.path,
+                        line=line_num,
+                        code_snippet=line.strip(),
+                        suggestion="Convert to tracked issue or resolve",
+                        is_blocker=False,
+                    )
+                )
 
         return violations

@@ -20,6 +20,7 @@ class ProviderConfig:
     Matches C# ProviderConfig
     Security: API keys should be loaded from environment variables
     """
+
     api_key: str | None = None
     endpoint: str | None = None
     default_model: str | None = None
@@ -81,6 +82,7 @@ class LlmConfiguration:
         config.deepseek.api_key = os.getenv("DEEPSEEK_API_KEY")
         config.deepseek.default_model = "deepseek-coder"
     """
+
     default_provider: LlmProvider = LlmProvider.DEEPSEEK
     fallback_providers: list[LlmProvider] = field(default_factory=list)
 
@@ -97,9 +99,9 @@ class LlmConfiguration:
 
     # Model Tiering (Optional)
     smart_model: str | None = None  # High-reasoning model (e.g. gpt-4o)
-    fast_model: str | None = None   # Fast/Cheap model (e.g. gpt-4o-mini)
+    fast_model: str | None = None  # Fast/Cheap model (e.g. gpt-4o-mini)
     fast_tier_providers: list[LlmProvider] = field(default_factory=lambda: [LlmProvider.OLLAMA])
-    max_concurrency: int = 4           # Global max concurrent requests
+    max_concurrency: int = 4  # Global max concurrent requests
 
     def get_provider_config(self, provider: LlmProvider) -> ProviderConfig | None:
         """
@@ -177,8 +179,7 @@ def create_default_config() -> LlmConfiguration:
     Note: API keys must be set from environment variables
     """
     config = LlmConfiguration(
-        default_provider=LlmProvider.DEEPSEEK,
-        fallback_providers=[LlmProvider.QWENCODE, LlmProvider.ANTHROPIC]
+        default_provider=LlmProvider.DEEPSEEK, fallback_providers=[LlmProvider.QWENCODE, LlmProvider.ANTHROPIC]
     )
 
     # Set default models
@@ -219,6 +220,7 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
         asyncio.get_running_loop()
         # If we're already in an async context, we need to run in a new thread
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor() as pool:
             future = pool.submit(asyncio.run, load_llm_config_async(config_override))
             return future.result()
@@ -233,6 +235,7 @@ async def _check_ollama_availability(endpoint: str) -> bool:
     Fail-fast: very short timeout to avoid slowing down startup.
     """
     import httpx
+
     try:
         async with httpx.AsyncClient(timeout=0.5) as client:
             response = await client.get(endpoint)
@@ -256,7 +259,8 @@ async def _check_claude_code_availability() -> bool:
     try:
         # Run claude --version to verify it's working
         process = await asyncio.create_subprocess_exec(  # warden: ignore
-            "claude", "--version",
+            "claude",
+            "--version",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -284,10 +288,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             explicit_provider_override = LlmProvider(config_override["provider"])
 
     # Create base configuration
-    config = LlmConfiguration(
-        default_provider=LlmProvider.AZURE_OPENAI,
-        fallback_providers=[]
-    )
+    config = LlmConfiguration(default_provider=LlmProvider.AZURE_OPENAI, fallback_providers=[])
 
     # Set default models for all providers
     for provider, model in DEFAULT_MODELS.items():
@@ -299,29 +300,32 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     configured_providers: list[LlmProvider] = []
 
     # Get all secrets at once for efficiency (uses SecretManager cache)
-    secrets = await manager.get_secrets_async([
-        "AZURE_OPENAI_API_KEY",
-        "AZURE_OPENAI_ENDPOINT",
-        "AZURE_OPENAI_DEPLOYMENT_NAME",
-        "AZURE_OPENAI_API_VERSION",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "DEEPSEEK_API_KEY",
-        "QWENCODE_API_KEY",
-        "GROQ_API_KEY",
-        "OPENROUTER_API_KEY",
-        "WARDEN_SMART_MODEL",
-        "WARDEN_FAST_MODEL",
-        "WARDEN_LLM_CONCURRENCY",
-        "WARDEN_FAST_TIER_PRIORITY",
-        "OLLAMA_HOST",
-        "CLAUDE_CODE_ENABLED",
-        "CLAUDE_CODE_MODE",
-    ])
+    secrets = await manager.get_secrets_async(
+        [
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_DEPLOYMENT_NAME",
+            "AZURE_OPENAI_API_VERSION",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "QWENCODE_API_KEY",
+            "GROQ_API_KEY",
+            "OPENROUTER_API_KEY",
+            "WARDEN_SMART_MODEL",
+            "WARDEN_FAST_MODEL",
+            "WARDEN_LLM_CONCURRENCY",
+            "WARDEN_FAST_TIER_PRIORITY",
+            "OLLAMA_HOST",
+            "CLAUDE_CODE_ENABLED",
+            "CLAUDE_CODE_MODE",
+        ]
+    )
 
     # Summary log instead of individual secret_not_found logs
     found_keys = [k for k, v in secrets.items() if v.found]
     import structlog
+
     logger = structlog.get_logger(__name__)
     if found_keys:
         logger.debug("secrets_loaded", count=len(found_keys), keys=found_keys)
@@ -341,12 +345,11 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         if providers_str:
             try:
                 config.fast_tier_providers = [
-                    LlmProvider(p.strip().lower())
-                    for p in providers_str.split(",")
-                    if p.strip()
+                    LlmProvider(p.strip().lower()) for p in providers_str.split(",") if p.strip()
                 ]
             except ValueError as e:
                 import structlog
+
                 logger = structlog.get_logger(__name__)
                 logger.warning("invalid_fast_tier_priority", value=providers_str, error=str(e))
 
@@ -361,7 +364,14 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     azure_deployment = secrets.get("AZURE_OPENAI_DEPLOYMENT_NAME")
     azure_api_version = secrets.get("AZURE_OPENAI_API_VERSION")
 
-    if azure_api_key and azure_api_key.found and azure_endpoint and azure_endpoint.found and azure_deployment and azure_deployment.found:
+    if (
+        azure_api_key
+        and azure_api_key.found
+        and azure_endpoint
+        and azure_endpoint.found
+        and azure_deployment
+        and azure_deployment.found
+    ):
         config.azure_openai.api_key = azure_api_key.value
         config.azure_openai.endpoint = azure_endpoint.value
         config.azure_openai.default_model = azure_deployment.value
@@ -418,7 +428,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         ollama_host_secret = None
 
     ollama_endpoint = "http://localhost:11434"
-    if ollama_host_secret and hasattr(ollama_host_secret, 'found') and ollama_host_secret.found:
+    if ollama_host_secret and hasattr(ollama_host_secret, "found") and ollama_host_secret.found:
         ollama_endpoint = ollama_host_secret.value or ollama_endpoint
 
     config.ollama.endpoint = ollama_endpoint
@@ -438,6 +448,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             # Validate mode (fail-fast)
             if mode not in _valid_claude_modes:
                 import structlog
+
                 _logger = structlog.get_logger(__name__)
                 _logger.warning(
                     "invalid_claude_code_mode",
@@ -476,7 +487,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
         # If default, replace with auto-detected if we found anything good
         if detected_fast_tier:
-             config.fast_tier_providers = detected_fast_tier
+            config.fast_tier_providers = detected_fast_tier
 
     # Prioritize explicit provider override from config.yaml
     if explicit_provider_override:

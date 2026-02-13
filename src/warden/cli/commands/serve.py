@@ -30,11 +30,13 @@ def mcp_callback(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
         serve_mcp(project_root=None)
 
+
 @serve_app.command("ipc")
 def serve_ipc():
     """Start the IPC server (used by CLI/GUI integration)."""
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(ipc_main())
+
 
 @serve_app.command("grpc")
 def serve_grpc(port: int = typer.Option(50051, help="Port to listen on")):
@@ -44,15 +46,14 @@ def serve_grpc(port: int = typer.Option(50051, help="Port to listen on")):
         from warden.services.grpc_entry import main_async as grpc_main
     except ImportError as e:
         typer.secho(
-            f"Error: gRPC dependencies not installed.\n"
-            f"Install with: pip install warden-core[grpc]\n"
-            f"Details: {e}",
-            fg=typer.colors.RED
+            f"Error: gRPC dependencies not installed.\nInstall with: pip install warden-core[grpc]\nDetails: {e}",
+            fg=typer.colors.RED,
         )
         raise typer.Exit(code=1)
 
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(grpc_main(port))
+
 
 @mcp_app.command("start")
 def serve_mcp(
@@ -89,6 +90,7 @@ def serve_mcp(
         raise typer.Exit(code=1)
 
     from warden.mcp.entry import run as mcp_run
+
     with contextlib.suppress(KeyboardInterrupt):
         mcp_run(str(root))
 
@@ -254,7 +256,7 @@ def _register_mcp_for_tool(
         console.print(f"  [dim]• {tool_name}: {result.message}[/dim]")
         return "skipped"
 
-    else: # error
+    else:  # error
         logger.error("mcp_register_failed", tool=tool_name, error=result.message)
         console.print(f"  [red]✗ {tool_name}[/red]: {result.message}")
         return "error"
@@ -276,7 +278,7 @@ def _read_mcp_config_safe(config_path: Path, tool_name: str, console) -> dict:
         return {}
 
     try:
-        with open(config_path, encoding='utf-8') as f:
+        with open(config_path, encoding="utf-8") as f:
             content = f.read().strip()
             if not content:
                 return {}
@@ -316,13 +318,9 @@ def _write_mcp_config_atomic(config_path: Path, data: dict) -> None:
     """
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    fd, temp_path = tempfile.mkstemp(
-        dir=config_path.parent,
-        prefix='.mcp_',
-        suffix='.tmp'
-    )
+    fd, temp_path = tempfile.mkstemp(dir=config_path.parent, prefix=".mcp_", suffix=".tmp")
     try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         # Atomic rename (POSIX compliant)
         os.replace(temp_path, config_path)
@@ -346,7 +344,7 @@ def _verify_mcp_registration(config_path: Path, expected_command: str) -> bool:
         True if verification passes, False otherwise
     """
     try:
-        with open(config_path, encoding='utf-8') as f:
+        with open(config_path, encoding="utf-8") as f:
             data = json.load(f)
         warden_config = data.get("mcpServers", {}).get("warden", {})
         return warden_config.get("command") == expected_command
@@ -386,7 +384,7 @@ def mcp_status():
             continue
 
         try:
-            with open(config_path, encoding='utf-8') as f:
+            with open(config_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Type-safe check

@@ -110,7 +110,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
                     issues.append(
                         CleaningIssue(
                             issue_type=CleaningIssueType.CODE_DUPLICATION,
-                            description=f"Function '{func1_name}' is {int(similarity*100)}% similar to '{func2_name}'",
+                            description=f"Function '{func1_name}' is {int(similarity * 100)}% similar to '{func2_name}'",
                             line_number=line_number,
                             severity=CleaningIssueSeverity.MEDIUM,
                         )
@@ -183,9 +183,11 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
 
                 # Check for duplicate starting from i and j
                 match_length = 0
-                while (i + match_length < j and
-                       j + match_length < len(lines) and
-                       self._lines_similar(lines[i + match_length], lines[j + match_length])):
+                while (
+                    i + match_length < j
+                    and j + match_length < len(lines)
+                    and self._lines_similar(lines[i + match_length], lines[j + match_length])
+                ):
                     match_length += 1
 
                 if match_length >= MIN_DUPLICATE_LINES:
@@ -221,11 +223,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
         similarity = SequenceMatcher(None, l1, l2).ratio()
         return similarity >= SIMILARITY_THRESHOLD
 
-    def _find_similar_functions_universal(
-        self,
-        ast_root: ASTNode,
-        code: str
-    ) -> list[tuple[str, str, int, float]]:
+    def _find_similar_functions_universal(self, ast_root: ASTNode, code: str) -> list[tuple[str, str, int, float]]:
         """
         Find similar functions using Universal AST.
 
@@ -246,7 +244,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
 
         # Compare each pair of functions
         for i, func1 in enumerate(functions):
-            for func2 in functions[i + 1:]:
+            for func2 in functions[i + 1 :]:
                 similarity = self._calculate_function_similarity_universal(func1, func2, lines)
                 if similarity >= SIMILARITY_THRESHOLD:
                     line_number = func1.location.start_line if func1.location else 0
@@ -256,12 +254,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
 
         return similar_functions
 
-    def _calculate_function_similarity_universal(
-        self,
-        func1: ASTNode,
-        func2: ASTNode,
-        lines: list[str]
-    ) -> float:
+    def _calculate_function_similarity_universal(self, func1: ASTNode, func2: ASTNode, lines: list[str]) -> float:
         """
         Calculate similarity between two functions using Universal AST.
 
@@ -286,11 +279,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
 
         return SequenceMatcher(None, func1_body, func2_body).ratio()
 
-    def _get_function_body_lines_universal(
-        self,
-        func: ASTNode,
-        lines: list[str]
-    ) -> list[str]:
+    def _get_function_body_lines_universal(self, func: ASTNode, lines: list[str]) -> list[str]:
         """
         Extract function body lines from Universal AST node.
 

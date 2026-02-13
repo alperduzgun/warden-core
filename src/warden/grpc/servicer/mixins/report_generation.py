@@ -16,9 +16,11 @@ except ImportError:
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -32,16 +34,13 @@ class ReportGenerationMixin:
         try:
             report_id = str(uuid.uuid4())
 
-            if hasattr(self.bridge, 'generate_html_report'):
-                result = await self.bridge.generate_html_report(
-                    run_id=request.run_id,
-                    output_path=request.output_path
-                )
+            if hasattr(self.bridge, "generate_html_report"):
+                result = await self.bridge.generate_html_report(run_id=request.run_id, output_path=request.output_path)
                 return warden_pb2.ReportResponse(
                     success=True,
                     report_id=report_id,
                     file_path=result.get("file_path", ""),
-                    size_bytes=result.get("size_bytes", 0)
+                    size_bytes=result.get("size_bytes", 0),
                 )
 
             html_content = self._generate_simple_html_report(request)
@@ -50,18 +49,12 @@ class ReportGenerationMixin:
             Path(output_path).write_text(html_content)
 
             return warden_pb2.ReportResponse(
-                success=True,
-                report_id=report_id,
-                file_path=output_path,
-                size_bytes=len(html_content.encode())
+                success=True, report_id=report_id, file_path=output_path, size_bytes=len(html_content.encode())
             )
 
         except Exception as e:
             logger.error("grpc_generate_html_error: %s", str(e))
-            return warden_pb2.ReportResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.ReportResponse(success=False, error_message=str(e))
 
     async def GeneratePdfReport(self, request, context) -> "warden_pb2.ReportResponse":
         """Generate PDF report."""
@@ -70,30 +63,22 @@ class ReportGenerationMixin:
         try:
             report_id = str(uuid.uuid4())
 
-            if hasattr(self.bridge, 'generate_pdf_report'):
-                result = await self.bridge.generate_pdf_report(
-                    run_id=request.run_id,
-                    output_path=request.output_path
-                )
+            if hasattr(self.bridge, "generate_pdf_report"):
+                result = await self.bridge.generate_pdf_report(run_id=request.run_id, output_path=request.output_path)
                 return warden_pb2.ReportResponse(
                     success=True,
                     report_id=report_id,
                     file_path=result.get("file_path", ""),
-                    size_bytes=result.get("size_bytes", 0)
+                    size_bytes=result.get("size_bytes", 0),
                 )
 
             return warden_pb2.ReportResponse(
-                success=False,
-                report_id=report_id,
-                error_message="PDF generation not available. Install wkhtmltopdf."
+                success=False, report_id=report_id, error_message="PDF generation not available. Install wkhtmltopdf."
             )
 
         except Exception as e:
             logger.error("grpc_generate_pdf_error: %s", str(e))
-            return warden_pb2.ReportResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.ReportResponse(success=False, error_message=str(e))
 
     async def GenerateJsonReport(self, request, context) -> "warden_pb2.ReportResponse":
         """Generate JSON report."""
@@ -112,23 +97,11 @@ class ReportGenerationMixin:
                 "issues": list(self._issues.values()),
                 "summary": {
                     "total_issues": len(self._issues),
-                    "critical": sum(
-                        1 for i in self._issues.values()
-                        if i.get("severity") == "critical"
-                    ),
-                    "high": sum(
-                        1 for i in self._issues.values()
-                        if i.get("severity") == "high"
-                    ),
-                    "medium": sum(
-                        1 for i in self._issues.values()
-                        if i.get("severity") == "medium"
-                    ),
-                    "low": sum(
-                        1 for i in self._issues.values()
-                        if i.get("severity") == "low"
-                    )
-                }
+                    "critical": sum(1 for i in self._issues.values() if i.get("severity") == "critical"),
+                    "high": sum(1 for i in self._issues.values() if i.get("severity") == "high"),
+                    "medium": sum(1 for i in self._issues.values() if i.get("severity") == "medium"),
+                    "low": sum(1 for i in self._issues.values() if i.get("severity") == "low"),
+                },
             }
 
             json_content = json.dumps(report_data, indent=2)
@@ -141,15 +114,12 @@ class ReportGenerationMixin:
                 report_id=report_id,
                 file_path=request.output_path or "",
                 content=json_content,
-                size_bytes=len(json_content.encode())
+                size_bytes=len(json_content.encode()),
             )
 
         except Exception as e:
             logger.error("grpc_generate_json_error: %s", str(e))
-            return warden_pb2.ReportResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.ReportResponse(success=False, error_message=str(e))
 
     async def GetReportStatus(self, request, context) -> "warden_pb2.ReportStatusResponse":
         """Get report generation status."""
@@ -163,16 +133,12 @@ class ReportGenerationMixin:
                 status=status.get("status", "not_found"),
                 progress=status.get("progress", 0.0),
                 file_path=status.get("file_path", ""),
-                error_message=status.get("error", "")
+                error_message=status.get("error", ""),
             )
 
         except Exception as e:
             logger.error("grpc_get_report_status_error: %s", str(e))
-            return warden_pb2.ReportStatusResponse(
-                report_id=request.report_id,
-                status="error",
-                error_message=str(e)
-            )
+            return warden_pb2.ReportStatusResponse(report_id=request.report_id, status="error", error_message=str(e))
 
     def _generate_simple_html_report(self, request) -> str:
         """Generate a simple HTML report."""
@@ -181,7 +147,7 @@ class ReportGenerationMixin:
         html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Warden Security Report - {request.project_name or 'Project'}</title>
+    <title>Warden Security Report - {request.project_name or "Project"}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; }}
         h1 {{ color: #333; }}
@@ -199,14 +165,14 @@ class ReportGenerationMixin:
     <h1>Warden Security Report</h1>
     <div class="summary">
         <h2>Summary</h2>
-        <p><strong>Project:</strong> {request.project_name or 'N/A'}</p>
-        <p><strong>Branch:</strong> {request.branch or 'N/A'}</p>
+        <p><strong>Project:</strong> {request.project_name or "N/A"}</p>
+        <p><strong>Branch:</strong> {request.branch or "N/A"}</p>
         <p><strong>Generated:</strong> {datetime.now().isoformat()}</p>
         <p><strong>Total Issues:</strong> {len(issues)}</p>
-        <p class="critical"><strong>Critical:</strong> {sum(1 for i in issues if i.get('severity') == 'critical')}</p>
-        <p class="high"><strong>High:</strong> {sum(1 for i in issues if i.get('severity') == 'high')}</p>
-        <p class="medium"><strong>Medium:</strong> {sum(1 for i in issues if i.get('severity') == 'medium')}</p>
-        <p class="low"><strong>Low:</strong> {sum(1 for i in issues if i.get('severity') == 'low')}</p>
+        <p class="critical"><strong>Critical:</strong> {sum(1 for i in issues if i.get("severity") == "critical")}</p>
+        <p class="high"><strong>High:</strong> {sum(1 for i in issues if i.get("severity") == "high")}</p>
+        <p class="medium"><strong>Medium:</strong> {sum(1 for i in issues if i.get("severity") == "medium")}</p>
+        <p class="low"><strong>Low:</strong> {sum(1 for i in issues if i.get("severity") == "low")}</p>
     </div>
 
     <h2>Issues</h2>
@@ -221,13 +187,13 @@ class ReportGenerationMixin:
 """
 
         for issue in issues:
-            severity = issue.get('severity', 'medium')
+            severity = issue.get("severity", "medium")
             html += f"""        <tr>
             <td class="{severity}">{severity.upper()}</td>
-            <td>{issue.get('title', '')}</td>
-            <td>{issue.get('file_path', '')}</td>
-            <td>{issue.get('line_number', 0)}</td>
-            <td>{issue.get('state', 'open')}</td>
+            <td>{issue.get("title", "")}</td>
+            <td>{issue.get("file_path", "")}</td>
+            <td>{issue.get("line_number", 0)}</td>
+            <td>{issue.get("state", "open")}</td>
         </tr>
 """
 

@@ -187,15 +187,17 @@ class AngularExtractor(BaseContractExtractor):
                 if http_method in ["post", "put", "patch"]:
                     input_type = self._extract_request_body_type(line, content, i)
 
-                operations.append(OperationDefinition(
-                    name=method_name,
-                    operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
-                    input_type=input_type,
-                    output_type=self._clean_type(response_type),
-                    description=f"{http_method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+                operations.append(
+                    OperationDefinition(
+                        name=method_name,
+                        operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
+                        input_type=input_type,
+                        output_type=self._clean_type(response_type),
+                        description=f"{http_method.upper()} {path}",
+                        source_file=str(file_path),
+                        source_line=i + 1,
+                    )
+                )
 
         return operations
 
@@ -278,7 +280,7 @@ class AngularExtractor(BaseContractExtractor):
                 match.group(1),
                 match.group(2),
                 file_path,
-                content[:match.start()].count("\n") + 1,
+                content[: match.start()].count("\n") + 1,
             )
             if model:
                 models.append(model)
@@ -289,7 +291,7 @@ class AngularExtractor(BaseContractExtractor):
                 match.group(1),
                 match.group(2),
                 file_path,
-                content[:match.start()].count("\n") + 1,
+                content[: match.start()].count("\n") + 1,
             )
             if model:
                 models.append(model)
@@ -323,13 +325,15 @@ class AngularExtractor(BaseContractExtractor):
             # Determine if array
             is_array = field_type.endswith("[]") or field_type.startswith("Array<")
 
-            fields.append(FieldDefinition(
-                name=field_name,
-                type_name=self._clean_type(field_type),
-                is_optional=is_optional,
-                is_array=is_array,
-                source_file=str(file_path),
-            ))
+            fields.append(
+                FieldDefinition(
+                    name=field_name,
+                    type_name=self._clean_type(field_type),
+                    is_optional=is_optional,
+                    is_array=is_array,
+                    source_file=str(file_path),
+                )
+            )
 
         if fields:
             return ModelDefinition(
@@ -368,13 +372,15 @@ class AngularExtractor(BaseContractExtractor):
                     values.append(value)
 
             if values:
-                line_num = content[:enum_match.start()].count("\n") + 1
-                enums.append(EnumDefinition(
-                    name=enum_name,
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: enum_match.start()].count("\n") + 1
+                enums.append(
+                    EnumDefinition(
+                        name=enum_name,
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return enums
 

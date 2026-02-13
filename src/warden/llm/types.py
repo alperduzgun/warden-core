@@ -5,7 +5,6 @@ Multi-provider LLM support with fallback chain.
 All types designed for Panel JSON compatibility (camelCase ↔ snake_case).
 """
 
-
 from enum import Enum
 from typing import List, Optional
 
@@ -16,6 +15,7 @@ from warden.shared.domain.base_model import BaseDomainModel
 
 class LlmProvider(str, Enum):
     """LLM provider types (matches C# LlmProvider enum)"""
+
     DEEPSEEK = "deepseek"
     QWENCODE = "qwencode"
     ANTHROPIC = "anthropic"
@@ -30,6 +30,7 @@ class LlmProvider(str, Enum):
 
 class LlmRequest(BaseDomainModel):
     """Request to LLM provider"""
+
     system_prompt: str
     user_message: str
     model: str | None = None
@@ -41,6 +42,7 @@ class LlmRequest(BaseDomainModel):
 
 class LlmResponse(BaseDomainModel):
     """Response from LLM provider"""
+
     content: str
     success: bool
     error_message: str | None = None
@@ -55,6 +57,7 @@ class LlmResponse(BaseDomainModel):
 
 class AnalysisIssue(BaseDomainModel):
     """Single issue from LLM analysis"""
+
     severity: str
     category: str
     title: str
@@ -68,6 +71,7 @@ class AnalysisIssue(BaseDomainModel):
 
 class AnalysisResult(BaseDomainModel):
     """LLM analysis result"""
+
     score: float
     confidence: float
     summary: str
@@ -77,6 +81,7 @@ class AnalysisResult(BaseDomainModel):
 
 class ClassificationCharacteristics(BaseDomainModel):
     """Code characteristics detected by classification"""
+
     has_async_operations: bool = False
     has_external_api_calls: bool = False
     has_user_input: bool = False
@@ -92,7 +97,7 @@ class ClassificationCharacteristics(BaseDomainModel):
 
 class ClassificationResult(BaseDomainModel):
     """LLM classification result"""
+
     characteristics: ClassificationCharacteristics
     recommended_frames: list[str]
     summary: str
-

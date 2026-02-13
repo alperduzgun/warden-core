@@ -64,9 +64,9 @@ class StatisticsCollector:
 
         # Config & Docs
         ext = file_path.suffix.lower()
-        if ext in ['.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.xml', '.lock']:
+        if ext in [".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".xml", ".lock"]:
             stats.config_files += 1
-        elif ext in ['.md', '.rst', '.txt', '.doc', '.docx']:
+        elif ext in [".md", ".rst", ".txt", ".doc", ".docx"]:
             stats.documentation_files += 1
 
     async def collect_async(self, all_files: list[Path] | None = None) -> ProjectStatistics:
@@ -87,6 +87,7 @@ class StatisticsCollector:
         # Try Rust-based metadata extraction (FAST)
         try:
             from warden import warden_core_rust
+
             paths = [str(f) for f in valid_files]
             rust_stats = warden_core_rust.get_file_stats(paths)
 
@@ -97,7 +98,7 @@ class StatisticsCollector:
                 stats.total_lines += s.line_count
 
             logger.debug("rust_stats_collection_completed", count=len(rust_stats))
-            return stats # Success early return
+            return stats  # Success early return
 
         except (ImportError, Exception) as e:
             if not isinstance(e, ImportError):
@@ -112,7 +113,7 @@ class StatisticsCollector:
                 try:
                     file_size = file_path.stat().st_size
                     if file_size < 200000:  # < 200KB
-                        with open(file_path, encoding='utf-8', errors='ignore') as f:
+                        with open(file_path, encoding="utf-8", errors="ignore") as f:
                             stats.total_lines += sum(1 for _ in f)
                 except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
                     pass  # Skip unreadable files

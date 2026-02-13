@@ -19,8 +19,9 @@ logger = get_logger(__name__)
 @dataclass
 class TaintSource:
     """A source of tainted (user-controlled) data."""
-    name: str           # "request.args"
-    node_type: str      # "call", "attribute", "subscript"
+
+    name: str  # "request.args"
+    node_type: str  # "call", "attribute", "subscript"
     line: int
     confidence: float = 0.9
 
@@ -28,18 +29,20 @@ class TaintSource:
 @dataclass
 class TaintSink:
     """A dangerous sink that should not receive tainted data."""
-    name: str           # "cursor.execute"
-    sink_type: str      # "SQL-value", "CMD-argument", "HTML-content"
+
+    name: str  # "cursor.execute"
+    sink_type: str  # "SQL-value", "CMD-argument", "HTML-content"
     line: int
 
 
 @dataclass
 class TaintPath:
     """A detected taint flow from source to sink."""
+
     source: TaintSource
     sink: TaintSink
-    transformations: list[str] = field(default_factory=list)    # ["f-string", "str.format"]
-    sanitizers: list[str] = field(default_factory=list)         # ["html.escape"]
+    transformations: list[str] = field(default_factory=list)  # ["f-string", "str.format"]
+    sanitizers: list[str] = field(default_factory=list)  # ["html.escape"]
     is_sanitized: bool = False
     confidence: float = 0.0
 
@@ -60,11 +63,21 @@ class TaintPath:
 
 # Known taint sources (user-controlled input)
 TAINT_SOURCES = {
-    "request.args", "request.form", "request.json", "request.data",
-    "request.values", "request.cookies", "request.headers",
-    "request.get_json", "request.files",
-    "input", "sys.argv", "os.environ", "os.getenv",
-    "stdin", "sys.stdin",
+    "request.args",
+    "request.form",
+    "request.json",
+    "request.data",
+    "request.values",
+    "request.cookies",
+    "request.headers",
+    "request.get_json",
+    "request.files",
+    "input",
+    "sys.argv",
+    "os.environ",
+    "os.getenv",
+    "stdin",
+    "sys.stdin",
 }
 
 # Known sinks with their types
@@ -145,9 +158,7 @@ class TaintAnalyzer:
         logger.debug("taint_analysis_complete", paths_found=len(paths))
         return paths
 
-    def _analyze_function(
-        self, func_node: ast.FunctionDef | ast.AsyncFunctionDef, source: str
-    ) -> list[TaintPath]:
+    def _analyze_function(self, func_node: ast.FunctionDef | ast.AsyncFunctionDef, source: str) -> list[TaintPath]:
         """Analyze a single function for taint flows."""
         # Step 1: Find all tainted variables (assigned from sources)
         tainted_vars: dict[str, TaintSource] = {}
@@ -227,9 +238,7 @@ class TaintAnalyzer:
 
         return paths
 
-    def _check_assignment_for_sources(
-        self, node: ast.Assign, tainted_vars: dict[str, TaintSource]
-    ) -> None:
+    def _check_assignment_for_sources(self, node: ast.Assign, tainted_vars: dict[str, TaintSource]) -> None:
         """Check if an assignment introduces tainted data."""
         source = self._identify_source(node.value)
         if source:
@@ -247,9 +256,7 @@ class TaintAnalyzer:
                     if var_name:
                         tainted_vars[var_name] = tainted
 
-    def _check_aug_assignment(
-        self, node: ast.AugAssign, tainted_vars: dict[str, TaintSource]
-    ) -> None:
+    def _check_aug_assignment(self, node: ast.AugAssign, tainted_vars: dict[str, TaintSource]) -> None:
         """Check augmented assignments (+=, etc.) for taint propagation."""
         var_name = self._get_var_name(node.target)
         if var_name and var_name in tainted_vars:
@@ -306,9 +313,7 @@ class TaintAnalyzer:
                     return (func_name, sink_type)
         return None
 
-    def _is_tainted(
-        self, node: ast.expr, tainted_vars: dict[str, TaintSource]
-    ) -> TaintSource | None:
+    def _is_tainted(self, node: ast.expr, tainted_vars: dict[str, TaintSource]) -> TaintSource | None:
         """Check if an expression uses tainted data."""
         # Direct variable reference
         var_name = self._get_var_name(node)

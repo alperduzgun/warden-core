@@ -89,8 +89,7 @@ class SQLInjectionCheck(ValidationCheck):
 
         # Pre-compile all patterns once for performance (KISS optimization)
         self._compiled_patterns = [
-            (re.compile(pattern_str, re.IGNORECASE), description)
-            for pattern_str, description in self.patterns
+            (re.compile(pattern_str, re.IGNORECASE), description) for pattern_str, description in self.patterns
         ]
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:

@@ -26,7 +26,7 @@ class OrchestratedLlmClient(ILlmClient):
         fast_clients: list[ILlmClient] | None = None,
         smart_model: str | None = None,
         fast_model: str | None = None,
-        metrics_collector = None
+        metrics_collector=None,
     ):
         """
         Initialize orchestrated LLM client with tiered routing.
@@ -50,11 +50,14 @@ class OrchestratedLlmClient(ILlmClient):
         # Initialize metrics collector
         if metrics_collector is None:
             from warden.llm.metrics import LLMMetricsCollector
+
             metrics_collector = LLMMetricsCollector()
         self.metrics = metrics_collector
 
         if not self.fast_clients:
-            logger.warning("orchestrated_client_no_fast_tier", message="Running in Smart-Only mode (slower, higher cost)")
+            logger.warning(
+                "orchestrated_client_no_fast_tier", message="Running in Smart-Only mode (slower, higher cost)"
+            )
         else:
             fast_providers = [c.provider.value for c in self.fast_clients]
             logger.info(
@@ -63,7 +66,7 @@ class OrchestratedLlmClient(ILlmClient):
                 smart_tier=smart_client.provider.value,
                 fast_tier_chain=" -> ".join(fast_providers),
                 fast_providers=fast_providers,
-                concurrency=self.metrics.max_concurrency if hasattr(self.metrics, 'max_concurrency') else "default"
+                concurrency=self.metrics.max_concurrency if hasattr(self.metrics, "max_concurrency") else "default",
             )
 
     @property
@@ -124,8 +127,8 @@ class OrchestratedLlmClient(ILlmClient):
                 duration_ms = int((time.time() - start_time) * 1000)
 
                 # Extract token counts from response
-                input_tokens = getattr(response, 'prompt_tokens', 0) or 0
-                output_tokens = getattr(response, 'completion_tokens', 0) or 0
+                input_tokens = getattr(response, "prompt_tokens", 0) or 0
+                output_tokens = getattr(response, "completion_tokens", 0) or 0
 
                 # Record metrics with token information
                 self.metrics.record_request(
@@ -136,7 +139,7 @@ class OrchestratedLlmClient(ILlmClient):
                     duration_ms=duration_ms,
                     error=response.error_message,
                     input_tokens=input_tokens,
-                    output_tokens=output_tokens
+                    output_tokens=output_tokens,
                 )
 
                 return client, response
@@ -152,11 +155,7 @@ class OrchestratedLlmClient(ILlmClient):
 
             # Wait for first completion or timeout
             try:
-                done, pending = await asyncio.wait(
-                    tasks,
-                    timeout=fast_timeout,
-                    return_when=asyncio.FIRST_COMPLETED
-                )
+                done, pending = await asyncio.wait(tasks, timeout=fast_timeout, return_when=asyncio.FIRST_COMPLETED)
             except Exception as e:
                 # Cancel all tasks on error
                 for task in tasks:
@@ -174,9 +173,7 @@ class OrchestratedLlmClient(ILlmClient):
                     if response.success:
                         successful_response = response
                         logger.info(
-                            "fast_tier_winner",
-                            provider=client.provider.value,
-                            duration_ms=response.duration_ms
+                            "fast_tier_winner", provider=client.provider.value, duration_ms=response.duration_ms
                         )
                         break  # First success wins
                     else:
@@ -187,25 +184,25 @@ class OrchestratedLlmClient(ILlmClient):
             # Cancel remaining pending tasks (anti-fragility: resource cleanup)
             for task in pending:
                 task.cancel()
-                logger.debug("cancelled_slow_provider", task=task.get_name() if hasattr(task, 'get_name') else 'unknown')
+                logger.debug(
+                    "cancelled_slow_provider", task=task.get_name() if hasattr(task, "get_name") else "unknown"
+                )
 
             # Log failed providers
             for provider, error in failed_providers:
-                logger.warning(
-                    "fast_tier_provider_failed",
-                    provider=provider,
-                    error=error
-                )
+                logger.warning("fast_tier_provider_failed", provider=provider, error=error)
 
             # Return successful response if any
             if successful_response:
                 return successful_response
 
             # If we are here, all fast clients failed or timed out
-            logger.warning("all_fast_tier_providers_failed_falling_back_to_smart",
-                          completed=len(done),
-                          timeout=len(pending),
-                          total=len(self.fast_clients))
+            logger.warning(
+                "all_fast_tier_providers_failed_falling_back_to_smart",
+                completed=len(done),
+                timeout=len(pending),
+                total=len(self.fast_clients),
+            )
 
             # Track fallback metric
             self.metrics.record_request(
@@ -214,7 +211,7 @@ class OrchestratedLlmClient(ILlmClient):
                 model="n/a",
                 success=False,
                 duration_ms=int(fast_timeout * 1000),
-                error="all_fast_providers_failed"
+                error="all_fast_providers_failed",
             )
 
         # 2. Smart Tier Execution (Final fallback or direct choice)
@@ -237,8 +234,8 @@ class OrchestratedLlmClient(ILlmClient):
         duration_ms = int((time.time() - start_time) * 1000)
 
         # Extract token counts from response
-        input_tokens = getattr(response, 'prompt_tokens', 0) or 0
-        output_tokens = getattr(response, 'completion_tokens', 0) or 0
+        input_tokens = getattr(response, "prompt_tokens", 0) or 0
+        output_tokens = getattr(response, "completion_tokens", 0) or 0
 
         # Record metrics for smart tier with token information
         self.metrics.record_request(
@@ -249,12 +246,13 @@ class OrchestratedLlmClient(ILlmClient):
             duration_ms=duration_ms,
             error=response.error_message,
             input_tokens=input_tokens,
-            output_tokens=output_tokens
+            output_tokens=output_tokens,
         )
 
         # CORE RESILIENCE: Raise exception on failure so Circuit Breaker can track it
         if not response.success:
             from warden.shared.infrastructure.exceptions import ExternalServiceError
+
             raise ExternalServiceError(f"Smart tier failed: {response.error_message}")
 
         return response

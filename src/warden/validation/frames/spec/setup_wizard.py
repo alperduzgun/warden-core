@@ -52,6 +52,7 @@ class SetupWizardConfig:
         exclude_dirs: Directories to skip during detection
         auto_suggest_roles: Automatically suggest roles based on platform type
     """
+
     search_path: str = ".."
     max_depth: int = 3
     min_confidence: float = 0.7
@@ -74,6 +75,7 @@ class PlatformSetupInput:
         role: Platform role (consumer/provider/both)
         description: Optional description
     """
+
     name: str
     path: str
     platform_type: str
@@ -221,19 +223,18 @@ class SetupWizard:
         platforms = []
         for project in projects:
             if isinstance(project, DetectedProject):
-                platforms.append({
-                    "name": project.name,
-                    "path": project.path,
-                    "type": project.platform_type.value,
-                    "role": project.role.value,
-                })
+                platforms.append(
+                    {
+                        "name": project.name,
+                        "path": project.path,
+                        "type": project.platform_type.value,
+                        "role": project.role.value,
+                    }
+                )
             elif isinstance(project, PlatformSetupInput):
                 platforms.append(project.to_dict())
             else:
-                raise TypeError(
-                    f"Expected DetectedProject or PlatformSetupInput, "
-                    f"got {type(project)}"
-                )
+                raise TypeError(f"Expected DetectedProject or PlatformSetupInput, got {type(project)}")
 
         # Validate
         result = self.validator.validate_platforms(platforms)
@@ -286,18 +287,14 @@ class SetupWizard:
                     platform["_metadata"] = {
                         "confidence": round(project.confidence, 2),
                         "evidence": project.evidence,
-                        **{k: v for k, v in project.metadata.items()
-                           if k not in ("absolute_path",)},
+                        **{k: v for k, v in project.metadata.items() if k not in ("absolute_path",)},
                     }
 
             elif isinstance(project, PlatformSetupInput):
                 platform = project.to_dict()
 
             else:
-                raise TypeError(
-                    f"Expected DetectedProject or PlatformSetupInput, "
-                    f"got {type(project)}"
-                )
+                raise TypeError(f"Expected DetectedProject or PlatformSetupInput, got {type(project)}")
 
             platforms.append(platform)
 
@@ -537,30 +534,21 @@ class SetupWizard:
         if consumers:
             lines.append(f"CONSUMERS ({len(consumers)}):")
             for p in consumers:
-                lines.append(
-                    f"  - {p.name} ({p.platform_type.value}) "
-                    f"- confidence: {p.confidence:.0%}"
-                )
+                lines.append(f"  - {p.name} ({p.platform_type.value}) - confidence: {p.confidence:.0%}")
                 lines.append(f"    path: {p.path}")
             lines.append("")
 
         if providers:
             lines.append(f"PROVIDERS ({len(providers)}):")
             for p in providers:
-                lines.append(
-                    f"  - {p.name} ({p.platform_type.value}) "
-                    f"- confidence: {p.confidence:.0%}"
-                )
+                lines.append(f"  - {p.name} ({p.platform_type.value}) - confidence: {p.confidence:.0%}")
                 lines.append(f"    path: {p.path}")
             lines.append("")
 
         if both:
             lines.append(f"BOTH (BFF Pattern) ({len(both)}):")
             for p in both:
-                lines.append(
-                    f"  - {p.name} ({p.platform_type.value}) "
-                    f"- confidence: {p.confidence:.0%}"
-                )
+                lines.append(f"  - {p.name} ({p.platform_type.value}) - confidence: {p.confidence:.0%}")
                 lines.append(f"    path: {p.path}")
             lines.append("")
 

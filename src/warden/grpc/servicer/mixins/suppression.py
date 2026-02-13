@@ -33,9 +33,7 @@ except ImportError:
 class SuppressionMixin:
     """Suppression endpoints (4 endpoints) with repository persistence."""
 
-    async def AddSuppression(
-        self, request, context
-    ) -> "warden_pb2.AddSuppressionResponse":
+    async def AddSuppression(self, request, context) -> "warden_pb2.AddSuppressionResponse":
         """Add a suppression rule with persistence."""
         logger.info("grpc_add_suppression", rule_id=request.rule_id)
 
@@ -68,13 +66,9 @@ class SuppressionMixin:
 
         except Exception as e:
             logger.error("grpc_add_suppression_error: %s", str(e))
-            return warden_pb2.AddSuppressionResponse(
-                success=False, error_message=str(e)
-            )
+            return warden_pb2.AddSuppressionResponse(success=False, error_message=str(e))
 
-    async def RemoveSuppression(
-        self, request, context
-    ) -> "warden_pb2.RemoveSuppressionResponse":
+    async def RemoveSuppression(self, request, context) -> "warden_pb2.RemoveSuppressionResponse":
         """Remove a suppression rule with persistence."""
         logger.info("grpc_remove_suppression", suppression_id=request.suppression_id)
 
@@ -95,23 +89,17 @@ class SuppressionMixin:
 
         except Exception as e:
             logger.error("grpc_remove_suppression_error: %s", str(e))
-            return warden_pb2.RemoveSuppressionResponse(
-                success=False, error_message=str(e)
-            )
+            return warden_pb2.RemoveSuppressionResponse(success=False, error_message=str(e))
 
     async def GetSuppressions(self, request, context) -> "warden_pb2.SuppressionList":
         """Get all suppression rules."""
         logger.info("grpc_get_suppressions")
 
         try:
-            response = warden_pb2.SuppressionList(
-                total_count=len(self._suppressions)
-            )
+            response = warden_pb2.SuppressionList(total_count=len(self._suppressions))
 
             for suppression in self._suppressions.values():
-                response.suppressions.append(
-                    ProtoConverters.convert_suppression(suppression)
-                )
+                response.suppressions.append(ProtoConverters.convert_suppression(suppression))
 
             return response
 
@@ -119,40 +107,29 @@ class SuppressionMixin:
             logger.error("grpc_get_suppressions_error: %s", str(e))
             return warden_pb2.SuppressionList()
 
-    async def CheckSuppression(
-        self, request, context
-    ) -> "warden_pb2.CheckSuppressionResponse":
+    async def CheckSuppression(self, request, context) -> "warden_pb2.CheckSuppressionResponse":
         """Check if an issue is suppressed."""
         logger.info("grpc_check_suppression", rule_id=request.rule_id)
 
         try:
             for suppression in self._suppressions.values():
-                if (suppression.get("is_global") and
-                        suppression.get("rule_id") == request.rule_id):
+                if suppression.get("is_global") and suppression.get("rule_id") == request.rule_id:
                     return warden_pb2.CheckSuppressionResponse(
                         is_suppressed=True,
                         suppression=ProtoConverters.convert_suppression(suppression),
-                        reason="Global suppression rule"
+                        reason="Global suppression rule",
                     )
 
-                if (suppression.get("rule_id") == request.rule_id and
-                        suppression.get("file_path") == request.file_path):
-                    if (suppression.get("line_number", 0) == 0 or
-                            suppression.get("line_number") == request.line_number):
+                if suppression.get("rule_id") == request.rule_id and suppression.get("file_path") == request.file_path:
+                    if suppression.get("line_number", 0) == 0 or suppression.get("line_number") == request.line_number:
                         return warden_pb2.CheckSuppressionResponse(
                             is_suppressed=True,
                             suppression=ProtoConverters.convert_suppression(suppression),
-                            reason="File-specific suppression rule"
+                            reason="File-specific suppression rule",
                         )
 
-            return warden_pb2.CheckSuppressionResponse(
-                is_suppressed=False,
-                reason="No matching suppression rule"
-            )
+            return warden_pb2.CheckSuppressionResponse(is_suppressed=False, reason="No matching suppression rule")
 
         except Exception as e:
             logger.error("grpc_check_suppression_error: %s", str(e))
-            return warden_pb2.CheckSuppressionResponse(
-                is_suppressed=False,
-                reason=str(e)
-            )
+            return warden_pb2.CheckSuppressionResponse(is_suppressed=False, reason=str(e))

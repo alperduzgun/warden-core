@@ -20,11 +20,12 @@ class FileType(str, Enum):
     Supported file types for code analysis.
     Delegates to LanguageRegistry for metadata to remain DRY.
     """
+
     # Import members from CodeLanguage to maintain compatibility
     PYTHON = CodeLanguage.PYTHON.value
     JAVASCRIPT = CodeLanguage.JAVASCRIPT.value
     TYPESCRIPT = CodeLanguage.TYPESCRIPT.value
-    JSX = CodeLanguage.JAVASCRIPT.value # Alias
+    JSX = CodeLanguage.JAVASCRIPT.value  # Alias
     TSX = CodeLanguage.TSX.value
     HTML = CodeLanguage.HTML.value
     CSS = CodeLanguage.CSS.value
@@ -49,12 +50,14 @@ class FileType(str, Enum):
     def extension(self) -> str:
         """Get primary file extension for this file type."""
         from warden.shared.languages.registry import LanguageRegistry
+
         return LanguageRegistry.get_primary_extension(CodeLanguage(self.value))
 
     @property
     def is_analyzable(self) -> bool:
         """Check if this file type can be analyzed by Warden."""
         from warden.shared.languages.registry import LanguageRegistry
+
         defn = LanguageRegistry.get_definition(CodeLanguage(self.value))
         return defn.is_analyzable if defn else False
 
@@ -152,9 +155,7 @@ class DiscoveryResult(BaseDomainModel):
 
     project_path: str
     files: list[DiscoveredFile] = Field(default_factory=list)
-    framework_detection: FrameworkDetectionResult = Field(
-        default_factory=FrameworkDetectionResult
-    )
+    framework_detection: FrameworkDetectionResult = Field(default_factory=FrameworkDetectionResult)
     stats: DiscoveryStats = Field(default_factory=DiscoveryStats)
     gitignore_patterns: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)

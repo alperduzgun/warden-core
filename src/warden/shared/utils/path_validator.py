@@ -10,14 +10,11 @@ from typing import Optional
 
 class PathTraversalError(Exception):
     """Raised when path traversal attack detected."""
+
     pass
 
 
-def validate_safe_path(
-    file_path: Path,
-    project_root: Path,
-    allow_absolute: bool = False
-) -> Path:
+def validate_safe_path(file_path: Path, project_root: Path, allow_absolute: bool = False) -> Path:
     """
     Validate path is safe (no traversal outside project_root).
 
@@ -44,17 +41,12 @@ def validate_safe_path(
     try:
         resolved.relative_to(project_root.resolve())
     except ValueError:
-        raise PathTraversalError(
-            f"Path traversal detected: {file_path} escapes {project_root}"
-        )
+        raise PathTraversalError(f"Path traversal detected: {file_path} escapes {project_root}")
 
     return resolved
 
 
-def safe_read_file(
-    file_path: str,
-    project_root: Path | None = None
-) -> str:
+def safe_read_file(file_path: str, project_root: Path | None = None) -> str:
     """
     Safely read file with path validation.
 

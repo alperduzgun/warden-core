@@ -373,11 +373,7 @@ class FrameRegistry:
                         attr = getattr(module, attr_name)
 
                         # Check if it's a ValidationFrame subclass (but not ValidationFrame itself)
-                        if (
-                            isinstance(attr, type)
-                            and issubclass(attr, ValidationFrame)
-                            and attr is not ValidationFrame
-                        ):
+                        if isinstance(attr, type) and issubclass(attr, ValidationFrame) and attr is not ValidationFrame:
                             frame_class = attr
                             break
 
@@ -538,7 +534,7 @@ class FrameRegistry:
                     continue
 
                 # Skip hidden directories, __pycache__, and system directories
-                if frame_path.name.startswith('.') or frame_path.name == '__pycache__':
+                if frame_path.name.startswith(".") or frame_path.name == "__pycache__":
                     logger.debug("skipping_system_directory", path=str(frame_path))
                     continue
 
@@ -591,7 +587,7 @@ class FrameRegistry:
                     continue
 
                 # Skip hidden directories, __pycache__, and system directories
-                if frame_path.name.startswith('.') or frame_path.name == '__pycache__':
+                if frame_path.name.startswith(".") or frame_path.name == "__pycache__":
                     logger.debug("skipping_system_directory_env", path=str(frame_path))
                     continue
 
@@ -663,11 +659,7 @@ class FrameRegistry:
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
 
-            if (
-                isinstance(attr, type)
-                and issubclass(attr, ValidationFrame)
-                and attr is not ValidationFrame
-            ):
+            if isinstance(attr, type) and issubclass(attr, ValidationFrame) and attr is not ValidationFrame:
                 self._validate_frame_class(attr)
 
                 # Store metadata if loaded
@@ -696,9 +688,7 @@ class FrameRegistry:
             ValidationFrameError: If validation fails
         """
         if not issubclass(frame_class, ValidationFrame):
-            raise ValidationFrameError(
-                f"{frame_class.__name__} is not a ValidationFrame subclass"
-            )
+            raise ValidationFrameError(f"{frame_class.__name__} is not a ValidationFrame subclass")
 
         # Try to instantiate to check for required attributes
         try:
@@ -708,13 +698,9 @@ class FrameRegistry:
             _ = instance.priority
             _ = instance.scope
         except Exception as e:
-            raise ValidationFrameError(
-                f"Frame {frame_class.__name__} validation failed: {e}"
-            )
+            raise ValidationFrameError(f"Frame {frame_class.__name__} validation failed: {e}")
 
-    def _deduplicate_frames(
-        self, frames: list[type[ValidationFrame]]
-    ) -> list[type[ValidationFrame]]:
+    def _deduplicate_frames(self, frames: list[type[ValidationFrame]]) -> list[type[ValidationFrame]]:
         """
         Remove duplicate frames (by frame_id).
 
@@ -743,9 +729,7 @@ class FrameRegistry:
 
         return unique_frames
 
-    def get_frame_config(
-        self, frame_id: str, user_config: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def get_frame_config(self, frame_id: str, user_config: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Get merged frame configuration (defaults from metadata + user overrides).
 

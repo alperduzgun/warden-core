@@ -16,6 +16,7 @@ from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
+
 class PipelineHandler(BaseHandler):
     """Handles code scanning and pipeline streaming events."""
 
@@ -23,7 +24,9 @@ class PipelineHandler(BaseHandler):
         self.orchestrator = orchestrator
         self.project_root = project_root
 
-    async def execute_pipeline_async(self, file_path: str, frames: list[str] | None = None, analysis_level: str = "standard") -> dict[str, Any]:
+    async def execute_pipeline_async(
+        self, file_path: str, frames: list[str] | None = None, analysis_level: str = "standard"
+    ) -> dict[str, Any]:
         """Execute validation pipeline on a single file."""
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
@@ -43,15 +46,19 @@ class PipelineHandler(BaseHandler):
         )
 
         result, context = await self.orchestrator.execute_async(
-            [code_file],
-            frames_to_execute=frames,
-            analysis_level=analysis_level
+            [code_file], frames_to_execute=frames, analysis_level=analysis_level
         )
 
         # Serialization handled by bridge or helper
         return result, context
 
-    async def execute_pipeline_stream_async(self, paths: str | list[str], frames: list[str] | None = None, analysis_level: str = "standard", baseline_fingerprints: set | None = None) -> AsyncIterator[dict[str, Any]]:
+    async def execute_pipeline_stream_async(
+        self,
+        paths: str | list[str],
+        frames: list[str] | None = None,
+        analysis_level: str = "standard",
+        baseline_fingerprints: set | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         if not self.orchestrator:
             raise IPCError(ErrorCode.INTERNAL_ERROR, "Pipeline orchestrator not initialized")
@@ -96,11 +103,7 @@ class PipelineHandler(BaseHandler):
         try:
             # Run in background
             pipeline_task = asyncio.create_task(
-                self.orchestrator.execute_async(
-                    code_files,
-                    frames_to_execute=frames,
-                    analysis_level=analysis_level
-                )
+                self.orchestrator.execute_async(code_files, frames_to_execute=frames, analysis_level=analysis_level)
             )
 
             while not pipeline_task.done() or not progress_queue.empty():
@@ -138,11 +141,13 @@ class PipelineHandler(BaseHandler):
             # If it's a file, handle it directly
             if root_path.is_file():
                 try:
-                    code_files.append(CodeFile(
-                        path=str(root_path.absolute()),
-                        content=root_path.read_text(encoding="utf-8", errors='replace'),
-                        language=self._detect_language(root_path)
-                    ))
+                    code_files.append(
+                        CodeFile(
+                            path=str(root_path.absolute()),
+                            content=root_path.read_text(encoding="utf-8", errors="replace"),
+                            language=self._detect_language(root_path),
+                        )
+                    )
                     seen_paths.add(str(root_path.absolute()))
                 except Exception as e:
                     logger.warning("file_read_error", file=str(root_path), error=str(e))
@@ -171,28 +176,36 @@ class PipelineHandler(BaseHandler):
 
                 try:
                     p = Path(f.path)
-                    code_files.append(CodeFile(
-                        path=str(p.absolute()),
-                        content=p.read_text(encoding="utf-8", errors='replace'),
-                        language=f.file_type.value,
-                        line_count=f.line_count or 0,
-                        hash=f.hash,
-                        metadata=f.metadata
-                    ))
+                    code_files.append(
+                        CodeFile(
+                            path=str(p.absolute()),
+                            content=p.read_text(encoding="utf-8", errors="replace"),
+                            language=f.file_type.value,
+                            line_count=f.line_count or 0,
+                            hash=f.hash,
+                            metadata=f.metadata,
+                        )
+                    )
                     seen_paths.add(f.path)
                 except Exception as e:
                     logger.warning("file_read_error", file=f.path, error=str(e))
 
-        return code_files[:1000] # Limit protection
+        return code_files[:1000]  # Limit protection
 
     def _detect_language(self, path: Path) -> str:
         ext = path.suffix.lower()
         mapping = {
-            '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
-            '.jsx': 'javascript', '.tsx': 'typescript', '.go': 'go',
-            '.rs': 'rust', '.java': 'java', '.cs': 'csharp'
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".jsx": "javascript",
+            ".tsx": "typescript",
+            ".go": "go",
+            ".rs": "rust",
+            ".java": "java",
+            ".cs": "csharp",
         }
-        return mapping.get(ext, 'text')
+        return mapping.get(ext, "text")
 
     def _filter_result(self, result: Any, baseline_fingerprints: set) -> Any:
         """Filter out findings that match the baseline fingerprints."""
@@ -219,22 +232,22 @@ class PipelineHandler(BaseHandler):
                 is_dict = isinstance(f, dict)
 
                 if is_dict:
-                     rule_id = f.get("id") or f.get("rule_id") or f.get("ruleId", "unknown")
-                     location = f.get("location", "")
-                     msg = f.get("message", "")
-                     raw_path = f.get("file_path") or f.get("path") or f.get("file")
+                    rule_id = f.get("id") or f.get("rule_id") or f.get("ruleId", "unknown")
+                    location = f.get("location", "")
+                    msg = f.get("message", "")
+                    raw_path = f.get("file_path") or f.get("path") or f.get("file")
                 else:
-                     rule_id = getattr(f, "id", None) or getattr(f, "rule_id", None) or getattr(f, "ruleId", "unknown")
-                     location = getattr(f, "location", "")
-                     msg = getattr(f, "message", "")
-                     raw_path = getattr(f, "file_path", None) or getattr(f, "path", None) or getattr(f, "file", None)
+                    rule_id = getattr(f, "id", None) or getattr(f, "rule_id", None) or getattr(f, "ruleId", "unknown")
+                    location = getattr(f, "location", "")
+                    msg = getattr(f, "message", "")
+                    raw_path = getattr(f, "file_path", None) or getattr(f, "path", None) or getattr(f, "file", None)
 
                 # Resolve file path relative to project root
                 path_str = str(raw_path) if raw_path else ""
 
                 # If path missing, try to extract from location
                 if not path_str and location:
-                    path_str = location.split(':')[0]
+                    path_str = location.split(":")[0]
 
                 if str(self.project_root) in path_str:
                     rel_path = path_str.replace(str(self.project_root) + "/", "")
@@ -245,7 +258,9 @@ class PipelineHandler(BaseHandler):
                 if is_dict:
                     snippet = f.get("code_snippet") or f.get("codeSnippet") or f.get("code", "")
                 else:
-                    snippet = getattr(f, "code_snippet", None) or getattr(f, "codeSnippet", None) or getattr(f, "code", "")
+                    snippet = (
+                        getattr(f, "code_snippet", None) or getattr(f, "codeSnippet", None) or getattr(f, "code", "")
+                    )
 
                 composite = f"{rule_id}:{rel_path}:{msg}:{snippet}"
                 fp = hashlib.sha256(composite.encode()).hexdigest()
@@ -295,7 +310,12 @@ class PipelineHandler(BaseHandler):
         for pkg in missing_pkgs:
             # Simple heuristic: pkg name ends with -lang, and target_languages has LANG
             lang_part = pkg.replace("tree-sitter-", "").replace("-", "_").upper()
-            if target_languages is None or lang_part in target_languages or (lang_part == "C_SHARP" and "CSHARP" in target_languages) or (lang_part == "BASH" and "SHELL" in target_languages):
+            if (
+                target_languages is None
+                or lang_part in target_languages
+                or (lang_part == "C_SHARP" and "CSHARP" in target_languages)
+                or (lang_part == "BASH" and "SHELL" in target_languages)
+            ):
                 to_install.append(pkg)
 
         if not to_install:

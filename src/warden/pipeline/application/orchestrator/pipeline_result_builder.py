@@ -30,9 +30,9 @@ class PipelineResultBuilder:
         frame_results = []
 
         # Convert context frame results to FrameResult objects
-        if hasattr(context, 'frame_results') and context.frame_results:
+        if hasattr(context, "frame_results") and context.frame_results:
             for _frame_id, frame_data in context.frame_results.items():
-                result = frame_data.get('result')
+                result = frame_data.get("result")
                 if result:
                     frame_results.append(result)
 
@@ -40,27 +40,28 @@ class PipelineResultBuilder:
         findings = self._collect_findings(context, frame_results)
 
         # Count by severity
-        critical_findings = sum(1 for f in findings if get_finding_severity(f) == 'critical')
-        high_findings = sum(1 for f in findings if get_finding_severity(f) == 'high')
-        medium_findings = sum(1 for f in findings if get_finding_severity(f) == 'medium')
-        low_findings = sum(1 for f in findings if get_finding_severity(f) == 'low')
+        critical_findings = sum(1 for f in findings if get_finding_severity(f) == "critical")
+        high_findings = sum(1 for f in findings if get_finding_severity(f) == "high")
+        medium_findings = sum(1 for f in findings if get_finding_severity(f) == "medium")
+        low_findings = sum(1 for f in findings if get_finding_severity(f) == "low")
         manual_review_count = sum(1 for f in findings if self._is_review_required(f))
         total_findings = len(findings)
 
         # Calculate quality score
-        quality_score = getattr(context, 'quality_score_before', None)
+        quality_score = getattr(context, "quality_score_before", None)
         if quality_score is None or quality_score == 0.0:
             from warden.shared.utils.quality_calculator import calculate_quality_score
+
             quality_score = calculate_quality_score(findings)
         context.quality_score_after = quality_score
 
         # Calculate frame counts
-        frames_passed = getattr(pipeline, 'frames_passed', 0)
-        frames_failed = getattr(pipeline, 'frames_failed', 0)
+        frames_passed = getattr(pipeline, "frames_passed", 0)
+        frames_failed = getattr(pipeline, "frames_failed", 0)
         frames_skipped = 0
 
         actual_total = frames_passed + frames_failed + frames_skipped
-        planned_total = len(getattr(context, 'selected_frames', [])) or len(self.frames)
+        planned_total = len(getattr(context, "selected_frames", [])) or len(self.frames)
         executed_count = len(frame_results)
         total_frames = max(actual_total, planned_total, executed_count)
 
@@ -92,25 +93,25 @@ class PipelineResultBuilder:
                         "status": fe.status,
                         "duration": fe.duration,
                     }
-                    for fe in getattr(pipeline, 'frame_executions', [])
+                    for fe in getattr(pipeline, "frame_executions", [])
                 ],
             },
-            artifacts=getattr(context, 'artifacts', []),
+            artifacts=getattr(context, "artifacts", []),
             quality_score=quality_score,
-            total_tokens=getattr(context, 'total_tokens', 0),
-            prompt_tokens=getattr(context, 'prompt_tokens', 0),
-            completion_tokens=getattr(context, 'completion_tokens', 0),
+            total_tokens=getattr(context, "total_tokens", 0),
+            prompt_tokens=getattr(context, "prompt_tokens", 0),
+            completion_tokens=getattr(context, "completion_tokens", 0),
         )
 
     @staticmethod
     def _collect_findings(context: PipelineContext, frame_results: list) -> list:
         """Collect findings from context or aggregate from frame results."""
-        if hasattr(context, 'findings') and context.findings:
+        if hasattr(context, "findings") and context.findings:
             return context.findings
 
         findings: list = []
         for frame_res in frame_results:
-            if hasattr(frame_res, 'findings') and frame_res.findings:
+            if hasattr(frame_res, "findings") and frame_res.findings:
                 findings.extend(frame_res.findings)
         return findings
 
@@ -118,6 +119,6 @@ class PipelineResultBuilder:
     def _is_review_required(f: Any) -> bool:
         """Check if a finding requires manual review."""
         if isinstance(f, dict):
-            return f.get('verification_metadata', {}).get('review_required', False)
-        v = getattr(f, 'verification_metadata', {})
-        return v.get('review_required', False) if isinstance(v, dict) else False
+            return f.get("verification_metadata", {}).get("review_required", False)
+        v = getattr(f, "verification_metadata", {})
+        return v.get("review_required", False) if isinstance(v, dict) else False

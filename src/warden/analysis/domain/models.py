@@ -236,9 +236,7 @@ class IssueSnapshot(BaseDomainModel):
                 # Convert Finding to WardenIssue
                 # Hash based on file + code content (NOT line number for stable deduplication)
                 file_path = finding.location.split(":")[0]
-                code_hash = hashlib.sha256(
-                    f"{file_path}:{finding.code}:{finding.message}".encode()
-                ).hexdigest()[:16]
+                code_hash = hashlib.sha256(f"{file_path}:{finding.code}:{finding.message}".encode()).hexdigest()[:16]
 
                 issue = WardenIssue(
                     id=finding.id,

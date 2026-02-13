@@ -247,7 +247,9 @@ class ResultAnalyzer:
             # Calculate statistics
             occurrence_count = len(issues)
             resolution_count = sum(
-                1 for i in issues if i.state.value == 1  # RESOLVED
+                1
+                for i in issues
+                if i.state.value == 1  # RESOLVED
             )
             reopen_count = sum(i.reopen_count for i in issues)
 

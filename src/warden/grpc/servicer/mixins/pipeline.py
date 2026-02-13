@@ -16,9 +16,11 @@ from warden.grpc.converters import ProtoConverters
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -34,10 +36,7 @@ class PipelineMixin:
         try:
             frames = list(request.frames) if request.frames else None
 
-            result = await self.bridge.execute_pipeline_async(
-                path=request.path,
-                frames=frames
-            )
+            result = await self.bridge.execute_pipeline_async(path=request.path, frames=frames)
 
             duration_ms = int((time.time() - start_time) * 1000)
             self.total_scans += 1
@@ -52,7 +51,7 @@ class PipelineMixin:
                 low_count=result.get("low_count", 0),
                 duration_ms=duration_ms,
                 frames_executed=result.get("frames_executed", []),
-                error_message=result.get("error", "")
+                error_message=result.get("error", ""),
             )
 
             for finding in result.get("findings", []):
@@ -66,24 +65,15 @@ class PipelineMixin:
                 response.cleanings.append(ProtoConverters.convert_cleaning(clean))
 
             self.total_findings += response.total_findings
-            logger.info(
-                "grpc_pipeline_complete",
-                findings=response.total_findings,
-                duration_ms=duration_ms
-            )
+            logger.info("grpc_pipeline_complete", findings=response.total_findings, duration_ms=duration_ms)
 
             return response
 
         except Exception as e:
             logger.error("grpc_pipeline_error: %s", str(e))
-            return warden_pb2.PipelineResult(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.PipelineResult(success=False, error_message=str(e))
 
-    async def ExecutePipelineStream(
-        self, request, context
-    ) -> AsyncIterator["warden_pb2.PipelineEvent"]:
+    async def ExecutePipelineStream(self, request, context) -> AsyncIterator["warden_pb2.PipelineEvent"]:
         """Execute pipeline with streaming progress events."""
         logger.info("grpc_execute_pipeline_stream", path=request.path)
 
@@ -91,27 +81,22 @@ class PipelineMixin:
             yield warden_pb2.PipelineEvent(
                 event_type="pipeline_start",
                 message=f"Starting pipeline for {request.path}",
-                timestamp_ms=int(time.time() * 1000)
+                timestamp_ms=int(time.time() * 1000),
             )
 
             frames = list(request.frames) if request.frames else None
 
-            async for event in self.bridge.execute_pipeline_stream_async(
-                path=request.path,
-                frames=frames
-            ):
+            async for event in self.bridge.execute_pipeline_stream_async(path=request.path, frames=frames):
                 proto_event = warden_pb2.PipelineEvent(
                     event_type=event.get("type", "progress"),
                     stage=event.get("stage", ""),
                     progress=event.get("progress", 0.0),
                     message=event.get("message", ""),
-                    timestamp_ms=int(time.time() * 1000)
+                    timestamp_ms=int(time.time() * 1000),
                 )
 
                 if "finding" in event:
-                    proto_event.finding.CopyFrom(
-                        ProtoConverters.convert_finding(event["finding"])
-                    )
+                    proto_event.finding.CopyFrom(ProtoConverters.convert_finding(event["finding"]))
 
                 yield proto_event
 
@@ -119,13 +104,9 @@ class PipelineMixin:
                 event_type="pipeline_complete",
                 progress=1.0,
                 message="Pipeline completed",
-                timestamp_ms=int(time.time() * 1000)
+                timestamp_ms=int(time.time() * 1000),
             )
 
         except Exception as e:
             logger.error("grpc_stream_error: %s", str(e))
-            yield warden_pb2.PipelineEvent(
-                event_type="error",
-                message=str(e),
-                timestamp_ms=int(time.time() * 1000)
-            )
+            yield warden_pb2.PipelineEvent(event_type="error", message=str(e), timestamp_ms=int(time.time() * 1000))

@@ -217,17 +217,17 @@ class NestJSExtractor(BaseContractExtractor):
                     # Clean return type
                     output_type = self._clean_type(return_type) if return_type else None
 
-                    operations.append(OperationDefinition(
-                        name=method_name,
-                        operation_type=self.HTTP_DECORATORS.get(
-                            http_method, OperationType.QUERY
-                        ),
-                        input_type=input_type,
-                        output_type=output_type,
-                        description=f"{http_method.upper()} /{full_path}",
-                        source_file=str(file_path),
-                        source_line=i + 1,
-                    ))
+                    operations.append(
+                        OperationDefinition(
+                            name=method_name,
+                            operation_type=self.HTTP_DECORATORS.get(http_method, OperationType.QUERY),
+                            input_type=input_type,
+                            output_type=output_type,
+                            description=f"{http_method.upper()} /{full_path}",
+                            source_file=str(file_path),
+                            source_line=i + 1,
+                        )
+                    )
 
         return operations
 
@@ -335,32 +335,47 @@ class NestJSExtractor(BaseContractExtractor):
 
                 is_array = prop_type.endswith("[]") or prop_type.startswith("Array<")
 
-                fields.append(FieldDefinition(
-                    name=prop_name,
-                    type_name=self._clean_type(prop_type),
-                    is_optional=is_optional,
-                    is_array=is_array,
-                    source_file=str(file_path),
-                ))
+                fields.append(
+                    FieldDefinition(
+                        name=prop_name,
+                        type_name=self._clean_type(prop_type),
+                        is_optional=is_optional,
+                        is_array=is_array,
+                        source_file=str(file_path),
+                    )
+                )
 
             if fields:
-                line_num = content[:class_match.start()].count("\n") + 1
-                models.append(ModelDefinition(
-                    name=class_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: class_match.start()].count("\n") + 1
+                models.append(
+                    ModelDefinition(
+                        name=class_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return models
 
     def _should_skip_class(self, class_name: str) -> bool:
         """Check if class should be skipped (not a model)."""
         skip_suffixes = [
-            "Controller", "Service", "Module", "Guard",
-            "Interceptor", "Filter", "Pipe", "Middleware",
-            "Gateway", "Resolver", "Factory", "Provider",
-            "Strategy", "Subscriber", "Listener",
+            "Controller",
+            "Service",
+            "Module",
+            "Guard",
+            "Interceptor",
+            "Filter",
+            "Pipe",
+            "Middleware",
+            "Gateway",
+            "Resolver",
+            "Factory",
+            "Provider",
+            "Strategy",
+            "Subscriber",
+            "Listener",
         ]
         return any(class_name.endswith(suffix) for suffix in skip_suffixes)
 
@@ -390,13 +405,15 @@ class NestJSExtractor(BaseContractExtractor):
                     values.append(value)
 
             if values:
-                line_num = content[:enum_match.start()].count("\n") + 1
-                enums.append(EnumDefinition(
-                    name=enum_name,
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: enum_match.start()].count("\n") + 1
+                enums.append(
+                    EnumDefinition(
+                        name=enum_name,
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return enums
 

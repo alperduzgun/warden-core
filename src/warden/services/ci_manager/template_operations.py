@@ -15,9 +15,11 @@ from .exceptions import TemplateError
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -28,10 +30,9 @@ CUSTOM_SECTION_END: Final[str] = "# WARDEN-CUSTOM-END"
 VERSION_HEADER_PATTERN: Final[str] = r"^# Warden CI v(\d+\.\d+\.\d+)"
 
 # Allowed template names (whitelist)
-ALLOWED_TEMPLATES: Final[frozenset[str]] = frozenset({
-    "github.yml", "gitlab.yml", "warden-pr.yml",
-    "warden-nightly.yml", "warden-release.yml"
-})
+ALLOWED_TEMPLATES: Final[frozenset[str]] = frozenset(
+    {"github.yml", "gitlab.yml", "warden-pr.yml", "warden-nightly.yml", "warden-release.yml"}
+)
 
 
 def load_template(template_name: str) -> str:
@@ -46,10 +47,7 @@ def load_template(template_name: str) -> str:
         raise TemplateError(f"Template not allowed: {template_name}")
 
     try:
-        content = importlib.resources.read_text(
-            "warden.templates.workflows",
-            template_name
-        )
+        content = importlib.resources.read_text("warden.templates.workflows", template_name)
 
         if not content or not content.strip():
             raise TemplateError(f"Template is empty: {template_name}")
@@ -119,11 +117,7 @@ def merge_custom_sections(
             custom_block += "\n"
         custom_block += f"{CUSTOM_SECTION_END}\n"
 
-    return (
-        new_content[:insertion_point] +
-        custom_block +
-        new_content[insertion_point:]
-    )
+    return new_content[:insertion_point] + custom_block + new_content[insertion_point:]
 
 
 def prepare_template_variables(branch: str, llm_config: dict[str, Any]) -> dict[str, str]:

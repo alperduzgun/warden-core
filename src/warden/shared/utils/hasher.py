@@ -33,7 +33,7 @@ class NormalizedHasher:
             return ""
 
         # 1. Normalize line endings
-        content = content.replace('\r\n', '\n').replace('\r', '\n')
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
 
         # 2. Language-specific comment removal
         content = NormalizedHasher._remove_comments(content, language)
@@ -41,11 +41,11 @@ class NormalizedHasher:
         # 3. Structural normalization
         # Replace all whitespace sequences (including newlines) with a single space
         # This effectively ignores formatting changes while preserving necessary spaces
-        content = re.sub(r'\s+', ' ', content)
+        content = re.sub(r"\s+", " ", content)
 
         # 4. Remove spaces around common separators that don't need them
         # (This helps ignore differences like 'foo( )' vs 'foo()')
-        content = re.sub(r'\s*([{}()\[\],;.:<>])\s*', r'\1', content)
+        content = re.sub(r"\s*([{}()\[\],;.:<>])\s*", r"\1", content)
 
         return content.strip()
 
@@ -61,34 +61,43 @@ class NormalizedHasher:
 
         if language in [CodeLanguage.PYTHON]:
             # Remove # comments
-            content = re.sub(r'#.*$', '', content, flags=re.MULTILINE)
+            content = re.sub(r"#.*$", "", content, flags=re.MULTILINE)
             # Note: We don't remove docstrings as they often contain important metadata
             # or versioning that might be relevant for some frames.
 
         elif language in [
-            CodeLanguage.JAVASCRIPT, CodeLanguage.TYPESCRIPT, CodeLanguage.TSX,
-            CodeLanguage.JAVA, CodeLanguage.CSHARP, CodeLanguage.GO,
-            CodeLanguage.RUST, CodeLanguage.KOTLIN, CodeLanguage.SWIFT,
-            CodeLanguage.CPP, CodeLanguage.C, CodeLanguage.DART, CodeLanguage.PHP
+            CodeLanguage.JAVASCRIPT,
+            CodeLanguage.TYPESCRIPT,
+            CodeLanguage.TSX,
+            CodeLanguage.JAVA,
+            CodeLanguage.CSHARP,
+            CodeLanguage.GO,
+            CodeLanguage.RUST,
+            CodeLanguage.KOTLIN,
+            CodeLanguage.SWIFT,
+            CodeLanguage.CPP,
+            CodeLanguage.C,
+            CodeLanguage.DART,
+            CodeLanguage.PHP,
         ]:
             # Remove /* */ multi-line comments
-            content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+            content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
             # Remove // single-line comments
-            content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
+            content = re.sub(r"//.*$", "", content, flags=re.MULTILINE)
 
         elif language == CodeLanguage.SQL:
             # Remove -- comments
-            content = re.sub(r'--.*$', '', content, flags=re.MULTILINE)
+            content = re.sub(r"--.*$", "", content, flags=re.MULTILINE)
             # Remove /* */ comments
-            content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+            content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
 
         elif language in [CodeLanguage.YAML, CodeLanguage.SHELL]:
             # Remove # comments
-            content = re.sub(r'#.*$', '', content, flags=re.MULTILINE)
+            content = re.sub(r"#.*$", "", content, flags=re.MULTILINE)
 
         elif language == CodeLanguage.HTML:
             # Remove <!-- --> comments
-            content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+            content = re.sub(r"<!--.*?-->", "", content, flags=re.DOTALL)
 
         return content
 
@@ -96,4 +105,4 @@ class NormalizedHasher:
     def calculate_normalized_hash(content: str, language: CodeLanguage) -> str:
         """Calculate SHA-256 hash of normalized content."""
         normalized = NormalizedHasher.normalize(content, language)
-        return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()

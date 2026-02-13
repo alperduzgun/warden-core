@@ -19,6 +19,7 @@ class MCPSession:
 
     Aggregate root for session state management.
     """
+
     session_id: str
     status: ServerStatus = ServerStatus.INITIALIZING
     initialized: bool = False
@@ -56,14 +57,17 @@ class MCPToolDefinition:
 
     Defines a tool that can be invoked by the MCP client.
     """
+
     name: str
     description: str
     category: ToolCategory
-    input_schema: dict[str, Any] = field(default_factory=lambda: {
-        "type": "object",
-        "properties": {},
-        "required": [],
-    })
+    input_schema: dict[str, Any] = field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        }
+    )
     requires_bridge: bool = False
 
     def to_mcp_format(self) -> dict[str, Any]:
@@ -82,6 +86,7 @@ class MCPResourceDefinition:
 
     Defines a resource that can be read by the MCP client.
     """
+
     uri: str
     name: str
     description: str
@@ -108,6 +113,7 @@ class MCPToolResult:
 
     Encapsulates tool output in MCP-compatible format.
     """
+
     content: list[dict[str, Any]]
     is_error: bool = False
 
@@ -132,4 +138,5 @@ class MCPToolResult:
     def json_result(cls, data: Any) -> "MCPToolResult":
         """Create a JSON result."""
         import json
+
         return cls(content=[{"type": "text", "text": json.dumps(data, indent=2, default=str)}])

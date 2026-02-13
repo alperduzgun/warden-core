@@ -11,6 +11,7 @@ from warden.ast.domain.enums import CodeLanguage
 
 class LanguageDefinition(BaseModel):
     """Rich metadata for a programming language."""
+
     name: str
     id: CodeLanguage
     extensions: set[str]
@@ -36,7 +37,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="python",
         proto_type_name="PYTHON",
         is_analyzable=True,
-        linter_names=["flake8", "pylint", "ruff"]
+        linter_names=["flake8", "pylint", "ruff"],
     ),
     LanguageDefinition(
         name="JavaScript",
@@ -48,7 +49,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="javascript",
         proto_type_name="JAVASCRIPT",
         is_analyzable=True,
-        linter_names=["eslint"]
+        linter_names=["eslint"],
     ),
     LanguageDefinition(
         name="TypeScript",
@@ -60,7 +61,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="typescript",
         proto_type_name="TYPESCRIPT",
         is_analyzable=True,
-        linter_names=["eslint", "tsc"]
+        linter_names=["eslint", "tsc"],
     ),
     LanguageDefinition(
         name="TSX",
@@ -71,7 +72,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="tsx",
         proto_type_name="TYPESCRIPT",
         is_analyzable=True,
-        linter_names=["eslint"]
+        linter_names=["eslint"],
     ),
     LanguageDefinition(
         name="Go",
@@ -82,7 +83,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="go",
         proto_type_name="GO",
         is_analyzable=True,
-        linter_names=["golangci-lint", "staticcheck"]
+        linter_names=["golangci-lint", "staticcheck"],
     ),
     LanguageDefinition(
         name="Rust",
@@ -93,7 +94,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="rust",
         proto_type_name="RUST",
         is_analyzable=True,
-        linter_names=["clippy"]
+        linter_names=["clippy"],
     ),
     LanguageDefinition(
         name="Java",
@@ -104,7 +105,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="java",
         proto_type_name="JAVA",
         is_analyzable=True,
-        linter_names=["checkstyle"]
+        linter_names=["checkstyle"],
     ),
     LanguageDefinition(
         name="Dart",
@@ -115,7 +116,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="dart",
         proto_type_name="DART",
         is_analyzable=True,
-        linter_names=["dart_analyze"]
+        linter_names=["dart_analyze"],
     ),
     LanguageDefinition(
         name="Swift",
@@ -127,7 +128,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="swift",
         proto_type_name="SWIFT",
         is_analyzable=True,
-        linter_names=["swiftlint"]
+        linter_names=["swiftlint"],
     ),
     LanguageDefinition(
         name="Kotlin",
@@ -139,7 +140,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="kotlin",
         proto_type_name="KOTLIN",
         is_analyzable=True,
-        linter_names=["ktlint"]
+        linter_names=["ktlint"],
     ),
     LanguageDefinition(
         name="C",
@@ -179,7 +180,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="ruby",
         proto_type_name="RUBY",
         is_analyzable=True,
-        linter_names=["rubocop"]
+        linter_names=["rubocop"],
     ),
     LanguageDefinition(
         name="PHP",
@@ -189,7 +190,7 @@ LANGUAGE_DEFINITIONS: list[LanguageDefinition] = [
         tree_sitter_id="php",
         proto_type_name="PHP",
         is_analyzable=True,
-        linter_names=["phpcs", "phpstan"]
+        linter_names=["phpcs", "phpstan"],
     ),
     LanguageDefinition(
         name="Scala",

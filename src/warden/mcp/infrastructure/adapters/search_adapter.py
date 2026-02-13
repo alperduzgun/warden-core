@@ -25,14 +25,16 @@ class SearchAdapter(BaseWardenAdapter):
         - warden_clear_index: Clear index
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_search_code",
-        "warden_search_similar_code",
-        "warden_search_by_description",
-        "warden_index_project",
-        "warden_get_index_stats",
-        "warden_clear_index",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_search_code",
+            "warden_search_similar_code",
+            "warden_search_by_description",
+            "warden_index_project",
+            "warden_get_index_stats",
+            "warden_clear_index",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.SEARCH
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -237,10 +239,12 @@ class SearchAdapter(BaseWardenAdapter):
                 result = await self.bridge.get_index_stats()
                 return MCPToolResult.json_result(result)
             else:
-                return MCPToolResult.json_result({
-                    "available": False,
-                    "message": "Index statistics not available",
-                })
+                return MCPToolResult.json_result(
+                    {
+                        "available": False,
+                        "message": "Index statistics not available",
+                    }
+                )
         except Exception as e:
             return MCPToolResult.error(f"Failed to get index stats: {e}")
 
@@ -252,10 +256,12 @@ class SearchAdapter(BaseWardenAdapter):
         try:
             if hasattr(self.bridge, "clear_index"):
                 await self.bridge.clear_index()
-                return MCPToolResult.json_result({
-                    "success": True,
-                    "message": "Index cleared",
-                })
+                return MCPToolResult.json_result(
+                    {
+                        "success": True,
+                        "message": "Index cleared",
+                    }
+                )
             else:
                 return MCPToolResult.error("Index clearing not available")
         except Exception as e:

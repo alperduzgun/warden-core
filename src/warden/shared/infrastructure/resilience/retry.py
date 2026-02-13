@@ -11,9 +11,11 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
+
     max_attempts: int = 3
     initial_delay: float = 1.0
     max_delay: float = 30.0
@@ -21,15 +23,16 @@ class RetryConfig:
     jitter: bool = True
     retryable_exceptions: tuple = (Exception,)
 
+
 class RetryExhausted(Exception):
     """Raised when all retry attempts are exhausted."""
+
     def __init__(self, operation: str, attempts: int, last_error: Exception):
         self.operation = operation
         self.attempts = attempts
         self.last_error = last_error
-        super().__init__(
-            f"Operation '{operation}' failed after {attempts} attempts: {last_error}"
-        )
+        super().__init__(f"Operation '{operation}' failed after {attempts} attempts: {last_error}")
+
 
 async def with_retry_async(
     coro_factory: Callable[[], Any],
@@ -45,7 +48,7 @@ async def with_retry_async(
             return await coro_factory()
         except config.retryable_exceptions as e:
             # Don't retry permanent failures (marked with non_retryable=True)
-            if getattr(e, 'non_retryable', False):
+            if getattr(e, "non_retryable", False):
                 raise
             last_error = e
             if attempt >= config.max_attempts:
@@ -76,6 +79,7 @@ async def with_retry_async(
 
     raise RetryExhausted(operation_name, config.max_attempts, last_error)
 
+
 def retry(
     max_attempts: int = 3,
     initial_delay: float = 1.0,
@@ -90,6 +94,7 @@ def retry(
         max_delay=max_delay,
         retryable_exceptions=retryable_exceptions,
     )
+
     def decorator(func):
         @functools.wraps(func)
         async def wrapper_async(*args, **kwargs):
@@ -99,5 +104,7 @@ def retry(
                 config,
                 name,
             )
+
         return wrapper_async
+
     return decorator

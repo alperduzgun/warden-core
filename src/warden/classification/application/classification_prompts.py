@@ -11,10 +11,7 @@ from warden.analysis.domain.project_context import Framework, ProjectType
 def get_classification_system_prompt(available_frames: list[Any] | None = None) -> str:
     """Get classification system prompt with Strategic Selection Principles."""
     if available_frames:
-        frames_descriptions = "\n".join([
-            f"- {f.frame_id}: {f.description}"
-            for f in available_frames
-        ])
+        frames_descriptions = "\n".join([f"- {f.frame_id}: {f.description}" for f in available_frames])
     else:
         frames_descriptions = """- SecurityFrame: Critical vulnerability detection (SQLi, XSS, Secrets). Uses LSP data flow for taint tracking.
 - ResilienceFrame: Chaos engineering - simulate failures, find missing resilience patterns (timeout, retry, circuit breaker).
@@ -65,6 +62,7 @@ Return a JSON object:
   "reasoning": "Selected SecurityFrame due to sensitive dependencies (SQLAlchemy). Rejected FuzzFrame due to high noise risk in Python runtime. Enabled ResilienceFrame for API resilience."
 }}
 """
+
 
 def format_classification_user_prompt(context: dict[str, Any]) -> str:
     """Format user prompt for classification."""

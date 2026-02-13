@@ -88,7 +88,7 @@ class TestResult(BaseDomainModel):
             "name": self.name,
             "status": self.status,
             "duration": self.duration,
-            "assertions": [a.to_json() for a in self.assertions]
+            "assertions": [a.to_json() for a in self.assertions],
         }
 
 
@@ -122,7 +122,7 @@ class SecurityTestDetails(BaseDomainModel):
             "sqlInjectionTests": [t.to_json() for t in self.sql_injection_tests],
             "xssTests": [t.to_json() for t in self.xss_tests],
             "secretsScan": [t.to_json() for t in self.secrets_scan],
-            "authTests": [t.to_json() for t in self.auth_tests]
+            "authTests": [t.to_json() for t in self.auth_tests],
         }
 
 
@@ -152,7 +152,7 @@ class ChaosTestDetails(BaseDomainModel):
         return {
             "networkFailures": [t.to_json() for t in self.network_failures],
             "resourceExhaustion": [t.to_json() for t in self.resource_exhaustion],
-            "errorRecovery": [t.to_json() for t in self.error_recovery]
+            "errorRecovery": [t.to_json() for t in self.error_recovery],
         }
 
 
@@ -182,7 +182,7 @@ class FuzzTestDetails(BaseDomainModel):
         return {
             "inputValidation": [t.to_json() for t in self.input_validation],
             "edgeCases": [t.to_json() for t in self.edge_cases],
-            "boundaryTests": [t.to_json() for t in self.boundary_tests]
+            "boundaryTests": [t.to_json() for t in self.boundary_tests],
         }
 
 
@@ -212,7 +212,7 @@ class PropertyTestDetails(BaseDomainModel):
         return {
             "invariants": [t.to_json() for t in self.invariants],
             "idempotency": [t.to_json() for t in self.idempotency],
-            "consistency": [t.to_json() for t in self.consistency]
+            "consistency": [t.to_json() for t in self.consistency],
         }
 
 
@@ -250,7 +250,7 @@ class StressTestMetrics(BaseDomainModel):
             "latencyP95": self.latency_p95,
             "latencyP99": self.latency_p99,
             "maxConcurrentUsers": self.max_concurrent_users,
-            "errorRate": self.error_rate
+            "errorRate": self.error_rate,
         }
 
 
@@ -275,9 +275,7 @@ class StressTestDetails(BaseDomainModel):
 
         Panel expects: {loadTests, metrics}
         """
-        result = {
-            "loadTests": [t.to_json() for t in self.load_tests]
-        }
+        result = {"loadTests": [t.to_json() for t in self.load_tests]}
 
         if self.metrics is not None:
             result["metrics"] = self.metrics.to_json()

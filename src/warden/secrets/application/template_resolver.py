@@ -107,9 +107,7 @@ class TemplateResolver:
 
         return result
 
-    async def resolve_keys(
-        self, config: dict[str, Any], keys: list[str]
-    ) -> dict[str, Any]:
+    async def resolve_keys(self, config: dict[str, Any], keys: list[str]) -> dict[str, Any]:
         """Resolve only specific keys in config (for security).
 
         Use this when you only want to resolve certain known keys,

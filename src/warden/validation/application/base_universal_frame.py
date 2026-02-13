@@ -16,6 +16,7 @@ from warden.validation.domain.frame import CodeFile, ValidationFrame
 
 logger = structlog.get_logger(__name__)
 
+
 class BaseUniversalFrame(ValidationFrame):
     """
     Base class for cross-language validation frames.
@@ -46,17 +47,13 @@ class BaseUniversalFrame(ValidationFrame):
             return None
 
         parse_result: ParseResult = await provider.parse(
-            source_code=code_file.content,
-            language=language,
-            file_path=code_file.path
+            source_code=code_file.content, language=language, file_path=code_file.path
         )
 
         if parse_result.status in [ParseStatus.SUCCESS, ParseStatus.PARTIAL]:
             return parse_result.ast_root
 
-        logger.warning("universal_ast_parse_failed",
-                       file=code_file.path,
-                       status=parse_result.status.value)
+        logger.warning("universal_ast_parse_failed", file=code_file.path, status=parse_result.status.value)
         return None
 
     def find_nodes_by_type(self, root: ASTNode, target_type: Any) -> list[ASTNode]:
@@ -79,6 +76,7 @@ class BaseUniversalFrame(ValidationFrame):
         Helper to extract all string/number literals.
         """
         from warden.ast.domain.enums import ASTNodeType
+
         literals = []
 
         def walk(node: ASTNode):

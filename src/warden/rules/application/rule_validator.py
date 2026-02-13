@@ -51,9 +51,7 @@ class CustomRuleValidator:
         logger.info("custom_rule_validator_initialized", rule_count=len(self.rules), has_llm=llm_service is not None)
 
     async def validate_file_async(
-        self,
-        file_path: Path | str,
-        rules: list[CustomRule] | None = None
+        self, file_path: Path | str, rules: list[CustomRule] | None = None
     ) -> list[CustomRuleViolation]:
         """Validate a file against rules.
 
@@ -67,9 +65,7 @@ class CustomRuleValidator:
         return await self.validate_batch_async([file_path], rules)
 
     async def validate_batch_async(
-        self,
-        file_paths: list[Path | str],
-        rules: list[CustomRule] | None = None
+        self, file_paths: list[Path | str], rules: list[CustomRule] | None = None
     ) -> list[CustomRuleViolation]:
         """Validate multiple files against rules efficiently.
 
@@ -146,13 +142,9 @@ class CustomRuleValidator:
 
             # Validate based on rule type
             if rule.type == "security":
-                violations.extend(
-                    self._validate_security_rule(rule, file_path, lines, content)
-                )
+                violations.extend(self._validate_security_rule(rule, file_path, lines, content))
             elif rule.type == "convention":
-                violations.extend(
-                    self._validate_convention_rule(rule, file_path, lines, content)
-                )
+                violations.extend(self._validate_convention_rule(rule, file_path, lines, content))
             elif rule.type == "script":
                 violation = await self._validate_script_async(rule, file_path)
                 if violation:
@@ -234,9 +226,7 @@ class CustomRuleValidator:
 
         # Secrets detection
         if "secrets" in conditions:
-            violations.extend(
-                self._validate_secrets_condition(rule, file_path, lines, conditions["secrets"])
-            )
+            violations.extend(self._validate_secrets_condition(rule, file_path, lines, conditions["secrets"]))
 
         # Git authorship rules
         if "git" in conditions:
@@ -251,15 +241,13 @@ class CustomRuleValidator:
                 "git_validation_not_implemented",
                 rule_id=rule.id,
                 rule_name=rule.name,
-                message="Git validation skipped - requires project-level implementation"
+                message="Git validation skipped - requires project-level implementation",
             )
             # Explicit: git validation is unimplemented, continue to other conditions
 
         # Connection string rules
         if "connections" in conditions:
-            violations.extend(
-                self._validate_connections_condition(rule, file_path, lines, conditions["connections"])
-            )
+            violations.extend(self._validate_connections_condition(rule, file_path, lines, conditions["connections"]))
 
         return violations
 
@@ -384,21 +372,15 @@ class CustomRuleValidator:
 
         # Redis key pattern validation
         if "redis" in conditions:
-            violations.extend(
-                self._validate_redis_condition(rule, file_path, lines, conditions["redis"])
-            )
+            violations.extend(self._validate_redis_condition(rule, file_path, lines, conditions["redis"]))
 
         # API route pattern validation
         if "api" in conditions:
-            violations.extend(
-                self._validate_api_condition(rule, file_path, lines, conditions["api"])
-            )
+            violations.extend(self._validate_api_condition(rule, file_path, lines, conditions["api"]))
 
         # Naming convention validation
         if "naming" in conditions:
-            violations.extend(
-                self._validate_naming_condition(rule, file_path, lines, conditions["naming"])
-            )
+            violations.extend(self._validate_naming_condition(rule, file_path, lines, conditions["naming"]))
 
         return violations
 
@@ -530,7 +512,8 @@ class CustomRuleValidator:
                                     is_blocker=rule.is_blocker,
                                     file=str(file_path),
                                     line=i,
-                                    message=rule.message or f"API route '{route}' does not match pattern: {route_pattern}",
+                                    message=rule.message
+                                    or f"API route '{route}' does not match pattern: {route_pattern}",
                                     code_snippet=line.strip(),
                                     suggestion=f"API routes must match pattern: {route_pattern}",
                                 )
@@ -570,7 +553,7 @@ class CustomRuleValidator:
             # See: RULES_SYSTEM_EXPLAINED.md, SORUN 1
 
             # Look for async methods without proper suffix (Python only for now)
-            async_pattern = r'async\s+def\s+(\w+)\s*\('
+            async_pattern = r"async\s+def\s+(\w+)\s*\("
 
             for i, line in enumerate(lines, start=1):
                 if self._is_suppressed(line):
@@ -585,13 +568,13 @@ class CustomRuleValidator:
                                 rule_id=rule.id,
                                 rule_name=rule.name,
                                 category=rule.category,
-                                    severity=rule.severity,
-                                    is_blocker=rule.is_blocker,
-                                    file=str(file_path),
-                                    line=i,
-                                    message=rule.message or f"Async method '{method_name}' must end with '{async_suffix}'",
-                                    code_snippet=line.strip(),
-                                    suggestion=f"Rename to '{method_name}{async_suffix}'",
+                                severity=rule.severity,
+                                is_blocker=rule.is_blocker,
+                                file=str(file_path),
+                                line=i,
+                                message=rule.message or f"Async method '{method_name}' must end with '{async_suffix}'",
+                                code_snippet=line.strip(),
+                                suggestion=f"Rename to '{method_name}{async_suffix}'",
                             )
                         )
 
@@ -755,8 +738,8 @@ class CustomRuleValidator:
                 return None
 
             # Create violation with stdout as message
-            violation_message = stdout_text if stdout_text else (
-                rule.message or f"Script validation failed: {rule.name}"
+            violation_message = (
+                stdout_text if stdout_text else (rule.message or f"Script validation failed: {rule.name}")
             )
 
             # If stderr has content, log it as additional context
@@ -822,7 +805,7 @@ PROJECT RULE:
 - ID: {rule.id}
 - Name: {rule.name}
 - Directive: {rule.description}
-- Severity: {rule.severity.value if hasattr(rule.severity, 'value') else rule.severity}
+- Severity: {rule.severity.value if hasattr(rule.severity, "value") else rule.severity}
 
 CODE TO AUDIT ({file_path.name}):
 ```
@@ -845,24 +828,28 @@ RETURN ONLY A JSON OBJECT:
         try:
             # Determine model from config if available (attached in WardenBridge)
             model = None
-            if hasattr(self.llm_service, 'config') and self.llm_service.config:
-                model = getattr(self.llm_service.config, 'smart_model', None)
+            if hasattr(self.llm_service, "config") and self.llm_service.config:
+                model = getattr(self.llm_service.config, "smart_model", None)
 
             # Call LLM service with model override
             logger.debug("executing_ai_rule", rule_id=rule.id, file=str(file_path), model=model)
             response = await self.llm_service.complete_async(
-                prompt=prompt,
-                system_prompt="You are a specialized code validation agent.",
-                model=model
+                prompt=prompt, system_prompt="You are a specialized code validation agent.", model=model
             )
             logger.debug("ai_rule_response_received", rule_id=rule.id)
 
             # Parse JSON response
             from warden.shared.utils.json_parser import parse_json_from_llm
-            result = parse_json_from_llm(response.content if hasattr(response, 'content') else str(response))
+
+            result = parse_json_from_llm(response.content if hasattr(response, "content") else str(response))
 
             if result.get("violation_found"):
-                logger.info("ai_rule_violation_found", rule_id=rule.id, file=str(file_path), explanation=result.get("explanation"))
+                logger.info(
+                    "ai_rule_violation_found",
+                    rule_id=rule.id,
+                    file=str(file_path),
+                    explanation=result.get("explanation"),
+                )
                 return [
                     CustomRuleViolation(
                         rule_id=rule.id,
@@ -872,9 +859,11 @@ RETURN ONLY A JSON OBJECT:
                         is_blocker=rule.is_blocker,
                         file=str(file_path),
                         line=result.get("line_number", 1),
-                        message=rule.message.format(reason=result.get("explanation")) if rule.message and "{reason}" in rule.message else (result.get("explanation") or f"AI violation: {rule.name}"),
+                        message=rule.message.format(reason=result.get("explanation"))
+                        if rule.message and "{reason}" in rule.message
+                        else (result.get("explanation") or f"AI violation: {rule.name}"),
                         suggestion=result.get("suggestion"),
-                        code_snippet=None, # AI doesn't always provide snippets
+                        code_snippet=None,  # AI doesn't always provide snippets
                     )
                 ]
 
@@ -916,7 +905,7 @@ RETURN ONLY A JSON OBJECT:
         # Supported: patterns (regex), max_lines (metric), max_size_mb (metric)
         conditions = rule.conditions
 
-        supported_keys = {'patterns', 'max_lines', 'max_size_mb'}
+        supported_keys = {"patterns", "max_lines", "max_size_mb"}
         keys = set(conditions.keys())
 
         # If keys is subset of supported -> Pure Rust rule
@@ -928,9 +917,7 @@ RETURN ONLY A JSON OBJECT:
                     # Check for look-around: (?=, (?<=, (?!, (?<!
                     # Check for backreference: \1, \2 (basic heuristic)
                     if any(x in pattern for x in ["(?=", "(?<=", "(?!", "(?<!"]):
-                        logger.debug("rule_routed_to_python_incompatible_regex",
-                                   rule_id=rule.id,
-                                   reason="look-around")
+                        logger.debug("rule_routed_to_python_incompatible_regex", rule_id=rule.id, reason="look-around")
                         return False
 
                     # Backreferences like \1 might be valid escapes, but we'll be conservative
@@ -939,10 +926,11 @@ RETURN ONLY A JSON OBJECT:
                     if "\\" in pattern:
                         # Simple check for backslash followed by digit 1-9
                         import re
+
                         if re.search(r"\\[1-9]", pattern):
-                            logger.debug("rule_routed_to_python_incompatible_regex",
-                                       rule_id=rule.id,
-                                       reason="backreference")
+                            logger.debug(
+                                "rule_routed_to_python_incompatible_regex", rule_id=rule.id, reason="backreference"
+                            )
                             return False
 
             return True
@@ -977,25 +965,27 @@ RETURN ONLY A JSON OBJECT:
         # Run in executor to avoid blocking event loop
         loop = asyncio.get_running_loop()
         results = await loop.run_in_executor(
-            None,
-            lambda: warden_core_rust.validate_files(path_strs, regex_rules, metric_rules)
+            None, lambda: warden_core_rust.validate_files(path_strs, regex_rules, metric_rules)
         )
 
         violations = []
         for res in results:
             rule = rule_map.get(res.rule_id)
-            if not rule: continue
+            if not rule:
+                continue
 
-            violations.append(CustomRuleViolation(
-                rule_id=rule.id,
-                rule_name=rule.name,
-                category=rule.category,
-                severity=rule.severity,
-                is_blocker=rule.is_blocker,
-                file=res.file_path,
-                line=res.line,
-                message=res.message,
-                code_snippet=res.snippet
-            ))
+            violations.append(
+                CustomRuleViolation(
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    category=rule.category,
+                    severity=rule.severity,
+                    is_blocker=rule.is_blocker,
+                    file=res.file_path,
+                    line=res.line,
+                    message=res.message,
+                    code_snippet=res.snippet,
+                )
+            )
 
         return violations

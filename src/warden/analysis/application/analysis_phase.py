@@ -71,6 +71,7 @@ class AnalysisPhase:
 
         # Get analysis level from config
         from warden.pipeline.domain.enums import AnalysisLevel
+
         level_str = self.config.get("analysis_level", "standard")
         try:
             self.analysis_level = AnalysisLevel(level_str.lower())
@@ -95,7 +96,7 @@ class AnalysisPhase:
             "analysis_phase_initialized",
             analyzer_count=len(self.analyzers),
             weights=self.weights,
-            cached_entries=len(self._cache_data)
+            cached_entries=len(self._cache_data),
         )
 
     def _get_default_config(self) -> dict[str, Any]:
@@ -124,6 +125,7 @@ class AnalysisPhase:
         try:
             if self._cache_file.exists():
                 import json
+
                 return json.loads(self._cache_file.read_text())
         except Exception as e:
             logger.warning("analysis_cache_load_failed", error=str(e))
@@ -133,6 +135,7 @@ class AnalysisPhase:
         """Save analysis cache."""
         try:
             import json
+
             self._cache_file.parent.mkdir(parents=True, exist_ok=True)
             self._cache_file.write_text(json.dumps(self._cache_data, indent=2))
         except Exception as e:
@@ -154,11 +157,7 @@ class AnalysisPhase:
         if not code_file.hash:
             return
 
-        self._cache_data[code_file.path] = {
-            "hash": code_file.hash,
-            "timestamp": time.time(),
-            "result": result
-        }
+        self._cache_data[code_file.path] = {"hash": code_file.hash, "timestamp": time.time(), "result": result}
 
     async def execute_async(
         self,
@@ -177,10 +176,7 @@ class AnalysisPhase:
             QualityMetrics object
         """
         # Filter handled files
-        code_files = [
-            f for f in code_files
-            if not self.ignore_matcher.should_ignore_file(Path(f.path))
-        ]
+        code_files = [f for f in code_files if not self.ignore_matcher.should_ignore_file(Path(f.path))]
 
         if not code_files:
             return QualityMetrics()
@@ -204,21 +200,25 @@ class AnalysisPhase:
             "analysis_phase_started",
             total_files=len(code_files),
             cached_files=cached_count,
-            files_to_analyze=len(files_to_analyze)
+            files_to_analyze=len(files_to_analyze),
         )
 
         # Notify progress callback
         if self.progress_callback:
-            self.progress_callback("progress_init", {
-                "total_units": len(files_to_analyze), # Only report work to be done
-                "phase": "ANALYSIS"
-            })
+            self.progress_callback(
+                "progress_init",
+                {
+                    "total_units": len(files_to_analyze),  # Only report work to be done
+                    "phase": "ANALYSIS",
+                },
+            )
 
         try:
             if files_to_analyze:
                 # Limit concurrency to prevent system overload (340+ files * 7 analyzers = 2000+ tasks)
                 # Use CPU-bound friendly limit: min(CPUs, 8)
                 import os
+
                 concurrency_limit = min(os.cpu_count() or 4, 8)
                 semaphore = asyncio.Semaphore(concurrency_limit)
 
@@ -228,11 +228,9 @@ class AnalysisPhase:
                     async with semaphore:
                         result = await self._analyze_file_async(cf, pipeline_context)
                         if self.progress_callback:
-                            self.progress_callback("progress_update", {
-                                "increment": 1,
-                                "phase": "ANALYSIS",
-                                "file": cf.path
-                            })
+                            self.progress_callback(
+                                "progress_update", {"increment": 1, "phase": "ANALYSIS", "file": cf.path}
+                            )
                         return result
 
                 # Run all analyzers in parallel for all files with semi-concurrency
@@ -267,11 +265,14 @@ class AnalysisPhase:
 
             # Notify progress callback with final score
             if self.progress_callback:
-                self.progress_callback("analysis_completed", {
-                    "phase": "analysis",
-                    "score": f"{metrics.overall_score:.1f}/10.0",
-                    "duration": f"{metrics.analysis_duration:.2f}s",
-                })
+                self.progress_callback(
+                    "analysis_completed",
+                    {
+                        "phase": "analysis",
+                        "score": f"{metrics.overall_score:.1f}/10.0",
+                        "duration": f"{metrics.analysis_duration:.2f}s",
+                    },
+                )
 
             return metrics
 
@@ -303,7 +304,7 @@ class AnalysisPhase:
 
         # Get cached AST if available
         ast_tree = None
-        if pipeline_context and hasattr(pipeline_context, 'ast_cache'):
+        if pipeline_context and hasattr(pipeline_context, "ast_cache"):
             ast_tree = pipeline_context.ast_cache.get(code_file.path)
 
         # Detect language
@@ -314,12 +315,14 @@ class AnalysisPhase:
         # we must discard it for standard 'ast' based analyzers to prevent crashes.
         # PythonASTProvider stores ast.AST in raw_node.
         import ast
+
         if is_python and ast_tree is not None and not isinstance(ast_tree, ast.AST):
             logger.debug("incompatible_ast_cache_discarding", file=code_file.path, type=type(ast_tree).__name__)
             ast_tree = None
 
         # Subsetting analyzers for BASIC level to hit performance targets
         from warden.pipeline.domain.enums import AnalysisLevel
+
         is_basic = self.analysis_level == AnalysisLevel.BASIC
 
         # Core analyzers for scoring (Python-specific for now)
@@ -337,9 +340,7 @@ class AnalysisPhase:
             tasks["maintainability"] = asyncio.create_task(
                 self.analyzers["maintainability"].analyze_async(code_file, ast_tree=ast_tree)
             )
-            tasks["naming"] = asyncio.create_task(
-                self.analyzers["naming"].analyze_async(code_file, ast_tree=ast_tree)
-            )
+            tasks["naming"] = asyncio.create_task(self.analyzers["naming"].analyze_async(code_file, ast_tree=ast_tree))
             tasks["documentation"] = asyncio.create_task(
                 self.analyzers["documentation"].analyze_async(code_file, ast_tree=ast_tree)
             )
@@ -361,10 +362,7 @@ class AnalysisPhase:
         # Wait for all analyzers with timeout
         try:
             timeout = self.config.get("timeout", 15.0)
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks.values(), return_exceptions=True),
-                timeout=timeout
-            )
+            results = await asyncio.wait_for(asyncio.gather(*tasks.values(), return_exceptions=True), timeout=timeout)
 
             # Map results back to analyzer names
             analyzer_results = {}
@@ -410,7 +408,7 @@ class AnalysisPhase:
         if self.config.get("use_llm", False):
             logger.info(
                 "llm_metrics_enhancement_not_available",
-                message="LLM-enhanced metrics analysis is planned but not yet implemented"
+                message="LLM-enhanced metrics analysis is planned but not yet implemented",
             )
 
         return metrics

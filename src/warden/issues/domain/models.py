@@ -112,9 +112,7 @@ class WardenIssue(BaseDomainModel):
             first_detected=datetime.fromisoformat(data["firstDetected"]),
             last_updated=datetime.fromisoformat(data["lastUpdated"]),
             reopen_count=data["reopenCount"],
-            state_history=[
-                StateTransition.from_json(t) for t in data.get("stateHistory", [])
-            ],
+            state_history=[StateTransition.from_json(t) for t in data.get("stateHistory", [])],
         )
 
     def is_critical(self) -> bool:

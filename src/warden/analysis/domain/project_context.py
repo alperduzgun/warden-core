@@ -166,7 +166,7 @@ class ProjectStatistics(BaseDomainModel):
 
     # Language distribution (language -> file count)
     language_distribution: dict[CodeLanguage, int] = Field(default_factory=dict)
-    language_bytes: dict[CodeLanguage, int] = Field(default_factory=dict) # byte counts (GitHub style)
+    language_bytes: dict[CodeLanguage, int] = Field(default_factory=dict)  # byte counts (GitHub style)
 
     # Directory statistics
     max_depth: int = 0  # Maximum directory depth
@@ -174,10 +174,10 @@ class ProjectStatistics(BaseDomainModel):
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> 'ProjectStatistics':
+    def from_json(cls, data: dict[str, Any]) -> "ProjectStatistics":
         """Create from JSON dict."""
         return cls.model_validate(data)
 
@@ -213,10 +213,10 @@ class ProjectConventions(BaseDomainModel):
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> 'ProjectConventions':
+    def from_json(cls, data: dict[str, Any]) -> "ProjectConventions":
         """Create from JSON dict."""
         return cls.model_validate(data)
 
@@ -284,10 +284,10 @@ class ProjectContext(BaseDomainModel):
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> 'ProjectContext':
+    def from_json(cls, data: dict[str, Any]) -> "ProjectContext":
         """Create from JSON dict."""
         return cls.model_validate(data)
 

@@ -20,6 +20,7 @@ from warden.cli_bridge.protocol import (
 try:
     from warden.cli_bridge.bridge import WardenBridge
     from warden.cli_bridge.server import IPCServer
+
     WARDEN_BRIDGE_AVAILABLE = True
 except ImportError:
     WARDEN_BRIDGE_AVAILABLE = False

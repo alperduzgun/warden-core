@@ -92,9 +92,7 @@ class ContextRetriever:
         response = await self.searcher.search(search_query)
 
         # Select chunks within token budget
-        selected_chunks, scores = self._select_chunks_within_budget(
-            response.results, max_chunks
-        )
+        selected_chunks, scores = self._select_chunks_within_budget(response.results, max_chunks)
 
         # Calculate stats
         total_chars = sum(chunk.char_count for chunk in selected_chunks)
@@ -123,9 +121,7 @@ class ContextRetriever:
 
         return context
 
-    def _select_chunks_within_budget(
-        self, results: list, max_chunks: int
-    ) -> tuple[list[CodeChunk], list[float]]:
+    def _select_chunks_within_budget(self, results: list, max_chunks: int) -> tuple[list[CodeChunk], list[float]]:
         """
         Select chunks that fit within token budget.
 
@@ -300,9 +296,7 @@ class ContextRetriever:
             "",
         ]
 
-        for i, (chunk, score) in enumerate(
-            zip(context.relevant_chunks, context.search_scores, strict=False), start=1
-        ):
+        for i, (chunk, score) in enumerate(zip(context.relevant_chunks, context.search_scores, strict=False), start=1):
             parts.extend(
                 [
                     f"## Chunk {i}/{context.chunk_count} (Score: {score:.2f})",
@@ -356,9 +350,7 @@ class ContextOptimizer:
         return unique_chunks
 
     @staticmethod
-    def sort_by_relevance(
-        chunks: list[CodeChunk], scores: list[float]
-    ) -> tuple[list[CodeChunk], list[float]]:
+    def sort_by_relevance(chunks: list[CodeChunk], scores: list[float]) -> tuple[list[CodeChunk], list[float]]:
         """
         Sort chunks by relevance score (descending).
 
@@ -392,11 +384,7 @@ class ContextOptimizer:
         Returns:
             Filtered (chunks, scores)
         """
-        filtered_pairs = [
-            (chunk, score)
-            for chunk, score in zip(chunks, scores, strict=False)
-            if score >= min_score
-        ]
+        filtered_pairs = [(chunk, score) for chunk, score in zip(chunks, scores, strict=False) if score >= min_score]
 
         if not filtered_pairs:
             return [], []

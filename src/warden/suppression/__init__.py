@@ -29,11 +29,11 @@ from warden.suppression.models import (
 )
 
 __all__ = [
-    'SuppressionType',
-    'SuppressionEntry',
-    'SuppressionConfig',
-    'SuppressionMatcher',
-    'load_suppression_config',
-    'save_suppression_config',
-    'create_default_config',
+    "SuppressionType",
+    "SuppressionEntry",
+    "SuppressionConfig",
+    "SuppressionMatcher",
+    "load_suppression_config",
+    "save_suppression_config",
+    "create_default_config",
 ]

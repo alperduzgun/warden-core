@@ -211,17 +211,17 @@ class FlutterExtractor(BaseContractExtractor):
                     # Clean return type (remove List<>, handle generics)
                     output_type = self._clean_type(return_type)
 
-                    operations.append(OperationDefinition(
-                        name=method_name,
-                        operation_type=self.RETROFIT_ANNOTATIONS.get(
-                            http_method, OperationType.QUERY
-                        ),
-                        input_type=input_type,
-                        output_type=output_type,
-                        description=f"{http_method} {path}",
-                        source_file=str(file_path),
-                        source_line=i + 1,
-                    ))
+                    operations.append(
+                        OperationDefinition(
+                            name=method_name,
+                            operation_type=self.RETROFIT_ANNOTATIONS.get(http_method, OperationType.QUERY),
+                            input_type=input_type,
+                            output_type=output_type,
+                            description=f"{http_method} {path}",
+                            source_file=str(file_path),
+                            source_line=i + 1,
+                        )
+                    )
 
         return operations
 
@@ -256,33 +256,37 @@ class FlutterExtractor(BaseContractExtractor):
         for dio_match in dio_pattern.finditer(content):
             method = dio_match.group(1).lower()
             path = dio_match.group(2)
-            line_num = content[:dio_match.start()].count("\n") + 1
+            line_num = content[: dio_match.start()].count("\n") + 1
             op_name = self._path_to_operation_name(path, method)
 
-            operations.append(OperationDefinition(
-                name=op_name,
-                operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
-                description=f"{method.upper()} {path}",
-                source_file=str(file_path),
-                source_line=line_num,
-            ))
+            operations.append(
+                OperationDefinition(
+                    name=op_name,
+                    operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
+                    description=f"{method.upper()} {path}",
+                    source_file=str(file_path),
+                    source_line=line_num,
+                )
+            )
 
         for http_match in http_pattern.finditer(content):
             method = http_match.group(1).lower()
             path = http_match.group(2)
-            line_num = content[:http_match.start()].count("\n") + 1
+            line_num = content[: http_match.start()].count("\n") + 1
 
             # Clean path (remove baseUrl prefix, interpolation)
             path = re.sub(r"^\$\{?\w+\}?/?", "", path)
             op_name = self._path_to_operation_name(path, method)
 
-            operations.append(OperationDefinition(
-                name=op_name,
-                operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
-                description=f"{method.upper()} {path}",
-                source_file=str(file_path),
-                source_line=line_num,
-            ))
+            operations.append(
+                OperationDefinition(
+                    name=op_name,
+                    operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
+                    description=f"{method.upper()} {path}",
+                    source_file=str(file_path),
+                    source_line=line_num,
+                )
+            )
 
         return operations
 
@@ -324,10 +328,20 @@ class FlutterExtractor(BaseContractExtractor):
                 continue
 
             # Skip non-model classes (widgets, states, etc.)
-            if any(suffix in class_name for suffix in [
-                "Widget", "State", "Page", "Screen", "View",
-                "Controller", "Bloc", "Cubit", "Provider",
-            ]):
+            if any(
+                suffix in class_name
+                for suffix in [
+                    "Widget",
+                    "State",
+                    "Page",
+                    "Screen",
+                    "View",
+                    "Controller",
+                    "Bloc",
+                    "Cubit",
+                    "Provider",
+                ]
+            ):
                 continue
 
             # Find the class body
@@ -357,9 +371,7 @@ class FlutterExtractor(BaseContractExtractor):
                     continue
 
                 # Determine if optional
-                is_optional = "?" in field_type or "?" in class_body[
-                    field_match.start() : field_match.end()
-                ]
+                is_optional = "?" in field_type or "?" in class_body[field_match.start() : field_match.end()]
 
                 # Determine if array
                 is_array = field_type.startswith("List<")
@@ -367,25 +379,29 @@ class FlutterExtractor(BaseContractExtractor):
                 # Clean type
                 clean_type = self._clean_type(field_type)
 
-                fields.append(FieldDefinition(
-                    name=field_name,
-                    type_name=clean_type,
-                    is_optional=is_optional,
-                    is_array=is_array,
-                    source_file=str(file_path),
-                ))
+                fields.append(
+                    FieldDefinition(
+                        name=field_name,
+                        type_name=clean_type,
+                        is_optional=is_optional,
+                        is_array=is_array,
+                        source_file=str(file_path),
+                    )
+                )
 
             # Only add if has fields (likely a data model)
             if fields:
                 # Get line number
-                line_num = content[:class_match.start()].count("\n") + 1
+                line_num = content[: class_match.start()].count("\n") + 1
 
-                models.append(ModelDefinition(
-                    name=class_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                models.append(
+                    ModelDefinition(
+                        name=class_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return models
 
@@ -423,14 +439,16 @@ class FlutterExtractor(BaseContractExtractor):
                     values.append(value)
 
             if values:
-                line_num = content[:enum_match.start()].count("\n") + 1
+                line_num = content[: enum_match.start()].count("\n") + 1
 
-                enums.append(EnumDefinition(
-                    name=enum_name,
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                enums.append(
+                    EnumDefinition(
+                        name=enum_name,
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return enums
 
@@ -490,7 +508,8 @@ class FlutterExtractor(BaseContractExtractor):
 
         # Split path into parts, filtering path parameters ({id}, $id, ${id}, \$id)
         parts = [
-            p for p in path.split("/")
+            p
+            for p in path.split("/")
             if p and not p.startswith("{") and not p.startswith("$") and not p.startswith("\\$")
         ]
 

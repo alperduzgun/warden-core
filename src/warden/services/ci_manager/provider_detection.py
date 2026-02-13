@@ -14,19 +14,22 @@ from typing import Final
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
 
 # Security: Allowed characters in branch names
-SAFE_BRANCH_PATTERN: Final[re.Pattern] = re.compile(r'^[\w\-./]+$')
+SAFE_BRANCH_PATTERN: Final[re.Pattern] = re.compile(r"^[\w\-./]+$")
 
 
 class CIProvider(Enum):
     """Supported CI providers."""
+
     GITHUB = "github"
     GITLAB = "gitlab"
 

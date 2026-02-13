@@ -23,12 +23,14 @@ class FortificationAdapter(BaseWardenAdapter):
         - warden_get_security_score: Security score
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_get_fortification_suggestions",
-        "warden_apply_fortification",
-        "warden_get_security_score",
-        "warden_fix",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_get_fortification_suggestions",
+            "warden_apply_fortification",
+            "warden_get_security_score",
+            "warden_fix",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.FORTIFICATION
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -144,12 +146,14 @@ class FortificationAdapter(BaseWardenAdapter):
         # Fallback: basic security analysis
         suggestions = self._basic_security_analysis(Path(path))
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "security_score": 75.0,
-            "duration_ms": 150,
-            "suggestions": suggestions,
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "security_score": 75.0,
+                "duration_ms": 150,
+                "suggestions": suggestions,
+            }
+        )
 
     async def _apply_fortification_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Apply fortification suggestion."""
@@ -168,8 +172,7 @@ class FortificationAdapter(BaseWardenAdapter):
 
         # Fallback: not available without bridge
         return MCPToolResult.error(
-            "Fortification application requires full Warden bridge. "
-            "Use dry_run=True to preview changes."
+            "Fortification application requires full Warden bridge. Use dry_run=True to preview changes."
         )
 
     async def _get_security_score_async(self, arguments: dict[str, Any]) -> MCPToolResult:
@@ -182,17 +185,19 @@ class FortificationAdapter(BaseWardenAdapter):
                 return MCPToolResult.error(f"Failed to get security score: {e}")
 
         # Fallback: default score calculation
-        return MCPToolResult.json_result({
-            "overall_score": 75.0,
-            "grade": "C",
-            "category_scores": {
-                "authentication": 80.0,
-                "authorization": 70.0,
-                "injection": 75.0,
-                "cryptography": 75.0,
-            },
-            "vulnerabilities": [],
-        })
+        return MCPToolResult.json_result(
+            {
+                "overall_score": 75.0,
+                "grade": "C",
+                "category_scores": {
+                    "authentication": 80.0,
+                    "authorization": 70.0,
+                    "injection": 75.0,
+                    "cryptography": 75.0,
+                },
+                "vulnerabilities": [],
+            }
+        )
 
     def _basic_security_analysis(self, path: Path) -> list[dict[str, Any]]:
         """Basic security analysis without bridge."""
@@ -233,16 +238,18 @@ class FortificationAdapter(BaseWardenAdapter):
                             if line.strip().startswith("#"):
                                 continue
 
-                            suggestions.append({
-                                "id": f"SEC_{len(suggestions):04d}",
-                                "type": "security",
-                                "file": str(py_file),
-                                "line": i + 1,
-                                "message": message,
-                                "severity": severity,
-                                "pattern": pattern,
-                                "suggestion": f"Review line {i+1}: {line.strip()[:50]}...",
-                            })
+                            suggestions.append(
+                                {
+                                    "id": f"SEC_{len(suggestions):04d}",
+                                    "type": "security",
+                                    "file": str(py_file),
+                                    "line": i + 1,
+                                    "message": message,
+                                    "severity": severity,
+                                    "pattern": pattern,
+                                    "suggestion": f"Review line {i + 1}: {line.strip()[:50]}...",
+                                }
+                            )
 
             except Exception:
                 continue

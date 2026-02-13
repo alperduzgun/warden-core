@@ -11,6 +11,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class ToolHandler(BaseHandler):
     """Handles discovery and testing of language tools (LSP, AST providers)."""
 
@@ -18,18 +19,21 @@ class ToolHandler(BaseHandler):
         """List all available AST providers and their metadata."""
         try:
             from warden.ast.application.provider_registry import ASTProviderRegistry
+
             registry = ASTProviderRegistry()
             await registry.discover_providers()
 
             providers = []
             for metadata in registry.list_providers():
-                providers.append({
-                    "name": metadata.name,
-                    "languages": [lang.value for lang in metadata.supported_languages],
-                    "priority": metadata.priority.name,
-                    "version": metadata.version,
-                    "source": "built-in" if metadata.name in ["Python AST", "Tree-sitter"] else "PyPI",
-                })
+                providers.append(
+                    {
+                        "name": metadata.name,
+                        "languages": [lang.value for lang in metadata.supported_languages],
+                        "priority": metadata.priority.name,
+                        "version": metadata.version,
+                        "source": "built-in" if metadata.name in ["Python AST", "Tree-sitter"] else "PyPI",
+                    }
+                )
             return providers
         except Exception as e:
             logger.error("get_available_providers_failed", error=str(e))
@@ -47,7 +51,7 @@ class ToolHandler(BaseHandler):
                 return {
                     "available": False,
                     "error": f"Unknown language: {language}",
-                    "supportedLanguages": [l.value for l in CodeLanguage if l != CodeLanguage.UNKNOWN]
+                    "supportedLanguages": [l.value for l in CodeLanguage if l != CodeLanguage.UNKNOWN],
                 }
 
             registry = ASTProviderRegistry()

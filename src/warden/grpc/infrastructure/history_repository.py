@@ -121,9 +121,7 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             reverse=True,
         )
 
-    async def get_events_by_type_async(
-        self, event_type: str, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    async def get_events_by_type_async(self, event_type: str, limit: int = 100) -> list[dict[str, Any]]:
         """Get events by event type."""
         data = await self._read_data_async()
         events = data.get("events", [])
@@ -138,17 +136,13 @@ class FileHistoryRepository(BaseFileRepository, IIssueHistoryRepository):
             reverse=True,
         )
 
-    async def get_events_since_async(
-        self, since: datetime, limit: int = 1000
-    ) -> list[dict[str, Any]]:
+    async def get_events_since_async(self, since: datetime, limit: int = 1000) -> list[dict[str, Any]]:
         """Get events since a specific datetime."""
         data = await self._read_data_async()
         events = data.get("events", [])
 
         since_str = since.isoformat()
-        filtered_events = [
-            e for e in events if e.get("timestamp", "") >= since_str
-        ]
+        filtered_events = [e for e in events if e.get("timestamp", "") >= since_str]
 
         # Return most recent first, limited
         return sorted(

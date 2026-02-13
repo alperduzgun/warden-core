@@ -79,10 +79,7 @@ class ProjectIntelligence:
     def has_web_inputs(self) -> bool:
         """Check if project has web input sources."""
         web_patterns = {"request", "form", "params", "query", "body"}
-        return any(
-            any(p in str(s.get("source", "")).lower() for p in web_patterns)
-            for s in self.input_sources
-        )
+        return any(any(p in str(s.get("source", "")).lower() for p in web_patterns) for s in self.input_sources)
 
     @property
     def has_sql_sinks(self) -> bool:

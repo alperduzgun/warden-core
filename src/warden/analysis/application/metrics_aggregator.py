@@ -74,7 +74,9 @@ class MetricsAggregator:
 
             # Process Duplication
             if file_results.get("duplication"):
-                score, blocks, lines, quick_wins = self._process_duplication_results(file_results["duplication"], file_path)
+                score, blocks, lines, quick_wins = self._process_duplication_results(
+                    file_results["duplication"], file_path
+                )
                 total_duplication_score += score
                 metrics.duplicate_blocks += blocks
                 metrics.duplicate_lines += lines
@@ -92,7 +94,9 @@ class MetricsAggregator:
 
             # Process Documentation
             if file_results.get("documentation"):
-                score, coverage, quick_wins = self._process_documentation_results(file_results["documentation"], file_path)
+                score, coverage, quick_wins = self._process_documentation_results(
+                    file_results["documentation"], file_path
+                )
                 total_documentation_score += score
                 documentation_coverage_sum += coverage
                 all_quick_wins.extend(quick_wins)
@@ -105,7 +109,7 @@ class MetricsAggregator:
 
             # Process Magic Numbers
             if file_results.get("magic_numbers"):
-                 all_hotspots.extend(self._process_magic_numbers_results(file_results["magic_numbers"], file_path))
+                all_hotspots.extend(self._process_magic_numbers_results(file_results["magic_numbers"], file_path))
 
         # Calculate averages and final metrics
         if file_count > 0:
@@ -118,9 +122,9 @@ class MetricsAggregator:
             metrics.documentation_coverage = documentation_coverage_sum / file_count
             # Test coverage average if tracked per file
             if metrics.test_coverage > 0:
-                 metrics.test_coverage = metrics.test_coverage / file_count
+                metrics.test_coverage = metrics.test_coverage / file_count
         else:
-             # Defaults are already 0.0 in QualityMetrics, but if we want 5.0 base:
+            # Defaults are already 0.0 in QualityMetrics, but if we want 5.0 base:
             metrics.complexity_score = 5.0
             metrics.duplication_score = 5.0
             metrics.maintainability_score = 5.0
@@ -145,12 +149,24 @@ class MetricsAggregator:
 
         # Breakdown
         metrics.metric_breakdowns = [
-            MetricBreakdown(name="complexity", score=metrics.complexity_score, weight=self.weights.get("complexity", 0.0)),
-            MetricBreakdown(name="duplication", score=metrics.duplication_score, weight=self.weights.get("duplication", 0.0)),
-            MetricBreakdown(name="maintainability", score=metrics.maintainability_score, weight=self.weights.get("maintainability", 0.0)),
+            MetricBreakdown(
+                name="complexity", score=metrics.complexity_score, weight=self.weights.get("complexity", 0.0)
+            ),
+            MetricBreakdown(
+                name="duplication", score=metrics.duplication_score, weight=self.weights.get("duplication", 0.0)
+            ),
+            MetricBreakdown(
+                name="maintainability",
+                score=metrics.maintainability_score,
+                weight=self.weights.get("maintainability", 0.0),
+            ),
             MetricBreakdown(name="naming", score=metrics.naming_score, weight=self.weights.get("naming", 0.0)),
-            MetricBreakdown(name="documentation", score=metrics.documentation_score, weight=self.weights.get("documentation", 0.0)),
-            MetricBreakdown(name="testability", score=metrics.testability_score, weight=self.weights.get("testability", 0.0)),
+            MetricBreakdown(
+                name="documentation", score=metrics.documentation_score, weight=self.weights.get("documentation", 0.0)
+            ),
+            MetricBreakdown(
+                name="testability", score=metrics.testability_score, weight=self.weights.get("testability", 0.0)
+            ),
         ]
 
         metrics.overall_score = metrics.calculate_overall_score()
@@ -171,14 +187,16 @@ class MetricsAggregator:
 
             for suggestion in result.suggestions[:3]:
                 if suggestion.issue:
-                    hotspots.append(CodeHotspot(
-                        file_path=file_path,
-                        line_number=suggestion.issue.line_number,
-                        issue_type="high_complexity",
-                        severity=suggestion.issue.severity.value,
-                        message=suggestion.issue.description,
-                        impact_score=2.0
-                    ))
+                    hotspots.append(
+                        CodeHotspot(
+                            file_path=file_path,
+                            line_number=suggestion.issue.line_number,
+                            issue_type="high_complexity",
+                            severity=suggestion.issue.severity.value,
+                            message=suggestion.issue.description,
+                            impact_score=2.0,
+                        )
+                    )
         return score, cyclomatic, hotspots
 
     def _process_duplication_results(self, result: Any, file_path: str) -> tuple[float, int, int, list[QuickWin]]:
@@ -197,13 +215,15 @@ class MetricsAggregator:
                 lines = result.metrics.get("total_duplicated_lines", 0)
 
             if issues > 0:
-                quick_wins.append(QuickWin(
-                    type="remove_duplication",
-                    description=f"Extract {issues} duplicate code blocks",
-                    estimated_effort="30min",
-                    score_improvement=0.5,
-                    file_path=file_path
-                ))
+                quick_wins.append(
+                    QuickWin(
+                        type="remove_duplication",
+                        description=f"Extract {issues} duplicate code blocks",
+                        estimated_effort="30min",
+                        score_improvement=0.5,
+                        file_path=file_path,
+                    )
+                )
         return score, blocks, lines, quick_wins
 
     def _process_maintainability_results(self, result: Any) -> tuple[float, int]:
@@ -214,7 +234,7 @@ class MetricsAggregator:
         if result.success and result.metrics:
             score = result.metrics.get("quality_score", 5.0)
             if "halstead_volume" in result.metrics:
-                 loc = 100 # Approximate
+                loc = 100  # Approximate
         return score, loc
 
     def _process_naming_results(self, result: Any) -> float:
@@ -235,13 +255,15 @@ class MetricsAggregator:
             coverage = result.metrics.get("documentation_coverage", 0.0)
 
             if score < 5:
-                quick_wins.append(QuickWin(
-                    type="add_documentation",
-                    description="Add missing docstrings",
-                    estimated_effort="15min",
-                    score_improvement=0.3,
-                    file_path=file_path
-                ))
+                quick_wins.append(
+                    QuickWin(
+                        type="add_documentation",
+                        description="Add missing docstrings",
+                        estimated_effort="15min",
+                        score_improvement=0.3,
+                        file_path=file_path,
+                    )
+                )
         return score, coverage, quick_wins
 
     def _process_testability_results(self, result: Any) -> tuple[float, float]:
@@ -258,12 +280,14 @@ class MetricsAggregator:
         """Process magic number analyzer results."""
         hotspots = []
         if result.success and result.issues_found > 5:
-            hotspots.append(CodeHotspot(
-                file_path=file_path,
-                line_number=1,
-                issue_type="magic_numbers",
-                severity="medium",
-                message=f"{result.issues_found} magic numbers found",
-                impact_score=1.0
-            ))
+            hotspots.append(
+                CodeHotspot(
+                    file_path=file_path,
+                    line_number=1,
+                    issue_type="magic_numbers",
+                    severity="medium",
+                    message=f"{result.issues_found} magic numbers found",
+                    impact_score=1.0,
+                )
+            )
         return hotspots

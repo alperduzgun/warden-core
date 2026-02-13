@@ -83,6 +83,7 @@ class LlmContextAnalyzer:
         # Initialize tokenizer for token estimation
         try:
             import tiktoken
+
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
         except (ImportError, Exception):
             logger.debug("tiktoken_not_available_for_context_analyzer_using_fallback")
@@ -145,7 +146,7 @@ class LlmContextAnalyzer:
         try:
             # Read file content if not provided
             if file_content is None:
-                with open(file_path, encoding='utf-8', errors='ignore') as f:
+                with open(file_path, encoding="utf-8", errors="ignore") as f:
                     file_content = f.read()[:5000]  # Limit for LLM
 
             # Call LLM for analysis
@@ -222,9 +223,7 @@ class LlmContextAnalyzer:
 
         try:
             # Prepare project summary for LLM
-            project_summary = self._create_project_summary(
-                project_root, file_list, config_files
-            )
+            project_summary = self._create_project_summary(project_root, file_list, config_files)
 
             # Call LLM for analysis
             decision = await self._analyze_project_with_llm_async(
@@ -270,11 +269,7 @@ class LlmContextAnalyzer:
             return [(ctx, conf, "rule-based") for _, ctx, conf in files]
 
         # Filter files that need LLM analysis
-        needs_llm = [
-            (path, ctx, conf)
-            for path, ctx, conf in files
-            if conf < self.confidence_threshold
-        ]
+        needs_llm = [(path, ctx, conf) for path, ctx, conf in files if conf < self.confidence_threshold]
 
         if not needs_llm:
             return [(ctx, conf, "rule-based") for _, ctx, conf in files]
@@ -450,7 +445,7 @@ Return JSON:
             user_message=prompt,
             max_tokens=500,
             temperature=0.0,  # Deterministic
-            use_fast_tier=True  # Use local Qwen for privacy and cost
+            use_fast_tier=True,  # Use local Qwen for privacy and cost
         )
 
         return await self.llm.send_async(request)
@@ -474,7 +469,7 @@ Return JSON:
             user_message=batch_prompt,
             max_tokens=2000,
             temperature=0.0,
-            use_fast_tier=True  # Use local Qwen for batch analysis
+            use_fast_tier=True,  # Use local Qwen for batch analysis
         )
 
         return await self.llm.send_async(request)
@@ -573,16 +568,15 @@ Top directories:
 {chr(10).join(f"- {d}" for d in sorted(dirs)[:20])}
 
 File types (by extension):
-{chr(10).join(f"- {ext}: {count} files" for ext, count in sorted(extensions.items(), key=lambda x: x[1], reverse=True)[:10])}
+{chr(10).join(f"- {ext}: {count} files" for ext, count in sorted(extensions.items(), key=lambda x: x[
+                    1
+                ], reverse=True)[:10])}
 
 Total files: {len(file_list)}
 """
         return summary
 
-    def _create_batch_prompt(
-        self,
-        files: list[tuple[Path, FileContext, float]]
-    ) -> str:
+    def _create_batch_prompt(self, files: list[tuple[Path, FileContext, float]]) -> str:
         """Create batch analysis prompt."""
         prompt = "Analyze these files and determine their contexts:\n\n"
 
@@ -621,19 +615,23 @@ Total files: {len(file_list)}
             if isinstance(data, list):
                 decisions = []
                 for item in data[:expected_count]:
-                    decisions.append(LlmContextDecision(
-                        context=item.get("context", "unknown"),
-                        confidence=float(item.get("confidence", 0.5)),
-                        reasoning=item.get("reasoning", ""),
-                    ))
+                    decisions.append(
+                        LlmContextDecision(
+                            context=item.get("context", "unknown"),
+                            confidence=float(item.get("confidence", 0.5)),
+                            reasoning=item.get("reasoning", ""),
+                        )
+                    )
 
                 # Pad with defaults if needed
                 while len(decisions) < expected_count:
-                    decisions.append(LlmContextDecision(
-                        context="unknown",
-                        confidence=0.0,
-                        reasoning="Missing from LLM response",
-                    ))
+                    decisions.append(
+                        LlmContextDecision(
+                            context="unknown",
+                            confidence=0.0,
+                            reasoning="Missing from LLM response",
+                        )
+                    )
 
                 return decisions
 

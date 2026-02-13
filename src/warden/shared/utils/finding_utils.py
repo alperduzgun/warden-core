@@ -25,6 +25,7 @@ def get_finding_attribute(finding: Any, attr: str, default: Any = None) -> Any:
     # Use getattr for everything else, which is safe for Finding objects
     return getattr(finding, attr, default)
 
+
 def set_finding_attribute(finding: Any, attr: str, value: Any) -> None:
     """
     Safely sets an attribute on a Finding object or a dictionary.
@@ -46,7 +47,8 @@ def set_finding_attribute(finding: Any, attr: str, value: Any) -> None:
         # Ignore if immutable or missing
         pass
 
+
 def get_finding_severity(finding: Any) -> str:
     """Safely gets normalized severity."""
-    sev = get_finding_attribute(finding, 'severity', 'medium')
-    return str(sev).lower() if sev else 'medium'
+    sev = get_finding_attribute(finding, "severity", "medium")
+    return str(sev).lower() if sev else "medium"

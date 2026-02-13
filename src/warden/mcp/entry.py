@@ -20,11 +20,13 @@ from typing import Optional
 # Try to import logging
 try:
     from warden.shared.infrastructure.logging import configure_logging, get_logger
+
     # Initial configuration for MCP to ensure logs go to stderr early
     configure_logging(stream=sys.stderr)
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -88,4 +90,5 @@ def run(project_root: str | None = None) -> None:
 
 if __name__ == "__main__":
     import os
+
     run()

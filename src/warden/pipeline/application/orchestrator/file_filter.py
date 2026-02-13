@@ -31,15 +31,17 @@ class FileFilter:
                 filtered.append(code_file)
                 continue
 
-            if hasattr(file_context_info, 'context'):
-                context_type = file_context_info.context.value if hasattr(file_context_info.context, 'value') else str(file_context_info.context)
+            if hasattr(file_context_info, "context"):
+                context_type = (
+                    file_context_info.context.value
+                    if hasattr(file_context_info.context, "value")
+                    else str(file_context_info.context)
+                )
             else:
                 context_type = "PRODUCTION"
 
             if context_type in ["TEST", "EXAMPLE", "DOCUMENTATION"] and not include_test_files:
-                logger.info("skipping_non_production_file",
-                           file=code_file.path,
-                           context=context_type)
+                logger.info("skipping_non_production_file", file=code_file.path, context=context_type)
                 continue
 
             filtered.append(code_file)
@@ -48,9 +50,7 @@ class FileFilter:
 
     @staticmethod
     def apply_triage_routing(
-        context: PipelineContext,
-        frame: ValidationFrame,
-        code_files: list[CodeFile]
+        context: PipelineContext, frame: ValidationFrame, code_files: list[CodeFile]
     ) -> list[CodeFile]:
         """
         Filter files based on Triage Lane and Frame cost.
@@ -59,15 +59,15 @@ class FileFilter:
         - Fast Lane: Skip expensive/LLM frames
         - Middle/Deep Lane: Execute everything
         """
-        if not hasattr(context, 'triage_decisions') or not context.triage_decisions:
+        if not hasattr(context, "triage_decisions") or not context.triage_decisions:
             return code_files
 
         is_expensive = False
 
-        if hasattr(frame, 'config') and frame.config.get('use_llm') is True:
+        if hasattr(frame, "config") and frame.config.get("use_llm") is True:
             is_expensive = True
         else:
-            expensive_keywords = ['security', 'complex', 'architecture', 'design', 'refactor', 'llm', 'deep']
+            expensive_keywords = ["security", "complex", "architecture", "design", "refactor", "llm", "deep"]
             if any(k in frame.frame_id.lower() for k in expensive_keywords):
                 is_expensive = True
 
@@ -83,24 +83,19 @@ class FileFilter:
                 filtered.append(cf)
                 continue
 
-            lane = decision_data.get('lane')
+            lane = decision_data.get("lane")
 
             if cf.metadata is None:
                 cf.metadata = {}
-            cf.metadata['triage_lane'] = lane
+            cf.metadata["triage_lane"] = lane
 
-            if lane == 'fast_lane':
+            if lane == "fast_lane":
                 skipped_count += 1
                 continue
 
             filtered.append(cf)
 
         if skipped_count > 0:
-             logger.info(
-                 "triage_routing_applied",
-                 frame=frame.frame_id,
-                 skipped=skipped_count,
-                 remaining=len(filtered)
-             )
+            logger.info("triage_routing_applied", frame=frame.frame_id, skipped=skipped_count, remaining=len(filtered))
 
         return filtered

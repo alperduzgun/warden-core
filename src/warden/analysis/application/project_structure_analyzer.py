@@ -49,7 +49,7 @@ class ProjectStructureAnalyzer:
         project_root: Path,
         llm_config: LlmConfiguration | None = None,
         analysis_level: Any | None = None,
-        llm_service: Any | None = None
+        llm_service: Any | None = None,
     ) -> None:
         """
         Initialize analyzer with project root.
@@ -74,9 +74,7 @@ class ProjectStructureAnalyzer:
         self.gitignore_filter = create_gitignore_filter(self.project_root)
 
     async def analyze_async(
-        self,
-        initial_context: ProjectContext | None = None,
-        all_files: list[Path] | None = None
+        self, initial_context: ProjectContext | None = None, all_files: list[Path] | None = None
     ) -> ProjectContext:
         """
         Analyze project structure and detect characteristics.
@@ -144,7 +142,9 @@ class ProjectStructureAnalyzer:
             context.conventions = self._detect_conventions()
 
             # Detect language and SDKs
-            context.primary_language, context.detected_languages, context.language_breakdown = self._detect_languages(context.statistics)
+            context.primary_language, context.detected_languages, context.language_breakdown = self._detect_languages(
+                context.statistics
+            )
             context.sdk_versions = self._detect_sdk_versions()
 
             # Detect service abstractions
@@ -210,7 +210,6 @@ class ProjectStructureAnalyzer:
             "ruff.toml": "python-ruff",
             ".ruff.toml": "python-ruff",
             "pytest.ini": "python-pytest",
-
             # JavaScript/TypeScript
             "package.json": "javascript-npm",
             "package-lock.json": "javascript-npm-lock",
@@ -226,12 +225,10 @@ class ProjectStructureAnalyzer:
             "nuxt.config.js": "javascript-nuxt",
             "angular.json": "javascript-angular",
             "vue.config.js": "javascript-vue",
-
             # Dart/Flutter
             "pubspec.yaml": "dart-pub",
             "pubspec.lock": "dart-pub-lock",
             "analysis_options.yaml": "dart-analysis",
-
             # Build tools
             "Dockerfile": "docker",
             "docker-compose.yml": "docker-compose",
@@ -240,7 +237,6 @@ class ProjectStructureAnalyzer:
             "CMakeLists.txt": "cmake",
             "build.gradle": "gradle",
             "pom.xml": "maven",
-
             # CI/CD
             ".gitlab-ci.yml": "gitlab-ci",
             ".github/workflows": "github-actions",
@@ -248,7 +244,6 @@ class ProjectStructureAnalyzer:
             "Jenkinsfile": "jenkins",
             ".circleci/config.yml": "circleci",
             "azure-pipelines.yml": "azure-devops",
-
             # Other
             ".gitignore": "git",
             ".env": "environment",
@@ -291,7 +286,7 @@ class ProjectStructureAnalyzer:
 
                 # Check one level deep
                 for subdir in self.project_root.iterdir():
-                    if subdir.is_dir() and not subdir.name.startswith('.'):
+                    if subdir.is_dir() and not subdir.name.startswith("."):
                         sub_path = subdir / pattern
                         if sub_path.exists() and sub_path.is_dir():
                             found_dirs.append(f"{subdir.name}/{pattern}/")
@@ -326,13 +321,19 @@ class ProjectStructureAnalyzer:
         config_detected_languages = set()
 
         # 1. Config Files (Intent) - Unchanged
-        if "go.mod" in self.config_files: config_detected_languages.add("go")
-        if "Cargo.toml" in self.config_files: config_detected_languages.add("rust")
-        if "pubspec.yaml" in self.config_files: config_detected_languages.add("dart")
-        if "pom.xml" in self.config_files or "build.gradle" in self.config_files: config_detected_languages.add("java")
+        if "go.mod" in self.config_files:
+            config_detected_languages.add("go")
+        if "Cargo.toml" in self.config_files:
+            config_detected_languages.add("rust")
+        if "pubspec.yaml" in self.config_files:
+            config_detected_languages.add("dart")
+        if "pom.xml" in self.config_files or "build.gradle" in self.config_files:
+            config_detected_languages.add("java")
         if "package.json" in self.config_files:
-            if "tsconfig.json" in self.config_files: config_detected_languages.add("typescript")
-            else: config_detected_languages.add("javascript")
+            if "tsconfig.json" in self.config_files:
+                config_detected_languages.add("typescript")
+            else:
+                config_detected_languages.add("javascript")
         if "pyproject.toml" in self.config_files or "setup.py" in self.config_files:
             config_detected_languages.add("python")
 
@@ -341,7 +342,7 @@ class ProjectStructureAnalyzer:
         breakdown = {}
         counts = {}
 
-        use_bytes = bool(stats.language_bytes) # Check if we have byte data
+        use_bytes = bool(stats.language_bytes)  # Check if we have byte data
         source_data = stats.language_bytes if use_bytes else stats.language_distribution
 
         total_value = sum(source_data.values()) if source_data else 1
@@ -350,7 +351,8 @@ class ProjectStructureAnalyzer:
             lang_id = lang_enum.value
 
             # Skip if value is 0
-            if value == 0: continue
+            if value == 0:
+                continue
 
             counts[lang_id] = value
             percent = (value / total_value) * 100
@@ -377,7 +379,8 @@ class ProjectStructureAnalyzer:
                 if l in config_detected_languages:
                     primary_lang = l
                     break
-            if primary_lang == "unknown": primary_lang = sorted(config_detected_languages)[0]
+            if primary_lang == "unknown":
+                primary_lang = sorted(config_detected_languages)[0]
         elif dominant_lang:
             primary_lang = dominant_lang
 
@@ -393,8 +396,9 @@ class ProjectStructureAnalyzer:
                 with open(self.project_root / "pyproject.toml", "rb") as f:
                     data = tomllib.load(f)
                     # Support both [tool.poetry] and [project] (PEP 621)
-                    python_req = (data.get("tool", {}).get("poetry", {}).get("dependencies", {}).get("python") or
-                                 data.get("project", {}).get("requires-python"))
+                    python_req = data.get("tool", {}).get("poetry", {}).get("dependencies", {}).get(
+                        "python"
+                    ) or data.get("project", {}).get("requires-python")
                     if python_req:
                         versions["python"] = python_req
             except (FileNotFoundError, PermissionError, tomllib.TOMLDecodeError, KeyError):
@@ -428,7 +432,7 @@ class ProjectStructureAnalyzer:
         if "pom.xml" in self.config_files:
             try:
                 content = (self.project_root / "pom.xml").read_text()
-                java_match = re.search(r'<java\.version>(\d+[\.\d]*)</java\.version>', content)
+                java_match = re.search(r"<java\.version>(\d+[\.\d]*)</java\.version>", content)
                 if java_match:
                     versions["java"] = java_match.group(1)
             except (OSError, FileNotFoundError, PermissionError):
@@ -438,7 +442,7 @@ class ProjectStructureAnalyzer:
         if "go.mod" in self.config_files:
             try:
                 content = (self.project_root / "go.mod").read_text()
-                go_match = re.search(r'^go\s+([\d.]+)', content, re.MULTILINE)
+                go_match = re.search(r"^go\s+([\d.]+)", content, re.MULTILINE)
                 if go_match:
                     versions["go"] = go_match.group(1)
             except (OSError, FileNotFoundError, PermissionError):
@@ -471,10 +475,10 @@ class ProjectStructureAnalyzer:
 
         # .NET - from *.csproj
         for f in self.config_files:
-            if f.endswith('.csproj'):
+            if f.endswith(".csproj"):
                 try:
                     content = (self.project_root / f).read_text()
-                    net_match = re.search(r'<TargetFramework>net([\d.]+)</TargetFramework>', content)
+                    net_match = re.search(r"<TargetFramework>net([\d.]+)</TargetFramework>", content)
                     if net_match:
                         versions["dotnet"] = net_match.group(1)
                         break
@@ -522,8 +526,9 @@ class ProjectStructureAnalyzer:
             return ProjectType.MONOREPO
 
         # Full-stack indicators
-        if ("frontend" in self.special_dirs.get("source", []) or "client" in self.special_dirs.get("source", [])) and \
-           ("backend" in self.special_dirs.get("source", []) or "server" in self.special_dirs.get("source", [])):
+        if ("frontend" in self.special_dirs.get("source", []) or "client" in self.special_dirs.get("source", [])) and (
+            "backend" in self.special_dirs.get("source", []) or "server" in self.special_dirs.get("source", [])
+        ):
             return ProjectType.FULLSTACK
 
         # Default to application
@@ -545,19 +550,21 @@ class ProjectStructureAnalyzer:
         dirs = set(self.directory_structure.keys())
 
         # MVC pattern
-        if {"models", "views", "controllers"}.issubset(dirs) or \
-           {"model", "view", "controller"}.issubset(dirs):
+        if {"models", "views", "controllers"}.issubset(dirs) or {"model", "view", "controller"}.issubset(dirs):
             return Architecture.MVC
 
         # Layered architecture
-        if {"presentation", "business", "data"}.issubset(dirs) or \
-           {"ui", "service", "repository"}.issubset(dirs) or \
-           {"api", "core", "infrastructure"}.issubset(dirs):
+        if (
+            {"presentation", "business", "data"}.issubset(dirs)
+            or {"ui", "service", "repository"}.issubset(dirs)
+            or {"api", "core", "infrastructure"}.issubset(dirs)
+        ):
             return Architecture.LAYERED
 
         # Hexagonal/Clean architecture
-        if {"domain", "application", "infrastructure"}.issubset(dirs) or \
-           {"entities", "use_cases", "adapters"}.issubset(dirs):
+        if {"domain", "application", "infrastructure"}.issubset(dirs) or {"entities", "use_cases", "adapters"}.issubset(
+            dirs
+        ):
             return Architecture.HEXAGONAL
 
         # DDD
@@ -631,7 +638,7 @@ class ProjectStructureAnalyzer:
         if "pyproject.toml" in self.config_files:
             pyproject = self.project_root / "pyproject.toml"
             try:
-                with open(pyproject, 'rb') as f:
+                with open(pyproject, "rb") as f:
                     data = tomllib.load(f)
                     if "tool" in data and "poetry" in data["tool"]:
                         tools.append(BuildTool.POETRY)
@@ -750,7 +757,7 @@ class ProjectStructureAnalyzer:
                 project_context=context,
                 llm_config=self.llm_config,
                 analysis_level=self.analysis_level,
-                llm_service=self.llm_service
+                llm_service=self.llm_service,
             )
             abstractions = await detector.detect_async(all_files=self._injected_files)
 

@@ -16,16 +16,16 @@ class OperationTimeoutError(Exception):
     Named to avoid shadowing Python's built-in asyncio.TimeoutError.
     Use this for Warden-specific timeout handling.
     """
+
     def __init__(self, operation: str, timeout_seconds: float):
         self.operation = operation
         self.timeout_seconds = timeout_seconds
-        super().__init__(
-            f"Operation '{operation}' timed out after {timeout_seconds}s"
-        )
+        super().__init__(f"Operation '{operation}' timed out after {timeout_seconds}s")
 
 
 # Backwards compatibility alias (deprecated)
 TimeoutError = OperationTimeoutError
+
 
 async def with_timeout_async(
     coro,
@@ -43,8 +43,10 @@ async def with_timeout_async(
         )
         raise OperationTimeoutError(operation_name, timeout_seconds)
 
+
 def timeout(seconds: float, operation_name: str | None = None):
     """Decorator to add timeout to async functions."""
+
     def decorator(func):
         @functools.wraps(func)
         async def wrapper_async(*args, **kwargs):
@@ -54,5 +56,7 @@ def timeout(seconds: float, operation_name: str | None = None):
                 seconds,
                 name,
             )
+
         return wrapper_async
+
     return decorator

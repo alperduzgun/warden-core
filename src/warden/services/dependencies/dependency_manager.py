@@ -11,6 +11,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 console = Console()
 
+
 class DependencyManager:
     """
     Manages runtime dependencies with resilience and safety checks.
@@ -20,8 +21,7 @@ class DependencyManager:
     @property
     def is_venv(self) -> bool:
         """Check if running inside a virtual environment."""
-        return (hasattr(sys, 'real_prefix') or
-                (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix))
+        return hasattr(sys, "real_prefix") or (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix)
 
     def is_installed(self, package_name: str) -> bool:
         """Check if a package is installed via importlib."""
@@ -31,7 +31,9 @@ class DependencyManager:
         except importlib.metadata.PackageNotFoundError:
             return False
 
-    async def install_packages_async(self, packages: list[str], timeout: int = 60, allow_system_break: bool = False) -> bool:
+    async def install_packages_async(
+        self, packages: list[str], timeout: int = 60, allow_system_break: bool = False
+    ) -> bool:
         """
         idempotently install packages.
         Returns True if all packages are installed (either previously or just now).
@@ -50,7 +52,9 @@ class DependencyManager:
             logger.warning("system_python_detected", action="block_install")
             console.print("[yellow]⚠️  System detected (PEP 668). Cannot auto-install dependencies.[/yellow]")
             console.print(f"[dim]Missing: {', '.join(missing)}[/dim]")
-            console.print(f"\n[bold]Please run manually:[/bold] [cyan]pip install {' '.join(missing)} --break-system-packages[/cyan]\n")
+            console.print(
+                f"\n[bold]Please run manually:[/bold] [cyan]pip install {' '.join(missing)} --break-system-packages[/cyan]\n"
+            )
             return False
 
         if use_break:
@@ -67,9 +71,7 @@ class DependencyManager:
             # Run pip install in subprocess with timeout
             # asyncio.to_thread is not enough for subprocess timeout control, usage of asyncio.create_subprocess_exec is better
             process = await asyncio.create_subprocess_exec(  # warden: ignore
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             try:

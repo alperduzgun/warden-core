@@ -118,9 +118,7 @@ class LoggingFortifier(BaseFortifier):
                 max_tokens=3000,
             )
 
-            fortified_code = self._extract_code_from_markdown(
-                response, code_file.content
-            )
+            fortified_code = self._extract_code_from_markdown(response, code_file.content)
 
             actions = [
                 FortificationAction(
@@ -166,9 +164,7 @@ class LoggingFortifier(BaseFortifier):
             line_number = i + 1
 
             # Detect function definitions without logging
-            if stripped_line.startswith("def ") and not self._has_logging_nearby(
-                lines, i
-            ):
+            if stripped_line.startswith("def ") and not self._has_logging_nearby(lines, i):
                 suggestions.append(
                     LoggingSuggestion(
                         line_number=line_number,
@@ -179,9 +175,7 @@ class LoggingFortifier(BaseFortifier):
                 )
 
             # Detect except blocks without logging
-            if stripped_line.startswith("except ") and not self._has_logging_in_block(
-                lines, i
-            ):
+            if stripped_line.startswith("except ") and not self._has_logging_in_block(lines, i):
                 suggestions.append(
                     LoggingSuggestion(
                         line_number=line_number,
@@ -212,23 +206,15 @@ class LoggingFortifier(BaseFortifier):
             if current_indent <= indent_level and lines[i].strip():
                 break
 
-            if any(
-                keyword in lines[i]
-                for keyword in ["logger.", "logging.", "log."]
-            ):
+            if any(keyword in lines[i] for keyword in ["logger.", "logging.", "log."]):
                 return True
 
         return False
 
     @staticmethod
-    def _build_logging_prompt(
-        code_file: CodeFile, suggestions: list[LoggingSuggestion]
-    ) -> str:
+    def _build_logging_prompt(code_file: CodeFile, suggestions: list[LoggingSuggestion]) -> str:
         """Build LLM prompt for logging."""
-        issues_list = "\n".join(
-            f"- Line {s.line_number}: {s.description} ({s.type})"
-            for s in suggestions
-        )
+        issues_list = "\n".join(f"- Line {s.line_number}: {s.description} ({s.type})" for s in suggestions)
 
         return f"""Add structured logging to this Python code:
 

@@ -137,39 +137,28 @@ class FrameMetadata:
         valid_categories = [cat.value for cat in FrameCategory]
         if self.category not in valid_categories:
             errors.append(
-                f"Invalid category: {self.category}. "
-                f"Must be one of: {', '.join(str(c) for c in valid_categories)}"
+                f"Invalid category: {self.category}. Must be one of: {', '.join(str(c) for c in valid_categories)}"
             )
 
         # Validate priority (FramePriority uses int values, but YAML uses string names)
         valid_priority_names = [pri.name.lower() for pri in FramePriority]
         if self.priority.lower() not in valid_priority_names:
-            errors.append(
-                f"Invalid priority: {self.priority}. "
-                f"Must be one of: {', '.join(valid_priority_names)}"
-            )
+            errors.append(f"Invalid priority: {self.priority}. Must be one of: {', '.join(valid_priority_names)}")
 
         # Validate scope
         valid_scopes = [scope.value for scope in FrameScope]
         if self.scope not in valid_scopes:
-            errors.append(
-                f"Invalid scope: {self.scope}. "
-                f"Must be one of: {', '.join(str(s) for s in valid_scopes)}"
-            )
+            errors.append(f"Invalid scope: {self.scope}. Must be one of: {', '.join(str(s) for s in valid_scopes)}")
 
         # Validate ID format (kebab-case)
         if self.id and not self.id.replace("-", "").replace("_", "").isalnum():
-            errors.append(
-                f"Invalid ID format: {self.id}. Use kebab-case (e.g., redis-security)"
-            )
+            errors.append(f"Invalid ID format: {self.id}. Use kebab-case (e.g., redis-security)")
 
         # Validate version format (semver)
         if self.version:
             parts = self.version.split(".")
             if len(parts) != 3 or not all(p.isdigit() for p in parts):
-                errors.append(
-                    f"Invalid version format: {self.version}. Use semantic versioning (e.g., 1.0.0)"
-                )
+                errors.append(f"Invalid version format: {self.version}. Use semantic versioning (e.g., 1.0.0)")
 
         # Validate applicability structure
         if self.applicability:
@@ -181,9 +170,7 @@ class FrameMetadata:
                     continue
 
                 if "language" not in app and "framework" not in app:
-                    errors.append(
-                        f"Invalid applicability[{i}]: Must have 'language' or 'framework' field"
-                    )
+                    errors.append(f"Invalid applicability[{i}]: Must have 'language' or 'framework' field")
 
         # Validate tags (should be list of strings)
         if self.tags:
@@ -195,9 +182,7 @@ class FrameMetadata:
                         errors.append(f"Invalid tags[{i}]: Must be a string, got {type(tag).__name__}")
 
         if errors:
-            raise ValueError(
-                "Frame metadata validation failed:\n  - " + "\n  - ".join(errors)
-            )
+            raise ValueError("Frame metadata validation failed:\n  - " + "\n  - ".join(errors))
 
     def get_category_enum(self) -> FrameCategory:
         """Get category as enum."""

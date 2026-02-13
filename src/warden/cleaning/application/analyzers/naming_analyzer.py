@@ -30,23 +30,23 @@ from warden.validation.domain.frame import CodeFile
 logger = structlog.get_logger()
 
 # Common acceptable single-letter variable names
-ACCEPTABLE_SINGLE_LETTERS = {'i', 'j', 'k', 'x', 'y', 'z', 'n', 't', '_'}
+ACCEPTABLE_SINGLE_LETTERS = {"i", "j", "k", "x", "y", "z", "n", "t", "_"}
 
 # Common unclear abbreviations
 UNCLEAR_ABBREVIATIONS = {
-    'tmp': 'temporary',
-    'val': 'value',
-    'arr': 'array',
-    'lst': 'list',
-    'dct': 'dictionary',
-    'num': 'number',
-    'str': 'string',
-    'obj': 'object',
-    'idx': 'index',
-    'cnt': 'count',
-    'msg': 'message',
-    'resp': 'response',
-    'req': 'request',
+    "tmp": "temporary",
+    "val": "value",
+    "arr": "array",
+    "lst": "list",
+    "dct": "dictionary",
+    "num": "number",
+    "str": "string",
+    "obj": "object",
+    "idx": "index",
+    "cnt": "count",
+    "msg": "message",
+    "resp": "response",
+    "req": "request",
 }
 
 
@@ -235,7 +235,7 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
                 )
 
         # Check for non-descriptive names
-        if name.lower() in ['process', 'handle', 'do', 'execute', 'run', 'go', 'func', 'method']:
+        if name.lower() in ["process", "handle", "do", "execute", "run", "go", "func", "method"]:
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.POOR_NAMING,
@@ -258,7 +258,7 @@ class NamingAnalyzer(BaseCleaningAnalyzer):
         line_number = node.location.start_line if node.location else 0
 
         # Check if class name follows PascalCase (common convention)
-        if not re.match(r'^[A-Z][a-zA-Z0-9]*$', name):
+        if not re.match(r"^[A-Z][a-zA-Z0-9]*$", name):
             issues.append(
                 CleaningIssue(
                     issue_type=CleaningIssueType.POOR_NAMING,

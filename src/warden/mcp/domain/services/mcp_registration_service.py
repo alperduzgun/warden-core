@@ -1,4 +1,3 @@
-
 import contextlib
 import json
 import logging
@@ -13,12 +12,14 @@ from warden.mcp.infrastructure.mcp_config_paths import get_mcp_config_paths, is_
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class RegistrationResult:
     tool_name: str
     status: str  # "registered", "skipped", "error"
     config_path: Path
     message: str | None = None
+
 
 class MCPRegistrationService:
     """
@@ -46,17 +47,12 @@ class MCPRegistrationService:
         }
 
         for tool_name, config_path in config_locations.items():
-            results[tool_name] = self._register_single_tool(
-                tool_name, config_path, mcp_config
-            )
+            results[tool_name] = self._register_single_tool(tool_name, config_path, mcp_config)
 
         return results
 
     def _register_single_tool(
-        self,
-        tool_name: str,
-        config_path: Path,
-        mcp_config: dict[str, Any]
+        self, tool_name: str, config_path: Path, mcp_config: dict[str, Any]
     ) -> RegistrationResult:
         """Register for a single tool with safety checks."""
 
@@ -66,13 +62,9 @@ class MCPRegistrationService:
                 try:
                     config_path.parent.mkdir(parents=True, exist_ok=True)
                 except OSError as e:
-                    return RegistrationResult(
-                        tool_name, "error", config_path, f"Cannot create directory: {e}"
-                    )
+                    return RegistrationResult(tool_name, "error", config_path, f"Cannot create directory: {e}")
             else:
-                return RegistrationResult(
-                    tool_name, "skipped", config_path, "Unsafe directory creation prevented"
-                )
+                return RegistrationResult(tool_name, "skipped", config_path, "Unsafe directory creation prevented")
 
         try:
             # 2. Read existing (Self-Healing)
@@ -104,7 +96,7 @@ class MCPRegistrationService:
             return {}
 
         try:
-            with open(path, encoding='utf-8') as f:
+            with open(path, encoding="utf-8") as f:
                 content = f.read().strip()
                 return json.loads(content) if content else {}
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -116,13 +108,9 @@ class MCPRegistrationService:
 
     def _write_config_atomic(self, path: Path, data: dict[str, Any]) -> None:
         """Atomic write pattern."""
-        fd, temp_path = tempfile.mkstemp(
-            dir=path.parent,
-            prefix='.mcp_reg_',
-            suffix='.tmp'
-        )
+        fd, temp_path = tempfile.mkstemp(dir=path.parent, prefix=".mcp_reg_", suffix=".tmp")
         try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             os.replace(temp_path, path)
         except Exception:

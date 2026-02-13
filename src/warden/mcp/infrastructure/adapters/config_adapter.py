@@ -28,14 +28,16 @@ class ConfigAdapter(BaseWardenAdapter):
         - warden_update_frame_status: Enable/disable frame
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_get_available_frames",
-        "warden_get_available_providers",
-        "warden_get_configuration",
-        "warden_update_configuration",
-        "warden_update_frame_status",
-        "warden_configure",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_get_available_frames",
+            "warden_get_available_providers",
+            "warden_get_configuration",
+            "warden_update_configuration",
+            "warden_update_frame_status",
+            "warden_configure",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.CONFIG
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -102,8 +104,8 @@ class ConfigAdapter(BaseWardenAdapter):
                     "vector_db": {
                         "type": "string",
                         "description": "Vector Database provider (local, qdrant, pinecone)",
-                        "default": "local"
-                    }
+                        "default": "local",
+                    },
                 },
                 required=["provider"],
             ),
@@ -137,10 +139,12 @@ class ConfigAdapter(BaseWardenAdapter):
 
         try:
             frames = await self.bridge.get_available_frames_async()
-            return MCPToolResult.json_result({
-                "frames": frames,
-                "total_count": len(frames),
-            })
+            return MCPToolResult.json_result(
+                {
+                    "frames": frames,
+                    "total_count": len(frames),
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"Failed to get frames: {e}")
 
@@ -151,10 +155,12 @@ class ConfigAdapter(BaseWardenAdapter):
 
         try:
             providers = await self.bridge.get_available_providers_async()
-            return MCPToolResult.json_result({
-                "providers": providers,
-                "total_count": len(providers),
-            })
+            return MCPToolResult.json_result(
+                {
+                    "providers": providers,
+                    "total_count": len(providers),
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"Failed to get providers: {e}")
 
@@ -220,10 +226,7 @@ class ConfigAdapter(BaseWardenAdapter):
         model = arguments.get("model")
         vector_db = arguments.get("vector_db", "local")
 
-        valid_providers = {
-            "ollama", "openai", "anthropic", "gemini",
-            "azure_openai", "deepseek", "groq", "openrouter"
-        }
+        valid_providers = {"ollama", "openai", "anthropic", "gemini", "azure_openai", "deepseek", "groq", "openrouter"}
 
         if provider not in valid_providers:
             return MCPToolResult.error(f"Invalid provider: {provider}. Must be one of: {', '.join(valid_providers)}")
@@ -240,7 +243,7 @@ class ConfigAdapter(BaseWardenAdapter):
                 "azure_openai": "AZURE_OPENAI_API_KEY",
                 "deepseek": "DEEPSEEK_API_KEY",
                 "groq": "GROQ_API_KEY",
-                "openrouter": "OPENROUTER_API_KEY"
+                "openrouter": "OPENROUTER_API_KEY",
             }
             if provider in key_map:
                 env_updates[key_map[provider]] = api_key
@@ -258,7 +261,7 @@ class ConfigAdapter(BaseWardenAdapter):
 
                 for line in current_lines:
                     # simplistic parsing
-                    parts = line.split('=')
+                    parts = line.split("=")
                     if len(parts) > 0:
                         key = parts[0].strip()
                         if key in env_updates:
@@ -269,8 +272,8 @@ class ConfigAdapter(BaseWardenAdapter):
 
                 for key, val in env_updates.items():
                     if key not in processed_keys:
-                        if new_lines and not new_lines[-1].endswith('\n'):
-                            new_lines.append('\n')
+                        if new_lines and not new_lines[-1].endswith("\n"):
+                            new_lines.append("\n")
                         new_lines.append(f"{key}={val}\n")
 
                 with open(env_path, "w") as f:
@@ -296,7 +299,7 @@ class ConfigAdapter(BaseWardenAdapter):
                 with open(config_path) as f:
                     config_data = yaml.safe_load(f) or {}
             except Exception:
-                config_data = {} # Fail safe, overwrite if corrupt
+                config_data = {}  # Fail safe, overwrite if corrupt
 
         # Ensure section exists
         if "llm" not in config_data:
@@ -307,36 +310,36 @@ class ConfigAdapter(BaseWardenAdapter):
             config_data["llm"]["smart_model"] = model
             # For simplicity, set fast model to same if not defined, or smart defaults
             if "fast_model" not in config_data["llm"]:
-                 config_data["llm"]["fast_model"] = model # simplified
+                config_data["llm"]["fast_model"] = model  # simplified
 
         config_data["vector_db"] = {"provider": vector_db}
 
         try:
-             with open(config_path, "w") as f:
-                 yaml.safe_dump(config_data, f)
+            with open(config_path, "w") as f:
+                yaml.safe_dump(config_data, f)
         except Exception as e:
             return MCPToolResult.error(f"Failed to write config.yaml: {e}")
 
         # 3. Update Artifacts (CLAUDE.md, etc.) to Usage Mode
         try:
             from warden.cli.commands.init_helpers import generate_ai_tool_files
+
             # Simplified mock config for generation
-            gen_config = {
-                "provider": provider,
-                "model": model,
-                "vector_db": vector_db
-            }
+            gen_config = {"provider": provider, "model": model, "vector_db": vector_db}
             generate_ai_tool_files(self.project_root, gen_config)
         except Exception as e:
             # Non-critical failure, but log it for observability
             # Assuming logger is available via self.logger or get_logger
             from warden.shared.infrastructure.logging import get_logger
+
             logger = get_logger(__name__)
             logger.warning("artifact_generation_failed_in_adapter", error=str(e))
 
-        return MCPToolResult.json_result({
-            "status": "configured",
-            "provider": provider,
-            "config_path": str(config_path),
-            "updated_env": list(env_updates.keys())
-        })
+        return MCPToolResult.json_result(
+            {
+                "status": "configured",
+                "provider": provider,
+                "config_path": str(config_path),
+                "updated_env": list(env_updates.keys()),
+            }
+        )

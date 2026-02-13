@@ -9,6 +9,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 console = Console()
 
+
 def update_command() -> None:
     """
     Update the Warden Hub catalog from remote Git repository.

@@ -130,13 +130,19 @@ class FileDiscoverer:
         # Try Rust discovery first
         try:
             from warden import warden_core_rust
+
             RUST_AVAILABLE = True
         except ImportError:
             RUST_AVAILABLE = False
 
         if RUST_AVAILABLE:
             try:
-                logger.debug("discovery_engine_selected", engine="rust", project_root=str(self.root_path), max_size_mb=self.max_size_mb)
+                logger.debug(
+                    "discovery_engine_selected",
+                    engine="rust",
+                    project_root=str(self.root_path),
+                    max_size_mb=self.max_size_mb,
+                )
                 rust_files = warden_core_rust.discover_files(str(self.root_path), self.use_gitignore, self.max_size_mb)
 
                 # STEP 1: Batch get stats (Parallel line count, hash, binary check)
@@ -270,9 +276,7 @@ class FileDiscoverer:
 
         return paths
 
-    def _calculate_stats(
-        self, files: list[DiscoveredFile], start_time: float
-    ) -> DiscoveryStats:
+    def _calculate_stats(self, files: list[DiscoveredFile], start_time: float) -> DiscoveryStats:
         """
         Calculate discovery statistics.
 

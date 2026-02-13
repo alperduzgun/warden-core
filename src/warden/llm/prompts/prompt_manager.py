@@ -21,6 +21,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 class PromptTemplateError(Exception):
     """Raised when template loading or rendering fails."""
+
     pass
 
 
@@ -39,8 +40,8 @@ class PromptManager:
 
     _MAX_INCLUDE_DEPTH = 10
     _MAX_TEMPLATE_SIZE = 100_000  # 100KB
-    _INCLUDE_PATTERN = re.compile(r'@include\(([^)]+)\)')
-    _VARIABLE_PATTERN = re.compile(r'\{\{(\w+)\}\}')
+    _INCLUDE_PATTERN = re.compile(r"@include\(([^)]+)\)")
+    _VARIABLE_PATTERN = re.compile(r"\{\{(\w+)\}\}")
 
     def __init__(self, templates_dir: Path | None = None):
         self._templates_dir = (templates_dir or TEMPLATES_DIR).resolve()
@@ -96,9 +97,7 @@ class PromptManager:
         # Circular include detection
         canonical = str(template_path)
         if canonical in visited:
-            raise PromptTemplateError(
-                f"Circular include detected: '{template_name}' already included in chain."
-            )
+            raise PromptTemplateError(f"Circular include detected: '{template_name}' already included in chain.")
         visited.add(canonical)
 
         # Read template
@@ -112,8 +111,7 @@ class PromptManager:
         # Size check
         if len(content) > self._MAX_TEMPLATE_SIZE:
             raise PromptTemplateError(
-                f"Template '{template_name}' exceeds size limit "
-                f"({len(content)} > {self._MAX_TEMPLATE_SIZE} bytes)."
+                f"Template '{template_name}' exceeds size limit ({len(content)} > {self._MAX_TEMPLATE_SIZE} bytes)."
             )
 
         # Resolve includes
@@ -142,6 +140,7 @@ class PromptManager:
 
     def _interpolate(self, content: str, variables: dict[str, str]) -> str:
         """Interpolate {{VAR}} placeholders. Unknown variables left as-is."""
+
         def replace_var(match: re.Match) -> str:
             var_name = match.group(1)
             return variables.get(var_name, match.group(0))

@@ -117,9 +117,7 @@ class SpringBootExtractor(BaseContractExtractor):
                     base_path = self._extract_base_path(content)
 
                     # Extract operations
-                    operations = self._extract_operations(
-                        content, file_path, base_path, is_kotlin
-                    )
+                    operations = self._extract_operations(content, file_path, base_path, is_kotlin)
                     for op in operations:
                         if op.name not in seen_operations:
                             contract.operations.append(op)
@@ -157,11 +155,7 @@ class SpringBootExtractor(BaseContractExtractor):
 
     def _is_controller(self, content: str) -> bool:
         """Check if file contains a Spring controller."""
-        return (
-            "@RestController" in content
-            or "@Controller" in content
-            or "RestController" in content
-        )
+        return "@RestController" in content or "@Controller" in content or "RestController" in content
 
     def _extract_base_path(self, content: str) -> str:
         """Extract base path from class-level @RequestMapping."""
@@ -268,9 +262,7 @@ class SpringBootExtractor(BaseContractExtractor):
                     # For @RequestMapping, check method attribute
                     actual_http_method = http_method
                     if http_method.lower() == "request":
-                        method_attr_match = re.search(
-                            r"method\s*=\s*RequestMethod\.(\w+)", line
-                        )
+                        method_attr_match = re.search(r"method\s*=\s*RequestMethod\.(\w+)", line)
                         if method_attr_match:
                             actual_http_method = method_attr_match.group(1).capitalize()
                         else:
@@ -279,15 +271,17 @@ class SpringBootExtractor(BaseContractExtractor):
                     mapping_key = f"{actual_http_method}Mapping"
                     op_type = self.HTTP_MAPPINGS.get(mapping_key, OperationType.QUERY)
 
-                    operations.append(OperationDefinition(
-                        name=method_name,
-                        operation_type=op_type,
-                        input_type=input_type,
-                        output_type=output_type,
-                        description=f"{actual_http_method.upper()} {full_path}",
-                        source_file=str(file_path),
-                        source_line=i + 1,
-                    ))
+                    operations.append(
+                        OperationDefinition(
+                            name=method_name,
+                            operation_type=op_type,
+                            input_type=input_type,
+                            output_type=output_type,
+                            description=f"{actual_http_method.upper()} {full_path}",
+                            source_file=str(file_path),
+                            source_line=i + 1,
+                        )
+                    )
 
         return operations
 
@@ -392,22 +386,26 @@ class SpringBootExtractor(BaseContractExtractor):
                 if len(parts) >= 2:
                     comp_type = parts[0]
                     comp_name = parts[1]
-                    fields.append(FieldDefinition(
-                        name=comp_name,
-                        type_name=self._clean_type(comp_type),
-                        is_optional=False,
-                        is_array="List<" in comp_type or "[]" in comp_type,
-                        source_file=str(file_path),
-                    ))
+                    fields.append(
+                        FieldDefinition(
+                            name=comp_name,
+                            type_name=self._clean_type(comp_type),
+                            is_optional=False,
+                            is_array="List<" in comp_type or "[]" in comp_type,
+                            source_file=str(file_path),
+                        )
+                    )
 
             if fields:
-                line_num = content[:record_match.start()].count("\n") + 1
-                models.append(ModelDefinition(
-                    name=record_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: record_match.start()].count("\n") + 1
+                models.append(
+                    ModelDefinition(
+                        name=record_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         # Handle regular classes
         for class_match in class_pattern.finditer(content):
@@ -441,22 +439,26 @@ class SpringBootExtractor(BaseContractExtractor):
                 field_type = field_match.group(1)
                 field_name = field_match.group(2)
 
-                fields.append(FieldDefinition(
-                    name=field_name,
-                    type_name=self._clean_type(field_type),
-                    is_optional=False,  # Java doesn't have nullable syntax
-                    is_array="List<" in field_type or "[]" in field_type,
-                    source_file=str(file_path),
-                ))
+                fields.append(
+                    FieldDefinition(
+                        name=field_name,
+                        type_name=self._clean_type(field_type),
+                        is_optional=False,  # Java doesn't have nullable syntax
+                        is_array="List<" in field_type or "[]" in field_type,
+                        source_file=str(file_path),
+                    )
+                )
 
             if fields:
-                line_num = content[:class_match.start()].count("\n") + 1
-                models.append(ModelDefinition(
-                    name=class_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: class_match.start()].count("\n") + 1
+                models.append(
+                    ModelDefinition(
+                        name=class_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return models
 
@@ -508,32 +510,48 @@ class SpringBootExtractor(BaseContractExtractor):
                 is_optional = param_type.endswith("?") or "= null" in param_type
                 is_array = param_type.startswith("List<")
 
-                fields.append(FieldDefinition(
-                    name=param_name,
-                    type_name=self._clean_type(param_type.rstrip("?")),
-                    is_optional=is_optional,
-                    is_array=is_array,
-                    source_file=str(file_path),
-                ))
+                fields.append(
+                    FieldDefinition(
+                        name=param_name,
+                        type_name=self._clean_type(param_type.rstrip("?")),
+                        is_optional=is_optional,
+                        is_array=is_array,
+                        source_file=str(file_path),
+                    )
+                )
 
             if fields:
-                line_num = content[:class_match.start()].count("\n") + 1
-                models.append(ModelDefinition(
-                    name=class_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: class_match.start()].count("\n") + 1
+                models.append(
+                    ModelDefinition(
+                        name=class_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return models
 
     def _should_skip_class(self, class_name: str) -> bool:
         """Check if class should be skipped (not a model)."""
         skip_suffixes = [
-            "Controller", "Service", "Repository", "Mapper",
-            "Handler", "Interceptor", "Filter", "Advice",
-            "Config", "Configuration", "Application", "Test",
-            "Exception", "Error", "Builder", "Factory",
+            "Controller",
+            "Service",
+            "Repository",
+            "Mapper",
+            "Handler",
+            "Interceptor",
+            "Filter",
+            "Advice",
+            "Config",
+            "Configuration",
+            "Application",
+            "Test",
+            "Exception",
+            "Error",
+            "Builder",
+            "Factory",
         ]
         return any(class_name.endswith(suffix) for suffix in skip_suffixes)
 
@@ -575,13 +593,15 @@ class SpringBootExtractor(BaseContractExtractor):
                     values.append(value)
 
             if values:
-                line_num = content[:enum_match.start()].count("\n") + 1
-                enums.append(EnumDefinition(
-                    name=enum_name,
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: enum_match.start()].count("\n") + 1
+                enums.append(
+                    EnumDefinition(
+                        name=enum_name,
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return enums
 

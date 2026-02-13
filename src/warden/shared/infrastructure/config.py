@@ -131,8 +131,8 @@ class Settings(BaseSettings):
                 logger.warning(
                     "auto_generated_secret_key",
                     message="SECRET_KEY was empty. Auto-generated a random key for development. "
-                           "Set SECRET_KEY in .env for production use.",
-                    key_length=len(self.secret_key)
+                    "Set SECRET_KEY in .env for production use.",
+                    key_length=len(self.secret_key),
                 )
         return self
 

@@ -204,6 +204,7 @@ class MinimalWardenBridge:
             Language identifier
         """
         from warden.shared.utils.language_utils import get_language_from_path
+
         return get_language_from_path(path).value
 
 

@@ -255,9 +255,7 @@ class GitChangesFrame(ValidationFrame):
 
         return result.stdout
 
-    def _analyze_changed_lines(
-        self, code_file: CodeFile, file_diff: FileDiff
-    ) -> list[Finding]:
+    def _analyze_changed_lines(self, code_file: CodeFile, file_diff: FileDiff) -> list[Finding]:
         """
         Analyze changed lines and generate findings.
 
@@ -320,9 +318,7 @@ class GitChangesFrame(ValidationFrame):
 
         return findings
 
-    def _create_summary_detail(
-        self, file_diff: FileDiff, added_lines: set[int]
-    ) -> str:
+    def _create_summary_detail(self, file_diff: FileDiff, added_lines: set[int]) -> str:
         """
         Create detailed summary of changes.
 

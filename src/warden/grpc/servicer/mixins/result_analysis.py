@@ -14,9 +14,11 @@ except ImportError:
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -42,10 +44,7 @@ class ResultAnalysisMixin:
                 quality_score = 100.0
             else:
                 weighted = (
-                    result.critical_count * 10 +
-                    result.high_count * 5 +
-                    result.medium_count * 2 +
-                    result.low_count * 1
+                    result.critical_count * 10 + result.high_count * 5 + result.medium_count * 2 + result.low_count * 1
                 )
                 quality_score = max(0.0, 100.0 - weighted)
 
@@ -63,7 +62,7 @@ class ResultAnalysisMixin:
                 new_issues=new_issues,
                 resolved_issues=resolved_issues,
                 persistent_issues=len(self._issues),
-                analysis_timestamp=datetime.now().isoformat()
+                analysis_timestamp=datetime.now().isoformat(),
             )
 
         except Exception as e:
@@ -77,15 +76,13 @@ class ResultAnalysisMixin:
         try:
             limit = request.limit if request.limit > 0 else 10
 
-            response = warden_pb2.TrendResponse(
-                overall_trend=warden_pb2.STABLE
-            )
+            response = warden_pb2.TrendResponse(overall_trend=warden_pb2.STABLE)
 
             for snapshot in self._issue_history[-limit:]:
                 point = warden_pb2.TrendPoint(
                     timestamp=snapshot.get("timestamp", ""),
                     total_issues=snapshot.get("total_issues", 0),
-                    quality_score=snapshot.get("quality_score", 0.0)
+                    quality_score=snapshot.get("quality_score", 0.0),
                 )
                 response.points.append(point)
 
@@ -125,7 +122,7 @@ class ResultAnalysisMixin:
                     critical=sum(1 for i in issues if i.get("severity") == "critical"),
                     high=sum(1 for i in issues if i.get("severity") == "high"),
                     medium=sum(1 for i in issues if i.get("severity") == "medium"),
-                    low=sum(1 for i in issues if i.get("severity") == "low")
+                    low=sum(1 for i in issues if i.get("severity") == "low"),
                 )
                 response.stats[frame_id].CopyFrom(stat)
 
@@ -148,15 +145,10 @@ class ResultAnalysisMixin:
             low = sum(1 for i in issues if i.get("severity") == "low")
             info = sum(1 for i in issues if i.get("severity") == "info")
 
-            weighted_score = (critical * 10 + high * 5 + medium * 2 + low * 1)
+            weighted_score = critical * 10 + high * 5 + medium * 2 + low * 1
 
             return warden_pb2.SeverityStats(
-                critical=critical,
-                high=high,
-                medium=medium,
-                low=low,
-                info=info,
-                weighted_score=float(weighted_score)
+                critical=critical, high=high, medium=medium, low=low, info=info, weighted_score=float(weighted_score)
             )
 
         except Exception as e:
@@ -171,16 +163,17 @@ class ResultAnalysisMixin:
             issues = list(self._issues.values())
 
             if not issues:
-                return warden_pb2.QualityScoreResponse(
-                    score=100.0,
-                    grade="A"
-                )
+                return warden_pb2.QualityScoreResponse(score=100.0, grade="A")
 
             weighted = sum(
-                10 if i.get("severity") == "critical" else
-                5 if i.get("severity") == "high" else
-                2 if i.get("severity") == "medium" else
-                1 for i in issues
+                10
+                if i.get("severity") == "critical"
+                else 5
+                if i.get("severity") == "high"
+                else 2
+                if i.get("severity") == "medium"
+                else 1
+                for i in issues
             )
             score = max(0.0, 100.0 - weighted)
 
@@ -195,10 +188,7 @@ class ResultAnalysisMixin:
             else:
                 grade = "F"
 
-            response = warden_pb2.QualityScoreResponse(
-                score=score,
-                grade=grade
-            )
+            response = warden_pb2.QualityScoreResponse(score=score, grade=grade)
 
             response.breakdown["security"] = score
             response.breakdown["code_quality"] = min(100.0, score + 10)

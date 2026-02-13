@@ -11,9 +11,11 @@ from .timeout import with_timeout_async
 
 T = TypeVar("T")
 
+
 @dataclass
 class ResilienceConfig:
     """Combined resilience configuration."""
+
     timeout_seconds: float | None = 30.0
     retry_enabled: bool = True
     retry_max_attempts: int = 3
@@ -24,8 +26,10 @@ class ResilienceConfig:
     circuit_failure_threshold: int = 5
     circuit_timeout_duration: float = 60.0
 
+
 class ResilientOperation(Generic[T]):
     """Combines multiple resilience patterns."""
+
     def __init__(self, name: str, config: ResilienceConfig | None = None):
         self.name = name
         self.config = config or ResilienceConfig()
@@ -71,6 +75,7 @@ class ResilientOperation(Generic[T]):
                 self._circuit_breaker._record_failure(e)
             raise
 
+
 def resilient(
     name: str | None = None,
     timeout_seconds: float = 30.0,
@@ -83,11 +88,15 @@ def resilient(
         retry_max_attempts=retry_max_attempts,
         circuit_breaker_enabled=circuit_breaker_enabled,
     )
+
     def decorator(func):
         op_name = name or func.__name__
         resilient_op = ResilientOperation(op_name, config)
+
         @functools.wraps(func)
         async def wrapper_async(*args, **kwargs):
             return await resilient_op.execute_async(lambda: func(*args, **kwargs))
+
         return wrapper_async
+
     return decorator

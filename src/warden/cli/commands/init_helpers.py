@@ -29,7 +29,7 @@ LLM_PROVIDERS = {
         "description": "Free, private, runs on your machine",
         "emoji": "🏠",
         "requires_key": False,
-        "default_model": "qwen2.5-coder:7b"
+        "default_model": "qwen2.5-coder:7b",
     },
     "2": {
         "id": "anthropic",
@@ -39,7 +39,7 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "ANTHROPIC_API_KEY",
         "key_prefix": "sk-ant-",
-        "default_model": "claude-sonnet-4-20250514"
+        "default_model": "claude-sonnet-4-20250514",
     },
     "3": {
         "id": "openai",
@@ -49,7 +49,7 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "OPENAI_API_KEY",
         "key_prefix": "sk-",
-        "default_model": "gpt-4o"
+        "default_model": "gpt-4o",
     },
     "4": {
         "id": "groq",
@@ -59,7 +59,7 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "GROQ_API_KEY",
         "key_prefix": "gsk_",
-        "default_model": "llama-3.3-70b-versatile"
+        "default_model": "llama-3.3-70b-versatile",
     },
     "5": {
         "id": "azure",
@@ -68,7 +68,7 @@ LLM_PROVIDERS = {
         "emoji": "☁️",
         "requires_key": True,
         "key_var": "AZURE_OPENAI_API_KEY",
-        "default_model": "gpt-4o"
+        "default_model": "gpt-4o",
     },
     "6": {
         "id": "deepseek",
@@ -77,7 +77,7 @@ LLM_PROVIDERS = {
         "emoji": "🔍",
         "requires_key": True,
         "key_var": "DEEPSEEK_API_KEY",
-        "default_model": "deepseek-coder"
+        "default_model": "deepseek-coder",
     },
     "7": {
         "id": "gemini",
@@ -86,7 +86,7 @@ LLM_PROVIDERS = {
         "emoji": "✨",
         "requires_key": True,
         "key_var": "GEMINI_API_KEY",
-        "default_model": "gemini-1.5-flash"
+        "default_model": "gemini-1.5-flash",
     },
     "8": {
         "id": "claude_code",
@@ -94,8 +94,8 @@ LLM_PROVIDERS = {
         "description": "Use your Claude Code subscription locally",
         "emoji": "🖥️",
         "requires_key": False,
-        "default_model": "claude-sonnet-4-20250514"
-    }
+        "default_model": "claude-sonnet-4-20250514",
+    },
 }
 
 CI_PROVIDERS = {
@@ -103,20 +103,10 @@ CI_PROVIDERS = {
         "id": "github",
         "name": "GitHub Actions",
         "template": "github.yml",
-        "target_path": ".github/workflows/warden.yml"
+        "target_path": ".github/workflows/warden.yml",
     },
-    "2": {
-        "id": "gitlab",
-        "name": "GitLab CI",
-        "template": "gitlab.yml",
-        "target_path": ".gitlab-ci.yml"
-    },
-    "3": {
-        "id": "skip",
-        "name": "Skip (Configure Later)",
-        "template": None,
-        "target_path": None
-    }
+    "2": {"id": "gitlab", "name": "GitLab CI", "template": "gitlab.yml", "target_path": ".gitlab-ci.yml"},
+    "3": {"id": "skip", "name": "Skip (Configure Later)", "template": None, "target_path": None},
 }
 
 
@@ -136,12 +126,7 @@ def select_llm_provider() -> dict:
     claude_path = shutil.which("claude")
     if claude_path:
         try:
-            result = subprocess.run(
-                ["claude", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
+            result = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=2)
             if result.returncode == 0:
                 default_choice = "8"  # Claude Code detected!
                 detected_providers["8"] = " [green](Detected ✓)[/green]"
@@ -160,11 +145,7 @@ def select_llm_provider() -> dict:
 
     for key, provider in LLM_PROVIDERS.items():
         detected = detected_providers.get(key, "")
-        table.add_row(
-            f"[{key}]",
-            f"{provider['emoji']} {provider['name']}{detected}",
-            provider['description']
-        )
+        table.add_row(f"[{key}]", f"{provider['emoji']} {provider['name']}{detected}", provider["description"])
 
     console.print(table)
     console.print()
@@ -173,11 +154,7 @@ def select_llm_provider() -> dict:
 
     choice = default_choice  # Smart default based on detection
     if is_interactive:
-        choice = Prompt.ask(
-            "Select provider",
-            choices=list(LLM_PROVIDERS.keys()),
-            default=default_choice
-        )
+        choice = Prompt.ask("Select provider", choices=list(LLM_PROVIDERS.keys()), default=default_choice)
 
     return LLM_PROVIDERS[choice]
 
@@ -206,10 +183,7 @@ def configure_ollama() -> tuple[dict, dict]:
             console.print("[dim]Installing Ollama...[/dim]")
             try:
                 # Linux/macOS installation
-                subprocess.run(
-                    ["bash", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
-                    check=True
-                )
+                subprocess.run(["bash", "-c", "curl -fsSL https://ollama.com/install.sh | sh"], check=True)
                 console.print("[green]✓ Ollama installed successfully![/green]")
             except subprocess.CalledProcessError:
                 console.print("[red]Installation failed. Please install manually:[/red]")
@@ -226,6 +200,7 @@ def configure_ollama() -> tuple[dict, dict]:
 
     # Validate OLLAMA_HOST URL to prevent SSRF
     from urllib.parse import urlparse
+
     parsed = urlparse(ollama_host)
     if parsed.scheme not in ("http", "https"):
         console.print(f"[red]Invalid OLLAMA_HOST scheme: {parsed.scheme}. Must be http or https.[/red]")
@@ -236,6 +211,7 @@ def configure_ollama() -> tuple[dict, dict]:
 
     try:
         import urllib.request
+
         urllib.request.urlopen(f"{ollama_host}/api/tags", timeout=2)
         console.print(f"[green]✓ Ollama server is running at {ollama_host}[/green]")
     except Exception:
@@ -247,6 +223,7 @@ def configure_ollama() -> tuple[dict, dict]:
     try:
         import json
         import urllib.request as req
+
         resp = req.urlopen(f"{ollama_host}/api/tags", timeout=3)
         installed_models = [m["name"] for m in json.loads(resp.read()).get("models", [])]
     except Exception:
@@ -254,8 +231,12 @@ def configure_ollama() -> tuple[dict, dict]:
 
     # Pick best smart model from installed models (prefer larger coder models)
     smart_candidates = [
-        "qwen2.5-coder:7b", "qwen2.5-coder:3b", "qwen2.5-coder:1.5b",
-        "codellama:7b", "deepseek-coder:6.7b", "starcoder2:7b",
+        "qwen2.5-coder:7b",
+        "qwen2.5-coder:3b",
+        "qwen2.5-coder:1.5b",
+        "codellama:7b",
+        "deepseek-coder:6.7b",
+        "starcoder2:7b",
     ]
     default_model = "qwen2.5-coder:7b"  # fallback if nothing installed
     for candidate in smart_candidates:
@@ -296,12 +277,10 @@ def configure_ollama() -> tuple[dict, dict]:
         "model": model,
         "timeout": 300,
         "use_local_llm": True,
-        "fast_model": default_fast
+        "fast_model": default_fast,
     }
 
-    env_vars = {
-        "OLLAMA_HOST": ollama_host
-    }
+    env_vars = {"OLLAMA_HOST": ollama_host}
 
     return llm_config, env_vars
 
@@ -335,12 +314,7 @@ def configure_claude_code() -> tuple[dict, dict]:
     # Verify authentication
     console.print("[dim]Checking authentication...[/dim]")
     try:
-        result = subprocess.run(
-            ["claude", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        result = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             version = result.stdout.strip()
             console.print(f"[green]✓ Claude Code version: {version}[/green]")
@@ -370,7 +344,7 @@ def configure_claude_code() -> tuple[dict, dict]:
         "smart_model": "claude-code-default",
         "fast_model": "claude-code-default",
         "timeout": 300,
-        "use_local_llm": False  # Claude Code is not the same as Ollama
+        "use_local_llm": False,  # Claude Code is not the same as Ollama
     }
 
     # No env vars needed - auto-detection handles everything
@@ -398,10 +372,10 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
     Prompts for API key and validates format.
     Returns (llm_config, env_vars).
     """
-    provider_name = provider['name']
-    key_var = provider['key_var']
-    key_prefix = provider.get('key_prefix', '')
-    default_model = provider['default_model']
+    provider_name = provider["name"]
+    key_var = provider["key_var"]
+    key_prefix = provider.get("key_prefix", "")
+    default_model = provider["default_model"]
 
     console.print(f"\n[bold cyan]☁️  Configuring {provider_name}[/bold cyan]")
 
@@ -426,25 +400,21 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
 
             # FAST FAIL: Check prefix
             if key_prefix and not api_key.startswith(key_prefix):
-                 console.print(f"[yellow]⚠️  Key must start with '{key_prefix}'[/yellow]")
-                 if Confirm.ask("Use this key anyway?", default=False):
-                     break
+                console.print(f"[yellow]⚠️  Key must start with '{key_prefix}'[/yellow]")
+                if Confirm.ask("Use this key anyway?", default=False):
+                    break
             # BASIC SANITY: Check length
             elif len(api_key) < 8:
-                 console.print("[red]❌ Key looks too short.[/red]")
+                console.print("[red]❌ Key looks too short.[/red]")
             else:
-                 break
+                break
 
         env_vars[key_var] = api_key
 
     # Model selection
     model = Prompt.ask("Select model", default=default_model)
 
-    llm_config = {
-        "provider": provider['id'],
-        "model": model,
-        "timeout": 300
-    }
+    llm_config = {"provider": provider["id"], "model": model, "timeout": 300}
 
     # Ask about local LLM for fast tier
     if Confirm.ask("Enable Ollama for fast/cheap checks? (Hybrid mode)", default=True):
@@ -470,10 +440,7 @@ def configure_azure() -> tuple[dict, dict]:
     env_vars["AZURE_OPENAI_API_KEY"] = api_key
 
     # Endpoint
-    endpoint = Prompt.ask(
-        "Azure Endpoint URL",
-        default="https://your-resource.openai.azure.com"
-    )
+    endpoint = Prompt.ask("Azure Endpoint URL", default="https://your-resource.openai.azure.com")
     env_vars["AZURE_OPENAI_ENDPOINT"] = endpoint
 
     # Deployment Name
@@ -491,8 +458,8 @@ def configure_azure() -> tuple[dict, dict]:
             "endpoint": "${AZURE_OPENAI_ENDPOINT}",
             "api_key": "${AZURE_OPENAI_API_KEY}",
             "deployment_name": "${AZURE_OPENAI_DEPLOYMENT_NAME}",
-            "api_version": api_version
-        }
+            "api_version": api_version,
+        },
     }
 
     return llm_config, env_vars
@@ -512,11 +479,11 @@ def configure_llm(existing_config: dict = None) -> tuple[dict, dict]:
     provider = select_llm_provider()
 
     # Step 2: Provider-specific configuration
-    if provider['id'] == 'ollama':
+    if provider["id"] == "ollama":
         return configure_ollama()
-    elif provider['id'] == 'azure':
+    elif provider["id"] == "azure":
         return configure_azure()
-    elif provider['id'] == 'claude_code':
+    elif provider["id"] == "claude_code":
         return configure_claude_code()
     else:
         # For non-interactive fallback to deepseek or whatever if key exists,
@@ -528,6 +495,7 @@ def configure_llm(existing_config: dict = None) -> tuple[dict, dict]:
 # CI/CD Configuration
 # =============================================================================
 
+
 def select_ci_provider() -> dict:
     """
     Display CI provider selection UI.
@@ -537,7 +505,7 @@ def select_ci_provider() -> dict:
     console.print("[dim]Automatically scan code on every push/PR.[/dim]\n")
 
     for key, ci in CI_PROVIDERS.items():
-        if ci['id'] == 'skip':
+        if ci["id"] == "skip":
             console.print(f"  [{key}] ⏭️  {ci['name']}")
         else:
             console.print(f"  [{key}] {ci['name']}")
@@ -546,23 +514,14 @@ def select_ci_provider() -> dict:
 
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
 
-    choice = "3" # Default: skip
+    choice = "3"  # Default: skip
     if is_interactive:
-        choice = Prompt.ask(
-            "Select CI provider",
-            choices=list(CI_PROVIDERS.keys()),
-            default="3"
-        )
+        choice = Prompt.ask("Select CI provider", choices=list(CI_PROVIDERS.keys()), default="3")
 
     return CI_PROVIDERS[choice]
 
 
-def configure_ci_workflow(
-    ci_provider: dict,
-    llm_config: dict,
-    project_root: Path,
-    branch: str = "main"
-) -> bool:
+def configure_ci_workflow(ci_provider: dict, llm_config: dict, project_root: Path, branch: str = "main") -> bool:
     """
     Generate CI workflow files from templates.
 
@@ -575,7 +534,7 @@ def configure_ci_workflow(
 
     Returns True if workflows were created.
     """
-    if ci_provider['id'] == 'skip':
+    if ci_provider["id"] == "skip":
         console.print("[dim]CI/CD configuration skipped. Run 'warden init --ci' later.[/dim]")
         return False
 
@@ -583,11 +542,11 @@ def configure_ci_workflow(
     console.print("[dim]Creating PR, Nightly, and Release workflows...[/dim]")
 
     # Prepare template variables
-    provider_id = llm_config.get('provider', 'ollama')
+    provider_id = llm_config.get("provider", "ollama")
 
     # Build environment variables section for CI
     ci_env_vars = ""
-    if provider_id == 'ollama':
+    if provider_id == "ollama":
         ci_env_vars = "      OLLAMA_HOST: http://localhost:11434"
         ollama_setup = """      - name: Setup Ollama
         run: |
@@ -608,8 +567,8 @@ def configure_ci_workflow(
     else:
         key_var = None
         for p in LLM_PROVIDERS.values():
-            if p['id'] == provider_id:
-                key_var = p.get('key_var')
+            if p["id"] == provider_id:
+                key_var = p.get("key_var")
                 break
 
         if key_var:
@@ -618,13 +577,13 @@ def configure_ci_workflow(
         ollama_setup = ""
 
     # Define workflows to generate based on CI provider
-    if ci_provider['id'] == 'github':
+    if ci_provider["id"] == "github":
         workflows = [
             ("warden-pr.yml", ".github/workflows/warden-pr.yml"),
             ("warden-nightly.yml", ".github/workflows/warden-nightly.yml"),
             ("warden-release.yml", ".github/workflows/warden-release.yml"),
         ]
-    elif ci_provider['id'] == 'gitlab':
+    elif ci_provider["id"] == "gitlab":
         # GitLab uses single .gitlab-ci.yml with stages
         workflows = [
             ("gitlab.yml", ".gitlab-ci.yml"),
@@ -633,6 +592,7 @@ def configure_ci_workflow(
         workflows = []
 
     import importlib.resources
+
     created_count = 0
 
     for template_name, target_rel_path in workflows:
@@ -640,47 +600,41 @@ def configure_ci_workflow(
 
         # Load template
         try:
-            template_content = importlib.resources.read_text(
-                "warden.templates.workflows",
-                template_name
-            )
+            template_content = importlib.resources.read_text("warden.templates.workflows", template_name)
         except Exception as e:
             console.print(f"[yellow]Warning: Template {template_name} not found: {e}[/yellow]")
             continue
 
         # Apply template substitutions
         content = template_content.format(
-            branch=branch,
-            ci_llm_provider=provider_id,
-            ci_env_vars=ci_env_vars,
-            ollama_setup=ollama_setup
+            branch=branch, ci_llm_provider=provider_id, ci_env_vars=ci_env_vars, ollama_setup=ollama_setup
         )
 
         # Create target directory if needed
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write workflow file
-        with open(target_path, 'w') as f:
+        with open(target_path, "w") as f:
             f.write(content)
 
         console.print(f"[green]✓ Created {target_path}[/green]")
         created_count += 1
 
     # Show secret configuration hint
-    if provider_id != 'ollama':
+    if provider_id != "ollama":
         console.print(f"\n[yellow]⚠️  Remember to add secrets to your {ci_provider['name']}:[/yellow]")
-        if provider_id == 'azure':
+        if provider_id == "azure":
             console.print("   - AZURE_OPENAI_API_KEY")
             console.print("   - AZURE_OPENAI_ENDPOINT")
             console.print("   - AZURE_OPENAI_DEPLOYMENT_NAME")
         else:
             for p in LLM_PROVIDERS.values():
-                if p['id'] == provider_id:
+                if p["id"] == provider_id:
                     console.print(f"   - {p.get('key_var', 'API_KEY')}")
                     break
 
     # Show workflow summary for GitHub
-    if ci_provider['id'] == 'github' and created_count > 0:
+    if ci_provider["id"] == "github" and created_count > 0:
         console.print(f"\n[bold green]✓ Created {created_count} CI workflow(s):[/bold green]")
         console.print("   [cyan]warden-pr.yml[/cyan]      → PR scans (--ci --diff)")
         console.print("   [cyan]warden-nightly.yml[/cyan] → Nightly baseline updates")
@@ -692,6 +646,7 @@ def configure_ci_workflow(
 # =============================================================================
 # AI Tool Files Generation
 # =============================================================================
+
 
 def generate_ai_tool_files(project_root: Path, llm_config: dict) -> None:
     """
@@ -732,7 +687,7 @@ You are responsible for the security and code quality of this project.
 
 **Do not ask for setup instructions.** The system is already online.
 """
-        with open(claude_md_path, 'w') as f:
+        with open(claude_md_path, "w") as f:
             f.write(claude_content)
         console.print(f"[green]✓ Updated {claude_md_path} (Security Protocols Active)[/green]")
 
@@ -745,14 +700,14 @@ You are responsible for the security and code quality of this project.
         cursorrules_path = project_root / ".cursorrules"
 
         if not cursorrules_path.exists():
-            with open(cursorrules_path, 'w') as f:
+            with open(cursorrules_path, "w") as f:
                 f.write(cursorrules_template)
             console.print(f"[green]✓ Created {cursorrules_path}[/green]")
         else:
             # Check if Warden rules already injected
             existing_content = cursorrules_path.read_text()
             if "Warden" not in existing_content:
-                with open(cursorrules_path, 'a') as f:
+                with open(cursorrules_path, "a") as f:
                     f.write("\n\n" + cursorrules_template)
                 console.print(f"[green]✓ Updated {cursorrules_path}[/green]")
             else:
@@ -770,10 +725,10 @@ You are responsible for the security and code quality of this project.
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             status="PENDING",
             score="?",
-            status_details="Run `warden scan` to perform initial analysis."
+            status_details="Run `warden scan` to perform initial analysis.",
         )
 
-        with open(status_path, 'w') as f:
+        with open(status_path, "w") as f:
             f.write(status_content)
         console.print(f"[green]✓ Created {status_path}[/green]")
     except Exception as e:
@@ -785,7 +740,7 @@ You are responsible for the security and code quality of this project.
         env_example_path = project_root / ".env.example"
 
         if not env_example_path.exists():
-            with open(env_example_path, 'w') as f:
+            with open(env_example_path, "w") as f:
                 f.write(env_template)
             console.print(f"[green]✓ Created {env_example_path}[/green]")
     except Exception as e:
@@ -796,7 +751,7 @@ You are responsible for the security and code quality of this project.
         rules_template = importlib.resources.read_text("warden.templates", "AI_RULES.md")
         rules_path = warden_dir / "AI_RULES.md"
 
-        with open(rules_path, 'w') as f:
+        with open(rules_path, "w") as f:
             f.write(rules_template)
         console.print(f"[green]✓ Created {rules_path}[/green]")
     except Exception as e:
@@ -819,9 +774,10 @@ You are responsible for the security and code quality of this project.
 - `warden status` - Quick status check
 """
         rules_path = warden_dir / "AI_RULES.md"
-        with open(rules_path, 'w') as f:
+        with open(rules_path, "w") as f:
             f.write(fallback_rules)
         console.print(f"[green]✓ Created {rules_path} (fallback)[/green]")
+
 
 def configure_vector_db() -> dict:
     """Configure Vector Database settings interactively."""
@@ -830,21 +786,32 @@ def configure_vector_db() -> dict:
 
     vector_db_choice = "local (chromadb)"
     if is_interactive:
-        vector_db_choice = Prompt.ask("Select Vector Database Provider", choices=["local (chromadb)", "cloud (qdrant/pinecone)"], default="local (chromadb)")
+        vector_db_choice = Prompt.ask(
+            "Select Vector Database Provider",
+            choices=["local (chromadb)", "cloud (qdrant/pinecone)"],
+            default="local (chromadb)",
+        )
 
     safe_name = "".join(c if c.isalnum() else "_" for c in Path.cwd().name).lower()
     collection_name = f"warden_{safe_name}"
 
     if vector_db_choice == "local (chromadb)":
         return {
-             "enabled": True, "provider": "local", "database": "chromadb",
-             "chroma_path": ".warden/embeddings", "collection_name": collection_name, "max_context_tokens": 4000
+            "enabled": True,
+            "provider": "local",
+            "database": "chromadb",
+            "chroma_path": ".warden/embeddings",
+            "collection_name": collection_name,
+            "max_context_tokens": 4000,
         }
     else:
         # Simplified cloud setup for brevity in helper
         return {
-             "enabled": True, "provider": "qdrant", "url": "${QDRANT_URL}",
-             "api_key": "${QDRANT_API_KEY}", "collection_name": collection_name,
+            "enabled": True,
+            "provider": "qdrant",
+            "url": "${QDRANT_URL}",
+            "api_key": "${QDRANT_API_KEY}",
+            "collection_name": collection_name,
         }
 
 
@@ -856,6 +823,7 @@ def _generate_agent_protocol(project_root: Path) -> Path:
 
     try:
         import importlib.resources
+
         template_content = importlib.resources.read_text("warden.templates", "AI_RULES.md")
     except Exception:
         template_content = """# Warden Agent Protocol
@@ -920,12 +888,7 @@ def _configure_claude_hooks(project_root: Path) -> None:
                 "SessionStart": [
                     {
                         "matcher": "startup",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "cat $CLAUDE_PROJECT_DIR/.warden/AI_RULES.md"
-                            }
-                        ]
+                        "hooks": [{"type": "command", "command": "cat $CLAUDE_PROJECT_DIR/.warden/AI_RULES.md"}],
                     }
                 ]
             }
@@ -968,9 +931,7 @@ def _configure_mcp_servers(project_root: Path) -> None:
     mcp_config_entry = {
         "command": warden_abs,
         "args": ["serve", "mcp"],
-        "env": {
-            "ProjectRoot": str(project_root.resolve())
-        },
+        "env": {"ProjectRoot": str(project_root.resolve())},
     }
 
     configs_to_update = [

@@ -80,7 +80,12 @@ class GapAnalyzer:
             print(f"{gap.severity}: {gap.message}")
     """
 
-    def __init__(self, config: GapAnalyzerConfig | None = None, llm_service: Any | None = None, semantic_search_service: Any | None = None):
+    def __init__(
+        self,
+        config: GapAnalyzerConfig | None = None,
+        llm_service: Any | None = None,
+        semantic_search_service: Any | None = None,
+    ):
         """Initialize analyzer with optional config."""
         self.config = config or GapAnalyzerConfig()
         self.llm_service = llm_service
@@ -160,32 +165,36 @@ class GapAnalyzer:
             else:
                 # Missing operation
                 result.missing_operations += 1
-                result.gaps.append(ContractGap(
-                    gap_type="missing_operation",
-                    severity=self.config.missing_operation_severity,
-                    message=f"Operation '{consumer_op.name}' expected by consumer but not found in provider",
-                    detail=self._get_missing_op_detail(consumer_op, provider_ops_map),
-                    consumer_platform=consumer_platform,
-                    provider_platform=provider_platform,
-                    operation_name=consumer_op.name,
-                    consumer_file=consumer_op.source_file,
-                    consumer_line=consumer_op.source_line,
-                ))
+                result.gaps.append(
+                    ContractGap(
+                        gap_type="missing_operation",
+                        severity=self.config.missing_operation_severity,
+                        message=f"Operation '{consumer_op.name}' expected by consumer but not found in provider",
+                        detail=self._get_missing_op_detail(consumer_op, provider_ops_map),
+                        consumer_platform=consumer_platform,
+                        provider_platform=provider_platform,
+                        operation_name=consumer_op.name,
+                        consumer_file=consumer_op.source_file,
+                        consumer_line=consumer_op.source_line,
+                    )
+                )
 
         # 2. Find unused provider operations
         for provider_op in provider.operations:
             if provider_op.name not in matched_provider_ops:
                 result.unused_operations += 1
-                result.gaps.append(ContractGap(
-                    gap_type="unused_operation",
-                    severity=self.config.unused_operation_severity,
-                    message=f"Operation '{provider_op.name}' provided but not used by consumer",
-                    consumer_platform=consumer_platform,
-                    provider_platform=provider_platform,
-                    operation_name=provider_op.name,
-                    provider_file=provider_op.source_file,
-                    provider_line=provider_op.source_line,
-                ))
+                result.gaps.append(
+                    ContractGap(
+                        gap_type="unused_operation",
+                        severity=self.config.unused_operation_severity,
+                        message=f"Operation '{provider_op.name}' provided but not used by consumer",
+                        consumer_platform=consumer_platform,
+                        provider_platform=provider_platform,
+                        operation_name=provider_op.name,
+                        provider_file=provider_op.source_file,
+                        provider_line=provider_op.source_line,
+                    )
+                )
 
         # 3. Check model compatibility
         model_gaps = self._check_models(
@@ -289,7 +298,7 @@ class GapAnalyzer:
         for prefix in self._prefixes + self._command_prefixes + self._update_prefixes + self._delete_prefixes:
             if lower_name.startswith(prefix):
                 # Keep the rest, preserve case from original
-                suffix = name[len(prefix):]
+                suffix = name[len(prefix) :]
                 if suffix:
                     return suffix[0].lower() + suffix[1:]
 
@@ -457,9 +466,7 @@ class GapAnalyzer:
                 # Search for usages/definitions
                 rag_query = f"usage of {safe_query} OR {safe_query} definition"
                 # Run sync semantic search in thread pool to avoid blocking event loop
-                result = await asyncio.to_thread(
-                    self.semantic_search_service.search, rag_query
-                )
+                result = await asyncio.to_thread(self.semantic_search_service.search, rag_query)
                 if result:
                     rag_context = str(result)
             except Exception as e:
@@ -467,7 +474,7 @@ class GapAnalyzer:
 
         try:
             # LLM call - now properly async
-            if hasattr(self.llm_service, 'find_best_match'):
+            if hasattr(self.llm_service, "find_best_match"):
                 prompt_context = f"API Operation Matching. Consumer: {safe_query} ({consumer_op.operation_type.value})"
                 if rag_context:
                     # SECURITY: Sanitize RAG context before embedding in prompt
@@ -478,9 +485,7 @@ class GapAnalyzer:
                 # Note: Most LLM services are sync, so we call directly
                 # If timeout is needed, use asyncio.wait_for at call site
                 match_name = self.llm_service.find_best_match(
-                    query=safe_query,
-                    options=[op.name for op in candidates],
-                    context=prompt_context
+                    query=safe_query, options=[op.name for op in candidates], context=prompt_context
                 )
 
                 duration = time.perf_counter() - start_time
@@ -488,11 +493,7 @@ class GapAnalyzer:
                 if match_name and match_name in provider_ops:
                     # Cache Success
                     self.decision_cache.cache_decision(
-                        safe_query,
-                        match_name,
-                        matched=True,
-                        confidence=0.9,
-                        reasoning="LLM Match"
+                        safe_query, match_name, matched=True, confidence=0.9, reasoning="LLM Match"
                     )
 
                     logger.info(
@@ -500,7 +501,7 @@ class GapAnalyzer:
                         consumer=safe_query,
                         matched=match_name,
                         duration=f"{duration:.4f}s",
-                        cached=True
+                        cached=True,
                     )
                     return MatchResult(
                         matched=True,
@@ -609,49 +610,55 @@ class GapAnalyzer:
         if self.config.check_input_types:
             if consumer_op.input_type and provider_op.input_type:
                 if not self._types_compatible(consumer_op.input_type, provider_op.input_type):
-                    gaps.append(ContractGap(
-                        gap_type="input_type_mismatch",
+                    gaps.append(
+                        ContractGap(
+                            gap_type="input_type_mismatch",
+                            severity=self.config.type_mismatch_severity,
+                            message=f"Input type mismatch for '{consumer_op.name}'",
+                            detail=f"Consumer expects '{consumer_op.input_type}', provider accepts '{provider_op.input_type}'",
+                            consumer_platform=consumer_platform,
+                            provider_platform=provider_platform,
+                            operation_name=consumer_op.name,
+                            consumer_file=consumer_op.source_file,
+                            consumer_line=consumer_op.source_line,
+                            provider_file=provider_op.source_file,
+                            provider_line=provider_op.source_line,
+                        )
+                    )
+            elif consumer_op.input_type and not provider_op.input_type:
+                gaps.append(
+                    ContractGap(
+                        gap_type="input_type_missing",
                         severity=self.config.type_mismatch_severity,
-                        message=f"Input type mismatch for '{consumer_op.name}'",
-                        detail=f"Consumer expects '{consumer_op.input_type}', provider accepts '{provider_op.input_type}'",
+                        message=f"Consumer sends input to '{consumer_op.name}' but provider doesn't expect it",
+                        detail=f"Consumer sends '{consumer_op.input_type}'",
                         consumer_platform=consumer_platform,
                         provider_platform=provider_platform,
                         operation_name=consumer_op.name,
                         consumer_file=consumer_op.source_file,
                         consumer_line=consumer_op.source_line,
-                        provider_file=provider_op.source_file,
-                        provider_line=provider_op.source_line,
-                    ))
-            elif consumer_op.input_type and not provider_op.input_type:
-                gaps.append(ContractGap(
-                    gap_type="input_type_missing",
-                    severity=self.config.type_mismatch_severity,
-                    message=f"Consumer sends input to '{consumer_op.name}' but provider doesn't expect it",
-                    detail=f"Consumer sends '{consumer_op.input_type}'",
-                    consumer_platform=consumer_platform,
-                    provider_platform=provider_platform,
-                    operation_name=consumer_op.name,
-                    consumer_file=consumer_op.source_file,
-                    consumer_line=consumer_op.source_line,
-                ))
+                    )
+                )
 
         # Check output type
         if self.config.check_output_types:
             if consumer_op.output_type and provider_op.output_type:
                 if not self._types_compatible(consumer_op.output_type, provider_op.output_type):
-                    gaps.append(ContractGap(
-                        gap_type="output_type_mismatch",
-                        severity=self.config.type_mismatch_severity,
-                        message=f"Output type mismatch for '{consumer_op.name}'",
-                        detail=f"Consumer expects '{consumer_op.output_type}', provider returns '{provider_op.output_type}'",
-                        consumer_platform=consumer_platform,
-                        provider_platform=provider_platform,
-                        operation_name=consumer_op.name,
-                        consumer_file=consumer_op.source_file,
-                        consumer_line=consumer_op.source_line,
-                        provider_file=provider_op.source_file,
-                        provider_line=provider_op.source_line,
-                    ))
+                    gaps.append(
+                        ContractGap(
+                            gap_type="output_type_mismatch",
+                            severity=self.config.type_mismatch_severity,
+                            message=f"Output type mismatch for '{consumer_op.name}'",
+                            detail=f"Consumer expects '{consumer_op.output_type}', provider returns '{provider_op.output_type}'",
+                            consumer_platform=consumer_platform,
+                            provider_platform=provider_platform,
+                            operation_name=consumer_op.name,
+                            consumer_file=consumer_op.source_file,
+                            consumer_line=consumer_op.source_line,
+                            provider_file=provider_op.source_file,
+                            provider_line=provider_op.source_line,
+                        )
+                    )
 
         return gaps
 
@@ -751,7 +758,7 @@ class GapAnalyzer:
 
         for suffix in suffixes:
             if consumer_model_name.endswith(suffix):
-                base_name = consumer_model_name[:-len(suffix)]
+                base_name = consumer_model_name[: -len(suffix)]
                 break
 
         # Try matching with different suffixes
@@ -780,45 +787,51 @@ class GapAnalyzer:
             if not provider_field:
                 # Missing field
                 if self.config.check_field_types:
-                    gaps.append(ContractGap(
-                        gap_type="missing_field",
-                        severity=self.config.missing_field_severity,
-                        message=f"Field '{consumer_field.name}' in '{consumer_model.name}' not found in provider",
-                        consumer_platform=consumer_platform,
-                        provider_platform=provider_platform,
-                        field_name=consumer_field.name,
-                        consumer_file=consumer_field.source_file,
-                    ))
+                    gaps.append(
+                        ContractGap(
+                            gap_type="missing_field",
+                            severity=self.config.missing_field_severity,
+                            message=f"Field '{consumer_field.name}' in '{consumer_model.name}' not found in provider",
+                            consumer_platform=consumer_platform,
+                            provider_platform=provider_platform,
+                            field_name=consumer_field.name,
+                            consumer_file=consumer_field.source_file,
+                        )
+                    )
                 continue
 
             # Check type compatibility
             if self.config.check_field_types:
                 if not self._types_compatible(consumer_field.type_name, provider_field.type_name):
-                    gaps.append(ContractGap(
-                        gap_type="field_type_mismatch",
-                        severity=self.config.type_mismatch_severity,
-                        message=f"Type mismatch for field '{consumer_field.name}' in '{consumer_model.name}'",
-                        detail=f"Consumer: {consumer_field.type_name}, Provider: {provider_field.type_name}",
-                        consumer_platform=consumer_platform,
-                        provider_platform=provider_platform,
-                        field_name=consumer_field.name,
-                        consumer_file=consumer_field.source_file,
-                        provider_file=provider_field.source_file,
-                    ))
+                    gaps.append(
+                        ContractGap(
+                            gap_type="field_type_mismatch",
+                            severity=self.config.type_mismatch_severity,
+                            message=f"Type mismatch for field '{consumer_field.name}' in '{consumer_model.name}'",
+                            detail=f"Consumer: {consumer_field.type_name}, Provider: {provider_field.type_name}",
+                            consumer_platform=consumer_platform,
+                            provider_platform=provider_platform,
+                            field_name=consumer_field.name,
+                            consumer_file=consumer_field.source_file,
+                            provider_file=provider_field.source_file,
+                        )
+                    )
 
             # Check optionality
             if self.config.check_field_optionality:
                 if not consumer_field.is_optional and provider_field.is_optional:
-                    gaps.append(ContractGap(
-                        gap_type="nullable_mismatch",
-                        severity=self.config.nullable_mismatch_severity,
-                        message=f"Field '{consumer_field.name}' in '{consumer_model.name}' is required by consumer but optional in provider",
-                        consumer_platform=consumer_platform,
-                        provider_platform=provider_platform,
-                        field_name=consumer_field.name,
-                        consumer_file=consumer_field.source_file,
-                        provider_file=provider_field.source_file,
-                    ))
+                    gaps.append(
+                        ContractGap(
+                            gap_type="nullable_mismatch",
+                            severity=self.config.nullable_mismatch_severity,
+                            message=f"Field '{consumer_field.name}' in '{consumer_model.name}' is required by consumer but optional in provider",
+                            consumer_platform=consumer_platform,
+                            provider_platform=provider_platform,
+                            field_name=consumer_field.name,
+                            consumer_file=consumer_field.source_file,
+                            provider_file=provider_field.source_file,
+                        )
+                    )
 
         return gaps
 
@@ -854,29 +867,33 @@ class GapAnalyzer:
             extra_in_provider = provider_values - consumer_values
 
             if missing_in_provider:
-                gaps.append(ContractGap(
-                    gap_type="enum_value_missing",
-                    severity=self.config.enum_mismatch_severity,
-                    message=f"Enum '{consumer_enum.name}' values missing in provider: {', '.join(missing_in_provider)}",
-                    detail=f"Consumer expects: {consumer_values}, Provider has: {provider_values}",
-                    consumer_platform=consumer_platform,
-                    provider_platform=provider_platform,
-                    consumer_file=consumer_enum.source_file,
-                    consumer_line=consumer_enum.source_line,
-                    provider_file=provider_enum.source_file,
-                    provider_line=provider_enum.source_line,
-                ))
+                gaps.append(
+                    ContractGap(
+                        gap_type="enum_value_missing",
+                        severity=self.config.enum_mismatch_severity,
+                        message=f"Enum '{consumer_enum.name}' values missing in provider: {', '.join(missing_in_provider)}",
+                        detail=f"Consumer expects: {consumer_values}, Provider has: {provider_values}",
+                        consumer_platform=consumer_platform,
+                        provider_platform=provider_platform,
+                        consumer_file=consumer_enum.source_file,
+                        consumer_line=consumer_enum.source_line,
+                        provider_file=provider_enum.source_file,
+                        provider_line=provider_enum.source_line,
+                    )
+                )
 
             if extra_in_provider:
-                gaps.append(ContractGap(
-                    gap_type="enum_value_extra",
-                    severity=GapSeverity.LOW,
-                    message=f"Enum '{consumer_enum.name}' has extra values in provider: {', '.join(extra_in_provider)}",
-                    consumer_platform=consumer_platform,
-                    provider_platform=provider_platform,
-                    provider_file=provider_enum.source_file,
-                    provider_line=provider_enum.source_line,
-                ))
+                gaps.append(
+                    ContractGap(
+                        gap_type="enum_value_extra",
+                        severity=GapSeverity.LOW,
+                        message=f"Enum '{consumer_enum.name}' has extra values in provider: {', '.join(extra_in_provider)}",
+                        consumer_platform=consumer_platform,
+                        provider_platform=provider_platform,
+                        provider_file=provider_enum.source_file,
+                        provider_line=provider_enum.source_line,
+                    )
+                )
 
         return gaps
 

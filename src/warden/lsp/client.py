@@ -1,4 +1,3 @@
-
 import asyncio
 import contextlib
 import json
@@ -9,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import structlog
 
 logger = structlog.get_logger()
+
 
 class LanguageServerClient:
     """
@@ -43,7 +43,7 @@ class LanguageServerClient:
                 cwd=self.cwd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
 
             # Start background reader
@@ -70,10 +70,7 @@ class LanguageServerClient:
                     # Type Hierarchy support
                     "typeHierarchy": {"dynamicRegistration": False},
                     # Hover support (for type info)
-                    "hover": {
-                        "dynamicRegistration": False,
-                        "contentFormat": ["markdown", "plaintext"]
-                    }
+                    "hover": {"dynamicRegistration": False, "contentFormat": ["markdown", "plaintext"]},
                 },
                 "workspace": {
                     "configuration": True,
@@ -82,17 +79,18 @@ class LanguageServerClient:
                         "dynamicRegistration": False,
                         "symbolKind": {
                             "valueSet": list(range(1, 27))  # All symbol kinds
-                        }
-                    }
-                }
+                        },
+                    },
+                },
             },
-            "initializationOptions": {}
+            "initializationOptions": {},
         }
         return await self.send_request_async("initialize", params)
 
     async def shutdown_async(self):
         """Graceful shutdown."""
-        if not self.process: return
+        if not self.process:
+            return
 
         try:
             logger.info("lsp_shutting_down")
@@ -125,12 +123,7 @@ class LanguageServerClient:
         self._request_id += 1
         req_id = self._request_id
 
-        request = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "method": method,
-            "params": params
-        }
+        request = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
 
         # Create future for response
         future = asyncio.Future()
@@ -151,13 +144,10 @@ class LanguageServerClient:
 
     async def send_notification_async(self, method: str, params: Any):
         """Send a fire-and-forget notification."""
-        if not self.process: return
+        if not self.process:
+            return
 
-        msg = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-        }
+        msg = {"jsonrpc": "2.0", "method": method, "params": params}
         await self._write_message_async(msg)
 
     # ============================================================
@@ -172,29 +162,19 @@ class LanguageServerClient:
         Idempotent: safe to call multiple times for same file.
         """
         uri = f"file://{file_path}"
-        await self.send_notification_async("textDocument/didOpen", {
-            "textDocument": {
-                "uri": uri,
-                "languageId": language_id,
-                "version": 1,
-                "text": content
-            }
-        })
+        await self.send_notification_async(
+            "textDocument/didOpen",
+            {"textDocument": {"uri": uri, "languageId": language_id, "version": 1, "text": content}},
+        )
         logger.debug("lsp_document_opened", uri=uri, language=language_id)
 
     async def close_document_async(self, file_path: str) -> None:
         """Close a document in the language server."""
         uri = f"file://{file_path}"
-        await self.send_notification_async("textDocument/didClose", {
-            "textDocument": {"uri": uri}
-        })
+        await self.send_notification_async("textDocument/didClose", {"textDocument": {"uri": uri}})
 
     async def find_references_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int,
-        include_declaration: bool = False
+        self, file_path: str, line: int, character: int, include_declaration: bool = False
     ) -> list[dict[str, Any]]:
         """
         Find all references to symbol at position.
@@ -210,11 +190,14 @@ class LanguageServerClient:
         """
         uri = f"file://{file_path}"
         try:
-            result = await self.send_request_async("textDocument/references", {
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character},
-                "context": {"includeDeclaration": include_declaration}
-            })
+            result = await self.send_request_async(
+                "textDocument/references",
+                {
+                    "textDocument": {"uri": uri},
+                    "position": {"line": line, "character": character},
+                    "context": {"includeDeclaration": include_declaration},
+                },
+            )
             refs = result or []
             logger.debug("lsp_references_found", uri=uri, line=line, count=len(refs))
             return refs
@@ -231,9 +214,7 @@ class LanguageServerClient:
         """
         uri = f"file://{file_path}"
         try:
-            result = await self.send_request_async("textDocument/documentSymbol", {
-                "textDocument": {"uri": uri}
-            })
+            result = await self.send_request_async("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
             symbols = result or []
             logger.debug("lsp_symbols_found", uri=uri, count=len(symbols))
             return symbols
@@ -241,12 +222,7 @@ class LanguageServerClient:
             logger.warning("lsp_get_symbols_failed", uri=uri, error=str(e))
             return []
 
-    async def goto_definition_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int
-    ) -> list[dict[str, Any]]:
+    async def goto_definition_async(self, file_path: str, line: int, character: int) -> list[dict[str, Any]]:
         """
         Go to definition of symbol at position.
 
@@ -255,10 +231,10 @@ class LanguageServerClient:
         """
         uri = f"file://{file_path}"
         try:
-            result = await self.send_request_async("textDocument/definition", {
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character}
-            })
+            result = await self.send_request_async(
+                "textDocument/definition",
+                {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}},
+            )
             # Result can be Location, Location[], or LocationLink[]
             if result is None:
                 return []
@@ -273,12 +249,7 @@ class LanguageServerClient:
     # Call Hierarchy (who calls what, what calls who)
     # ============================================================
 
-    async def prepare_call_hierarchy_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int
-    ) -> list[dict[str, Any]]:
+    async def prepare_call_hierarchy_async(self, file_path: str, line: int, character: int) -> list[dict[str, Any]]:
         """
         Prepare call hierarchy at a position.
 
@@ -287,10 +258,10 @@ class LanguageServerClient:
         """
         uri = f"file://{file_path}"
         try:
-            result = await self.send_request_async("textDocument/prepareCallHierarchy", {
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character}
-            })
+            result = await self.send_request_async(
+                "textDocument/prepareCallHierarchy",
+                {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}},
+            )
             items = result or []
             logger.debug("lsp_call_hierarchy_prepared", uri=uri, count=len(items))
             return items
@@ -298,10 +269,7 @@ class LanguageServerClient:
             logger.warning("lsp_prepare_call_hierarchy_failed", uri=uri, error=str(e))
             return []
 
-    async def get_incoming_calls_async(
-        self,
-        call_hierarchy_item: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    async def get_incoming_calls_async(self, call_hierarchy_item: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Get incoming calls (who calls this function).
 
@@ -312,9 +280,7 @@ class LanguageServerClient:
             List of CallHierarchyIncomingCall objects
         """
         try:
-            result = await self.send_request_async("callHierarchy/incomingCalls", {
-                "item": call_hierarchy_item
-            })
+            result = await self.send_request_async("callHierarchy/incomingCalls", {"item": call_hierarchy_item})
             calls = result or []
             logger.debug("lsp_incoming_calls_found", count=len(calls))
             return calls
@@ -322,10 +288,7 @@ class LanguageServerClient:
             logger.warning("lsp_incoming_calls_failed", error=str(e))
             return []
 
-    async def get_outgoing_calls_async(
-        self,
-        call_hierarchy_item: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    async def get_outgoing_calls_async(self, call_hierarchy_item: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Get outgoing calls (what does this function call).
 
@@ -336,9 +299,7 @@ class LanguageServerClient:
             List of CallHierarchyOutgoingCall objects
         """
         try:
-            result = await self.send_request_async("callHierarchy/outgoingCalls", {
-                "item": call_hierarchy_item
-            })
+            result = await self.send_request_async("callHierarchy/outgoingCalls", {"item": call_hierarchy_item})
             calls = result or []
             logger.debug("lsp_outgoing_calls_found", count=len(calls))
             return calls
@@ -350,12 +311,7 @@ class LanguageServerClient:
     # Type Hierarchy (class inheritance)
     # ============================================================
 
-    async def prepare_type_hierarchy_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int
-    ) -> list[dict[str, Any]]:
+    async def prepare_type_hierarchy_async(self, file_path: str, line: int, character: int) -> list[dict[str, Any]]:
         """
         Prepare type hierarchy at a position.
 
@@ -364,10 +320,10 @@ class LanguageServerClient:
         """
         uri = f"file://{file_path}"
         try:
-            result = await self.send_request_async("textDocument/prepareTypeHierarchy", {
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character}
-            })
+            result = await self.send_request_async(
+                "textDocument/prepareTypeHierarchy",
+                {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}},
+            )
             items = result or []
             logger.debug("lsp_type_hierarchy_prepared", uri=uri, count=len(items))
             return items
@@ -375,10 +331,7 @@ class LanguageServerClient:
             logger.warning("lsp_prepare_type_hierarchy_failed", uri=uri, error=str(e))
             return []
 
-    async def get_supertypes_async(
-        self,
-        type_hierarchy_item: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    async def get_supertypes_async(self, type_hierarchy_item: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Get supertypes (parent classes/interfaces).
 
@@ -386,9 +339,7 @@ class LanguageServerClient:
             List of TypeHierarchyItem objects
         """
         try:
-            result = await self.send_request_async("typeHierarchy/supertypes", {
-                "item": type_hierarchy_item
-            })
+            result = await self.send_request_async("typeHierarchy/supertypes", {"item": type_hierarchy_item})
             types = result or []
             logger.debug("lsp_supertypes_found", count=len(types))
             return types
@@ -396,10 +347,7 @@ class LanguageServerClient:
             logger.warning("lsp_supertypes_failed", error=str(e))
             return []
 
-    async def get_subtypes_async(
-        self,
-        type_hierarchy_item: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    async def get_subtypes_async(self, type_hierarchy_item: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Get subtypes (child classes/implementations).
 
@@ -407,9 +355,7 @@ class LanguageServerClient:
             List of TypeHierarchyItem objects
         """
         try:
-            result = await self.send_request_async("typeHierarchy/subtypes", {
-                "item": type_hierarchy_item
-            })
+            result = await self.send_request_async("typeHierarchy/subtypes", {"item": type_hierarchy_item})
             types = result or []
             logger.debug("lsp_subtypes_found", count=len(types))
             return types
@@ -421,10 +367,7 @@ class LanguageServerClient:
     # Workspace Symbols (search symbols across project)
     # ============================================================
 
-    async def get_workspace_symbols_async(
-        self,
-        query: str = ""
-    ) -> list[dict[str, Any]]:
+    async def get_workspace_symbols_async(self, query: str = "") -> list[dict[str, Any]]:
         """
         Search for symbols across the workspace.
 
@@ -435,9 +378,7 @@ class LanguageServerClient:
             List of SymbolInformation objects
         """
         try:
-            result = await self.send_request_async("workspace/symbol", {
-                "query": query
-            })
+            result = await self.send_request_async("workspace/symbol", {"query": query})
             symbols = result or []
             logger.debug("lsp_workspace_symbols_found", query=query, count=len(symbols))
             return symbols
@@ -449,12 +390,7 @@ class LanguageServerClient:
     # Hover (type info and documentation)
     # ============================================================
 
-    async def get_hover_async(
-        self,
-        file_path: str,
-        line: int,
-        character: int
-    ) -> dict[str, Any] | None:
+    async def get_hover_async(self, file_path: str, line: int, character: int) -> dict[str, Any] | None:
         """
         Get hover information (type info, docs) at position.
 
@@ -463,10 +399,9 @@ class LanguageServerClient:
         """
         uri = f"file://{file_path}"
         try:
-            result = await self.send_request_async("textDocument/hover", {
-                "textDocument": {"uri": uri},
-                "position": {"line": line, "character": character}
-            })
+            result = await self.send_request_async(
+                "textDocument/hover", {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+            )
             if result:
                 logger.debug("lsp_hover_found", uri=uri, line=line)
             return result
@@ -490,7 +425,7 @@ class LanguageServerClient:
         """Encode and write message to stdin."""
         body = json.dumps(msg)
         content = f"Content-Length: {len(body)}\r\n\r\n{body}"
-        self.process.stdin.write(content.encode('utf-8'))
+        self.process.stdin.write(content.encode("utf-8"))
         await self.process.stdin.drain()
 
     async def _read_loop_async(self):
@@ -501,10 +436,12 @@ class LanguageServerClient:
                 content_length = 0
                 while True:
                     line = await self.process.stdout.readline()
-                    if not line: raise EOFError("LSP process closed stdout")
+                    if not line:
+                        raise EOFError("LSP process closed stdout")
 
-                    line = line.decode('utf-8').strip()
-                    if not line: break # End of headers
+                    line = line.decode("utf-8").strip()
+                    if not line:
+                        break  # End of headers
 
                     if line.lower().startswith("content-length:"):
                         content_length = int(line.split(":")[1].strip())
@@ -512,7 +449,7 @@ class LanguageServerClient:
                 # 2. Read Body
                 if content_length > 0:
                     body_bytes = await self.process.stdout.readexactly(content_length)
-                    msg = json.loads(body_bytes.decode('utf-8'))
+                    msg = json.loads(body_bytes.decode("utf-8"))
                     self._handle_message(msg)
 
         except asyncio.CancelledError:
@@ -532,9 +469,7 @@ class LanguageServerClient:
             req_id = msg["id"]
             if req_id in self._pending_requests:
                 if "error" in msg:
-                    self._pending_requests[req_id].set_exception(
-                        RuntimeError(f"LSP Error: {msg['error']}")
-                    )
+                    self._pending_requests[req_id].set_exception(RuntimeError(f"LSP Error: {msg['error']}"))
                 else:
                     self._pending_requests[req_id].set_result(msg.get("result"))
                 del self._pending_requests[req_id]

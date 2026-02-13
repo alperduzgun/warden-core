@@ -82,7 +82,7 @@ Once `warden_configure` returns success:
                 description="Instructions for Agents on how to guide users through setup.",
                 resource_type=ResourceType.CONFIG,
                 mime_type="text/markdown",
-                file_path="(internal memory)"
+                file_path="(internal memory)",
             )
         ]
 

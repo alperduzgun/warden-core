@@ -17,6 +17,7 @@ from warden.ast.domain.enums import CodeLanguage
 
 logger = structlog.get_logger()
 
+
 class DependencyGraph:
     """
     Manages a graph where nodes are files and edges are 'depends-on' relationships.
@@ -82,11 +83,7 @@ class DependencyGraph:
                     self.add_dependency(file_path, resolved_path)
 
         except Exception as e:
-            logger.warning(
-                "dependency_scan_failed",
-                file=str(file_path),
-                error=str(e)
-            )
+            logger.warning("dependency_scan_failed", file=str(file_path), error=str(e))
 
     def get_transitive_impact(self, changed_files: list[Path]) -> set[Path]:
         """

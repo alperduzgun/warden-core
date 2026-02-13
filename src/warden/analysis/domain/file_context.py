@@ -48,7 +48,7 @@ class ContextWeight(BaseDomainModel):
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
 
 class ContextWeights(BaseDomainModel):
@@ -130,14 +130,11 @@ class ContextWeights(BaseDomainModel):
         }
 
         # Return specific weights or default production weights
-        return weight_configs.get(
-            self.context,
-            weight_configs[FileContext.PRODUCTION]
-        )
+        return weight_configs.get(self.context, weight_configs[FileContext.PRODUCTION])
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
 
 class FileContextInfo(BaseDomainModel):
@@ -171,7 +168,7 @@ class FileContextInfo(BaseDomainModel):
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
     def should_suppress_issue(self, issue_type: str) -> bool:
         """
@@ -292,7 +289,7 @@ class PreAnalysisResult(BaseDomainModel):
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
-        return self.model_dump(by_alias=True, mode='json')
+        return self.model_dump(by_alias=True, mode="json")
 
     def get_context_summary(self) -> str:
         """
@@ -318,11 +315,7 @@ class PreAnalysisResult(BaseDomainModel):
         Returns:
             List of file paths marked as production context
         """
-        return [
-            path
-            for path, info in self.file_contexts.items()
-            if info.context == FileContext.PRODUCTION
-        ]
+        return [path for path, info in self.file_contexts.items() if info.context == FileContext.PRODUCTION]
 
     def get_test_files(self) -> list[str]:
         """
@@ -331,11 +324,7 @@ class PreAnalysisResult(BaseDomainModel):
         Returns:
             List of file paths marked as test context
         """
-        return [
-            path
-            for path, info in self.file_contexts.items()
-            if info.context == FileContext.TEST
-        ]
+        return [path for path, info in self.file_contexts.items() if info.context == FileContext.TEST]
 
     def should_analyze_file(self, file_path: str) -> bool:
         """

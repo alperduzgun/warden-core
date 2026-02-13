@@ -40,9 +40,9 @@ class ProtoConverters:
 
         # 1. Resolve to CodeLanguage enum
         try:
-            if lang.startswith("."): # It's an extension
+            if lang.startswith("."):  # It's an extension
                 lang_enum = LanguageRegistry.get_language_from_path(lang)
-            else: # It's a name or id
+            else:  # It's a name or id
                 lang_enum = CodeLanguage(lang.lower())
         except ValueError:
             # Fallback for names not exactly matching enum value
@@ -51,7 +51,7 @@ class ProtoConverters:
         # 2. Get Registry definition
         defn = LanguageRegistry.get_definition(lang_enum)
         if defn and defn.proto_type_name:
-             return getattr(warden_pb2, defn.proto_type_name.upper(), warden_pb2.OTHER)
+            return getattr(warden_pb2, defn.proto_type_name.upper(), warden_pb2.OTHER)
 
         # 3. Fallback to name-based lookup if no definition found
         return ProtoConverters._to_proto_enum(warden_pb2, lang_enum.value, warden_pb2.OTHER)
@@ -71,7 +71,7 @@ class ProtoConverters:
             suggestion=get_finding_attribute(finding, "suggestion", ""),
             frame_id=get_finding_attribute(finding, "frame_id", ""),
             cwe_id=get_finding_attribute(finding, "cwe_id", ""),
-            owasp_category=get_finding_attribute(finding, "owasp_category", "")
+            owasp_category=get_finding_attribute(finding, "owasp_category", ""),
         )
 
     @staticmethod
@@ -85,7 +85,7 @@ class ProtoConverters:
             line_number=fort.get("line_number", 0),
             original_code=fort.get("original_code", ""),
             suggested_code=fort.get("suggested_code", ""),
-            rationale=fort.get("rationale", "")
+            rationale=fort.get("rationale", ""),
         )
 
     @staticmethod
@@ -97,7 +97,7 @@ class ProtoConverters:
             description=clean.get("description", ""),
             file_path=clean.get("file_path", ""),
             line_number=clean.get("line_number", 0),
-            detail=clean.get("detail", "")
+            detail=clean.get("detail", ""),
         )
 
     @staticmethod
@@ -121,7 +121,7 @@ class ProtoConverters:
             suppressed_at=issue.get("suppressed_at", "") or "",
             suppressed_by=issue.get("suppressed_by", "") or "",
             suppression_reason=issue.get("suppression_reason", "") or "",
-            occurrence_count=issue.get("occurrence_count", 1)
+            occurrence_count=issue.get("occurrence_count", 1),
         )
 
     @staticmethod
@@ -136,7 +136,7 @@ class ProtoConverters:
             start_line=chunk.get("start_line", 0),
             end_line=chunk.get("end_line", 0),
             language=chunk.get("language", ""),
-            similarity_score=chunk.get("similarity_score", 0.0)
+            similarity_score=chunk.get("similarity_score", 0.0),
         )
 
     @staticmethod
@@ -151,7 +151,7 @@ class ProtoConverters:
             size_bytes=file.get("size_bytes", 0),
             line_count=file.get("line_count", 0),
             is_analyzable=file.get("is_analyzable", True),
-            language=file.get("language", "")
+            language=file.get("language", ""),
         )
 
     @staticmethod
@@ -162,7 +162,7 @@ class ProtoConverters:
             version=fw.get("version", ""),
             language=fw.get("language", ""),
             confidence=fw.get("confidence", 0.0),
-            detected_from=fw.get("detected_from", "")
+            detected_from=fw.get("detected_from", ""),
         )
 
     @staticmethod
@@ -177,7 +177,7 @@ class ProtoConverters:
             created_by=suppression.get("created_by", ""),
             created_at=suppression.get("created_at", ""),
             expires_at=suppression.get("expires_at", "") or "",
-            is_global=suppression.get("is_global", False)
+            is_global=suppression.get("is_global", False),
         )
 
     @staticmethod
@@ -192,13 +192,11 @@ class ProtoConverters:
             line_number=suggestion.get("line_number", 0),
             code_snippet=suggestion.get("code_snippet", ""),
             suggested_fix=suggestion.get("suggested_fix", ""),
-            priority=ProtoConverters.severity_to_proto(suggestion.get("priority", ""))
+            priority=ProtoConverters.severity_to_proto(suggestion.get("priority", "")),
         )
 
     @staticmethod
-    def convert_fortification_suggestion(
-        suggestion: dict[str, Any]
-    ) -> "warden_pb2.FortificationSuggestion":
+    def convert_fortification_suggestion(suggestion: dict[str, Any]) -> "warden_pb2.FortificationSuggestion":
         """Convert dict fortification suggestion to proto FortificationSuggestion."""
         return warden_pb2.FortificationSuggestion(
             id=suggestion.get("id", ""),
@@ -210,12 +208,13 @@ class ProtoConverters:
             original_code=suggestion.get("original_code", ""),
             suggested_code=suggestion.get("suggested_code", ""),
             rationale=suggestion.get("rationale", ""),
-            priority=ProtoConverters.severity_to_proto(suggestion.get("priority", ""))
+            priority=ProtoConverters.severity_to_proto(suggestion.get("priority", "")),
         )
 
     @staticmethod
     def detect_language(path: Path) -> str:
         """Detect language using central LanguageRegistry."""
         from warden.shared.languages.registry import LanguageRegistry
+
         lang_enum = LanguageRegistry.get_language_from_path(path)
         return lang_enum.value if lang_enum != CodeLanguage.UNKNOWN else ""

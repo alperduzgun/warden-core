@@ -26,24 +26,29 @@ from warden.shared.domain.base_model import BaseDomainModel
 
 class FortificationActionType(Enum):
     """Types of fortification actions."""
+
     ERROR_HANDLING = "error_handling"
     LOGGING = "logging"
     INPUT_VALIDATION = "input_validation"
     RESOURCE_DISPOSAL = "resource_disposal"
     NULL_CHECK = "null_check"
 
+
 class FortifierPriority(Enum):
     """Priority levels for fortifiers."""
+
     CRITICAL = 0
     HIGH = 1
     MEDIUM = 2
     LOW = 3
+
 
 class Fortification(BaseDomainModel):
     """
     A fortification/remediation suggestion.
     Represents a defensive code improvement recommended by the AI Tech Lead.
     """
+
     id: str  # Unique ID for the fortification itself
     finding_id: str | None = None  # ID of the finding this fixes
     title: str
@@ -56,15 +61,19 @@ class Fortification(BaseDomainModel):
     severity: str = "medium"
     auto_fixable: bool = False
 
+
 class FortificationAction(BaseDomainModel):
     """Represents a single fortification action applied to code."""
+
     type: FortificationActionType
     description: str
     line_number: int
     severity: str = "High"
 
+
 class FortificationSuggestion(BaseDomainModel):
     """Internal representation of a fortification suggestion."""
+
     issue_line: int
     issue_type: str
     description: str
@@ -77,6 +86,7 @@ class FortificationResult(BaseDomainModel):
     """
     Result of fortification step execution.
     """
+
     success: bool = True
     fortifications: list[Fortification] = Field(default_factory=list)
     suggestions: list[Fortification] = Field(default_factory=list)
@@ -96,6 +106,5 @@ class FortificationResult(BaseDomainModel):
             "filesModified": self.files_modified,
             "summary": self.summary,
             "duration": f"{self.duration:.1f}s",
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
-

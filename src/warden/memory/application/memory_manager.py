@@ -62,7 +62,7 @@ class MemoryManager:
             logger.debug(
                 "memory_loaded",
                 fact_count=len(self.knowledge_graph.facts),
-                last_updated=self.knowledge_graph.last_updated
+                last_updated=self.knowledge_graph.last_updated,
             )
         except Exception as e:
             logger.error("memory_load_failed", error=str(e))
@@ -79,14 +79,10 @@ class MemoryManager:
             # Ensure pretty print for human readability/debug
             content = json.dumps(data, indent=2)
 
-            async with aiofiles.open(self.memory_file, mode='w') as f:
+            async with aiofiles.open(self.memory_file, mode="w") as f:
                 await f.write(content)
 
-            logger.debug(
-                "memory_saved",
-                fact_count=len(self.knowledge_graph.facts),
-                path=str(self.memory_file)
-            )
+            logger.debug("memory_saved", fact_count=len(self.knowledge_graph.facts), path=str(self.memory_file))
         except Exception as e:
             logger.error("memory_save_failed", error=str(e))
 
@@ -115,12 +111,12 @@ class MemoryManager:
         fact = Fact(
             id=fact_id,
             category="service_abstraction",
-            subject=abstraction['name'],
+            subject=abstraction["name"],
             predicate="implements",
-            object=abstraction['category'],
+            object=abstraction["category"],
             source="ServiceAbstractionDetector",
-            confidence=abstraction.get('confidence', 1.0),
-            metadata=abstraction  # Store full abstraction data in metadata
+            confidence=abstraction.get("confidence", 1.0),
+            metadata=abstraction,  # Store full abstraction data in metadata
         )
 
         self.add_fact(fact)
@@ -143,11 +139,7 @@ class MemoryManager:
         return None
 
     def update_file_state(
-        self,
-        file_path: str,
-        content_hash: str,
-        findings_count: int = 0,
-        context_data: dict[str, Any] | None = None
+        self, file_path: str, content_hash: str, findings_count: int = 0, context_data: dict[str, Any] | None = None
     ) -> None:
         """
         Update stored state for a file.
@@ -165,7 +157,7 @@ class MemoryManager:
             "file_path": file_path,
             "content_hash": content_hash,
             "findings_count": findings_count,
-            "last_scan": datetime.now().isoformat()
+            "last_scan": datetime.now().isoformat(),
         }
 
         if context_data:
@@ -179,7 +171,7 @@ class MemoryManager:
             object=content_hash,
             source="MemoryManager",
             confidence=1.0,
-            metadata=metadata
+            metadata=metadata,
         )
 
         logger.debug("adding_file_state_fact", fact_id=fact_id)
@@ -221,11 +213,7 @@ class MemoryManager:
             object="json_data",
             source="LLMPhaseBase",
             confidence=1.0,
-            metadata={
-                "key": key,
-                "response": value,
-                "cached_at": datetime.now().isoformat()
-            }
+            metadata={"key": key, "response": value, "cached_at": datetime.now().isoformat()},
         )
 
         self.add_fact(fact)
@@ -239,15 +227,11 @@ class MemoryManager:
         if fact:
             return {
                 "purpose": fact.metadata.get("purpose", ""),
-                "architecture_description": fact.metadata.get("architecture_description", "")
+                "architecture_description": fact.metadata.get("architecture_description", ""),
             }
         return None
 
-    def update_project_purpose(
-        self,
-        purpose: str,
-        architecture_description: str = ""
-    ) -> None:
+    def update_project_purpose(self, purpose: str, architecture_description: str = "") -> None:
         """
         Update stored project purpose.
         """
@@ -256,7 +240,7 @@ class MemoryManager:
         metadata = {
             "purpose": purpose,
             "architecture_description": architecture_description,
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat(),
         }
 
         fact = Fact(
@@ -267,7 +251,7 @@ class MemoryManager:
             object=purpose[:100],  # Short summary as object
             source="ProjectPurposeDetector",
             confidence=1.0,
-            metadata=metadata
+            metadata=metadata,
         )
 
         self.add_fact(fact)
@@ -284,10 +268,7 @@ class MemoryManager:
         """Update stored environment hash."""
         fact_id = "environment:global"
 
-        metadata = {
-            "hash": env_hash,
-            "updated_at": datetime.now().isoformat()
-        }
+        metadata = {"hash": env_hash, "updated_at": datetime.now().isoformat()}
 
         fact = Fact(
             id=fact_id,
@@ -297,7 +278,7 @@ class MemoryManager:
             object=env_hash,
             source="PreAnalysisPhase",
             confidence=1.0,
-            metadata=metadata
+            metadata=metadata,
         )
 
         self.add_fact(fact)
@@ -340,7 +321,7 @@ class MemoryManager:
         metadata = {
             "modules": serialized_map,
             "module_count": len(serialized_map),
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat(),
         }
 
         fact = Fact(
@@ -351,7 +332,7 @@ class MemoryManager:
             object=f"{len(serialized_map)} modules",
             source="ProjectPurposeDetector",
             confidence=1.0,
-            metadata=metadata
+            metadata=metadata,
         )
 
         self.add_fact(fact)
@@ -380,10 +361,7 @@ class MemoryManager:
         """
         fact_id = "intelligence:security_posture"
 
-        metadata = {
-            "posture": posture,
-            "updated_at": datetime.now().isoformat()
-        }
+        metadata = {"posture": posture, "updated_at": datetime.now().isoformat()}
 
         fact = Fact(
             id=fact_id,
@@ -393,7 +371,7 @@ class MemoryManager:
             object=posture,
             source="ProjectPurposeDetector",
             confidence=1.0,
-            metadata=metadata
+            metadata=metadata,
         )
 
         self.add_fact(fact)

@@ -60,19 +60,19 @@ class PropertyFrame(ValidationFrame):
     # Property check patterns
     PATTERNS = {
         "division_no_zero_check": {
-            "pattern": r'(?<!\/)\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))',
+            "pattern": r"(?<!\/)\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))",
             "severity": "medium",
             "message": "Division operation without zero check",
             "suggestion": "Check divisor is not zero before division",
         },
         "comparison_always_true": {
-            "pattern": r'if\s+true|if\s+True|while\s+true|while\s+True',
+            "pattern": r"if\s+true|if\s+True|while\s+true|while\s+True",
             "severity": "low",
             "message": "Always-true condition detected",
             "suggestion": "Review logic - condition always evaluates to true",
         },
         "negative_index_possible": {
-            "pattern": r'\[\s*-?\w+\s*-\s*\w+\s*\]',
+            "pattern": r"\[\s*-?\w+\s*-\s*\w+\s*\]",
             "severity": "medium",
             "message": "Array access with possible negative index",
             "suggestion": "Ensure index is non-negative",
@@ -121,8 +121,8 @@ Output must be a valid JSON object with the following structure:
         }
 
         # Pre-compile assertion check patterns
-        self._assertion_pattern = re.compile(r'\bassert\b|Assert\.|assertThat')
-        self._function_pattern = re.compile(r'def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\(')
+        self._assertion_pattern = re.compile(r"\bassert\b|Assert\.|assertThat")
+        self._function_pattern = re.compile(r"def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\(")
 
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
@@ -157,7 +157,7 @@ Output must be a valid JSON object with the following structure:
             findings.extend(pattern_findings)
 
         # Run LLM analysis if available
-        if hasattr(self, 'llm_service') and self.llm_service:
+        if hasattr(self, "llm_service") and self.llm_service:
             llm_findings = await self._analyze_with_llm(code_file)
             findings.extend(llm_findings)
 
@@ -287,7 +287,7 @@ Output must be a valid JSON object with the following structure:
                 system_prompt=self.SYSTEM_PROMPT,
                 user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
                 temperature=0.1,
-                use_fast_tier=True
+                use_fast_tier=True,
             )
 
             response = await client.send_async(request)
@@ -305,18 +305,18 @@ Output must be a valid JSON object with the following structure:
                     result = AnalysisResult.from_json(data)
 
                     for issue in result.issues:
-                        findings.append(Finding(
-                            id=f"{self.frame_id}-llm-{issue.line}",
-                            severity=issue.severity,
-                            message=issue.title,
-                            location=f"{code_file.path}:{issue.line}",
-                            detail=issue.description,
-                            code=issue.evidence_quote
-                        ))
+                        findings.append(
+                            Finding(
+                                id=f"{self.frame_id}-llm-{issue.line}",
+                                severity=issue.severity,
+                                message=issue.title,
+                                location=f"{code_file.path}:{issue.line}",
+                                detail=issue.description,
+                                code=issue.evidence_quote,
+                            )
+                        )
 
-                    logger.info("property_llm_analysis_completed",
-                              findings=len(findings),
-                              confidence=result.confidence)
+                    logger.info("property_llm_analysis_completed", findings=len(findings), confidence=result.confidence)
 
                 except Exception as e:
                     logger.warning("property_llm_parsing_failed", error=str(e), content_preview=content[:100])

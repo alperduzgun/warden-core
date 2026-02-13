@@ -146,10 +146,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         name_lower = path.name.lower()
 
         # Check file name patterns
-        test_patterns = [
-            'test_', '_test.py', 'tests.py',
-            'spec_', '_spec.py', 'specs.py'
-        ]
+        test_patterns = ["test_", "_test.py", "tests.py", "spec_", "_spec.py", "specs.py"]
 
         for pattern in test_patterns:
             if pattern in name_lower:
@@ -157,7 +154,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         # Check if in test directory
         path_parts = [p.lower() for p in path.parts]
-        test_dirs = ['test', 'tests', 'spec', 'specs', '__tests__']
+        test_dirs = ["test", "tests", "spec", "specs", "__tests__"]
 
         return any(test_dir in path_parts for test_dir in test_dirs)
 
@@ -336,7 +333,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
         for node in ast.walk(tree):
             # Count test functions
-            if isinstance(node, ast.FunctionDef) and node.name.startswith('test'):
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("test"):
                 test_count += 1
 
                 # Check for assertions
@@ -346,9 +343,9 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
                         has_assertion = True
                         assertion_count += 1
                     elif isinstance(child, ast.Call):
-                        if hasattr(child.func, 'attr'):
+                        if hasattr(child.func, "attr"):
                             # Check for unittest assertions
-                            if child.func.attr.startswith('assert'):
+                            if child.func.attr.startswith("assert"):
                                 has_assertion = True
                                 assertion_count += 1
 
@@ -400,9 +397,9 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         for child in ast.walk(node):
             # File I/O
             if isinstance(child, ast.Call):
-                if hasattr(child.func, 'id') and child.func.id in ['open', 'print']:
+                if hasattr(child.func, "id") and child.func.id in ["open", "print"]:
                     return True
-                if hasattr(child.func, 'attr') and child.func.attr in ['write', 'read', 'save']:
+                if hasattr(child.func, "attr") and child.func.attr in ["write", "read", "save"]:
                     return True
 
             # Global modifications
@@ -411,8 +408,11 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
 
             # Database/network calls (heuristic)
             if isinstance(child, ast.Attribute):
-                if hasattr(child, 'attr'):
-                    if any(keyword in child.attr.lower() for keyword in ['save', 'delete', 'update', 'insert', 'fetch', 'post', 'get']):
+                if hasattr(child, "attr"):
+                    if any(
+                        keyword in child.attr.lower()
+                        for keyword in ["save", "delete", "update", "insert", "fetch", "post", "get"]
+                    ):
                         return True
 
         return False
@@ -424,16 +424,16 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         for child in ast.walk(node):
             if isinstance(child, ast.Call):
                 # Direct instantiation of external classes
-                if hasattr(child.func, 'id'):
+                if hasattr(child.func, "id"):
                     class_name = child.func.id
                     # Common external dependencies
-                    if class_name in ['HTTPClient', 'DatabaseConnection', 'FileManager', 'Logger']:
+                    if class_name in ["HTTPClient", "DatabaseConnection", "FileManager", "Logger"]:
                         hard_deps.append(class_name)
 
                 # Import and instantiate pattern
-                if isinstance(child.func, ast.Attribute) and hasattr(child.func.value, 'id'):
+                if isinstance(child.func, ast.Attribute) and hasattr(child.func.value, "id"):
                     module = child.func.value.id
-                    if module in ['requests', 'urllib', 'socket', 'subprocess']:
+                    if module in ["requests", "urllib", "socket", "subprocess"]:
                         hard_deps.append(f"{module}.{child.func.attr}")
 
         return hard_deps
@@ -496,10 +496,10 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         for child in node.body:
             if isinstance(child, ast.Assign):
                 for target in child.targets:
-                    if isinstance(target, ast.Name) and '_instance' in target.id.lower():
+                    if isinstance(target, ast.Name) and "_instance" in target.id.lower():
                         has_instance = True
 
-            if isinstance(child, ast.FunctionDef) and child.name == '__new__':
+            if isinstance(child, ast.FunctionDef) and child.name == "__new__":
                 has_new = True
 
         return has_instance or has_new
@@ -511,10 +511,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         for child in node.body:
             if isinstance(child, ast.FunctionDef):
                 # Check if it's a static method
-                is_static = any(
-                    isinstance(dec, ast.Name) and dec.id == 'staticmethod'
-                    for dec in child.decorator_list
-                )
+                is_static = any(isinstance(dec, ast.Name) and dec.id == "staticmethod" for dec in child.decorator_list)
 
                 if is_static and self._has_side_effects(child):
                     issues.append(
@@ -531,7 +528,7 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
     def _get_init_method(self, node: ast.ClassDef) -> ast.FunctionDef | None:
         """Get __init__ method from class."""
         for child in node.body:
-            if isinstance(child, ast.FunctionDef) and child.name == '__init__':
+            if isinstance(child, ast.FunctionDef) and child.name == "__init__":
                 return child
         return None
 
@@ -540,18 +537,25 @@ class TestabilityAnalyzer(BaseCleaningAnalyzer):
         for child in ast.walk(init_method):
             if isinstance(child, ast.Call):
                 # Check for instantiation of external classes
-                if hasattr(child.func, 'id'):
+                if hasattr(child.func, "id"):
                     class_name = child.func.id
                     # Common dependencies that should be injected
-                    if any(keyword in class_name.lower() for keyword in ['client', 'connection', 'manager', 'service', 'repository']):
+                    if any(
+                        keyword in class_name.lower()
+                        for keyword in ["client", "connection", "manager", "service", "repository"]
+                    ):
                         # Check if it's assigned to self
                         parent = child
                         while parent:
                             if isinstance(parent, ast.Assign):
                                 for target in parent.targets:
-                                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == 'self':
+                                    if (
+                                        isinstance(target, ast.Attribute)
+                                        and isinstance(target.value, ast.Name)
+                                        and target.value.id == "self"
+                                    ):
                                         return True
-                            parent = getattr(parent, 'parent', None)
+                            parent = getattr(parent, "parent", None)
 
         return False
 

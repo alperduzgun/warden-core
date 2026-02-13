@@ -8,10 +8,12 @@ from rich.console import Console
 
 console = Console()
 
+
 class GitHubCli:
     """
     Wrapper for GitHub CLI (gh) operations with resilience and cross-platform support.
     """
+
     CMD_TIMEOUT = 60  # seconds
 
     @staticmethod
@@ -36,7 +38,14 @@ class GitHubCli:
                 pkg_manager = "Homebrew"
         elif system == "windows":  # Windows
             if shutil.which("winget"):
-                install_cmd = ["winget", "install", "--id", "GitHub.cli", "--accept-source-agreements", "--accept-package-agreements"]
+                install_cmd = [
+                    "winget",
+                    "install",
+                    "--id",
+                    "GitHub.cli",
+                    "--accept-source-agreements",
+                    "--accept-package-agreements",
+                ]
                 pkg_manager = "WinGet"
             elif shutil.which("choco"):
                 install_cmd = ["choco", "install", "gh"]
@@ -106,7 +115,7 @@ class GitHubCli:
                 ["gh", "run", "download", "--name", artifact_name, "--dir", str(target_dir)],
                 check=True,
                 capture_output=True,
-                timeout=GitHubCli.CMD_TIMEOUT
+                timeout=GitHubCli.CMD_TIMEOUT,
             )
             return True
         except subprocess.TimeoutExpired:

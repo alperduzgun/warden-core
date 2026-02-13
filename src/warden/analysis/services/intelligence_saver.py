@@ -111,7 +111,7 @@ class IntelligenceSaver:
                 "intelligence_saved",
                 path=str(self.intelligence_path),
                 modules=len(module_map),
-                exceptions=len(file_exceptions or {})
+                exceptions=len(file_exceptions or {}),
             )
             return True
 
@@ -146,7 +146,7 @@ class IntelligenceSaver:
                 "intelligence_saved",
                 path=str(self.intelligence_path),
                 modules=len(intelligence.modules),
-                quality_score=intelligence.quality_score
+                quality_score=intelligence.quality_score,
             )
             return True
 
@@ -154,11 +154,7 @@ class IntelligenceSaver:
             logger.error("intelligence_save_failed", error=str(e))
             return False
 
-    def update_verification_counts(
-        self,
-        verified_count: int,
-        total_claims: int | None = None
-    ) -> bool:
+    def update_verification_counts(self, verified_count: int, total_claims: int | None = None) -> bool:
         """
         Update verification counts in existing intelligence file.
 
@@ -194,7 +190,7 @@ class IntelligenceSaver:
             logger.debug(
                 "verification_counts_updated",
                 verified=verified_count,
-                total=total_claims or data.get("llmClaimsCount", 0)
+                total=total_claims or data.get("llmClaimsCount", 0),
             )
             return True
 

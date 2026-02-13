@@ -20,26 +20,19 @@ logger = get_logger(__name__)
 T = TypeVar("T")
 R = TypeVar("R")
 
+
 class ParallelBatchExecutor:
     """
     Executes a batch of async tasks with standardized resilience guardrails.
     """
 
-    def __init__(
-        self,
-        concurrency_limit: int = 4,
-        item_timeout: float = 30.0,
-        return_exceptions: bool = False
-    ):
+    def __init__(self, concurrency_limit: int = 4, item_timeout: float = 30.0, return_exceptions: bool = False):
         self.semaphore = asyncio.Semaphore(concurrency_limit)
         self.item_timeout = item_timeout
         self.return_exceptions = return_exceptions
 
     async def execute_batch(
-        self,
-        items: list[T],
-        task_fn: Callable[[T], Coroutine[Any, Any, R]],
-        batch_name: str = "batch"
+        self, items: list[T], task_fn: Callable[[T], Coroutine[Any, Any, R]], batch_name: str = "batch"
     ) -> list[R | None]:
         """
         Executes a function across a list of items in parallel with guardrails.
@@ -50,10 +43,7 @@ class ParallelBatchExecutor:
         async def _safe_execute(item: T) -> R | None:
             async with self.semaphore:
                 try:
-                    return await asyncio.wait_for(
-                        task_fn(item),
-                        timeout=self.item_timeout
-                    )
+                    return await asyncio.wait_for(task_fn(item), timeout=self.item_timeout)
                 except asyncio.TimeoutError:
                     logger.warning("parallel_task_timeout", batch=batch_name)
                     return None
@@ -70,11 +60,6 @@ class ParallelBatchExecutor:
         results = await asyncio.gather(*tasks, return_exceptions=self.return_exceptions)
 
         duration = int((time.time() - start_time) * 1000)
-        logger.info(
-            "parallel_batch_completed",
-            batch=batch_name,
-            count=len(items),
-            duration_ms=duration
-        )
+        logger.info("parallel_batch_completed", batch=batch_name, count=len(items), duration_ms=duration)
 
         return results

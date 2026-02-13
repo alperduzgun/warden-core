@@ -25,6 +25,7 @@ logger = structlog.get_logger(__name__)
 
 class ServiceCategory(Enum):
     """Category of service abstraction."""
+
     SECRET_MANAGEMENT = "secret_management"
     CONFIG_MANAGEMENT = "config_management"
     DATABASE_ACCESS = "database_access"
@@ -140,7 +141,7 @@ class ServiceAbstractionDetector:
         project_context: ProjectContext | None = None,
         llm_config: LlmConfiguration | None = None,
         analysis_level: Any | None = None,
-        llm_service: Any | None = None
+        llm_service: Any | None = None,
     ) -> None:
         """
         Initialize detector.
@@ -172,6 +173,7 @@ class ServiceAbstractionDetector:
 
         # Check analysis level - bypass LLM initialization if basic
         from warden.pipeline.domain.enums import AnalysisLevel
+
         if self.analysis_level == AnalysisLevel.BASIC:
             self.llm = None
             logger.debug("llm_disabled_for_detector", reason="analysis_level_basic")
@@ -298,8 +300,17 @@ class ServiceAbstractionDetector:
         }
 
         excluded_patterns = [
-            "node_modules", "venv", ".venv", "env", "__pycache__",
-            "dist", "build", ".git", ".tox", ".mypy_cache", "vendor",
+            "node_modules",
+            "venv",
+            ".venv",
+            "env",
+            "__pycache__",
+            "dist",
+            "build",
+            ".git",
+            ".tox",
+            ".mypy_cache",
+            "vendor",
         ]
 
         files = []
@@ -357,10 +368,10 @@ class ServiceAbstractionDetector:
 
     def _analyze_node(
         self,
-        node: Any, # ASTNode
+        node: Any,  # ASTNode
         file_path: Path,
         file_content: str,
-        language: CodeLanguage
+        language: CodeLanguage,
     ) -> ServiceAbstraction | None:
         """Analyze a class or interface node for service abstraction characteristics."""
         name = node.name
@@ -428,12 +439,14 @@ class ServiceAbstractionDetector:
         services_to_analyze = []
         for name, abs_info in self.abstractions.items():
             # If it's a known category, it already has some rules, but LLM can refine or find new ones
-            services_to_analyze.append({
-                "name": name,
-                "category": abs_info.category.value,
-                "methods": abs_info.public_methods[:10],
-                "description": abs_info.description
-            })
+            services_to_analyze.append(
+                {
+                    "name": name,
+                    "category": abs_info.category.value,
+                    "methods": abs_info.public_methods[:10],
+                    "description": abs_info.description,
+                }
+            )
 
         if not services_to_analyze:
             return
@@ -465,7 +478,7 @@ Return strictly JSON:
                 system_prompt="You are an expert security and architectural analyzer. Help identify when developers bypass project-specific abstractions.",
                 user_message=prompt,
                 max_tokens=1000,
-                temperature=0.0
+                temperature=0.0,
             )
 
             response = await self.llm.send_async(request)
@@ -476,10 +489,14 @@ Return strictly JSON:
                 if name in self.abstractions:
                     # Merge LLM suggestions with existing patterns
                     new_patterns = item.get("bypass_patterns", [])
-                    self.abstractions[name].bypass_patterns = list(set(self.abstractions[name].bypass_patterns + new_patterns))
+                    self.abstractions[name].bypass_patterns = list(
+                        set(self.abstractions[name].bypass_patterns + new_patterns)
+                    )
 
                     new_kws = item.get("keywords", [])
-                    self.abstractions[name].responsibility_keywords = list(set(self.abstractions[name].responsibility_keywords + new_kws))
+                    self.abstractions[name].responsibility_keywords = list(
+                        set(self.abstractions[name].responsibility_keywords + new_kws)
+                    )
 
             logger.info("bypass_rules_synthesized", count=len(data.get("abstractions", [])))
 
@@ -535,7 +552,9 @@ Return strictly JSON:
 
 
 # Convenience function for standalone usage
-async def detect_service_abstractions_async(project_root: Path, project_context: ProjectContext | None = None) -> dict[str, ServiceAbstraction]:
+async def detect_service_abstractions_async(
+    project_root: Path, project_context: ProjectContext | None = None
+) -> dict[str, ServiceAbstraction]:
     """
     Detect service abstractions in a project.
 

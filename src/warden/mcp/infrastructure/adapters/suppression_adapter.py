@@ -26,12 +26,14 @@ class SuppressionAdapter(BaseWardenAdapter):
         - warden_check_suppression: Check if suppressed
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_add_suppression",
-        "warden_remove_suppression",
-        "warden_get_suppressions",
-        "warden_check_suppression",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_add_suppression",
+            "warden_remove_suppression",
+            "warden_get_suppressions",
+            "warden_check_suppression",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.SUPPRESSION
 
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
@@ -163,10 +165,12 @@ class SuppressionAdapter(BaseWardenAdapter):
 
         self._suppressions[suppression_id] = suppression
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "suppression": suppression,
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "suppression": suppression,
+            }
+        )
 
     async def _remove_suppression_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Remove a suppression rule."""
@@ -180,17 +184,21 @@ class SuppressionAdapter(BaseWardenAdapter):
 
         del self._suppressions[suppression_id]
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "message": f"Suppression {suppression_id} removed",
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "message": f"Suppression {suppression_id} removed",
+            }
+        )
 
     async def _get_suppressions_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get all suppression rules."""
-        return MCPToolResult.json_result({
-            "suppressions": list(self._suppressions.values()),
-            "total_count": len(self._suppressions),
-        })
+        return MCPToolResult.json_result(
+            {
+                "suppressions": list(self._suppressions.values()),
+                "total_count": len(self._suppressions),
+            }
+        )
 
     async def _check_suppression_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Check if an issue is suppressed."""
@@ -226,11 +234,13 @@ class SuppressionAdapter(BaseWardenAdapter):
 
             # Check global suppression
             if supp.get("is_global"):
-                return MCPToolResult.json_result({
-                    "is_suppressed": True,
-                    "suppression": supp,
-                    "reason": "Global suppression",
-                })
+                return MCPToolResult.json_result(
+                    {
+                        "is_suppressed": True,
+                        "suppression": supp,
+                        "reason": "Global suppression",
+                    }
+                )
 
             # Check file match
             if supp.get("file_path") and supp["file_path"] != file_path:
@@ -240,14 +250,18 @@ class SuppressionAdapter(BaseWardenAdapter):
             if supp.get("line_number") and line_number and supp["line_number"] != line_number:
                 continue
 
-            return MCPToolResult.json_result({
-                "is_suppressed": True,
-                "suppression": supp,
-                "reason": supp.get("justification", "Suppressed"),
-            })
+            return MCPToolResult.json_result(
+                {
+                    "is_suppressed": True,
+                    "suppression": supp,
+                    "reason": supp.get("justification", "Suppressed"),
+                }
+            )
 
-        return MCPToolResult.json_result({
-            "is_suppressed": False,
-            "suppression": None,
-            "reason": None,
-        })
+        return MCPToolResult.json_result(
+            {
+                "is_suppressed": False,
+                "suppression": None,
+                "reason": None,
+            }
+        )

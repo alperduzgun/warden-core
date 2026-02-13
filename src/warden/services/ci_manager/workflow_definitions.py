@@ -18,6 +18,7 @@ from .template_operations import ALLOWED_TEMPLATES, CURRENT_TEMPLATE_VERSION
 
 class WorkflowType(Enum):
     """Types of CI workflows."""
+
     PR = "pr"
     NIGHTLY = "nightly"
     RELEASE = "release"
@@ -27,6 +28,7 @@ class WorkflowType(Enum):
 @dataclass(frozen=True)
 class WorkflowTemplate:
     """Immutable workflow template definition."""
+
     provider: CIProvider
     workflow_type: WorkflowType
     template_name: str
@@ -45,6 +47,7 @@ class WorkflowTemplate:
 @dataclass
 class WorkflowStatus:
     """Status of a CI workflow file."""
+
     exists: bool
     path: str
     version: str | None = None
@@ -59,6 +62,7 @@ class WorkflowStatus:
 @dataclass
 class CIStatus:
     """Overall CI configuration status."""
+
     provider: CIProvider | None = None
     workflows: dict[str, WorkflowStatus] = field(default_factory=dict)
     is_configured: bool = False

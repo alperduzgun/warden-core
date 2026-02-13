@@ -223,12 +223,7 @@ class ValidationCheck(ABC):
 
     def __repr__(self) -> str:
         """String representation for logging."""
-        return (
-            f"{self.__class__.__name__}("
-            f"id={self.id}, "
-            f"name={self.name}, "
-            f"severity={self.severity.value})"
-        )
+        return f"{self.__class__.__name__}(id={self.id}, name={self.name}, severity={self.severity.value})"
 
 
 class CheckRegistry:

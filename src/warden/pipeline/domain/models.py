@@ -50,7 +50,9 @@ class PipelineConfig(BaseDomainModel):
     Defines how frames should be executed.
     """
 
-    strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL  # SEQUENTIAL, PARALLEL, FAIL_FAST, or PIPELINE execution modes
+    strategy: ExecutionStrategy = (
+        ExecutionStrategy.SEQUENTIAL
+    )  # SEQUENTIAL, PARALLEL, FAIL_FAST, or PIPELINE execution modes
     fail_fast: bool = True
     timeout: int = 300  # Total pipeline timeout in seconds
     frame_timeout: int = 120  # Per-frame timeout in seconds
@@ -105,9 +107,7 @@ class PipelineConfig(BaseDomainModel):
 
         # Convert custom rules
         data["globalRules"] = [rule.to_json() for rule in self.global_rules]
-        data["frameRules"] = {
-            frame_id: frame_rules.to_json() for frame_id, frame_rules in self.frame_rules.items()
-        }
+        data["frameRules"] = {frame_id: frame_rules.to_json() for frame_id, frame_rules in self.frame_rules.items()}
 
         return data
 
@@ -122,10 +122,11 @@ class FrameChain(BaseDomainModel):
 
     Frames execute based on dependency ordering with skip conditions.
     """
-    frame: str                                    # Frame ID to execute
+
+    frame: str  # Frame ID to execute
     on_complete: list[str] = Field(default_factory=list)  # Frame IDs to trigger after completion
-    skip_if: str | None = None                    # Condition name to skip (e.g., "no_sql_sinks")
-    priority: int = 1                             # Execution priority (lower = sooner)
+    skip_if: str | None = None  # Condition name to skip (e.g., "no_sql_sinks")
+    priority: int = 1  # Execution priority (lower = sooner)
 
     def to_json(self) -> dict[str, Any]:
         data = super().to_json()
@@ -300,6 +301,7 @@ class PipelineResult(BaseDomainModel):
         # Add LLM performance metrics
         try:
             from warden.llm.factory import get_global_metrics_collector
+
             metrics_collector = get_global_metrics_collector()
             data["llmMetrics"] = metrics_collector.get_summary()
         except Exception:

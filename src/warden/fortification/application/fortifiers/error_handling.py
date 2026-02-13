@@ -132,9 +132,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             )
             try:
                 # Use LLM to generate better suggestions (NOT to modify code!)
-                enhanced = await self._enhance_suggestions_with_llm_async(
-                    code_file, fortification_suggestions
-                )
+                enhanced = await self._enhance_suggestions_with_llm_async(code_file, fortification_suggestions)
                 if enhanced:
                     fortification_suggestions = enhanced
             except Exception as e:
@@ -172,9 +170,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             line_number = i + 1
 
             # Detect async/await without try-except
-            if ("await " in stripped_line or "async def" in stripped_line) and not self._is_inside_try_except(
-                lines, i
-            ):
+            if ("await " in stripped_line or "async def" in stripped_line) and not self._is_inside_try_except(lines, i):
                 suggestions.append(
                     ErrorHandlingSuggestion(
                         line_number=line_number,
@@ -186,8 +182,7 @@ class ErrorHandlingFortifier(BaseFortifier):
 
             # Detect file operations
             if any(
-                keyword in stripped_line
-                for keyword in ["open(", "Path(", "os.path", "shutil."]
+                keyword in stripped_line for keyword in ["open(", "Path(", "os.path", "shutil."]
             ) and not self._is_inside_try_except(lines, i):
                 suggestions.append(
                     ErrorHandlingSuggestion(
@@ -200,8 +195,7 @@ class ErrorHandlingFortifier(BaseFortifier):
 
             # Detect HTTP/network requests
             if any(
-                keyword in stripped_line
-                for keyword in ["requests.", "httpx.", "urllib.", "aiohttp."]
+                keyword in stripped_line for keyword in ["requests.", "httpx.", "urllib.", "aiohttp."]
             ) and not self._is_inside_try_except(lines, i):
                 suggestions.append(
                     ErrorHandlingSuggestion(
@@ -214,8 +208,7 @@ class ErrorHandlingFortifier(BaseFortifier):
 
             # Detect database operations
             if any(
-                keyword in stripped_line
-                for keyword in [".execute_async(", ".query(", "cursor.", "session."]
+                keyword in stripped_line for keyword in [".execute_async(", ".query(", "cursor.", "session."]
             ) and not self._is_inside_try_except(lines, i):
                 suggestions.append(
                     ErrorHandlingSuggestion(
@@ -228,8 +221,7 @@ class ErrorHandlingFortifier(BaseFortifier):
 
             # Detect JSON parsing
             if any(
-                keyword in stripped_line
-                for keyword in ["json.loads(", "json.load(", ".json()"]
+                keyword in stripped_line for keyword in ["json.loads(", "json.load(", ".json()"]
             ) and not self._is_inside_try_except(lines, i):
                 suggestions.append(
                     ErrorHandlingSuggestion(
@@ -311,9 +303,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             return suggestions
 
         # Build prompt for LLM (asking for suggestions, not code!)
-        issues_list = "\n".join(
-            f"- Line {s.issue_line}: {s.description}" for s in suggestions
-        )
+        issues_list = "\n".join(f"- Line {s.issue_line}: {s.description}" for s in suggestions)
 
         prompt = f"""You are a code safety expert. For each issue below, provide a specific suggestion on how to fix it.
 

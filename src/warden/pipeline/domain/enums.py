@@ -127,6 +127,7 @@ class AnalysisLevel(str, Enum):
 
     Determines the depth of AI-driven analysis.
     """
-    BASIC = "basic"        # No LLM, regex/AST only
+
+    BASIC = "basic"  # No LLM, regex/AST only
     STANDARD = "standard"  # Default LLM usage with caching
-    DEEP = "deep"          # Full semantic and logic audit
+    DEEP = "deep"  # Full semantic and logic audit

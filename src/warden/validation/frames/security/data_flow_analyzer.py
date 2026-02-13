@@ -9,16 +9,15 @@ from typing import Any
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
-async def analyze_data_flow(
-    code_file: Any,
-    findings: list[Any]
-) -> dict[str, Any]:
+async def analyze_data_flow(code_file: Any, findings: list[Any]) -> dict[str, Any]:
     """
     Analyze data flow using LSP for taint tracking.
 
@@ -29,14 +28,11 @@ async def analyze_data_flow(
     Returns:
         Dict with data flow context for each finding
     """
-    data_flow_context: dict[str, Any] = {
-        "tainted_paths": [],
-        "blast_radius": [],
-        "data_sources": []
-    }
+    data_flow_context: dict[str, Any] = {"tainted_paths": [], "blast_radius": [], "data_sources": []}
 
     try:
         from warden.lsp import get_semantic_analyzer
+
         analyzer = get_semantic_analyzer()
     except ImportError:
         logger.debug("lsp_not_available_for_data_flow")
@@ -53,44 +49,42 @@ async def analyze_data_flow(
             # Get callers (blast radius - who uses this vulnerable code)
             callers = await asyncio.wait_for(
                 analyzer.get_callers_async(
-                    code_file.path,
-                    location["line"],
-                    location.get("column", 0),
-                    content=code_file.content
+                    code_file.path, location["line"], location.get("column", 0), content=code_file.content
                 ),
-                timeout=5.0
+                timeout=5.0,
             )
             if callers:
-                data_flow_context["blast_radius"].extend([
-                    {
-                        "vulnerable_at": f"{code_file.path}:{location['line']}",
-                        "called_from": c.name,
-                        "caller_file": c.location,
-                        "finding_type": location.get("type", "unknown")
-                    }
-                    for c in callers[:3]
-                ])
+                data_flow_context["blast_radius"].extend(
+                    [
+                        {
+                            "vulnerable_at": f"{code_file.path}:{location['line']}",
+                            "called_from": c.name,
+                            "caller_file": c.location,
+                            "finding_type": location.get("type", "unknown"),
+                        }
+                        for c in callers[:3]
+                    ]
+                )
 
             # Get callees (data sources - where does data come from)
             callees = await asyncio.wait_for(
                 analyzer.get_callees_async(
-                    code_file.path,
-                    location["line"],
-                    location.get("column", 0),
-                    content=code_file.content
+                    code_file.path, location["line"], location.get("column", 0), content=code_file.content
                 ),
-                timeout=5.0
+                timeout=5.0,
             )
             if callees:
-                data_flow_context["data_sources"].extend([
-                    {
-                        "vulnerable_at": f"{code_file.path}:{location['line']}",
-                        "data_from": c.name,
-                        "source_file": c.location,
-                        "finding_type": location.get("type", "unknown")
-                    }
-                    for c in callees[:3]
-                ])
+                data_flow_context["data_sources"].extend(
+                    [
+                        {
+                            "vulnerable_at": f"{code_file.path}:{location['line']}",
+                            "data_from": c.name,
+                            "source_file": c.location,
+                            "finding_type": location.get("type", "unknown"),
+                        }
+                        for c in callees[:3]
+                    ]
+                )
 
         except asyncio.TimeoutError:
             logger.debug("lsp_data_flow_timeout", location=location)
@@ -102,28 +96,41 @@ async def analyze_data_flow(
         for source in data_flow_context["data_sources"]:
             # Check if source is from untrusted origin (request, user input, etc.)
             source_name = source.get("data_from", "").lower()
-            if any(keyword in source_name for keyword in [
-                "request", "input", "param", "query", "body", "form",
-                "user", "args", "kwargs", "data", "payload"
-            ]):
-                data_flow_context["tainted_paths"].append({
-                    "source": source["data_from"],
-                    "sink": source["vulnerable_at"],
-                    "risk": "high" if "sql" in source.get("finding_type", "").lower() else "medium"
-                })
+            if any(
+                keyword in source_name
+                for keyword in [
+                    "request",
+                    "input",
+                    "param",
+                    "query",
+                    "body",
+                    "form",
+                    "user",
+                    "args",
+                    "kwargs",
+                    "data",
+                    "payload",
+                ]
+            ):
+                data_flow_context["tainted_paths"].append(
+                    {
+                        "source": source["data_from"],
+                        "sink": source["vulnerable_at"],
+                        "risk": "high" if "sql" in source.get("finding_type", "").lower() else "medium",
+                    }
+                )
 
-    logger.debug("data_flow_analysis_complete",
-                blast_radius=len(data_flow_context["blast_radius"]),
-                data_sources=len(data_flow_context["data_sources"]),
-                tainted_paths=len(data_flow_context["tainted_paths"]))
+    logger.debug(
+        "data_flow_analysis_complete",
+        blast_radius=len(data_flow_context["blast_radius"]),
+        data_sources=len(data_flow_context["data_sources"]),
+        tainted_paths=len(data_flow_context["tainted_paths"]),
+    )
 
     return data_flow_context
 
 
-def _extract_sensitive_locations(
-    code_file: Any,
-    check_results: list[Any]
-) -> list[dict[str, Any]]:
+def _extract_sensitive_locations(code_file: Any, check_results: list[Any]) -> list[dict[str, Any]]:
     """Extract line numbers and types from check findings for LSP analysis."""
     locations = []
 
@@ -136,12 +143,9 @@ def _extract_sensitive_locations(
                 try:
                     line = int(parts[-1]) if len(parts) >= 2 else 1
                     column = int(parts[-1]) if len(parts) >= 3 else 0
-                    locations.append({
-                        "line": line,
-                        "column": column,
-                        "type": finding.check_id,
-                        "message": finding.message
-                    })
+                    locations.append(
+                        {"line": line, "column": column, "type": finding.check_id, "message": finding.message}
+                    )
                 except ValueError:
                     continue
 

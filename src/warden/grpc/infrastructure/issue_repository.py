@@ -163,8 +163,4 @@ class FileIssueRepository(BaseFileRepository[WardenIssue], IIssueRepository):
     async def get_high_or_critical_issues_async(self) -> list[WardenIssue]:
         """Get all high or critical severity issues."""
         all_issues = await self.get_all_async()
-        return [
-            i
-            for i in all_issues
-            if i.severity in (IssueSeverity.CRITICAL, IssueSeverity.HIGH)
-        ]
+        return [i for i in all_issues if i.severity in (IssueSeverity.CRITICAL, IssueSeverity.HIGH)]

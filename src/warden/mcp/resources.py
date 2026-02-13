@@ -15,6 +15,7 @@ from warden.mcp.protocol import MCPResource, MCPResourceContent
 @dataclass
 class ResourceDefinition:
     """Internal resource definition."""
+
     uri: str
     name: str
     description: str
@@ -185,12 +186,14 @@ class MCPResourceManager:
                 }
                 mime_type = mime_types.get(ext, "application/octet-stream")
 
-                reports.append({
-                    "name": file_path.name,
-                    "path": str(file_path.relative_to(self.project_root)),
-                    "size": file_path.stat().st_size,
-                    "modified": file_path.stat().st_mtime,
-                    "mime_type": mime_type,
-                })
+                reports.append(
+                    {
+                        "name": file_path.name,
+                        "path": str(file_path.relative_to(self.project_root)),
+                        "size": file_path.stat().st_size,
+                        "modified": file_path.stat().st_mtime,
+                        "mime_type": mime_type,
+                    }
+                )
 
         return reports

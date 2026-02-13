@@ -36,10 +36,7 @@ class LinterRunner:
         self.max_output_size = max_output_size  # 10MB default
 
     async def execute_json_command_async(
-        self,
-        command: list[str],
-        cwd: Path | None = None,
-        env: dict[str, str] | None = None
+        self, command: list[str], cwd: Path | None = None, env: dict[str, str] | None = None
     ) -> tuple[bool, Any, str | None]:
         """
         Execute a command and parse its output as JSON.
@@ -57,12 +54,7 @@ class LinterRunner:
 
         try:
             process = await asyncio.create_subprocess_exec(  # warden: ignore
-                *command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=cwd,
-                env=env,
-                limit=self.max_output_size
+                *command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env, limit=self.max_output_size
             )
 
             try:
@@ -86,13 +78,15 @@ class LinterRunner:
                 if process.returncode != 0:
                     logger.warning("linter_exec_failed_no_output", tool=tool_name, error=stderr_decoded)
                     return False, None, stderr_decoded or "Execution failed with no output"
-                return True, [], None # Empty success
+                return True, [], None  # Empty success
 
             try:
                 data = json.loads(stdout_decoded)
                 return True, data, None
             except json.JSONDecodeError as e:
-                logger.error("linter_output_invalid_json", tool=tool_name, error=str(e), partial_output=stdout_decoded[:100])
+                logger.error(
+                    "linter_output_invalid_json", tool=tool_name, error=str(e), partial_output=stdout_decoded[:100]
+                )
                 return False, None, f"Invalid JSON output: {e!s}"
 
         except Exception as e:

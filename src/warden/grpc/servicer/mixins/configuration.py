@@ -12,9 +12,11 @@ except ImportError:
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -34,24 +36,20 @@ class ConfigurationMixin:
             for frame in frames:
                 priority = frame.get("priority", 0)
                 if isinstance(priority, str):
-                    priority_map = {
-                        "critical": 1,
-                        "high": 2,
-                        "medium": 3,
-                        "low": 4,
-                        "info": 5
-                    }
+                    priority_map = {"critical": 1, "high": 2, "medium": 3, "low": 4, "info": 5}
                     priority = priority_map.get(priority.lower(), 0)
 
-                response.frames.append(warden_pb2.Frame(
-                    id=frame.get("id", ""),
-                    name=frame.get("name", ""),
-                    description=frame.get("description", ""),
-                    priority=priority,
-                    is_blocker=frame.get("is_blocker", False),
-                    enabled=frame.get("enabled", True),
-                    tags=frame.get("tags", [])
-                ))
+                response.frames.append(
+                    warden_pb2.Frame(
+                        id=frame.get("id", ""),
+                        name=frame.get("name", ""),
+                        description=frame.get("description", ""),
+                        priority=priority,
+                        is_blocker=frame.get("is_blocker", False),
+                        enabled=frame.get("enabled", True),
+                        tags=frame.get("tags", []),
+                    )
+                )
 
             return response
 
@@ -76,13 +74,15 @@ class ConfigurationMixin:
             response = warden_pb2.ProviderList(default_provider=default_provider)
 
             for provider in providers:
-                response.providers.append(warden_pb2.Provider(
-                    id=provider.get("id", provider.get("name", "")),
-                    name=provider.get("name", ""),
-                    available=provider.get("available", True),
-                    is_default=provider.get("is_default", False),
-                    status=provider.get("status", "ready")
-                ))
+                response.providers.append(
+                    warden_pb2.Provider(
+                        id=provider.get("id", provider.get("name", "")),
+                        name=provider.get("name", ""),
+                        available=provider.get("available", True),
+                        is_default=provider.get("is_default", False),
+                        status=provider.get("status", "ready"),
+                    )
+                )
 
             return response
 
@@ -90,9 +90,7 @@ class ConfigurationMixin:
             logger.error("grpc_providers_error: %s", str(e))
             return warden_pb2.ProviderList()
 
-    async def GetConfiguration(
-        self, request, context
-    ) -> "warden_pb2.ConfigurationResponse":
+    async def GetConfiguration(self, request, context) -> "warden_pb2.ConfigurationResponse":
         """Get full configuration."""
         logger.info("grpc_get_config")
 
@@ -104,42 +102,39 @@ class ConfigurationMixin:
             response = warden_pb2.ConfigurationResponse(
                 project_root=str(self.bridge.project_root),
                 config_file=config.get("config_file", ""),
-                active_profile=config.get("active_profile", "default")
+                active_profile=config.get("active_profile", "default"),
             )
 
             frames_list = frames if isinstance(frames, list) else frames.get("frames", [])
             for frame in frames_list:
                 priority = frame.get("priority", 0)
                 if isinstance(priority, str):
-                    priority_map = {
-                        "critical": 1,
-                        "high": 2,
-                        "medium": 3,
-                        "low": 4,
-                        "info": 5
-                    }
+                    priority_map = {"critical": 1, "high": 2, "medium": 3, "low": 4, "info": 5}
                     priority = priority_map.get(priority.lower(), 0)
 
-                response.available_frames.frames.append(warden_pb2.Frame(
-                    id=frame.get("id", ""),
-                    name=frame.get("name", ""),
-                    description=frame.get("description", ""),
-                    priority=priority,
-                    is_blocker=frame.get("is_blocker", False),
-                    enabled=frame.get("enabled", True)
-                ))
+                response.available_frames.frames.append(
+                    warden_pb2.Frame(
+                        id=frame.get("id", ""),
+                        name=frame.get("name", ""),
+                        description=frame.get("description", ""),
+                        priority=priority,
+                        is_blocker=frame.get("is_blocker", False),
+                        enabled=frame.get("enabled", True),
+                    )
+                )
 
             providers = (
-                providers_result if isinstance(providers_result, list)
-                else providers_result.get("providers", [])
+                providers_result if isinstance(providers_result, list) else providers_result.get("providers", [])
             )
             for provider in providers:
-                response.available_providers.providers.append(warden_pb2.Provider(
-                    id=provider.get("id", provider.get("name", "")),
-                    name=provider.get("name", ""),
-                    available=provider.get("available", True),
-                    is_default=provider.get("is_default", False)
-                ))
+                response.available_providers.providers.append(
+                    warden_pb2.Provider(
+                        id=provider.get("id", provider.get("name", "")),
+                        name=provider.get("name", ""),
+                        available=provider.get("available", True),
+                        is_default=provider.get("is_default", False),
+                    )
+                )
 
             return response
 
@@ -147,60 +142,38 @@ class ConfigurationMixin:
             logger.error("grpc_config_error: %s", str(e))
             return warden_pb2.ConfigurationResponse()
 
-    async def UpdateConfiguration(
-        self, request, context
-    ) -> "warden_pb2.UpdateConfigResponse":
+    async def UpdateConfiguration(self, request, context) -> "warden_pb2.UpdateConfigResponse":
         """Update configuration settings."""
         logger.info("grpc_update_config")
 
         try:
             settings = dict(request.settings)
 
-            if hasattr(self.bridge, 'update_config'):
+            if hasattr(self.bridge, "update_config"):
                 await self.bridge.update_config(settings)
 
             return warden_pb2.UpdateConfigResponse(success=True)
 
         except Exception as e:
             logger.error("grpc_update_config_error: %s", str(e))
-            return warden_pb2.UpdateConfigResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.UpdateConfigResponse(success=False, error_message=str(e))
 
-    async def UpdateFrameStatus(
-        self, request, context
-    ) -> "warden_pb2.UpdateFrameStatusResponse":
+    async def UpdateFrameStatus(self, request, context) -> "warden_pb2.UpdateFrameStatusResponse":
         """Enable or disable a frame."""
-        logger.info(
-            "grpc_update_frame_status",
-            frame_id=request.frame_id,
-            enabled=request.enabled
-        )
+        logger.info("grpc_update_frame_status", frame_id=request.frame_id, enabled=request.enabled)
 
         try:
-            if hasattr(self.bridge, 'update_frame_status'):
-                await self.bridge.update_frame_status_async(
-                    frame_id=request.frame_id,
-                    enabled=request.enabled
-                )
+            if hasattr(self.bridge, "update_frame_status"):
+                await self.bridge.update_frame_status_async(frame_id=request.frame_id, enabled=request.enabled)
 
                 return warden_pb2.UpdateFrameStatusResponse(
-                    success=True,
-                    frame=warden_pb2.Frame(
-                        id=request.frame_id,
-                        enabled=request.enabled
-                    )
+                    success=True, frame=warden_pb2.Frame(id=request.frame_id, enabled=request.enabled)
                 )
 
             return warden_pb2.UpdateFrameStatusResponse(
-                success=False,
-                error_message="Frame status update not available"
+                success=False, error_message="Frame status update not available"
             )
 
         except Exception as e:
             logger.error("grpc_update_frame_error: %s", str(e))
-            return warden_pb2.UpdateFrameStatusResponse(
-                success=False,
-                error_message=str(e)
-            )
+            return warden_pb2.UpdateFrameStatusResponse(success=False, error_message=str(e))

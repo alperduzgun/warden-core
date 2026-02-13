@@ -1,4 +1,3 @@
-
 """
 Code indexer for semantic search.
 
@@ -98,11 +97,7 @@ class CodeIndexer:
                 existing_hash = self.adapter.get_existing_file_hash(file_path)
 
             if existing_hash == current_hash:
-                logger.debug(
-                    "file_unchanged_skipping_index",
-                    file_path=rel_path,
-                    hash=current_hash
-                )
+                logger.debug("file_unchanged_skipping_index", file_path=rel_path, hash=current_hash)
                 return 0
 
         # Chunk file
@@ -158,10 +153,7 @@ class CodeIndexer:
 
         if ids:
             success = await self.adapter.upsert(
-                ids=ids,
-                embeddings=embeddings,
-                metadatas=metadatas,
-                documents=documents
+                ids=ids, embeddings=embeddings, metadatas=metadatas, documents=documents
             )
             if not success:
                 logger.error("adapter_upsert_failed")
@@ -181,7 +173,7 @@ class CodeIndexer:
         file_paths: str | list[str],
         languages: dict[str, str],
         max_concurrency: int = 5,
-        progress_callback: callable | None = None
+        progress_callback: callable | None = None,
     ) -> IndexStats:
         """
         Index multiple files in parallel.
@@ -193,6 +185,7 @@ class CodeIndexer:
             progress_callback: Async callable(count) to report progress
         """
         import asyncio
+
         if isinstance(file_paths, str):
             file_paths = [file_paths]
 
@@ -229,9 +222,7 @@ class CodeIndexer:
             if chunk_count > 0:
                 total_chunks += chunk_count
                 files_indexed += 1
-                chunks_by_language[language] = (
-                    chunks_by_language.get(language, 0) + chunk_count
-                )
+                chunks_by_language[language] = chunks_by_language.get(language, 0) + chunk_count
 
         logger.info(
             "batch_indexing_completed",

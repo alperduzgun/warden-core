@@ -63,31 +63,26 @@ class AnthropicClient(ILlmClient):
 
         try:
             from warden.llm.global_rate_limiter import GlobalRateLimiter
+
             limiter = await GlobalRateLimiter.get_instance()
             await limiter.acquire("anthropic", tokens=request.max_tokens)
 
             headers = {
                 "x-api-key": self._api_key,
                 "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
+                "content-type": "application/json",
             }
 
             payload = {
                 "model": request.model or self._default_model,
                 "system": request.system_prompt,
-                "messages": [
-                    {"role": "user", "content": request.user_message}
-                ],
+                "messages": [{"role": "user", "content": request.user_message}],
                 "temperature": request.temperature,
-                "max_tokens": request.max_tokens
+                "max_tokens": request.max_tokens,
             }
 
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
-                response = await client.post(
-                    f"{self._base_url}/v1/messages",
-                    headers=headers,
-                    json=payload
-                )
+                response = await client.post(f"{self._base_url}/v1/messages", headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
 
@@ -100,7 +95,7 @@ class AnthropicClient(ILlmClient):
                     success=False,
                     error_message="No response from Anthropic",
                     provider=self.provider,
-                    duration_ms=duration_ms
+                    duration_ms=duration_ms,
                 )
 
             # Extract usage information
@@ -114,29 +109,21 @@ class AnthropicClient(ILlmClient):
                 prompt_tokens=usage.get("input_tokens"),
                 completion_tokens=usage.get("output_tokens"),
                 total_tokens=usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
 
         except httpx.HTTPStatusError as e:
             duration_ms = int((time.time() - start_time) * 1000)
-            response_text = (e.response.text[:200] if e.response.text else "No response body")
+            response_text = e.response.text[:200] if e.response.text else "No response body"
             error_msg = f"HTTP {e.response.status_code}: {response_text}"
             return LlmResponse(
-                content="",
-                success=False,
-                error_message=error_msg,
-                provider=self.provider,
-                duration_ms=duration_ms
+                content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
             )
 
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return LlmResponse(
-                content="",
-                success=False,
-                error_message=str(e),
-                provider=self.provider,
-                duration_ms=duration_ms
+                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
             )
 
     async def is_available_async(self) -> bool:
@@ -151,7 +138,7 @@ class AnthropicClient(ILlmClient):
                 system_prompt="You are a helpful assistant.",
                 user_message="Hi",
                 max_tokens=10,
-                timeout_seconds=10  # Short timeout for availability check
+                timeout_seconds=10,  # Short timeout for availability check
             )
 
             response = await self.send_async(test_request)

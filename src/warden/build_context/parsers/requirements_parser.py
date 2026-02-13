@@ -60,10 +60,7 @@ class RequirementsParser:
 
         try:
             # Parse main requirements file
-            dependencies = self._parse_requirements_file(
-                self.requirements_path,
-                visited=set()
-            )
+            dependencies = self._parse_requirements_file(self.requirements_path, visited=set())
 
             # Parse dev requirements if exists
             dev_dependencies: list[Dependency] = []
@@ -77,10 +74,7 @@ class RequirementsParser:
 
             for dev_path in dev_paths:
                 if dev_path.exists():
-                    dev_deps = self._parse_requirements_file(
-                        dev_path,
-                        visited=set()
-                    )
+                    dev_deps = self._parse_requirements_file(dev_path, visited=set())
                     dev_dependencies.extend(dev_deps)
                     break  # Only parse first found dev requirements
 
@@ -100,11 +94,7 @@ class RequirementsParser:
             print(f"Error parsing requirements.txt: {e}")
             return None
 
-    def _parse_requirements_file(
-        self,
-        file_path: Path,
-        visited: set[Path]
-    ) -> list[Dependency]:
+    def _parse_requirements_file(self, file_path: Path, visited: set[Path]) -> list[Dependency]:
         """
         Parse a single requirements file.
 
@@ -140,10 +130,7 @@ class RequirementsParser:
                     if line.startswith("-r "):
                         include_path = file_path.parent / line[3:].strip()
                         if include_path.exists():
-                            included_deps = self._parse_requirements_file(
-                                include_path,
-                                visited
-                            )
+                            included_deps = self._parse_requirements_file(include_path, visited)
                             dependencies.extend(included_deps)
                         continue
 
@@ -188,7 +175,7 @@ class RequirementsParser:
 
         # Pattern: name[extras]version_spec
         # Matches: package, package==1.0, package[extra]>=1.0
-        pattern = r'^([a-zA-Z0-9_-]+)(?:\[([^\]]+)\])?(.*)?$'
+        pattern = r"^([a-zA-Z0-9_-]+)(?:\[([^\]]+)\])?(.*)?$"
         match = re.match(pattern, line.strip())
 
         if not match:
@@ -207,13 +194,7 @@ class RequirementsParser:
         if not version:
             version = "*"
 
-        return Dependency(
-            name=name,
-            version=version,
-            type=DependencyType.PRODUCTION,
-            is_direct=True,
-            extras=extras
-        )
+        return Dependency(name=name, version=version, type=DependencyType.PRODUCTION, is_direct=True, extras=extras)
 
     def _parse_editable_requirement(self, line: str) -> Dependency | None:
         """
@@ -232,25 +213,15 @@ class RequirementsParser:
         """
         # Extract package name from #egg=package
         if "#egg=" in line:
-            egg_match = re.search(r'#egg=([a-zA-Z0-9_-]+)', line)
+            egg_match = re.search(r"#egg=([a-zA-Z0-9_-]+)", line)
             if egg_match:
                 name = egg_match.group(1)
-                return Dependency(
-                    name=name,
-                    version="@editable",
-                    type=DependencyType.PRODUCTION,
-                    is_direct=True
-                )
+                return Dependency(name=name, version="@editable", type=DependencyType.PRODUCTION, is_direct=True)
 
         # Handle local editable installs (e.g., -e .)
         if line.startswith("."):
             # Try to get name from setup.py or pyproject.toml
-            return Dependency(
-                name="local-package",
-                version="@editable",
-                type=DependencyType.PRODUCTION,
-                is_direct=True
-            )
+            return Dependency(name="local-package", version="@editable", type=DependencyType.PRODUCTION, is_direct=True)
 
         return None
 

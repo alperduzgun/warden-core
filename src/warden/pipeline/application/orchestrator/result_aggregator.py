@@ -18,11 +18,7 @@ logger = get_logger(__name__)
 class ResultAggregator:
     """Aggregates and processes validation results."""
 
-    def store_validation_results(
-        self,
-        context: PipelineContext,
-        pipeline: ValidationPipeline
-    ) -> None:
+    def store_validation_results(self, context: PipelineContext, pipeline: ValidationPipeline) -> None:
         """
         Store validation results in context.
 
@@ -30,7 +26,7 @@ class ResultAggregator:
             context: Pipeline context to store results in
             pipeline: Validation pipeline with execution stats
         """
-        if not hasattr(context, 'frame_results'):
+        if not hasattr(context, "frame_results"):
             # Initialize empty results if no frame results
             context.findings = []
             context.validated_issues = []
@@ -39,14 +35,14 @@ class ResultAggregator:
         # Aggregate findings from all frames
         all_findings = []
         for frame_id, frame_data in context.frame_results.items():
-            frame_result = frame_data.get('result')
-            if frame_result and hasattr(frame_result, 'findings'):
+            frame_result = frame_data.get("result")
+            if frame_result and hasattr(frame_result, "findings"):
                 all_findings.extend(frame_result.findings)
 
             # Aggregate custom rule violations as findings
-            for violation in frame_data.get('pre_violations', []):
+            for violation in frame_data.get("pre_violations", []):
                 all_findings.append(self._violation_to_finding(violation, frame_id, "pre"))
-            for violation in frame_data.get('post_violations', []):
+            for violation in frame_data.get("post_violations", []):
                 all_findings.append(self._violation_to_finding(violation, frame_id, "post"))
 
         # Replace context.findings with aggregated results (single source of truth)
@@ -67,10 +63,7 @@ class ResultAggregator:
             }
 
             # Check if it's a false positive
-            is_fp = self._is_false_positive(
-                finding_dict,
-                getattr(context, 'suppression_rules', [])
-            )
+            is_fp = self._is_false_positive(finding_dict, getattr(context, "suppression_rules", []))
 
             if not is_fp:
                 validated_issues.append(finding_dict)
@@ -79,19 +72,22 @@ class ResultAggregator:
                     "finding_suppressed",
                     finding_id=finding_dict.get("id"),
                     reason="suppression_rule_match",
-                    file_path=finding_dict.get("file_path")
+                    file_path=finding_dict.get("file_path"),
                 )
 
         context.validated_issues = validated_issues
 
         # Add phase result
-        context.add_phase_result("VALIDATION", {
-            "total_findings": len(all_findings),
-            "validated_issues": len(context.validated_issues),
-            "frames_executed": pipeline.frames_executed,
-            "frames_passed": pipeline.frames_passed,
-            "frames_failed": pipeline.frames_failed,
-        })
+        context.add_phase_result(
+            "VALIDATION",
+            {
+                "total_findings": len(all_findings),
+                "validated_issues": len(context.validated_issues),
+                "frames_executed": pipeline.frames_executed,
+                "frames_passed": pipeline.frames_passed,
+                "frames_failed": pipeline.frames_failed,
+            },
+        )
 
     def _is_false_positive(
         self,
@@ -126,31 +122,28 @@ class ResultAggregator:
                 # Simple string rule matching
                 finding_type = get_finding_attribute(finding, "type")
                 finding_msg = get_finding_attribute(finding, "message", "")
-                if (finding_type == rule or finding_msg.find(rule) != -1):
+                if finding_type == rule or finding_msg.find(rule) != -1:
                     return True
         return False
 
     @staticmethod
     def _violation_to_finding(violation, frame_id: str, phase: str) -> Finding:
         """Convert a CustomRuleViolation to a Finding for unified aggregation."""
-        severity = getattr(violation, 'severity', 'medium')
-        if hasattr(severity, 'value'):
+        severity = getattr(violation, "severity", "medium")
+        if hasattr(severity, "value"):
             severity = severity.value
         return Finding(
             id=f"rule/{frame_id}/{phase}/{getattr(violation, 'rule_id', 'unknown')}",
             severity=str(severity).lower(),
-            message=getattr(violation, 'message', str(violation)),
+            message=getattr(violation, "message", str(violation)),
             location=f"{getattr(violation, 'file', 'unknown')}:{getattr(violation, 'line', 0)}",
-            detail=getattr(violation, 'suggestion', None),
-            code=getattr(violation, 'code_snippet', None),
-            line=getattr(violation, 'line', 0),
-            is_blocker=getattr(violation, 'is_blocker', False),
+            detail=getattr(violation, "suggestion", None),
+            code=getattr(violation, "code_snippet", None),
+            line=getattr(violation, "line", 0),
+            is_blocker=getattr(violation, "is_blocker", False),
         )
 
-    def aggregate_frame_results(
-        self,
-        context: PipelineContext
-    ) -> dict[str, Any]:
+    def aggregate_frame_results(self, context: PipelineContext) -> dict[str, Any]:
         """
         Aggregate results from all executed frames.
 
@@ -160,7 +153,7 @@ class ResultAggregator:
         Returns:
             Aggregated statistics
         """
-        if not hasattr(context, 'frame_results'):
+        if not hasattr(context, "frame_results"):
             return {
                 "total_frames": 0,
                 "total_findings": 0,
@@ -179,25 +172,21 @@ class ResultAggregator:
         }
 
         for frame_id, frame_data in context.frame_results.items():
-            frame_result = frame_data.get('result')
+            frame_result = frame_data.get("result")
             if not frame_result:
                 stats["frames_skipped"] += 1
                 continue
 
             # Count findings
-            findings_count = (
-                len(frame_result.findings)
-                if hasattr(frame_result, 'findings')
-                else 0
-            )
+            findings_count = len(frame_result.findings) if hasattr(frame_result, "findings") else 0
             stats["total_findings"] += findings_count
             stats["findings_by_frame"][frame_id] = findings_count
 
             # Count pass/fail
-            status = getattr(frame_result, 'status', 'unknown')
-            if status in ['passed', 'warning']:
+            status = getattr(frame_result, "status", "unknown")
+            if status in ["passed", "warning"]:
                 stats["frames_passed"] += 1
-            elif status in ['failed', 'error', 'timeout']:
+            elif status in ["failed", "error", "timeout"]:
                 stats["frames_failed"] += 1
             else:
                 stats["frames_skipped"] += 1

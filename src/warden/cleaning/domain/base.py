@@ -30,10 +30,11 @@ class CleaningAnalyzerPriority:
 
     Lower values execute first.
     """
+
     CRITICAL = 0  # Critical issues (e.g., severe naming problems)
-    HIGH = 1      # High priority (e.g., complexity, duplication)
-    MEDIUM = 2    # Medium priority (e.g., magic numbers)
-    LOW = 3       # Low priority (e.g., minor style issues)
+    HIGH = 1  # High priority (e.g., complexity, duplication)
+    MEDIUM = 2  # Medium priority (e.g., magic numbers)
+    LOW = 3  # Low priority (e.g., minor style issues)
 
 
 class BaseCleaningAnalyzer(ABC):
@@ -67,11 +68,7 @@ class BaseCleaningAnalyzer(ABC):
             self._ast_registry = ASTProviderRegistry()
             await self._ast_registry.discover_providers()
 
-    async def _get_ast_root(
-        self,
-        code_file: CodeFile,
-        ast_tree: Any | None = None
-    ) -> ASTNode | None:
+    async def _get_ast_root(self, code_file: CodeFile, ast_tree: Any | None = None) -> ASTNode | None:
         """
         Get Universal AST root for a code file.
 
@@ -107,11 +104,7 @@ class BaseCleaningAnalyzer(ABC):
             )
             return None
 
-        parse_result = await provider.parse(
-            code_file.content,
-            language,
-            code_file.path
-        )
+        parse_result = await provider.parse(code_file.content, language, code_file.path)
 
         if parse_result.status == ParseStatus.FAILED:
             logger.debug(
@@ -275,6 +268,7 @@ class BaseCleaningAnalyzer(ABC):
         Returns:
             Maximum nesting depth
         """
+
         def get_depth(node: ASTNode, current_depth: int = 0) -> int:
             """Recursively calculate depth."""
             max_depth = current_depth
@@ -316,10 +310,14 @@ class BaseCleaningAnalyzer(ABC):
             count = 0
 
             # Count decision points based on node type
-            if node.node_type in (
-                ASTNodeType.IF_STATEMENT,
-                ASTNodeType.LOOP_STATEMENT,
-            ) or node.node_type == ASTNodeType.TRY_CATCH:
+            if (
+                node.node_type
+                in (
+                    ASTNodeType.IF_STATEMENT,
+                    ASTNodeType.LOOP_STATEMENT,
+                )
+                or node.node_type == ASTNodeType.TRY_CATCH
+            ):
                 count += 1
             elif node.node_type == ASTNodeType.BINARY_EXPRESSION:
                 # Boolean operators (&&, ||) add complexity

@@ -46,17 +46,19 @@ class ClassSizeDetector(BaseDetector):
                 if node.location:
                     class_lines = node.location.end_line - node.location.start_line + 1
                     if class_lines > self.max_class_lines:
-                        violations.append(AntiPatternViolation(
-                            pattern_id="god-class",
-                            pattern_name="God Class",
-                            severity=AntiPatternSeverity.HIGH,
-                            message=f"Class '{node.name or 'anonymous'}' has {class_lines} lines (max: {self.max_class_lines})",
-                            file_path=code_file.path,
-                            line=node.location.start_line,
-                            code_snippet=f"class {node.name or '?'}:  # {class_lines} lines",
-                            suggestion="Split into smaller, focused classes",
-                            is_blocker=False,
-                        ))
+                        violations.append(
+                            AntiPatternViolation(
+                                pattern_id="god-class",
+                                pattern_name="God Class",
+                                severity=AntiPatternSeverity.HIGH,
+                                message=f"Class '{node.name or 'anonymous'}' has {class_lines} lines (max: {self.max_class_lines})",
+                                file_path=code_file.path,
+                                line=node.location.start_line,
+                                code_snippet=f"class {node.name or '?'}:  # {class_lines} lines",
+                                suggestion="Split into smaller, focused classes",
+                                is_blocker=False,
+                            )
+                        )
 
             for child in node.children:
                 walk(child)
@@ -86,17 +88,19 @@ class ClassSizeDetector(BaseDetector):
                         if hasattr(node, "end_lineno") and node.end_lineno:
                             class_lines = node.end_lineno - node.lineno + 1
                             if class_lines > self.max_class_lines:
-                                violations.append(AntiPatternViolation(
-                                    pattern_id="god-class",
-                                    pattern_name="God Class",
-                                    severity=AntiPatternSeverity.HIGH,
-                                    message=f"Class '{node.name}' has {class_lines} lines (max: {self.max_class_lines})",
-                                    file_path=code_file.path,
-                                    line=node.lineno,
-                                    code_snippet=f"class {node.name}:  # {class_lines} lines",
-                                    suggestion="Split into smaller, focused classes",
-                                    is_blocker=False,
-                                ))
+                                violations.append(
+                                    AntiPatternViolation(
+                                        pattern_id="god-class",
+                                        pattern_name="God Class",
+                                        severity=AntiPatternSeverity.HIGH,
+                                        message=f"Class '{node.name}' has {class_lines} lines (max: {self.max_class_lines})",
+                                        file_path=code_file.path,
+                                        line=node.lineno,
+                                        code_snippet=f"class {node.name}:  # {class_lines} lines",
+                                        suggestion="Split into smaller, focused classes",
+                                        is_blocker=False,
+                                    )
+                                )
             except SyntaxError:
                 pass
 
@@ -105,24 +109,24 @@ class ClassSizeDetector(BaseDetector):
 
         return violations
 
-    def _check_file_size(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[AntiPatternViolation]:
+    def _check_file_size(self, code_file: CodeFile, lines: list[str]) -> list[AntiPatternViolation]:
         """Check if file exceeds maximum line count."""
         violations = []
         total_lines = len(lines)
 
         if total_lines > self.max_file_lines:
-            violations.append(AntiPatternViolation(
-                pattern_id="large-file",
-                pattern_name="Large File",
-                severity=AntiPatternSeverity.MEDIUM,
-                message=f"File has {total_lines} lines (max: {self.max_file_lines})",
-                file_path=code_file.path,
-                line=1,
-                code_snippet=f"// {total_lines} lines",
-                suggestion="Consider splitting into smaller modules",
-                is_blocker=False,
-            ))
+            violations.append(
+                AntiPatternViolation(
+                    pattern_id="large-file",
+                    pattern_name="Large File",
+                    severity=AntiPatternSeverity.MEDIUM,
+                    message=f"File has {total_lines} lines (max: {self.max_file_lines})",
+                    file_path=code_file.path,
+                    line=1,
+                    code_snippet=f"// {total_lines} lines",
+                    suggestion="Consider splitting into smaller modules",
+                    is_blocker=False,
+                )
+            )
 
         return violations

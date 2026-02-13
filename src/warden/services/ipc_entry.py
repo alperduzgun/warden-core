@@ -22,10 +22,7 @@ from warden.cli_bridge.server import IPCServer
 project_root = Path(__file__).parents[3]
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +87,7 @@ async def main_async():
     bridge = WardenBridge(project_root=project_root)
 
     # Create server instance with initialized bridge
-    server = IPCServer(
-        bridge=bridge,
-        transport="socket",
-        socket_path=SOCKET_PATH
-    )
+    server = IPCServer(bridge=bridge, transport="socket", socket_path=SOCKET_PATH)
 
     try:
         # Start server

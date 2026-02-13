@@ -118,9 +118,7 @@ class FortificationOrchestrator:
                     language=code_file.language,
                 )
 
-                result = await fortifier.fortify_async(
-                    fortification_input, cancellation_token
-                )
+                result = await fortifier.fortify_async(fortification_input, cancellation_token)
 
                 if result.success:
                     # Update current code for next fortifier
@@ -167,19 +165,12 @@ class FortificationOrchestrator:
             fortified_code=current_code,
             actions=all_actions,
             summary=summary,
-            error_message=(
-                f"Failed fortifiers: {', '.join(failed_fortifiers)}"
-                if failed_fortifiers
-                else None
-            ),
+            error_message=(f"Failed fortifiers: {', '.join(failed_fortifiers)}" if failed_fortifiers else None),
             fortifier_name="FortificationOrchestrator",
         )
 
-
     @staticmethod
-    def _build_summary(
-        actions: list[FortificationAction], failed_fortifiers: list[str]
-    ) -> str:
+    def _build_summary(actions: list[FortificationAction], failed_fortifiers: list[str]) -> str:
         """
         Build human-readable summary of fortification.
 

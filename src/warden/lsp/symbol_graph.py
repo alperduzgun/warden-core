@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -7,6 +6,7 @@ import structlog
 from warden.lsp import LSPManager
 
 logger = structlog.get_logger()
+
 
 class LSPSymbolGraph:
     """
@@ -31,12 +31,16 @@ class LSPSymbolGraph:
 
         for f in files:
             path = Path(f)
-            if path.suffix == ".py": files_by_lang["python"].append(f)
-            elif path.suffix in [".ts", ".tsx"]: files_by_lang["typescript"].append(f)
-            elif path.suffix in [".js", ".jsx"]: files_by_lang["javascript"].append(f)
+            if path.suffix == ".py":
+                files_by_lang["python"].append(f)
+            elif path.suffix in [".ts", ".tsx"]:
+                files_by_lang["typescript"].append(f)
+            elif path.suffix in [".js", ".jsx"]:
+                files_by_lang["javascript"].append(f)
 
         for language, lang_files in files_by_lang.items():
-            if not lang_files: continue
+            if not lang_files:
+                continue
 
             client = await self.lsp_manager.get_client_async(language, root_path)
             if not client:
@@ -55,20 +59,16 @@ class LSPSymbolGraph:
                             logger.warning("lsp_file_read_failed", file=str(file_path), error=str(e))
                             continue
 
-                        await client.send_notification_async("textDocument/didOpen", {
-                            "textDocument": {
-                                "uri": uri,
-                                "languageId": language,
-                                "version": 1,
-                                "text": text
-                            }
-                        })
+                        await client.send_notification_async(
+                            "textDocument/didOpen",
+                            {"textDocument": {"uri": uri, "languageId": language, "version": 1, "text": text}},
+                        )
                         self._opened_files.add(uri)
                         logger.debug("lsp_file_opened", uri=uri, total_open=len(self._opened_files))
 
-                    symbols = await client.send_request_async("textDocument/documentSymbol", {
-                        "textDocument": {"uri": uri}
-                    })
+                    symbols = await client.send_request_async(
+                        "textDocument/documentSymbol", {"textDocument": {"uri": uri}}
+                    )
 
                     if symbols:
                         graph[file_path] = symbols
@@ -85,4 +85,5 @@ class LSPSymbolGraph:
     def print_graph(self, graph: dict[str, list[Any]]):
         """Debug helper to log graph structure."""
         import json
+
         logger.debug("symbol_graph_dump", graph=json.dumps(graph, indent=2))

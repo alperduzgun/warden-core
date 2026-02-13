@@ -30,10 +30,11 @@ class RustPreFilter:
         code_files: list[CodeFile],
     ) -> None:
         """Run global high-performance pre-filtering using Rust engine."""
-        project_root = getattr(context, 'project_root', Path.cwd())
+        project_root = getattr(context, "project_root", Path.cwd())
         engine = RustValidationEngine(project_root)
 
         import warden
+
         package_root = Path(warden.__file__).parent
         rule_paths = [
             package_root / "rules/defaults/python/security.yaml",
@@ -48,7 +49,7 @@ class RustPreFilter:
                 await engine.load_rules_from_yaml_async(path)
 
         if self.rule_validator and self.rule_validator.rules:
-            regex_rules = [r for r in self.rule_validator.rules if r.pattern and r.type != 'ai']
+            regex_rules = [r for r in self.rule_validator.rules if r.pattern and r.type != "ai"]
             if regex_rules:
                 engine.add_custom_rules(regex_rules)
 
@@ -65,14 +66,13 @@ class RustPreFilter:
                 logger.info("rust_scan_raw_hits", count=total_hits)
 
                 from warden.validation.application.alpha_judgment import AlphaJudgment
-                alpha = AlphaJudgment(config=self.config.dict() if hasattr(self.config, 'dict') else {})
+
+                alpha = AlphaJudgment(config=self.config.dict() if hasattr(self.config, "dict") else {})
 
                 filtered_findings = alpha.evaluate(findings, code_files)
 
                 if filtered_findings:
-                    logger.info("rust_pre_filtering_found_issues",
-                              raw=total_hits,
-                              filtered=len(filtered_findings))
+                    logger.info("rust_pre_filtering_found_issues", raw=total_hits, filtered=len(filtered_findings))
 
                     frame_id = "system_security_rules"
                     frame_result = FrameResult(
@@ -81,22 +81,18 @@ class RustPreFilter:
                         status="failed",
                         duration=0.1,
                         issues_found=len(filtered_findings),
-                        is_blocker=any(f.severity == 'critical' for f in filtered_findings),
+                        is_blocker=any(f.severity == "critical" for f in filtered_findings),
                         findings=filtered_findings,
-                        metadata={
-                            "engine": "rust",
-                            "raw_hits": total_hits,
-                            "filtered_hits": len(filtered_findings)
-                        }
+                        metadata={"engine": "rust", "raw_hits": total_hits, "filtered_hits": len(filtered_findings)},
                     )
 
-                    if not hasattr(context, 'frame_results') or context.frame_results is None:
+                    if not hasattr(context, "frame_results") or context.frame_results is None:
                         context.frame_results = {}
 
                     context.frame_results[frame_id] = {
-                        'result': frame_result,
-                        'pre_violations': [],
-                        'post_violations': []
+                        "result": frame_result,
+                        "pre_violations": [],
+                        "post_violations": [],
                     }
                 else:
                     logger.info("alpha_judgment_filtered_all_hits", raw=total_hits)

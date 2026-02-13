@@ -62,7 +62,7 @@ class ModularContractExtractor(BaseContractExtractor):
             logger.warning(
                 "modules_directory_not_found",
                 path=str(self.modules_dir),
-                message="No modular contracts found, returning empty contract"
+                message="No modular contracts found, returning empty contract",
             )
             return Contract(
                 name=f"{self.role.value}_contract",
@@ -170,7 +170,9 @@ class ModularContractExtractor(BaseContractExtractor):
 
         return OperationDefinition(
             name=operation_name,
-            operation_type=OperationType.COMMAND if http_method in ["POST", "PUT", "DELETE", "PATCH"] else OperationType.QUERY,
+            operation_type=OperationType.COMMAND
+            if http_method in ["POST", "PUT", "DELETE", "PATCH"]
+            else OperationType.QUERY,
             source_file=op_dict.get("source_file"),
             source_line=op_dict.get("line_number"),
             metadata={
@@ -178,7 +180,7 @@ class ModularContractExtractor(BaseContractExtractor):
                 "http_method": http_method,
                 "request_fields": op_dict.get("request", []),
                 "response_fields": op_dict.get("response", []),
-            }
+            },
         )
 
     def _extract_http_method(self, endpoint: str) -> str:

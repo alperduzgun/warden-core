@@ -102,7 +102,12 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
     requires_config = ["platforms"]  # Need platforms configuration
     requires_context = ["project_context"]  # Required for monorepo auto-detection
 
-    def __init__(self, config: dict[str, Any] | None = None, llm_service: Any | None = None, semantic_search_service: Any | None = None):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        llm_service: Any | None = None,
+        semantic_search_service: Any | None = None,
+    ):
         """
         Initialize SpecFrame.
 
@@ -270,6 +275,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
             files = suppression.get("files", [])
             if files and gap_file:
                 import fnmatch
+
                 if not any(fnmatch.fnmatch(gap_file, pattern) for pattern in files):
                     continue
             elif files and not gap_file:
@@ -314,6 +320,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
 
         # Pattern matching with wildcards
         import fnmatch
+
         return fnmatch.fnmatch(gap_key, rule)
 
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
@@ -379,8 +386,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
 
             if not consumers or not providers:
                 return self._create_skip_result(
-                    "No consumer/provider pair found. "
-                    "Configure at least one consumer and one provider platform."
+                    "No consumer/provider pair found. Configure at least one consumer and one provider platform."
                 )
 
             # Extract contracts from each platform
@@ -392,13 +398,15 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                 if contract:
                     contracts[platform.name] = contract
                     metadata["contracts_extracted"] += 1
-                    metadata["platforms_analyzed"].append({
-                        "name": platform.name,
-                        "type": platform.platform_type.value,
-                        "role": platform.role.value,
-                        "operations": len(contract.operations),
-                        "models": len(contract.models),
-                    })
+                    metadata["platforms_analyzed"].append(
+                        {
+                            "name": platform.name,
+                            "type": platform.platform_type.value,
+                            "role": platform.role.value,
+                            "operations": len(contract.operations),
+                            "models": len(contract.models),
+                        }
+                    )
 
             # Gap analysis timeout config (SECURITY: Prevent DOS via expensive analysis)
             gap_analysis_timeout = self.config.get("gap_analysis_timeout", 120) if self.config else 120
@@ -466,8 +474,8 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                             message=f"Gap analysis timed out comparing {consumer.name} vs {provider.name}",
                             location="project-level",
                             detail=f"Analysis exceeded {gap_analysis_timeout}s timeout. "
-                                   f"Partial results may be incomplete. "
-                                   f"Consider increasing 'gap_analysis_timeout' config or optimizing contract size.",
+                            f"Partial results may be incomplete. "
+                            f"Consider increasing 'gap_analysis_timeout' config or optimizing contract size.",
                             code=None,
                         )
                         findings.append(timeout_finding)
@@ -476,7 +484,6 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                         metadata["timeout_occurred"] = True
                         metadata["timeout_seconds"] = gap_analysis_timeout
                         metadata["timeout_pair"] = f"{consumer.name}_vs_{provider.name}"
-
 
             # Enrich project_context with findings
             self.enrich_project_context(contracts, all_gaps, metadata)
@@ -558,8 +565,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         # Check platforms configured
         if not self.platforms:
             return self._create_skip_result(
-                "No platforms configured. "
-                "Add 'platforms' list to .warden/config.yaml under frames.spec"
+                "No platforms configured. Add 'platforms' list to .warden/config.yaml under frames.spec"
             )
 
         # Check minimum 2 platforms
@@ -632,7 +638,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
             "resolving_platform_path",
             platform=platform.name,
             configured_path=platform.path,
-            resolved_path=str(platform_path.absolute())
+            resolved_path=str(platform_path.absolute()),
         )
 
         # Get resilience config from frame config if available
@@ -795,7 +801,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
         analyzer = GapAnalyzer(
             config=analyzer_config,  # Use the analyzer_config created above
             llm_service=self.llm_service,
-            semantic_search_service=self.semantic_search_service
+            semantic_search_service=self.semantic_search_service,
         )
         return await analyzer.analyze(
             consumer=consumer,
@@ -936,8 +942,8 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                     "operations": [
                         {
                             "name": op.name,
-                            "method": op.metadata.get('http_method', 'N/A'),
-                            "path": op.metadata.get('endpoint', 'N/A'),
+                            "method": op.metadata.get("http_method", "N/A"),
+                            "path": op.metadata.get("endpoint", "N/A"),
                             "type": op.operation_type.value,
                         }
                         for op in contract.operations
@@ -953,7 +959,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                                     "is_array": f.is_array,
                                 }
                                 for f in model.fields
-                            ]
+                            ],
                         }
                         for model in contract.models
                     ],

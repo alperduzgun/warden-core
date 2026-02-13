@@ -41,7 +41,7 @@ class LLMPhaseConfig:
     temperature: float = 0.0  # Idempotency: fully deterministic
     max_tokens: int = 800  # Reduced to stay within context limits
     tpm_limit: int = 1000  # Default Free Tier
-    rpm_limit: int = 6     # Default Free Tier
+    rpm_limit: int = 6  # Default Free Tier
 
 
 @dataclass
@@ -68,9 +68,7 @@ class LLMCache:
     def clear_expired(self) -> None:
         """Remove expired entries."""
         current_time = time.time()
-        expired = [
-            k for k, (_, t) in self.cache.items() if current_time - t >= self.ttl
-        ]
+        expired = [k for k, (_, t) in self.cache.items() if current_time - t >= self.ttl]
         for key in expired:
             del self.cache[key]
 
@@ -110,10 +108,9 @@ class LLMPhaseBase(ABC):
         self.llm = llm_service
         self.project_root = project_root
         self.use_gitignore = use_gitignore
-        self.memory_manager = kwargs.get('memory_manager')
-        self.semantic_search_service: Any | None = kwargs.get('semantic_search_service')
+        self.memory_manager = kwargs.get("memory_manager")
+        self.semantic_search_service: Any | None = kwargs.get("semantic_search_service")
         self.cache = LLMCache() if self.config.cache_enabled else None
-
 
         # Initialize Rate Limiter
         # Use injected rate limiter if provided (preferred for shared limits)
@@ -121,19 +118,17 @@ class LLMPhaseBase(ABC):
             self.rate_limiter = rate_limiter
         else:
             # Fallback to local rate limiter (per-phase limits)
-            self.rate_limiter = RateLimiter(RateLimitConfig(
-                tpm=self.config.tpm_limit,
-                rpm=self.config.rpm_limit
-            ))
+            self.rate_limiter = RateLimiter(RateLimitConfig(tpm=self.config.tpm_limit, rpm=self.config.rpm_limit))
         # Initializing tokenizer (cl100k_base is used by gpt-4, gpt-3.5)
         try:
             import tiktoken
+
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
         except (ImportError, Exception):
             self.tokenizer = None
 
         # Preferred Model Tier (smart or fast)
-        self.preferred_model_tier = kwargs.get('preferred_model_tier', 'smart')
+        self.preferred_model_tier = kwargs.get("preferred_model_tier", "smart")
 
         # Enable LLM if service is provided
         if llm_service:
@@ -142,34 +137,34 @@ class LLMPhaseBase(ABC):
             # Auto-Scale Rate Limits for Local LLM (Ollama / Local HTTP)
             # Local models are compute-bound, not quota-bound.
             # Default 1000 TPM is too low and causes unnecessary waits.
-            provider_raw = getattr(llm_service, 'provider', '')
+            provider_raw = getattr(llm_service, "provider", "")
             provider = str(provider_raw).upper()
 
             # Check for Local Endpoint (Generic detection for Ollama, LMStudio, LocalAI, etc.)
-            endpoint = getattr(llm_service, 'endpoint', getattr(llm_service, '_endpoint', ''))
+            endpoint = getattr(llm_service, "endpoint", getattr(llm_service, "_endpoint", ""))
             str_endpoint = str(endpoint)
             is_local = (
-                'OLLAMA' in provider or
-                'localhost' in str_endpoint or
-                '127.0.0.1' in str_endpoint or
-                '::1' in str_endpoint or
-                '0:0:0:0:0:0:0:1' in str_endpoint
+                "OLLAMA" in provider
+                or "localhost" in str_endpoint
+                or "127.0.0.1" in str_endpoint
+                or "::1" in str_endpoint
+                or "0:0:0:0:0:0:0:1" in str_endpoint
             )
 
             self.is_local = is_local
             if is_local:
-                 # Effectively unlimited for local (TPM-wise), but we will cap concurrency later
-                 self.config.tpm_limit = 1_000_000
-                 self.config.rpm_limit = 100
+                # Effectively unlimited for local (TPM-wise), but we will cap concurrency later
+                self.config.tpm_limit = 1_000_000
+                self.config.rpm_limit = 100
 
-                 # PROMPTLY UPDATE ACTIVE RATE LIMITER
-                 if self.rate_limiter and hasattr(self.rate_limiter, 'config'):
-                     self.rate_limiter.config.tpm = self.config.tpm_limit
-                     self.rate_limiter.config.rpm = self.config.rpm_limit
+                # PROMPTLY UPDATE ACTIVE RATE LIMITER
+                if self.rate_limiter and hasattr(self.rate_limiter, "config"):
+                    self.rate_limiter.config.tpm = self.config.tpm_limit
+                    self.rate_limiter.config.rpm = self.config.rpm_limit
 
-                 logger.info("rate_limits_relaxed_for_local_llm", provider=provider, tpm=1000000)
+                logger.info("rate_limits_relaxed_for_local_llm", provider=provider, tpm=1000000)
             else:
-                 self.is_local = False
+                self.is_local = False
 
             logger.info(
                 "llm_phase_initialized",
@@ -230,31 +225,31 @@ class LLMPhaseBase(ABC):
 
             # 3. CPU Core Count (Hardware ceiling)
             cpu_count = os.cpu_count() or 2
-            hardware_ceiling = max(1, cpu_count // 2) # Leave half for OS/Other tasks
+            hardware_ceiling = max(1, cpu_count // 2)  # Leave half for OS/Other tasks
 
             # Final Decision: Most restrictive constraint wins
             final_batch_size = min(max_allowed, mem_based_limit, cpu_based_limit, hardware_ceiling)
 
             if final_batch_size < max_allowed:
-                 logger.debug(
-                     "adaptive_batch_size_throttled",
-                     phase=self.phase_name,
-                     final=final_batch_size,
-                     original=max_allowed,
-                     ram_gb=f"{available_gb:.1f}",
-                     cpu=f"{cpu_load}%"
-                 )
+                logger.debug(
+                    "adaptive_batch_size_throttled",
+                    phase=self.phase_name,
+                    final=final_batch_size,
+                    original=max_allowed,
+                    ram_gb=f"{available_gb:.1f}",
+                    cpu=f"{cpu_load}%",
+                )
 
             return final_batch_size
         except Exception as e:
             logger.warning("resource_check_failed", error=str(e))
-            return 1 # Fail safe
+            return 1  # Fail safe
 
     async def analyze_with_llm_async(
         self,
         context: dict[str, Any],
         use_cache: bool = True,
-        pipeline_context: Optional['PipelineContext'] = None,
+        pipeline_context: Optional["PipelineContext"] = None,
         model: str | None = None,
     ) -> Any | None:
         """
@@ -285,17 +280,13 @@ class LLMPhaseBase(ABC):
                 is_fast_tier = True
 
             # Get Context
-            context["pipeline_context"] = pipeline_context.get_llm_context_prompt(
-                self.phase_name,
-                concise=is_fast_tier
-            )
+            context["pipeline_context"] = pipeline_context.get_llm_context_prompt(self.phase_name, concise=is_fast_tier)
             context["previous_phases"] = pipeline_context.get_context_for_phase(self.phase_name)
 
             # Add LLM history with Tier-Aware Limits
             history_limit = 1 if is_fast_tier else 5
             context["previous_llm_interactions"] = [
-                h for h in pipeline_context.llm_history
-                if h["phase"] != self.phase_name
+                h for h in pipeline_context.llm_history if h["phase"] != self.phase_name
             ][-history_limit:]
 
         # Generate cache key
@@ -325,7 +316,9 @@ class LLMPhaseBase(ABC):
             # Prepare prompts with pipeline context
             system_prompt = self.get_system_prompt()
             if pipeline_context:
-                system_prompt = f"{system_prompt}\n\nPIPELINE CONTEXT:\n{pipeline_context.get_llm_context_prompt(self.phase_name)}"
+                system_prompt = (
+                    f"{system_prompt}\n\nPIPELINE CONTEXT:\n{pipeline_context.get_llm_context_prompt(self.phase_name)}"
+                )
 
             user_prompt = self.format_user_prompt(context)
 
@@ -341,10 +334,7 @@ class LLMPhaseBase(ABC):
             # Call LLM with retry logic
             llm_start_time = time.time()
             response = await self._call_llm_with_retry_async(
-                system_prompt,
-                user_prompt,
-                model=model,
-                use_fast_tier=is_fast_tier
+                system_prompt, user_prompt, model=model, use_fast_tier=is_fast_tier
             )
             llm_duration = time.time() - llm_start_time
 
@@ -365,8 +355,8 @@ class LLMPhaseBase(ABC):
                     usage={
                         "prompt_tokens": response.prompt_tokens,
                         "completion_tokens": response.completion_tokens,
-                        "total_tokens": response.total_tokens
-                    }
+                        "total_tokens": response.total_tokens,
+                    },
                 )
 
             if response and response.success:
@@ -386,7 +376,7 @@ class LLMPhaseBase(ABC):
                     "llm_analysis_complete",
                     phase=self.phase_name,
                     response_length=len(response.content),
-                    tokens=response.total_tokens
+                    tokens=response.total_tokens,
                 )
 
                 return result
@@ -408,7 +398,7 @@ class LLMPhaseBase(ABC):
         self,
         items: list[dict[str, Any]],
         use_cache: bool = True,
-        pipeline_context: Optional['PipelineContext'] = None,
+        pipeline_context: Optional["PipelineContext"] = None,
         model: str | None = None,
     ) -> list[Any | None]:
         """
@@ -425,8 +415,8 @@ class LLMPhaseBase(ABC):
 
         # Initial batch size from config
         requested_batch_size = self.config.batch_size
-        llm_config = getattr(self.llm, 'config', None) if hasattr(self.llm, 'config') else None
-        if llm_config and hasattr(llm_config, 'max_concurrency'):
+        llm_config = getattr(self.llm, "config", None) if hasattr(self.llm, "config") else None
+        if llm_config and hasattr(llm_config, "max_concurrency"):
             requested_batch_size = llm_config.max_concurrency
 
         # Process in batches
@@ -440,12 +430,8 @@ class LLMPhaseBase(ABC):
 
             # Process batch concurrently
             batch_tasks = [
-                self.analyze_with_llm_async(
-                    item,
-                    use_cache=use_cache,
-                    pipeline_context=pipeline_context,
-                    model=model
-                ) for item in batch
+                self.analyze_with_llm_async(item, use_cache=use_cache, pipeline_context=pipeline_context, model=model)
+                for item in batch
             ]
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
@@ -484,7 +470,7 @@ class LLMPhaseBase(ABC):
             LLM response or None if all retries failed
         """
         # 1. Estimate Token Cost
-        estimated_tokens = 100 # Safety buffer
+        estimated_tokens = 100  # Safety buffer
         if self.tokenizer:
             try:
                 # Count input tokens
@@ -505,7 +491,7 @@ class LLMPhaseBase(ABC):
         # 3. Complexity-Based Smart Routing (Auto-Upgrade)
         # If using Fast Tier (usually small 0.5b/7b model) and request is big,
         # PROACTIVELY upgrade to Smart Tier (Cloud) to prevent context failure/timeout.
-        complexity_threshold = 2000 # Conservative limit for 0.5b model context + output
+        complexity_threshold = 2000  # Conservative limit for 0.5b model context + output
 
         if use_fast_tier and estimated_tokens > complexity_threshold:
             logger.info(
@@ -513,10 +499,10 @@ class LLMPhaseBase(ABC):
                 reason="context_too_large_for_local_model",
                 tokens=estimated_tokens,
                 threshold=complexity_threshold,
-                action="upgrading_to_smart_tier"
+                action="upgrading_to_smart_tier",
             )
             use_fast_tier = False
-            model = None # Unset local model to allow Orchestrator to pick Smart Default
+            model = None  # Unset local model to allow Orchestrator to pick Smart Default
 
         await self.rate_limiter.acquire_async(estimated_tokens)
 
@@ -525,10 +511,7 @@ class LLMPhaseBase(ABC):
                 # Call LLM with timeout
                 response = await asyncio.wait_for(
                     self.llm.complete_async(
-                        prompt=user_prompt,
-                        system_prompt=system_prompt,
-                        model=model,
-                        use_fast_tier=use_fast_tier
+                        prompt=user_prompt, system_prompt=system_prompt, model=model, use_fast_tier=use_fast_tier
                     ),
                     timeout=self.config.timeout,
                 )
@@ -552,7 +535,7 @@ class LLMPhaseBase(ABC):
 
             # Exponential backoff
             if attempt < self.config.max_retries - 1:
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
         return None
 
@@ -581,11 +564,7 @@ class LLMPhaseBase(ABC):
         Returns:
             True if LLM should be used
         """
-        return (
-            self.config.enabled
-            and self.llm is not None
-            and confidence < self.config.confidence_threshold
-        )
+        return self.config.enabled and self.llm is not None and confidence < self.config.confidence_threshold
 
     async def enhance_with_llm_async(
         self,
@@ -636,6 +615,7 @@ class LLMPhaseBase(ABC):
         Delegates to get_finding_attribute for consistency across the core.
         """
         from warden.shared.utils.finding_utils import get_finding_attribute
+
         return get_finding_attribute(obj, key, default)
 
 

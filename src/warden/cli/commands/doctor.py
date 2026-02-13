@@ -8,6 +8,7 @@ from warden.services.package_manager.doctor import WardenDoctor
 app = typer.Typer(help="Warden Doctor - Diagnostic tool for project health.")
 console = Console()
 
+
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context) -> None:
     """
@@ -15,6 +16,7 @@ def main(ctx: typer.Context) -> None:
     """
     if ctx.invoked_subcommand is None:
         doctor()
+
 
 @app.command()
 def doctor() -> None:

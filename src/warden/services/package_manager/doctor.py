@@ -15,10 +15,12 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 console = Console()
 
+
 class CheckStatus(Enum):
     SUCCESS = auto()
     WARNING = auto()
     ERROR = auto()
+
 
 class WardenDoctor:
     """
@@ -78,7 +80,10 @@ class WardenDoctor:
         current_version = sys.version_info[:2]
 
         if current_version < min_version:
-            return CheckStatus.ERROR, f"Python {current_version[0]}.{current_version[1]} detected. Warden requires Python {min_version[0]}.{min_version[1]}+"
+            return (
+                CheckStatus.ERROR,
+                f"Python {current_version[0]}.{current_version[1]} detected. Warden requires Python {min_version[0]}.{min_version[1]}+",
+            )
 
         return CheckStatus.SUCCESS, f"Python {current_version[0]}.{current_version[1]} (compatible)"
 
@@ -89,9 +94,20 @@ class WardenDoctor:
         and correct value types for known top-level keys.
         """
         KNOWN_TOP_LEVEL_KEYS = {
-            "project", "frames", "dependencies", "llm", "frames_config",
-            "custom_rules", "ci", "advanced", "spec", "analysis",
-            "suppression", "fortification", "cleaning", "pipeline",
+            "project",
+            "frames",
+            "dependencies",
+            "llm",
+            "frames_config",
+            "custom_rules",
+            "ci",
+            "advanced",
+            "spec",
+            "analysis",
+            "suppression",
+            "fortification",
+            "cleaning",
+            "pipeline",
         }
 
         EXPECTED_TYPES = {
@@ -172,14 +188,13 @@ class WardenDoctor:
             return self._check_claude_code_env()
 
         # Cloud providers — check for at least one API key
-        has_key = any([
-            settings.openai_api_key,
-            settings.azure_openai_api_key,
-            settings.deepseek_api_key
-        ])
+        has_key = any([settings.openai_api_key, settings.azure_openai_api_key, settings.deepseek_api_key])
 
         if not has_key:
-            return CheckStatus.WARNING, "Missing: LLM API Key (OpenAI/Azure/DeepSeek). Zombie Mode (Offline) active. Intelligence reduced."
+            return (
+                CheckStatus.WARNING,
+                "Missing: LLM API Key (OpenAI/Azure/DeepSeek). Zombie Mode (Offline) active. Intelligence reduced.",
+            )
         return CheckStatus.SUCCESS, "Environment variables loaded and API keys present."
 
     def _get_configured_provider(self) -> str:
@@ -200,8 +215,10 @@ class WardenDoctor:
         ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
         try:
             import urllib.request
+
             resp = urllib.request.urlopen(f"{ollama_host}/api/tags", timeout=3)
             import json
+
             models = [m["name"] for m in json.loads(resp.read()).get("models", [])]
 
             # Check configured model is installed
@@ -227,7 +244,10 @@ class WardenDoctor:
         """Check Claude Code CLI availability."""
         claude_path = shutil.which("claude")
         if not claude_path:
-            return CheckStatus.WARNING, "Claude Code CLI not found on PATH. Install: npm install -g @anthropic-ai/claude-code"
+            return (
+                CheckStatus.WARNING,
+                "Claude Code CLI not found on PATH. Install: npm install -g @anthropic-ai/claude-code",
+            )
         return CheckStatus.SUCCESS, f"Claude Code CLI found at {claude_path}."
 
     def check_frames(self) -> tuple[CheckStatus, str]:
@@ -270,7 +290,10 @@ class WardenDoctor:
             return CheckStatus.ERROR, f"Missing frames: {', '.join(missing_frames)}. Run 'warden install'."
         if drifted_frames:
             logger.error("frames_drift_detected", count=len(drifted_frames), frames=drifted_frames)
-            return CheckStatus.ERROR, f"Drift detected in frames: {', '.join(drifted_frames)}. Run 'warden install -U' to repair."
+            return (
+                CheckStatus.ERROR,
+                f"Drift detected in frames: {', '.join(drifted_frames)}. Run 'warden install -U' to repair.",
+            )
 
         return CheckStatus.SUCCESS, f"All {len(deps)} dependent frames are installed and verified."
 

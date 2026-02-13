@@ -1,4 +1,3 @@
-
 """
 Semantic code searcher.
 
@@ -66,9 +65,7 @@ class SemanticSearcher:
 
         try:
             # Generate query embedding
-            query_embedding, _ = await self.embedding_generator.generate_embedding(
-                query.query_text
-            )
+            query_embedding, _ = await self.embedding_generator.generate_embedding(query.query_text)
 
             # Build filter (where clause)
             where_filter = self._build_where_filter(query)
@@ -83,9 +80,7 @@ class SemanticSearcher:
 
             # Adapter query
             raw_results = await self.adapter.query(
-                query_embeddings=[query_embedding],
-                n_results=query.limit,
-                where=where_filter
+                query_embeddings=[query_embedding], n_results=query.limit, where=where_filter
             )
 
             # Convert to SearchResult objects

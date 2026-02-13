@@ -43,22 +43,14 @@ class GitHubActionsTemplate:
             YAML content as string
         """
         warden_install = (
-            f"pip install warden-core=={config.warden_version}"
-            if config.warden_version
-            else "pip install warden-core"
+            f"pip install warden-core=={config.warden_version}" if config.warden_version else "pip install warden-core"
         )
 
-        frames_arg = (
-            " ".join(f"--frame {frame}" for frame in config.frames)
-            if config.frames
-            else ""
-        )
+        frames_arg = " ".join(f"--frame {frame}" for frame in config.frames) if config.frames else ""
 
         fail_arg = "--fail-on-issues" if config.fail_on_issues else ""
 
-        trigger_section = GitHubActionsTemplate._generate_triggers(
-            config.trigger_events
-        )
+        trigger_section = GitHubActionsTemplate._generate_triggers(config.trigger_events)
 
         template = f"""name: {config.workflow_name}
 

@@ -44,9 +44,7 @@ class IntelligenceLoader:
             project_root: Root directory of the project.
         """
         self.project_root = Path(project_root).resolve()
-        self.intelligence_path = (
-            self.project_root / self.INTELLIGENCE_DIR / self.INTELLIGENCE_FILE
-        )
+        self.intelligence_path = self.project_root / self.INTELLIGENCE_DIR / self.INTELLIGENCE_FILE
         self._intelligence: ProjectIntelligence | None = None
         self._loaded = False
 
@@ -68,10 +66,7 @@ class IntelligenceLoader:
             True if loaded successfully, False otherwise.
         """
         if not self.is_available:
-            logger.debug(
-                "intelligence_not_available",
-                path=str(self.intelligence_path)
-            )
+            logger.debug("intelligence_not_available", path=str(self.intelligence_path))
             return False
 
         try:
@@ -85,7 +80,7 @@ class IntelligenceLoader:
                 "intelligence_loaded",
                 modules=len(self._intelligence.modules),
                 exceptions=len(self._intelligence.exceptions),
-                quality_score=self._intelligence.quality_score
+                quality_score=self._intelligence.quality_score,
             )
             return True
 
@@ -251,9 +246,6 @@ class IntelligenceLoader:
             "purpose": self._intelligence.purpose,
             "architecture": self._intelligence.architecture,
             "security_posture": self._intelligence.security_posture.value,
-            "modules": {
-                name: info.to_json()
-                for name, info in self._intelligence.modules.items()
-            },
+            "modules": {name: info.to_json() for name, info in self._intelligence.modules.items()},
             "quality_score": self._intelligence.quality_score,
         }

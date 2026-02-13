@@ -58,40 +58,28 @@ class GeminiClient(ILlmClient):
         # Construct payload
         # System instructions are supported in 1.5 models via system_instruction
         payload: dict[str, Any] = {
-            "contents": [
-                {
-                    "parts": [{"text": request.user_message}]
-                }
-            ],
+            "contents": [{"parts": [{"text": request.user_message}]}],
             "generationConfig": {
                 "temperature": request.temperature,
                 "maxOutputTokens": request.max_tokens,
-            }
+            },
         }
 
         # Add system prompt if present
         if request.system_prompt:
-            payload["systemInstruction"] = {
-                "parts": [{"text": request.system_prompt}]
-            }
+            payload["systemInstruction"] = {"parts": [{"text": request.system_prompt}]}
 
         try:
             from warden.llm.global_rate_limiter import GlobalRateLimiter
+
             limiter = await GlobalRateLimiter.get_instance()
             await limiter.acquire("gemini", tokens=request.max_tokens)
 
             # Prepare headers with API key (secure method)
-            headers = {
-                "Content-Type": "application/json",
-                "x-goog-api-key": self._api_key
-            }
+            headers = {"Content-Type": "application/json", "x-goog-api-key": self._api_key}
 
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers=headers
-                )
+                response = await client.post(url, json=payload, headers=headers)
 
                 if response.status_code != 200:
                     response.raise_for_status()
@@ -110,13 +98,13 @@ class GeminiClient(ILlmClient):
                     content = "".join([p.get("text", "") for p in parts])
 
             if not content:
-                 # Check for safety ratings blocking
+                # Check for safety ratings blocking
                 return LlmResponse(
                     content="",
                     success=False,
                     error_message=f"No content generated. Response: {result}",
                     provider=self.provider,
-                    duration_ms=duration_ms
+                    duration_ms=duration_ms,
                 )
 
             # Token usage
@@ -130,7 +118,7 @@ class GeminiClient(ILlmClient):
                 prompt_tokens=usage.get("promptTokenCount"),
                 completion_tokens=usage.get("candidatesTokenCount"),
                 total_tokens=usage.get("totalTokenCount"),
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
 
         except httpx.HTTPStatusError as e:
@@ -140,17 +128,13 @@ class GeminiClient(ILlmClient):
                 success=False,
                 error_message=f"HTTP {e.response.status_code}: {(e.response.text[:200] if e.response.text else 'No response body')}",
                 provider=self.provider,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
 
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return LlmResponse(
-                content="",
-                success=False,
-                error_message=str(e),
-                provider=self.provider,
-                duration_ms=duration_ms
+                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
             )
 
     async def is_available_async(self) -> bool:

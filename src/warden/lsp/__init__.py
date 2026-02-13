@@ -1,4 +1,3 @@
-
 from warden.lsp.client import LanguageServerClient
 from warden.lsp.diagnostic_service import LSPDiagnosticService
 from warden.lsp.manager import LSPManager

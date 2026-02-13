@@ -24,9 +24,11 @@ from warden.mcp.ports.tool_executor import IToolExecutor
 # Optional logging
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -69,72 +71,84 @@ class ToolExecutorService:
         # Import adapters dynamically
         try:
             from warden.mcp.infrastructure.adapters.pipeline_adapter import PipelineAdapter
+
             self.register_adapter(PipelineAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.config_adapter import ConfigAdapter
+
             self.register_adapter(ConfigAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.health_adapter import HealthAdapter
+
             self.register_adapter(HealthAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.issue_adapter import IssueAdapter
+
             self.register_adapter(IssueAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.suppression_adapter import SuppressionAdapter
+
             self.register_adapter(SuppressionAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.search_adapter import SearchAdapter
+
             self.register_adapter(SearchAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.llm_adapter import LlmAdapter
+
             self.register_adapter(LlmAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.discovery_adapter import DiscoveryAdapter
+
             self.register_adapter(DiscoveryAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.analysis_adapter import AnalysisAdapter
+
             self.register_adapter(AnalysisAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.report_adapter import ReportAdapter
+
             self.register_adapter(ReportAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.cleanup_adapter import CleanupAdapter
+
             self.register_adapter(CleanupAdapter(self.project_root))
         except ImportError:
             pass
 
         try:
             from warden.mcp.infrastructure.adapters.fortification_adapter import FortificationAdapter
+
             self.register_adapter(FortificationAdapter(self.project_root))
         except ImportError:
             pass
@@ -181,9 +195,7 @@ class ToolExecutorService:
     @property
     def bridge_available(self) -> bool:
         """Check if any bridge-based adapter is available."""
-        return self._bridge_adapter.is_available or any(
-            a.is_available for a in self._adapters
-        )
+        return self._bridge_adapter.is_available or any(a.is_available for a in self._adapters)
 
     @property
     def registry(self) -> ToolRegistry:
@@ -219,9 +231,7 @@ class ToolExecutorService:
             adapter = self._find_adapter_for_tool(tool_name)
             if adapter:
                 if not adapter.is_available:
-                    return MCPToolResult.error(
-                        f"Adapter for {tool_name} not available"
-                    ).to_dict()
+                    return MCPToolResult.error(f"Adapter for {tool_name} not available").to_dict()
                 result = await adapter.execute_async(tool, arguments)
                 return result.to_dict()
 
@@ -280,18 +290,14 @@ class ToolExecutorService:
             content = status_file.read_text(encoding="utf-8")
             return MCPToolResult.success(content)
         else:
-            return MCPToolResult.success(
-                "Warden status file not found. Run 'warden scan' first."
-            )
+            return MCPToolResult.success("Warden status file not found. Run 'warden scan' first.")
 
     async def _tool_list_reports_async(self) -> MCPToolResult:
         """List all available reports."""
         reports = self._resource_repo.list_all_reports()
 
         if not reports:
-            return MCPToolResult.success(
-                "No reports found. Run 'warden scan' to generate reports."
-            )
+            return MCPToolResult.success("No reports found. Run 'warden scan' to generate reports.")
 
         text = "Available Warden Reports:\n\n"
         for report in reports:

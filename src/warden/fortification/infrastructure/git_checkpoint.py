@@ -17,6 +17,7 @@ logger = get_logger(__name__)
 
 class GitCheckpointError(Exception):
     """Raised when git checkpoint operations fail."""
+
     pass
 
 
@@ -52,16 +53,16 @@ class GitCheckpointManager:
             result = subprocess.run(
                 ["git", "rev-parse", "--is-inside-work-tree"],
                 cwd=self.project_root,
-                capture_output=True, text=True, timeout=10
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode != 0:
                 raise GitCheckpointError("Not inside a git repository")
 
             # Create stash (doesn't pop - just creates ref)
             result = subprocess.run(
-                ["git", "stash", "create"],
-                cwd=self.project_root,
-                capture_output=True, text=True, timeout=30
+                ["git", "stash", "create"], cwd=self.project_root, capture_output=True, text=True, timeout=30
             )
 
             ref = result.stdout.strip()
@@ -94,9 +95,7 @@ class GitCheckpointManager:
         """
         try:
             result = subprocess.run(
-                ["git", "checkout", "--", file_path],
-                cwd=self.project_root,
-                capture_output=True, text=True, timeout=10
+                ["git", "checkout", "--", file_path], cwd=self.project_root, capture_output=True, text=True, timeout=10
             )
             if result.returncode == 0:
                 logger.info("file_rollback_success", file=file_path)
@@ -124,8 +123,7 @@ class GitCheckpointManager:
 
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "py_compile", str(file_path)],
-                capture_output=True, text=True, timeout=10
+                [sys.executable, "-m", "py_compile", str(file_path)], capture_output=True, text=True, timeout=10
             )
             return result.returncode == 0
         except Exception as e:

@@ -23,9 +23,11 @@ from warden.shared.utils.retry_utils import async_retry as retry_async
 # Optional imports - graceful degradation if Warden logging not available
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -121,9 +123,7 @@ class IPCServer:
         protocol = asyncio.StreamReaderProtocol(reader)
         await loop.connect_read_pipe(lambda: protocol, sys.stdin)
 
-        writer_transport, writer_protocol = await loop.connect_write_pipe(
-            asyncio.streams.FlowControlMixin, sys.stdout
-        )
+        writer_transport, writer_protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, sys.stdout)
         writer = asyncio.StreamWriter(writer_transport, writer_protocol, reader, loop)
 
         try:
@@ -147,9 +147,7 @@ class IPCServer:
 
                 except Exception as e:
                     logger.error("stdio_request_error", error=str(e))
-                    error_response = IPCResponse.create_error(
-                        error_obj=IPCError.from_exception(e), request_id=None
-                    )
+                    error_response = IPCResponse.create_error(error_obj=IPCError.from_exception(e), request_id=None)
                     writer.write((error_response.to_json() + "\n").encode("utf-8"))
                     await writer.drain()
 
@@ -205,7 +203,7 @@ class IPCServer:
             self.server = await asyncio.start_unix_server(
                 handle_client_async,
                 path=self.socket_path,
-                limit=10 * 1024 * 1024  # 10MB limit for large responses
+                limit=10 * 1024 * 1024,  # 10MB limit for large responses
             )
         finally:
             os.umask(old_umask)

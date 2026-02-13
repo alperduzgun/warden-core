@@ -18,9 +18,11 @@ from warden.mcp.resources import MCPResourceManager
 # Optional logging
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 

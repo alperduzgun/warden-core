@@ -13,6 +13,7 @@ console = Console()
 
 app = typer.Typer(help="Warden Package Manager - Install frames and rules.")
 
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -23,10 +24,13 @@ def main(
     if ctx.invoked_subcommand is None:
         install()
 
+
 @app.command()
 def install(
     frame_id: str | None = typer.Argument(None, help="Specific frame ID to install from the Hub"),
-    force_update: bool = typer.Option(False, "--force-update", "-U", help="Force update dependencies, ignoring warden.lock")
+    force_update: bool = typer.Option(
+        False, "--force-update", "-U", help="Force update dependencies, ignoring warden.lock"
+    ),
 ) -> None:
     """
     Install dependencies from warden.yaml or a specific frame from the Hub.
@@ -89,7 +93,7 @@ def install(
             title="[bold]Installation Summary[/bold]",
             subtitle=f"[bold green]{len(installed_items)} packages installed[/bold green]",
             expand=False,
-            border_style="cyan"
+            border_style="cyan",
         )
         console.print("\n", panel)
 

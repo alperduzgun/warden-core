@@ -1,4 +1,5 @@
 """Rate limiter for LLM API calls (ID 17)."""
+
 import asyncio
 import time
 from dataclasses import dataclass
@@ -7,9 +8,10 @@ from dataclasses import dataclass
 @dataclass
 class RateLimitConfig:
     """Rate limiter configuration."""
+
     tpm: int = 5000  # Tokens per minute
-    rpm: int = 10    # Requests per minute
-    burst: int = 1   # Burst capacity
+    rpm: int = 10  # Requests per minute
+    burst: int = 1  # Burst capacity
 
 
 class RateLimiter:

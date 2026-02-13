@@ -82,14 +82,11 @@ class SpecDecisionCache:
 
             # Write to temp file first for atomic operation
             fd, temp_path = tempfile.mkstemp(
-                dir=self.cache_file.parent,
-                prefix=f".{self.cache_file.name}.",
-                suffix=".tmp",
-                text=True
+                dir=self.cache_file.parent, prefix=f".{self.cache_file.name}.", suffix=".tmp", text=True
             )
 
             try:
-                with os.fdopen(fd, 'w', encoding='utf-8') as temp_file:
+                with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
                     json.dump(self._cache, temp_file, indent=2)
                     temp_file.flush()
                     os.fsync(temp_file.fileno())  # Ensure data written to disk
@@ -127,12 +124,7 @@ class SpecDecisionCache:
             return self._cache.get(key)
 
     def cache_decision(
-        self,
-        consumer_op: str,
-        provider_op: str,
-        matched: bool,
-        reasoning: str = "",
-        confidence: float = 1.0
+        self, consumer_op: str, provider_op: str, matched: bool, reasoning: str = "", confidence: float = 1.0
     ) -> None:
         """
         Cache a decision with thread-safe atomic write.
@@ -155,7 +147,7 @@ class SpecDecisionCache:
                 "provider_op": provider_op,
                 "reasoning": reasoning,
                 "confidence": confidence,
-                "timestamp": "iso-timestamp-placeholder"  # Ideally real timestamp
+                "timestamp": "iso-timestamp-placeholder",  # Ideally real timestamp
             }
             self._cache[key] = entry
             self._save_cache()  # Called while holding lock for atomicity

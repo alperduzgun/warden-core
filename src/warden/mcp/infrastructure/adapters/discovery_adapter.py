@@ -24,18 +24,21 @@ class DiscoveryAdapter(BaseWardenAdapter):
         - warden_get_project_stats: Project statistics
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_discover_files",
-        "warden_get_files_by_type",
-        "warden_detect_frameworks",
-        "warden_get_project_stats",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_discover_files",
+            "warden_get_files_by_type",
+            "warden_detect_frameworks",
+            "warden_get_project_stats",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.DISCOVERY
 
     @property
     def LANGUAGE_EXTENSIONS(self) -> dict[str, list[str]]:
         """Dynamic mapping from LanguageRegistry."""
         from warden.shared.languages.registry import LanguageRegistry
+
         mapping = {}
         for lang in LanguageRegistry.get_code_languages():
             defn = LanguageRegistry.get_definition(lang)
@@ -144,8 +147,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
                     continue
 
                 # Skip ignored directories
-                if any(p.startswith(".") or p == "__pycache__" or p == "node_modules"
-                       for p in rel_path.parts):
+                if any(p.startswith(".") or p == "__pycache__" or p == "node_modules" for p in rel_path.parts):
                     continue
 
                 if item.is_file():
@@ -164,12 +166,14 @@ class DiscoveryAdapter(BaseWardenAdapter):
                             analyzable.append(file_info)
                             break
 
-            return MCPToolResult.json_result({
-                "success": True,
-                "total_files": len(files),
-                "analyzable_files": len(analyzable),
-                "files": analyzable[:100],  # Limit to 100 files in response
-            })
+            return MCPToolResult.json_result(
+                {
+                    "success": True,
+                    "total_files": len(files),
+                    "analyzable_files": len(analyzable),
+                    "files": analyzable[:100],  # Limit to 100 files in response
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"Discovery failed: {e}")
 
@@ -194,22 +198,28 @@ class DiscoveryAdapter(BaseWardenAdapter):
             for item in self.project_root.rglob("*"):
                 if item.is_file() and item.suffix in extensions:
                     # Skip common ignored directories
-                    if any(p.startswith(".") or p == "__pycache__" or p == "node_modules"
-                           for p in item.relative_to(self.project_root).parts):
+                    if any(
+                        p.startswith(".") or p == "__pycache__" or p == "node_modules"
+                        for p in item.relative_to(self.project_root).parts
+                    ):
                         continue
-                    files.append({
-                        "path": str(item),
-                        "name": item.name,
-                        "extension": item.suffix,
-                        "size": item.stat().st_size,
-                    })
+                    files.append(
+                        {
+                            "path": str(item),
+                            "name": item.name,
+                            "extension": item.suffix,
+                            "size": item.stat().st_size,
+                        }
+                    )
 
-            return MCPToolResult.json_result({
-                "success": True,
-                "total_files": len(files),
-                "types": types,
-                "files": files[:100],
-            })
+            return MCPToolResult.json_result(
+                {
+                    "success": True,
+                    "total_files": len(files),
+                    "types": types,
+                    "files": files[:100],
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"File filtering failed: {e}")
 
@@ -242,6 +252,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
             frameworks.append({"name": "Node.js", "type": "language"})
             try:
                 import json
+
                 pkg = json.loads((path / "package.json").read_text())
                 deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
                 if "react" in deps:
@@ -263,11 +274,13 @@ class DiscoveryAdapter(BaseWardenAdapter):
         if (path / "go.mod").exists():
             frameworks.append({"name": "Go", "type": "language"})
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "frameworks": frameworks,
-            "total_count": len(frameworks),
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "frameworks": frameworks,
+                "total_count": len(frameworks),
+            }
+        )
 
     async def _get_project_stats_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get project statistics."""
@@ -286,8 +299,7 @@ class DiscoveryAdapter(BaseWardenAdapter):
 
                 # Skip ignored directories
                 rel_parts = item.relative_to(self.project_root).parts
-                if any(p.startswith(".") or p == "__pycache__" or p == "node_modules"
-                       for p in rel_parts):
+                if any(p.startswith(".") or p == "__pycache__" or p == "node_modules" for p in rel_parts):
                     continue
 
                 stats["total_files"] += 1

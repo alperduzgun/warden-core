@@ -64,7 +64,13 @@ class ILlmClient(ABC):
         """
         pass
 
-    async def complete_async(self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None, use_fast_tier: bool = False) -> LlmResponse:
+    async def complete_async(
+        self,
+        prompt: str,
+        system_prompt: str = "You are a helpful coding assistant.",
+        model: str | None = None,
+        use_fast_tier: bool = False,
+    ) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
 
@@ -88,7 +94,7 @@ class ILlmClient(ABC):
             temperature=0.0,  # Idempotency
             max_tokens=2000,
             timeout_seconds=120.0,
-            use_fast_tier=use_fast_tier
+            use_fast_tier=use_fast_tier,
         )
 
         response = await self.send_async(request)
@@ -144,7 +150,7 @@ class ILlmClient(ABC):
             response = await self.complete_async(
                 prompt,
                 system_prompt="You are a strict security auditor. Output valid JSON only.",
-                use_fast_tier=use_fast_tier
+                use_fast_tier=use_fast_tier,
             )
             if not response.success:
                 return {"findings": []}

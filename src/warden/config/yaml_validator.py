@@ -23,6 +23,7 @@ from warden.validation.domain.frame import get_frame_by_id
 
 class ValidationError(Exception):
     """Pipeline validation error."""
+
     pass
 
 
@@ -60,8 +61,7 @@ class ValidationResult:
         return "\n".join(lines) if lines else "Valid"
 
 
-def validate_basic_structure(config: PipelineConfig,
-                             result: ValidationResult) -> None:
+def validate_basic_structure(config: PipelineConfig, result: ValidationResult) -> None:
     """Validate basic pipeline structure."""
     # Check start node exists
     start_node = config.get_start_node()
@@ -80,7 +80,7 @@ def validate_basic_structure(config: PipelineConfig,
 
     # Validate frame IDs
     for node in frame_nodes:
-        frame_id = node.data.get('frameId')
+        frame_id = node.data.get("frameId")
         if not frame_id:
             result.add_error(f"Frame node {node.id} missing frameId")
         elif not get_frame_by_id(frame_id):

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import ast
@@ -11,6 +10,7 @@ from warden.semantic_search.embeddings import EmbeddingGenerator
 from warden.semantic_search.models import ChunkType, CodeChunk
 
 logger = structlog.get_logger()
+
 
 class CodeChunker:
     """
@@ -68,21 +68,15 @@ class CodeChunker:
                 error=str(e),
             )
             # Fallback to module-level chunk
-            chunks.append(
-                self._create_module_chunk(file_path, content, language="python")
-            )
+            chunks.append(self._create_module_chunk(file_path, content, language="python"))
 
         # If no chunks extracted, add whole file
         if not chunks:
-            chunks.append(
-                self._create_module_chunk(file_path, content, language="python")
-            )
+            chunks.append(self._create_module_chunk(file_path, content, language="python"))
 
         return chunks
 
-    def _extract_function_chunk(
-        self, node: ast.FunctionDef, file_path: str, content: str
-    ) -> CodeChunk | None:
+    def _extract_function_chunk(self, node: ast.FunctionDef, file_path: str, content: str) -> CodeChunk | None:
         """Extract function as code chunk."""
         start_line = node.lineno
         end_line = node.end_lineno or start_line
@@ -135,9 +129,7 @@ class CodeChunker:
             metadata={"function_name": node.name},
         )
 
-    def _extract_class_chunk(
-        self, node: ast.ClassDef, file_path: str, content: str
-    ) -> CodeChunk | None:
+    def _extract_class_chunk(self, node: ast.ClassDef, file_path: str, content: str) -> CodeChunk | None:
         """Extract class as code chunk."""
         start_line = node.lineno
         end_line = node.end_lineno or start_line
@@ -190,9 +182,7 @@ class CodeChunker:
             metadata={"class_name": node.name},
         )
 
-    def _create_module_chunk(
-        self, file_path: str, content: str, language: str
-    ) -> CodeChunk:
+    def _create_module_chunk(self, file_path: str, content: str, language: str) -> CodeChunk:
         """Create module-level chunk (entire file)."""
         lines = content.split("\n")
         # Calculate proper relative path

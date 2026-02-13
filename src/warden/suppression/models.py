@@ -86,8 +86,7 @@ class SuppressionEntry(BaseDomainModel):
         # Check if rule is in the list
         return rule in self.rules
 
-    def matches_location(self, file_path: str | None = None,
-                        line_number: int | None = None) -> bool:
+    def matches_location(self, file_path: str | None = None, line_number: int | None = None) -> bool:
         """
         Check if this suppression applies to a specific location.
 
@@ -106,8 +105,9 @@ class SuppressionEntry(BaseDomainModel):
             # Simple pattern matching (exact match or glob)
             if self.file == file_path:
                 return True
-            if '*' in self.file or '?' in self.file:
+            if "*" in self.file or "?" in self.file:
                 import fnmatch
+
                 return bool(fnmatch.fnmatch(file_path, self.file))
 
         # Check line number if specified
@@ -165,7 +165,7 @@ class SuppressionConfig(BaseDomainModel):
         """Convert to Panel-compatible JSON (camelCase)."""
         data = super().to_json()
         # Convert entries
-        data['entries'] = [e.to_json() for e in self.entries]
+        data["entries"] = [e.to_json() for e in self.entries]
         return data
 
     def add_entry(self, entry: SuppressionEntry) -> None:
@@ -222,6 +222,7 @@ class SuppressionConfig(BaseDomainModel):
             return False
 
         import fnmatch
+
         return any(fnmatch.fnmatch(file_path, pattern) for pattern in self.ignored_files)
 
     def is_rule_globally_suppressed(self, rule: str) -> bool:

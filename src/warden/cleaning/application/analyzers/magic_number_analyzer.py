@@ -29,19 +29,84 @@ logger = structlog.get_logger()
 
 # Numbers that are NOT magic (common, self-documenting)
 ACCEPTABLE_NUMBERS = {
-    0, 1, -1, 2, 3, 4, 5, 8, 10, 12, 16, 24, 32, 60, 64, 100, 128, 180,
-    255, 256, 360, 365, 500, 512, 1000, 1024, 2048, 4096, 8080, 8192,
+    0,
+    1,
+    -1,
+    2,
+    3,
+    4,
+    5,
+    8,
+    10,
+    12,
+    16,
+    24,
+    32,
+    60,
+    64,
+    100,
+    128,
+    180,
+    255,
+    256,
+    360,
+    365,
+    500,
+    512,
+    1000,
+    1024,
+    2048,
+    4096,
+    8080,
+    8192,
     # Common fractions/percentages
-    0.1, 0.25, 0.5, 0.75, 2.0,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    2.0,
 }
 
 # Acceptable string literals (common patterns)
 ACCEPTABLE_STRINGS = {
-    '', ' ', '\n', '\t', '\r', ',', '.', '/', '-', '_', ':', ';',
-    'utf-8', 'utf8', 'ascii', 'latin-1',
-    'True', 'False', 'None', 'null', 'true', 'false', 'nil',
-    'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS',
-    'id', 'name', 'type', 'value', 'key', 'error', 'message', 'status',
+    "",
+    " ",
+    "\n",
+    "\t",
+    "\r",
+    ",",
+    ".",
+    "/",
+    "-",
+    "_",
+    ":",
+    ";",
+    "utf-8",
+    "utf8",
+    "ascii",
+    "latin-1",
+    "True",
+    "False",
+    "None",
+    "null",
+    "true",
+    "false",
+    "nil",
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "HEAD",
+    "OPTIONS",
+    "id",
+    "name",
+    "type",
+    "value",
+    "key",
+    "error",
+    "message",
+    "status",
 }
 
 
@@ -196,9 +261,9 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
                     )
 
             # Check string literals (only flag long config-like strings)
-            elif isinstance(value, str) and (len(value) > 10 and
-                value not in ACCEPTABLE_STRINGS and
-                self._looks_like_config_value(value)):
+            elif isinstance(value, str) and (
+                len(value) > 10 and value not in ACCEPTABLE_STRINGS and self._looks_like_config_value(value)
+            ):
                 issues.append(
                     CleaningIssue(
                         issue_type=CleaningIssueType.MAGIC_NUMBER,
@@ -221,16 +286,16 @@ class MagicNumberAnalyzer(BaseCleaningAnalyzer):
             True if it looks like a hardcoded config value
         """
         # File paths
-        if '/' in value and len(value) > 15:
+        if "/" in value and len(value) > 15:
             return True
         # URLs
-        if value.startswith(('http://', 'https://', 'ftp://')):
+        if value.startswith(("http://", "https://", "ftp://")):
             return True
         # Connection strings
-        if any(x in value.lower() for x in ['host=', 'port=', 'user=', 'password=']):
+        if any(x in value.lower() for x in ["host=", "port=", "user=", "password="]):
             return True
         # Email patterns
-        return bool('@' in value and '.' in value)
+        return bool("@" in value and "." in value)
 
     def _create_suggestion(self, issue: CleaningIssue, code: str) -> CleaningSuggestion:
         """Create a cleanup suggestion from an issue."""

@@ -1,4 +1,3 @@
-
 """
 Git Helper for Warden CLI.
 
@@ -18,6 +17,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class GitHelper:
     def __init__(self, working_dir: Path):
         self.working_dir = working_dir
@@ -27,16 +27,16 @@ class GitHelper:
             raise RuntimeError("Git executable not found in PATH")
 
         if not (self.working_dir / ".git").exists():
-             # Check if we are in a subdirectory of a repo
-             try:
-                 subprocess.run(
-                     [self.git_cmd, "rev-parse", "--is-inside-work-tree"],
-                     cwd=str(self.working_dir),
-                     check=True,
-                     capture_output=True
-                 )
-             except subprocess.CalledProcessError:
-                 raise RuntimeError(f"Directory {working_dir} is not a git repository")
+            # Check if we are in a subdirectory of a repo
+            try:
+                subprocess.run(
+                    [self.git_cmd, "rev-parse", "--is-inside-work-tree"],
+                    cwd=str(self.working_dir),
+                    check=True,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError:
+                raise RuntimeError(f"Directory {working_dir} is not a git repository")
 
     def get_changed_files(self, base_branch: str = "main", diff_filter: str = "d") -> list[str]:
         """
@@ -67,15 +67,15 @@ class GitHelper:
                 logger.warning("git_remote_ref_not_found", ref=target, fallback=base_branch)
                 target = base_branch
                 if not self._ref_exists(target):
-                     # Crucial Edge Case: Initial commit or no main branch
-                     # Compare against empty tree (all files are new)
-                     logger.warning("git_local_ref_not_found", ref=target, fallback="HEAD")
-                     # Just return cached changes if no base exists
-                     cmd = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", "HEAD"]
+                    # Crucial Edge Case: Initial commit or no main branch
+                    # Compare against empty tree (all files are new)
+                    logger.warning("git_local_ref_not_found", ref=target, fallback="HEAD")
+                    # Just return cached changes if no base exists
+                    cmd = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", "HEAD"]
                 else:
                     cmd = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", f"{target}...HEAD"]
             else:
-                 cmd = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", f"{target}...HEAD"]
+                cmd = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", f"{target}...HEAD"]
 
             # Also include staged/unstaged changes not yet committed
             # We combine: (Diff to Base) + (Staged) + (Unstaged)
@@ -92,19 +92,26 @@ class GitHelper:
             if any("..." in arg for arg in cmd):
                 result = subprocess.run(cmd, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
                 for line in result.stdout.splitlines():
-                    if line.strip(): changed_files.add(line.strip())
+                    if line.strip():
+                        changed_files.add(line.strip())
 
             # B. Unstaged/Staged changes (Current working tree vs HEAD)
             cmd_dirty = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", "HEAD"]
-            result_dirty = subprocess.run(cmd_dirty, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
+            result_dirty = subprocess.run(
+                cmd_dirty, cwd=str(self.working_dir), capture_output=True, text=True, check=True
+            )
             for line in result_dirty.stdout.splitlines():
-                if line.strip(): changed_files.add(line.strip())
+                if line.strip():
+                    changed_files.add(line.strip())
 
             # C. Untracked files
             cmd_untracked = [self.git_cmd, "ls-files", "--others", "--exclude-standard"]
-            result_untracked = subprocess.run(cmd_untracked, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
+            result_untracked = subprocess.run(
+                cmd_untracked, cwd=str(self.working_dir), capture_output=True, text=True, check=True
+            )
             for line in result_untracked.stdout.splitlines():
-                if line.strip(): changed_files.add(line.strip())
+                if line.strip():
+                    changed_files.add(line.strip())
 
             # Resolve to absolute paths
             abs_paths = []
@@ -124,10 +131,7 @@ class GitHelper:
         """Check if a git reference exists."""
         try:
             subprocess.run(
-                [self.git_cmd, "rev-parse", "--verify", ref],
-                cwd=str(self.working_dir),
-                capture_output=True,
-                check=True
+                [self.git_cmd, "rev-parse", "--verify", ref], cwd=str(self.working_dir), capture_output=True, check=True
             )
             return True
         except subprocess.CalledProcessError:

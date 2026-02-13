@@ -43,22 +43,14 @@ class GitLabCITemplate:
             YAML content as string
         """
         warden_install = (
-            f"pip install warden-core=={config.warden_version}"
-            if config.warden_version
-            else "pip install warden-core"
+            f"pip install warden-core=={config.warden_version}" if config.warden_version else "pip install warden-core"
         )
 
-        frames_arg = (
-            " ".join(f"--frame {frame}" for frame in config.frames)
-            if config.frames
-            else ""
-        )
+        frames_arg = " ".join(f"--frame {frame}" for frame in config.frames) if config.frames else ""
 
         fail_arg = "--fail-on-issues" if config.fail_on_issues else ""
 
-        cache_section = (
-            GitLabCITemplate._generate_cache() if config.cache_dependencies else ""
-        )
+        cache_section = GitLabCITemplate._generate_cache() if config.cache_dependencies else ""
 
         rules_section = GitLabCITemplate._generate_rules(config.rules)
 
@@ -165,9 +157,7 @@ cache:
 
             # Check for stages or jobs
             has_stages = "stages" in data
-            has_jobs = any(
-                isinstance(v, dict) and "script" in v for v in data.values()
-            )
+            has_jobs = any(isinstance(v, dict) and "script" in v for v in data.values())
 
             return has_stages or has_jobs
 

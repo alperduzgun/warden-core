@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Set
 # Tree-sitter node types that represent try-catch/exception handling
 TRY_CATCH_NODE_TYPES: set[str] = {
     # Python
-    "try_statement", "except_clause",
+    "try_statement",
+    "except_clause",
     # JavaScript/TypeScript
     "catch_clause",
     # Java/Kotlin
@@ -23,12 +24,15 @@ TRY_CATCH_NODE_TYPES: set[str] = {
     # Go (error handling is different but we check for patterns)
     "if_statement",  # if err != nil {...}
     # Ruby
-    "begin", "rescue", "rescue_block",
+    "begin",
+    "rescue",
+    "rescue_block",
     # PHP
     # Rust (Result/Option handling)
-    "match_expression", "if_let_expression",
+    "match_expression",
+    "if_let_expression",
     # Swift
-    "do_statement", # Scala
+    "do_statement",  # Scala
     "try_expression",
 }
 
@@ -37,15 +41,19 @@ CLASS_NODE_TYPES: set[str] = {
     # Python
     "class_definition",
     # JavaScript/TypeScript
-    "class_declaration", "class",
+    "class_declaration",
+    "class",
     # Java
     "interface_declaration",
     # C#
     "struct_declaration",
     # Go
-    "type_declaration", "type_spec",  # struct
+    "type_declaration",
+    "type_spec",  # struct
     # Rust
-    "struct_item", "impl_item", "trait_item",
+    "struct_item",
+    "impl_item",
+    "trait_item",
     # Ruby
     "module",
     # PHP
@@ -54,36 +62,56 @@ CLASS_NODE_TYPES: set[str] = {
     # Swift
     "protocol_declaration",
     # Scala
-    "object_definition", "trait_definition",
+    "object_definition",
+    "trait_definition",
 }
 
 # Tree-sitter node types for function calls (debug output detection)
 CALL_NODE_TYPES: set[str] = {
-    "call_expression", "call", "invocation_expression",
-    "method_invocation", "function_call", "application",
+    "call_expression",
+    "call",
+    "invocation_expression",
+    "method_invocation",
+    "function_call",
+    "application",
 }
 
 # Debug function names by category (language-agnostic where possible)
 DEBUG_FUNCTION_NAMES: set[str] = {
     # Python
-    "print", "pprint",
+    "print",
+    "pprint",
     # JavaScript/TypeScript (console methods detected separately)
     # Java
-    "println", "printStackTrace",
+    "println",
+    "printStackTrace",
     # Go
-    "Println", "Printf", "Print",
+    "Println",
+    "Printf",
+    "Print",
     # Rust
-    "println!", "print!", "dbg!", "eprintln!",  # Rust macros
+    "println!",
+    "print!",
+    "dbg!",
+    "eprintln!",  # Rust macros
     # Ruby
-    "puts", "p", "pp",
+    "puts",
+    "p",
+    "pp",
     # PHP
-    "var_dump", "print_r", "dd", "dump", "die",
+    "var_dump",
+    "print_r",
+    "dd",
+    "dump",
+    "die",
     # Kotlin
     # Swift
-    "debugPrint", # Scala
+    "debugPrint",  # Scala
     # Dart
     # C/C++
-    "printf", "fprintf", "cout",
+    "printf",
+    "fprintf",
+    "cout",
 }
 
 # Debug member access patterns (e.g., console.log, System.out.println)
@@ -104,6 +132,7 @@ DEBUG_MEMBER_PATTERNS: dict[str, set[str]] = {
 # =============================================================================
 # LANGUAGE-SPECIFIC PATTERNS
 # =============================================================================
+
 
 def get_exception_patterns(language: str) -> dict[str, Any]:
     """Get exception handling patterns for a language."""

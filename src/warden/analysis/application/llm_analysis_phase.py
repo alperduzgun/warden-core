@@ -34,7 +34,9 @@ class LLMAnalysisPhase(LLMPhaseBase):
 
     def get_system_prompt(self) -> str:
         """Get analysis system prompt."""
-        return PromptTemplates.QUALITY_ANALYSIS + """
+        return (
+            PromptTemplates.QUALITY_ANALYSIS
+            + """
 
 Scoring Guidelines:
 - 0-3: Poor quality, significant issues
@@ -57,6 +59,7 @@ Adjust scores based on file context:
 - Generated code: Focus on correctness
 
 Return a JSON object with scores for each metric."""
+        )
 
     def format_user_prompt(self, context: dict[str, Any]) -> str:
         """Format user prompt for quality analysis."""
@@ -136,9 +139,7 @@ Return as JSON."""
 
             for field in required:
                 if field not in result:
-                    logger.warning(
-                        "missing_field_in_llm_response", field=field, phase=self.phase_name
-                    )
+                    logger.warning("missing_field_in_llm_response", field=field, phase=self.phase_name)
                     result[field] = 5.0  # Default middle score
 
             # Ensure scores are floats between 0-10
@@ -154,9 +155,7 @@ Return as JSON."""
             return result
 
         except Exception as e:
-            logger.error(
-                "llm_response_parsing_failed", phase=self.phase_name, error=str(e)
-            )
+            logger.error("llm_response_parsing_failed", phase=self.phase_name, error=str(e))
             # Return default scores on parse failure
             return {
                 "complexity_score": 5.0,
@@ -201,7 +200,11 @@ Return as JSON."""
         }
 
         # --- Active Context Retrieval Integration ---
-        if hasattr(self, 'semantic_search_service') and self.semantic_search_service and self.semantic_search_service.is_available():
+        if (
+            hasattr(self, "semantic_search_service")
+            and self.semantic_search_service
+            and self.semantic_search_service.is_available()
+        ):
             try:
                 formatted_context = await self._retrieve_and_format_context(file_path, code)
                 if formatted_context:
@@ -262,7 +265,7 @@ Return as JSON."""
         if not self.config.enabled or not self.llm:
             # Fallback to rules for all
             for _, path, file_context, _ in files:
-                initial = (initial_metrics.get(path, {}) if initial_metrics else {})
+                initial = initial_metrics.get(path, {}) if initial_metrics else {}
                 results[path] = (self._create_metrics_from_rules(initial, file_context), 0.6)
             return results
 
@@ -283,7 +286,7 @@ Return as JSON."""
                 response = await self.llm.complete_async(
                     prompt,
                     self.get_system_prompt(),
-                    use_fast_tier=True  # Use Qwen for cost optimization (Phase 1 migration)
+                    use_fast_tier=True,  # Use Qwen for cost optimization (Phase 1 migration)
                 )
 
                 # Parse Batch Results
@@ -308,21 +311,23 @@ Return as JSON."""
                         results[path] = (metrics, 0.9)
                     else:
                         # Fallback for this specific item in batch
-                        initial = (initial_metrics.get(path, {}) if initial_metrics else {})
+                        initial = initial_metrics.get(path, {}) if initial_metrics else {}
                         results[path] = (self._create_metrics_from_rules(initial, file_context), 0.5)
 
             except Exception as e:
                 logger.error("batch_quality_analysis_failed", error=str(e))
                 # Fallback for the whole batch
                 for _, path, file_context, _ in batch_items:
-                    initial = (initial_metrics.get(path, {}) if initial_metrics else {})
+                    initial = initial_metrics.get(path, {}) if initial_metrics else {}
                     results[path] = (self._create_metrics_from_rules(initial, file_context), 0.5)
             # Increment by the actual size of the batch we just processed
             i += len(batch_items)
 
         return results
 
-    def _format_batch_user_prompt(self, batch_items: list[tuple[str, Path, FileContext, bool]], initial_metrics: Any) -> str:
+    def _format_batch_user_prompt(
+        self, batch_items: list[tuple[str, Path, FileContext, bool]], initial_metrics: Any
+    ) -> str:
         batch_summary = ""
         for i, (code, path, ctx, impacted) in enumerate(batch_items):
             metrics = initial_metrics.get(path, {}) if initial_metrics else {}
@@ -462,29 +467,27 @@ FILES TO ANALYZE:
             technical_debt_hours=0.0,
         )
 
-    async def execute_async(self, code_files: list[Any], pipeline_context: Any | None = None, impacted_files: list[str] = None) -> QualityMetrics:
+    async def execute_async(
+        self, code_files: list[Any], pipeline_context: Any | None = None, impacted_files: list[str] = None
+    ) -> QualityMetrics:
         """
         Execute LLM-enhanced analysis phase with True Batching.
         """
         if not code_files:
             return self._create_default_metrics(FileContext.PRODUCTION)
 
-        logger.info(
-            "llm_analysis_phase_starting_batch",
-            file_count=len(code_files),
-            has_llm=self.llm is not None
-        )
+        logger.info("llm_analysis_phase_starting_batch", file_count=len(code_files), has_llm=self.llm is not None)
 
         # Prepare items for batch analysis
         batch_items = []
         for code_file in code_files:
-            file_path = Path(code_file.path) if hasattr(code_file, 'path') else Path("unknown")
-            code = code_file.content if hasattr(code_file, 'content') else ""
+            file_path = Path(code_file.path) if hasattr(code_file, "path") else Path("unknown")
+            code = code_file.content if hasattr(code_file, "content") else ""
 
             # Use FileContext from context if available, else default to PRODUCTION
             # In a real scenario, we'd get this from the PreAnalysis phase
             file_context = FileContext.PRODUCTION
-            if pipeline_context and hasattr(pipeline_context, 'file_contexts'):
+            if pipeline_context and hasattr(pipeline_context, "file_contexts"):
                 ctx_info = pipeline_context.file_contexts.get(str(file_path))
                 if ctx_info:
                     file_context = ctx_info.context
@@ -510,14 +513,10 @@ FILES TO ANALYZE:
             testability_score=sum(m.testability_score for m in all_metrics) / len(all_metrics),
             overall_score=sum(m.overall_score for m in all_metrics) / len(all_metrics),
             technical_debt_hours=sum(m.technical_debt_hours for m in all_metrics),
-            summary=f"Analyzed {len(all_metrics)} files in batch mode."
+            summary=f"Analyzed {len(all_metrics)} files in batch mode.",
         )
 
-        logger.info(
-            "llm_batch_analysis_complete",
-            avg_score=avg_metrics.overall_score,
-            total_files=len(all_metrics)
-        )
+        logger.info("llm_batch_analysis_complete", avg_score=avg_metrics.overall_score, total_files=len(all_metrics))
 
         return avg_metrics
 
@@ -555,7 +554,9 @@ FILES TO ANALYZE:
                 # Potential self-match, check content overlap or skip to be safe
                 continue
 
-            formatted_context += f"\n--- Related File: {chunk.relative_path} (Lines {chunk.start_line}-{chunk.end_line}) ---\n"
+            formatted_context += (
+                f"\n--- Related File: {chunk.relative_path} (Lines {chunk.start_line}-{chunk.end_line}) ---\n"
+            )
             formatted_context += f"{chunk.content}\n"
             relevant_count += 1
 

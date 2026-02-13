@@ -20,6 +20,7 @@ from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
 
+
 class IntegrityIssue:
     def __init__(self, file_path: str, message: str, severity: str = "error"):
         self.file_path = file_path
@@ -27,32 +28,21 @@ class IntegrityIssue:
         self.severity = severity
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "file": self.file_path,
-            "message": self.message,
-            "severity": self.severity
-        }
+        return {"file": self.file_path, "message": self.message, "severity": self.severity}
+
 
 class IntegrityScanner:
     """
     Scans codebase for integrity issues (syntax, build).
     """
 
-    def __init__(
-        self,
-        project_root: Path,
-        ast_registry: ASTProviderRegistry,
-        config: dict[str, Any] | None = None
-    ):
+    def __init__(self, project_root: Path, ast_registry: ASTProviderRegistry, config: dict[str, Any] | None = None):
         self.project_root = project_root
         self.ast_registry = ast_registry
         self.config = config or {}
 
     async def scan_async(
-        self,
-        code_files: list[CodeFile],
-        project_context: ProjectContext,
-        pipeline_context: Any | None = None
+        self, code_files: list[CodeFile], project_context: ProjectContext, pipeline_context: Any | None = None
     ) -> list[IntegrityIssue]:
         """
         Run integrity scan on code files.
@@ -76,7 +66,9 @@ class IntegrityScanner:
 
         return issues
 
-    async def _check_syntax_async(self, code_files: list[CodeFile], pipeline_context: Any | None = None) -> list[IntegrityIssue]:
+    async def _check_syntax_async(
+        self, code_files: list[CodeFile], pipeline_context: Any | None = None
+    ) -> list[IntegrityIssue]:
         """Check syntax using loaded AST providers."""
         issues = []
 
@@ -97,18 +89,22 @@ class IntegrityScanner:
 
                 if result.status == "failed" or result.errors:
                     for error in result.errors:
-                        issues.append(IntegrityIssue(
-                            file_path=str(Path(cf.path).relative_to(self.project_root)) if self.project_root in Path(cf.path).parents else cf.path,
-                            message=f"Syntax error: {error.message}",
-                            severity="error"
-                        ))
+                        issues.append(
+                            IntegrityIssue(
+                                file_path=str(Path(cf.path).relative_to(self.project_root))
+                                if self.project_root in Path(cf.path).parents
+                                else cf.path,
+                                message=f"Syntax error: {error.message}",
+                                severity="error",
+                            )
+                        )
                 elif result.status == "success" and result.ast_root:
                     # CACHE AST IF CONTEXT PROVIDED
-                    if pipeline_context and hasattr(pipeline_context, 'ast_cache'):
+                    if pipeline_context and hasattr(pipeline_context, "ast_cache"):
                         # Store the native AST node if available (provider specific)
                         if result.ast_root.raw_node:
-                             pipeline_context.ast_cache[cf.path] = result.ast_root.raw_node
-                             logger.debug("ast_cached_in_context", file=cf.path)
+                            pipeline_context.ast_cache[cf.path] = result.ast_root.raw_node
+                            logger.debug("ast_cached_in_context", file=cf.path)
 
             except Exception as e:
                 logger.debug("syntax_check_exception", file=cf.path, error=str(e))
@@ -118,11 +114,11 @@ class IntegrityScanner:
 
     def _find_error_node(self, node):
         """Recursively find the first error node."""
-        if node.type == 'ERROR' or node.is_missing:
+        if node.type == "ERROR" or node.is_missing:
             return node
 
         for child in node.children:
-            if child.has_error: # optimize traversal
+            if child.has_error:  # optimize traversal
                 found = self._find_error_node(child)
                 if found:
                     return found
@@ -141,21 +137,23 @@ class IntegrityScanner:
         try:
             # Detect shell features that shlex.split cannot handle.
             # Users should wrap complex commands in a script file instead.
-            shell_chars = set('|><&;$`')
+            shell_chars = set("|><&;$`")
             if any(c in command for c in shell_chars):
                 logger.warning(
                     "build_command_has_shell_features",
                     command=command,
                     hint="Wrap complex commands (pipes, redirects) in a shell script.",
                 )
-                return [IntegrityIssue(
-                    file_path="BUILD",
-                    message=(
-                        f"Build command contains shell features ({', '.join(c for c in shell_chars if c in command)}). "
-                        f"Wrap in a script file for security. Command: {command[:80]}"
-                    ),
-                    severity="warning",
-                )]
+                return [
+                    IntegrityIssue(
+                        file_path="BUILD",
+                        message=(
+                            f"Build command contains shell features ({', '.join(c for c in shell_chars if c in command)}). "
+                            f"Wrap in a script file for security. Command: {command[:80]}"
+                        ),
+                        severity="warning",
+                    )
+                ]
 
             # Security: Use create_subprocess_exec to avoid shell injection
             proc = await asyncio.create_subprocess_exec(  # warden: ignore
@@ -166,17 +164,17 @@ class IntegrityScanner:
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0) # 30s timeout
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)  # 30s timeout
             except asyncio.TimeoutError:
                 try:
                     proc.kill()
                 except (ProcessLookupError, OSError):
                     pass  # Process already terminated
-                return [IntegrityIssue(
-                    file_path="BUILD",
-                    message=f"Build command '{command}' timed out after 30s.",
-                    severity="error"
-                )]
+                return [
+                    IntegrityIssue(
+                        file_path="BUILD", message=f"Build command '{command}' timed out after 30s.", severity="error"
+                    )
+                ]
 
             if proc.returncode != 0:
                 # Build failed
@@ -185,19 +183,17 @@ class IntegrityScanner:
                 if len(error_msg) > 500:
                     error_msg = error_msg[:500] + "..."
 
-                issues.append(IntegrityIssue(
-                    file_path="BUILD",
-                    message=f"Build validation failed: {error_msg}",
-                    severity="error"
-                ))
+                issues.append(
+                    IntegrityIssue(file_path="BUILD", message=f"Build validation failed: {error_msg}", severity="error")
+                )
 
         except Exception as e:
             logger.warning("build_verification_failed", error=str(e))
-            issues.append(IntegrityIssue(
-                file_path="BUILD",
-                message=f"Build verification execution error: {e!s}",
-                severity="warning"
-            ))
+            issues.append(
+                IntegrityIssue(
+                    file_path="BUILD", message=f"Build verification execution error: {e!s}", severity="warning"
+                )
+            )
 
         return issues
 
@@ -215,7 +211,11 @@ class IntegrityScanner:
                 return "npm run build"
 
         # Python (Interpreted, but can check compile)
-        if context.framework in [Framework.FASTAPI, Framework.DJANGO, Framework.FLASK] or (self.project_root / "requirements.txt").exists() or (self.project_root / "pyproject.toml").exists():
+        if (
+            context.framework in [Framework.FASTAPI, Framework.DJANGO, Framework.FLASK]
+            or (self.project_root / "requirements.txt").exists()
+            or (self.project_root / "pyproject.toml").exists()
+        ):
             # Python compiles to bytecode.
             # python3 should be available if we are running warden
             return f"{sys.executable} -m compileall -q ."
@@ -231,4 +231,5 @@ class IntegrityScanner:
 
     def _guess_language(self, path: str) -> CodeLanguage:
         from warden.shared.languages.registry import LanguageRegistry
+
         return LanguageRegistry.get_language_from_path(Path(path))

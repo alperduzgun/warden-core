@@ -87,6 +87,7 @@ Code:
 {code}
 """
 
+
 @dataclass
 class APICallCandidate:
     function_name: str
@@ -97,17 +98,19 @@ class APICallCandidate:
     context: str
     ast_node: ASTNode
 
+
 def parse_list_field(field_data: Any) -> list[dict[str, str]]:
     """Helper to ensure fields are list of dicts or strings for YAML."""
     if isinstance(field_data, list):
         parsed = []
         for item in field_data:
-            if isinstance(item, str) and ':' in item:
+            if isinstance(item, str) and ":" in item:
                 parsed.append(item)
             else:
                 parsed.append(str(item))
         return parsed
     return []
+
 
 class UniversalContractExtractor:
     def __init__(
@@ -130,9 +133,9 @@ class UniversalContractExtractor:
             "operations_extracted": 0,
             "models_extracted": 0,
             "enums_extracted": 0,
-            "ai_enabled": False, # Added ai_enabled to stats
+            "ai_enabled": False,  # Added ai_enabled to stats
         }
-        self.ai_enabled = False # Default to False, will be set by health check
+        self.ai_enabled = False  # Default to False, will be set by health check
         # Internal cache: avoids re-parsing the same file across detect/models/enums
         self._parse_cache: dict[str, Any] = {}
         # External cache reference (set by pipeline if available)
@@ -154,13 +157,15 @@ class UniversalContractExtractor:
                     logger.warning(
                         "ai_extraction_degraded",
                         reason="LLM service or configured model not available. Entering heuristic-only mode.",
-                        provider=self.llm_service.provider.value if hasattr(self.llm_service, 'provider') else 'unknown'
+                        provider=self.llm_service.provider.value
+                        if hasattr(self.llm_service, "provider")
+                        else "unknown",
                     )
             except Exception as e:
                 logger.warning("ai_health_check_failed", error=str(e))
 
         self.ai_enabled = ai_available
-        self.stats["ai_enabled"] = ai_available # Update stats
+        self.stats["ai_enabled"] = ai_available  # Update stats
 
         # Initialize providers (Fixed Step 2592)
         await self.ast_registry.discover_providers()
@@ -190,7 +195,9 @@ class UniversalContractExtractor:
         self.stats["enums_extracted"] = len(enums)
 
         duration = int((time.time() - start_time) * 1000)
-        logger.info("universal_extraction_completed", duration_ms=duration, operations=len(operations), stats=self.stats)
+        logger.info(
+            "universal_extraction_completed", duration_ms=duration, operations=len(operations), stats=self.stats
+        )
 
         return Contract(
             name=self.project_root.name,
@@ -219,7 +226,7 @@ class UniversalContractExtractor:
         from warden.shared.utils.path_utils import SafeFileScanner
 
         scanner = SafeFileScanner(self.project_root, max_depth=15)
-        extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.dart', '.java', '.kt', '.swift', '.go', '.rs'}
+        extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".dart", ".java", ".kt", ".swift", ".go", ".rs"}
 
         files = scanner.scan(extensions)
         print(f"DEBUG [{self.role.name}]: Found {len(files)} files in {self.project_root}")
@@ -231,13 +238,15 @@ class UniversalContractExtractor:
         for file_path in code_files:
             try:
                 language = self._detect_language(file_path)
-                if not language: continue
+                if not language:
+                    continue
 
                 provider = self.ast_registry.get_provider(language)
-                if not provider: continue
+                if not provider:
+                    continue
 
                 try:
-                    source = file_path.read_text(encoding='utf-8', errors='replace')
+                    source = file_path.read_text(encoding="utf-8", errors="replace")
                 except Exception:
                     continue
 
@@ -265,16 +274,16 @@ class UniversalContractExtractor:
     def _detect_language(self, file_path: Path) -> ASTCodeLanguage | None:
         ext = file_path.suffix.lower()
         mapping = {
-            '.py': ASTCodeLanguage.PYTHON,
-            '.js': ASTCodeLanguage.JAVASCRIPT,
-            '.ts': ASTCodeLanguage.TYPESCRIPT,
-            '.tsx': ASTCodeLanguage.TYPESCRIPT,
-            '.dart': ASTCodeLanguage.DART,
-            '.java': ASTCodeLanguage.JAVA,
-            '.kt': ASTCodeLanguage.KOTLIN,
-            '.swift': ASTCodeLanguage.SWIFT,
-            '.go': ASTCodeLanguage.GO,
-            '.rs': ASTCodeLanguage.RUST,
+            ".py": ASTCodeLanguage.PYTHON,
+            ".js": ASTCodeLanguage.JAVASCRIPT,
+            ".ts": ASTCodeLanguage.TYPESCRIPT,
+            ".tsx": ASTCodeLanguage.TYPESCRIPT,
+            ".dart": ASTCodeLanguage.DART,
+            ".java": ASTCodeLanguage.JAVA,
+            ".kt": ASTCodeLanguage.KOTLIN,
+            ".swift": ASTCodeLanguage.SWIFT,
+            ".go": ASTCodeLanguage.GO,
+            ".rs": ASTCodeLanguage.RUST,
         }
         return mapping.get(ext)
 
@@ -282,32 +291,37 @@ class UniversalContractExtractor:
         """Recursive find call expressions."""
         calls = []
 
-        raw_type = node.attributes.get('original_type', '')
+        raw_type = node.attributes.get("original_type", "")
 
         is_call = node.node_type == ASTNodeType.CALL_EXPRESSION
 
         # Fallback for Dart/unmapped nodes
         # TreeSitterProvider puts raw type in attributes['original_type']
-        raw_type = node.attributes.get('original_type', '')
-        if raw_type in ['method_invocation', 'function_expression_invocation', 'call_expression', 'constructor_invocation']:
-             is_call = True
+        raw_type = node.attributes.get("original_type", "")
+        if raw_type in [
+            "method_invocation",
+            "function_expression_invocation",
+            "call_expression",
+            "constructor_invocation",
+        ]:
+            is_call = True
 
         # Dart await_expression: `await http.get(...)` parses as await_expression
         # with a selector child containing the actual call
-        if raw_type == 'await_expression':
+        if raw_type == "await_expression":
             for child in node.children:
-                ct = child.attributes.get('original_type', '')
-                if ct in ('selector', 'method_invocation', 'call_expression'):
+                ct = child.attributes.get("original_type", "")
+                if ct in ("selector", "method_invocation", "call_expression"):
                     is_call = True
                     break
 
         # Dart selector check (expression_statement wrapping identifier + selector)
-        if raw_type == 'expression_statement':
+        if raw_type == "expression_statement":
             has_selector = False
             has_identifier = False
             for child in node.children:
-                ct = child.attributes.get('original_type', '')
-                if ct == 'selector':
+                ct = child.attributes.get("original_type", "")
+                if ct == "selector":
                     has_selector = True
                 if child.node_type == ASTNodeType.IDENTIFIER:
                     has_identifier = True
@@ -337,7 +351,7 @@ class UniversalContractExtractor:
             line=node.location.start_line if node.location else 0,
             column=node.location.start_column if node.location else 0,
             context=context,
-            ast_node=node
+            ast_node=node,
         )
 
     def _extract_function_name(self, node: ASTNode) -> str | None:
@@ -356,7 +370,8 @@ class UniversalContractExtractor:
         return node.name
 
     def _is_relevant_candidate(self, name: str) -> bool:
-        if not name: return False
+        if not name:
+            return False
 
         # Blocklist (Noise)
         """Heuristic to filter out non-API calls."""
@@ -364,19 +379,59 @@ class UniversalContractExtractor:
 
         # Denylist (Common noise)
         denylist = {
-            "log", "print", "debug", "assert", "expect", "push", "pop", "clear", "add", "remove",
-            "testwidgets", "pump", "pumpwidget", "tap", "entertext", "drag", "longpress",
-            "setstate", "initstate", "dispose", "build", "render"
+            "log",
+            "print",
+            "debug",
+            "assert",
+            "expect",
+            "push",
+            "pop",
+            "clear",
+            "add",
+            "remove",
+            "testwidgets",
+            "pump",
+            "pumpwidget",
+            "tap",
+            "entertext",
+            "drag",
+            "longpress",
+            "setstate",
+            "initstate",
+            "dispose",
+            "build",
+            "render",
         }
         if name_lower in denylist or any(d == name_lower.split(".")[-1] for d in denylist):
             return False
 
         # Allowlist (HTTP/API keywords) - Use exact/word boundary matching where possible
         api_keywords = {
-            "http", "dio", "fetch", "axios", "api", "service", "client", "request",
-            "query", "mutation", "subscription", "router", "app.get", "app.post",
-            "db.", "firestore", "collection", "doc", "firebase", "send", "call",
-            "remote", "endpoint", "auth", "token"
+            "http",
+            "dio",
+            "fetch",
+            "axios",
+            "api",
+            "service",
+            "client",
+            "request",
+            "query",
+            "mutation",
+            "subscription",
+            "router",
+            "app.get",
+            "app.post",
+            "db.",
+            "firestore",
+            "collection",
+            "doc",
+            "firebase",
+            "send",
+            "call",
+            "remote",
+            "endpoint",
+            "auth",
+            "token",
         }
 
         # HTTP Methods (Whole word only to avoid testWidgets matching 'get')
@@ -384,13 +439,16 @@ class UniversalContractExtractor:
 
         # Score-based relevance
         score = 0
-        if any(k in name_lower for k in api_keywords): score += 2
+        if any(k in name_lower for k in api_keywords):
+            score += 2
 
         # Match HTTP methods as separate components (e.g. .get() or getSomething)
         name_parts = name_lower.replace("_", ".").split(".")
-        if any(m in name_parts for m in http_methods): score += 2
+        if any(m in name_parts for m in http_methods):
+            score += 2
 
-        if any(name_lower.startswith(k) for k in ["api", "service", "http"]): score += 1
+        if any(name_lower.startswith(k) for k in ["api", "service", "http"]):
+            score += 1
 
         return score >= 2
 
@@ -414,7 +472,8 @@ class UniversalContractExtractor:
 
     async def _extract_operations(self, candidates: list[APICallCandidate]) -> list[OperationDefinition]:
         """Extract high-level operation definitions using AI/Heuristics."""
-        if not candidates: return []
+        if not candidates:
+            return []
 
         # If AI is disabled or unavailable, use heuristics only
         if not self.ai_enabled:
@@ -428,9 +487,9 @@ class UniversalContractExtractor:
         executor = ParallelBatchExecutor(concurrency_limit=4, item_timeout=30.0)
 
         results = await executor.execute_batch(
-            items=candidates, # Changed from 'calls' to 'candidates'
+            items=candidates,  # Changed from 'calls' to 'candidates'
             task_fn=self._extract_single_operation,
-            batch_name="spec_operation_extraction"
+            batch_name="spec_operation_extraction",
         )
 
         # Filter out None and return
@@ -458,21 +517,17 @@ Similar Patterns:
 Extract details.
 """
         request = LlmRequest(
-            system_prompt="You are a contract extraction specialist.",
-            user_message=prompt,
-            temperature=0.0
+            system_prompt="You are a contract extraction specialist.", user_message=prompt, temperature=0.0
         )
 
         try:
-            response = await asyncio.wait_for(
-                self.llm_service.send_async(request),
-                timeout=60.0
-            )
+            response = await asyncio.wait_for(self.llm_service.send_async(request), timeout=60.0)
 
             # OrchestratedClient now raises ExternalServiceError on failure
             # So response.success is True here
 
             from warden.shared.utils.json_parser import parse_json_from_llm
+
             data = parse_json_from_llm(response.content)
 
             if not data:
@@ -480,27 +535,31 @@ Extract details.
 
             # Mapping
             op_type = OperationType.QUERY
-            method = data.get('http_method', '').upper()
-            if method in ['POST', 'PUT', 'DELETE', 'PATCH']:
+            method = data.get("http_method", "").upper()
+            if method in ["POST", "PUT", "DELETE", "PATCH"]:
                 op_type = OperationType.COMMAND
 
             metadata = {}
-            if 'http_method' in data: metadata['http_method'] = data['http_method']
-            if 'endpoint' in data: metadata['endpoint'] = data['endpoint']
-            if 'request_fields' in data: metadata['request_fields'] = parse_list_field(data['request_fields'])
-            if 'response_fields' in data: metadata['response_fields'] = parse_list_field(data['response_fields'])
+            if "http_method" in data:
+                metadata["http_method"] = data["http_method"]
+            if "endpoint" in data:
+                metadata["endpoint"] = data["endpoint"]
+            if "request_fields" in data:
+                metadata["request_fields"] = parse_list_field(data["request_fields"])
+            if "response_fields" in data:
+                metadata["response_fields"] = parse_list_field(data["response_fields"])
 
             return OperationDefinition(
-                name=data.get('operation_name', call.function_name),
+                name=data.get("operation_name", call.function_name),
                 operation_type=op_type,
-                description=data.get('description'),
+                description=data.get("description"),
                 metadata=metadata,
                 source_file=call.file_path,
-                source_line=call.line
+                source_line=call.line,
             )
 
         except CircuitBreakerOpen:
-            raise # Re-raise to stop extraction loop on upper level
+            raise  # Re-raise to stop extraction loop on upper level
 
         except (ExternalServiceError, RetryExhausted) as e:
             # Single operation failure (e.g. timeout, rate limit before breaker trips)
@@ -519,11 +578,13 @@ Extract details.
         for file_path in code_files:
             try:
                 language = self._detect_language(file_path)
-                if not language: continue
+                if not language:
+                    continue
                 provider = self.ast_registry.get_provider(language)
-                if not provider: continue
+                if not provider:
+                    continue
 
-                source = file_path.read_text(encoding='utf-8', errors='replace')
+                source = file_path.read_text(encoding="utf-8", errors="replace")
                 result = await self._cached_parse(provider, source, language, str(file_path))
                 if result.status != ParseStatus.SUCCESS or not result.ast_root:
                     continue
@@ -544,11 +605,13 @@ Extract details.
         for file_path in code_files:
             try:
                 language = self._detect_language(file_path)
-                if not language: continue
+                if not language:
+                    continue
                 provider = self.ast_registry.get_provider(language)
-                if not provider: continue
+                if not provider:
+                    continue
 
-                source = file_path.read_text(encoding='utf-8', errors='replace')
+                source = file_path.read_text(encoding="utf-8", errors="replace")
                 result = await self._cached_parse(provider, source, language, str(file_path))
                 if result.status != ParseStatus.SUCCESS or not result.ast_root:
                     continue
@@ -598,6 +661,7 @@ Extract details.
 
     def _create_model_definition(self, node: ASTNode, source: str, file_path: Path) -> ModelDefinition | None:
         from warden.validation.frames.spec.models import FieldDefinition
+
         fields = []
 
         def find_fields_recursive(curr: ASTNode):
@@ -619,25 +683,33 @@ Extract details.
                                 break
 
                     if field_name:
-                        fields.append(FieldDefinition(
-                            name=field_name,
-                            type_name=field_type,
-                            source_file=str(file_path),
-                            source_line=child.location.start_line if child.location else 0
-                        ))
+                        fields.append(
+                            FieldDefinition(
+                                name=field_name,
+                                type_name=field_type,
+                                source_file=str(file_path),
+                                source_line=child.location.start_line if child.location else 0,
+                            )
+                        )
                 # Don't recurse into other classes/functions
-                elif child.node_type not in [ASTNodeType.CLASS, ASTNodeType.INTERFACE, ASTNodeType.FUNCTION, ASTNodeType.METHOD]:
+                elif child.node_type not in [
+                    ASTNodeType.CLASS,
+                    ASTNodeType.INTERFACE,
+                    ASTNodeType.FUNCTION,
+                    ASTNodeType.METHOD,
+                ]:
                     find_fields_recursive(child)
 
         find_fields_recursive(node)
 
-        if not fields: return None
+        if not fields:
+            return None
 
         return ModelDefinition(
             name=node.name or "UnknownModel",
             fields=fields,
             source_file=str(file_path),
-            source_line=node.location.start_line if node.location else 0
+            source_line=node.location.start_line if node.location else 0,
         )
 
     def _create_enum_definition(self, node: ASTNode, source: str, file_path: Path) -> EnumDefinition | None:
@@ -663,9 +735,9 @@ Extract details.
 
         return EnumDefinition(
             name=node.name or "UnknownEnum",
-            values=list(set(values)), # Deduplicate
+            values=list(set(values)),  # Deduplicate
             source_file=str(file_path),
-            source_line=node.location.start_line if node.location else 0
+            source_line=node.location.start_line if node.location else 0,
         )
 
     def _find_annotated_nodes(self, node: ASTNode) -> list[tuple[ASTNode, str]]:
@@ -693,10 +765,10 @@ Extract details.
         logger.info("creating_fallback_operation", function=call.function_name, reason="ai_unavailable")
         return OperationDefinition(
             name=call.function_name,
-            operation_type=OperationType.QUERY, # Default to Query for safety
+            operation_type=OperationType.QUERY,  # Default to Query for safety
             description=f"Auto-extracted (AI extraction skipped/failed)",
             source_file=call.file_path,
-            source_line=call.line
+            source_line=call.line,
         )
 
     async def _get_similar_patterns(self, call: APICallCandidate) -> str:
@@ -718,15 +790,18 @@ Extract details.
 
         try:
             lines = source.splitlines()
-            if not lines: return ""
+            if not lines:
+                return ""
 
             sl = node.location.start_line
             sc = node.location.start_column
             el = node.location.end_line
             ec = node.location.end_column
 
-            if sl < 0 or sl >= len(lines): return ""
-            if el > len(lines): el = len(lines)
+            if sl < 0 or sl >= len(lines):
+                return ""
+            if el > len(lines):
+                el = len(lines)
 
             if sl == el:
                 if sl < len(lines):
@@ -748,7 +823,8 @@ Extract details.
 
     def _get_context(self, node: ASTNode, source: str) -> str:
         lines = source.splitlines()
-        if not node.location: return ""
+        if not node.location:
+            return ""
         sl = max(0, node.location.start_line - 10)
         el = min(len(lines), node.location.end_line + 10)
         return "\n".join(lines[sl:el])

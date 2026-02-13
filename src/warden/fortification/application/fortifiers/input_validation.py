@@ -114,9 +114,7 @@ class InputValidationFortifier(BaseFortifier):
                 max_tokens=3000,
             )
 
-            fortified_code = self._extract_code_from_markdown(
-                response, code_file.content
-            )
+            fortified_code = self._extract_code_from_markdown(response, code_file.content)
 
             actions = [
                 FortificationAction(
@@ -214,9 +212,7 @@ class InputValidationFortifier(BaseFortifier):
             return []
 
     @staticmethod
-    def _has_validation_for_param(
-        lines: list[str], func_line: int, param: str
-    ) -> bool:
+    def _has_validation_for_param(lines: list[str], func_line: int, param: str) -> bool:
         """Check if parameter has validation."""
         # Look in next 10 lines for validation
         for i in range(func_line + 1, min(func_line + 11, len(lines))):
@@ -236,13 +232,9 @@ class InputValidationFortifier(BaseFortifier):
         return False
 
     @staticmethod
-    def _build_validation_prompt(
-        code_file: CodeFile, suggestions: list[ValidationSuggestion]
-    ) -> str:
+    def _build_validation_prompt(code_file: CodeFile, suggestions: list[ValidationSuggestion]) -> str:
         """Build LLM prompt for validation."""
-        params_list = "\n".join(
-            f"- Line {s.line_number}: {s.description}" for s in suggestions
-        )
+        params_list = "\n".join(f"- Line {s.line_number}: {s.description}" for s in suggestions)
 
         return f"""Add input validation to this Python code:
 

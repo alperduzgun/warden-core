@@ -27,9 +27,7 @@ except ImportError:
 DEFAULT_STORAGE_PATH = ".warden/grpc/suppressions.json"
 
 
-class FileSuppressionRepository(
-    BaseFileRepository[dict[str, Any]], ISuppressionRepository
-):
+class FileSuppressionRepository(BaseFileRepository[dict[str, Any]], ISuppressionRepository):
     """
     File-based suppression repository implementation.
 
@@ -55,9 +53,7 @@ class FileSuppressionRepository(
         root = project_root or Path.cwd()
         storage_path = root / DEFAULT_STORAGE_PATH
         super().__init__(storage_path, "suppressions")
-        logger.info(
-            "suppression_repository_initialized", storage_path=str(storage_path)
-        )
+        logger.info("suppression_repository_initialized", storage_path=str(storage_path))
 
     async def get_async(self, id: str) -> dict[str, Any] | None:
         """Get suppression by ID."""
@@ -131,7 +127,9 @@ class FileSuppressionRepository(
             if file_pattern is None:
                 # Global suppression, applies to all files
                 result.append(suppression)
-            elif file_pattern == file_path or (("*" in file_pattern or "?" in file_pattern) and fnmatch.fnmatch(file_path, file_pattern)):
+            elif file_pattern == file_path or (
+                ("*" in file_pattern or "?" in file_pattern) and fnmatch.fnmatch(file_path, file_pattern)
+            ):
                 result.append(suppression)
 
         return result

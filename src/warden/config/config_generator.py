@@ -71,9 +71,7 @@ class ConfigGenerator:
             )
 
         # Build base configuration with full project metadata
-        config = self._build_base_config(
-            template, project_name, language, sdk_version, framework, project_type
-        )
+        config = self._build_base_config(template, project_name, language, sdk_version, framework, project_type)
 
         # Add LLM configuration if recommended
         if template.llm_recommended:
@@ -177,9 +175,7 @@ class ConfigGenerator:
             "max_retries": 2,
         }
 
-    def _apply_framework_tweaks(
-        self, config: dict[str, Any], framework: str, language: str
-    ) -> dict[str, Any]:
+    def _apply_framework_tweaks(self, config: dict[str, Any], framework: str, language: str) -> dict[str, Any]:
         """
         Apply framework-specific configuration adjustments.
 

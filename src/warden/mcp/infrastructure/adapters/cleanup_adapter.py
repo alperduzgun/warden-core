@@ -24,11 +24,13 @@ class CleanupAdapter(BaseWardenAdapter):
         - warden_get_cleanup_score: Get cleanup score
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_analyze_cleanup",
-        "warden_get_cleanup_suggestions",
-        "warden_get_cleanup_score",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_analyze_cleanup",
+            "warden_get_cleanup_suggestions",
+            "warden_get_cleanup_score",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.CLEANUP
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -97,12 +99,14 @@ class CleanupAdapter(BaseWardenAdapter):
             # Fallback: basic analysis
             suggestions = self._basic_cleanup_analysis(safe_path)
 
-            return MCPToolResult.json_result({
-                "success": True,
-                "cleanup_score": 85.0,
-                "duration_ms": 100,
-                "suggestions": suggestions,
-            })
+            return MCPToolResult.json_result(
+                {
+                    "success": True,
+                    "cleanup_score": 85.0,
+                    "duration_ms": 100,
+                    "suggestions": suggestions,
+                }
+            )
         except ValueError as e:
             return MCPToolResult.error(f"Path validation failed: {e}")
         except Exception as e:
@@ -125,15 +129,17 @@ class CleanupAdapter(BaseWardenAdapter):
                 return MCPToolResult.error(f"Failed to get cleanup score: {e}")
 
         # Fallback: default score
-        return MCPToolResult.json_result({
-            "overall_score": 85.0,
-            "grade": "B",
-            "analyzer_scores": {
-                "dead_code": 90.0,
-                "unused_imports": 80.0,
-                "code_duplication": 85.0,
-            },
-        })
+        return MCPToolResult.json_result(
+            {
+                "overall_score": 85.0,
+                "grade": "B",
+                "analyzer_scores": {
+                    "dead_code": 90.0,
+                    "unused_imports": 80.0,
+                    "code_duplication": 85.0,
+                },
+            }
+        )
 
     def _basic_cleanup_analysis(self, path: Path) -> list[dict[str, Any]]:
         """Basic cleanup analysis without bridge."""
@@ -155,34 +161,40 @@ class CleanupAdapter(BaseWardenAdapter):
                     # Unused imports (simple heuristic)
                     if line.strip().startswith("import ") or line.strip().startswith("from "):
                         module = line.split()[-1].split(".")[0]
-                        if module not in content[content.index(line) + len(line):]:
-                            suggestions.append({
-                                "type": "unused_import",
-                                "file": str(py_file),
-                                "line": i + 1,
-                                "message": f"Potentially unused import: {line.strip()}",
-                                "severity": "low",
-                            })
+                        if module not in content[content.index(line) + len(line) :]:
+                            suggestions.append(
+                                {
+                                    "type": "unused_import",
+                                    "file": str(py_file),
+                                    "line": i + 1,
+                                    "message": f"Potentially unused import: {line.strip()}",
+                                    "severity": "low",
+                                }
+                            )
 
                     # TODO comments
                     if "# TODO" in line or "# FIXME" in line:
-                        suggestions.append({
-                            "type": "todo_comment",
-                            "file": str(py_file),
-                            "line": i + 1,
-                            "message": f"TODO/FIXME comment found: {line.strip()[:50]}...",
-                            "severity": "info",
-                        })
+                        suggestions.append(
+                            {
+                                "type": "todo_comment",
+                                "file": str(py_file),
+                                "line": i + 1,
+                                "message": f"TODO/FIXME comment found: {line.strip()[:50]}...",
+                                "severity": "info",
+                            }
+                        )
 
                     # Long lines
                     if len(line) > 120:
-                        suggestions.append({
-                            "type": "long_line",
-                            "file": str(py_file),
-                            "line": i + 1,
-                            "message": f"Line exceeds 120 characters ({len(line)} chars)",
-                            "severity": "low",
-                        })
+                        suggestions.append(
+                            {
+                                "type": "long_line",
+                                "file": str(py_file),
+                                "line": i + 1,
+                                "message": f"Line exceeds 120 characters ({len(line)} chars)",
+                                "severity": "low",
+                            }
+                        )
 
             except Exception:
                 continue

@@ -27,12 +27,14 @@ class ReportAdapter(BaseWardenAdapter):
         - warden_get_report_status: Get report status
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_generate_html_report",
-        "warden_generate_pdf_report",
-        "warden_generate_json_report",
-        "warden_get_report_status",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_generate_html_report",
+            "warden_generate_pdf_report",
+            "warden_generate_json_report",
+            "warden_get_report_status",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.REPORT
 
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
@@ -168,12 +170,14 @@ class ReportAdapter(BaseWardenAdapter):
                 "progress": 100,
             }
 
-            return MCPToolResult.json_result({
-                "success": True,
-                "report_id": report_id,
-                "file_path": str(output),
-                "size_bytes": output.stat().st_size,
-            })
+            return MCPToolResult.json_result(
+                {
+                    "success": True,
+                    "report_id": report_id,
+                    "file_path": str(output),
+                    "size_bytes": output.stat().st_size,
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"HTML report generation failed: {e}")
 
@@ -194,10 +198,7 @@ class ReportAdapter(BaseWardenAdapter):
                 return MCPToolResult.json_result(result)
 
             # PDF generation typically requires wkhtmltopdf
-            return MCPToolResult.error(
-                "PDF generation requires wkhtmltopdf. "
-                "Use warden_generate_html_report instead."
-            )
+            return MCPToolResult.error("PDF generation requires wkhtmltopdf. Use warden_generate_html_report instead.")
         except Exception as e:
             return MCPToolResult.error(f"PDF report generation failed: {e}")
 
@@ -244,13 +245,15 @@ class ReportAdapter(BaseWardenAdapter):
                 "progress": 100,
             }
 
-            return MCPToolResult.json_result({
-                "success": True,
-                "report_id": report_id,
-                "file_path": str(output),
-                "size_bytes": output.stat().st_size,
-                "content": report_data,
-            })
+            return MCPToolResult.json_result(
+                {
+                    "success": True,
+                    "report_id": report_id,
+                    "file_path": str(output),
+                    "size_bytes": output.stat().st_size,
+                    "content": report_data,
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"JSON report generation failed: {e}")
 
@@ -266,10 +269,12 @@ class ReportAdapter(BaseWardenAdapter):
         if not status:
             return MCPToolResult.error(f"Report not found: {report_id}")
 
-        return MCPToolResult.json_result({
-            "report_id": report_id,
-            **status,
-        })
+        return MCPToolResult.json_result(
+            {
+                "report_id": report_id,
+                **status,
+            }
+        )
 
     def _generate_basic_html(self, project_name: str, branch: str, run_id: str) -> str:
         """Generate basic HTML report."""

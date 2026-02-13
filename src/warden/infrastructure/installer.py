@@ -94,12 +94,8 @@ class AutoInstaller:
         # 1. Idempotency Check
         current_version = AutoInstaller._get_installed_version()
         if current_version and config.version and current_version == config.version:
-             logger.info("install_skipped_idempotent", version=current_version)
-             return InstallResult(
-                 success=True,
-                 message="Already installed",
-                 version=current_version
-             )
+            logger.info("install_skipped_idempotent", version=current_version)
+            return InstallResult(success=True, message="Already installed", version=current_version)
 
         # Build pip install command
         if config.version:
@@ -178,16 +174,16 @@ class AutoInstaller:
                 ["warden", "--version"],
                 capture_output=True,
                 text=True,
-                check=True, # Fail fast
+                check=True,  # Fail fast
             )
             return InstallResult(success=True, message="Verification successful")
 
         except subprocess.CalledProcessError as e:
-             return InstallResult(success=False, message=f"Verification cmd failed: {e.stderr}")
+            return InstallResult(success=False, message=f"Verification cmd failed: {e.stderr}")
         except FileNotFoundError:
-             return InstallResult(success=False, message="Warden binary not found in PATH")
+            return InstallResult(success=False, message="Warden binary not found in PATH")
         except Exception as e:
-             return InstallResult(success=False, message=f"Verification exception: {e!s}")
+            return InstallResult(success=False, message=f"Verification exception: {e!s}")
 
     @staticmethod
     def _get_installed_version() -> str | None:
@@ -331,11 +327,7 @@ infrastructure:
         Returns:
             Installation script as string
         """
-        warden_install = (
-            f"pip install warden-core=={version}"
-            if version
-            else "pip install warden-core"
-        )
+        warden_install = f"pip install warden-core=={version}" if version else "pip install warden-core"
 
         if platform == "github":
             return f"""# GitHub Actions Warden Installation

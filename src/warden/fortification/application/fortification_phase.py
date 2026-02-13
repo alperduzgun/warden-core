@@ -50,7 +50,6 @@ class FortificationPhase:
 
     # Delegated to FortificationPromptBuilder
 
-
     def __init__(
         self,
         config: dict[str, Any] | None = None,
@@ -76,12 +75,12 @@ class FortificationPhase:
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
 
         # Initialize IgnoreMatcher
-        project_root = getattr(self.context, 'project_root', None) or Path.cwd()
+        project_root = getattr(self.context, "project_root", None) or Path.cwd()
         if isinstance(self.context, dict):
-            project_root = self.context.get('project_root') or project_root
-            use_gitignore = self.context.get('use_gitignore', True)
+            project_root = self.context.get("project_root") or project_root
+            use_gitignore = self.context.get("use_gitignore", True)
         else:
-            use_gitignore = getattr(self.context, 'use_gitignore', True)
+            use_gitignore = getattr(self.context, "use_gitignore", True)
 
         self.ignore_matcher = IgnoreMatcher(Path(project_root), use_gitignore=use_gitignore)
 
@@ -111,22 +110,20 @@ class FortificationPhase:
         normalized_issues = []
         for issue in validated_issues:
             normalized = self._normalize_issue(issue)
-            if not self.ignore_matcher.should_ignore_for_frame(
-                Path(normalized.get("file_path", "")),
-                "fortification"
-            ):
+            if not self.ignore_matcher.should_ignore_for_frame(Path(normalized.get("file_path", "")), "fortification"):
                 normalized_issues.append(normalized)
 
         if len(validated_issues) > len(normalized_issues):
-             logger.info(
+            logger.info(
                 "fortification_phase_issues_ignored",
                 ignored=len(validated_issues) - len(normalized_issues),
-                remaining=len(normalized_issues)
+                remaining=len(normalized_issues),
             )
 
         validated_issues = normalized_issues
 
         from warden.fortification.application.orchestrator import FortificationOrchestrator
+
         orchestrator = FortificationOrchestrator(llm_service=self.llm_service)
 
         all_fortifications = []
@@ -136,7 +133,8 @@ class FortificationPhase:
             # Filter files based on ignore matcher
             original_count = len(code_files)
             code_files = [
-                cf for cf in code_files
+                cf
+                for cf in code_files
                 if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "fortification")
             ]
 
@@ -144,7 +142,7 @@ class FortificationPhase:
                 logger.info(
                     "fortification_phase_files_ignored",
                     ignored=original_count - len(code_files),
-                    remaining=len(code_files)
+                    remaining=len(code_files),
                 )
 
             for code_file in code_files:
@@ -152,14 +150,16 @@ class FortificationPhase:
                 all_actions.extend(res.actions)
                 # Map actions to fortifications for Panel
                 for action in res.actions:
-                    all_fortifications.append(Fortification(
-                        id=f"fort-{len(all_fortifications)}",
-                        title=action.type.value.replace("_", " ").title(),
-                        detail=action.description,
-                        severity=action.severity.lower() if hasattr(action, 'severity') else "high",
-                        auto_fixable=True,
-                        line_number=action.line_number
-                    ))
+                    all_fortifications.append(
+                        Fortification(
+                            id=f"fort-{len(all_fortifications)}",
+                            title=action.type.value.replace("_", " ").title(),
+                            detail=action.description,
+                            severity=action.severity.lower() if hasattr(action, "severity") else "high",
+                            auto_fixable=True,
+                            line_number=action.line_number,
+                        )
+                    )
 
         # Legacy rule-based/llm fixes for validated issues
         issues_by_type = self._group_issues_by_type(validated_issues)
@@ -175,31 +175,31 @@ class FortificationPhase:
                 if not fid and issues:
                     fid = issues[0].get("id")
 
-                all_fortifications.append(Fortification(
-                    id=f"fix-{len(all_fortifications)}",
-                    title=fix.get("title", "Security Fix"),
-                    detail=fix.get("detail", ""),
-                    suggested_code=fix.get("code") or fix.get("suggested_code"),
-                    original_code=fix.get("original_code"),
-                    file_path=fix.get("file_path"),
-                    line_number=fix.get("line_number"),
-                    confidence=fix.get("confidence", 0.0),
-                    severity=fix.get("severity", "medium"),
-                    auto_fixable=fix.get("auto_fixable", False),
-                    finding_id=fid
-                ))
+                all_fortifications.append(
+                    Fortification(
+                        id=f"fix-{len(all_fortifications)}",
+                        title=fix.get("title", "Security Fix"),
+                        detail=fix.get("detail", ""),
+                        suggested_code=fix.get("code") or fix.get("suggested_code"),
+                        original_code=fix.get("original_code"),
+                        file_path=fix.get("file_path"),
+                        line_number=fix.get("line_number"),
+                        confidence=fix.get("confidence", 0.0),
+                        severity=fix.get("severity", "medium"),
+                        auto_fixable=fix.get("auto_fixable", False),
+                        finding_id=fid,
+                    )
+                )
 
         result = FortificationResult(
-            fortifications=[
-                f.to_json() if hasattr(f, 'to_json') else f
-                for f in all_fortifications
-            ],
+            fortifications=[f.to_json() if hasattr(f, "to_json") else f for f in all_fortifications],
             applied_fixes=[],
-            security_improvements=self._calculate_improvements(validated_issues, all_fortifications) if validated_issues else {},
+            security_improvements=self._calculate_improvements(validated_issues, all_fortifications)
+            if validated_issues
+            else {},
         )
 
         return result
-
 
     async def _generate_llm_fixes_async(
         self,
@@ -223,13 +223,12 @@ class FortificationPhase:
         semantic_context = []
 
         # Step 1: Retrieve semantic context from project
-        if self.semantic_search_service and hasattr(self.semantic_search_service, 'is_available'):
+        if self.semantic_search_service and hasattr(self.semantic_search_service, "is_available"):
             try:
                 if self.semantic_search_service.is_available():
                     # Get search queries for this issue type
                     queries = FortificationPromptBuilder.ISSUE_SEARCH_QUERIES.get(
-                        issue_type.lower(),
-                        [f"secure {issue_type} handling", f"safe {issue_type} pattern"]
+                        issue_type.lower(), [f"secure {issue_type} handling", f"safe {issue_type} pattern"]
                     )
 
                     # Search for similar patterns
@@ -265,19 +264,17 @@ class FortificationPhase:
             unique_context = []
             for item in semantic_context:
                 # content attribute or str representation
-                content = getattr(item, 'content', str(item))
+                content = getattr(item, "content", str(item))
                 if content not in seen:
                     seen.add(content)
                     unique_context.append(item)
 
             # Sort by score descending (if available)
-            unique_context.sort(key=lambda x: getattr(x, 'score', 0.0), reverse=True)
+            unique_context.sort(key=lambda x: getattr(x, "score", 0.0), reverse=True)
             semantic_context = unique_context
 
         # Step 2: Create context-aware prompt with semantic examples
-        prompt = FortificationPromptBuilder.create_llm_prompt(
-            issue_type, issues, self.context, semantic_context
-        )
+        prompt = FortificationPromptBuilder.create_llm_prompt(issue_type, issues, self.context, semantic_context)
 
         try:
             # Acquire rate limit if available
@@ -289,7 +286,7 @@ class FortificationPhase:
             # Determine model tier
             model = None
             llm_cfg = None
-            if self.context and hasattr(self.context, 'llm_config'):
+            if self.context and hasattr(self.context, "llm_config"):
                 llm_cfg = self.context.llm_config
             elif isinstance(self.context, dict):
                 llm_cfg = self.context.get("llm_config")
@@ -301,10 +298,7 @@ class FortificationPhase:
                     model = getattr(llm_cfg, "smart_model", None)
 
             # Step 3: Get LLM suggestions
-            response = await self.llm_service.complete_async(
-                prompt=prompt,
-                model=model
-            )
+            response = await self.llm_service.complete_async(prompt=prompt, model=model)
 
             if not response:
                 logger.warning("llm_security_fix_response_empty", issue_type=issue_type)
@@ -331,7 +325,6 @@ class FortificationPhase:
             fixes = await self._generate_rule_based_fixes_async(issue_type, issues)
 
         return fixes
-
 
     async def _generate_rule_based_fixes_async(
         self,
@@ -471,13 +464,13 @@ class FortificationPhase:
 
         # Type/Category
         normalized["type"] = get_attr(issue, ["type", "category", "rule_name", "ruleName"], "issue")
-        if hasattr(normalized["type"], "value"): # Handle Enum
-             normalized["type"] = normalized["type"].value
+        if hasattr(normalized["type"], "value"):  # Handle Enum
+            normalized["type"] = normalized["type"].value
 
         # Severity
         normalized["severity"] = get_attr(issue, ["severity"], "medium")
-        if hasattr(normalized["severity"], "value"): # Handle Enum
-             normalized["severity"] = normalized["severity"].value.lower()
+        if hasattr(normalized["severity"], "value"):  # Handle Enum
+            normalized["severity"] = normalized["severity"].value.lower()
 
         # Message/Description
         normalized["message"] = get_attr(issue, ["message", "description", "detail"], "")
@@ -527,7 +520,9 @@ class FortificationPhase:
         # Count issues by severity
         issue_severity_counts = {}
         for issue in issues:
-            severity = issue.get("severity", "medium") if isinstance(issue, dict) else getattr(issue, "severity", "medium")
+            severity = (
+                issue.get("severity", "medium") if isinstance(issue, dict) else getattr(issue, "severity", "medium")
+            )
             issue_severity_counts[severity] = issue_severity_counts.get(severity, 0) + 1
 
         # Count fixes by severity
@@ -551,8 +546,7 @@ class FortificationPhase:
             "issues_by_severity": issue_severity_counts,
             "fixes_by_severity": fix_severity_counts,
             "critical_coverage": (
-                fix_severity_counts.get("critical", 0) /
-                issue_severity_counts.get("critical", 1) * 100
+                fix_severity_counts.get("critical", 0) / issue_severity_counts.get("critical", 1) * 100
                 if issue_severity_counts.get("critical", 0) > 0
                 else 100
             ),

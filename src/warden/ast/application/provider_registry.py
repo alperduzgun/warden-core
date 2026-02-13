@@ -76,9 +76,7 @@ class ASTProviderRegistry:
                 self._language_providers[language].append(provider)
 
                 # Sort by priority (lower value first)
-                self._language_providers[language].sort(
-                    key=lambda p: p.get_priority(language)
-                )
+                self._language_providers[language].sort(key=lambda p: p.get_priority(language))
 
         logger.info(
             "provider_registered",

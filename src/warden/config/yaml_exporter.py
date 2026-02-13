@@ -15,6 +15,7 @@ from warden.config.domain.models import PipelineConfig
 
 class YAMLExportError(Exception):
     """YAML export error."""
+
     pass
 
 
@@ -44,34 +45,28 @@ def export_simple_format(config: PipelineConfig) -> dict[str, Any]:
     # Extract frame IDs from nodes
     frame_ids = []
     for node in config.nodes:
-        if node.type == 'frame':
-            frame_id = node.data.get('frameId')
+        if node.type == "frame":
+            frame_id = node.data.get("frameId")
             if frame_id:
                 frame_ids.append(frame_id)
 
     # Build simple YAML
     data: dict[str, Any] = {
-        'version': config.version,
-        'name': config.name,
-        'frames': frame_ids,
-        'settings': {
-            'fail_fast': config.settings.fail_fast,
-            'parallel': config.settings.parallel
-        }
+        "version": config.version,
+        "name": config.name,
+        "frames": frame_ids,
+        "settings": {"fail_fast": config.settings.fail_fast, "parallel": config.settings.parallel},
     }
 
     if config.settings.timeout:
-        data['settings']['timeout'] = config.settings.timeout
+        data["settings"]["timeout"] = config.settings.timeout
 
     if config.project:
-        data['project'] = {
-            'id': config.project.id,
-            'name': config.project.name
-        }
+        data["project"] = {"id": config.project.id, "name": config.project.name}
         if config.project.path:
-            data['project']['path'] = config.project.path
+            data["project"]["path"] = config.project.path
         if config.project.branch:
-            data['project']['branch'] = config.project.branch
+            data["project"]["branch"] = config.project.branch
 
     return data
 
@@ -83,91 +78,77 @@ def export_full_format(config: PipelineConfig) -> dict[str, Any]:
     Includes all nodes, edges, positions, rules, etc.
     """
     data: dict[str, Any] = {
-        'version': config.version,
-        'id': config.id,
-        'name': config.name,
-        'nodes': [],
-        'edges': [],
-        'settings': {
-            'fail_fast': config.settings.fail_fast,
-            'parallel': config.settings.parallel
-        }
+        "version": config.version,
+        "id": config.id,
+        "name": config.name,
+        "nodes": [],
+        "edges": [],
+        "settings": {"fail_fast": config.settings.fail_fast, "parallel": config.settings.parallel},
     }
 
     # Add project if present
     if config.project:
-        data['project'] = {
-            'id': config.project.id,
-            'name': config.project.name
-        }
+        data["project"] = {"id": config.project.id, "name": config.project.name}
         if config.project.path:
-            data['project']['path'] = config.project.path
+            data["project"]["path"] = config.project.path
         if config.project.branch:
-            data['project']['branch'] = config.project.branch
+            data["project"]["branch"] = config.project.branch
         if config.project.commit:
-            data['project']['commit'] = config.project.commit
+            data["project"]["commit"] = config.project.commit
 
     # Add nodes with positions
     for node in config.nodes:
         node_dict: dict[str, Any] = {
-            'id': node.id,
-            'type': node.type,
-            'position': {
-                'x': node.position.x,
-                'y': node.position.y
-            }
+            "id": node.id,
+            "type": node.type,
+            "position": {"x": node.position.x, "y": node.position.y},
         }
         if node.data:
-            node_dict['data'] = node.data
-        data['nodes'].append(node_dict)
+            node_dict["data"] = node.data
+        data["nodes"].append(node_dict)
 
     # Add edges
     for edge in config.edges:
-        edge_dict: dict[str, Any] = {
-            'id': edge.id,
-            'source': edge.source,
-            'target': edge.target
-        }
+        edge_dict: dict[str, Any] = {"id": edge.id, "source": edge.source, "target": edge.target}
         if edge.source_handle:
-            edge_dict['source_handle'] = edge.source_handle
+            edge_dict["source_handle"] = edge.source_handle
         if edge.target_handle:
-            edge_dict['target_handle'] = edge.target_handle
-        if edge.type != 'smoothstep':
-            edge_dict['type'] = edge.type
+            edge_dict["target_handle"] = edge.target_handle
+        if edge.type != "smoothstep":
+            edge_dict["type"] = edge.type
         if not edge.animated:
-            edge_dict['animated'] = False
+            edge_dict["animated"] = False
         if edge.label:
-            edge_dict['label'] = edge.label
+            edge_dict["label"] = edge.label
 
-        data['edges'].append(edge_dict)
+        data["edges"].append(edge_dict)
 
     # Add global rules if present
     if config.global_rules:
-        data['global_rules'] = []
+        data["global_rules"] = []
         for rule in config.global_rules:
             rule_dict = {
-                'id': rule.id,
-                'name': rule.name,
-                'category': rule.category,
-                'severity': rule.severity,
-                'is_blocker': rule.is_blocker,
-                'description': rule.description,
-                'type': rule.type,
-                'conditions': rule.conditions
+                "id": rule.id,
+                "name": rule.name,
+                "category": rule.category,
+                "severity": rule.severity,
+                "is_blocker": rule.is_blocker,
+                "description": rule.description,
+                "type": rule.type,
+                "conditions": rule.conditions,
             }
             if rule.language:
-                rule_dict['language'] = rule.language
-            data['global_rules'].append(rule_dict)
+                rule_dict["language"] = rule.language
+            data["global_rules"].append(rule_dict)
 
     # Add timeout if set
     if config.settings.timeout:
-        data['settings']['timeout'] = config.settings.timeout
+        data["settings"]["timeout"] = config.settings.timeout
 
     return data
 
 
-def export_to_yaml(config: PipelineConfig, file_path: str,
-                   simple_format: bool = False) -> None:
+def export_to_yaml(config: PipelineConfig, file_path: str, simple_format: bool = False) -> None:
     """
     Export PipelineConfig to YAML file.
 
@@ -197,21 +178,13 @@ def export_to_yaml(config: PipelineConfig, file_path: str,
 
     # Write YAML
     try:
-        with open(path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                data,
-                f,
-                default_flow_style=False,
-                sort_keys=False,
-                allow_unicode=True,
-                indent=2
-            )
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True, indent=2)
     except Exception as e:
         raise YAMLExportError(f"Failed to write YAML: {e}")
 
 
-def export_to_yaml_string(config: PipelineConfig,
-                          simple_format: bool = False) -> str:
+def export_to_yaml_string(config: PipelineConfig, simple_format: bool = False) -> str:
     """
     Export PipelineConfig to YAML string.
 
@@ -228,12 +201,6 @@ def export_to_yaml_string(config: PipelineConfig,
     data = export_to_dict(config, simple_format=simple_format)
 
     try:
-        return yaml.dump(
-            data,
-            default_flow_style=False,
-            sort_keys=False,
-            allow_unicode=True,
-            indent=2
-        )
+        return yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True, indent=2)
     except Exception as e:
         raise YAMLExportError(f"Failed to serialize YAML: {e}")

@@ -10,31 +10,37 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class CircuitState(Enum):
     """Circuit breaker states."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
 
+
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker."""
+
     failure_threshold: int = 5
     success_threshold: int = 2
     timeout_duration: float = 60.0
     excluded_exceptions: tuple = ()
 
+
 class CircuitBreakerOpen(Exception):
     """Raised when circuit is open."""
+
     def __init__(self, name: str, retry_after: float):
         self.name = name
         self.retry_after = retry_after
-        super().__init__(
-            f"Circuit '{name}' is open. Retry after {retry_after:.1f}s"
-        )
+        super().__init__(f"Circuit '{name}' is open. Retry after {retry_after:.1f}s")
+
 
 class CircuitBreaker:
     """Circuit breaker implementation."""
+
     def __init__(self, name: str, config: CircuitBreakerConfig | None = None):
         self.name = name
         self.config = config or CircuitBreakerConfig()
@@ -100,6 +106,7 @@ class CircuitBreaker:
             self._record_failure(exc_val)
         return False
 
+
 def circuit_breaker(
     name: str,
     failure_threshold: int = 5,
@@ -111,10 +118,13 @@ def circuit_breaker(
         timeout_duration=timeout_duration,
     )
     breaker = CircuitBreaker(name, config)
+
     def decorator(func):
         @functools.wraps(func)
         async def wrapper_async(*args, **kwargs):
             async with breaker:
                 return await func(*args, **kwargs)
+
         return wrapper_async
+
     return decorator

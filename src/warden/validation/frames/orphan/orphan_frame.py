@@ -124,18 +124,18 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
         for code_file in code_files:
             # Skip non-applicable
             if not self._is_applicable(code_file):
-                results.append(self._create_skipped_result(time.perf_counter())) # duration approx 0
+                results.append(self._create_skipped_result(time.perf_counter()))  # duration approx 0
                 continue
 
             try:
                 # Check if LSP should be used from config
                 use_lsp = self.config.get("use_lsp", False)
-                project_root = getattr(self, 'project_root', None)
+                project_root = getattr(self, "project_root", None)
 
                 # Build mini ast_cache from code_file metadata if available
                 _file_cache = None
-                if code_file.metadata and '_cached_parse_result' in code_file.metadata:
-                    _file_cache = {code_file.path: code_file.metadata['_cached_parse_result']}
+                if code_file.metadata and "_cached_parse_result" in code_file.metadata:
+                    _file_cache = {code_file.path: code_file.metadata["_cached_parse_result"]}
 
                 detector = await OrphanDetectorFactory.create_detector(
                     code_file.content,
@@ -146,20 +146,23 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
                 )
                 if not detector:
                     # Language not supported
-                    results.append(FrameResult(
-                        frame_id=self.frame_id,
-                        frame_name=self.name,
-                        status="skipped",
-                        duration=0.0,
-                        issues_found=0,
-                        is_blocker=False,
-                        findings=[],
-                        metadata={"reason": "unsupported_language"}
-                    ))
+                    results.append(
+                        FrameResult(
+                            frame_id=self.frame_id,
+                            frame_name=self.name,
+                            status="skipped",
+                            duration=0.0,
+                            issues_found=0,
+                            is_blocker=False,
+                            findings=[],
+                            metadata={"reason": "unsupported_language"},
+                        )
+                    )
                     continue
 
                 # Call appropriate detection method (async for LSP, sync for others)
                 from orphan_detector import LSPOrphanDetector
+
                 if isinstance(detector, LSPOrphanDetector):
                     orphan_findings = await detector.detect_all_async()
                 else:
@@ -171,28 +174,32 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
                 else:
                     # No orphans found by AST, create passed result immediately
                     # Reuse helper or create new
-                    results.append(FrameResult(
-                        frame_id=self.frame_id,
-                        frame_name=self.name,
-                        status="passed",
-                        duration=0.0,
-                        issues_found=0,
-                        is_blocker=False,
-                        findings=[]
-                    ))
+                    results.append(
+                        FrameResult(
+                            frame_id=self.frame_id,
+                            frame_name=self.name,
+                            status="passed",
+                            duration=0.0,
+                            issues_found=0,
+                            is_blocker=False,
+                            findings=[],
+                        )
+                    )
             except Exception as e:
                 logger.error("orphan_ast_error", file=code_file.path, error=str(e))
                 # Add error result
-                results.append(FrameResult(
-                     frame_id=self.frame_id,
-                     frame_name=self.name,
-                     status="error",
-                     duration=0.0,
-                     issues_found=0,
-                     is_blocker=False,
-                     findings=[],
-                     metadata={"error": str(e)}
-                ))
+                results.append(
+                    FrameResult(
+                        frame_id=self.frame_id,
+                        frame_name=self.name,
+                        status="error",
+                        duration=0.0,
+                        issues_found=0,
+                        is_blocker=False,
+                        findings=[],
+                        metadata={"error": str(e)},
+                    )
+                )
 
         # 2. Filtering Phase (LLM or Basic)
         final_findings_map = {}
@@ -200,11 +207,11 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
         llm_filter = self._get_or_create_filter()
         if self.use_llm_filter and llm_filter and findings_map:
             # Smart Batch LLM Filtering
-            logger.info("starting_smart_batch_filter", total_candidates=sum(len(f_list) for f_list in findings_map.values()))
+            logger.info(
+                "starting_smart_batch_filter", total_candidates=sum(len(f_list) for f_list in findings_map.values())
+            )
             final_findings_map = await llm_filter.filter_findings_batch(
-                findings_map,
-                valid_files_map,
-                self.project_context
+                findings_map, valid_files_map, self.project_context
             )
         else:
             # Basic Filtering per file
@@ -222,21 +229,23 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
             # Metadata construction (simplified for batch)
             metadata = {
-                 "total_orphans": len(findings_map.get(path, [])),
-                 "final_orphans": len(filtered_findings),
-                 "batch_processed": True
+                "total_orphans": len(findings_map.get(path, [])),
+                "final_orphans": len(filtered_findings),
+                "batch_processed": True,
             }
 
-            results.append(FrameResult(
-                frame_id=self.frame_id,
-                frame_name=self.name,
-                status=status,
-                duration=time.perf_counter() - start_time, # Total batch duration average? Or just total
-                issues_found=len(frame_findings),
-                is_blocker=False,
-                findings=frame_findings,
-                metadata=metadata
-            ))
+            results.append(
+                FrameResult(
+                    frame_id=self.frame_id,
+                    frame_name=self.name,
+                    status=status,
+                    duration=time.perf_counter() - start_time,  # Total batch duration average? Or just total
+                    issues_found=len(frame_findings),
+                    is_blocker=False,
+                    findings=frame_findings,
+                    metadata=metadata,
+                )
+            )
 
         # Calculate aggregate stats for CLI summary
         total_candidates = sum(len(f_list) for f_list in findings_map.values())
@@ -255,8 +264,8 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
                 total_candidates,
                 final_count,
                 len(valid_files_map),
-                list(findings_map.keys())[:5]  # Sample files
-            )
+                list(findings_map.keys())[:5],  # Sample files
+            ),
         }
 
         # Store for pipeline context access
@@ -268,17 +277,11 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
             duration=time.perf_counter() - start_time,
             ast_candidates=total_candidates,
             final_findings=final_count,
-            llm_filtered=filtered_count
+            llm_filtered=filtered_count,
         )
         return results
 
-    def _generate_filter_summary(
-        self,
-        candidates: int,
-        final: int,
-        file_count: int,
-        sample_files: list[str]
-    ) -> str:
+    def _generate_filter_summary(self, candidates: int, final: int, file_count: int, sample_files: list[str]) -> str:
         """Generate human-readable summary of LLM filtering decision."""
         if candidates == 0:
             return "No orphan candidates detected in codebase."
@@ -332,12 +335,12 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
             # STAGE 1: AST-based detection (fast, language-specific)
             # Check if LSP should be used from config
             use_lsp = self.config.get("use_lsp", False)
-            project_root = getattr(self, 'project_root', None)
+            project_root = getattr(self, "project_root", None)
 
             # Build mini ast_cache from code_file metadata if available
             _file_cache = None
-            if code_file.metadata and '_cached_parse_result' in code_file.metadata:
-                _file_cache = {code_file.path: code_file.metadata['_cached_parse_result']}
+            if code_file.metadata and "_cached_parse_result" in code_file.metadata:
+                _file_cache = {code_file.path: code_file.metadata["_cached_parse_result"]}
 
             detector = await OrphanDetectorFactory.create_detector(
                 code_file.content,
@@ -361,11 +364,12 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
                     issues_found=0,
                     is_blocker=False,
                     findings=[],
-                    metadata={"reason": "unsupported_language", "skipped": True}
+                    metadata={"reason": "unsupported_language", "skipped": True},
                 )
 
             # Call appropriate detection method (async for LSP, sync for others)
             from orphan_detector import LSPOrphanDetector
+
             if isinstance(detector, LSPOrphanDetector):
                 orphan_findings = await detector.detect_all_async()
             else:
@@ -397,9 +401,7 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
                 false_positives_removed = len(orphan_findings) - len(filtered_findings)
                 false_positive_rate = (
-                    (false_positives_removed / len(orphan_findings) * 100)
-                    if len(orphan_findings) > 0
-                    else 0
+                    (false_positives_removed / len(orphan_findings) * 100) if len(orphan_findings) > 0 else 0
                 )
 
                 logger.info(
@@ -457,22 +459,10 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
                 **filtering_metadata,
                 "total_orphans": len(orphan_findings),
                 "final_orphans": len(filtered_findings),
-                "unused_imports": sum(
-                    1 for f in filtered_findings if f.orphan_type == "unused_import"
-                ),
-                "unreferenced_functions": sum(
-                    1
-                    for f in filtered_findings
-                    if f.orphan_type == "unreferenced_function"
-                ),
-                "unreferenced_classes": sum(
-                    1
-                    for f in filtered_findings
-                    if f.orphan_type == "unreferenced_class"
-                ),
-                "dead_code": sum(
-                    1 for f in filtered_findings if f.orphan_type == "dead_code"
-                ),
+                "unused_imports": sum(1 for f in filtered_findings if f.orphan_type == "unused_import"),
+                "unreferenced_functions": sum(1 for f in filtered_findings if f.orphan_type == "unreferenced_function"),
+                "unreferenced_classes": sum(1 for f in filtered_findings if f.orphan_type == "unreferenced_class"),
+                "dead_code": sum(1 for f in filtered_findings if f.orphan_type == "dead_code"),
             }
 
             return FrameResult(
@@ -522,6 +512,7 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
         # Get file extension
         import os
+
         _, ext = os.path.splitext(code_file.path)
         ext = ext.lower()
 
@@ -538,9 +529,7 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
         return True
 
-    def _filter_findings(
-        self, findings: list[OrphanFinding], code_file: CodeFile
-    ) -> list[OrphanFinding]:
+    def _filter_findings(self, findings: list[OrphanFinding], code_file: CodeFile) -> list[OrphanFinding]:
         """
         Filter findings based on configuration.
 
@@ -559,10 +548,15 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
                 continue
 
             # Filter private functions/classes if configured
-            if self.ignore_private and finding.orphan_type in [
-                "unreferenced_function",
-                "unreferenced_class",
-            ] and finding.name.startswith("_"):
+            if (
+                self.ignore_private
+                and finding.orphan_type
+                in [
+                    "unreferenced_function",
+                    "unreferenced_class",
+                ]
+                and finding.name.startswith("_")
+            ):
                 continue
 
             # Filter entry points
@@ -573,9 +567,7 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
         return filtered
 
-    def _convert_to_findings(
-        self, orphan_findings: list[OrphanFinding], code_file: CodeFile
-    ) -> list[Finding]:
+    def _convert_to_findings(self, orphan_findings: list[OrphanFinding], code_file: CodeFile) -> list[Finding]:
         """
         Convert OrphanFinding objects to Frame Finding objects.
 
@@ -717,13 +709,10 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
         try:
             # Check for injected services from FrameExecutor
-            llm_service = getattr(self, 'llm_service', None)
-            semantic_search_service = getattr(self, 'semantic_search_service', None)
+            llm_service = getattr(self, "llm_service", None)
+            semantic_search_service = getattr(self, "semantic_search_service", None)
 
-            self.llm_filter = LLMOrphanFilter(
-                llm_service=llm_service,
-                semantic_search_service=semantic_search_service
-            )
+            self.llm_filter = LLMOrphanFilter(llm_service=llm_service, semantic_search_service=semantic_search_service)
             return self.llm_filter
         except Exception as e:
             logger.warning(

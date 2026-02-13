@@ -28,11 +28,7 @@ class AutoFixResult:
 
     @property
     def summary(self) -> str:
-        return (
-            f"{len(self.applied)} applied / "
-            f"{len(self.skipped)} skipped / "
-            f"{len(self.failed)} failed"
-        )
+        return f"{len(self.applied)} applied / {len(self.skipped)} skipped / {len(self.failed)} failed"
 
 
 class AutoFixer:
@@ -115,17 +111,13 @@ class AutoFixer:
             applied=len(result.applied),
             skipped=len(result.skipped),
             failed=len(result.failed),
-            dry_run=self.dry_run
+            dry_run=self.dry_run,
         )
 
         return result
 
     def _apply_single_fix(
-        self,
-        file_path: Path,
-        original_code: str | None,
-        suggested_code: str,
-        fix: dict[str, Any]
+        self, file_path: Path, original_code: str | None, suggested_code: str, fix: dict[str, Any]
     ) -> bool:
         """
         Apply a single fix with syntax validation and rollback.
@@ -147,15 +139,14 @@ class AutoFixer:
 
             # Atomic write: write to temp, then replace
             import os
+
             tmp_fd = None
             tmp_path = None
             try:
                 tmp_fd, tmp_path = tempfile.mkstemp(
-                    suffix=file_path.suffix,
-                    dir=file_path.parent,
-                    prefix=".warden_fix_"
+                    suffix=file_path.suffix, dir=file_path.parent, prefix=".warden_fix_"
                 )
-                with os.fdopen(tmp_fd, 'w') as f:
+                with os.fdopen(tmp_fd, "w") as f:
                     f.write(new_content)
                     tmp_fd = None  # fd is now owned by fdopen
 

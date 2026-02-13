@@ -48,14 +48,14 @@ def file_lock(lock_path: Path, timeout: float = 10.0):
                         "removing_stale_lock",
                         path=str(lock_path),
                         age_seconds=int(lock_age),
-                        threshold=STALE_LOCK_THRESHOLD
+                        threshold=STALE_LOCK_THRESHOLD,
                     )
                     lock_path.unlink()
             except (OSError, FileNotFoundError) as e:
                 logger.debug("stale_lock_check_failed", path=str(lock_path), error=str(e))
 
         # Create lock file
-        lock_file = open(lock_path, 'w')
+        lock_file = open(lock_path, "w")
 
         # Try to acquire exclusive lock with timeout
         start_time = time.time()
@@ -91,6 +91,7 @@ def file_lock(lock_path: Path, timeout: float = 10.0):
                 logger = get_logger(__name__)
                 logger.debug("lock_cleanup_error", error=str(e))
 
+
 class ReportGenerator:
     """Generate reports in various formats."""
 
@@ -117,10 +118,7 @@ class ReportGenerator:
         return getattr(obj, key, default)
 
     def generate_json_report(
-        self,
-        scan_results: dict[str, Any],
-        output_path: Path,
-        base_path: Path | None = None
+        self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
     ) -> None:
         """
         Generate JSON report from scan results.
@@ -138,13 +136,9 @@ class ReportGenerator:
             sanitized_results = self._sanitize_paths(scan_results, base_path, inplace=False)
 
             # Atomic write: write to temp file first, then replace atomically
-            temp_fd, temp_path = tempfile.mkstemp(
-                suffix='.json',
-                dir=output_path.parent,
-                prefix='.tmp_'
-            )
+            temp_fd, temp_path = tempfile.mkstemp(suffix=".json", dir=output_path.parent, prefix=".tmp_")
             try:
-                with os.fdopen(temp_fd, 'w') as f:
+                with os.fdopen(temp_fd, "w") as f:
                     json.dump(sanitized_results, f, indent=4)
                 os.replace(temp_path, output_path)  # Atomic on Unix/Linux
             except Exception:
@@ -168,6 +162,7 @@ class ReportGenerator:
         # If not in-place, create a deep copy first
         if not inplace:
             import copy
+
             data = copy.deepcopy(data)
 
         # Resolving allow generic usage (Fail Fast logic: base_path must be valid if provided)
@@ -207,14 +202,11 @@ class ReportGenerator:
             return text.replace(str(root_path), ".")
 
         except (ValueError, OSError):
-             # On failure, return original (Fail Safe) or attempt minimal replacement
-             return text.replace(str(root_path), ".")
+            # On failure, return original (Fail Safe) or attempt minimal replacement
+            return text.replace(str(root_path), ".")
 
     def generate_sarif_report(
-        self,
-        scan_results: dict[str, Any],
-        output_path: Path,
-        base_path: Path | None = None
+        self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
     ) -> None:
         """
         Generate SARIF report from scan results for GitHub integration.
@@ -225,6 +217,7 @@ class ReportGenerator:
             base_path: Optional base path for relativizing paths
         """
         from warden.shared.infrastructure.logging import get_logger
+
         logger = get_logger(__name__)
 
         # Basic SARIF v2.1.0 structure
@@ -238,50 +231,42 @@ class ReportGenerator:
                             "name": "Warden",
                             "semanticVersion": "0.1.0",
                             "informationUri": "https://github.com/alperduzgun/warden-core",
-                            "rules": []
+                            "rules": [],
                         }
                     },
-                    "invocations": [
-                        {
-                            "executionSuccessful": True,
-                            "toolExecutionNotifications": []
-                        }
-                    ],
-                    "results": []
+                    "invocations": [{"executionSuccessful": True, "toolExecutionNotifications": []}],
+                    "results": [],
                 }
-            ]
+            ],
         }
 
         # Inject AI Advisories from Metadata
-        metadata = scan_results.get('metadata', {})
-        advisories = metadata.get('advisories', [])
+        metadata = scan_results.get("metadata", {})
+        advisories = metadata.get("advisories", [])
         # Fallback to check if it's in top-level for some reason
         if not advisories:
-            advisories = scan_results.get('advisories', [])
+            advisories = scan_results.get("advisories", [])
 
         if advisories:
             notifications = []
             for advice in advisories:
-                notifications.append({
-                    "descriptor": {
-                        "id": "AI001",
-                        "name": "AI Advisor Note"
-                    },
-                    "message": {
-                        "text": advice
-                    },
-                    "level": "note"
-                })
+                notifications.append(
+                    {
+                        "descriptor": {"id": "AI001", "name": "AI Advisor Note"},
+                        "message": {"text": advice},
+                        "level": "note",
+                    }
+                )
             sarif["runs"][0]["invocations"][0]["toolExecutionNotifications"] = notifications
 
         # Add custom properties for LLM usage and metrics
         properties = {}
 
-        llm_usage = scan_results.get('llmUsage', {})
+        llm_usage = scan_results.get("llmUsage", {})
         if llm_usage:
             properties["llmUsage"] = llm_usage
 
-        llm_metrics = scan_results.get('llmMetrics', {})
+        llm_metrics = scan_results.get("llmMetrics", {})
         if llm_metrics:
             properties["llmMetrics"] = llm_metrics
 
@@ -292,19 +277,19 @@ class ReportGenerator:
         rules_map = {}
 
         # Support both snake_case (CLI) and camelCase (Panel)
-        frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
+        frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
 
         for frame in frame_results:
-            findings = self._get_val(frame, 'findings', [])
-            frame_id = self._get_val(frame, 'frame_id', self._get_val(frame, 'frameId', 'generic'))
+            findings = self._get_val(frame, "findings", [])
+            frame_id = self._get_val(frame, "frame_id", self._get_val(frame, "frameId", "generic"))
 
             for finding in findings:
                 # Use finding ID or Fallback to frame ID
-                rule_id = str(self._get_val(finding, 'id', frame_id)).lower().replace(' ', '-')
+                rule_id = str(self._get_val(finding, "id", frame_id)).lower().replace(" ", "-")
 
                 # Handle file path - Finding has 'location' usually as 'file:line'
-                location_str = self._get_val(finding, 'location', 'unknown')
-                file_path = location_str.split(':')[0] if ':' in location_str else location_str
+                location_str = self._get_val(finding, "location", "unknown")
+                file_path = location_str.split(":")[0] if ":" in location_str else location_str
 
                 # Log if critical attributes are missing
                 if not rule_id or not location_str:
@@ -312,7 +297,7 @@ class ReportGenerator:
                         "sarif_finding_missing_critical_attributes",
                         finding_id=rule_id,
                         location=location_str,
-                        frame_id=frame_id
+                        frame_id=frame_id,
                     )
 
                 # Register rule if not seen
@@ -320,47 +305,43 @@ class ReportGenerator:
                     rule = {
                         "id": rule_id,
                         "shortDescription": {
-                            "text": self._get_val(frame, 'frame_name', self._get_val(frame, 'frameName', frame_id))
+                            "text": self._get_val(frame, "frame_name", self._get_val(frame, "frameName", frame_id))
                         },
-                        "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules"
+                        "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules",
                     }
                     run["tool"]["driver"]["rules"].append(rule)
                     rules_map[rule_id] = rule
 
                 # Create SARIF result
-                severity = self._get_val(finding, 'severity', 'warning').lower()
+                severity = self._get_val(finding, "severity", "warning").lower()
                 level = "error" if severity in ["critical", "high"] else "warning"
 
                 result = {
                     "ruleId": rule_id,
                     "level": level,
-                    "message": {
-                        "text": self._get_val(finding, 'message', 'Issue detected by Warden')
-                    },
+                    "message": {"text": self._get_val(finding, "message", "Issue detected by Warden")},
                     "locations": [
                         {
                             "physicalLocation": {
-                                "artifactLocation": {
-                                    "uri": self._to_relative_uri(file_path)
-                                },
+                                "artifactLocation": {"uri": self._to_relative_uri(file_path)},
                                 "region": {
-                                    "startLine": max(1, self._get_val(finding, 'line', 1)),
-                                    "startColumn": max(1, self._get_val(finding, 'column', 1))
-                                }
+                                    "startLine": max(1, self._get_val(finding, "line", 1)),
+                                    "startColumn": max(1, self._get_val(finding, "column", 1)),
+                                },
                             }
                         }
-                    ]
+                    ],
                 }
 
                 # Add detail if available
-                detail = self._get_val(finding, 'detail', '')
+                detail = self._get_val(finding, "detail", "")
 
                 # Check for manual review flag in verification metadata
-                verification = self._get_val(finding, 'verification_metadata', {})
-                if self._get_val(verification, 'review_required'):
+                verification = self._get_val(finding, "verification_metadata", {})
+                if self._get_val(verification, "review_required"):
                     result["message"]["text"] = f"⚠️ [MANUAL REVIEW REQUIRED] {result['message']['text']}"
                     if not detail:
-                        detail = self._get_val(verification, 'reason', 'LLM verification was uncertain or skipped.')
+                        detail = self._get_val(verification, "reason", "LLM verification was uncertain or skipped.")
                     else:
                         detail = f"{self._get_val(verification, 'reason', 'Verification uncertain')} | {detail}"
 
@@ -368,7 +349,7 @@ class ReportGenerator:
                     result["message"]["text"] += f"\\n\\nDetails: {detail}"
 
                 # Add exploit evidence if available
-                exploit_evidence = self._get_val(finding, 'exploitEvidence', None)
+                exploit_evidence = self._get_val(finding, "exploitEvidence", None)
                 if exploit_evidence:
                     if "properties" not in result:
                         result["properties"] = {}
@@ -377,12 +358,12 @@ class ReportGenerator:
                 run["results"].append(result)
 
         # Log suppressed findings
-        suppressed_findings = scan_results.get('suppressed_findings', [])
+        suppressed_findings = scan_results.get("suppressed_findings", [])
         if suppressed_findings:
             logger.info(
                 "sarif_suppressed_findings",
                 count=len(suppressed_findings),
-                findings=[f.get('id', 'unknown') for f in suppressed_findings]
+                findings=[f.get("id", "unknown") for f in suppressed_findings],
             )
             # Optionally, add suppressed findings to SARIF as notifications or with suppression property
             # For now, just logging as per instruction.
@@ -395,13 +376,9 @@ class ReportGenerator:
 
         with file_lock(lock_path):
             # Atomic write: write to temp file first, then replace atomically
-            temp_fd, temp_path = tempfile.mkstemp(
-                suffix='.sarif',
-                dir=output_path.parent,
-                prefix='.tmp_'
-            )
+            temp_fd, temp_path = tempfile.mkstemp(suffix=".sarif", dir=output_path.parent, prefix=".tmp_")
             try:
-                with os.fdopen(temp_fd, 'w') as f:
+                with os.fdopen(temp_fd, "w") as f:
                     json.dump(sarif, f, indent=4)
                 os.replace(temp_path, output_path)  # Atomic on Unix/Linux
             except Exception:
@@ -437,10 +414,7 @@ class ReportGenerator:
                 raise
 
     def generate_svg_badge(
-        self,
-        scan_results: dict[str, Any],
-        output_path: Path,
-        base_path: Path | None = None
+        self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
     ) -> None:
         """
         Generate a premium, standalone SVG badge for the project quality.
@@ -449,29 +423,29 @@ class ReportGenerator:
 
         # Extract findings
         all_findings = []
-        frame_results = scan_results.get('frame_results', scan_results.get('frameResults', []))
+        frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
         for frame in frame_results:
-            all_findings.extend(frame.get('findings', []))
-        manual = scan_results.get('manual_review_findings_list', [])
+            all_findings.extend(frame.get("findings", []))
+        manual = scan_results.get("manual_review_findings_list", [])
         all_findings.extend(manual)
 
         score = calculate_quality_score(all_findings, 10.0)
 
         # Determine Color Gradient
         if score >= 9.0:
-            gradient_start, gradient_end = "#10B981", "#059669" # Emerald
+            gradient_start, gradient_end = "#10B981", "#059669"  # Emerald
             status_text = "EXCELLENT"
         elif score >= 7.5:
-            gradient_start, gradient_end = "#3B82F6", "#2563EB" # Blue
+            gradient_start, gradient_end = "#3B82F6", "#2563EB"  # Blue
             status_text = "GOOD"
         elif score >= 5.0:
-            gradient_start, gradient_end = "#F59E0B", "#D97706" # Amber
+            gradient_start, gradient_end = "#F59E0B", "#D97706"  # Amber
             status_text = "WARNING"
         elif score >= 2.5:
-            gradient_start, gradient_end = "#F97316", "#EA580C" # Orange
+            gradient_start, gradient_end = "#F97316", "#EA580C"  # Orange
             status_text = "RISK"
         else:
-            gradient_start, gradient_end = "#EF4444", "#DC2626" # Red
+            gradient_start, gradient_end = "#EF4444", "#DC2626"  # Red
             status_text = "CRITICAL"
 
         # Calculate progress circle (circumference = 2 * pi * r)
@@ -488,10 +462,11 @@ class ReportGenerator:
         badge_secret = os.environ.get("WARDEN_BADGE_SECRET", "")
         if not badge_secret:
             from warden.shared.infrastructure.logging import get_logger as _get_logger
+
             _get_logger(__name__).warning(
                 "badge_secret_not_set",
                 message="WARDEN_BADGE_SECRET env var not set. Badge signature uses weak default. "
-                        "Set WARDEN_BADGE_SECRET for production use.",
+                "Set WARDEN_BADGE_SECRET for production use.",
             )
             badge_secret = "warden-local-dev-only"  # warden: ignore
         secret_key = badge_secret.encode()
@@ -537,7 +512,7 @@ class ReportGenerator:
 
         <!-- Progress Bar Section -->
         <line x1="184" y1="64" x2="276" y2="64" stroke="#3f3f46" stroke-width="4" stroke-linecap="round" stroke-opacity="0.5"/>
-        <line x1="184" y1="64" x2="{184 + (92 * (score/10.0))}" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
+        <line x1="184" y1="64" x2="{184 + (92 * (score / 10.0))}" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
 
         <!-- Footer Meta -->
         <text x="276" y="84" fill="#52525b" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="9" text-anchor="end" letter-spacing="0.5">AI-NATIVE GUARDIAN</text>
@@ -547,9 +522,9 @@ class ReportGenerator:
         # Atomic write
         lock_path = output_path.parent / f".{output_path.name}.lock"
         with file_lock(lock_path):
-            temp_fd, temp_path = tempfile.mkstemp(suffix='.svg', dir=output_path.parent, prefix='.tmp_badge_')
+            temp_fd, temp_path = tempfile.mkstemp(suffix=".svg", dir=output_path.parent, prefix=".tmp_badge_")
             try:
-                with os.fdopen(temp_fd, 'w') as f:
+                with os.fdopen(temp_fd, "w") as f:
                     f.write(svg_content)
                 os.replace(temp_path, output_path)
             except Exception:
@@ -558,10 +533,7 @@ class ReportGenerator:
                 raise
 
     def generate_junit_report(
-        self,
-        scan_results: dict[str, Any],
-        output_path: Path,
-        base_path: Path | None = None
+        self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
     ) -> None:
         """
         Generate JUnit XML report for general CI/CD compatibility.
@@ -573,58 +545,42 @@ class ReportGenerator:
 
         testsuites = ET.Element("testsuites", name="Warden Scan")
 
-        frame_results = sanitized_results.get('frame_results', sanitized_results.get('frameResults', []))
+        frame_results = sanitized_results.get("frame_results", sanitized_results.get("frameResults", []))
 
         testsuite = ET.SubElement(
             testsuites,
             "testsuite",
             name="security_validation",
             tests=str(len(frame_results)),
-            failures=str(sanitized_results.get('frames_failed', sanitized_results.get('framesFailed', 0))),
+            failures=str(sanitized_results.get("frames_failed", sanitized_results.get("framesFailed", 0))),
             errors="0",
-            skipped=str(sanitized_results.get('frames_skipped', sanitized_results.get('framesSkipped', 0))),
-            time=str(sanitized_results.get('duration', 0))
+            skipped=str(sanitized_results.get("frames_skipped", sanitized_results.get("framesSkipped", 0))),
+            time=str(sanitized_results.get("duration", 0)),
         )
 
         for frame in frame_results:
-            name = frame.get('frame_name', frame.get('frameName', 'Unknown Frame'))
+            name = frame.get("frame_name", frame.get("frameName", "Unknown Frame"))
             classname = f"warden.{frame.get('frame_id', frame.get('frameId', 'generic'))}"
-            duration = str(frame.get('duration', 0))
+            duration = str(frame.get("duration", 0))
 
-            testcase = ET.SubElement(
-                testsuite,
-                "testcase",
-                name=name,
-                classname=classname,
-                time=duration
-            )
+            testcase = ET.SubElement(testsuite, "testcase", name=name, classname=classname, time=duration)
 
-            status = frame.get('status')
+            status = frame.get("status")
             if status == "failed":
-                findings = frame.get('findings', [])
+                findings = frame.get("findings", [])
                 message = f"Found {len(findings)} issues in {name}"
-                failure_text = "\\n".join([
-                    f"- [{f.get('severity')}] {f.get('location')}: {f.get('message')}"
-                    for f in findings
-                ])
-
-                failure = ET.SubElement(
-                    testcase,
-                    "failure",
-                    message=message,
-                    type="SecurityViolation"
+                failure_text = "\\n".join(
+                    [f"- [{f.get('severity')}] {f.get('location')}: {f.get('message')}" for f in findings]
                 )
+
+                failure = ET.SubElement(testcase, "failure", message=message, type="SecurityViolation")
                 failure.text = failure_text
             elif status == "skipped":
                 ET.SubElement(testcase, "skipped")
 
         # Atomic write: write to temp file first, then replace atomically
         tree = ET.ElementTree(testsuites)
-        temp_fd, temp_path = tempfile.mkstemp(
-            suffix='.xml',
-            dir=output_path.parent,
-            prefix='.tmp_'
-        )
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".xml", dir=output_path.parent, prefix=".tmp_")
         try:
             # Close the file descriptor and use path-based write
             os.close(temp_fd)
@@ -637,10 +593,7 @@ class ReportGenerator:
             raise
 
     def generate_html_report(
-        self,
-        scan_results: dict[str, Any],
-        output_path: Path,
-        base_path: Path | None = None
+        self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
     ) -> None:
         """
         Generate HTML report from scan results.
@@ -656,10 +609,7 @@ class ReportGenerator:
         self.html_generator.generate(sanitized_results, output_path)
 
     def generate_pdf_report(
-        self,
-        scan_results: dict[str, Any],
-        output_path: Path,
-        base_path: Path | None = None
+        self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
     ) -> None:
         """
         Generate PDF report from HTML.
@@ -673,13 +623,12 @@ class ReportGenerator:
             RuntimeError: If WeasyPrint is not installed
         """
         from warden.shared.infrastructure.logging import get_logger
+
         logger = get_logger(__name__)
 
         # OBSERVABILITY: Log PDF generation start
         logger.info(
-            "pdf_generation_started",
-            output_path=str(output_path),
-            findings_count=scan_results.get('total_findings', 0)
+            "pdf_generation_started", output_path=str(output_path), findings_count=scan_results.get("total_findings", 0)
         )
 
         # Use inplace=False to create a copy for sanitization
@@ -693,30 +642,21 @@ class ReportGenerator:
             from weasyprint import CSS, HTML
         except ImportError:
             logger.error("pdf_generation_failed", reason="weasyprint_not_installed")
-            raise RuntimeError(
-                "PDF generation requires WeasyPrint. Install with: pip install weasyprint"
-            )
+            raise RuntimeError("PDF generation requires WeasyPrint. Install with: pip install weasyprint")
 
         # Convert HTML to PDF using atomic write
-        temp_fd, temp_path = tempfile.mkstemp(
-            suffix='.pdf',
-            dir=output_path.parent,
-            prefix='.tmp_'
-        )
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".pdf", dir=output_path.parent, prefix=".tmp_")
         try:
             # Close the file descriptor as WeasyPrint writes to path directly
             os.close(temp_fd)
             HTML(string=html_content).write_pdf(
-                temp_path,
-                stylesheets=[CSS(string=self.html_generator.get_pdf_styles())]
+                temp_path, stylesheets=[CSS(string=self.html_generator.get_pdf_styles())]
             )
             os.replace(temp_path, output_path)  # Atomic on Unix/Linux
 
             # OBSERVABILITY: Log successful PDF generation
             logger.info(
-                "pdf_generated",
-                output_path=str(output_path),
-                file_size_kb=round(output_path.stat().st_size / 1024, 2)
+                "pdf_generated", output_path=str(output_path), file_size_kb=round(output_path.stat().st_size / 1024, 2)
             )
         except Exception as e:
             # Clean up temp file on failure
@@ -725,10 +665,7 @@ class ReportGenerator:
 
             # OBSERVABILITY: Log failure with context
             logger.error(
-                "pdf_generation_failed",
-                output_path=str(output_path),
-                error=str(e),
-                error_type=type(e).__name__
+                "pdf_generation_failed", output_path=str(output_path), error=str(e), error_type=type(e).__name__
             )
             # Re-raise with more context
             raise RuntimeError(f"PDF generation failed: {e!s}") from e

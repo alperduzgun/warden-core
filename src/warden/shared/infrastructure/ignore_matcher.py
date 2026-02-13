@@ -219,9 +219,7 @@ class IgnoreMatcher:
 
         return False
 
-    def should_ignore_for_frame(
-        self, file_path: Path, frame_id: str
-    ) -> bool:
+    def should_ignore_for_frame(self, file_path: Path, frame_id: str) -> bool:
         """
         Check if a file should be ignored for a specific frame.
 

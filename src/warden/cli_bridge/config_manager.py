@@ -53,7 +53,9 @@ class ConfigManager:
             if root_manifest.exists():
                 self.config_path = root_manifest
             else:
-                raise FileNotFoundError(f"Config file not found in {self.project_root} (checked warden.yaml and .warden/config.yaml)")
+                raise FileNotFoundError(
+                    f"Config file not found in {self.project_root} (checked warden.yaml and .warden/config.yaml)"
+                )
 
         with open(self.config_path) as f:
             config = yaml.safe_load(f)
@@ -71,15 +73,8 @@ class ConfigManager:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write with nice formatting
-        with open(self.config_path, 'w') as f:
-            yaml.safe_dump(
-                config,
-                f,
-                default_flow_style=False,
-                sort_keys=False,
-                allow_unicode=True,
-                indent=2
-            )
+        with open(self.config_path, "w") as f:
+            yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True, indent=2)
 
     def update_frame_status(self, frame_id: str, enabled: bool) -> dict[str, Any]:
         """
@@ -103,26 +98,22 @@ class ConfigManager:
         config = self.read_config()
 
         # Ensure frames_config exists
-        if 'frames_config' not in config:
-            config['frames_config'] = {}
+        if "frames_config" not in config:
+            config["frames_config"] = {}
 
         # Ensure frame config exists
-        if frame_id not in config['frames_config']:
-            config['frames_config'][frame_id] = {}
+        if frame_id not in config["frames_config"]:
+            config["frames_config"][frame_id] = {}
 
         # Update enabled status
-        config['frames_config'][frame_id]['enabled'] = enabled
+        config["frames_config"][frame_id]["enabled"] = enabled
 
         # Write back to file
         self.write_config(config)
 
         logger.info(f"Frame status updated: {frame_id} → enabled={enabled}")
 
-        return {
-            "frame_id": frame_id,
-            "enabled": enabled,
-            "config": config['frames_config'][frame_id]
-        }
+        return {"frame_id": frame_id, "enabled": enabled, "config": config["frames_config"][frame_id]}
 
     def get_frame_status(self, frame_id: str) -> bool | None:
         """
@@ -136,7 +127,7 @@ class ConfigManager:
         """
         try:
             config = self.read_config()
-            return config.get('frames_config', {}).get(frame_id, {}).get('enabled')
+            return config.get("frames_config", {}).get(frame_id, {}).get("enabled")
         except FileNotFoundError:
             return None
 
@@ -162,6 +153,7 @@ class ConfigManager:
         if self.rules_path.is_dir():
             # Use shared merger logic (DRY)
             from warden.shared.utils.yaml_merger import YAMLMerger
+
             return YAMLMerger.merge_directory(self.rules_path)
 
         with open(self.rules_path) as f:
@@ -194,15 +186,11 @@ class ConfigManager:
             rules = self.read_rules()
         except FileNotFoundError as e:
             logger.error(f"Frame consistency validation failed: {e}")
-            return {
-                "valid": False,
-                "error": str(e),
-                "warnings": [str(e)]
-            }
+            return {"valid": False, "error": str(e), "warnings": [str(e)]}
 
         # Get frame lists
-        config_frames = set(config.get('frames', []))
-        rules_frames = set(rules.get('frame_rules', {}).keys())
+        config_frames = set(config.get("frames", []))
+        rules_frames = set(rules.get("frame_rules", {}).keys())
 
         # Find mismatches
         missing_in_rules = config_frames - rules_frames
@@ -232,5 +220,5 @@ class ConfigManager:
             "rules_frames": sorted(rules_frames),
             "missing_in_rules": sorted(missing_in_rules),
             "missing_in_config": sorted(missing_in_config),
-            "warnings": warnings
+            "warnings": warnings,
         }

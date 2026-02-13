@@ -143,12 +143,14 @@ class AntiPatternFrame(ValidationFrame):
             # Register tree-sitter provider
             try:
                 from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
+
                 cls._registry.register(TreeSitterProvider())
             except ImportError:
                 logger.debug("tree_sitter_provider_not_available")
             # Register Python native provider if available
             try:
                 from warden.ast.providers.python_provider import PythonASTProvider
+
                 cls._registry.register(PythonASTProvider())
             except ImportError:
                 pass
@@ -186,27 +188,19 @@ class AntiPatternFrame(ValidationFrame):
         # Run detections using modular detectors
         if self.check_exception_handling or self.check_generic_exception:
             checks_executed.append("exception_handling")
-            violations.extend(
-                self._exception_detector.detect(code_file, language, lines, ast_root)
-            )
+            violations.extend(self._exception_detector.detect(code_file, language, lines, ast_root))
 
         if self.check_god_class:
             checks_executed.append("god_class")
-            violations.extend(
-                self._class_size_detector.detect(code_file, language, lines, ast_root)
-            )
+            violations.extend(self._class_size_detector.detect(code_file, language, lines, ast_root))
 
         if self.check_debug_output:
             checks_executed.append("debug_output")
-            violations.extend(
-                self._debug_detector.detect(code_file, language, lines, ast_root)
-            )
+            violations.extend(self._debug_detector.detect(code_file, language, lines, ast_root))
 
         if self.check_todo_fixme:
             checks_executed.append("todo_fixme")
-            violations.extend(
-                self._todo_detector.detect(code_file, language, lines, ast_root)
-            )
+            violations.extend(self._todo_detector.detect(code_file, language, lines, ast_root))
 
         # Convert to findings
         findings = self._violations_to_findings(violations)
@@ -268,6 +262,7 @@ class AntiPatternFrame(ValidationFrame):
         # Try LanguageRegistry first
         try:
             from warden.shared.languages.registry import LanguageRegistry
+
             lang = LanguageRegistry.get_language_from_path(code_file.path)
             if lang and lang != CodeLanguage.UNKNOWN:
                 return lang
@@ -319,12 +314,15 @@ class AntiPatternFrame(ValidationFrame):
     # =========================================================================
 
     async def _get_ast(
-        self, content: str, language: CodeLanguage, file_path: str,
+        self,
+        content: str,
+        language: CodeLanguage,
+        file_path: str,
         code_file: Any = None,
     ) -> ASTNode | None:
         """Get Universal AST for content using best available provider."""
         # Cache-first: use pre-parsed result if available
-        cached = code_file.metadata.get('_cached_parse_result') if code_file and code_file.metadata else None
+        cached = code_file.metadata.get("_cached_parse_result") if code_file and code_file.metadata else None
         if cached and (cached.is_success() or cached.is_partial()) and cached.ast_root:
             return cached.ast_root
 
@@ -349,9 +347,7 @@ class AntiPatternFrame(ValidationFrame):
     # RESULT CONVERSION
     # =========================================================================
 
-    def _violations_to_findings(
-        self, violations: list[AntiPatternViolation]
-    ) -> list[Finding]:
+    def _violations_to_findings(self, violations: list[AntiPatternViolation]) -> list[Finding]:
         """Convert violations to Frame findings."""
         findings = []
 

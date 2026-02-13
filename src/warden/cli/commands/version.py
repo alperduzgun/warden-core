@@ -8,6 +8,7 @@ from warden.cli.utils import get_installed_version
 
 console = Console()
 
+
 def version_command():
     """Show Warden version info."""
     version = get_installed_version()

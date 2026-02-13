@@ -61,9 +61,12 @@ def privacy_redactor(logger: Any, method_name: str, event_dict: dict[str, Any]) 
         """Recursively redact dictionary values."""
         return {
             k: (
-                redact_string(v) if isinstance(v, str)
-                else redact_dict(v) if isinstance(v, dict)
-                else [redact_string(i) if isinstance(i, str) else i for i in v] if isinstance(v, list)
+                redact_string(v)
+                if isinstance(v, str)
+                else redact_dict(v)
+                if isinstance(v, dict)
+                else [redact_string(i) if isinstance(i, str) else i for i in v]
+                if isinstance(v, list)
                 else v
             )
             for k, v in d.items()
@@ -121,7 +124,7 @@ def configure_logging(stream: Any = sys.stderr) -> None:
         format="%(message)s",
         stream=stream,
         level=getattr(logging, settings.log_level.upper()),
-        force=True, # Force reconfiguration in case it was already set
+        force=True,  # Force reconfiguration in case it was already set
     )
 
 

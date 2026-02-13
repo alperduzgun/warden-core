@@ -72,12 +72,12 @@ class CleaningPhase:
         self.use_llm = self.config.get("use_llm", True) and llm_service is not None
 
         # Initialize IgnoreMatcher
-        project_root = getattr(self.context, 'project_root', None) or Path.cwd()
+        project_root = getattr(self.context, "project_root", None) or Path.cwd()
         if isinstance(self.context, dict):
-            project_root = self.context.get('project_root') or project_root
-            use_gitignore = self.context.get('use_gitignore', True)
+            project_root = self.context.get("project_root") or project_root
+            use_gitignore = self.context.get("use_gitignore", True)
         else:
-            use_gitignore = getattr(self.context, 'use_gitignore', True)
+            use_gitignore = getattr(self.context, "use_gitignore", True)
 
         self.ignore_matcher = IgnoreMatcher(Path(project_root), use_gitignore=use_gitignore)
 
@@ -118,18 +118,16 @@ class CleaningPhase:
         # Filter files based on ignore matcher
         original_count = len(code_files)
         code_files = [
-            cf for cf in code_files
-            if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "cleaning")
+            cf for cf in code_files if not self.ignore_matcher.should_ignore_for_frame(Path(cf.path), "cleaning")
         ]
 
         if len(code_files) < original_count:
-             logger.info(
-                "cleaning_phase_files_ignored",
-                ignored=original_count - len(code_files),
-                remaining=len(code_files)
+            logger.info(
+                "cleaning_phase_files_ignored", ignored=original_count - len(code_files), remaining=len(code_files)
             )
 
         from warden.cleaning.application.orchestrator import CleaningOrchestrator
+
         orchestrator = CleaningOrchestrator()
 
         all_cleanings = []
@@ -144,8 +142,12 @@ class CleaningPhase:
             # Skip non-production files based on context
             file_context = self.context.get("file_contexts", {}).get(code_file.path)
             if file_context:
-                if hasattr(file_context, 'context'):
-                    context_type = file_context.context.value if hasattr(file_context.context, 'value') else str(file_context.context)
+                if hasattr(file_context, "context"):
+                    context_type = (
+                        file_context.context.value
+                        if hasattr(file_context.context, "value")
+                        else str(file_context.context)
+                    )
                 elif isinstance(file_context, dict):
                     context_type = file_context.get("context", "PRODUCTION")
                 else:
@@ -160,15 +162,21 @@ class CleaningPhase:
 
             # Map suggestions to cleanings for Panel
             for sug in res.suggestions:
-                all_cleanings.append(Cleaning(
-                    id=f"clean-{len(all_cleanings)}",
-                    title=sug.issue.issue_type.value.replace("_", " ").title(),
-                    detail=sug.suggestion
-                ))
+                all_cleanings.append(
+                    Cleaning(
+                        id=f"clean-{len(all_cleanings)}",
+                        title=sug.issue.issue_type.value.replace("_", " ").title(),
+                        detail=sug.suggestion,
+                    )
+                )
 
             # Heuristic: Skip LLM cleaning if code quality is already Good/Excellent (>7.0)
             skip_llm_for_quality = False
-            phase_results = self.context.get("phase_results", {}) if isinstance(self.context, dict) else getattr(self.context, "phase_results", {})
+            phase_results = (
+                self.context.get("phase_results", {})
+                if isinstance(self.context, dict)
+                else getattr(self.context, "phase_results", {})
+            )
             file_metrics = phase_results.get("ANALYSIS", {}).get("metrics", {}).get(code_file.path)
 
             if file_metrics:
@@ -180,15 +188,15 @@ class CleaningPhase:
             if self.use_llm and not skip_llm_for_quality:
                 files_for_llm.append(code_file)
             else:
-                 # If skipping LLM or LLM disabled, run rule-based fallback immediately/lazily?
-                 # Actually orchestrator.analyze_async does some rule based stuff, but _generate_rule_based_suggestions_async does MORE.
-                 # Let's collecting them for batch processing to avoid confusion, or run here?
-                 # Running here is fine as it's CPU bound and fast.
-                 if not self.use_llm and skip_llm_for_quality:
-                     logger.debug("falling_back_to_rules_due_to_high_quality", file=code_file.path)
+                # If skipping LLM or LLM disabled, run rule-based fallback immediately/lazily?
+                # Actually orchestrator.analyze_async does some rule based stuff, but _generate_rule_based_suggestions_async does MORE.
+                # Let's collecting them for batch processing to avoid confusion, or run here?
+                # Running here is fine as it's CPU bound and fast.
+                if not self.use_llm and skip_llm_for_quality:
+                    logger.debug("falling_back_to_rules_due_to_high_quality", file=code_file.path)
 
-                 sugs = await self._generate_rule_based_suggestions_async(code_file)
-                 rule_based_suggestions[code_file.path] = sugs
+                sugs = await self._generate_rule_based_suggestions_async(code_file)
+                rule_based_suggestions[code_file.path] = sugs
 
         # Batch Process LLM Suggestions
         llm_suggestions_map = {}
@@ -201,18 +209,22 @@ class CleaningPhase:
             suggestions = llm_suggestions_map.get(code_file.path) or rule_based_suggestions.get(code_file.path) or {}
 
             for sug in suggestions.get("cleanings", []):
-                all_cleanings.append(Cleaning(
-                    id=f"leg-clean-{len(all_cleanings)}",
-                    title=sug.get("title", "Cleaning Suggestion"),
-                    detail=sug.get("detail", "")
-                ))
+                all_cleanings.append(
+                    Cleaning(
+                        id=f"leg-clean-{len(all_cleanings)}",
+                        title=sug.get("title", "Cleaning Suggestion"),
+                        detail=sug.get("detail", ""),
+                    )
+                )
 
             for ref in suggestions.get("refactorings", []):
-                all_refactorings.append(Cleaning(
-                    id=f"ref-{len(all_refactorings)}",
-                    title=ref.get("title", "Refactoring"),
-                    detail=ref.get("detail", "")
-                ))
+                all_refactorings.append(
+                    Cleaning(
+                        id=f"ref-{len(all_refactorings)}",
+                        title=ref.get("title", "Refactoring"),
+                        detail=ref.get("detail", ""),
+                    )
+                )
 
         # Calculate results
         quality_score_before = self.context.get("quality_score_before", 0.0)
@@ -228,14 +240,13 @@ class CleaningPhase:
         )
 
         result = CleaningPhaseResult(
-            cleaning_suggestions=[c.to_json() if hasattr(c, 'to_json') else c for c in all_cleanings],
-            refactorings=[r.to_json() if hasattr(r, 'to_json') else r for r in all_refactorings],
+            cleaning_suggestions=[c.to_json() if hasattr(c, "to_json") else c for c in all_cleanings],
+            refactorings=[r.to_json() if hasattr(r, "to_json") else r for r in all_refactorings],
             quality_score_after=quality_score_after,
             code_improvements=code_improvements,
         )
 
         return result
-
 
     async def _generate_llm_suggestions_async(
         self,
@@ -288,29 +299,19 @@ class CleaningPhase:
 
         # Generate suggestions based on patterns
         if analysis.get("duplicate_code"):
-            cleanings.append(
-                self.pattern_analyzer.create_duplication_suggestion(analysis["duplicate_code"])
-            )
+            cleanings.append(self.pattern_analyzer.create_duplication_suggestion(analysis["duplicate_code"]))
 
         if analysis.get("complex_functions"):
-            refactorings.append(
-                self.pattern_analyzer.create_complexity_suggestion(analysis["complex_functions"])
-            )
+            refactorings.append(self.pattern_analyzer.create_complexity_suggestion(analysis["complex_functions"]))
 
         if analysis.get("naming_issues"):
-            cleanings.append(
-                self.pattern_analyzer.create_naming_suggestion(analysis["naming_issues"])
-            )
+            cleanings.append(self.pattern_analyzer.create_naming_suggestion(analysis["naming_issues"]))
 
         if analysis.get("dead_code"):
-            cleanings.append(
-                self.pattern_analyzer.create_dead_code_suggestion(analysis["dead_code"])
-            )
+            cleanings.append(self.pattern_analyzer.create_dead_code_suggestion(analysis["dead_code"]))
 
         if analysis.get("import_issues"):
-            cleanings.append(
-                self.pattern_analyzer.create_import_suggestion(analysis["import_issues"])
-            )
+            cleanings.append(self.pattern_analyzer.create_import_suggestion(analysis["import_issues"]))
 
         return {
             "cleanings": cleanings,
@@ -412,7 +413,8 @@ class CleaningPhase:
             "by_impact": impact_counts,
             "by_effort": effort_counts,
             "quick_wins": [
-                s for s in cleaning_suggestions + refactorings
+                s
+                for s in cleaning_suggestions + refactorings
                 if self._safe_get(s, "impact") in ["high", "medium"] and self._safe_get(s, "effort") == "low"
             ][:5],  # Top 5 quick wins
         }

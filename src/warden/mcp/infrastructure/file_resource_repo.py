@@ -15,9 +15,11 @@ from warden.mcp.ports.resource_repository import IResourceRepository
 # Optional logging
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -90,9 +92,7 @@ class FileResourceRepository(IResourceRepository):
             project_root: Project root directory
         """
         self.project_root = project_root
-        self._resources: dict[str, MCPResourceDefinition] = {
-            r.uri: r for r in WARDEN_RESOURCES
-        }
+        self._resources: dict[str, MCPResourceDefinition] = {r.uri: r for r in WARDEN_RESOURCES}
 
     async def exists(self, uri: str) -> bool:
         """Check if resource file exists."""
@@ -134,8 +134,7 @@ class FileResourceRepository(IResourceRepository):
 
         # Filter for known report types
         report_files = [
-            f for f in reports_dir.iterdir()
-            if f.is_file() and f.suffix in {'.json', '.sarif', '.html', '.md'}
+            f for f in reports_dir.iterdir() if f.is_file() and f.suffix in {".json", ".sarif", ".html", ".md"}
         ]
 
         if not report_files:
@@ -154,14 +153,16 @@ class FileResourceRepository(IResourceRepository):
         # Add dynamic latest report if available
         latest_path = self._find_latest_report()
         if latest_path:
-            available.append(MCPResourceDefinition(
-                uri="warden://reports/latest",
-                name="Latest Scan Report",
-                description="The most recently generated scan report",
-                resource_type=ResourceType.REPORT_JSON, # Default to generic report type
-                mime_type="application/json" if latest_path.suffix in {'.json', '.sarif'} else "text/plain",
-                file_path=str(latest_path.relative_to(self.project_root))
-            ))
+            available.append(
+                MCPResourceDefinition(
+                    uri="warden://reports/latest",
+                    name="Latest Scan Report",
+                    description="The most recently generated scan report",
+                    resource_type=ResourceType.REPORT_JSON,  # Default to generic report type
+                    mime_type="application/json" if latest_path.suffix in {".json", ".sarif"} else "text/plain",
+                    file_path=str(latest_path.relative_to(self.project_root)),
+                )
+            )
 
         return available
 
@@ -196,12 +197,14 @@ class FileResourceRepository(IResourceRepository):
         for file_path in reports_dir.iterdir():
             if file_path.is_file():
                 ext = file_path.suffix.lower()
-                reports.append({
-                    "name": file_path.name,
-                    "path": str(file_path.relative_to(self.project_root)),
-                    "size": file_path.stat().st_size,
-                    "modified": file_path.stat().st_mtime,
-                    "mime_type": mime_types.get(ext, "application/octet-stream"),
-                })
+                reports.append(
+                    {
+                        "name": file_path.name,
+                        "path": str(file_path.relative_to(self.project_root)),
+                        "size": file_path.stat().st_size,
+                        "modified": file_path.stat().st_mtime,
+                        "mime_type": mime_types.get(ext, "application/octet-stream"),
+                    }
+                )
 
         return reports

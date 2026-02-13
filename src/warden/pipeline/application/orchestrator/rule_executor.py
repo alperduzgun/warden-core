@@ -49,15 +49,12 @@ class RuleExecutor:
         """Convert CustomRuleViolation to Finding."""
         return Finding(
             id=violation.rule_id,
-            severity=violation.severity.value if hasattr(violation.severity, 'value') else str(violation.severity),
+            severity=violation.severity.value if hasattr(violation.severity, "value") else str(violation.severity),
             message=violation.message,
             location=f"{violation.file}:{violation.line}",
             detail=violation.suggestion,
             code=violation.code_snippet,
             line=violation.line,
             is_blocker=violation.is_blocker,
-            remediation=Remediation(
-                description=violation.suggestion,
-                code=""
-            ) if violation.suggestion else None
+            remediation=Remediation(description=violation.suggestion, code="") if violation.suggestion else None,
         )

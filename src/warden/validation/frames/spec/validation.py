@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 
 class IssueSeverity(str, Enum):
     """Severity levels for validation issues."""
+
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -40,6 +41,7 @@ class ValidationIssue:
         suggestion: Suggested fix or action
         platform_name: Platform name (if issue is platform-specific)
     """
+
     severity: IssueSeverity
     message: str
     field: str
@@ -67,6 +69,7 @@ class ValidationResult:
         issues: List of validation issues found
         metadata: Additional validation metadata
     """
+
     is_valid: bool
     issues: list[ValidationIssue] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
@@ -183,15 +186,17 @@ class SpecConfigValidator:
 
         # Check minimum platforms requirement
         if len(platforms) < 2:
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message=f"At least 2 platforms required, found {len(platforms)}",
-                field="platforms",
-                suggestion=(
-                    "Add at least one consumer (frontend/mobile) and "
-                    "one provider (backend) platform to enable contract comparison"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message=f"At least 2 platforms required, found {len(platforms)}",
+                    field="platforms",
+                    suggestion=(
+                        "Add at least one consumer (frontend/mobile) and "
+                        "one provider (backend) platform to enable contract comparison"
+                    ),
+                )
+            )
 
         # Validate each platform
         platform_names: set[str] = set()
@@ -236,31 +241,27 @@ class SpecConfigValidator:
 
         # Check for consumer/provider pairing
         if metadata["consumer_count"] == 0:
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message="No consumer platforms configured",
-                field="platforms",
-                suggestion=(
-                    "Add at least one platform with role: consumer "
-                    "(e.g., Flutter, React, Angular)"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message="No consumer platforms configured",
+                    field="platforms",
+                    suggestion=("Add at least one platform with role: consumer (e.g., Flutter, React, Angular)"),
+                )
+            )
 
         if metadata["provider_count"] == 0:
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message="No provider platforms configured",
-                field="platforms",
-                suggestion=(
-                    "Add at least one platform with role: provider "
-                    "(e.g., Spring Boot, FastAPI, NestJS)"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message="No provider platforms configured",
+                    field="platforms",
+                    suggestion=("Add at least one platform with role: provider (e.g., Spring Boot, FastAPI, NestJS)"),
+                )
+            )
 
         # Determine if valid
-        is_valid = not any(
-            i.severity == IssueSeverity.ERROR for i in issues
-        )
+        is_valid = not any(i.severity == IssueSeverity.ERROR for i in issues)
 
         result = ValidationResult(
             is_valid=is_valid,
@@ -295,13 +296,15 @@ class SpecConfigValidator:
 
         for field in required_fields:
             if not platform.get(field):
-                issues.append(ValidationIssue(
-                    severity=IssueSeverity.ERROR,
-                    message=f"Missing required field: {field}",
-                    field=field,
-                    platform_name=platform_name,
-                    suggestion=f"Add '{field}' to platform configuration",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        severity=IssueSeverity.ERROR,
+                        message=f"Missing required field: {field}",
+                        field=field,
+                        platform_name=platform_name,
+                        suggestion=f"Add '{field}' to platform configuration",
+                    )
+                )
 
     def _validate_path(
         self,
@@ -329,40 +332,43 @@ class SpecConfigValidator:
 
         # Check existence
         if not path.exists():
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message=f"Platform path does not exist: {path_str}",
-                field="path",
-                platform_name=platform_name,
-                suggestion=(
-                    f"Verify the path is correct. "
-                    f"Resolved to: {path.resolve()}"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message=f"Platform path does not exist: {path_str}",
+                    field="path",
+                    platform_name=platform_name,
+                    suggestion=(f"Verify the path is correct. Resolved to: {path.resolve()}"),
+                )
+            )
             return
 
         # Check if it's a directory
         if not path.is_dir():
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message=f"Platform path is not a directory: {path_str}",
-                field="path",
-                platform_name=platform_name,
-                suggestion="Provide a path to the project root directory",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message=f"Platform path is not a directory: {path_str}",
+                    field="path",
+                    platform_name=platform_name,
+                    suggestion="Provide a path to the project root directory",
+                )
+            )
             return
 
         # Check readability
         try:
             list(path.iterdir())
         except (PermissionError, OSError) as e:
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message=f"Platform path is not readable: {e!s}",
-                field="path",
-                platform_name=platform_name,
-                suggestion="Check directory permissions",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message=f"Platform path is not readable: {e!s}",
+                    field="path",
+                    platform_name=platform_name,
+                    suggestion="Check directory permissions",
+                )
+            )
 
     def _validate_platform_type(
         self,
@@ -387,13 +393,15 @@ class SpecConfigValidator:
 
         if not self._is_valid_platform_type(type_str):
             valid_types = ", ".join(t.value for t in PlatformType)
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message=f"Invalid platform type: {type_str}",
-                field="type",
-                platform_name=platform_name,
-                suggestion=f"Valid types: {valid_types}",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message=f"Invalid platform type: {type_str}",
+                    field="type",
+                    platform_name=platform_name,
+                    suggestion=f"Valid types: {valid_types}",
+                )
+            )
             return None
 
         return PlatformType(type_str)
@@ -423,13 +431,15 @@ class SpecConfigValidator:
             return PlatformRole(role_str)
         except ValueError:
             valid_roles = ", ".join(r.value for r in PlatformRole)
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message=f"Invalid platform role: {role_str}",
-                field="role",
-                platform_name=platform_name,
-                suggestion=f"Valid roles: {valid_roles}",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message=f"Invalid platform role: {role_str}",
+                    field="role",
+                    platform_name=platform_name,
+                    suggestion=f"Valid roles: {valid_roles}",
+                )
+            )
             return None
 
     def _check_duplicates(
@@ -452,13 +462,15 @@ class SpecConfigValidator:
         """
         # Check duplicate names
         if platform_name in seen_names:
-            issues.append(ValidationIssue(
-                severity=IssueSeverity.ERROR,
-                message=f"Duplicate platform name: {platform_name}",
-                field="name",
-                platform_name=platform_name,
-                suggestion="Each platform must have a unique name",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=IssueSeverity.ERROR,
+                    message=f"Duplicate platform name: {platform_name}",
+                    field="name",
+                    platform_name=platform_name,
+                    suggestion="Each platform must have a unique name",
+                )
+            )
         else:
             seen_names.add(platform_name)
 
@@ -472,16 +484,18 @@ class SpecConfigValidator:
             path_resolved = str(path.resolve())
 
             if path_resolved in seen_paths:
-                issues.append(ValidationIssue(
-                    severity=IssueSeverity.WARNING,
-                    message=f"Duplicate platform path: {path_str}",
-                    field="path",
-                    platform_name=platform_name,
-                    suggestion=(
-                        "Multiple platforms point to the same directory. "
-                        "This may be intentional for different extraction strategies."
-                    ),
-                ))
+                issues.append(
+                    ValidationIssue(
+                        severity=IssueSeverity.WARNING,
+                        message=f"Duplicate platform path: {path_str}",
+                        field="path",
+                        platform_name=platform_name,
+                        suggestion=(
+                            "Multiple platforms point to the same directory. "
+                            "This may be intentional for different extraction strategies."
+                        ),
+                    )
+                )
             else:
                 seen_paths.add(path_resolved)
 
@@ -515,19 +529,18 @@ class SpecConfigValidator:
             file_count = sum(1 for _ in islice(path.rglob("*"), max_files_to_count))
 
             if file_count >= max_files_to_count:
-                issues.append(ValidationIssue(
-                    severity=IssueSeverity.WARNING,
-                    message=(
-                        f"Project appears very large (>10,000 files): "
-                        f"{platform_name}"
-                    ),
-                    field="path",
-                    platform_name=platform_name,
-                    suggestion=(
-                        "Consider using .gitignore patterns or excluding "
-                        "build/vendor directories to speed up analysis"
-                    ),
-                ))
+                issues.append(
+                    ValidationIssue(
+                        severity=IssueSeverity.WARNING,
+                        message=(f"Project appears very large (>10,000 files): {platform_name}"),
+                        field="path",
+                        platform_name=platform_name,
+                        suggestion=(
+                            "Consider using .gitignore patterns or excluding "
+                            "build/vendor directories to speed up analysis"
+                        ),
+                    )
+                )
 
         except (PermissionError, OSError):
             pass

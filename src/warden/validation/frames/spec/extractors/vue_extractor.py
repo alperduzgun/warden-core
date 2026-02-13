@@ -204,15 +204,17 @@ class VueExtractor(BaseContractExtractor):
 
                 input_type = self._extract_request_body(line, http_method)
 
-                operations.append(OperationDefinition(
-                    name=method_name,
-                    operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
-                    input_type=input_type,
-                    output_type=self._clean_type(response_type) if response_type else None,
-                    description=f"{http_method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+                operations.append(
+                    OperationDefinition(
+                        name=method_name,
+                        operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
+                        input_type=input_type,
+                        output_type=self._clean_type(response_type) if response_type else None,
+                        description=f"{http_method.upper()} {path}",
+                        source_file=str(file_path),
+                        source_line=i + 1,
+                    )
+                )
                 continue
 
             # Check $fetch pattern
@@ -226,15 +228,17 @@ class VueExtractor(BaseContractExtractor):
                 if not method_name:
                     method_name = self._path_to_operation_name(path, http_method)
 
-                operations.append(OperationDefinition(
-                    name=method_name,
-                    operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
-                    input_type=None,
-                    output_type=self._clean_type(response_type) if response_type else None,
-                    description=f"{http_method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+                operations.append(
+                    OperationDefinition(
+                        name=method_name,
+                        operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
+                        input_type=None,
+                        output_type=self._clean_type(response_type) if response_type else None,
+                        description=f"{http_method.upper()} {path}",
+                        source_file=str(file_path),
+                        source_line=i + 1,
+                    )
+                )
                 continue
 
             # Check native fetch pattern
@@ -247,13 +251,15 @@ class VueExtractor(BaseContractExtractor):
                 if not method_name:
                     method_name = self._path_to_operation_name(path, http_method)
 
-                operations.append(OperationDefinition(
-                    name=method_name,
-                    operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
-                    description=f"{http_method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+                operations.append(
+                    OperationDefinition(
+                        name=method_name,
+                        operation_type=self.HTTP_METHODS.get(http_method, OperationType.QUERY),
+                        description=f"{http_method.upper()} {path}",
+                        source_file=str(file_path),
+                        source_line=i + 1,
+                    )
+                )
 
         return operations
 
@@ -321,7 +327,7 @@ class VueExtractor(BaseContractExtractor):
                 match.group(1),
                 match.group(2),
                 file_path,
-                content[:match.start()].count("\n") + 1,
+                content[: match.start()].count("\n") + 1,
             )
             if model:
                 models.append(model)
@@ -331,7 +337,7 @@ class VueExtractor(BaseContractExtractor):
                 match.group(1),
                 match.group(2),
                 file_path,
-                content[:match.start()].count("\n") + 1,
+                content[: match.start()].count("\n") + 1,
             )
             if model:
                 models.append(model)
@@ -348,8 +354,12 @@ class VueExtractor(BaseContractExtractor):
         """Parse interface/type body to extract fields."""
         # Skip Vue/common types
         skip_types = [
-            "Ref", "ComputedRef", "Component", "Plugin",
-            "RouteLocationNormalized", "Router",
+            "Ref",
+            "ComputedRef",
+            "Component",
+            "Plugin",
+            "RouteLocationNormalized",
+            "Router",
         ]
         if name in skip_types:
             return None
@@ -366,13 +376,15 @@ class VueExtractor(BaseContractExtractor):
 
             is_array = field_type.endswith("[]") or field_type.startswith("Array<")
 
-            fields.append(FieldDefinition(
-                name=field_name,
-                type_name=self._clean_type(field_type),
-                is_optional=is_optional,
-                is_array=is_array,
-                source_file=str(file_path),
-            ))
+            fields.append(
+                FieldDefinition(
+                    name=field_name,
+                    type_name=self._clean_type(field_type),
+                    is_optional=is_optional,
+                    is_array=is_array,
+                    source_file=str(file_path),
+                )
+            )
 
         if fields:
             return ModelDefinition(
@@ -410,13 +422,15 @@ class VueExtractor(BaseContractExtractor):
                     values.append(value)
 
             if values:
-                line_num = content[:enum_match.start()].count("\n") + 1
-                enums.append(EnumDefinition(
-                    name=enum_name,
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: enum_match.start()].count("\n") + 1
+                enums.append(
+                    EnumDefinition(
+                        name=enum_name,
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return enums
 

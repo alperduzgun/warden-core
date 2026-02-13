@@ -41,11 +41,7 @@ class OllamaClient(ILlmClient):
         # Cache of models confirmed missing — prevents repeated 404s
         self._missing_models: set[str] = set()
 
-        logger.debug(
-            "ollama_client_initialized",
-            endpoint=self._endpoint,
-            default_model=self._default_model
-        )
+        logger.debug("ollama_client_initialized", endpoint=self._endpoint, default_model=self._default_model)
 
     @property
     def provider(self) -> LlmProvider:
@@ -72,6 +68,7 @@ class OllamaClient(ILlmClient):
 
         try:
             from warden.llm.global_rate_limiter import GlobalRateLimiter
+
             limiter = await GlobalRateLimiter.get_instance()
             await limiter.acquire("ollama", tokens=request.max_tokens)
 
@@ -79,20 +76,14 @@ class OllamaClient(ILlmClient):
                 "model": model,
                 "messages": [
                     {"role": "system", "content": request.system_prompt},
-                    {"role": "user", "content": request.user_message}
+                    {"role": "user", "content": request.user_message},
                 ],
                 "stream": False,
-                "options": {
-                    "temperature": request.temperature,
-                    "num_predict": request.max_tokens
-                }
+                "options": {"temperature": request.temperature, "num_predict": request.max_tokens},
             }
 
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
-                response = await client.post(
-                    f"{self._endpoint}/api/chat",
-                    json=payload
-                )
+                response = await client.post(f"{self._endpoint}/api/chat", json=payload)
                 response.raise_for_status()
                 result = response.json()
 
@@ -111,7 +102,7 @@ class OllamaClient(ILlmClient):
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=prompt_tokens + completion_tokens,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
 
         except httpx.HTTPStatusError as e:
@@ -120,11 +111,7 @@ class OllamaClient(ILlmClient):
                 # Cache the missing model to fail-fast on subsequent calls
                 self._missing_models.add(model)
                 error_msg = f"Model '{model}' not found. Run 'ollama pull {model}'."
-                logger.error(
-                    "ollama_model_not_found",
-                    model=model,
-                    duration_ms=duration_ms
-                )
+                logger.error("ollama_model_not_found", model=model, duration_ms=duration_ms)
                 # Raise non-retryable error to prevent retry/timeout overhead
                 raise ModelNotFoundError(error_msg) from e
 
@@ -134,31 +121,18 @@ class OllamaClient(ILlmClient):
                 status_code=e.response.status_code,
                 error=error_msg,
                 model=model,
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
             )
             return LlmResponse(
-                content="",
-                success=False,
-                error_message=error_msg,
-                provider=self.provider,
-                duration_ms=duration_ms
+                content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
             )
         except ModelNotFoundError:
             raise  # Don't wrap in generic handler
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
-            logger.error(
-                "ollama_request_failed",
-                error=str(e),
-                model=model,
-                duration_ms=duration_ms
-            )
+            logger.error("ollama_request_failed", error=str(e), model=model, duration_ms=duration_ms)
             return LlmResponse(
-                content="",
-                success=False,
-                error_message=str(e),
-                provider=self.provider,
-                duration_ms=duration_ms
+                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
             )
 
     async def is_available_async(self) -> bool:
@@ -179,13 +153,11 @@ class OllamaClient(ILlmClient):
                     model_names = [m.get("name") for m in models]
 
                     # Exact match or tag-less match
-                    exists = any(self._default_model == name or f"{self._default_model}:latest" == name for name in model_names)
+                    exists = any(
+                        self._default_model == name or f"{self._default_model}:latest" == name for name in model_names
+                    )
                     if not exists:
-                        logger.warning(
-                            "ollama_model_missing",
-                            required=self._default_model,
-                            available=model_names
-                        )
+                        logger.warning("ollama_model_missing", required=self._default_model, available=model_names)
                         return False
 
                 return True

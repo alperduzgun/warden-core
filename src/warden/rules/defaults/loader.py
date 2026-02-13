@@ -44,17 +44,17 @@ class DefaultRulesLoader:
                 with open(yaml_file) as f:
                     data = yaml.safe_load(f)
 
-                    if 'rules' in data:
-                        for rule_data in data['rules']:
+                    if "rules" in data:
+                        for rule_data in data["rules"]:
                             # STRICT ACTIVATION LOGIC (Safety Principle)
                             # If rule has activation criteria, context MUST match.
                             # If no context provided but activation required -> SKIP (Fail Safe)
-                            if 'activation' in rule_data:
+                            if "activation" in rule_data:
                                 if not context_tags:
                                     # Rule requires specific context, none provided -> Skip
                                     continue
 
-                                activation = rule_data['activation']
+                                activation = rule_data["activation"]
                                 should_load = True
                                 for key, value in activation.items():
                                     # Strict string equality (Strict Types)
@@ -66,44 +66,53 @@ class DefaultRulesLoader:
 
                             # Convert pattern to conditions for compatibility
                             conditions = {}
-                            if 'pattern' in rule_data:
-                                conditions = {'pattern': rule_data['pattern']}
+                            if "pattern" in rule_data:
+                                conditions = {"pattern": rule_data["pattern"]}
 
                             # Map category from tags
-                            category = RuleCategory.SECURITY if 'security' in rule_data.get('tags', []) else RuleCategory.CONVENTION
+                            category = (
+                                RuleCategory.SECURITY
+                                if "security" in rule_data.get("tags", [])
+                                else RuleCategory.CONVENTION
+                            )
 
                             # Map severity
-                            severity_str = rule_data.get('severity', 'medium')
-                            severity = RuleSeverity.CRITICAL if severity_str == 'critical' else \
-                                      RuleSeverity.HIGH if severity_str == 'high' else \
-                                      RuleSeverity.MEDIUM if severity_str == 'medium' else \
-                                      RuleSeverity.LOW
+                            severity_str = rule_data.get("severity", "medium")
+                            severity = (
+                                RuleSeverity.CRITICAL
+                                if severity_str == "critical"
+                                else RuleSeverity.HIGH
+                                if severity_str == "high"
+                                else RuleSeverity.MEDIUM
+                                if severity_str == "medium"
+                                else RuleSeverity.LOW
+                            )
 
                             rule = CustomRule(
-                                id=rule_data['id'],
-                                name=rule_data['name'],
-                                description=rule_data.get('description', ''),
+                                id=rule_data["id"],
+                                name=rule_data["name"],
+                                description=rule_data.get("description", ""),
                                 category=category,
                                 severity=severity,
-                                is_blocker=severity_str in ['critical', 'high'],
-                                enabled=rule_data.get('enabled', True),
-                                type='pattern',
+                                is_blocker=severity_str in ["critical", "high"],
+                                enabled=rule_data.get("enabled", True),
+                                type="pattern",
                                 conditions=conditions,
-                                message=rule_data.get('message', ''),
-                                pattern=rule_data.get('pattern', ''),
-                                tags=rule_data.get('tags', []),
-                                file_pattern=rule_data.get('file_pattern', ''),
-                                excluded_paths=rule_data.get('excluded_paths', []),
-                                auto_fix=rule_data.get('auto_fix', None),
+                                message=rule_data.get("message", ""),
+                                pattern=rule_data.get("pattern", ""),
+                                tags=rule_data.get("tags", []),
+                                file_pattern=rule_data.get("file_pattern", ""),
+                                excluded_paths=rule_data.get("excluded_paths", []),
+                                auto_fix=rule_data.get("auto_fix", None),
                             )
                             rules.append(rule)
             except Exception as e:
                 # Observability: Log failure structurally (placeholder print until logger import added)
-                 print(f"Error loading rules from {yaml_file}: {e}")
+                print(f"Error loading rules from {yaml_file}: {e}")
 
-                 # In a real fix, I would add logger import above.
-                 # I'll try to add it in a multi-edit if possible or separate step.
-                 continue
+                # In a real fix, I would add logger import above.
+                # I'll try to add it in a multi-edit if possible or separate step.
+                continue
 
         return rules
 
@@ -133,39 +142,48 @@ class DefaultRulesLoader:
             with open(file_path) as f:
                 data = yaml.safe_load(f)
 
-                if 'rules' in data:
-                    for rule_data in data['rules']:
+                if "rules" in data:
+                    for rule_data in data["rules"]:
                         # Convert pattern to conditions for compatibility
                         conditions = {}
-                        if 'pattern' in rule_data:
-                            conditions = {'pattern': rule_data['pattern']}
+                        if "pattern" in rule_data:
+                            conditions = {"pattern": rule_data["pattern"]}
 
                         # Map category from tags
-                        category = RuleCategory.SECURITY if 'security' in rule_data.get('tags', []) else RuleCategory.CONVENTION
+                        category = (
+                            RuleCategory.SECURITY
+                            if "security" in rule_data.get("tags", [])
+                            else RuleCategory.CONVENTION
+                        )
 
                         # Map severity
-                        severity_str = rule_data.get('severity', 'medium')
-                        severity = RuleSeverity.CRITICAL if severity_str == 'critical' else \
-                                  RuleSeverity.HIGH if severity_str == 'high' else \
-                                  RuleSeverity.MEDIUM if severity_str == 'medium' else \
-                                  RuleSeverity.LOW
+                        severity_str = rule_data.get("severity", "medium")
+                        severity = (
+                            RuleSeverity.CRITICAL
+                            if severity_str == "critical"
+                            else RuleSeverity.HIGH
+                            if severity_str == "high"
+                            else RuleSeverity.MEDIUM
+                            if severity_str == "medium"
+                            else RuleSeverity.LOW
+                        )
 
                         rule = CustomRule(
-                            id=rule_data['id'],
-                            name=rule_data['name'],
-                            description=rule_data.get('description', ''),
+                            id=rule_data["id"],
+                            name=rule_data["name"],
+                            description=rule_data.get("description", ""),
                             category=category,
                             severity=severity,
-                            is_blocker=severity_str in ['critical', 'high'],
-                            enabled=rule_data.get('enabled', True),
-                            type='pattern',
+                            is_blocker=severity_str in ["critical", "high"],
+                            enabled=rule_data.get("enabled", True),
+                            type="pattern",
                             conditions=conditions,
-                            message=rule_data.get('message', ''),
-                            pattern=rule_data.get('pattern', ''),
-                            tags=rule_data.get('tags', []),
-                            file_pattern=rule_data.get('file_pattern', ''),
-                            excluded_paths=rule_data.get('excluded_paths', []),
-                            auto_fix=rule_data.get('auto_fix', None),
+                            message=rule_data.get("message", ""),
+                            pattern=rule_data.get("pattern", ""),
+                            tags=rule_data.get("tags", []),
+                            file_pattern=rule_data.get("file_pattern", ""),
+                            excluded_paths=rule_data.get("excluded_paths", []),
+                            auto_fix=rule_data.get("auto_fix", None),
                         )
                         rules.append(rule)
         except Exception as e:
@@ -178,7 +196,7 @@ class DefaultRulesLoader:
         languages = []
 
         for path in self.rules_dir.iterdir():
-            if path.is_dir() and not path.name.startswith('__'):
+            if path.is_dir() and not path.name.startswith("__"):
                 languages.append(path.name)
 
         return sorted(languages)
@@ -196,9 +214,6 @@ class DefaultRulesLoader:
                 severity = rule.severity.lower()
                 severity_counts[severity] = severity_counts.get(severity, 0) + 1
 
-            summary[language] = {
-                'total': len(rules),
-                **severity_counts
-            }
+            summary[language] = {"total": len(rules), **severity_counts}
 
         return summary

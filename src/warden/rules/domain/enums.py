@@ -49,4 +49,3 @@ class RuleType(Enum):
     PATTERN = "pattern"
     SCRIPT = "script"
     AI = "ai"
-

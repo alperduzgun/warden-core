@@ -37,6 +37,7 @@ logger = get_logger(__name__)
 # Global shutdown flag
 _shutdown_requested = False
 
+
 async def graceful_shutdown() -> None:
     """
     Perform graceful shutdown of all Warden services.
@@ -57,6 +58,7 @@ async def graceful_shutdown() -> None:
         # Shutdown LSP servers
         try:
             from warden.lsp.manager import LSPManager
+
             lsp_manager = LSPManager.get_instance()
             await lsp_manager.shutdown_all_async()
             logger.info("lsp_servers_shutdown_complete")
@@ -66,6 +68,7 @@ async def graceful_shutdown() -> None:
         # Close semantic search services
         try:
             from warden.shared.services.semantic_search_service import SemanticSearchService
+
             # If there's a global instance, close it
             # This is optional - depends on implementation
             logger.info("semantic_search_cleanup_complete")
@@ -77,13 +80,12 @@ async def graceful_shutdown() -> None:
         logger.error("shutdown_error", error=str(e))
 
 
-
 # Initialize Typer app
 app = typer.Typer(
     name="warden",
     help="AI Code Guardian - Secure your code before production",
     add_completion=False,
-    no_args_is_help=True
+    no_args_is_help=True,
 )
 
 # Register Sub-Apps
@@ -104,6 +106,7 @@ app.command(name="install")(install_command)
 app.command(name="doctor")(doctor_command)
 app.command(name="update")(update_command)
 app.command(name="refresh")(refresh_command)
+
 
 def _normalize_color_env() -> None:
     """Normalize FORCE_COLOR / NO_COLOR for Rich/Typer compatibility.
@@ -130,6 +133,7 @@ def main():
     # with asyncio.run() which manages its own loop lifecycle.
 
     app()
+
 
 if __name__ == "__main__":
     app()

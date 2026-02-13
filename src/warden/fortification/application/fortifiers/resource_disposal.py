@@ -114,9 +114,7 @@ class ResourceDisposalFortifier(BaseFortifier):
                 max_tokens=3000,
             )
 
-            fortified_code = self._extract_code_from_markdown(
-                response, code_file.content
-            )
+            fortified_code = self._extract_code_from_markdown(response, code_file.content)
 
             actions = [
                 FortificationAction(
@@ -174,8 +172,7 @@ class ResourceDisposalFortifier(BaseFortifier):
 
             # Detect database connections without context manager
             if any(
-                pattern in stripped_line
-                for pattern in [".connect(", "Connection(", "Session("]
+                pattern in stripped_line for pattern in [".connect(", "Connection(", "Session("]
             ) and not self._is_in_with_block(lines, i):
                 suggestions.append(
                     DisposalSuggestion(
@@ -188,8 +185,7 @@ class ResourceDisposalFortifier(BaseFortifier):
 
             # Detect HTTP clients without context manager
             if any(
-                pattern in stripped_line
-                for pattern in ["httpx.Client(", "aiohttp.ClientSession("]
+                pattern in stripped_line for pattern in ["httpx.Client(", "aiohttp.ClientSession("]
             ) and not self._is_in_with_block(lines, i):
                 suggestions.append(
                     DisposalSuggestion(
@@ -202,8 +198,7 @@ class ResourceDisposalFortifier(BaseFortifier):
 
             # Detect locks/semaphores without context manager
             if any(
-                pattern in stripped_line
-                for pattern in ["Lock()", "Semaphore(", "RLock()"]
+                pattern in stripped_line for pattern in ["Lock()", "Semaphore(", "RLock()"]
             ) and not self._is_in_with_block(lines, i):
                 suggestions.append(
                     DisposalSuggestion(
@@ -242,14 +237,9 @@ class ResourceDisposalFortifier(BaseFortifier):
         return False
 
     @staticmethod
-    def _build_disposal_prompt(
-        code_file: CodeFile, suggestions: list[DisposalSuggestion]
-    ) -> str:
+    def _build_disposal_prompt(code_file: CodeFile, suggestions: list[DisposalSuggestion]) -> str:
         """Build LLM prompt for resource disposal."""
-        resources_list = "\n".join(
-            f"- Line {s.line_number}: {s.description} ({s.resource_type})"
-            for s in suggestions
-        )
+        resources_list = "\n".join(f"- Line {s.line_number}: {s.description} ({s.resource_type})" for s in suggestions)
 
         return f"""Add context managers (with statements) to this Python code:
 

@@ -136,18 +136,10 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
                 summary=f"Found {len(issues)} simplification opportunities",
                 analyzer_name=self.name,
                 metrics={
-                    "guard_clause_opportunities": sum(
-                        1 for i in issues if "guard clause" in i.description.lower()
-                    ),
-                    "redundant_else": sum(
-                        1 for i in issues if "redundant else" in i.description.lower()
-                    ),
-                    "complex_boolean": sum(
-                        1 for i in issues if "boolean" in i.description.lower()
-                    ),
-                    "modernization": sum(
-                        1 for i in issues if "modern" in i.description.lower()
-                    ),
+                    "guard_clause_opportunities": sum(1 for i in issues if "guard clause" in i.description.lower()),
+                    "redundant_else": sum(1 for i in issues if "redundant else" in i.description.lower()),
+                    "complex_boolean": sum(1 for i in issues if "boolean" in i.description.lower()),
+                    "modernization": sum(1 for i in issues if "modern" in i.description.lower()),
                 },
             )
 
@@ -165,9 +157,7 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
                 analyzer_name=self.name,
             )
 
-    def _analyze_simplification_universal(
-        self, ast_root: ASTNode, code: str
-    ) -> list[CleaningIssue]:
+    def _analyze_simplification_universal(self, ast_root: ASTNode, code: str) -> list[CleaningIssue]:
         """
         Analyze code for simplification opportunities using Universal AST.
 
@@ -245,8 +235,9 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
 
                 # Check if there's an else clause
                 has_else = any(
-                    child for child in node.children
-                    if hasattr(child, 'node_type') and 'else' in str(child.node_type).lower()
+                    child
+                    for child in node.children
+                    if hasattr(child, "node_type") and "else" in str(child.node_type).lower()
                 )
 
                 if has_early_exit and has_else:
@@ -278,9 +269,9 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
             True if block has early exit
         """
         # Check node attributes for return/break/continue indicators
-        if hasattr(node, 'node_type'):
+        if hasattr(node, "node_type"):
             node_type_str = str(node.node_type).lower()
-            if any(keyword in node_type_str for keyword in ['return', 'break', 'continue']):
+            if any(keyword in node_type_str for keyword in ["return", "break", "continue"]):
                 return True
 
         # Check children recursively
@@ -335,9 +326,7 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
         find_complex_booleans(node)
         return issues
 
-    def _check_python_modernization(
-        self, code: str, lines: list[str]
-    ) -> list[CleaningIssue]:
+    def _check_python_modernization(self, code: str, lines: list[str]) -> list[CleaningIssue]:
         """
         Check for Python modernization opportunities.
 
@@ -377,7 +366,7 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
                 )
 
             # Check for manual list building that could be comprehension
-            if re.search(r'for\s+\w+\s+in.*:\s*$', line_stripped):
+            if re.search(r"for\s+\w+\s+in.*:\s*$", line_stripped):
                 # Look ahead for append pattern
                 if i + 1 < len(lines):
                     next_line = lines[i + 1].strip()
@@ -401,7 +390,9 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
 
         if "guard clause" in issue.description.lower():
             suggestion = "Use guard clauses to reduce nesting and improve readability"
-            rationale = "Guard clauses (early returns) flatten code structure, making it easier to understand the happy path"
+            rationale = (
+                "Guard clauses (early returns) flatten code structure, making it easier to understand the happy path"
+            )
             example_code = """# Instead of:
 def process(item):
     if item is not None:

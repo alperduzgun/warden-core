@@ -1,4 +1,3 @@
-
 import asyncio
 import functools
 import logging
@@ -7,6 +6,7 @@ from collections.abc import Callable
 from typing import Any, Tuple, Type
 
 logger = logging.getLogger(__name__)
+
 
 def async_retry(
     retries: int = 3,
@@ -30,6 +30,7 @@ def async_retry(
         jitter: Whether to add random jitter to delay (default: True)
         exceptions: Tuple of exceptions to catch and retry (default: Exception)
     """
+
     def decorator(func: Callable[..., Any]):
         @functools.wraps(func)
         async def wrapper_async(*args, **kwargs):
@@ -46,7 +47,7 @@ def async_retry(
                         raise
 
                     # Calculate delay with backoff
-                    current_delay = min(delay * (backoff_factor ** attempt), max_delay)
+                    current_delay = min(delay * (backoff_factor**attempt), max_delay)
 
                     if jitter:
                         # Add random jitter (±10% of current delay)
@@ -64,4 +65,5 @@ def async_retry(
                 raise last_exception
 
         return wrapper_async
+
     return decorator

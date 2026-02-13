@@ -39,13 +39,14 @@ class WardenServicer(
     ConfigurationMixin,
     HealthStatusMixin,
     WardenServicerBase,
-    warden_pb2_grpc.WardenServiceServicer if warden_pb2_grpc else object
+    warden_pb2_grpc.WardenServiceServicer if warden_pb2_grpc else object,
 ):
     """
     Complete gRPC service implementation with 51 endpoints.
 
     Combines all mixins to provide full WardenService functionality.
     """
+
     pass
 
 

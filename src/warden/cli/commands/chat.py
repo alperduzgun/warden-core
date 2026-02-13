@@ -7,9 +7,9 @@ from rich.console import Console
 
 console = Console()
 
+
 def chat_command(
-    ctx: typer.Context,
-    dev: bool = typer.Option(False, "--dev", help="Run in dev mode (npm run start:raw)")
+    ctx: typer.Context, dev: bool = typer.Option(False, "--dev", help="Run in dev mode (npm run start:raw)")
 ):
     """
     Launch the interactive AI Chat interface (Node.js required).

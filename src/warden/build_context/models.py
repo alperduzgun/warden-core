@@ -111,8 +111,8 @@ class Dependency(BaseDomainModel):
         """Convert to Panel-compatible JSON (camelCase)."""
         data = super().to_json()
         # Ensure extras is always present even if empty
-        if 'extras' not in data:
-            data['extras'] = []
+        if "extras" not in data:
+            data["extras"] = []
         return data
 
 
@@ -185,9 +185,9 @@ class BuildContext(BaseDomainModel):
         data = super().to_json()
 
         # Convert nested dependencies
-        data['dependencies'] = [dep.to_json() for dep in self.dependencies]
-        data['devDependencies'] = [dep.to_json() for dep in self.dev_dependencies]
-        data['scripts'] = [script.to_json() for script in self.scripts]
+        data["dependencies"] = [dep.to_json() for dep in self.dependencies]
+        data["devDependencies"] = [dep.to_json() for dep in self.dev_dependencies]
+        data["scripts"] = [script.to_json() for script in self.scripts]
 
         return data
 
@@ -209,10 +209,7 @@ class BuildContext(BaseDomainModel):
 
     def get_production_dependencies(self) -> list[Dependency]:
         """Get only production dependencies."""
-        return [
-            dep for dep in self.get_all_dependencies()
-            if dep.type == DependencyType.PRODUCTION
-        ]
+        return [dep for dep in self.get_all_dependencies() if dep.type == DependencyType.PRODUCTION]
 
     def get_script_by_name(self, name: str) -> BuildScript | None:
         """Find script by name."""
@@ -241,5 +238,5 @@ def create_empty_context(project_path: str) -> BuildContext:
         project_path=project_path,
         project_name="Unknown Project",
         project_version="0.0.0",
-        project_description="No build system detected"
+        project_description="No build system detected",
     )

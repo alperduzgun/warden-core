@@ -67,7 +67,7 @@ class PhaseExecutor:
             project_root=self.project_root,
             llm_service=self.llm_service,
             semantic_search_service=self.semantic_search_service,
-            rate_limiter=self.rate_limiter
+            rate_limiter=self.rate_limiter,
         )
         self.analysis_executor = AnalysisExecutor(
             config=self.config,
@@ -75,14 +75,13 @@ class PhaseExecutor:
             project_root=self.project_root,
             llm_service=self.llm_service,
             semantic_search_service=self.semantic_search_service,
-
-            rate_limiter=self.rate_limiter
+            rate_limiter=self.rate_limiter,
         )
         self.triage_phase = TriagePhase(
             project_root=self.project_root,
             progress_callback=self._progress_callback,
-            config=self.config.pre_analysis_config, # Share config with pre_analysis or dedicated
-            llm_service=self.llm_service
+            config=self.config.pre_analysis_config,  # Share config with pre_analysis or dedicated
+            llm_service=self.llm_service,
         )
         self.classification_executor = ClassificationExecutor(
             config=self.config,
@@ -93,7 +92,7 @@ class PhaseExecutor:
             frames=self.frames,
             available_frames=self.frames,
             semantic_search_service=self.semantic_search_service,
-            rate_limiter=self.rate_limiter
+            rate_limiter=self.rate_limiter,
         )
         self.fortification_executor = FortificationExecutor(
             config=self.config,
@@ -101,7 +100,7 @@ class PhaseExecutor:
             project_root=self.project_root,
             llm_service=self.llm_service,
             semantic_search_service=self.semantic_search_service,
-            rate_limiter=self.rate_limiter
+            rate_limiter=self.rate_limiter,
         )
         self.cleaning_executor = CleaningExecutor(
             config=self.config,
@@ -109,7 +108,7 @@ class PhaseExecutor:
             project_root=self.project_root,
             llm_service=self.llm_service,
             semantic_search_service=self.semantic_search_service,
-            rate_limiter=self.rate_limiter
+            rate_limiter=self.rate_limiter,
         )
 
     @property

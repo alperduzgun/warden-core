@@ -3,6 +3,7 @@ Quality Score Calculator.
 
 Centralizes the logic for calculating the project's quality/resilience score based on findings.
 """
+
 from typing import Any, List
 
 
@@ -31,10 +32,10 @@ def calculate_quality_score(findings: list[Any], base_score: float = 10.0) -> fl
 
     from warden.shared.utils.finding_utils import get_finding_severity
 
-    critical = sum(1 for f in findings if get_finding_severity(f) == 'critical')
-    high = sum(1 for f in findings if get_finding_severity(f) == 'high')
-    medium = sum(1 for f in findings if get_finding_severity(f) == 'medium')
-    low = sum(1 for f in findings if get_finding_severity(f) == 'low')
+    critical = sum(1 for f in findings if get_finding_severity(f) == "critical")
+    high = sum(1 for f in findings if get_finding_severity(f) == "high")
+    medium = sum(1 for f in findings if get_finding_severity(f) == "medium")
+    low = sum(1 for f in findings if get_finding_severity(f) == "low")
 
     penalty = (critical * 3.0) + (high * 1.5) + (medium * 0.5) + (low * 0.1)
 
@@ -43,6 +44,7 @@ def calculate_quality_score(findings: list[Any], base_score: float = 10.0) -> fl
 
     # Cap result within bounds
     return max(0.1, min(base_score, score))
+
 
 def get_shield_data(findings: list[Any], base_score: float = 10.0) -> dict:
     """
@@ -80,6 +82,6 @@ def get_shield_data(findings: list[Any], base_score: float = 10.0) -> dict:
         "label": "Warden Quality",
         "message": f"{score:.1f} / 10",
         "color": color,
-        "namedLogo": "shields.io", # Optional styling
-        "style": "flat"
+        "namedLogo": "shields.io",  # Optional styling
+        "style": "flat",
     }

@@ -13,6 +13,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class ConfigHandler(BaseHandler):
     """Handles Warden configuration, frame discovery, and consistency checks."""
 
@@ -35,10 +36,11 @@ class ConfigHandler(BaseHandler):
                 "config": self._get_default_pipeline_config(),
                 "frames": self.get_default_frames(),
                 "available_frames": self.get_available_frames_async(),
-                "name": "default"
+                "name": "default",
             }
 
         from warden.cli_bridge.config_manager import ConfigManager
+
         config_mgr = ConfigManager(self.project_root)
 
         try:
@@ -54,7 +56,7 @@ class ConfigHandler(BaseHandler):
                     "config": self._get_default_pipeline_config(),
                     "frames": self.get_default_frames(),
                     "available_frames": self.get_available_frames_async(),
-                    "name": "default-fallback"
+                    "name": "default-fallback",
                 }
 
         if config_data is None:
@@ -68,8 +70,8 @@ class ConfigHandler(BaseHandler):
             logger.warning("rules_read_failed", error=str(e))
 
         # Merge rules and config
-        frame_config = config_data.get('frames_config', config_data.get('frame_config', {}))
-        frame_rules = rules_data.get('frame_rules', {})
+        frame_config = config_data.get("frames_config", config_data.get("frame_config", {}))
+        frame_rules = rules_data.get("frame_rules", {})
         for fid, rule_cfg in frame_rules.items():
             if fid not in frame_config:
                 frame_config[fid] = rule_cfg
@@ -80,20 +82,20 @@ class ConfigHandler(BaseHandler):
 
         available_frames, frame_map = self._instantiate_all_frames(frame_config)
 
-        frame_names = config_data.get('frames', [])
+        frame_names = config_data.get("frames", [])
         if not frame_names:
             frames = self.get_default_frames()
             self.active_config_name = "default"
         else:
             frames = self._select_frames(frame_names, frame_map, available_frames)
-            self.active_config_name = config_data.get('name', 'project-config')
+            self.active_config_name = config_data.get("name", "project-config")
 
-        settings = config_data.get('settings', {})
+        settings = config_data.get("settings", {})
         # Load all rules using RulesYAMLLoader
         from warden.rules.domain.models import FrameRules
         from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
 
-        RulesYAMLLoader() # Static methods used below
+        RulesYAMLLoader()  # Static methods used below
         project_rule_config = RulesYAMLLoader.load_rules_sync(self.project_root)
 
         # Extract global rules as objects
@@ -111,42 +113,39 @@ class ConfigHandler(BaseHandler):
         for fid, fr_data in project_rule_config.frame_rules.items():
             pre_rules = [rule_map[rid] for rid in fr_data.pre_rules if rid in rule_map]
             post_rules = [rule_map[rid] for rid in fr_data.post_rules if rid in rule_map]
-            pipeline_frame_rules[fid] = FrameRules(
-                pre_rules=pre_rules,
-                post_rules=post_rules,
-                on_fail=fr_data.on_fail
-            )
+            pipeline_frame_rules[fid] = FrameRules(pre_rules=pre_rules, post_rules=post_rules, on_fail=fr_data.on_fail)
 
         pipeline_config = PipelineConfig(
-            fail_fast=settings.get('fail_fast', True),
-            timeout=settings.get('timeout', 300),
-            frame_timeout=settings.get('frame_timeout', 120),
+            fail_fast=settings.get("fail_fast", True),
+            timeout=settings.get("timeout", 300),
+            frame_timeout=settings.get("frame_timeout", 120),
             parallel_limit=4,
-            enable_pre_analysis=settings.get('enable_pre_analysis', True),
-            enable_analysis=settings.get('enable_analysis', True),
+            enable_pre_analysis=settings.get("enable_pre_analysis", True),
+            enable_analysis=settings.get("enable_analysis", True),
             enable_classification=True,
-            enable_validation=settings.get('enable_validation', True),
-            enable_fortification=settings.get('enable_fortification', True),
-            enable_cleaning=settings.get('enable_cleaning', True),
-            pre_analysis_config=settings.get('pre_analysis_config', None),
-            semantic_search_config=config_data.get('semantic_search'),
-            llm_config=config_data.get('llm'),
-            enable_issue_validation=settings.get('enable_issue_validation', True),
-            use_gitignore=settings.get('use_gitignore', True),
-            discovery_config=settings.get('discovery_config', None),
+            enable_validation=settings.get("enable_validation", True),
+            enable_fortification=settings.get("enable_fortification", True),
+            enable_cleaning=settings.get("enable_cleaning", True),
+            pre_analysis_config=settings.get("pre_analysis_config", None),
+            semantic_search_config=config_data.get("semantic_search"),
+            llm_config=config_data.get("llm"),
+            enable_issue_validation=settings.get("enable_issue_validation", True),
+            use_gitignore=settings.get("use_gitignore", True),
+            discovery_config=settings.get("discovery_config", None),
             global_rules=global_rules_objects,
-            frame_rules=pipeline_frame_rules
+            frame_rules=pipeline_frame_rules,
         )
 
         return {
             "config": pipeline_config,
             "frames": frames,
             "available_frames": available_frames,
-            "name": self.active_config_name
+            "name": self.active_config_name,
         }
 
     def _get_default_pipeline_config(self):
         from warden.pipeline.domain.models import PipelineConfig
+
         return PipelineConfig(
             fail_fast=True,
             timeout=300,
@@ -162,6 +161,7 @@ class ConfigHandler(BaseHandler):
 
     def get_default_frames(self) -> list[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
+
         registry = FrameRegistry()
         registry.discover_all(project_root=self.project_root)
 
@@ -184,6 +184,7 @@ class ConfigHandler(BaseHandler):
 
     def get_available_frames_async(self) -> list[Any]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
+
         registry = FrameRegistry()
         registry.discover_all(project_root=self.project_root)
         frames = []
@@ -196,6 +197,7 @@ class ConfigHandler(BaseHandler):
 
     def _instantiate_all_frames(self, frame_config: dict[str, Any]) -> tuple[list[Any], dict[str, Any]]:
         from warden.validation.infrastructure.frame_registry import FrameRegistry
+
         registry = FrameRegistry()
         registry.discover_all(project_root=self.project_root)
 
@@ -211,7 +213,7 @@ class ConfigHandler(BaseHandler):
                 instance = cls(config=config)
                 available.append(instance)
                 frame_map[fid] = instance
-                norm_name = instance.name.replace(' ', '').replace('-', '').replace('_', '').lower()
+                norm_name = instance.name.replace(" ", "").replace("-", "").replace("_", "").lower()
                 frame_map[norm_name] = instance
             except Exception as e:
                 logger.warning("frame_init_failed", fid=fid, error=str(e))
@@ -220,18 +222,18 @@ class ConfigHandler(BaseHandler):
     def _select_frames(self, names: list[str], frame_map: dict[str, Any], available: list[Any]) -> list[Any]:
         selected = []
         for name in names:
-            norm = name.replace('-', '').replace('_', '').lower()
+            norm = name.replace("-", "").replace("_", "").lower()
             if norm in frame_map:
                 selected.append(frame_map[norm])
             else:
                 for f in available:
-                    f_norm = f.name.replace(' ', '').replace('-', '').replace('_', '').lower()
+                    f_norm = f.name.replace(" ", "").replace("-", "").replace("_", "").lower()
                     if f_norm == norm:
                         selected.append(f)
                         break
                 else:
-                    if norm == 'architectural' and 'architecturalconsistency' in frame_map:
-                        selected.append(frame_map['architecturalconsistency'])
+                    if norm == "architectural" and "architecturalconsistency" in frame_map:
+                        selected.append(frame_map["architecturalconsistency"])
                     else:
                         logger.warning("configured_frame_not_found", name=name)
         return selected
@@ -239,6 +241,7 @@ class ConfigHandler(BaseHandler):
     def validate_consistency(self) -> None:
         try:
             from warden.cli_bridge.config_manager import ConfigManager
+
             config_mgr = ConfigManager(self.project_root)
             result = config_mgr.validate_frame_consistency()
             if not result.get("valid"):

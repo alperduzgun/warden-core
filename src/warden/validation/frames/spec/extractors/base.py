@@ -267,8 +267,17 @@ class BaseContractExtractor(ABC):
         # Only check path parts relative to project_root to avoid false positives
         # when the absolute path contains exclude words (e.g. pytest tmp_path with "test")
         exclude_names = {
-            "test", "tests", "spec", "mock", "mocks", "generated",
-            "node_modules", ".dart_tool", "build", "dist", ".gradle",
+            "test",
+            "tests",
+            "spec",
+            "mock",
+            "mocks",
+            "generated",
+            "node_modules",
+            ".dart_tool",
+            "build",
+            "dist",
+            ".gradle",
         }
         filtered = []
         for f in files:
@@ -358,6 +367,7 @@ def get_extractor(
     # Special handling for ModularExtractor (pre-generated contracts)
     if platform_type == PlatformType.MODULAR:
         from warden.validation.frames.spec.extractors.modular_extractor import ModularContractExtractor
+
         return ModularContractExtractor(
             project_root=project_root,
             role=role,
@@ -367,6 +377,7 @@ def get_extractor(
     # Special handling for UniversalExtractor (doesn't use registry)
     if platform_type == PlatformType.UNIVERSAL:
         from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
+
         return UniversalContractExtractor(
             project_root=project_root,
             role=role,
@@ -382,6 +393,7 @@ def get_extractor(
     # Gen 3.1: Prioritize UniversalExtractor for Core 5 (starting with Flutter)
     if platform_type in [PlatformType.FLUTTER]:
         from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
+
         return UniversalContractExtractor(
             project_root=project_root,
             role=role,
@@ -402,6 +414,7 @@ def get_extractor(
         platform=platform_type.value,
     )
     from warden.validation.frames.spec.extractors.universal_extractor import UniversalContractExtractor
+
     return UniversalContractExtractor(
         project_root=project_root,
         role=role,

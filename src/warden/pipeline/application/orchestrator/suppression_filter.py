@@ -35,21 +35,21 @@ class SuppressionFilter:
         for finding in findings:
             is_suppressed = False
 
-            f_id = getattr(finding, 'id', getattr(finding, 'rule', ''))
+            f_id = getattr(finding, "id", getattr(finding, "rule", ""))
 
             f_path = ""
-            if hasattr(finding, 'file_path'):
+            if hasattr(finding, "file_path"):
                 f_path = finding.file_path
-            elif hasattr(finding, 'location'):
-                f_path = finding.location.split(':')[0]
+            elif hasattr(finding, "location"):
+                f_path = finding.location.split(":")[0]
 
             for rule_cfg in suppressions:
-                rule_pattern = rule_cfg.get('rule')
-                file_patterns = rule_cfg.get('files', [])
+                rule_pattern = rule_cfg.get("rule")
+                file_patterns = rule_cfg.get("files", [])
                 if isinstance(file_patterns, str):
                     file_patterns = [file_patterns]
 
-                if rule_pattern != '*' and rule_pattern != f_id:
+                if rule_pattern != "*" and rule_pattern != f_id:
                     continue
 
                 matched_file = False
@@ -65,9 +65,7 @@ class SuppressionFilter:
                 if not matched_file:
                     continue
 
-                logger.debug("suppressing_finding_by_config",
-                            finding=f_id,
-                            file=f_path)
+                logger.debug("suppressing_finding_by_config", finding=f_id, file=f_path)
                 is_suppressed = True
                 break
 

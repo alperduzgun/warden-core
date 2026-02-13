@@ -96,11 +96,7 @@ class PyprojectParser:
             print(f"Error parsing pyproject.toml: {e}")
             return None
 
-    def _parse_poetry(
-        self,
-        data: dict[str, Any],
-        build_system: BuildSystem
-    ) -> BuildContext:
+    def _parse_poetry(self, data: dict[str, Any], build_system: BuildSystem) -> BuildContext:
         """
         Parse Poetry-style pyproject.toml.
 
@@ -124,21 +120,14 @@ class PyprojectParser:
             python_version = str(deps_raw["python"])
 
         # Parse dependencies
-        dependencies = self._parse_poetry_dependencies(
-            deps_raw,
-            exclude=["python"]
-        )
+        dependencies = self._parse_poetry_dependencies(deps_raw, exclude=["python"])
 
         # Parse dev dependencies
-        dev_dependencies = self._parse_poetry_dependencies(
-            poetry.get("dev-dependencies", {})
-        )
+        dev_dependencies = self._parse_poetry_dependencies(poetry.get("dev-dependencies", {}))
 
         # Also check group.dev.dependencies (Poetry 1.2+)
         if "group" in poetry and "dev" in poetry["group"]:
-            dev_deps_group = self._parse_poetry_dependencies(
-                poetry["group"]["dev"].get("dependencies", {})
-            )
+            dev_deps_group = self._parse_poetry_dependencies(poetry["group"]["dev"].get("dependencies", {}))
             dev_dependencies.extend(dev_deps_group)
 
         # Extract scripts
@@ -164,11 +153,7 @@ class PyprojectParser:
             metadata=metadata,
         )
 
-    def _parse_pep621(
-        self,
-        data: dict[str, Any],
-        build_system: BuildSystem
-    ) -> BuildContext:
+    def _parse_pep621(self, data: dict[str, Any], build_system: BuildSystem) -> BuildContext:
         """
         Parse PEP 621-style pyproject.toml.
 
@@ -186,9 +171,7 @@ class PyprojectParser:
         project_description = project.get("description")
 
         # Parse dependencies
-        dependencies = self._parse_pep621_dependencies(
-            project.get("dependencies", [])
-        )
+        dependencies = self._parse_pep621_dependencies(project.get("dependencies", []))
 
         # Parse optional dependencies (dev, test, etc.)
         dev_dependencies: list[Dependency] = []
@@ -230,9 +213,7 @@ class PyprojectParser:
         )
 
     def _parse_poetry_dependencies(
-        self,
-        deps_dict: dict[str, Any],
-        exclude: list[str] | None = None
+        self, deps_dict: dict[str, Any], exclude: list[str] | None = None
     ) -> list[Dependency]:
         """
         Parse Poetry dependencies.
@@ -257,14 +238,7 @@ class PyprojectParser:
 
             # Simple version string
             if isinstance(spec, str):
-                dependencies.append(
-                    Dependency(
-                        name=name,
-                        version=spec,
-                        type=DependencyType.PRODUCTION,
-                        is_direct=True
-                    )
-                )
+                dependencies.append(Dependency(name=name, version=spec, type=DependencyType.PRODUCTION, is_direct=True))
             # Complex dependency dict
             elif isinstance(spec, dict):
                 version = spec.get("version", "*")
@@ -272,20 +246,13 @@ class PyprojectParser:
 
                 dependencies.append(
                     Dependency(
-                        name=name,
-                        version=version,
-                        type=DependencyType.PRODUCTION,
-                        is_direct=True,
-                        extras=extras
+                        name=name, version=version, type=DependencyType.PRODUCTION, is_direct=True, extras=extras
                     )
                 )
 
         return dependencies
 
-    def _parse_pep621_dependencies(
-        self,
-        deps_list: list[str]
-    ) -> list[Dependency]:
+    def _parse_pep621_dependencies(self, deps_list: list[str]) -> list[Dependency]:
         """
         Parse PEP 621 dependencies.
 
@@ -322,7 +289,7 @@ class PyprojectParser:
             Dependency if valid, None otherwise
         """
         # Pattern: name[extras]version_spec
-        pattern = r'^([a-zA-Z0-9_-]+)(?:\[([^\]]+)\])?(.*)?$'
+        pattern = r"^([a-zA-Z0-9_-]+)(?:\[([^\]]+)\])?(.*)?$"
         match = re.match(pattern, req_str.strip())
 
         if not match:
@@ -341,13 +308,10 @@ class PyprojectParser:
             version=version if version else "*",
             type=DependencyType.PRODUCTION,
             is_direct=True,
-            extras=extras
+            extras=extras,
         )
 
-    def _parse_poetry_scripts(
-        self,
-        scripts_dict: dict[str, str]
-    ) -> list[BuildScript]:
+    def _parse_poetry_scripts(self, scripts_dict: dict[str, str]) -> list[BuildScript]:
         """
         Parse Poetry scripts.
 
@@ -360,19 +324,11 @@ class PyprojectParser:
         scripts: list[BuildScript] = []
 
         for name, command in scripts_dict.items():
-            scripts.append(
-                BuildScript(
-                    name=name,
-                    command=command
-                )
-            )
+            scripts.append(BuildScript(name=name, command=command))
 
         return scripts
 
-    def _parse_pep621_scripts(
-        self,
-        scripts_dict: dict[str, str]
-    ) -> list[BuildScript]:
+    def _parse_pep621_scripts(self, scripts_dict: dict[str, str]) -> list[BuildScript]:
         """
         Parse PEP 621 scripts.
 
@@ -399,11 +355,13 @@ class PyprojectParser:
         """
         try:
             import tomllib  # Python 3.11+
+
             with open(path, "rb") as f:
                 return tomllib.load(f)
         except ImportError:
             try:
                 import tomli  # Fallback for Python < 3.11
+
                 with open(path, "rb") as f:
                     return tomli.load(f)  # type: ignore
             except ImportError:

@@ -110,9 +110,7 @@ class BaseFileRepository(Generic[T]):
         try:
             async with aiofiles.open(self.storage_path, encoding="utf-8") as f:
                 content = await f.read()
-                data = (
-                    json.loads(content) if content.strip() else self._get_empty_structure()
-                )
+                data = json.loads(content) if content.strip() else self._get_empty_structure()
 
                 # Update cache
                 self._cache = data
@@ -138,9 +136,7 @@ class BaseFileRepository(Generic[T]):
                 backup_path = self.storage_path.with_suffix(".json.bak")
                 try:
                     # Read current content and write to backup
-                    async with aiofiles.open(
-                        self.storage_path, encoding="utf-8"
-                    ) as f:
+                    async with aiofiles.open(self.storage_path, encoding="utf-8") as f:
                         current_content = await f.read()
                     async with aiofiles.open(backup_path, "w", encoding="utf-8") as f:
                         await f.write(current_content)

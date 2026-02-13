@@ -35,7 +35,7 @@ class FileContextAnalyzer:
     def __init__(
         self,
         project_context: ProjectContext | None = None,
-        llm_analyzer: Optional['LlmContextAnalyzer'] = None,
+        llm_analyzer: Optional["LlmContextAnalyzer"] = None,
     ) -> None:
         """
         Initialize analyzer.
@@ -60,11 +60,13 @@ class FileContextAnalyzer:
             FileContextInfo with detected context and metadata
         """
         import asyncio
+
         try:
             # Try to get existing event loop
             asyncio.get_running_loop()
             # If we're in an async context, we need a workaround
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, self.analyze_file_async(file_path))
                 return future.result()
@@ -94,13 +96,14 @@ class FileContextAnalyzer:
                 # Read file content for LLM
                 file_content = None
                 try:
-                    with open(file_path, encoding='utf-8', errors='ignore') as f:
+                    with open(file_path, encoding="utf-8", errors="ignore") as f:
                         file_content = f.read()[:5000]
                 except (OSError, FileNotFoundError, PermissionError):
                     pass  # File unreadable - continue without content
 
                 # Enhance with LLM
                 from warden.analysis.application.llm_context_analyzer import LlmContextAnalyzer
+
                 if isinstance(self.llm_analyzer, LlmContextAnalyzer):
                     context, confidence, method = await self.llm_analyzer.analyze_file_context_async(
                         file_path=file_path,
@@ -172,7 +175,7 @@ class FileContextAnalyzer:
             (content_result, "content"),
             (import_result, "imports"),
             (metadata_result, "metadata"),
-            (project_hint, "project_context")
+            (project_hint, "project_context"),
         ]
 
         # Filter None and find best candidate
@@ -192,6 +195,7 @@ class FileContextAnalyzer:
             # Boost Test confidence if project uses a known test framework
             if best_context == FileContext.TEST:
                 from warden.analysis.domain.project_context import TestFramework
+
                 if self.project_context.test_framework != TestFramework.NONE:
                     best_confidence += 0.3
                     boosted = True
@@ -199,6 +203,7 @@ class FileContextAnalyzer:
             # Boost Framework confidence if it's a known framework project
             elif best_context == FileContext.FRAMEWORK:
                 from warden.analysis.domain.project_context import Framework
+
                 if self.project_context.framework != Framework.NONE:
                     best_confidence += 0.2
                     boosted = True
@@ -206,7 +211,9 @@ class FileContextAnalyzer:
             if boosted:
                 best_confidence = min(best_confidence, 0.95)
                 best_method = f"{best_method}+intent_boost"
-                logger.debug("intent_boost_applied", file=str(file_path), context=best_context.value, confidence=best_confidence)
+                logger.debug(
+                    "intent_boost_applied", file=str(file_path), context=best_context.value, confidence=best_confidence
+                )
 
         return best_context, best_confidence, best_method
 
@@ -368,7 +375,9 @@ class FileContextAnalyzer:
             for pattern in patterns:
                 if pattern.search(path_str):
                     # Higher confidence for clear directory patterns
-                    confidence = 0.98 if context in [FileContext.TEST, FileContext.VENDOR, FileContext.GENERATED] else 0.95
+                    confidence = (
+                        0.98 if context in [FileContext.TEST, FileContext.VENDOR, FileContext.GENERATED] else 0.95
+                    )
                     return (context, confidence)
 
         return None
@@ -377,7 +386,7 @@ class FileContextAnalyzer:
         """Detect context by file content patterns."""
         try:
             # Read first 5000 characters for performance
-            with open(file_path, encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read(5000)
 
             match_counts = {}
@@ -408,17 +417,22 @@ class FileContextAnalyzer:
 
     def _detect_by_imports(self, file_path: Path) -> tuple[FileContext, float] | None:
         """Detect context by import statements."""
-        if file_path.suffix != '.py':
+        if file_path.suffix != ".py":
             return None
 
         try:
-            with open(file_path, encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
 
             # Test framework imports
             test_imports = [
-                "pytest", "unittest", "nose", "mock",
-                "fixtures", "testtools", "hypothesis",
+                "pytest",
+                "unittest",
+                "nose",
+                "mock",
+                "fixtures",
+                "testtools",
+                "hypothesis",
             ]
 
             for imp in test_imports:
@@ -437,7 +451,7 @@ class FileContextAnalyzer:
     def _detect_by_metadata(self, file_path: Path) -> tuple[FileContext, float] | None:
         """Detect context by file metadata or special comments."""
         try:
-            with open(file_path, encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 # Check first 1000 characters for metadata
                 content = f.read(1000)
 
@@ -540,7 +554,7 @@ class FileContextAnalyzer:
     def _check_ignore_marker(self, file_path: Path) -> bool:
         """Check if file has ignore marker."""
         try:
-            with open(file_path, encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read(1000)
 
             ignore_markers = [
@@ -558,9 +572,18 @@ class FileContextAnalyzer:
     def _is_entry_point(self, file_path: Path) -> bool:
         """Check if file is an entry point."""
         entry_names = [
-            "main.py", "app.py", "index.py", "__main__.py",
-            "run.py", "start.py", "server.py", "wsgi.py",
-            "index.js", "app.js", "main.js", "server.js",
+            "main.py",
+            "app.py",
+            "index.py",
+            "__main__.py",
+            "run.py",
+            "start.py",
+            "server.py",
+            "wsgi.py",
+            "index.js",
+            "app.js",
+            "main.js",
+            "server.js",
         ]
 
         return file_path.name in entry_names
@@ -570,8 +593,14 @@ class FileContextAnalyzer:
         # Check path
         path_str = str(file_path)
         generated_patterns = [
-            "__pycache__", ".pyc", "_pb2.py", "_pb2_grpc.py",
-            "generated/", "gen/", "build/", "dist/",
+            "__pycache__",
+            ".pyc",
+            "_pb2.py",
+            "_pb2_grpc.py",
+            "generated/",
+            "gen/",
+            "build/",
+            "dist/",
         ]
 
         return any(pattern in path_str for pattern in generated_patterns)
@@ -580,8 +609,12 @@ class FileContextAnalyzer:
         """Check if file is vendor/third-party."""
         path_str = str(file_path)
         vendor_patterns = [
-            "vendor/", "node_modules/", "bower_components/",
-            "third_party/", "external/", ".vendor/",
+            "vendor/",
+            "node_modules/",
+            "bower_components/",
+            "third_party/",
+            "external/",
+            ".vendor/",
         ]
 
         return any(pattern in path_str for pattern in vendor_patterns)

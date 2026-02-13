@@ -81,10 +81,12 @@ class AlphaJudgment:
         for path, file_findings in findings_by_file.items():
             # A. Density Check
             if len(file_findings) > self.max_findings_per_file:
-                logger.debug("alpha_judgment_density_filtered",
-                             file=path,
-                             count=len(file_findings),
-                             limit=self.max_findings_per_file)
+                logger.debug(
+                    "alpha_judgment_density_filtered",
+                    file=path,
+                    count=len(file_findings),
+                    limit=self.max_findings_per_file,
+                )
                 ignored_density += len(file_findings)
                 # Ideally, we might want to keep one "summary" finding,
                 # but for noise reduction, we often drop them as "test data".
@@ -106,20 +108,22 @@ class AlphaJudgment:
 
                 valid_findings.append(finding)
 
-        logger.info("alpha_judgment_complete",
-                    input=start_count,
-                    output=len(valid_findings),
-                    dropped_density=ignored_density,
-                    dropped_comment=ignored_comment)
+        logger.info(
+            "alpha_judgment_complete",
+            input=start_count,
+            output=len(valid_findings),
+            dropped_density=ignored_density,
+            dropped_comment=ignored_comment,
+        )
 
         return valid_findings
 
     def _get_path_from_finding(self, finding: Finding) -> str | None:
         """Extract path from finding location."""
-        if hasattr(finding, 'file_path') and finding.file_path:
+        if hasattr(finding, "file_path") and finding.file_path:
             return finding.file_path
         if finding.location:
-             return finding.location.split(':')[0]
+            return finding.location.split(":")[0]
         return None
 
     def _is_in_comment(self, finding: Finding, code_file: CodeFile) -> bool:
@@ -145,7 +149,8 @@ class AlphaJudgment:
         # Get language markers
         lang = code_file.language.lower() if code_file.language else "unknown"
         # Normalize language (e.g. python3 -> python)
-        if "python" in lang: lang = "python"
+        if "python" in lang:
+            lang = "python"
 
         markers = self.comment_patterns.get(lang, [])
 
@@ -171,4 +176,3 @@ class AlphaJudgment:
                 pass
 
         return False
-

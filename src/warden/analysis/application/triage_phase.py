@@ -18,6 +18,7 @@ from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
 
+
 class TriagePhase:
     """
     Executes Adaptive Hybrid Triage.
@@ -29,7 +30,7 @@ class TriagePhase:
         project_root: Path,
         progress_callback: Callable | None = None,
         config: dict[str, Any] | None = None,
-        llm_service: Any | None = None
+        llm_service: Any | None = None,
     ):
         self.project_root = project_root
         self.progress_callback = progress_callback
@@ -39,11 +40,7 @@ class TriagePhase:
         self.llm_service = llm_service or create_client()
         self.triage_service = TriageService(self.llm_service)
 
-    async def execute_async(
-        self,
-        code_files: list[CodeFile],
-        pipeline_context: PipelineContext
-    ) -> dict[str, Any]:
+    async def execute_async(self, code_files: list[CodeFile], pipeline_context: PipelineContext) -> dict[str, Any]:
         """Execute Triage phase."""
         start_time = time.perf_counter()
         logger.info("triage_phase_started", file_count=len(code_files))
@@ -72,7 +69,7 @@ class TriagePhase:
                         file_path=str(file.path),
                         lane=TriageLane.MIDDLE,
                         risk_score=RiskScore(score=5, confidence=0, reasoning="Missed in batch", category="error"),
-                        processing_time_ms=0
+                        processing_time_ms=0,
                     )
                     decisions[str(file.path)] = fallback.model_dump()
 
@@ -80,37 +77,33 @@ class TriagePhase:
             logger.error("triage_phase_batch_failed", error=str(e))
             # Critical fallback for phase failure
             for file in code_files:
-                 fallback = TriageDecision(
-                        file_path=str(file.path),
-                        lane=TriageLane.MIDDLE,
-                        risk_score=RiskScore(score=5, confidence=0, reasoning=f"Phase Error: {e!s}", category="error"),
-                        processing_time_ms=0
-                    )
-                 decisions[str(file.path)] = fallback.model_dump()
-
+                fallback = TriageDecision(
+                    file_path=str(file.path),
+                    lane=TriageLane.MIDDLE,
+                    risk_score=RiskScore(score=5, confidence=0, reasoning=f"Phase Error: {e!s}", category="error"),
+                    processing_time_ms=0,
+                )
+                decisions[str(file.path)] = fallback.model_dump()
 
         # Update pipeline context
         pipeline_context.triage_decisions = decisions
 
         # Stats
-        fast_count = sum(1 for d in decisions.values() if d['lane'] == TriageLane.FAST)
-        middle_count = sum(1 for d in decisions.values() if d['lane'] == TriageLane.MIDDLE)
-        deep_count = sum(1 for d in decisions.values() if d['lane'] == TriageLane.DEEP)
+        fast_count = sum(1 for d in decisions.values() if d["lane"] == TriageLane.FAST)
+        middle_count = sum(1 for d in decisions.values() if d["lane"] == TriageLane.MIDDLE)
+        deep_count = sum(1 for d in decisions.values() if d["lane"] == TriageLane.DEEP)
 
         duration = time.perf_counter() - start_time
 
-        logger.info(
-            "triage_phase_completed",
-            duration=duration,
-            fast=fast_count,
-            middle=middle_count,
-            deep=deep_count
-        )
+        logger.info("triage_phase_completed", duration=duration, fast=fast_count, middle=middle_count, deep=deep_count)
 
         if self.progress_callback:
-            self.progress_callback("triage_completed", {
-                "duration": f"{duration:.2f}s",
-                "stats": {"fast": fast_count, "middle": middle_count, "deep": deep_count}
-            })
+            self.progress_callback(
+                "triage_completed",
+                {
+                    "duration": f"{duration:.2f}s",
+                    "stats": {"fast": fast_count, "middle": middle_count, "deep": deep_count},
+                },
+            )
 
         return decisions

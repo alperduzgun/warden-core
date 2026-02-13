@@ -13,7 +13,6 @@ from warden.shared.domain.base_model import BaseDomainModel
 
 
 class CustomRule(BaseDomainModel):
-
     """Custom validation rule definition.
 
     Represents a project-specific rule that validates code against
@@ -41,7 +40,9 @@ class CustomRule(BaseDomainModel):
     name: str
     category: RuleCategory
     severity: RuleSeverity
-    is_blocker: bool = Field(alias="isBlocker")  # Explicit alias if auto-alias fails for some reason, but auto-alias should work.
+    is_blocker: bool = Field(
+        alias="isBlocker"
+    )  # Explicit alias if auto-alias fails for some reason, but auto-alias should work.
     description: str
     enabled: bool
     type: str  # 'security' | 'convention' | 'pattern' | 'script' | 'ai'

@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 @dataclass
 class CommandResult:
     """Result of a command execution."""
+
     command: str
     exit_code: int
     stdout: str
@@ -48,7 +49,7 @@ class CommandExecutor:
         cwd: str | Path | None = None,
         env: dict[str, str] | None = None,
         timeout: float | None = None,
-        shell: bool = False
+        shell: bool = False,
     ) -> CommandResult:
         """
         Execute a command asynchronously.
@@ -64,6 +65,7 @@ class CommandExecutor:
             CommandResult object
         """
         import time
+
         start_time = time.perf_counter()
         timeout_val = timeout if timeout is not None else self.default_timeout
 
@@ -71,6 +73,7 @@ class CommandExecutor:
         if isinstance(command, str) and not shell:
             # Split string if not using shell
             import shlex
+
             cmd_args = shlex.split(command)
         else:
             cmd_args = command
@@ -94,7 +97,7 @@ class CommandExecutor:
                     stderr=asyncio.subprocess.PIPE,
                     cwd=cwd,
                     env=run_env,
-                    preexec_fn=os.setsid  # Create process group for easier cleanup
+                    preexec_fn=os.setsid,  # Create process group for easier cleanup
                 )
             else:
                 process = await asyncio.create_subprocess_exec(
@@ -103,14 +106,11 @@ class CommandExecutor:
                     stderr=asyncio.subprocess.PIPE,
                     cwd=cwd,
                     env=run_env,
-                    preexec_fn=os.setsid
+                    preexec_fn=os.setsid,
                 )
 
             try:
-                stdout_data, stderr_data = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout_val
-                )
+                stdout_data, stderr_data = await asyncio.wait_for(process.communicate(), timeout=timeout_val)
             except asyncio.TimeoutError:
                 logger.warning("command_timeout", command=cmd_str, timeout=timeout_val)
 
@@ -124,30 +124,21 @@ class CommandExecutor:
                     stdout="",
                     stderr="Command timed out",
                     duration=time.perf_counter() - start_time,
-                    is_timeout=True
+                    is_timeout=True,
                 )
 
             duration = time.perf_counter() - start_time
             exit_code = process.returncode
-            stdout_str = stdout_data.decode('utf-8', errors='replace')
-            stderr_str = stderr_data.decode('utf-8', errors='replace')
+            stdout_str = stdout_data.decode("utf-8", errors="replace")
+            stderr_str = stderr_data.decode("utf-8", errors="replace")
 
             if exit_code != 0:
-                logger.warning(
-                    "command_failed",
-                    command=cmd_str,
-                    exit_code=exit_code,
-                    stderr_snippet=stderr_str[:200]
-                )
+                logger.warning("command_failed", command=cmd_str, exit_code=exit_code, stderr_snippet=stderr_str[:200])
             else:
                 logger.debug("command_success", command=cmd_str, duration=duration)
 
             return CommandResult(
-                command=cmd_str,
-                exit_code=exit_code,
-                stdout=stdout_str,
-                stderr=stderr_str,
-                duration=duration
+                command=cmd_str, exit_code=exit_code, stdout=stdout_str, stderr=stderr_str, duration=duration
             )
 
         except Exception as e:
@@ -157,5 +148,5 @@ class CommandExecutor:
                 exit_code=-2,
                 stdout="",
                 stderr=f"Execution error: {e!s}",
-                duration=time.perf_counter() - start_time
+                duration=time.perf_counter() - start_time,
             )

@@ -79,6 +79,7 @@ class FileClassifier:
             FileType enum value
         """
         from warden.shared.utils.language_utils import get_language_from_path
+
         lang = get_language_from_path(file_path)
         try:
             return FileType(lang.value)
@@ -132,10 +133,12 @@ class FileClassifier:
     def get_supported_extensions(cls) -> set[str]:
         """Get all supported file extensions."""
         from warden.shared.utils.language_utils import get_supported_extensions
+
         return set(get_supported_extensions())
 
     @classmethod
     def get_analyzable_extensions(cls) -> set[str]:
         """Get file extensions that can be analyzed."""
         from warden.shared.utils.language_utils import get_code_extensions
+
         return get_code_extensions()

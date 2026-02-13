@@ -190,24 +190,22 @@ class FastAPIExtractor(BaseContractExtractor):
                     return_type = func_match.group(3)
 
                     # Use response_model if specified, else return type
-                    output_type = response_model or self._clean_type(
-                        return_type.strip() if return_type else "None"
-                    )
+                    output_type = response_model or self._clean_type(return_type.strip() if return_type else "None")
 
                     # Extract input type from Body parameter
                     input_type = self._extract_body_param(params)
 
-                    operations.append(OperationDefinition(
-                        name=func_name,
-                        operation_type=self.HTTP_DECORATORS.get(
-                            http_method, OperationType.QUERY
-                        ),
-                        input_type=input_type,
-                        output_type=output_type,
-                        description=f"{http_method.upper()} {path}",
-                        source_file=str(file_path),
-                        source_line=i + 1,
-                    ))
+                    operations.append(
+                        OperationDefinition(
+                            name=func_name,
+                            operation_type=self.HTTP_DECORATORS.get(http_method, OperationType.QUERY),
+                            input_type=input_type,
+                            output_type=output_type,
+                            description=f"{http_method.upper()} {path}",
+                            source_file=str(file_path),
+                            source_line=i + 1,
+                        )
+                    )
 
         return operations
 
@@ -221,11 +219,22 @@ class FastAPIExtractor(BaseContractExtractor):
 
         for param in param_list:
             # Skip common non-body params
-            if any(skip in param.lower() for skip in [
-                "request:", "response:", "db:", "session:",
-                "current_user", "background", "= depends", "= query",
-                "= path", "= header", "= cookie",
-            ]):
+            if any(
+                skip in param.lower()
+                for skip in [
+                    "request:",
+                    "response:",
+                    "db:",
+                    "session:",
+                    "current_user",
+                    "background",
+                    "= depends",
+                    "= query",
+                    "= path",
+                    "= header",
+                    "= cookie",
+                ]
+            ):
                 continue
 
             # Look for Body(...) annotation
@@ -334,35 +343,35 @@ class FastAPIExtractor(BaseContractExtractor):
                     "Optional[" in field_type
                     or "| None" in field_type
                     or "None |" in field_type
-                    or "= None" in class_body[field_match.start():field_match.end() + 20]
+                    or "= None" in class_body[field_match.start() : field_match.end() + 20]
                 )
 
                 # Determine if array
-                is_array = (
-                    field_type.startswith("List[")
-                    or field_type.startswith("list[")
-                    or "List[" in field_type
-                )
+                is_array = field_type.startswith("List[") or field_type.startswith("list[") or "List[" in field_type
 
                 # Clean type
                 clean_type = self._clean_type(field_type)
 
-                fields.append(FieldDefinition(
-                    name=field_name,
-                    type_name=clean_type,
-                    is_optional=is_optional,
-                    is_array=is_array,
-                    source_file=str(file_path),
-                ))
+                fields.append(
+                    FieldDefinition(
+                        name=field_name,
+                        type_name=clean_type,
+                        is_optional=is_optional,
+                        is_array=is_array,
+                        source_file=str(file_path),
+                    )
+                )
 
             if fields:
-                line_num = content[:class_match.start()].count("\n") + 1
-                models.append(ModelDefinition(
-                    name=class_name,
-                    fields=fields,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: class_match.start()].count("\n") + 1
+                models.append(
+                    ModelDefinition(
+                        name=class_name,
+                        fields=fields,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return models
 
@@ -409,13 +418,15 @@ class FastAPIExtractor(BaseContractExtractor):
                     values.append(value_name)
 
             if values:
-                line_num = content[:enum_match.start()].count("\n") + 1
-                enums.append(EnumDefinition(
-                    name=enum_name,
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=line_num,
-                ))
+                line_num = content[: enum_match.start()].count("\n") + 1
+                enums.append(
+                    EnumDefinition(
+                        name=enum_name,
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=line_num,
+                    )
+                )
 
         return enums
 

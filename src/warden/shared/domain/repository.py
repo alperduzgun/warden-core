@@ -190,9 +190,7 @@ class IIssueHistoryRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_events_async(
-        self, issue_id: str, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    async def get_events_async(self, issue_id: str, limit: int = 100) -> list[dict[str, Any]]:
         """Get events for an issue."""
         ...
 

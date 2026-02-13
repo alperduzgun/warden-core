@@ -64,7 +64,7 @@ class PipelineContext:
     project_metadata: dict[str, Any] = field(default_factory=dict)
 
     # Phase 0.5: TRIAGE Results (Adaptive Hybrid Triage)
-    triage_decisions: dict[str, Any] = field(default_factory=dict) # Key: file_path, Value: TriageDecision.model_dump()
+    triage_decisions: dict[str, Any] = field(default_factory=dict)  # Key: file_path, Value: TriageDecision.model_dump()
 
     # Phase 1: ANALYSIS Results
     quality_metrics: QualityMetrics | None = None
@@ -173,14 +173,16 @@ class PipelineContext:
                 self.prompt_tokens += usage.get("prompt_tokens", 0)
                 self.completion_tokens += usage.get("completion_tokens", 0)
 
-            self.llm_history.append({
-                "phase": phase,
-                "timestamp": datetime.now().isoformat(),
-                "prompt": prompt[:500],  # Truncate for storage
-                "response": response[:500],  # Truncate for storage
-                "confidence": confidence,
-                "usage": usage or {},
-            })
+            self.llm_history.append(
+                {
+                    "phase": phase,
+                    "timestamp": datetime.now().isoformat(),
+                    "prompt": prompt[:500],  # Truncate for storage
+                    "response": response[:500],  # Truncate for storage
+                    "confidence": confidence,
+                    "usage": usage or {},
+                }
+            )
 
     def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int = None) -> None:
         """
@@ -226,7 +228,7 @@ class PipelineContext:
         # ANALYSIS gets PRE-ANALYSIS results
         if phase in ["ANALYSIS", "CLASSIFICATION", "VALIDATION", "FORTIFICATION", "CLEANING"]:
             # Check if project_type is a ProjectContext object or an enum
-            if hasattr(self.project_type, 'project_type'):
+            if hasattr(self.project_type, "project_type"):
                 # It's a ProjectContext object
                 project_type_value = self.project_type.project_type.value if self.project_type.project_type else None
                 framework_value = self.project_type.framework.value if self.project_type.framework else None
@@ -235,59 +237,69 @@ class PipelineContext:
                 project_type_value = self.project_type.value if self.project_type else None
                 framework_value = self.framework.value if self.framework else None
 
-            context.update({
-                "project_type": project_type_value,
-                "framework": framework_value,
-                "file_context": self.file_context.value if self.file_context else None,
-                "file_contexts": self.file_contexts,
-                "project_metadata": self.project_metadata,
-            })
+            context.update(
+                {
+                    "project_type": project_type_value,
+                    "framework": framework_value,
+                    "file_context": self.file_context.value if self.file_context else None,
+                    "file_contexts": self.file_contexts,
+                    "project_metadata": self.project_metadata,
+                }
+            )
 
         # CLASSIFICATION gets ANALYSIS results too
         if phase in ["CLASSIFICATION", "VALIDATION", "FORTIFICATION", "CLEANING"]:
-            context.update({
-                "quality_metrics": self.quality_metrics.to_json() if self.quality_metrics else None,
-                "quality_score": self.quality_score_before,
-                "quality_score_before": self.quality_score_before,
-                "quality_confidence": self.quality_confidence,
-                "hotspots": self.hotspots,
-                "quick_wins": self.quick_wins,
-                "technical_debt_hours": self.technical_debt_hours,
-            })
+            context.update(
+                {
+                    "quality_metrics": self.quality_metrics.to_json() if self.quality_metrics else None,
+                    "quality_score": self.quality_score_before,
+                    "quality_score_before": self.quality_score_before,
+                    "quality_confidence": self.quality_confidence,
+                    "hotspots": self.hotspots,
+                    "quick_wins": self.quick_wins,
+                    "technical_debt_hours": self.technical_debt_hours,
+                }
+            )
 
         # VALIDATION gets CLASSIFICATION results too + project intelligence
         if phase in ["VALIDATION", "FORTIFICATION", "CLEANING"]:
-            context.update({
-                "selected_frames": self.selected_frames,
-                "suppression_rules": self.suppression_rules,
-                "frame_priorities": self.frame_priorities,
-                "classification_reasoning": self.classification_reasoning,
-                "learned_patterns": self.learned_patterns,
-                "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
-            })
+            context.update(
+                {
+                    "selected_frames": self.selected_frames,
+                    "suppression_rules": self.suppression_rules,
+                    "frame_priorities": self.frame_priorities,
+                    "classification_reasoning": self.classification_reasoning,
+                    "learned_patterns": self.learned_patterns,
+                    "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
+                }
+            )
 
         # FORTIFICATION gets VALIDATION results too
         if phase in ["FORTIFICATION", "CLEANING"]:
-            context.update({
-                "findings": self.findings,
-                "validated_issues": self.validated_issues,
-                "false_positives": self.false_positives,
-                "true_positives": self.true_positives,
-                "frame_results": self.frame_results,
-            })
+            context.update(
+                {
+                    "findings": self.findings,
+                    "validated_issues": self.validated_issues,
+                    "false_positives": self.false_positives,
+                    "true_positives": self.true_positives,
+                    "frame_results": self.frame_results,
+                }
+            )
 
         # CLEANING gets FORTIFICATION results too
         if phase == "CLEANING":
-            context.update({
-                "fortifications": self.fortifications,
-                "applied_fixes": self.applied_fixes,
-                "security_improvements": self.security_improvements,
-            })
+            context.update(
+                {
+                    "fortifications": self.fortifications,
+                    "applied_fixes": self.applied_fixes,
+                    "security_improvements": self.security_improvements,
+                }
+            )
 
         # Add LLM history for context continuity
-        context["previous_llm_interactions"] = [
-            h for h in self.llm_history if h["phase"] != phase
-        ][-5:]  # Last 5 interactions from other phases
+        context["previous_llm_interactions"] = [h for h in self.llm_history if h["phase"] != phase][
+            -5:
+        ]  # Last 5 interactions from other phases
 
         return context
 
@@ -307,7 +319,7 @@ class PipelineContext:
         # Add project context
         if self.project_type:
             # Check if project_type is a ProjectContext object or an enum
-            if hasattr(self.project_type, 'project_type'):
+            if hasattr(self.project_type, "project_type"):
                 pt = self.project_type.project_type.value if self.project_type.project_type else "unknown"
                 fw = self.project_type.framework.value if self.project_type.framework else "unknown"
             else:
@@ -328,15 +340,13 @@ class PipelineContext:
 
         # Add quality context
         if self.quality_score_before > 0:
-            context_parts.append(
-                f"QUALITY: {self.quality_score_before:.1f}/10"
-            )
+            context_parts.append(f"QUALITY: {self.quality_score_before:.1f}/10")
 
         # Add issues context
         if self.findings:
             if concise:
                 # Just counts for concise mode
-                crit = sum(1 for f in self.findings if get_finding_severity(f) == 'critical')
+                crit = sum(1 for f in self.findings if get_finding_severity(f) == "critical")
                 total = len(self.findings)
                 context_parts.append(f"ISSUES: {total} ({crit} critical)")
             else:
@@ -348,15 +358,11 @@ class PipelineContext:
 
         # Add frame selection (skip for concise unless relevant)
         if self.selected_frames and not concise:
-            context_parts.append(
-                f"VALIDATION FRAMES: {', '.join(self.selected_frames)}"
-            )
+            context_parts.append(f"VALIDATION FRAMES: {', '.join(self.selected_frames)}")
 
         # Add fixes applied
         if self.fortifications:
-            context_parts.append(
-                f"FIXES: {len(self.fortifications)}"
-            )
+            context_parts.append(f"FIXES: {len(self.fortifications)}")
 
         # Add phase-specific context (Skip for concise, implied by prompt)
         if not concise:
@@ -376,7 +382,7 @@ class PipelineContext:
     def to_json(self) -> dict[str, Any]:
         """Convert context to JSON for serialization."""
         # Determine project type and framework values
-        if hasattr(self.project_type, 'project_type'):
+        if hasattr(self.project_type, "project_type"):
             project_type_value = self.project_type.project_type.value if self.project_type.project_type else None
             framework_value = self.project_type.framework.value if self.project_type.framework else None
         else:
@@ -412,23 +418,19 @@ class PipelineContext:
 
         if self.project_type:
             # Check if project_type is a ProjectContext object or an enum
-            if hasattr(self.project_type, 'project_type'):
+            if hasattr(self.project_type, "project_type"):
                 pt = self.project_type.project_type.value if self.project_type.project_type else "unknown"
                 fw = self.project_type.framework.value if self.project_type.framework else "unknown"
             else:
                 pt = self.project_type.value if self.project_type else "unknown"
                 fw = self.framework.value if self.framework else "unknown"
-            summary_parts.append(
-                f"Project: {pt} / {fw}"
-            )
+            summary_parts.append(f"Project: {pt} / {fw}")
 
         if self.file_context:
             summary_parts.append(f"File Type: {self.file_context.value}")
 
         if self.quality_score_before > 0:
-            summary_parts.append(
-                f"Quality: {self.quality_score_before:.1f} → {self.quality_score_after:.1f}"
-            )
+            summary_parts.append(f"Quality: {self.quality_score_before:.1f} → {self.quality_score_after:.1f}")
 
         if self.findings:
             summary_parts.append(f"Issues Found: {len(self.findings)}")
@@ -437,8 +439,6 @@ class PipelineContext:
             summary_parts.append(f"Fixes Generated: {len(self.fortifications)}")
 
         if self.cleaning_suggestions:
-            summary_parts.append(
-                f"Improvements Suggested: {len(self.cleaning_suggestions)}"
-            )
+            summary_parts.append(f"Improvements Suggested: {len(self.cleaning_suggestions)}")
 
         return "\n".join(summary_parts)

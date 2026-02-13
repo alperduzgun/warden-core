@@ -1,4 +1,5 @@
 """Centralized async error handling decorator."""
+
 import functools
 from collections.abc import Callable
 from typing import Any, Dict, List, Optional, Type
@@ -10,16 +11,19 @@ logger = structlog.get_logger(__name__)
 
 class OperationTimeoutError(Exception):
     """An operation timed out."""
+
     pass
 
 
 class ProviderUnavailableError(Exception):
     """LLM provider is unavailable."""
+
     pass
 
 
 class ValidationError(Exception):
     """Validation frame execution failed."""
+
     pass
 
 
@@ -60,6 +64,7 @@ def async_error_handler(
     Returns:
         Decorated async function with centralized error handling
     """
+
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
@@ -106,5 +111,7 @@ def async_error_handler(
                 if reraise:
                     raise mapped from e
                 return None
+
         return wrapper
+
     return decorator

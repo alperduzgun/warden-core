@@ -23,12 +23,13 @@ class PipelineAdapter(BaseWardenAdapter):
         - warden_execute_pipeline_stream: Execute pipeline with streaming
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_execute_pipeline",
-        "warden_execute_pipeline_stream",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_execute_pipeline",
+            "warden_execute_pipeline_stream",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.PIPELINE
-
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get pipeline tool definitions."""
@@ -90,7 +91,7 @@ class PipelineAdapter(BaseWardenAdapter):
         frames = arguments.get("frames")
 
         if not self.bridge:
-             raise RuntimeError("Warden bridge not available")
+            raise RuntimeError("Warden bridge not available")
 
         try:
             safe_path = sanitize_path(path, self.project_root)
@@ -130,10 +131,12 @@ class PipelineAdapter(BaseWardenAdapter):
                 else:
                     events.append(event)
 
-            return MCPToolResult.json_result({
-                "events": events,
-                "result": final_result,
-                "event_count": len(events),
-            })
+            return MCPToolResult.json_result(
+                {
+                    "events": events,
+                    "result": final_result,
+                    "event_count": len(events),
+                }
+            )
         except Exception as e:
             return MCPToolResult.error(f"Pipeline stream failed: {e}")

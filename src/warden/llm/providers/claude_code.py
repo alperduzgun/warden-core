@@ -40,6 +40,7 @@ MAX_PROMPT_LENGTH = 100_000
 # CLAUDE CODE CLIENT
 # =============================================================================
 
+
 class ClaudeCodeClient(ILlmClient):
     """
     Simple Claude Code CLI wrapper.
@@ -87,10 +88,7 @@ class ClaudeCodeClient(ILlmClient):
 
         prompt_length = len(request.system_prompt or "") + len(request.user_message)
         if prompt_length > MAX_PROMPT_LENGTH:
-            return self._error_response(
-                f"Prompt too large: {prompt_length} > {MAX_PROMPT_LENGTH}",
-                model, 0
-            )
+            return self._error_response(f"Prompt too large: {prompt_length} > {MAX_PROMPT_LENGTH}", model, 0)
 
         # Build prompt
         full_prompt = request.user_message
@@ -102,18 +100,18 @@ class ClaudeCodeClient(ILlmClient):
             process = await asyncio.create_subprocess_exec(  # warden: ignore
                 self._cli_path,
                 "--print",
-                "--output-format", "json",
-                "--max-turns", "1",
-                "-p", full_prompt,
+                "--output-format",
+                "json",
+                "--max-turns",
+                "1",
+                "-p",
+                full_prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
             timeout = request.timeout_seconds or self._timeout
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
             duration_ms = self._calc_duration_ms(start_time)
 
@@ -125,8 +123,7 @@ class ClaudeCodeClient(ILlmClient):
                     error=error_msg[:200],
                 )
                 return self._error_response(
-                    f"CLI error (exit {process.returncode}): {error_msg[:200]}",
-                    model, duration_ms
+                    f"CLI error (exit {process.returncode}): {error_msg[:200]}", model, duration_ms
                 )
 
             return self._parse_response(stdout, model, duration_ms)
@@ -221,6 +218,7 @@ class ClaudeCodeClient(ILlmClient):
 # =============================================================================
 # PUBLIC API
 # =============================================================================
+
 
 async def detect_claude_code() -> bool:
     """Check if Claude Code CLI is available (used by auto-detection)."""

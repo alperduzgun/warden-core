@@ -42,6 +42,7 @@ def sanitize_path(path: str | Path, base_dir: str | Path) -> Path:
 
     return resolved_path
 
+
 class SafeFileScanner:
     """
     Chaos-Protected file scanner.
@@ -53,16 +54,19 @@ class SafeFileScanner:
     """
 
     DEFAULT_EXCLUDES = {
-        'node_modules', 'venv', '.venv', 'build', 'dist',
-        '.git', '__pycache__', '.warden', '.idea', '.vscode'
+        "node_modules",
+        "venv",
+        ".venv",
+        "build",
+        "dist",
+        ".git",
+        "__pycache__",
+        ".warden",
+        ".idea",
+        ".vscode",
     }
 
-    def __init__(
-        self,
-        project_root: Path,
-        max_depth: int = 15,
-        exclude_dirs: set[str] | None = None
-    ):
+    def __init__(self, project_root: Path, max_depth: int = 15, exclude_dirs: set[str] | None = None):
         self.project_root = project_root.resolve()
         self.max_depth = max_depth
         self.exclude_dirs = exclude_dirs or self.DEFAULT_EXCLUDES

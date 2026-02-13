@@ -16,6 +16,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class FrameFetcher:
     """
     Service responsible for fetching frames and rules from remote or local sources.
@@ -52,7 +53,7 @@ class FrameFetcher:
         for file_path in sorted(files, key=lambda p: str(p.relative_to(path))):
             rel_path = file_path.relative_to(path)
             # Skip hidden files and pycache within the package
-            if any(part.startswith('.') or part == "__pycache__" for part in rel_path.parts):
+            if any(part.startswith(".") or part == "__pycache__" for part in rel_path.parts):
                 continue
 
             # Add relative path to hash to detect renames/moves
@@ -76,7 +77,7 @@ class FrameFetcher:
         locked = self.lock_data.get("packages", {}).get(name)
         if not locked or "content_hash" not in locked:
             logger.warning("integrity_check_skipped_no_lock", name=name)
-            return True # Assume OK if no hash exists yet
+            return True  # Assume OK if no hash exists yet
 
         frame_path = self.frames_dir / name
         if not frame_path.exists():
@@ -192,6 +193,7 @@ class FrameFetcher:
         Returns True if all succeed, False on any failure (fail-fast).
         """
         from warden.services.package_manager.registry import RegistryClient
+
         registry = RegistryClient()
 
         logger.info("fetch_all_started", dependency_count=len(dependencies))
@@ -204,7 +206,7 @@ class FrameFetcher:
         for core in core_frames:
             if core["id"] not in all_to_install:
                 logger.info("auto_adding_core_frame", name=core["id"])
-                all_to_install[core["id"]] = "latest" # Registry will resolve this
+                all_to_install[core["id"]] = "latest"  # Registry will resolve this
 
         # 3. Process the merged list
         for name, source in all_to_install.items():
@@ -285,19 +287,21 @@ class FrameFetcher:
             if ref:
                 cmd.extend(["-b", ref])
 
-            logger.info("executing_git_clone", url=url, ref=ref, attempt=attempt+1)
+            logger.info("executing_git_clone", url=url, ref=ref, attempt=attempt + 1)
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode == 0:
                 break
 
-            logger.warning("git_clone_attempt_failed", attempt=attempt+1, error=result.stderr)
+            logger.warning("git_clone_attempt_failed", attempt=attempt + 1, error=result.stderr)
             if attempt == max_retries - 1:
                 logger.error("git_clone_final_failure", error=result.stderr)
                 return False
 
         # Stage lock update (transaction pattern)
-        self._update_lock(name, {"git": url, "ref": exact_commit, "path": subpath} if subpath else {"git": url, "ref": exact_commit})
+        self._update_lock(
+            name, {"git": url, "ref": exact_commit, "path": subpath} if subpath else {"git": url, "ref": exact_commit}
+        )
 
         source_path = pkg_staging / subpath if subpath else pkg_staging
         return self._install_from_staging(name, source_path)
@@ -326,6 +330,7 @@ class FrameFetcher:
     def _fetch_from_registry(self, name: str, version: str) -> bool:
         """Fetch from Warden Hub using RegistryClient resolution."""
         from warden.services.package_manager.registry import RegistryClient
+
         registry = RegistryClient()
 
         details = registry.get_details(name)

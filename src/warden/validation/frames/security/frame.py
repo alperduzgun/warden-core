@@ -104,9 +104,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
         self.checks.register(SQLInjectionCheck(self.config.get("sql_injection", {})))
         self.checks.register(XSSCheck(self.config.get("xss", {})))
         self.checks.register(SecretsCheck(self.config.get("secrets", {})))
-        self.checks.register(
-            HardcodedPasswordCheck(self.config.get("hardcoded_password", {}))
-        )
+        self.checks.register(HardcodedPasswordCheck(self.config.get("hardcoded_password", {})))
 
         logger.info(
             "builtin_checks_registered",
@@ -123,7 +121,8 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
             try:
                 # Get check-specific config from frame config
                 check_config = self.config.get("checks", {}).get(
-                    check_class.id, {}  # type: ignore[attr-defined]
+                    check_class.id,
+                    {},  # type: ignore[attr-defined]
                 )
                 check_instance = check_class(config=check_config)
                 self.checks.register(check_instance)
@@ -137,7 +136,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                 logger.error(
                     "community_check_registration_failed",
                     frame=self.name,
-                    check=check_class.__name__ if hasattr(check_class, '__name__') else "unknown",
+                    check=check_class.__name__ if hasattr(check_class, "__name__") else "unknown",
                     error=str(e),
                 )
 
@@ -206,6 +205,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
         if code_file.language == "python":
             try:
                 from ._internal.taint_analyzer import TaintAnalyzer
+
                 taint_analyzer = TaintAnalyzer()
                 taint_paths = taint_analyzer.analyze(code_file.content, code_file.language)
                 if taint_paths:
@@ -222,23 +222,28 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                 logger.debug("data_flow_analysis_failed", error=str(e))
 
         # STEP 4: AI-Powered Security Verification
-        if hasattr(self, 'llm_service') and self.llm_service:
+        if hasattr(self, "llm_service") and self.llm_service:
             try:
                 logger.info("executing_llm_security_check", file=code_file.path)
 
                 # Get Cross-File Context via Semantic Search
                 semantic_context = ""
-                if hasattr(self, 'semantic_search_service') and self.semantic_search_service and self.semantic_search_service.is_available():
+                if (
+                    hasattr(self, "semantic_search_service")
+                    and self.semantic_search_service
+                    and self.semantic_search_service.is_available()
+                ):
                     try:
                         search_results = await self.semantic_search_service.search(
-                            query=f"Security sensitive logic related to {code_file.path}",
-                            limit=3
+                            query=f"Security sensitive logic related to {code_file.path}", limit=3
                         )
                         if search_results:
                             semantic_context = "\n[Semantic Context from other files]:\n"
                             for res in search_results:
                                 if res.chunk.file_path != code_file.path:
-                                    semantic_context += f"- File: {res.chunk.file_path}\n  Code: {res.chunk.content[:200]}...\n"
+                                    semantic_context += (
+                                        f"- File: {res.chunk.file_path}\n  Code: {res.chunk.content[:200]}...\n"
+                                    )
                     except Exception as e:
                         logger.warning("security_semantic_search_failed", error=str(e))
 
@@ -247,51 +252,57 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                     ast_str = format_ast_context(ast_context)
                     if ast_str:
                         semantic_context += f"\n\n{ast_str}"
-                        logger.debug("ast_context_added_to_llm",
-                                    dangerous_calls=len(ast_context.get("dangerous_calls", [])),
-                                    sql_queries=len(ast_context.get("sql_queries", [])))
+                        logger.debug(
+                            "ast_context_added_to_llm",
+                            dangerous_calls=len(ast_context.get("dangerous_calls", [])),
+                            sql_queries=len(ast_context.get("sql_queries", [])),
+                        )
 
                 # Add LSP Data Flow Context (Taint Analysis)
                 if data_flow_context:
                     data_flow_str = format_data_flow_context(data_flow_context)
                     if data_flow_str:
                         semantic_context += f"\n\n{data_flow_str}"
-                        logger.debug("data_flow_context_added_to_llm",
-                                    tainted_paths=len(data_flow_context.get("tainted_paths", [])),
-                                    blast_radius=len(data_flow_context.get("blast_radius", [])))
+                        logger.debug(
+                            "data_flow_context_added_to_llm",
+                            tainted_paths=len(data_flow_context.get("tainted_paths", [])),
+                            blast_radius=len(data_flow_context.get("blast_radius", [])),
+                        )
 
                 # Determine tier from metadata (Adaptive Hybrid Triage)
                 use_fast_tier = False
-                if code_file.metadata and code_file.metadata.get('triage_lane') == 'middle_lane':
+                if code_file.metadata and code_file.metadata.get("triage_lane") == "middle_lane":
                     use_fast_tier = True
                     logger.debug("using_fast_tier_for_security_analysis", file=code_file.path)
 
                 response = await self.llm_service.analyze_security_async(
-                    code_file.content + semantic_context,
-                    code_file.language,
-                    use_fast_tier=use_fast_tier
+                    code_file.content + semantic_context, code_file.language, use_fast_tier=use_fast_tier
                 )
-                logger.info("llm_security_response_received", response_count=len(response.get('findings', [])) if response else 0)
+                logger.info(
+                    "llm_security_response_received",
+                    response_count=len(response.get("findings", [])) if response else 0,
+                )
 
-                if response and isinstance(response, dict) and 'findings' in response:
+                if response and isinstance(response, dict) and "findings" in response:
                     from warden.validation.domain.check import CheckFinding, CheckSeverity
+
                     llm_findings = []
-                    for f in response['findings']:
+                    for f in response["findings"]:
                         severity_map = {
-                            'critical': CheckSeverity.CRITICAL,
-                            'high': CheckSeverity.HIGH,
-                            'medium': CheckSeverity.MEDIUM,
-                            'low': CheckSeverity.LOW
+                            "critical": CheckSeverity.CRITICAL,
+                            "high": CheckSeverity.HIGH,
+                            "medium": CheckSeverity.MEDIUM,
+                            "low": CheckSeverity.LOW,
                         }
-                        sev = f.get('severity', 'medium').lower()
+                        sev = f.get("severity", "medium").lower()
                         ai_finding = CheckFinding(
                             check_id="llm-security",
                             check_name="AI Security Analysis",
                             severity=severity_map.get(sev, CheckSeverity.MEDIUM),
-                            message=f.get('message', 'Potential issue detected'),
+                            message=f.get("message", "Potential issue detected"),
                             location=f"{code_file.path}:{f.get('line_number', 1)}",
-                            suggestion=f.get('detail', 'AI identified a potential vulnerability.'),
-                            code_snippet=None
+                            suggestion=f.get("detail", "AI identified a potential vulnerability."),
+                            code_snippet=None,
                         )
                         llm_findings.append(ai_finding)
 
@@ -300,7 +311,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                             check_id="llm-security-check",
                             check_name="LLM Enhanced Security Analysis",
                             passed=False,
-                            findings=llm_findings
+                            findings=llm_findings,
                         )
                         check_results.append(llm_result)
 
@@ -411,12 +422,8 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
             findings_map[code_file.path] = all_findings
 
         # PHASE 2: Batch LLM Verification (if LLM available)
-        if hasattr(self, 'llm_service') and self.llm_service:
-            findings_map = await batch_verify_security_findings(
-                findings_map,
-                code_files,
-                self.llm_service
-            )
+        if hasattr(self, "llm_service") and self.llm_service:
+            findings_map = await batch_verify_security_findings(findings_map, code_files, self.llm_service)
 
         # PHASE 3: Build Results
         results = []
@@ -445,10 +452,12 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
             results.append(result)
 
         batch_duration = time.perf_counter() - batch_start
-        logger.info("security_batch_completed",
-                   file_count=len(code_files),
-                   total_findings=sum(len(f) for f in findings_map.values()),
-                   duration=f"{batch_duration:.2f}s")
+        logger.info(
+            "security_batch_completed",
+            file_count=len(code_files),
+            total_findings=sum(len(f) for f in findings_map.values()),
+            duration=f"{batch_duration:.2f}s",
+        )
 
         return results
 

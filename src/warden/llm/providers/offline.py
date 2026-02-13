@@ -28,7 +28,7 @@ class OfflineClient(ILlmClient):
             success=True,
             provider=self.provider,
             model="offline-fallback",
-            token_usage={"prompt": 0, "completion": 0, "total": 0}
+            token_usage={"prompt": 0, "completion": 0, "total": 0},
         )
 
     async def is_available_async(self) -> bool:
@@ -37,7 +37,9 @@ class OfflineClient(ILlmClient):
         """
         return True
 
-    async def complete_async(self, prompt: str, system_prompt: str = "", model: str | None = None, use_fast_tier: bool = False) -> LlmResponse:
+    async def complete_async(
+        self, prompt: str, system_prompt: str = "", model: str | None = None, use_fast_tier: bool = False
+    ) -> LlmResponse:
         return await self.send_async(None)
 
     async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:

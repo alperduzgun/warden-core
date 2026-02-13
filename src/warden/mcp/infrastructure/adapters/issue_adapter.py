@@ -31,16 +31,18 @@ class IssueAdapter(BaseWardenAdapter):
         - warden_get_issue_stats: Get statistics
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_get_all_issues",
-        "warden_get_open_issues",
-        "warden_get_issue_by_hash",
-        "warden_resolve_issue",
-        "warden_suppress_issue",
-        "warden_reopen_issue",
-        "warden_get_issue_history",
-        "warden_get_issue_stats",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_get_all_issues",
+            "warden_get_open_issues",
+            "warden_get_issue_by_hash",
+            "warden_resolve_issue",
+            "warden_suppress_issue",
+            "warden_reopen_issue",
+            "warden_get_issue_history",
+            "warden_get_issue_stats",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.ISSUE
 
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
@@ -51,6 +53,7 @@ class IssueAdapter(BaseWardenAdapter):
         self._issues: dict[str, dict[str, Any]] = {}
         self._max_issues = 10000
         from collections import deque
+
         self._history: deque = deque(maxlen=5000)
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -195,13 +198,15 @@ class IssueAdapter(BaseWardenAdapter):
 
         # Paginate
         total = len(filtered)
-        paginated = filtered[offset:offset + limit]
+        paginated = filtered[offset : offset + limit]
 
-        return MCPToolResult.json_result({
-            "total_count": total,
-            "filtered_count": len(paginated),
-            "issues": paginated,
-        })
+        return MCPToolResult.json_result(
+            {
+                "total_count": total,
+                "filtered_count": len(paginated),
+                "issues": paginated,
+            }
+        )
 
     async def _get_open_issues_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get open issues only."""
@@ -240,18 +245,22 @@ class IssueAdapter(BaseWardenAdapter):
         self._issues[issue_id]["resolved_at"] = datetime.now(timezone.utc).isoformat()
 
         # Record history
-        self._history.append({
-            "issue_id": issue_id,
-            "action": "resolved",
-            "actor": actor,
-            "comment": comment,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._history.append(
+            {
+                "issue_id": issue_id,
+                "action": "resolved",
+                "actor": actor,
+                "comment": comment,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "issue": self._issues[issue_id],
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "issue": self._issues[issue_id],
+            }
+        )
 
     async def _suppress_issue_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Suppress an issue."""
@@ -274,18 +283,22 @@ class IssueAdapter(BaseWardenAdapter):
         self._issues[issue_id]["suppression_reason"] = comment
 
         # Record history
-        self._history.append({
-            "issue_id": issue_id,
-            "action": "suppressed",
-            "actor": actor,
-            "comment": comment,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._history.append(
+            {
+                "issue_id": issue_id,
+                "action": "suppressed",
+                "actor": actor,
+                "comment": comment,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "issue": self._issues[issue_id],
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "issue": self._issues[issue_id],
+            }
+        )
 
     async def _reopen_issue_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Reopen an issue."""
@@ -307,25 +320,31 @@ class IssueAdapter(BaseWardenAdapter):
         self._issues[issue_id]["reopened_at"] = datetime.now(timezone.utc).isoformat()
 
         # Record history
-        self._history.append({
-            "issue_id": issue_id,
-            "action": "reopened",
-            "actor": actor,
-            "comment": comment,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._history.append(
+            {
+                "issue_id": issue_id,
+                "action": "reopened",
+                "actor": actor,
+                "comment": comment,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
-        return MCPToolResult.json_result({
-            "success": True,
-            "issue": self._issues[issue_id],
-        })
+        return MCPToolResult.json_result(
+            {
+                "success": True,
+                "issue": self._issues[issue_id],
+            }
+        )
 
     async def _get_issue_history_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get issue history."""
-        return MCPToolResult.json_result({
-            "history": self._history,
-            "total_count": len(self._history),
-        })
+        return MCPToolResult.json_result(
+            {
+                "history": self._history,
+                "total_count": len(self._history),
+            }
+        )
 
     async def _get_issue_stats_async(self, arguments: dict[str, Any]) -> MCPToolResult:
         """Get issue statistics."""

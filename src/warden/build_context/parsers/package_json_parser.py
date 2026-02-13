@@ -89,28 +89,16 @@ class PackageJsonParser:
             project_description = data.get("description")
 
             # Extract dependencies
-            dependencies = self._parse_dependencies(
-                data.get("dependencies", {}),
-                DependencyType.PRODUCTION
-            )
+            dependencies = self._parse_dependencies(data.get("dependencies", {}), DependencyType.PRODUCTION)
 
-            dev_dependencies = self._parse_dependencies(
-                data.get("devDependencies", {}),
-                DependencyType.DEVELOPMENT
-            )
+            dev_dependencies = self._parse_dependencies(data.get("devDependencies", {}), DependencyType.DEVELOPMENT)
 
             # Handle peerDependencies
-            peer_deps = self._parse_dependencies(
-                data.get("peerDependencies", {}),
-                DependencyType.PEER
-            )
+            peer_deps = self._parse_dependencies(data.get("peerDependencies", {}), DependencyType.PEER)
             dependencies.extend(peer_deps)
 
             # Handle optionalDependencies
-            optional_deps = self._parse_dependencies(
-                data.get("optionalDependencies", {}),
-                DependencyType.OPTIONAL
-            )
+            optional_deps = self._parse_dependencies(data.get("optionalDependencies", {}), DependencyType.OPTIONAL)
             dependencies.extend(optional_deps)
 
             # Extract scripts
@@ -146,11 +134,7 @@ class PackageJsonParser:
             print(f"Error parsing package.json: {e}")
             return None
 
-    def _parse_dependencies(
-        self,
-        deps_dict: dict[str, str],
-        dep_type: DependencyType
-    ) -> list[Dependency]:
+    def _parse_dependencies(self, deps_dict: dict[str, str], dep_type: DependencyType) -> list[Dependency]:
         """
         Parse dependencies dictionary.
 
@@ -164,14 +148,7 @@ class PackageJsonParser:
         dependencies: list[Dependency] = []
 
         for name, version in deps_dict.items():
-            dependencies.append(
-                Dependency(
-                    name=name,
-                    version=version,
-                    type=dep_type,
-                    is_direct=True
-                )
-            )
+            dependencies.append(Dependency(name=name, version=version, type=dep_type, is_direct=True))
 
         return dependencies
 
@@ -188,13 +165,7 @@ class PackageJsonParser:
         scripts: list[BuildScript] = []
 
         for name, command in scripts_dict.items():
-            scripts.append(
-                BuildScript(
-                    name=name,
-                    command=command,
-                    description=self._get_script_description(name)
-                )
-            )
+            scripts.append(BuildScript(name=name, command=command, description=self._get_script_description(name)))
 
         return scripts
 

@@ -50,6 +50,7 @@ ci_app = typer.Typer(
 # Helper Functions
 # =============================================================================
 
+
 def _get_ci_manager() -> CIManager:
     """
     Get CI manager instance for current directory.
@@ -111,23 +112,12 @@ def _print_secrets_hint(llm_provider: str) -> None:
 # Commands
 # =============================================================================
 
+
 @ci_app.command("init")
 def ci_init(
-    provider: str | None = typer.Option(
-        None,
-        "--provider", "-p",
-        help="CI provider: github or gitlab"
-    ),
-    branch: str = typer.Option(
-        "main",
-        "--branch", "-b",
-        help="Default branch name"
-    ),
-    force: bool = typer.Option(
-        False,
-        "--force", "-f",
-        help="Overwrite existing workflow files"
-    ),
+    provider: str | None = typer.Option(None, "--provider", "-p", help="CI provider: github or gitlab"),
+    branch: str = typer.Option("main", "--branch", "-b", help="Default branch name"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing workflow files"),
 ) -> None:
     """
     Initialize CI/CD workflows from templates.
@@ -226,15 +216,9 @@ def ci_init(
 @ci_app.command("update")
 def ci_update(
     no_preserve_custom: bool = typer.Option(
-        False,
-        "--no-preserve-custom",
-        help="Overwrite custom sections in workflow files"
+        False, "--no-preserve-custom", help="Overwrite custom sections in workflow files"
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be updated without making changes"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be updated without making changes"),
 ) -> None:
     """
     Update CI workflows from latest templates.
@@ -341,11 +325,7 @@ def ci_sync() -> None:
 
 @ci_app.command("status")
 def ci_status(
-    json_output: bool = typer.Option(
-        False,
-        "--json",
-        help="Output as JSON"
-    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """
     Show CI workflow status.
@@ -380,11 +360,12 @@ def ci_status(
     console.print()
 
     if not status_data.get("is_configured"):
-        console.print(Panel(
-            "[yellow]No CI workflows detected.[/yellow]\n\n"
-            "Run [bold]warden ci init[/bold] to set up CI/CD.",
-            title="Status",
-        ))
+        console.print(
+            Panel(
+                "[yellow]No CI workflows detected.[/yellow]\n\nRun [bold]warden ci init[/bold] to set up CI/CD.",
+                title="Status",
+            )
+        )
         return
 
     # Provider info
@@ -445,6 +426,7 @@ def ci_status(
     for name, wf in workflows.items():
         if wf.get("last_modified"):
             from datetime import datetime
+
             try:
                 dt = datetime.fromisoformat(wf["last_modified"])
                 if most_recent_time is None or dt > most_recent_time:

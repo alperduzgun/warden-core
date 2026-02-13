@@ -21,11 +21,7 @@ class AsyncRuleValidator:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         logger.info("async_validator_initialized", workers=max_workers)
 
-    async def validate_patterns_async(
-        self,
-        content: str,
-        patterns: list[str]
-    ) -> list:
+    async def validate_patterns_async(self, content: str, patterns: list[str]) -> list:
         """
         Validate content against patterns asynchronously.
 
@@ -37,12 +33,7 @@ class AsyncRuleValidator:
             List of matches
         """
         loop = asyncio.get_event_loop()
-        matches = await loop.run_in_executor(
-            self.executor,
-            self._validate_patterns,
-            content,
-            patterns
-        )
+        matches = await loop.run_in_executor(self.executor, self._validate_patterns, content, patterns)
         return matches
 
     @staticmethod

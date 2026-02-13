@@ -13,11 +13,7 @@ from rich.table import Table
 console = Console()
 
 # Create sub-app for baseline commands
-baseline_app = typer.Typer(
-    name="baseline",
-    help="Manage Warden baseline and technical debt",
-    no_args_is_help=True
-)
+baseline_app = typer.Typer(name="baseline", help="Manage Warden baseline and technical debt", no_args_is_help=True)
 
 
 @baseline_app.command(name="debt")
@@ -86,12 +82,7 @@ def debt_command(
         else:
             status = "[green]✓ OK[/green]"
 
-        table.add_row(
-            mod_name,
-            str(debt_count),
-            str(oldest_age) if oldest_age > 0 else "-",
-            status
-        )
+        table.add_row(mod_name, str(debt_count), str(oldest_age) if oldest_age > 0 else "-", status)
 
     console.print(table)
     console.print(f"\n[bold]Total Debt Items:[/bold] {total_debt}")
@@ -120,12 +111,9 @@ def debt_command(
                 severity = item.get("severity", "medium")
                 first_seen = item.get("first_seen", "unknown")
 
-                sev_color = {
-                    "critical": "red",
-                    "high": "yellow",
-                    "medium": "blue",
-                    "low": "dim"
-                }.get(str(severity).lower(), "dim")
+                sev_color = {"critical": "red", "high": "yellow", "medium": "blue", "low": "dim"}.get(
+                    str(severity).lower(), "dim"
+                )
 
                 console.print(f"  [{sev_color}]• {rule}[/{sev_color}] at {path}")
                 console.print(f"    [dim]First seen: {first_seen[:10] if first_seen != 'unknown' else 'unknown'}[/dim]")
@@ -168,6 +156,7 @@ def migrate_command(
     module_map = None
     try:
         from warden.analysis.services.intelligence_loader import IntelligenceLoader
+
         intel_loader = IntelligenceLoader(root)
         if intel_loader.load():
             module_map = {

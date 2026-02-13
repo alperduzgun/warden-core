@@ -10,6 +10,7 @@ def get_installed_version() -> str:
     except Exception:
         return "0.1.0"  # Fallback
 
+
 def check_node_cli_installed() -> bool:
     """Check if warden-cli (Node.js) is installed and available."""
     # check for global executable

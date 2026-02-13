@@ -195,9 +195,7 @@ if __name__ == "__main__":
         if result.returncode != 0:
             print("❌ Warden found issues in staged files:")
             print(result.stdout)
-            print(
-                "\nCommit blocked. Fix issues or use 'git commit --no-verify' to bypass."
-            )
+            print("\nCommit blocked. Fix issues or use 'git commit --no-verify' to bypass.")
             return 1
 
         print("✓ Warden pre-commit checks passed!")

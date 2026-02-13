@@ -7,6 +7,7 @@ from rich.table import Table
 
 console = Console()
 
+
 class StatusReporter:
     """
     Handles parsing and displaying Warden status reports (SARIF).
@@ -19,7 +20,9 @@ class StatusReporter:
         """
         if not report_path.exists():
             console.print("[yellow]No report found.[/yellow]")
-            console.print("Run [bold]warden scan[/bold] locally or [bold]warden status --fetch[/bold] to get CI results.")
+            console.print(
+                "Run [bold]warden scan[/bold] locally or [bold]warden status --fetch[/bold] to get CI results."
+            )
             return
 
         try:
@@ -45,7 +48,7 @@ class StatusReporter:
 
                 console.print(Panel(table, border_style=status_color))
             else:
-                 console.print("[yellow]SARIF file is valid but contains no runs.[/yellow]")
+                console.print("[yellow]SARIF file is valid but contains no runs.[/yellow]")
 
         except Exception as e:
             console.print(f"[red]Failed to parse report:[/red] {e}")

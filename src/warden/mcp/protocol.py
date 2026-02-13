@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 class MCPErrorCode(IntEnum):
     """MCP-specific error codes (JSON-RPC 2.0 compatible)."""
+
     # Standard JSON-RPC errors
     PARSE_ERROR = -32700
     INVALID_REQUEST = -32600
@@ -30,6 +31,7 @@ class MCPErrorCode(IntEnum):
 @dataclass
 class MCPError:
     """MCP error response."""
+
     code: int
     message: str
     data: Any | None = None
@@ -44,6 +46,7 @@ class MCPError:
 @dataclass
 class MCPRequest:
     """MCP JSON-RPC request."""
+
     jsonrpc: str
     method: str
     id: int | str | None = None
@@ -66,6 +69,7 @@ class MCPRequest:
 @dataclass
 class MCPResponse:
     """MCP JSON-RPC response."""
+
     jsonrpc: str = "2.0"
     id: int | str | None = None
     result: Any | None = None
@@ -88,6 +92,7 @@ class MCPResponse:
 @dataclass
 class MCPServerCapabilities:
     """MCP server capabilities announcement."""
+
     resources: bool = True
     tools: bool = True
     prompts: bool = False
@@ -109,6 +114,7 @@ class MCPServerCapabilities:
 @dataclass
 class MCPServerInfo:
     """MCP server information."""
+
     name: str = "warden-mcp"
     version: str = "1.0.0"
 
@@ -119,6 +125,7 @@ class MCPServerInfo:
 @dataclass
 class MCPResource:
     """MCP resource definition."""
+
     uri: str
     name: str
     description: str | None = None
@@ -138,6 +145,7 @@ class MCPResource:
 @dataclass
 class MCPResourceContent:
     """MCP resource content."""
+
     uri: str
     mime_type: str
     text: str | None = None
@@ -155,6 +163,7 @@ class MCPResourceContent:
 @dataclass
 class MCPTool:
     """MCP tool definition."""
+
     name: str
     description: str
     input_schema: dict[str, Any] = field(default_factory=dict)
@@ -170,6 +179,7 @@ class MCPTool:
 @dataclass
 class MCPToolResult:
     """MCP tool execution result."""
+
     content: list[dict[str, Any]]
     is_error: bool = False
 

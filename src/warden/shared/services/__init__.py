@@ -59,11 +59,7 @@ class LLMService:
 
         try:
             # Simplified for now
-            return {
-                "analysis": "Code analysis result",
-                "suggestions": [],
-                "confidence": 0.5
-            }
+            return {"analysis": "Code analysis result", "suggestions": [], "confidence": 0.5}
         except Exception as e:
             logger.error("code_analysis_failed", error=str(e))
             return {"error": str(e)}
@@ -71,10 +67,10 @@ class LLMService:
     def _build_suggestion_prompt(self, issue: dict[str, Any]) -> str:
         """Build prompt for suggestion generation."""
         return f"""
-        Issue: {issue.get('message', '')}
-        Severity: {issue.get('severity', 'medium')}
-        File: {issue.get('file_path', '')}
-        Line: {issue.get('line', 0)}
+        Issue: {issue.get("message", "")}
+        Severity: {issue.get("severity", "medium")}
+        File: {issue.get("file_path", "")}
+        Line: {issue.get("line", 0)}
 
         Please provide a fix suggestion.
         """
@@ -98,7 +94,7 @@ class SecuritySuggestionService:
             "severity": severity,
             "auto_fixable": False,
             "suggestion": None,
-            "confidence": 0.0
+            "confidence": 0.0,
         }
 
         # Generate suggestion based on issue type
@@ -133,11 +129,7 @@ class CodeImprovementService:
         """Initialize code improvement service."""
         self.llm_service = llm_service or LLMService()
 
-    async def generate_cleaning_suggestion(
-        self,
-        code: str,
-        issues: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    async def generate_cleaning_suggestion(self, code: str, issues: list[dict[str, Any]]) -> dict[str, Any]:
         """Generate cleaning suggestions for code."""
 
         suggestions = []
@@ -147,32 +139,38 @@ class CodeImprovementService:
             issue_type = issue.get("type", "")
 
             if "complexity" in issue_type:
-                suggestions.append({
-                    "type": "refactor",
-                    "target": issue.get("function", ""),
-                    "suggestion": "Break down complex function into smaller ones",
-                    "priority": "medium"
-                })
+                suggestions.append(
+                    {
+                        "type": "refactor",
+                        "target": issue.get("function", ""),
+                        "suggestion": "Break down complex function into smaller ones",
+                        "priority": "medium",
+                    }
+                )
             elif "duplication" in issue_type:
-                suggestions.append({
-                    "type": "extract",
-                    "target": issue.get("code_block", ""),
-                    "suggestion": "Extract duplicated code into a shared function",
-                    "priority": "high"
-                })
+                suggestions.append(
+                    {
+                        "type": "extract",
+                        "target": issue.get("code_block", ""),
+                        "suggestion": "Extract duplicated code into a shared function",
+                        "priority": "high",
+                    }
+                )
             elif "naming" in issue_type:
-                suggestions.append({
-                    "type": "rename",
-                    "target": issue.get("identifier", ""),
-                    "suggestion": "Use more descriptive names",
-                    "priority": "low"
-                })
+                suggestions.append(
+                    {
+                        "type": "rename",
+                        "target": issue.get("identifier", ""),
+                        "suggestion": "Use more descriptive names",
+                        "priority": "low",
+                    }
+                )
 
         return {
             "cleaning_suggestions": suggestions,
             "refactorings": [],
             "quality_score_after": 0.0,
-            "code_improvements": []
+            "code_improvements": [],
         }
 
 

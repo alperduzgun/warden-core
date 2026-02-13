@@ -157,7 +157,7 @@ class LLMOrphanFilter:
             batch_size=batch_size,
             max_retries=max_retries,
             injected_service=llm_service is not None,
-            cached_patterns=len(self._pattern_cache)
+            cached_patterns=len(self._pattern_cache),
         )
 
     def _load_cache(self):
@@ -208,16 +208,11 @@ class LLMOrphanFilter:
         if not is_true_orphan:
             self._pattern_cache[key] = (is_true_orphan, reasoning)
             self._save_cache()  # Persist immediately
-            logger.debug(
-                "pattern_cached",
-                key=key,
-                is_true_orphan=is_true_orphan,
-                cache_size=len(self._pattern_cache)
-            )
+            logger.debug("pattern_cached", key=key, is_true_orphan=is_true_orphan, cache_size=len(self._pattern_cache))
 
     async def filter_findings_batch(
         self,
-        findings_map: dict[str, list[OrphanFinding]], # file_path -> findings
+        findings_map: dict[str, list[OrphanFinding]],  # file_path -> findings
         code_files: dict[str, CodeFile],
         project_context: Any | None = None,
     ) -> dict[str, list[OrphanFinding]]:
@@ -233,7 +228,7 @@ class LLMOrphanFilter:
         time.perf_counter()
 
         # 1. Flatten all findings
-        all_flattened: list[tuple[str, OrphanFinding]] = [] # (file_path, finding)
+        all_flattened: list[tuple[str, OrphanFinding]] = []  # (file_path, finding)
         total_findings = 0
 
         for f_path, f_list in findings_map.items():
@@ -241,14 +236,10 @@ class LLMOrphanFilter:
                 all_flattened.append((f_path, finding))
             total_findings += len(f_list)
 
-        logger.info(
-            "llm_batch_filter_started",
-            total_files=len(findings_map),
-            total_findings=total_findings
-        )
+        logger.info("llm_batch_filter_started", total_files=len(findings_map), total_findings=total_findings)
 
         # 2. Check cache & Create batches
-        MAX_SAFE_TOKENS = 6000 # Leaving 2000 for output and system prompt from 8k limit
+        MAX_SAFE_TOKENS = 6000  # Leaving 2000 for output and system prompt from 8k limit
         batches = []
         current_batch = []
         current_tokens = 0
@@ -282,8 +273,8 @@ class LLMOrphanFilter:
             # Usually finding.snippet or we assume some length.
             # Let's verify OrphanFinding structure later, but safely assume
             # we can look at snippet. If not available, estimate 500 chars.
-            snippet_len = len(getattr(finding, 'snippet', '')) or 500
-            estimated_tokens = (snippet_len // 4) + 100 # +100 for JSON wrapping
+            snippet_len = len(getattr(finding, "snippet", "")) or 500
+            estimated_tokens = (snippet_len // 4) + 100  # +100 for JSON wrapping
 
             # Check limits: Count OR Tokens
             if (len(current_batch) >= self.batch_size) or (current_tokens + estimated_tokens > MAX_SAFE_TOKENS):
@@ -304,22 +295,18 @@ class LLMOrphanFilter:
             total_items=len(all_flattened),
             cached_hits=cached_count,
             skipped_false_positives=skipped_count,
-            items_to_process=sum(len(b) for b in batches)
+            items_to_process=sum(len(b) for b in batches),
         )
 
         # 3. Process batches
         results_map: dict[str, list[OrphanFinding]] = cached_results
 
         for i, batch in enumerate(batches):
-            logger.info("processing_smart_batch", index=i+1, total=len(batches), items=len(batch))
+            logger.info("processing_smart_batch", index=i + 1, total=len(batches), items=len(batch))
 
             try:
                 # Process via LLM
-                batch_results = await self._filter_multi_file_batch(
-                    batch,
-                    code_files,
-                    project_context
-                )
+                batch_results = await self._filter_multi_file_batch(batch, code_files, project_context)
 
                 # Redistribute results & update cache
                 # Note: filter_multi_file_batch returns only TRUE orphans
@@ -340,7 +327,7 @@ class LLMOrphanFilter:
                             finding,
                             f_path,
                             is_true_orphan=False,
-                            reasoning="Marked as false positive by LLM batch filter"
+                            reasoning="Marked as false positive by LLM batch filter",
                         )
 
             except Exception as e:
@@ -370,7 +357,9 @@ class LLMOrphanFilter:
                 if search_results:
                     semantic_context = "\n[Global Semantic Usage Context]\n"
                     for res in search_results:
-                        semantic_context += f"- Potential usage in {res.chunk.file_path}: {res.chunk.content[:150]}...\n"
+                        semantic_context += (
+                            f"- Potential usage in {res.chunk.file_path}: {res.chunk.content[:150]}...\n"
+                        )
             except Exception as e:
                 logger.warning("batch_semantic_search_failed", error=str(e))
 
@@ -379,9 +368,9 @@ class LLMOrphanFilter:
 
         # Send to LLM with semantic context
         response = await self._call_llm(
-            code="", # No single code file
+            code="",  # No single code file
             prompt=prompt + (f"\n# SEMANTIC CONTEXT\n{semantic_context}" if semantic_context else ""),
-            language="mixed"
+            language="mixed",
         )
 
         # Parse
@@ -408,16 +397,16 @@ class LLMOrphanFilter:
         if project_context:
             try:
                 # Robust extraction from Pydantic model or similar object
-                name = getattr(project_context, 'project_name', 'Unknown')
-                p_type = getattr(project_context, 'project_type', None)
-                framework = getattr(project_context, 'framework', None)
-                arch = getattr(project_context, 'architecture', None)
-                purpose = getattr(project_context, 'purpose', 'No specific purpose defined')
+                name = getattr(project_context, "project_name", "Unknown")
+                p_type = getattr(project_context, "project_type", None)
+                framework = getattr(project_context, "framework", None)
+                arch = getattr(project_context, "architecture", None)
+                purpose = getattr(project_context, "purpose", "No specific purpose defined")
 
                 # Convert Enums to string if needed
-                p_type_str = p_type.value if hasattr(p_type, 'value') else str(p_type)
-                fw_str = framework.value if hasattr(framework, 'value') else str(framework)
-                arch_str = arch.value if hasattr(arch, 'value') else str(arch)
+                p_type_str = p_type.value if hasattr(p_type, "value") else str(p_type)
+                fw_str = framework.value if hasattr(framework, "value") else str(framework)
+                arch_str = arch.value if hasattr(arch, "value") else str(arch)
 
                 context_str = (
                     f"Project: {name}\n"
@@ -432,10 +421,16 @@ class LLMOrphanFilter:
 
                 # 1. Project Type Rules
                 if "library" in p_type_str.lower() or "monorepo" in p_type_str.lower():
-                    rules.append("LIBRARY/SDK DETECTED: Assume public classes/functions are EXTERNAL APIs (Not orphans).")
+                    rules.append(
+                        "LIBRARY/SDK DETECTED: Assume public classes/functions are EXTERNAL APIs (Not orphans)."
+                    )
                 elif "cli" in p_type_str.lower():
-                    rules.append("CLI TOOL STRICT MODE: The ONLY public entry points are functions decorated as commands (e.g. @click.command).")
-                    rules.append("ANY other public function that is unused by commands is DEAD CODE (TRUE ORPHAN). Do not assume external usage.")
+                    rules.append(
+                        "CLI TOOL STRICT MODE: The ONLY public entry points are functions decorated as commands (e.g. @click.command)."
+                    )
+                    rules.append(
+                        "ANY other public function that is unused by commands is DEAD CODE (TRUE ORPHAN). Do not assume external usage."
+                    )
                 elif "microservice" in p_type_str.lower() or "api" in p_type_str.lower():
                     rules.append("WEB SERVICE DETECTED: Controller endpoints / Route handlers are entry points.")
                     rules.append("Service layer methods not called by controllers or other services ARE orphans.")
@@ -448,7 +443,9 @@ class LLMOrphanFilter:
 
                 # 3. Architecture Rules
                 if "clean" in arch_str.lower():
-                    rules.append("CLEAN ARCHITECTURE: Domain entities and use-cases might be defined but awaiting implementation.")
+                    rules.append(
+                        "CLEAN ARCHITECTURE: Domain entities and use-cases might be defined but awaiting implementation."
+                    )
 
                 project_rules = "\n".join([f"- {r}" for r in rules])
 
@@ -545,9 +542,7 @@ class LLMOrphanFilter:
 
             try:
                 # Filter batch using LLM
-                filtered_batch = await self._filter_batch(
-                    batch, code_file, language
-                )
+                filtered_batch = await self._filter_batch(batch, code_file, language)
 
                 true_orphans.extend(filtered_batch)
                 total_decisions += len(batch)
@@ -613,9 +608,7 @@ class LLMOrphanFilter:
 
                 # Filter based on LLM decisions
                 true_orphans = [
-                    finding
-                    for finding, decision in zip(batch, decisions, strict=False)
-                    if decision.is_true_orphan
+                    finding for finding, decision in zip(batch, decisions, strict=False) if decision.is_true_orphan
                 ]
 
                 # Log filtering stats
@@ -687,7 +680,7 @@ You have deep understanding of:
             user_message=user_message,
             max_tokens=3000,
             temperature=0.0,  # Deterministic for consistency
-            use_fast_tier=True
+            use_fast_tier=True,
         )
 
         response = await self.llm.send_async(request)
@@ -881,9 +874,7 @@ Now analyze the findings and return the JSON.
 
             # Validate count
             if len(decisions_data) != expected_count:
-                raise ValueError(
-                    f"Expected {expected_count} decisions, got {len(decisions_data)}"
-                )
+                raise ValueError(f"Expected {expected_count} decisions, got {len(decisions_data)}")
 
             # Convert to FilterDecision objects
             decisions = []
@@ -970,7 +961,7 @@ Now analyze the findings and return the JSON.
         """
         batches = []
         for i in range(0, len(findings), self.batch_size):
-            batches.append(findings[i:i + self.batch_size])
+            batches.append(findings[i : i + self.batch_size])
 
         logger.debug(
             "findings_batched",
@@ -991,7 +982,7 @@ Now analyze the findings and return the JSON.
         import asyncio
 
         # Exponential backoff: 1s, 2s, 4s, ...
-        delay = 2 ** attempt
+        delay = 2**attempt
 
         logger.debug(
             "retry_backoff",

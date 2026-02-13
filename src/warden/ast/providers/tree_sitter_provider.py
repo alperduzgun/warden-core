@@ -31,6 +31,7 @@ logger = structlog.get_logger(__name__)
 # Try to import tree-sitter (optional dependency)
 try:
     import tree_sitter
+
     TREE_SITTER_AVAILABLE = True
 except ImportError:
     TREE_SITTER_AVAILABLE = False
@@ -74,7 +75,8 @@ class TreeSitterProvider(IASTProvider):
             name="tree-sitter",
             priority=ASTProviderPriority.TREE_SITTER,
             supported_languages=[
-                lang for lang in LanguageRegistry.get_code_languages()
+                lang
+                for lang in LanguageRegistry.get_code_languages()
                 if LanguageRegistry.get_definition(lang) and LanguageRegistry.get_definition(lang).tree_sitter_id
             ],
             version="1.1.0",
@@ -86,8 +88,8 @@ class TreeSitterProvider(IASTProvider):
 
         self._parsers = {}  # Language -> Parser cache
         self._available = TREE_SITTER_AVAILABLE
-        self._language_objs = {} # Language -> tree_sitter.Language
-        self._missing_modules = {} # Language -> module_name
+        self._language_objs = {}  # Language -> tree_sitter.Language
+        self._missing_modules = {}  # Language -> module_name
 
         if self._available:
             self._initialize_languages()
@@ -98,6 +100,7 @@ class TreeSitterProvider(IASTProvider):
             return
 
         from warden.shared.languages.registry import LanguageRegistry
+
         logger.debug("initializing_tree_sitter_languages_from_registry")
 
         for lang in self._metadata.supported_languages:
@@ -122,8 +125,8 @@ class TreeSitterProvider(IASTProvider):
                 # Use a heuristic or standardized check
                 lang_fn = getattr(mod, "language", None)
                 if not lang_fn:
-                     # Try lang_id specific name (e.g. tree_sitter_typescript.language_typescript)
-                     lang_fn = getattr(mod, f"language_{ts_id.replace('-', '_')}", None)
+                    # Try lang_id specific name (e.g. tree_sitter_typescript.language_typescript)
+                    lang_fn = getattr(mod, f"language_{ts_id.replace('-', '_')}", None)
 
                 if lang_fn:
                     self._language_objs[lang] = tree_sitter.Language(lang_fn())
@@ -134,7 +137,11 @@ class TreeSitterProvider(IASTProvider):
             except Exception as e:
                 logger.warning("failed_to_load_grammar", language=lang.name, error=str(e))
 
-        logger.info("tree_sitter_languages_loaded", languages=[l.name for l in self._language_objs], missing=len(self._missing_modules))
+        logger.info(
+            "tree_sitter_languages_loaded",
+            languages=[l.name for l in self._language_objs],
+            missing=len(self._missing_modules),
+        )
 
     @property
     def missing_grammars(self) -> list[str]:
@@ -179,7 +186,7 @@ class TreeSitterProvider(IASTProvider):
                 [sys.executable, "-m", "pip", "install", "--quiet", "--break-system-packages", package_name],
                 capture_output=True,
                 text=True,
-                timeout=60  # 60 second timeout
+                timeout=60,  # 60 second timeout
             )
 
             if result.returncode != 0:
@@ -197,7 +204,9 @@ class TreeSitterProvider(IASTProvider):
                 mod = __import__(actual_module_name)
                 lang_fn = getattr(mod, "language", None)
                 if not lang_fn:
-                    lang_fn = getattr(mod, f"language_{actual_module_name.replace('tree_sitter_', '').replace('_orchard', '')}", None)
+                    lang_fn = getattr(
+                        mod, f"language_{actual_module_name.replace('tree_sitter_', '').replace('_orchard', '')}", None
+                    )
 
                 if lang_fn:
                     self._language_objs[language] = tree_sitter.Language(lang_fn())
@@ -279,7 +288,7 @@ class TreeSitterProvider(IASTProvider):
                 warnings=[],
                 parse_time_ms=0,
                 file_path=file_path,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
 
         if not self.supports_language(language):
@@ -297,7 +306,7 @@ class TreeSitterProvider(IASTProvider):
                 warnings=[],
                 parse_time_ms=0,
                 file_path=file_path,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
 
         start_time = time.time()
@@ -322,7 +331,7 @@ class TreeSitterProvider(IASTProvider):
                         warnings=[],
                         parse_time_ms=0,
                         file_path=file_path,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now(),
                     )
 
             parser = tree_sitter.Parser(language_obj)
@@ -344,7 +353,7 @@ class TreeSitterProvider(IASTProvider):
                 warnings=[],
                 parse_time_ms=parse_time_ms,
                 file_path=file_path,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
 
         except Exception as e:
@@ -365,7 +374,7 @@ class TreeSitterProvider(IASTProvider):
                 warnings=[],
                 parse_time_ms=parse_time_ms,
                 file_path=file_path,
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
 
     def supports_language(self, language: CodeLanguage) -> bool:
@@ -419,23 +428,19 @@ class TreeSitterProvider(IASTProvider):
             for cap_name, nodes in captures.items():
                 if cap_name == "dep":
                     for node in nodes:
-                        dep_str = source_bytes[node.start_byte:node.end_byte].decode().strip("\"'`")
+                        dep_str = source_bytes[node.start_byte : node.end_byte].decode().strip("\"'`")
                         if dep_str:
                             dependencies.add(dep_str)
 
             return sorted(dependencies)
         except Exception as e:
-            logger.debug(
-                "tree_sitter_dependency_extraction_failed",
-                language=language.value,
-                error=str(e)
-            )
+            logger.debug("tree_sitter_dependency_extraction_failed", language=language.value, error=str(e))
             return []
 
     def _get_dependency_query_str(self, language: CodeLanguage) -> str:
         """Get tree-sitter query string for dependencies based on language."""
         queries = {
-            CodeLanguage.JAVASCRIPT: "(import_statement source: (string) @dep) (call_expression function: (identifier) @func (#eq? @func \"require\") arguments: (arguments (string) @dep))",
+            CodeLanguage.JAVASCRIPT: '(import_statement source: (string) @dep) (call_expression function: (identifier) @func (#eq? @func "require") arguments: (arguments (string) @dep))',
             CodeLanguage.TYPESCRIPT: "(import_statement source: (string) @dep)",
             CodeLanguage.GO: "(import_spec (interpreted_string_literal) @dep)",
             CodeLanguage.JAVA: "(import_declaration (scoped_identifier) @dep)",
@@ -443,7 +448,9 @@ class TreeSitterProvider(IASTProvider):
         }
         return queries.get(language, "")
 
-    def _convert_node(self, ts_node: "tree_sitter.Node", source: str, language: CodeLanguage, file_path: str | None = None) -> ASTNode:
+    def _convert_node(
+        self, ts_node: "tree_sitter.Node", source: str, language: CodeLanguage, file_path: str | None = None
+    ) -> ASTNode:
         """Recursively convert a tree-sitter node to Warden ASTNode."""
         node_type, is_generic = self._map_node_type(ts_node, language)
 
@@ -455,44 +462,44 @@ class TreeSitterProvider(IASTProvider):
             start_line=start_point[0] + 1,
             start_column=start_point[1],
             end_line=end_point[0] + 1,
-            end_column=end_point[1]
+            end_column=end_point[1],
         )
 
         # Extract name if applicable
         name = None
         # Common patterns for names in TS/JS/Go
-        name_node = (ts_node.child_by_field_name("name") or
-                     ts_node.child_by_field_name("identifier") or
-                     ts_node.child_by_field_name("field_identifier"))
+        name_node = (
+            ts_node.child_by_field_name("name")
+            or ts_node.child_by_field_name("identifier")
+            or ts_node.child_by_field_name("field_identifier")
+        )
 
         if name_node:
-             name = source[name_node.start_byte:name_node.end_byte]
+            name = source[name_node.start_byte : name_node.end_byte]
 
         # If it's a type node but no name found via field, try some common patterns
-        if node_type in [ASTNodeType.CLASS, ASTNodeType.FUNCTION, ASTNodeType.INTERFACE, ASTNodeType.METHOD] and not name:
+        if (
+            node_type in [ASTNodeType.CLASS, ASTNodeType.FUNCTION, ASTNodeType.INTERFACE, ASTNodeType.METHOD]
+            and not name
+        ):
             for child in ts_node.children:
                 if child.type in ["identifier", "type_identifier", "field_identifier"]:
-                    name = source[child.start_byte:child.end_byte]
+                    name = source[child.start_byte : child.end_byte]
                     break
 
         # CRITICAL FIX: Identifiers must have their content as name
         if node_type == ASTNodeType.IDENTIFIER and not name:
-            name = source[ts_node.start_byte:ts_node.end_byte]
+            name = source[ts_node.start_byte : ts_node.end_byte]
 
         # Create the node
-        ast_node = ASTNode(
-            node_type=node_type,
-            name=name,
-            location=location,
-            children=[]
-        )
+        ast_node = ASTNode(node_type=node_type, name=name, location=location, children=[])
 
         # Add original type as attribute (Robustly)
         # Convert to string to avoid issues with tree-sitter bindings
         try:
             raw_type = ts_node.type
             if isinstance(raw_type, bytes):
-                raw_type = raw_type.decode('utf-8')
+                raw_type = raw_type.decode("utf-8")
             ast_node.attributes["original_type"] = str(raw_type)
         except Exception:
             ast_node.attributes["original_type"] = "unknown"
@@ -519,22 +526,19 @@ class TreeSitterProvider(IASTProvider):
             "program": ASTNodeType.MODULE,
             "source_file": ASTNodeType.MODULE,
             "module": ASTNodeType.MODULE,  # Python root
-
             # Classes & Interfaces
             "class_declaration": ASTNodeType.CLASS,
-            "class_definition": ASTNodeType.CLASS, # Dart/Python/Others
+            "class_definition": ASTNodeType.CLASS,  # Dart/Python/Others
             "class": ASTNodeType.CLASS,
             "interface_declaration": ASTNodeType.INTERFACE,
-            "type_alias_declaration": ASTNodeType.INTERFACE, # Often used as interface in TS
+            "type_alias_declaration": ASTNodeType.INTERFACE,  # Often used as interface in TS
             "enum_declaration": ASTNodeType.ENUM,
             "enum_definition": ASTNodeType.ENUM,
-
             # Functions & Methods
             "function_declaration": ASTNodeType.FUNCTION,
             "method_definition": ASTNodeType.METHOD,
             "method_declaration": ASTNodeType.METHOD,
             "arrow_function": ASTNodeType.FUNCTION,
-
             # Control Flow - Universal
             "if_statement": ASTNodeType.IF_STATEMENT,
             "if_expression": ASTNodeType.IF_STATEMENT,
@@ -547,11 +551,9 @@ class TreeSitterProvider(IASTProvider):
             "try_expression": ASTNodeType.TRY_CATCH,
             "catch_clause": ASTNodeType.TRY_CATCH,
             "guard_statement": ASTNodeType.IF_STATEMENT,  # Swift guard
-
             # Imports
             "import_statement": ASTNodeType.IMPORT,
             "import_declaration": ASTNodeType.IMPORT,
-
             # Literals
             "string": ASTNodeType.LITERAL,
             "number": ASTNodeType.LITERAL,
@@ -562,25 +564,22 @@ class TreeSitterProvider(IASTProvider):
             "false": ASTNodeType.LITERAL,
             "null": ASTNodeType.LITERAL,
             "nil": ASTNodeType.LITERAL,
-
             # Expressions
             "call_expression": ASTNodeType.CALL_EXPRESSION,
             "member_expression": ASTNodeType.MEMBER_ACCESS,
             "binary_expression": ASTNodeType.BINARY_EXPRESSION,
             "identifier": ASTNodeType.IDENTIFIER,
-
             # C# Specifics
             "using_directive": ASTNodeType.IMPORT,
             "namespace_declaration": ASTNodeType.MODULE,
             "property_declaration": ASTNodeType.PROPERTY,
             "package_declaration": ASTNodeType.MODULE,
-
             # Fields & Properties
             "field_declaration": ASTNodeType.FIELD,
             "variable_declaration": ASTNodeType.VARIABLE_DECLARATION,
-            "formal_parameter": ASTNodeType.FIELD, # For data constructors
-            "field_formal_parameter": ASTNodeType.FIELD, # Dart
-            "declaration": ASTNodeType.FIELD, # Heuristic fallback
+            "formal_parameter": ASTNodeType.FIELD,  # For data constructors
+            "field_formal_parameter": ASTNodeType.FIELD,  # Dart
+            "declaration": ASTNodeType.FIELD,  # Heuristic fallback
         }
 
         if t in mappings:
@@ -588,8 +587,11 @@ class TreeSitterProvider(IASTProvider):
 
         # Heuristic for generic mappings
         if "declaration" in t or "definition" in t:
-             if "function" in t: return ASTNodeType.FUNCTION, True
-             if "class" in t: return ASTNodeType.CLASS, True
-             if "method" in t: return ASTNodeType.METHOD, True
+            if "function" in t:
+                return ASTNodeType.FUNCTION, True
+            if "class" in t:
+                return ASTNodeType.CLASS, True
+            if "method" in t:
+                return ASTNodeType.METHOD, True
 
         return ASTNodeType.UNKNOWN, True

@@ -78,14 +78,11 @@ class SecretsCheck(ValidationCheck):
 
         # Load custom patterns from config
         custom_patterns = self.config.get("custom_patterns", [])
-        self.patterns = self.SECRET_PATTERNS + [
-            (pattern, "Custom secret pattern") for pattern in custom_patterns
-        ]
+        self.patterns = self.SECRET_PATTERNS + [(pattern, "Custom secret pattern") for pattern in custom_patterns]
 
         # Pre-compile all patterns once for performance (KISS optimization)
         self._compiled_patterns = [
-            (re.compile(pattern_str, re.IGNORECASE), secret_type)
-            for pattern_str, secret_type in self.patterns
+            (re.compile(pattern_str, re.IGNORECASE), secret_type) for pattern_str, secret_type in self.patterns
         ]
 
         # Exclusions (environment variable usage is OK)

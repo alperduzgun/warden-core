@@ -15,9 +15,11 @@ except ImportError:
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -30,26 +32,18 @@ class HealthStatusMixin:
 
         components = {
             "bridge": self.bridge is not None,
-            "orchestrator": (
-                self.bridge.orchestrator is not None if self.bridge else False
-            )
+            "orchestrator": (self.bridge.orchestrator is not None if self.bridge else False),
         }
 
         try:
             providers = await self.bridge.get_available_providers_async()
-            providers_list = (
-                providers if isinstance(providers, list)
-                else providers.get("providers", [])
-            )
+            providers_list = providers if isinstance(providers, list) else providers.get("providers", [])
             components["llm"] = any(p.get("available") for p in providers_list)
         except Exception:
             components["llm"] = False
 
         return warden_pb2.HealthResponse(
-            healthy=all(components.values()),
-            version="1.0.0",
-            uptime_seconds=int(uptime),
-            components=components
+            healthy=all(components.values()), version="1.0.0", uptime_seconds=int(uptime), components=components
         )
 
     async def GetStatus(self, request, context) -> "warden_pb2.StatusResponse":
@@ -62,5 +56,5 @@ class HealthStatusMixin:
             total_scans=self.total_scans,
             total_findings=self.total_findings,
             memory_mb=int(process.memory_info().rss / 1024 / 1024),
-            cpu_percent=process.cpu_percent()
+            cpu_percent=process.cpu_percent(),
         )

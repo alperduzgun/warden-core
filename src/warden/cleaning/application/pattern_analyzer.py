@@ -51,7 +51,7 @@ class PatternAnalyzer:
             analysis["duplicate_code"] = duplicates
 
         # Check for complex functions (Python specific)
-        if code_file.path.endswith('.py'):
+        if code_file.path.endswith(".py"):
             complex_funcs = self._find_complex_functions(content)
             if complex_funcs:
                 analysis["complex_functions"] = complex_funcs
@@ -87,14 +87,14 @@ class PatternAnalyzer:
         Returns:
             List of duplicate code occurrences
         """
-        lines = content.split('\n')
+        lines = content.split("\n")
         seen_lines = {}
         duplicates = []
 
         for i, line in enumerate(lines):
             # Only consider meaningful lines (>20 chars, not empty/comment)
             stripped = line.strip()
-            if len(stripped) > 20 and not stripped.startswith('#'):
+            if len(stripped) > 20 and not stripped.startswith("#"):
                 if line in seen_lines:
                     duplicates.append((seen_lines[line], i, line))
                 else:
@@ -116,7 +116,7 @@ class PatternAnalyzer:
         Returns:
             List of complex functions
         """
-        func_pattern = re.compile(r'^def\s+(\w+)\s*\([^)]*\):', re.MULTILINE)
+        func_pattern = re.compile(r"^def\s+(\w+)\s*\([^)]*\):", re.MULTILINE)
         functions = list(func_pattern.finditer(content))
         complex_funcs = []
 
@@ -127,18 +127,20 @@ class PatternAnalyzer:
             func_content = content[start_pos:end_pos]
 
             # Count lines and complexity metrics
-            line_count = func_content.count('\n')
+            line_count = func_content.count("\n")
 
             # Consider function complex if:
             # - More than 50 lines
             # - More than 10 if/for/while statements (cyclomatic complexity)
             if line_count > 50 or self._calculate_cyclomatic_complexity(func_content) > 10:
-                complex_funcs.append({
-                    "name": match.group(1),
-                    "line_count": line_count,
-                    "start_line": content[:start_pos].count('\n') + 1,
-                    "complexity": self._calculate_cyclomatic_complexity(func_content),
-                })
+                complex_funcs.append(
+                    {
+                        "name": match.group(1),
+                        "line_count": line_count,
+                        "start_line": content[:start_pos].count("\n") + 1,
+                        "complexity": self._calculate_cyclomatic_complexity(func_content),
+                    }
+                )
 
         return complex_funcs
 
@@ -159,15 +161,15 @@ class PatternAnalyzer:
 
         # Count decision points
         decision_keywords = [
-            r'\bif\b',
-            r'\belif\b',
-            r'\bfor\b',
-            r'\bwhile\b',
-            r'\btry\b',
-            r'\bexcept\b',
-            r'\bwith\b',
-            r'\band\b',
-            r'\bor\b',
+            r"\bif\b",
+            r"\belif\b",
+            r"\bfor\b",
+            r"\bwhile\b",
+            r"\btry\b",
+            r"\bexcept\b",
+            r"\bwith\b",
+            r"\band\b",
+            r"\bor\b",
         ]
 
         for keyword in decision_keywords:
@@ -190,15 +192,15 @@ class PatternAnalyzer:
             List of bad variable names
         """
         # Find single-letter variables (except common loop counters)
-        bad_names = re.findall(r'\b([a-z])\s*=', content)
+        bad_names = re.findall(r"\b([a-z])\s*=", content)
 
         # Filter out common acceptable single letters
-        acceptable = ['i', 'j', 'k', 'n', 'm', 'x', 'y', 'z']
+        acceptable = ["i", "j", "k", "n", "m", "x", "y", "z"]
         bad_names = [n for n in bad_names if n not in acceptable]
 
         # Also find very short names (2 chars)
-        short_names = re.findall(r'\b([a-z]{2})\s*=', content)
-        problematic_short = ['aa', 'bb', 'cc', 'dd', 'xx', 'yy', 'zz']
+        short_names = re.findall(r"\b([a-z]{2})\s*=", content)
+        problematic_short = ["aa", "bb", "cc", "dd", "xx", "yy", "zz"]
         bad_names.extend([n for n in short_names if n in problematic_short])
 
         return list(set(bad_names))
@@ -219,7 +221,7 @@ class PatternAnalyzer:
         dead_code = {}
 
         # Find unused imports
-        import_pattern = re.compile(r'^(?:from\s+[\w.]+\s+)?import\s+(\w+)', re.MULTILINE)
+        import_pattern = re.compile(r"^(?:from\s+[\w.]+\s+)?import\s+(\w+)", re.MULTILINE)
         imports = []
 
         for match in import_pattern.finditer(content):
@@ -238,7 +240,7 @@ class PatternAnalyzer:
             dead_code["unused_imports"] = unused_imports
 
         # Find unused variables (simplified)
-        var_pattern = re.compile(r'^(\w+)\s*=', re.MULTILINE)
+        var_pattern = re.compile(r"^(\w+)\s*=", re.MULTILINE)
         variables = []
 
         for match in var_pattern.finditer(content):

@@ -229,9 +229,7 @@ class ASTProviderLoader:
                         await self._load_provider_from_file(Path(module_or_path), class_name)
                     else:
                         # It's a module name
-                        provider = await self._load_provider_from_module(
-                            module_or_path, class_name
-                        )
+                        provider = await self._load_provider_from_module(module_or_path, class_name)
                         if provider:
                             self._registry.register(provider)
                             self._loaded_providers.append(f"env:{spec}")

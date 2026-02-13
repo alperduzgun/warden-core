@@ -71,7 +71,7 @@ class ProjectConfig:
                 if isinstance(value, str):
                     lines.append(f'{key} = "{value}"')
                 else:
-                    lines.append(f'{key} = {value}')
+                    lines.append(f"{key} = {value}")
 
         return "\n".join(lines) + "\n"
 
@@ -131,16 +131,12 @@ class ProjectConfig:
             "kotlin",
         }
         if self.language.lower() not in valid_languages:
-            issues.append(
-                f"Unsupported language '{self.language}'. "
-                f"Supported: {', '.join(sorted(valid_languages))}"
-            )
+            issues.append(f"Unsupported language '{self.language}'. Supported: {', '.join(sorted(valid_languages))}")
 
         valid_project_types = {"application", "library", "microservice", "monorepo"}
         if self.project_type not in valid_project_types:
             issues.append(
-                f"Invalid project type '{self.project_type}'. "
-                f"Valid types: {', '.join(sorted(valid_project_types))}"
+                f"Invalid project type '{self.project_type}'. Valid types: {', '.join(sorted(valid_project_types))}"
             )
 
         return issues

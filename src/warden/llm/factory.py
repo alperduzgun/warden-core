@@ -21,6 +21,7 @@ _providers_lock = threading.Lock()
 _providers_imported = False
 _factory_logger = _structlog.get_logger(__name__)
 
+
 def _ensure_providers_registered() -> None:
     """
     Lazy import all providers to trigger self-registration.
@@ -38,17 +39,18 @@ def _ensure_providers_registered() -> None:
             return  # Double-check after acquiring lock
 
         provider_modules = [
-            'warden.llm.providers.anthropic',
-            'warden.llm.providers.deepseek',
-            'warden.llm.providers.qwencode',
-            'warden.llm.providers.openai',
-            'warden.llm.providers.groq',
-            'warden.llm.providers.ollama',
-            'warden.llm.providers.gemini',
-            'warden.llm.providers.claude_code',
+            "warden.llm.providers.anthropic",
+            "warden.llm.providers.deepseek",
+            "warden.llm.providers.qwencode",
+            "warden.llm.providers.openai",
+            "warden.llm.providers.groq",
+            "warden.llm.providers.ollama",
+            "warden.llm.providers.gemini",
+            "warden.llm.providers.claude_code",
         ]
 
         import importlib
+
         for module_name in provider_modules:
             try:
                 importlib.import_module(module_name)
@@ -90,9 +92,7 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
     return ProviderRegistry.create(provider, config)
 
 
-def create_client(
-    provider_or_config: LlmProvider | LlmConfiguration | str | None = None
-) -> ILlmClient:
+def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | None = None) -> ILlmClient:
     """
     Create an LLM client based on input or default configuration.
 
@@ -125,7 +125,7 @@ def create_client(
     # Try to create local/fast clients if enabled in priority order
     fast_clients = []
 
-    for fast_provider in getattr(config, 'fast_tier_providers', [LlmProvider.OLLAMA]):
+    for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
         try:
             fast_cfg = config.get_provider_config(fast_provider)
             if fast_cfg and fast_cfg.enabled:
@@ -135,32 +135,32 @@ def create_client(
         except Exception as e:
             _factory_logger.warning("fast_tier_client_creation_failed", provider=fast_provider.value, error=str(e))
 
-    _factory_logger.debug("factory_client_status",
-                fast_providers_configured=[p.value for p in getattr(config, 'fast_tier_providers', [])],
-                fast_clients_created=[c.provider for c in fast_clients])
+    _factory_logger.debug(
+        "factory_client_status",
+        fast_providers_configured=[p.value for p in getattr(config, "fast_tier_providers", [])],
+        fast_clients_created=[c.provider for c in fast_clients],
+    )
 
     # Wrap in OrchestratedLlmClient for tiered execution support
     from .providers.orchestrated import OrchestratedLlmClient
+
     return OrchestratedLlmClient(
         smart_client=smart_client,
         fast_clients=fast_clients,
         smart_model=config.smart_model,
         fast_model=config.fast_model,
-        metrics_collector=get_global_metrics_collector()
+        metrics_collector=get_global_metrics_collector(),
     )
 
 
 def _create_offline_client():
     """Safely create OfflineClient fallback."""
     from .providers.offline import OfflineClient
+
     return OfflineClient()
 
-@async_error_handler(
-    fallback_value=_create_offline_client,
-    log_level="error",
-    context_keys=["config"],
-    reraise=False
-)
+
+@async_error_handler(fallback_value=_create_offline_client, log_level="error", context_keys=["config"], reraise=False)
 async def create_client_with_fallback_async(config: LlmConfiguration | None = None) -> ILlmClient:
     """
     Create client with automatic fallback chain.
@@ -169,6 +169,7 @@ async def create_client_with_fallback_async(config: LlmConfiguration | None = No
     and are properly logged.
     """
     import structlog
+
     _logger = structlog.get_logger(__name__)
 
     if config is None:
@@ -196,12 +197,14 @@ async def create_client_with_fallback_async(config: LlmConfiguration | None = No
     # FALLBACK: Zombie Mode (Offline)
     # If no providers worked, return the OfflineClient
     from .providers.offline import OfflineClient
+
     return OfflineClient()
+
 
 __all__ = [
     "create_client",
     "create_provider_client",
     "create_client_with_fallback_async",
     "get_global_metrics_collector",
-    "ProviderRegistry"
+    "ProviderRegistry",
 ]

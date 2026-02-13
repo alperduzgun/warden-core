@@ -25,10 +25,37 @@ logger = structlog.get_logger()
 
 # Keywords that indicate critical security areas
 CRITICAL_KEYWORDS = {
-    "P0": ["crypto", "encrypt", "decrypt", "secret", "credential", "password",
-           "token", "jwt", "oauth", "payment", "billing", "charge", "stripe", "paypal", "bank"],
-    "P1": ["auth", "login", "session", "permission", "role", "admin",
-           "user", "account", "profile", "pii", "gdpr", "security"],
+    "P0": [
+        "crypto",
+        "encrypt",
+        "decrypt",
+        "secret",
+        "credential",
+        "password",
+        "token",
+        "jwt",
+        "oauth",
+        "payment",
+        "billing",
+        "charge",
+        "stripe",
+        "paypal",
+        "bank",
+    ],
+    "P1": [
+        "auth",
+        "login",
+        "session",
+        "permission",
+        "role",
+        "admin",
+        "user",
+        "account",
+        "profile",
+        "pii",
+        "gdpr",
+        "security",
+    ],
 }
 
 
@@ -65,9 +92,7 @@ class ProjectPurposeDetector:
                 self.llm = None
 
     async def detect_async(
-        self,
-        file_list: list[Path],
-        config_files: dict[str, str]
+        self, file_list: list[Path], config_files: dict[str, str]
     ) -> tuple[str, str, dict[str, ModuleInfo]]:
         """
         Analyze the project and return (purpose, architecture_description, module_map).
@@ -149,7 +174,7 @@ Return strictly JSON:
                 user_message=prompt,
                 max_tokens=1200,  # Increased for enhanced output
                 temperature=0.0,
-                use_fast_tier=True  # Use local Qwen for cost optimization
+                use_fast_tier=True,  # Use local Qwen for cost optimization
             )
 
             response = await self.llm.send_async(request)
@@ -171,10 +196,7 @@ Return strictly JSON:
                 logger.debug("modules_identified", count=len(module_map))
                 for name, info in module_map.items():
                     logger.debug(
-                        "module_classified",
-                        name=name,
-                        risk=info.risk_level.value,
-                        security_focus=info.security_focus
+                        "module_classified", name=name, risk=info.risk_level.value, security_focus=info.security_focus
                     )
 
             if anomalies:
@@ -215,7 +237,17 @@ Return strictly JSON:
         # 3. Entry point content sampling
         samples = ""
         # Common entry points across languages
-        entry_patterns = ["main.py", "app.py", "index.ts", "setup.py", "pyproject.toml", "manage.py", "index.js", "main.go", "Cargo.toml"]
+        entry_patterns = [
+            "main.py",
+            "app.py",
+            "index.ts",
+            "setup.py",
+            "pyproject.toml",
+            "manage.py",
+            "index.js",
+            "main.go",
+            "Cargo.toml",
+        ]
 
         found_entries = []
         for pattern in entry_patterns:
@@ -229,7 +261,7 @@ Return strictly JSON:
             try:
                 # Read the beginning of the file to understand its role
                 # Increased limit to 3000 chars to avoid false "incomplete file" anomalies
-                full_content = f.read_text(encoding='utf-8', errors='ignore')
+                full_content = f.read_text(encoding="utf-8", errors="ignore")
                 content = full_content[:3000]
                 if len(full_content) > 3000:
                     content += "\n...[TRUNCATED]"
@@ -261,11 +293,7 @@ CODE SAMPLES (Entry Points/Configs):
             logger.debug("json_parse_failed", error=str(e), content=content[:100])
         return {}
 
-    def _build_module_map(
-        self,
-        raw_module_map: dict[str, Any],
-        file_list: list[Path]
-    ) -> dict[str, ModuleInfo]:
+    def _build_module_map(self, raw_module_map: dict[str, Any], file_list: list[Path]) -> dict[str, ModuleInfo]:
         """
         Convert raw LLM module map to ModuleInfo objects.
 
@@ -316,10 +344,7 @@ CODE SAMPLES (Entry Points/Configs):
         return module_map
 
     def _apply_keyword_overrides(
-        self,
-        module_map: dict[str, ModuleInfo],
-        file_list: list[Path],
-        critical_files: list[dict[str, Any]]
+        self, module_map: dict[str, ModuleInfo], file_list: list[Path], critical_files: list[dict[str, Any]]
     ) -> dict[str, ModuleInfo]:
         """
         Apply keyword-based risk overrides for files that contain critical patterns.
@@ -341,12 +366,7 @@ CODE SAMPLES (Entry Points/Configs):
                 path = cf.get("path", "")
                 risk = cf.get("risk_level", "P0")
                 reason = cf.get("reason", "")
-                logger.debug(
-                    "critical_file_identified",
-                    path=path,
-                    risk=risk,
-                    reason=reason
-                )
+                logger.debug("critical_file_identified", path=path, risk=risk, reason=reason)
 
         # Apply keyword-based scanning for files not covered by modules
         for f in file_list:
@@ -368,7 +388,7 @@ CODE SAMPLES (Entry Points/Configs):
                                         keyword=keyword,
                                         module=mod_name,
                                         from_risk=mod_info.risk_level.value,
-                                        to_risk="P0"
+                                        to_risk="P0",
                                     )
                                 break
                         break
@@ -386,7 +406,7 @@ CODE SAMPLES (Entry Points/Configs):
                                         keyword=keyword,
                                         module=mod_name,
                                         from_risk=mod_info.risk_level.value,
-                                        to_risk="P1"
+                                        to_risk="P1",
                                     )
                                 break
                         break

@@ -10,10 +10,12 @@ def detect_language(path: Path) -> str:
     """Detect programming language from file extension."""
     try:
         from warden.shared.utils.language_utils import get_language_from_path
+
         return get_language_from_path(path).value
     except Exception:
         # Fallback for unknown extensions
         return "unknown"
+
 
 def serialize_pipeline_result(result: Any) -> dict[str, Any]:
     """Serialize pipeline result to JSON-RPC compatible dict."""
@@ -27,7 +29,7 @@ def serialize_pipeline_result(result: Any) -> dict[str, Any]:
                 return val
             # If it's a JSON string, we can't easily return it here if typed as Dict/Any
             # without parsing, but usually in Python we pass dicts via IPC bridge.
-            return {"data": val} # Wrapper if not dict
+            return {"data": val}  # Wrapper if not dict
 
         if hasattr(result, "model_dump"):
             data = result.model_dump(mode="json")
@@ -38,31 +40,33 @@ def serialize_pipeline_result(result: Any) -> dict[str, Any]:
             all_findings = []
 
             # First try from result.frame_results (might be objects)
-            if hasattr(result, 'frame_results') and result.frame_results:
+            if hasattr(result, "frame_results") and result.frame_results:
                 for frame_res in result.frame_results:
-                    if hasattr(frame_res, 'findings') and frame_res.findings:
+                    if hasattr(frame_res, "findings") and frame_res.findings:
                         for finding in frame_res.findings:
-                            if hasattr(finding, 'to_dict'):
+                            if hasattr(finding, "to_dict"):
                                 all_findings.append(finding.to_dict())
-                            elif hasattr(finding, 'to_json'):
+                            elif hasattr(finding, "to_json"):
                                 all_findings.append(finding.to_json())
                             elif isinstance(finding, dict):
                                 all_findings.append(finding)
 
             # Fallback: try from serialized data
-            elif 'frame_results' in data and isinstance(data['frame_results'], list):
-                for frame_res in data['frame_results']:
-                    if isinstance(frame_res, dict) and 'findings' in frame_res:
-                        all_findings.extend(frame_res['findings'])
+            elif "frame_results" in data and isinstance(data["frame_results"], list):
+                for frame_res in data["frame_results"]:
+                    if isinstance(frame_res, dict) and "findings" in frame_res:
+                        all_findings.extend(frame_res["findings"])
 
-            data['findings'] = all_findings
+            data["findings"] = all_findings
 
             return data
 
         # Fallback manual serialization
         return {
             "pipeline_id": getattr(result, "pipeline_id", "unknown"),
-            "status": getattr(result, "status", "unknown").value if hasattr(getattr(result, "status", None), 'value') else str(getattr(result, "status", "unknown")),
+            "status": getattr(result, "status", "unknown").value
+            if hasattr(getattr(result, "status", None), "value")
+            else str(getattr(result, "status", "unknown")),
             "duration": getattr(result, "duration", 0),
             "total_findings": getattr(result, "total_findings", 0),
             "frame_results": [
@@ -74,15 +78,13 @@ def serialize_pipeline_result(result: Any) -> dict[str, Any]:
                             "severity": getattr(f, "severity", "unknown"),
                             "message": getattr(f, "message", str(f)),
                             "line": getattr(f, "line_number", getattr(f, "line", 0)),
-                        } for f in getattr(fr, "findings", [])
-                    ]
-                } for fr in getattr(result, "frame_results", [])
-            ]
+                        }
+                        for f in getattr(fr, "findings", [])
+                    ],
+                }
+                for fr in getattr(result, "frame_results", [])
+            ],
         }
     except Exception as e:
         # Failsafe return to prevent bridge crash
-        return {
-            "error": "serialization_failed",
-            "message": str(e),
-            "original_type": str(type(result))
-        }
+        return {"error": "serialization_failed", "message": str(e), "original_type": str(type(result))}

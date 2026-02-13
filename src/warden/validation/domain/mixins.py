@@ -27,11 +27,7 @@ class BatchExecutable(ABC):
     """
 
     @abstractmethod
-    async def execute_batch_async(
-        self,
-        code_files: list["CodeFile"],
-        context: Any = None
-    ) -> list["FrameResult"]:
+    async def execute_batch_async(self, code_files: list["CodeFile"], context: Any = None) -> list["FrameResult"]:
         """
         Execute validation on multiple files in batch.
 

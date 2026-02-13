@@ -157,13 +157,13 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 # Skip private functions (start with _)
-                if not node.name.startswith('_') or node.name.startswith('__'):
+                if not node.name.startswith("_") or node.name.startswith("__"):
                     total_functions += 1
                     if ast.get_docstring(node):
                         documented_functions += 1
 
                 # Count public methods in classes
-                if self._is_method(node) and not node.name.startswith('_'):
+                if self._is_method(node) and not node.name.startswith("_"):
                     total_public_methods += 1
                     if ast.get_docstring(node):
                         documented_public_methods += 1
@@ -174,8 +174,8 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                     documented_classes += 1
 
         # Calculate comment density
-        lines = code.split('\n')
-        comment_lines = sum(1 for line in lines if line.strip().startswith('#'))
+        lines = code.split("\n")
+        comment_lines = sum(1 for line in lines if line.strip().startswith("#"))
         total_lines = len([line for line in lines if line.strip()])
         comment_density = (comment_lines / total_lines * 100) if total_lines > 0 else 0
 
@@ -234,9 +234,9 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 # Check public functions and methods
-                if not node.name.startswith('_') and not ast.get_docstring(node):
+                if not node.name.startswith("_") and not ast.get_docstring(node):
                     # Special case: __init__ should have docstring if it has complex parameters
-                    if node.name == '__init__' and len(node.args.args) > 2:
+                    if node.name == "__init__" and len(node.args.args) > 2:
                         issues.append(
                             CleaningIssue(
                                 issue_type=CleaningIssueType.MISSING_DOC,
@@ -245,7 +245,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                                 severity=CleaningIssueSeverity.MEDIUM,
                             )
                         )
-                    elif not node.name.startswith('__'):
+                    elif not node.name.startswith("__"):
                         issues.append(
                             CleaningIssue(
                                 issue_type=CleaningIssueType.MISSING_DOC,
@@ -288,12 +288,12 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
 
                     # Check for missing parameter documentation in functions
                     if isinstance(node, ast.FunctionDef) and node.args.args:
-                        params = [arg.arg for arg in node.args.args if arg.arg != 'self']
+                        params = [arg.arg for arg in node.args.args if arg.arg != "self"]
                         if params:
                             # Check if parameters are documented (simple heuristic)
                             has_params_section = any(
                                 keyword in docstring.lower()
-                                for keyword in ['args:', 'arguments:', 'parameters:', 'params:']
+                                for keyword in ["args:", "arguments:", "parameters:", "params:"]
                             )
 
                             if not has_params_section:
@@ -310,7 +310,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                             if not self._returns_none(node):
                                 has_return_doc = any(
                                     keyword in docstring.lower()
-                                    for keyword in ['returns:', 'return:', 'yields:', 'yield:']
+                                    for keyword in ["returns:", "return:", "yields:", "yield:"]
                                 )
                                 if not has_return_doc:
                                     issues.append(
@@ -327,16 +327,16 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
     def _check_outdated_comments(self, code: str) -> list[CleaningIssue]:
         """Check for potentially outdated comments."""
         issues = []
-        lines = code.split('\n')
+        lines = code.split("\n")
 
         # Patterns that might indicate outdated comments
         outdated_patterns = [
-            (r'#\s*TODO\s*[:]*\s*\d{4}', "Old TODO from {}", CleaningIssueSeverity.LOW),
-            (r'#\s*FIXME\s*[:]*\s*\d{4}', "Old FIXME from {}", CleaningIssueSeverity.MEDIUM),
-            (r'#\s*HACK', "HACK comment indicates technical debt", CleaningIssueSeverity.MEDIUM),
-            (r'#\s*XXX', "XXX comment indicates problem", CleaningIssueSeverity.MEDIUM),
-            (r'#\s*BUG', "BUG comment should be addressed", CleaningIssueSeverity.HIGH),
-            (r'#\s*DEPRECATED', "Deprecated code should be removed", CleaningIssueSeverity.HIGH),
+            (r"#\s*TODO\s*[:]*\s*\d{4}", "Old TODO from {}", CleaningIssueSeverity.LOW),
+            (r"#\s*FIXME\s*[:]*\s*\d{4}", "Old FIXME from {}", CleaningIssueSeverity.MEDIUM),
+            (r"#\s*HACK", "HACK comment indicates technical debt", CleaningIssueSeverity.MEDIUM),
+            (r"#\s*XXX", "XXX comment indicates problem", CleaningIssueSeverity.MEDIUM),
+            (r"#\s*BUG", "BUG comment should be addressed", CleaningIssueSeverity.HIGH),
+            (r"#\s*DEPRECATED", "Deprecated code should be removed", CleaningIssueSeverity.HIGH),
         ]
 
         for line_num, line in enumerate(lines, 1):
@@ -345,7 +345,9 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                     issues.append(
                         CleaningIssue(
                             issue_type=CleaningIssueType.POOR_DOC,
-                            description=message.format(re.search(r'\d{4}', line).group() if re.search(r'\d{4}', line) else ""),
+                            description=message.format(
+                                re.search(r"\d{4}", line).group() if re.search(r"\d{4}", line) else ""
+                            ),
                             line_number=line_num,
                             severity=severity,
                         )
@@ -359,9 +361,27 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
 
         # Common unclear names
         unclear_names = {
-            'data', 'info', 'temp', 'tmp', 'obj', 'val', 'var',
-            'foo', 'bar', 'baz', 'test', 'thing', 'stuff',
-            'a', 'b', 'c', 'd', 'e', 'x', 'y', 'z',
+            "data",
+            "info",
+            "temp",
+            "tmp",
+            "obj",
+            "val",
+            "var",
+            "foo",
+            "bar",
+            "baz",
+            "test",
+            "thing",
+            "stuff",
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "x",
+            "y",
+            "z",
         }
 
         for node in ast.walk(tree):
@@ -393,7 +413,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
             elif isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name):
-                        if target.id.lower() in unclear_names and not target.id.startswith('_'):
+                        if target.id.lower() in unclear_names and not target.id.startswith("_"):
                             issues.append(
                                 CleaningIssue(
                                     issue_type=CleaningIssueType.POOR_NAMING,
@@ -408,7 +428,7 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
     def _is_method(self, node: ast.FunctionDef) -> bool:
         """Check if a function is a method (inside a class)."""
         # This is a simplified check - proper implementation would track parent nodes
-        return len(node.args.args) > 0 and node.args.args[0].arg == 'self'
+        return len(node.args.args) > 0 and node.args.args[0].arg == "self"
 
     def _returns_none(self, node: ast.FunctionDef) -> bool:
         """Check if function returns None or has no return statement."""

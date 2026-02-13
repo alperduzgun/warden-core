@@ -177,11 +177,7 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
 
         return issues
 
-    def _check_function_complexity_universal(
-        self,
-        node: ASTNode,
-        lines: list[str]
-    ) -> list[CleaningIssue]:
+    def _check_function_complexity_universal(self, node: ASTNode, lines: list[str]) -> list[CleaningIssue]:
         """
         Check a function for complexity issues using Universal AST.
 
@@ -262,7 +258,9 @@ class ComplexityAnalyzer(BaseCleaningAnalyzer):
             example_code = "# Break into smaller functions:\ndef main_function():\n    result1 = process_step_1()\n    result2 = process_step_2(result1)\n    return finalize(result2)"
         elif "parameters" in issue.description:
             suggestion = "Reduce the number of parameters by grouping related ones into a data class or dictionary"
-            rationale = "Too many parameters make functions hard to use and test. Consider using a configuration object."
+            rationale = (
+                "Too many parameters make functions hard to use and test. Consider using a configuration object."
+            )
             example_code = "# Use dataclass or dict:\n@dataclass\nclass Config:\n    param1: str\n    param2: int\n\ndef function(config: Config):\n    ..."
         elif "nesting" in issue.description:
             suggestion = "Reduce nesting by extracting nested blocks into separate functions or using early returns"

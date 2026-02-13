@@ -11,18 +11,21 @@ from pydantic import BaseModel, Field, field_validator
 
 class TriageLane(str, Enum):
     """Routing lanes for analysis depth."""
-    FAST = "fast_lane"      # Regex/Rule-based (0 cost, <10ms)
+
+    FAST = "fast_lane"  # Regex/Rule-based (0 cost, <10ms)
     MIDDLE = "middle_lane"  # Local LLM Deep Scan (0 cost, ~2s)
-    DEEP = "deep_lane"      # Cloud API Analysis ($ cost, ~15s)
+    DEEP = "deep_lane"  # Cloud API Analysis ($ cost, ~15s)
+
 
 class RiskScore(BaseModel):
     """Risk assessment for a specific file."""
+
     score: float = Field(..., ge=0, le=10, description="Risk score from 0 to 10")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the score")
     reasoning: str = Field(..., description="Explanation for the assigned score")
     category: str = Field(..., description="Categorization (e.g., 'auth', 'dto', 'ui')")
 
-    @field_validator('score', mode='before')
+    @field_validator("score", mode="before")
     @classmethod
     def normalize_score(cls, v):
         """
@@ -40,9 +43,9 @@ class RiskScore(BaseModel):
             # Clamp to [0, 10]
             return max(0.0, min(10.0, val))
         except (ValueError, TypeError):
-            return 5.0 # Safe default on catastrophic failure
+            return 5.0  # Safe default on catastrophic failure
 
-    @field_validator('confidence', mode='before')
+    @field_validator("confidence", mode="before")
     @classmethod
     def normalize_confidence(cls, v):
         """
@@ -54,10 +57,12 @@ class RiskScore(BaseModel):
                 val = val / 100.0
             return max(0.0, min(1.0, val))
         except (ValueError, TypeError):
-            return 0.5 # Default middle confidence
+            return 0.5  # Default middle confidence
+
 
 class TriageDecision(BaseModel):
     """Final routing decision for a file."""
+
     file_path: str
     lane: TriageLane
     risk_score: RiskScore

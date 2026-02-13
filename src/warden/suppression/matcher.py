@@ -40,11 +40,11 @@ class SuppressionMatcher:
         # Compile inline comment patterns
         self._inline_patterns = [
             # Python-style: # warden-ignore or # warden-ignore: rule1, rule2
-            re.compile(r'#\s*warden-ignore(?:\s*:\s*(.+?))?\s*$'),
+            re.compile(r"#\s*warden-ignore(?:\s*:\s*(.+?))?\s*$"),
             # JavaScript-style: // warden-ignore or // warden-ignore: rule1, rule2
-            re.compile(r'//\s*warden-ignore(?:\s*:\s*(.+?))?\s*$'),
+            re.compile(r"//\s*warden-ignore(?:\s*:\s*(.+?))?\s*$"),
             # Multi-line comment: /* warden-ignore */ or /* warden-ignore: rule1 */
-            re.compile(r'/\*\s*warden-ignore(?:\s*:\s*(.+?))?\s*\*/'),
+            re.compile(r"/\*\s*warden-ignore(?:\s*:\s*(.+?))?\s*\*/"),
         ]
 
     def is_suppressed(
@@ -151,9 +151,7 @@ class SuppressionMatcher:
 
         return None
 
-    def _parse_inline_suppression(
-        self, code: str, line: int
-    ) -> set[str] | None:
+    def _parse_inline_suppression(self, code: str, line: int) -> set[str] | None:
         """
         Parse inline suppression comment from code.
 
@@ -168,7 +166,7 @@ class SuppressionMatcher:
         if not code or line <= 0:
             return None
 
-        lines = code.split('\n')
+        lines = code.split("\n")
         if line > len(lines):
             return None
 
@@ -185,11 +183,7 @@ class SuppressionMatcher:
                 rules_str = match.group(1)
                 if rules_str:
                     # Specific rules
-                    rules = [
-                        rule.strip()
-                        for rule in rules_str.split(',')
-                        if rule.strip()
-                    ]
+                    rules = [rule.strip() for rule in rules_str.split(",") if rule.strip()]
                     return set(rules)
                 else:
                     # Suppress all rules
@@ -202,7 +196,7 @@ class SuppressionMatcher:
         code: str,
         line: int,
         rules: list[str] | None = None,
-        comment_style: str = '#',
+        comment_style: str = "#",
     ) -> str:
         """
         Add inline suppression comment to code.
@@ -219,7 +213,7 @@ class SuppressionMatcher:
         if not code or line <= 0:
             return code
 
-        lines = code.split('\n')
+        lines = code.split("\n")
         if line > len(lines):
             return code
 
@@ -239,7 +233,7 @@ class SuppressionMatcher:
         modified_line = f"{line_content}  {comment_style} {suppression}"
         lines[line - 1] = modified_line
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def remove_inline_suppression(self, code: str, line: int) -> str:
         """
@@ -255,7 +249,7 @@ class SuppressionMatcher:
         if not code or line <= 0:
             return code
 
-        lines = code.split('\n')
+        lines = code.split("\n")
         if line > len(lines):
             return code
 
@@ -264,13 +258,13 @@ class SuppressionMatcher:
         # Remove suppression patterns
         modified_line = line_content
         for pattern in self._inline_patterns:
-            modified_line = pattern.sub('', modified_line)
+            modified_line = pattern.sub("", modified_line)
 
         # Clean up trailing whitespace
         modified_line = modified_line.rstrip()
 
         lines[line - 1] = modified_line
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def get_suppressed_lines(self, code: str) -> dict[int, set[str]]:
         """
@@ -287,7 +281,7 @@ class SuppressionMatcher:
             return {}
 
         result: dict[int, set[str]] = {}
-        lines = code.split('\n')
+        lines = code.split("\n")
 
         for line_num, _line_content in enumerate(lines, start=1):
             suppressed_rules = self._parse_inline_suppression(code, line_num)

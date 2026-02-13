@@ -154,7 +154,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
         # Calculate metrics
         halstead = self._calculate_halstead_metrics(tree, code)
         cyclomatic = self._calculate_cyclomatic_complexity(tree)
-        loc = len([line for line in code.split('\n') if line.strip() and not line.strip().startswith('#')])
+        loc = len([line for line in code.split("\n") if line.strip() and not line.strip().startswith("#")])
 
         # Calculate MI with safe logarithms
         volume = halstead.get("volume", 1)
@@ -187,10 +187,31 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
 
         for node in ast.walk(tree):
             # Count operators
-            if isinstance(node, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod,
-                                 ast.Pow, ast.FloorDiv, ast.And, ast.Or, ast.Not,
-                                 ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
-                                 ast.Is, ast.IsNot, ast.In, ast.NotIn)):
+            if isinstance(
+                node,
+                (
+                    ast.Add,
+                    ast.Sub,
+                    ast.Mult,
+                    ast.Div,
+                    ast.Mod,
+                    ast.Pow,
+                    ast.FloorDiv,
+                    ast.And,
+                    ast.Or,
+                    ast.Not,
+                    ast.Eq,
+                    ast.NotEq,
+                    ast.Lt,
+                    ast.LtE,
+                    ast.Gt,
+                    ast.GtE,
+                    ast.Is,
+                    ast.IsNot,
+                    ast.In,
+                    ast.NotIn,
+                ),
+            ):
                 operators.add(type(node).__name__)
                 total_operators += 1
 
@@ -199,14 +220,14 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
                 operands.add(node.id)
                 total_operands += 1
             elif isinstance(node, (ast.Constant, ast.Num, ast.Str)):
-                value = getattr(node, 'value', getattr(node, 'n', getattr(node, 's', '')))
+                value = getattr(node, "value", getattr(node, "n", getattr(node, "s", "")))
                 operands.add(str(value))
                 total_operands += 1
 
         # Calculate Halstead metrics
         n1 = len(operators)  # Unique operators
-        n2 = len(operands)   # Unique operands
-        N1 = total_operators # Total operators
+        n2 = len(operands)  # Unique operands
+        N1 = total_operators  # Total operators
         N2 = total_operands  # Total operands
 
         vocabulary = n1 + n2
@@ -356,7 +377,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
                 for child in ast.walk(node):
                     if isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name):
                         obj_name = child.value.id
-                        if obj_name != 'self':
+                        if obj_name != "self":
                             attr_access_count[obj_name] += 1
 
                 # Check if any external object is accessed too much
@@ -419,7 +440,7 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
                 # Track combinations of 3+ parameters
                 if len(param_names) >= 3:
                     for i in range(len(param_names) - 2):
-                        combo = tuple(sorted(param_names[i:i+3]))
+                        combo = tuple(sorted(param_names[i : i + 3]))
                         param_combinations[combo] += 1
 
         # Report combinations that appear multiple times

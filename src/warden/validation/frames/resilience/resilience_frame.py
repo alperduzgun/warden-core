@@ -44,33 +44,35 @@ logger = get_logger(__name__)
 
 # Universal import patterns (work across languages)
 _IMPORT_PATTERNS = [
-    re.compile(r'^\s*import\s+(.+)', re.IGNORECASE),
-    re.compile(r'^\s*from\s+(\S+)\s+import', re.IGNORECASE),
+    re.compile(r"^\s*import\s+(.+)", re.IGNORECASE),
+    re.compile(r"^\s*from\s+(\S+)\s+import", re.IGNORECASE),
     re.compile(r'^\s*require\s*\(\s*[\'"]([^\'"]+)', re.IGNORECASE),
-    re.compile(r'^\s*use\s+(\S+)', re.IGNORECASE),
-    re.compile(r'^\s*using\s+(\S+)', re.IGNORECASE),
+    re.compile(r"^\s*use\s+(\S+)", re.IGNORECASE),
+    re.compile(r"^\s*using\s+(\S+)", re.IGNORECASE),
     re.compile(r'^\s*#include\s*[<"]([^>"]+)', re.IGNORECASE),
 ]
 
 # Function call pattern
-_CALL_PATTERN = re.compile(r'\b(\w+(?:\.\w+)*)\s*\(', re.MULTILINE)
+_CALL_PATTERN = re.compile(r"\b(\w+(?:\.\w+)*)\s*\(", re.MULTILINE)
 
 # Async function pattern
-_ASYNC_PATTERN = re.compile(r'\basync\s+(?:def|function|fn)\s+(\w+)', re.MULTILINE)
+_ASYNC_PATTERN = re.compile(r"\basync\s+(?:def|function|fn)\s+(\w+)", re.MULTILINE)
 
 # Error handler pattern
-_ERROR_HANDLER_PATTERN = re.compile(r'\b(try|catch|except|rescue|recover)\b', re.IGNORECASE)
+_ERROR_HANDLER_PATTERN = re.compile(r"\b(try|catch|except|rescue|recover)\b", re.IGNORECASE)
 
 # Keywords to filter from function calls
-_CALL_KEYWORDS = frozenset({'if', 'for', 'while', 'switch', 'catch', 'function', 'def', 'class'})
+_CALL_KEYWORDS = frozenset({"if", "for", "while", "switch", "catch", "function", "def", "class"})
 
 
 # =============================================================================
 # DOMAIN MODELS (Strict Types, Immutable)
 # =============================================================================
 
+
 class DependencyType(Enum):
     """Types of external dependencies that can fail."""
+
     NETWORK = "network"
     DATABASE = "database"
     FILE_SYSTEM = "file_system"
@@ -83,6 +85,7 @@ class DependencyType(Enum):
 @dataclass(frozen=True)
 class ExtractedCall:
     """A function/method call extracted from code."""
+
     name: str
     line: int
     module: str | None = None
@@ -94,6 +97,7 @@ class ExtractedCall:
 @dataclass(frozen=True)
 class ExtractedImport:
     """An import statement extracted from code."""
+
     module: str
     line: int
     alias: str | None = None
@@ -107,6 +111,7 @@ class ChaosContext:
     Collected incrementally through analysis pipeline.
     Passed to LLM for intelligent decision making.
     """
+
     # From Tree-sitter (structural)
     imports: list[ExtractedImport] = field(default_factory=list)
     function_calls: list[ExtractedCall] = field(default_factory=list)
@@ -139,22 +144,22 @@ class ChaosContext:
         lines = []
 
         if self.imports:
-            import_list = [f"{i.module}" for i in self.imports[:self.MAX_IMPORTS_IN_CONTEXT]]
+            import_list = [f"{i.module}" for i in self.imports[: self.MAX_IMPORTS_IN_CONTEXT]]
             lines.append(f"Imports: {', '.join(import_list)}")
 
         if self.function_calls:
-            call_list = list({c.name for c in self.function_calls})[:self.MAX_CALLS_IN_CONTEXT]
+            call_list = list({c.name for c in self.function_calls})[: self.MAX_CALLS_IN_CONTEXT]
             lines.append(f"Function calls: {', '.join(call_list)}")
 
         if self.async_functions:
-            lines.append(f"Async functions: {', '.join(self.async_functions[:self.MAX_ASYNC_IN_CONTEXT])}")
+            lines.append(f"Async functions: {', '.join(self.async_functions[: self.MAX_ASYNC_IN_CONTEXT])}")
 
         if self.callers:
-            caller_list = [f"{c['name']} ({c.get('file', '?')})" for c in self.callers[:self.MAX_CALLERS_IN_CONTEXT]]
+            caller_list = [f"{c['name']} ({c.get('file', '?')})" for c in self.callers[: self.MAX_CALLERS_IN_CONTEXT]]
             lines.append(f"Called by (blast radius): {', '.join(caller_list)}")
 
         if self.callees:
-            callee_list = [f"{c['name']} ({c.get('file', '?')})" for c in self.callees[:self.MAX_CALLEES_IN_CONTEXT]]
+            callee_list = [f"{c['name']} ({c.get('file', '?')})" for c in self.callees[: self.MAX_CALLEES_IN_CONTEXT]]
             lines.append(f"Calls to (failure sources): {', '.join(callee_list)}")
 
         return "\n".join(lines) if lines else "No structural context available"
@@ -226,6 +231,7 @@ Given code and its structural context (imports, function calls, cross-file depen
 # RESILIENCE FRAME (Main Class)
 # =============================================================================
 
+
 class ResilienceFrame(ValidationFrame):
     """
     Chaos Engineering Analysis Frame.
@@ -274,9 +280,7 @@ class ResilienceFrame(ValidationFrame):
         if self._timeout <= 0:
             raise ValueError(f"timeout must be positive, got {self._timeout}")
 
-        logger.debug("resilience_frame_initialized",
-                    timeout=self._timeout,
-                    version=self.version)
+        logger.debug("resilience_frame_initialized", timeout=self._timeout, version=self.version)
 
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
@@ -292,10 +296,9 @@ class ResilienceFrame(ValidationFrame):
         """
         start_time = time.perf_counter()
 
-        logger.info("chaos_analysis_started",
-                   file=code_file.path,
-                   language=code_file.language,
-                   size_bytes=code_file.size_bytes)
+        logger.info(
+            "chaos_analysis_started", file=code_file.path, language=code_file.language, size_bytes=code_file.size_bytes
+        )
 
         findings: list[Finding] = []
         context = ChaosContext()
@@ -326,18 +329,17 @@ class ResilienceFrame(ValidationFrame):
 
         except Exception as e:
             # Fail-fast but graceful: log and return partial result
-            logger.error("chaos_analysis_failed",
-                        file=code_file.path,
-                        error=str(e),
-                        error_type=type(e).__name__)
-            findings.append(Finding(
-                id=f"{self.frame_id}-error",
-                severity="low",
-                message=f"Analysis incomplete: {type(e).__name__}",
-                location=code_file.path,
-                detail=str(e),
-                code=None
-            ))
+            logger.error("chaos_analysis_failed", file=code_file.path, error=str(e), error_type=type(e).__name__)
+            findings.append(
+                Finding(
+                    id=f"{self.frame_id}-error",
+                    severity="low",
+                    message=f"Analysis incomplete: {type(e).__name__}",
+                    location=code_file.path,
+                    detail=str(e),
+                    code=None,
+                )
+            )
 
         return self._create_result(code_file, findings, context, start_time)
 
@@ -357,9 +359,9 @@ class ResilienceFrame(ValidationFrame):
         try:
             # Try tree-sitter first
             context = await self._extract_with_tree_sitter(code_file)
-            logger.debug("structure_extracted_tree_sitter",
-                        imports=len(context.imports),
-                        calls=len(context.function_calls))
+            logger.debug(
+                "structure_extracted_tree_sitter", imports=len(context.imports), calls=len(context.function_calls)
+            )
         except Exception as e:
             # Fallback to regex (always works)
             logger.debug("tree_sitter_fallback_to_regex", reason=str(e))
@@ -381,7 +383,7 @@ class ResilienceFrame(ValidationFrame):
             raise ValueError(f"Unsupported language: {code_file.language}")
 
         # Cache-first: use pre-parsed result if available
-        cached = code_file.metadata.get('_cached_parse_result') if code_file.metadata else None
+        cached = code_file.metadata.get("_cached_parse_result") if code_file.metadata else None
         if cached and cached.ast_root:
             result = cached
         else:
@@ -392,7 +394,7 @@ class ResilienceFrame(ValidationFrame):
             if not provider:
                 raise ValueError(f"No AST provider for {lang}")
 
-            if hasattr(provider, 'ensure_grammar'):
+            if hasattr(provider, "ensure_grammar"):
                 await provider.ensure_grammar(lang)
 
             result = await provider.parse(code_file.content, lang)
@@ -418,60 +420,64 @@ class ResilienceFrame(ValidationFrame):
         if node is None:
             return
 
-        node_type = getattr(node, 'type', '') or getattr(node, 'node_type', '')
+        node_type = getattr(node, "type", "") or getattr(node, "node_type", "")
 
         # Import detection (universal patterns)
-        if node_type in ('import_statement', 'import_declaration', 'import_from_statement',
-                         'use_declaration', 'using_directive'):
-            line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+        if node_type in (
+            "import_statement",
+            "import_declaration",
+            "import_from_statement",
+            "use_declaration",
+            "using_directive",
+        ):
+            line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
             # Get the import text
-            if hasattr(node, 'text'):
+            if hasattr(node, "text"):
                 module = node.text.decode() if isinstance(node.text, bytes) else str(node.text)
             else:
                 module = str(node)
             context.imports.append(ExtractedImport(module=module[:100], line=line))
 
         # Function call detection
-        if node_type in ('call_expression', 'call', 'method_invocation', 'invocation_expression'):
-            line = getattr(node, 'start_point', (0,))[0] if hasattr(node, 'start_point') else 0
+        if node_type in ("call_expression", "call", "method_invocation", "invocation_expression"):
+            line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
             # Get function name
             name = self._extract_call_name(node)
             if name and len(context.function_calls) < self.MAX_CALLS_TO_ANALYZE:
                 context.function_calls.append(ExtractedCall(name=name[:50], line=line))
 
         # Async function detection
-        if node_type in ('async_function_definition', 'async_function_declaration',
-                         'async_method_definition'):
+        if node_type in ("async_function_definition", "async_function_declaration", "async_method_definition"):
             name = self._extract_function_name(node)
             if name:
                 context.async_functions.append(name[:50])
 
         # Error handler detection
-        if node_type in ('try_statement', 'try_expression', 'catch_clause'):
+        if node_type in ("try_statement", "try_expression", "catch_clause"):
             context.error_handlers += 1
 
         # Recurse into children
-        children = getattr(node, 'children', []) or []
+        children = getattr(node, "children", []) or []
         for child in children:
             self._walk_ast_node(child, context, source)
 
     def _extract_call_name(self, node: Any) -> str | None:
         """Extract function name from call node."""
         # Try common patterns
-        for attr in ('function', 'callee', 'name', 'method'):
+        for attr in ("function", "callee", "name", "method"):
             child = getattr(node, attr, None)
             if child:
-                if hasattr(child, 'text'):
+                if hasattr(child, "text"):
                     return child.text.decode() if isinstance(child.text, bytes) else str(child.text)
-                if hasattr(child, 'name'):
+                if hasattr(child, "name"):
                     return str(child.name)
         return None
 
     def _extract_function_name(self, node: Any) -> str | None:
         """Extract function name from definition node."""
-        name_node = getattr(node, 'name', None)
+        name_node = getattr(node, "name", None)
         if name_node:
-            if hasattr(name_node, 'text'):
+            if hasattr(name_node, "text"):
                 return name_node.text.decode() if isinstance(name_node.text, bytes) else str(name_node.text)
             return str(name_node)
         return None
@@ -485,17 +491,14 @@ class ResilienceFrame(ValidationFrame):
         """
         context = ChaosContext()
         content = code_file.content
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Extract imports (limit lines scanned for performance)
         for i, line in enumerate(lines[:200]):
             for pattern in _IMPORT_PATTERNS:
                 match = pattern.search(line)
                 if match and len(context.imports) < self.MAX_IMPORTS_TO_ANALYZE:
-                    context.imports.append(ExtractedImport(
-                        module=match.group(1)[:100],
-                        line=i
-                    ))
+                    context.imports.append(ExtractedImport(module=match.group(1)[:100], line=i))
                     break
 
         # Extract function calls
@@ -531,37 +534,38 @@ class ResilienceFrame(ValidationFrame):
 
         try:
             from warden.lsp import get_semantic_analyzer
+
             analyzer = get_semantic_analyzer()
 
             # Get callers/callees for first few async functions (rate limited)
-            for func_name in context.async_functions[:self.MAX_LSP_FUNCTIONS_TO_CHECK]:
+            for func_name in context.async_functions[: self.MAX_LSP_FUNCTIONS_TO_CHECK]:
                 try:
                     # Find function in code
-                    match = re.search(rf'\b{re.escape(func_name)}\s*\(', code_file.content)
+                    match = re.search(rf"\b{re.escape(func_name)}\s*\(", code_file.content)
                     if not match:
                         continue
 
-                    line = code_file.content[:match.start()].count('\n')
+                    line = code_file.content[: match.start()].count("\n")
 
                     # Get callers with timeout
                     callers = await asyncio.wait_for(
                         analyzer.get_callers_async(code_file.path, line, 4, content=code_file.content),
-                        timeout=self.LSP_CALL_TIMEOUT
+                        timeout=self.LSP_CALL_TIMEOUT,
                     )
                     if callers:
-                        context.callers.extend([
-                            {"name": c.name, "file": c.location} for c in callers[:context.MAX_CALLERS_IN_CONTEXT]
-                        ])
+                        context.callers.extend(
+                            [{"name": c.name, "file": c.location} for c in callers[: context.MAX_CALLERS_IN_CONTEXT]]
+                        )
 
                     # Get callees with timeout
                     callees = await asyncio.wait_for(
                         analyzer.get_callees_async(code_file.path, line, 4, content=code_file.content),
-                        timeout=self.LSP_CALL_TIMEOUT
+                        timeout=self.LSP_CALL_TIMEOUT,
                     )
                     if callees:
-                        context.callees.extend([
-                            {"name": c.name, "file": c.location} for c in callees[:context.MAX_CALLEES_IN_CONTEXT]
-                        ])
+                        context.callees.extend(
+                            [{"name": c.name, "file": c.location} for c in callees[: context.MAX_CALLEES_IN_CONTEXT]]
+                        )
 
                 except asyncio.TimeoutError:
                     logger.debug("lsp_timeout", func=func_name, timeout=self.LSP_CALL_TIMEOUT)
@@ -576,11 +580,7 @@ class ResilienceFrame(ValidationFrame):
     # STEP 3: Semantic Search (VectorDB)
     # =========================================================================
 
-    async def _search_related_patterns(
-        self,
-        code_file: CodeFile,
-        context: ChaosContext
-    ) -> list[dict[str, Any]]:
+    async def _search_related_patterns(self, code_file: CodeFile, context: ChaosContext) -> list[dict[str, Any]]:
         """
         Search for related resilience patterns using VectorDB.
 
@@ -595,7 +595,7 @@ class ResilienceFrame(ValidationFrame):
         related_patterns: list[dict[str, Any]] = []
 
         # Check if semantic search service is available
-        if not hasattr(self, 'semantic_search_service') or not self.semantic_search_service:
+        if not hasattr(self, "semantic_search_service") or not self.semantic_search_service:
             logger.debug("semantic_search_not_available")
             return related_patterns
 
@@ -609,7 +609,7 @@ class ResilienceFrame(ValidationFrame):
 
             # Add external dependency names
             if context.imports:
-                import_names = [i.module.split('.')[-1] for i in context.imports[:3]]
+                import_names = [i.module.split(".")[-1] for i in context.imports[:3]]
                 search_terms.extend(import_names)
 
             # Add async function names (likely need resilience)
@@ -623,9 +623,9 @@ class ResilienceFrame(ValidationFrame):
 
             # Search with timeout
             import asyncio
+
             search_results = await asyncio.wait_for(
-                self.semantic_search_service.search(query=query, limit=3),
-                timeout=5.0
+                self.semantic_search_service.search(query=query, limit=3), timeout=5.0
             )
 
             if search_results:
@@ -634,20 +634,18 @@ class ResilienceFrame(ValidationFrame):
                     if result.chunk.file_path == code_file.path:
                         continue
 
-                    related_patterns.append({
-                        "file": result.chunk.file_path,
-                        "content": result.chunk.content[:300],
-                        "score": result.score if hasattr(result, 'score') else 0.0,
-                        "has_timeout": "timeout" in result.chunk.content.lower(),
-                        "has_retry": "retry" in result.chunk.content.lower(),
-                        "has_circuit_breaker": "circuit" in result.chunk.content.lower(),
-                    })
+                    related_patterns.append(
+                        {
+                            "file": result.chunk.file_path,
+                            "content": result.chunk.content[:300],
+                            "score": result.score if hasattr(result, "score") else 0.0,
+                            "has_timeout": "timeout" in result.chunk.content.lower(),
+                            "has_retry": "retry" in result.chunk.content.lower(),
+                            "has_circuit_breaker": "circuit" in result.chunk.content.lower(),
+                        }
+                    )
 
-                logger.debug(
-                    "semantic_search_complete",
-                    query=query[:50],
-                    results_found=len(related_patterns)
-                )
+                logger.debug("semantic_search_complete", query=query[:50], results_found=len(related_patterns))
 
         except asyncio.TimeoutError:
             logger.debug("semantic_search_timeout")
@@ -690,15 +688,14 @@ class ResilienceFrame(ValidationFrame):
         """
         try:
             # Check if service exists
-            if not hasattr(self, 'llm_service') or self.llm_service is None:
+            if not hasattr(self, "llm_service") or self.llm_service is None:
                 return False
 
             # Check circuit breaker
             if ResilienceFrame._llm_circuit_opened_at is not None:
                 elapsed = time.perf_counter() - ResilienceFrame._llm_circuit_opened_at
                 if elapsed < self.CIRCUIT_BREAKER_RESET_SECONDS:
-                    logger.debug("llm_circuit_open",
-                                seconds_remaining=self.CIRCUIT_BREAKER_RESET_SECONDS - elapsed)
+                    logger.debug("llm_circuit_open", seconds_remaining=self.CIRCUIT_BREAKER_RESET_SECONDS - elapsed)
                     return False
                 # Reset circuit breaker
                 logger.info("llm_circuit_reset")
@@ -711,10 +708,7 @@ class ResilienceFrame(ValidationFrame):
             return False
 
     async def _analyze_with_llm(
-        self,
-        code_file: CodeFile,
-        context: ChaosContext,
-        related_patterns: list[dict[str, Any]] | None = None
+        self, code_file: CodeFile, context: ChaosContext, related_patterns: list[dict[str, Any]] | None = None
     ) -> list[Finding]:
         """
         Analyze with LLM for intelligent chaos engineering.
@@ -761,10 +755,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
             )
 
             # Call LLM with timeout
-            response = await asyncio.wait_for(
-                self.llm_service.send_async(request),
-                timeout=self._timeout
-            )
+            response = await asyncio.wait_for(self.llm_service.send_async(request), timeout=self._timeout)
 
             if response.success and response.content:
                 findings = self._parse_llm_response(response.content, code_file.path)
@@ -789,9 +780,11 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
         ResilienceFrame._llm_failure_count += 1
         if ResilienceFrame._llm_failure_count >= self.CIRCUIT_BREAKER_THRESHOLD:
             ResilienceFrame._llm_circuit_opened_at = time.perf_counter()
-            logger.warning("llm_circuit_opened",
-                          failures=ResilienceFrame._llm_failure_count,
-                          reset_seconds=self.CIRCUIT_BREAKER_RESET_SECONDS)
+            logger.warning(
+                "llm_circuit_opened",
+                failures=ResilienceFrame._llm_failure_count,
+                reset_seconds=self.CIRCUIT_BREAKER_RESET_SECONDS,
+            )
 
     def _parse_llm_response(self, content: str, file_path: str) -> list[Finding]:
         """Parse LLM JSON response into findings."""
@@ -805,14 +798,16 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 return findings
 
             for issue in data.get("issues", []):
-                findings.append(Finding(
-                    id=f"{self.frame_id}-{issue.get('line', 0)}",
-                    severity=issue.get("severity", "medium"),
-                    message=issue.get("title", "Resilience issue"),
-                    location=f"{file_path}:{issue.get('line', 1)}",
-                    detail=f"{issue.get('description', '')}\n\nSuggestion: {issue.get('suggestion', '')}",
-                    code=None
-                ))
+                findings.append(
+                    Finding(
+                        id=f"{self.frame_id}-{issue.get('line', 0)}",
+                        severity=issue.get("severity", "medium"),
+                        message=issue.get("title", "Resilience issue"),
+                        location=f"{file_path}:{issue.get('line', 1)}",
+                        detail=f"{issue.get('description', '')}\n\nSuggestion: {issue.get('suggestion', '')}",
+                        code=None,
+                    )
+                )
 
         except Exception as e:
             logger.warning("chaos_parse_error", error=str(e))
@@ -835,26 +830,30 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
 
         # Heuristic: async functions should have error handling
         if context.async_functions and context.error_handlers == 0:
-            findings.append(Finding(
-                id=f"{self.frame_id}-no-error-handling",
-                severity="medium",
-                message=f"{len(context.async_functions)} async functions with no error handling",
-                location=f"{code_file.path}:1",
-                detail="Async operations should have try/catch for resilience",
-                code=None
-            ))
+            findings.append(
+                Finding(
+                    id=f"{self.frame_id}-no-error-handling",
+                    severity="medium",
+                    message=f"{len(context.async_functions)} async functions with no error handling",
+                    location=f"{code_file.path}:1",
+                    detail="Async operations should have try/catch for resilience",
+                    code=None,
+                )
+            )
 
         # Heuristic: many calls, few handlers = risky
         call_count = len(context.function_calls)
         if call_count > 10 and context.error_handlers < 2:
-            findings.append(Finding(
-                id=f"{self.frame_id}-insufficient-handlers",
-                severity="low",
-                message=f"{call_count} function calls with only {context.error_handlers} error handlers",
-                location=f"{code_file.path}:1",
-                detail="Consider adding more error handling for external calls",
-                code=None
-            ))
+            findings.append(
+                Finding(
+                    id=f"{self.frame_id}-insufficient-handlers",
+                    severity="low",
+                    message=f"{call_count} function calls with only {context.error_handlers} error handlers",
+                    location=f"{code_file.path}:1",
+                    detail="Consider adding more error handling for external calls",
+                    code=None,
+                )
+            )
 
         return findings
 
@@ -863,11 +862,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
     # =========================================================================
 
     def _create_result(
-        self,
-        code_file: CodeFile,
-        findings: list[Finding],
-        context: ChaosContext,
-        start_time: float
+        self, code_file: CodeFile, findings: list[Finding], context: ChaosContext, start_time: float
     ) -> FrameResult:
         """Create FrameResult with metadata."""
         duration = time.perf_counter() - start_time
@@ -883,11 +878,13 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
         else:
             status = "passed"
 
-        logger.info("chaos_analysis_complete",
-                   file=code_file.path,
-                   status=status,
-                   findings=len(findings),
-                   duration_ms=int(duration * 1000))
+        logger.info(
+            "chaos_analysis_complete",
+            file=code_file.path,
+            status=status,
+            findings=len(findings),
+            duration_ms=int(duration * 1000),
+        )
 
         return FrameResult(
             frame_id=self.frame_id,
@@ -904,5 +901,5 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 "async_functions": len(context.async_functions),
                 "error_handlers": context.error_handlers,
                 "has_lsp_context": bool(context.callers or context.callees),
-            }
+            },
         )

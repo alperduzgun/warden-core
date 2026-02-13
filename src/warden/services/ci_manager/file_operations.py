@@ -19,9 +19,11 @@ from .validation import validate_path_within_project
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -47,16 +49,13 @@ def atomic_write(target_path: Path, project_root: Path) -> Generator[Any, None, 
     temp_path = None
 
     try:
-        temp_fd, temp_path_str = tempfile.mkstemp(
-            dir=safe_path.parent,
-            prefix=".warden_",
-            suffix=".tmp"
-        )
+        temp_fd, temp_path_str = tempfile.mkstemp(dir=safe_path.parent, prefix=".warden_", suffix=".tmp")
         temp_path = Path(temp_path_str)
 
         # Yield file handle for writing
         import os
-        with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
             temp_fd = None  # fd is now owned by file object
             yield f
 
@@ -104,8 +103,6 @@ def compute_checksum(content: str) -> str:
     """Compute checksum of content (excluding dynamic header)."""
     lines = content.split("\n")
     content_lines = [
-        line for line in lines
-        if not line.startswith("# Warden CI v")
-        and not line.startswith("# Generated:")
+        line for line in lines if not line.startswith("# Warden CI v") and not line.startswith("# Generated:")
     ]
     return hashlib.sha256("\n".join(content_lines).encode()).hexdigest()[:12]

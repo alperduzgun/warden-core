@@ -29,11 +29,13 @@ class HealthAdapter(BaseWardenAdapter):
         - warden_setup_status: Check setup completeness for AI tools
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_health_check",
-        "warden_get_server_status",
-        "warden_setup_status",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_health_check",
+            "warden_get_server_status",
+            "warden_setup_status",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.STATUS
 
     def __init__(self, project_root: Path, bridge: Any = None) -> None:
@@ -93,14 +95,16 @@ class HealthAdapter(BaseWardenAdapter):
 
         all_healthy = all(components.values())
 
-        return MCPToolResult.json_result({
-            "healthy": all_healthy,
-            "status": "ok" if all_healthy else "degraded",
-            "version": self._get_version(),
-            "uptime_seconds": round(uptime, 2),
-            "components": components,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return MCPToolResult.json_result(
+            {
+                "healthy": all_healthy,
+                "status": "ok" if all_healthy else "degraded",
+                "version": self._get_version(),
+                "uptime_seconds": round(uptime, 2),
+                "components": components,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     async def _get_server_status_async(self) -> MCPToolResult:
         """Get detailed server status."""
@@ -112,6 +116,7 @@ class HealthAdapter(BaseWardenAdapter):
         memory_mb = None
         try:
             import resource
+
             rusage = resource.getrusage(resource.RUSAGE_SELF)
             memory_mb = rusage.ru_maxrss / 1024  # Convert to MB on macOS
             if sys.platform == "linux":
@@ -146,21 +151,24 @@ class HealthAdapter(BaseWardenAdapter):
             bridge_status["llm"] = getattr(self.bridge, "llm_config", None) is not None
             bridge_status["config_name"] = getattr(self.bridge, "active_config_name", None)
 
-        return MCPToolResult.json_result({
-            "running": True,
-            "uptime_seconds": round(uptime, 2),
-            "memory_mb": memory_mb,
-            "python": python_info,
-            "project": project_info,
-            "bridge": bridge_status,
-            "version": self._get_version(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return MCPToolResult.json_result(
+            {
+                "running": True,
+                "uptime_seconds": round(uptime, 2),
+                "memory_mb": memory_mb,
+                "python": python_info,
+                "project": project_info,
+                "bridge": bridge_status,
+                "version": self._get_version(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     def _get_version(self) -> str:
         """Get Warden version."""
         try:
             from warden._version import __version__
+
             return __version__
         except ImportError:
             return "unknown"
@@ -195,12 +203,14 @@ class HealthAdapter(BaseWardenAdapter):
         if warden_dir.exists():
             setup_status["project_initialized"] = True
         else:
-            setup_status["missing_steps"].append({
-                "step": "project_init",
-                "description": "Project not initialized with Warden",
-                "command": "warden init",
-                "priority": 1,
-            })
+            setup_status["missing_steps"].append(
+                {
+                    "step": "project_init",
+                    "description": "Project not initialized with Warden",
+                    "command": "warden init",
+                    "priority": 1,
+                }
+            )
             setup_status["setup_commands"].append("warden init")
 
         # Check 2: Config exists and has LLM provider + API key
@@ -209,7 +219,8 @@ class HealthAdapter(BaseWardenAdapter):
         if config_path.exists():
             try:
                 import yaml
-                with open(config_path, encoding='utf-8') as f:
+
+                with open(config_path, encoding="utf-8") as f:
                     config = yaml.safe_load(f) or {}
 
                 # Type-safe access: llm might not be a dict
@@ -225,33 +236,41 @@ class HealthAdapter(BaseWardenAdapter):
                         setup_status["llm_api_key_present"] = api_key_present
 
                         if not api_key_present and provider not in ("ollama", "local"):
-                            setup_status["missing_steps"].append({
-                                "step": "api_key",
-                                "description": f"API key missing for {provider}. Set environment variable or add to .env",
-                                "command": f"export {self._get_api_key_env_name(provider)}=your_key",
-                                "priority": 1,
-                            })
+                            setup_status["missing_steps"].append(
+                                {
+                                    "step": "api_key",
+                                    "description": f"API key missing for {provider}. Set environment variable or add to .env",
+                                    "command": f"export {self._get_api_key_env_name(provider)}=your_key",
+                                    "priority": 1,
+                                }
+                            )
                     else:
-                        setup_status["missing_steps"].append({
+                        setup_status["missing_steps"].append(
+                            {
+                                "step": "llm_config",
+                                "description": "LLM provider not configured (needed for AI-powered analysis)",
+                                "command": "warden init --reconfigure",
+                                "priority": 2,
+                            }
+                        )
+                else:
+                    setup_status["missing_steps"].append(
+                        {
                             "step": "llm_config",
-                            "description": "LLM provider not configured (needed for AI-powered analysis)",
+                            "description": "LLM configuration is invalid or missing",
                             "command": "warden init --reconfigure",
                             "priority": 2,
-                        })
-                else:
-                    setup_status["missing_steps"].append({
-                        "step": "llm_config",
-                        "description": "LLM configuration is invalid or missing",
-                        "command": "warden init --reconfigure",
-                        "priority": 2,
-                    })
+                        }
+                    )
             except (yaml.YAMLError, OSError, UnicodeDecodeError) as e:
-                setup_status["missing_steps"].append({
-                    "step": "config_error",
-                    "description": f"Config file is corrupted: {type(e).__name__}",
-                    "command": "warden init --reconfigure",
-                    "priority": 1,
-                })
+                setup_status["missing_steps"].append(
+                    {
+                        "step": "config_error",
+                        "description": f"Config file is corrupted: {type(e).__name__}",
+                        "command": "warden init --reconfigure",
+                        "priority": 1,
+                    }
+                )
 
         # Check 3: AI tool files exist (CLAUDE.md, .cursorrules)
         ai_files_status = {
@@ -265,23 +284,27 @@ class HealthAdapter(BaseWardenAdapter):
             setup_status["ai_tools_configured"] = True
         else:
             missing_files = [k for k, v in ai_files_status.items() if not v]
-            setup_status["missing_steps"].append({
-                "step": "ai_tool_files",
-                "description": f"AI integration files missing: {', '.join(missing_files)}",
-                "command": "warden init --agent",
-                "priority": 2,
-            })
+            setup_status["missing_steps"].append(
+                {
+                    "step": "ai_tool_files",
+                    "description": f"AI integration files missing: {', '.join(missing_files)}",
+                    "command": "warden init --agent",
+                    "priority": 2,
+                }
+            )
 
         # Check 4: MCP registration (check known config paths)
         mcp_registered = self._check_mcp_registration()
         setup_status["mcp_registered"] = mcp_registered
         if not mcp_registered:
-            setup_status["missing_steps"].append({
-                "step": "mcp_register",
-                "description": "Warden MCP not registered with AI tools (Claude, Cursor, etc.)",
-                "command": "warden serve mcp register",
-                "priority": 2,
-            })
+            setup_status["missing_steps"].append(
+                {
+                    "step": "mcp_register",
+                    "description": "Warden MCP not registered with AI tools (Claude, Cursor, etc.)",
+                    "command": "warden serve mcp register",
+                    "priority": 2,
+                }
+            )
             setup_status["setup_commands"].append("warden serve mcp register")
 
         # Check 5: Baseline exists
@@ -290,31 +313,35 @@ class HealthAdapter(BaseWardenAdapter):
         if baseline_dir.exists() or baseline_file.exists():
             setup_status["baseline_exists"] = True
         else:
-            setup_status["missing_steps"].append({
-                "step": "baseline",
-                "description": "Security baseline not created (run initial scan)",
-                "command": "warden scan",
-                "priority": 3,
-            })
+            setup_status["missing_steps"].append(
+                {
+                    "step": "baseline",
+                    "description": "Security baseline not created (run initial scan)",
+                    "command": "warden scan",
+                    "priority": 3,
+                }
+            )
             setup_status["setup_commands"].append("warden scan")
 
         # Check 6: Recent scan status
         ai_status_path = warden_dir / "ai_status.md"
         if ai_status_path.exists():
             try:
-                content = ai_status_path.read_text(encoding='utf-8', errors='replace')
+                content = ai_status_path.read_text(encoding="utf-8", errors="replace")
                 # Use upper() for case-insensitive matching
                 content_upper = content.upper()
                 if "PASS" in content_upper:
                     setup_status["last_scan_status"] = "PASS"
                 elif "FAIL" in content_upper:
                     setup_status["last_scan_status"] = "FAIL"
-                    setup_status["missing_steps"].append({
-                        "step": "fix_issues",
-                        "description": "Last scan found issues - check .warden/reports/",
-                        "command": "warden scan",
-                        "priority": 1,
-                    })
+                    setup_status["missing_steps"].append(
+                        {
+                            "step": "fix_issues",
+                            "description": "Last scan found issues - check .warden/reports/",
+                            "command": "warden scan",
+                            "priority": 1,
+                        }
+                    )
                 else:
                     setup_status["last_scan_status"] = "PENDING"
             except (OSError, PermissionError) as e:
@@ -323,18 +350,15 @@ class HealthAdapter(BaseWardenAdapter):
 
         # Determine overall readiness
         setup_status["ready_for_use"] = (
-            setup_status["project_initialized"] and
-            setup_status["ai_tools_configured"] and
-            setup_status["baseline_exists"] and
-            (setup_status["llm_api_key_present"] or provider in ("ollama", "local", "none", None))
+            setup_status["project_initialized"]
+            and setup_status["ai_tools_configured"]
+            and setup_status["baseline_exists"]
+            and (setup_status["llm_api_key_present"] or provider in ("ollama", "local", "none", None))
         )
 
         # Set next action based on priority (default priority 99 if missing)
         if setup_status["missing_steps"]:
-            sorted_steps = sorted(
-                setup_status["missing_steps"],
-                key=lambda x: x.get("priority", 99)
-            )
+            sorted_steps = sorted(setup_status["missing_steps"], key=lambda x: x.get("priority", 99))
             setup_status["next_action"] = sorted_steps[0]
         else:
             setup_status["next_action"] = {
@@ -413,7 +437,7 @@ class HealthAdapter(BaseWardenAdapter):
         for config_path in config_paths:
             if config_path.exists():
                 try:
-                    with open(config_path, encoding='utf-8') as f:
+                    with open(config_path, encoding="utf-8") as f:
                         data = json.load(f)
                     # Type-safe check
                     if isinstance(data, dict):

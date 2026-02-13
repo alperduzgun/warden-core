@@ -51,13 +51,7 @@ class ChaosFrame(ValidationFrame):
 
     # Chaos configuration
     FAILURE_RATE = 0.3  # 30% of files will experience chaos
-    CHAOS_TYPES = [
-        "timeout",
-        "exception",
-        "malformed_output",
-        "partial_failure",
-        "resource_exhaustion"
-    ]
+    CHAOS_TYPES = ["timeout", "exception", "malformed_output", "partial_failure", "resource_exhaustion"]
 
     def __init__(self, config: dict | None = None):
         super().__init__(config)
@@ -83,7 +77,7 @@ class ChaosFrame(ValidationFrame):
                 frame_name=self.name,
                 findings=[],
                 status="passed",
-                message="No chaos injected (lucky!)"
+                message="No chaos injected (lucky!)",
             )
 
         # Select chaos type
@@ -107,7 +101,7 @@ class ChaosFrame(ValidationFrame):
             frame_name=self.name,
             findings=[],
             status="failed",
-            message="Chaos injection failed to trigger"
+            message="Chaos injection failed to trigger",
         )
 
     async def _inject_timeout(self):
@@ -122,7 +116,7 @@ class ChaosFrame(ValidationFrame):
             ValueError("Chaos: Invalid value encountered"),
             KeyError("Chaos: Missing required key"),
             AttributeError("Chaos: Attribute not found"),
-            TypeError("Chaos: Type mismatch")
+            TypeError("Chaos: Type mismatch"),
         ]
         exception = random.choice(exceptions)
         logger.error("chaos_exception_injected", exception_type=type(exception).__name__)
@@ -143,12 +137,12 @@ class ChaosFrame(ValidationFrame):
             findings=[],
             status="failed",
             message="Chaos: Partial failure - some checks could not complete",
-            error="Simulated partial failure for resilience testing"
+            error="Simulated partial failure for resilience testing",
         )
 
     def _inject_resource_exhaustion(self):
         """Simulate memory exhaustion"""
         logger.error("chaos_resource_exhaustion_injected", message="Allocating large memory")
         # Allocate large list (will be caught by memory limits)
-        _ = [0] * (10 ** 8)  # 100M integers (~800MB)
+        _ = [0] * (10**8)  # 100M integers (~800MB)
         raise MemoryError("Chaos: Simulated memory exhaustion")

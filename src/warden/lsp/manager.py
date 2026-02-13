@@ -175,7 +175,7 @@ class LSPManager:
     Thread Safety: Thread-safe via double-checked locking pattern.
     """
 
-    _instance: Optional['LSPManager'] = None
+    _instance: Optional["LSPManager"] = None
     _lock: threading.Lock = threading.Lock()
 
     def __init__(self) -> None:
@@ -185,7 +185,7 @@ class LSPManager:
         self._discover_binaries()
 
     @classmethod
-    def get_instance(cls) -> 'LSPManager':
+    def get_instance(cls) -> "LSPManager":
         """
         Get singleton instance (thread-safe).
 
@@ -235,12 +235,7 @@ class LSPManager:
             if not found:
                 missing.append(language)
 
-        logger.info(
-            "lsp_binaries_discovered",
-            available=available,
-            missing=missing,
-            total=len(LSP_SERVER_CONFIG)
-        )
+        logger.info("lsp_binaries_discovered", available=available, missing=missing, total=len(LSP_SERVER_CONFIG))
 
     def is_available(self, language: str) -> bool:
         """Check if LSP is available for a language."""
@@ -250,11 +245,7 @@ class LSPManager:
         """Get list of languages with available LSP servers."""
         return list(self._binaries.keys())
 
-    async def get_client_async(
-        self,
-        language: str,
-        root_path: str
-    ) -> LanguageServerClient | None:
+    async def get_client_async(self, language: str, root_path: str) -> LanguageServerClient | None:
         """
         Get or spawn a client for the given language.
 

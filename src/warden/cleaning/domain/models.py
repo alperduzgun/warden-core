@@ -25,6 +25,7 @@ from warden.shared.domain.base_model import BaseDomainModel
 
 class CleaningIssueType(Enum):
     """Types of cleaning opportunities."""
+
     POOR_NAMING = "poor_naming"
     CODE_DUPLICATION = "code_duplication"
     SOLID_VIOLATION = "solid_violation"
@@ -40,25 +41,31 @@ class CleaningIssueType(Enum):
     TESTABILITY_ISSUE = "testability_issue"
     POOR_DOC = "poor_doc"
 
+
 class CleaningIssueSeverity(Enum):
     """Severity levels for cleaning issues."""
+
     CRITICAL = 0
     HIGH = 1
     MEDIUM = 2
     LOW = 3
     INFO = 4
 
+
 class Cleaning(BaseDomainModel):
     """
     A single cleaning suggestion.
     Represents a code cleanup or refactoring improvement.
     """
+
     id: str
     title: str
     detail: str  # Can contain HTML for Panel rendering
 
+
 class CleaningIssue(BaseDomainModel):
     """Represents a single cleanup opportunity."""
+
     issue_type: CleaningIssueType
     description: str
     line_number: int
@@ -67,17 +74,21 @@ class CleaningIssue(BaseDomainModel):
     column_start: int | None = None
     column_end: int | None = None
 
+
 class CleaningSuggestion(BaseDomainModel):
     """A suggestion for code cleanup."""
+
     issue: CleaningIssue
     suggestion: str
     example_code: str | None = None
     rationale: str | None = None
 
+
 class CleaningResult(BaseDomainModel):
     """
     Result of cleaning step execution.
     """
+
     success: bool = True
     cleanings: list[Cleaning] = Field(default_factory=list)
     issues_found: int = 0
@@ -104,6 +115,5 @@ class CleaningResult(BaseDomainModel):
             "summary": self.summary,
             "duration": f"{self.duration:.1f}s",
             "timestamp": self.timestamp.isoformat(),
-            "metrics": self.metrics
+            "metrics": self.metrics,
         }
-

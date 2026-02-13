@@ -30,9 +30,11 @@ from warden.services.ci_manager import (
 
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -50,12 +52,14 @@ class CIAdapter(BaseWardenAdapter):
     All operations are idempotent and safe to retry.
     """
 
-    SUPPORTED_TOOLS = frozenset({
-        "warden_ci_init",
-        "warden_ci_update",
-        "warden_ci_sync",
-        "warden_ci_get_status",
-    })
+    SUPPORTED_TOOLS = frozenset(
+        {
+            "warden_ci_init",
+            "warden_ci_update",
+            "warden_ci_sync",
+            "warden_ci_get_status",
+        }
+    )
     TOOL_CATEGORY = ToolCategory.CONFIG
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -224,21 +228,25 @@ class CIAdapter(BaseWardenAdapter):
             )
 
             if result.get("success"):
-                return MCPToolResult.json_result({
-                    "status": "success",
-                    "provider": provider.value,
-                    "created": result.get("created", []),
-                    "skipped": result.get("skipped", []),
-                    "message": f"CI workflows initialized for {provider.value}",
-                })
+                return MCPToolResult.json_result(
+                    {
+                        "status": "success",
+                        "provider": provider.value,
+                        "created": result.get("created", []),
+                        "skipped": result.get("skipped", []),
+                        "message": f"CI workflows initialized for {provider.value}",
+                    }
+                )
             else:
-                return MCPToolResult.json_result({
-                    "status": "partial",
-                    "provider": provider.value,
-                    "created": result.get("created", []),
-                    "skipped": result.get("skipped", []),
-                    "errors": result.get("errors", []),
-                })
+                return MCPToolResult.json_result(
+                    {
+                        "status": "partial",
+                        "provider": provider.value,
+                        "created": result.get("created", []),
+                        "skipped": result.get("skipped", []),
+                        "errors": result.get("errors", []),
+                    }
+                )
 
         except (ValidationError, SecurityError) as e:
             return MCPToolResult.error(str(e))
@@ -288,14 +296,16 @@ class CIAdapter(BaseWardenAdapter):
             if "error" in result:
                 return MCPToolResult.error(result["error"])
 
-            return MCPToolResult.json_result({
-                "status": "success" if result.get("success") else "partial",
-                "dry_run": dry_run,
-                "updated": result.get("updated", []),
-                "unchanged": result.get("unchanged", []),
-                "errors": result.get("errors", []),
-                "message": "Dry run complete" if dry_run else "CI workflows updated",
-            })
+            return MCPToolResult.json_result(
+                {
+                    "status": "success" if result.get("success") else "partial",
+                    "dry_run": dry_run,
+                    "updated": result.get("updated", []),
+                    "unchanged": result.get("unchanged", []),
+                    "errors": result.get("errors", []),
+                    "message": "Dry run complete" if dry_run else "CI workflows updated",
+                }
+            )
 
         except (ValidationError, SecurityError) as e:
             return MCPToolResult.error(str(e))
@@ -325,12 +335,14 @@ class CIAdapter(BaseWardenAdapter):
             if "error" in result:
                 return MCPToolResult.error(result["error"])
 
-            return MCPToolResult.json_result({
-                "status": "success" if result.get("success") else "partial",
-                "synced": result.get("synced", []),
-                "errors": result.get("errors", []),
-                "message": "CI workflows synced with configuration",
-            })
+            return MCPToolResult.json_result(
+                {
+                    "status": "success" if result.get("success") else "partial",
+                    "synced": result.get("synced", []),
+                    "errors": result.get("errors", []),
+                    "message": "CI workflows synced with configuration",
+                }
+            )
 
         except (ValidationError, SecurityError) as e:
             return MCPToolResult.error(str(e))
@@ -356,10 +368,12 @@ class CIAdapter(BaseWardenAdapter):
                 workflow_count=len(status_data.get("workflows", {})),
             )
 
-            return MCPToolResult.json_result({
-                "status": "configured" if status_data.get("is_configured") else "not_configured",
-                **status_data,
-            })
+            return MCPToolResult.json_result(
+                {
+                    "status": "configured" if status_data.get("is_configured") else "not_configured",
+                    **status_data,
+                }
+            )
 
         except ValidationError as e:
             return MCPToolResult.error(str(e))

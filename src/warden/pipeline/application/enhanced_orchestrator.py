@@ -64,13 +64,11 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         self.discovery_result: Any | None = None
         self.build_context: BuildContext | None = None
 
-
         logger.info(
             "enhanced_orchestrator_initialized",
             frame_count=len(frames),
             discovery_enabled=self.config.enable_discovery,
             build_context_enabled=self.config.enable_build_context,
-
         )
 
     async def execute_with_discovery_async(self, project_path: str) -> PipelineResult:
@@ -109,14 +107,11 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
         # Phase 3: Run validation frames
         result = await super().execute_async(code_files)
 
-
-
         logger.info(
             "enhanced_pipeline_completed",
             project_path=project_path,
             total_files=len(code_files),
             total_findings=result.total_findings,
-
         )
 
         return result
@@ -151,7 +146,9 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
                     if rule.id == "file-size-limit" and rule.enabled:
                         max_size_mb = rule.conditions.get("max_size_mb")
                         if max_size_mb:
-                            logger.info("discovery_limit_extracted_from_global_rules", rule_id=rule.id, limit_mb=max_size_mb)
+                            logger.info(
+                                "discovery_limit_extracted_from_global_rules", rule_id=rule.id, limit_mb=max_size_mb
+                            )
                             break
 
             # Create discoverer
@@ -167,9 +164,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             self.discovery_result = await discoverer.discover_async()
 
             # Convert to CodeFile objects
-            code_files = await self._convert_to_code_files_async(
-                self.discovery_result.get_analyzable_files()
-            )
+            code_files = await self._convert_to_code_files_async(self.discovery_result.get_analyzable_files())
 
             logger.info(
                 "discovery_phase_completed",
@@ -189,9 +184,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             # Return empty list on error
             return []
 
-    async def _convert_to_code_files_async(
-        self, discovered_files: list[DiscoveredFile]
-    ) -> list[CodeFile]:
+    async def _convert_to_code_files_async(self, discovered_files: list[DiscoveredFile]) -> list[CodeFile]:
         """
         Convert DiscoveredFile objects to CodeFile objects.
 
@@ -244,6 +237,7 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             Language name
         """
         from warden.shared.utils.language_utils import get_language_from_path
+
         # get_language_from_path expects a Path or string with extension
         # If we only have extension, we can create a dummy path
         return get_language_from_path(f"dummy{extension}").value
@@ -283,10 +277,6 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             )
             # Continue without build context
             self.build_context = None
-
-
-
-
 
     def _extract_line_number(self, location: str) -> int:
         """
@@ -339,5 +329,3 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
             BuildContext or None if build context was not loaded
         """
         return self.build_context
-
-

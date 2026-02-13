@@ -26,22 +26,21 @@ class PreAnalysisExecutor(BasePhaseExecutor):
 
         if self.progress_callback:
             start_time = time.perf_counter()
-            self.progress_callback("phase_started", {
-                "phase": "PRE_ANALYSIS",
-                "phase_name": "PRE_ANALYSIS"
-            })
+            self.progress_callback("phase_started", {"phase": "PRE_ANALYSIS", "phase_name": "PRE_ANALYSIS"})
 
         try:
             from warden.analysis.application.pre_analysis_phase import PreAnalysisPhase
 
             phase_config = {
-                "pre_analysis": getattr(self.config, 'pre_analysis_config', {}),
-                "semantic_search": getattr(self.config, 'semantic_search_config', {}),
-                "integrity_config": getattr(self.config, 'integrity_config', {}) if hasattr(self.config, 'integrity_config') else {},
-                "analysis_level": getattr(self.config, 'analysis_level', None),
-                "use_llm": getattr(self.config, 'use_llm', True) if hasattr(self.config, 'use_llm') else True,
-                "llm_config": getattr(self.config, 'llm_config', None),
-                "ci_mode": getattr(self.config, 'ci_mode', False),
+                "pre_analysis": getattr(self.config, "pre_analysis_config", {}),
+                "semantic_search": getattr(self.config, "semantic_search_config", {}),
+                "integrity_config": getattr(self.config, "integrity_config", {})
+                if hasattr(self.config, "integrity_config")
+                else {},
+                "analysis_level": getattr(self.config, "analysis_level", None),
+                "use_llm": getattr(self.config, "use_llm", True) if hasattr(self.config, "use_llm") else True,
+                "llm_config": getattr(self.config, "llm_config", None),
+                "ci_mode": getattr(self.config, "ci_mode", False),
             }
 
             phase = PreAnalysisPhase(
@@ -60,12 +59,15 @@ class PreAnalysisExecutor(BasePhaseExecutor):
             context.project_metadata = {}  # Will be populated later if needed
 
             # Add phase result
-            context.add_phase_result("PRE_ANALYSIS", {
-                "project_type": result.project_context.project_type.value if result.project_context else None,
-                "framework": result.project_context.framework.value if result.project_context else None,
-                "file_count": len(result.file_contexts),
-                "confidence": result.project_context.confidence if result.project_context else 0.0,
-            })
+            context.add_phase_result(
+                "PRE_ANALYSIS",
+                {
+                    "project_type": result.project_context.project_type.value if result.project_context else None,
+                    "framework": result.project_context.framework.value if result.project_context else None,
+                    "file_count": len(result.file_contexts),
+                    "confidence": result.project_context.confidence if result.project_context else 0.0,
+                },
+            )
 
             logger.info(
                 "phase_completed",
@@ -82,8 +84,6 @@ class PreAnalysisExecutor(BasePhaseExecutor):
 
         if self.progress_callback:
             duration = time.perf_counter() - start_time
-            self.progress_callback("phase_completed", {
-                "phase": "PRE_ANALYSIS",
-                "phase_name": "PRE_ANALYSIS",
-                "duration": duration
-            })
+            self.progress_callback(
+                "phase_completed", {"phase": "PRE_ANALYSIS", "phase_name": "PRE_ANALYSIS", "duration": duration}
+            )

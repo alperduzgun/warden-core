@@ -79,8 +79,7 @@ class LLMSuggestionGenerator:
         if self.semantic_search_service and self.semantic_search_service.is_available():
             try:
                 search_results = await self.semantic_search_service.search(
-                    query=f"Code patterns and utilities used in {code_file.path}",
-                    limit=3
+                    query=f"Code patterns and utilities used in {code_file.path}", limit=3
                 )
                 if search_results:
                     semantic_context = "\n[Global Code Patterns]:\n"
@@ -104,8 +103,8 @@ class LLMSuggestionGenerator:
 
             # Determine model tier
             model = None
-            if self.context and hasattr(self.context, 'llm_config') and self.context.llm_config:
-                model = getattr(self.context.llm_config, 'fast_model', None)
+            if self.context and hasattr(self.context, "llm_config") and self.context.llm_config:
+                model = getattr(self.context.llm_config, "fast_model", None)
             elif isinstance(self.context, dict) and "llm_config" in self.context:
                 config = self.context["llm_config"]
                 if isinstance(config, dict):
@@ -118,11 +117,11 @@ class LLMSuggestionGenerator:
                 prompt=prompt,
                 system_prompt="You are a senior software engineer specialized in code quality and refactoring. Respond only with valid JSON.",
                 model=model,
-                use_fast_tier=True  # Use Qwen for cost optimization (Phase 1 migration)
+                use_fast_tier=True,  # Use Qwen for cost optimization (Phase 1 migration)
             )
 
             # Parse LLM response - response is an LlmResponse object
-            response_text = response.content if hasattr(response, 'content') else str(response)
+            response_text = response.content if hasattr(response, "content") else str(response)
             suggestions = self.parse_response(response_text, code_file)
 
             logger.info(
@@ -188,7 +187,7 @@ class LLMSuggestionGenerator:
         - Type: {project_type}
         - Framework: {framework}
         - Language: {language}
-        - Quality Score: {self.context.get('quality_score_before', 0):.1f}/10
+        - Quality Score: {self.context.get("quality_score_before", 0):.1f}/10
 
         ### TARGET CODE ({code_file.path}):
         ```{language}
@@ -257,7 +256,7 @@ class LLMSuggestionGenerator:
 
         try:
             # Extract JSON from response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
 
@@ -429,9 +428,9 @@ class LLMSuggestionGenerator:
         formatted = []
         for finding in findings:
             # Handle both dict and object access safely
-            finding_type = self._get_val(finding, 'type', 'issue')
-            message = self._get_val(finding, 'message', 'Security issue')
-            line = self._get_val(finding, 'line_number', 'unknown')
+            finding_type = self._get_val(finding, "type", "issue")
+            message = self._get_val(finding, "message", "Security issue")
+            line = self._get_val(finding, "line_number", "unknown")
 
             formatted.append(f"- {finding_type}: {message} (line {line})")
 
@@ -456,14 +455,12 @@ class LLMSuggestionGenerator:
 
         # Process files in batches
         for i in range(0, len(code_files), batch_size):
-            batch = code_files[i:i + batch_size]
+            batch = code_files[i : i + batch_size]
 
             # Generate suggestions for each file in parallel
             import asyncio
-            tasks = [
-                self.generate_suggestions_async(code_file)
-                for code_file in batch
-            ]
+
+            tasks = [self.generate_suggestions_async(code_file) for code_file in batch]
 
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 

@@ -16,6 +16,7 @@ try:
     from warden.warden_core_rust import MatchHit, RustRule
 
     from warden import warden_core_rust
+
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False
@@ -71,7 +72,7 @@ class RustValidationEngine:
                     "id": rule.id,
                     "name": rule.name,
                     "description": rule.description,
-                    "severity": rule.severity.value if hasattr(rule.severity, 'value') else str(rule.severity),
+                    "severity": rule.severity.value if hasattr(rule.severity, "value") else str(rule.severity),
                     "message": rule.message,
                 }
         logger.debug("custom_rules_added", count=len(rules))
@@ -105,7 +106,7 @@ class RustValidationEngine:
 
         return findings
 
-    def _hit_to_finding(self, hit_item: 'MatchHit', message_override: str | None = None) -> Finding:
+    def _hit_to_finding(self, hit_item: "MatchHit", message_override: str | None = None) -> Finding:
         """Convert a Rust hit to a Warden Finding."""
         rule = self.rules_metadata.get(hit_item.rule_id, {})
 
@@ -119,5 +120,5 @@ class RustValidationEngine:
             code=hit_item.snippet,
             line=hit_item.line_number,
             column=hit_item.column,
-            is_blocker=rule.get("severity") == "critical"
+            is_blocker=rule.get("severity") == "critical",
         )

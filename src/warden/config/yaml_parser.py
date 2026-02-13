@@ -54,6 +54,7 @@ from warden.validation.domain.frame import get_frame_by_id
 
 class YAMLParseError(Exception):
     """YAML parsing error."""
+
     pass
 
 
@@ -90,7 +91,7 @@ def load_yaml(file_path: str) -> dict[str, Any]:
 
     # Load YAML
     try:
-        with open(path, encoding='utf-8') as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if not isinstance(data, dict):
@@ -125,33 +126,28 @@ def parse_simple_format(data: dict[str, Any]) -> PipelineConfig:
     Generates a linear pipeline: start → frame1 → frame2 → ... → end
     """
     # Required fields
-    if 'name' not in data:
+    if "name" not in data:
         raise YAMLParseError("Missing required field: name")
 
     # Parse frames
-    frame_ids = data.get('frames', [])
+    frame_ids = data.get("frames", [])
     if not frame_ids:
         raise YAMLParseError("At least one frame required")
 
     # Parse settings
-    settings_data = data.get('settings', {})
+    settings_data = data.get("settings", {})
     settings = PipelineSettings(
-        fail_fast=settings_data.get('fail_fast', True),
-        timeout=settings_data.get('timeout'),
-        parallel=settings_data.get('parallel', False),
-        enable_issue_validation=settings_data.get('enable_issue_validation', True)
+        fail_fast=settings_data.get("fail_fast", True),
+        timeout=settings_data.get("timeout"),
+        parallel=settings_data.get("parallel", False),
+        enable_issue_validation=settings_data.get("enable_issue_validation", True),
     )
 
     # Generate nodes
     nodes: list[PipelineNode] = []
 
     # Start node
-    nodes.append(PipelineNode(
-        id='start',
-        type='start',
-        position=Position(x=100, y=200),
-        data={'type': 'start'}
-    ))
+    nodes.append(PipelineNode(id="start", type="start", position=Position(x=100, y=200), data={"type": "start"}))
 
     # Frame nodes
     x_offset = 300
@@ -160,44 +156,41 @@ def parse_simple_format(data: dict[str, Any]) -> PipelineConfig:
         if not frame:
             raise YAMLParseError(f"Unknown frame: {frame_id}")
 
-        nodes.append(PipelineNode(
-            id=f'frame-{frame_id}',
-            type='frame',
-            position=Position(x=x_offset + (i * 200), y=200),
-            data={
-                'type': 'frame',
-                'frameId': frame_id,
-                'preRules': [],
-                'postRules': [],
-                'onFail': 'stop',
-                'config': {}
-            }
-        ))
+        nodes.append(
+            PipelineNode(
+                id=f"frame-{frame_id}",
+                type="frame",
+                position=Position(x=x_offset + (i * 200), y=200),
+                data={
+                    "type": "frame",
+                    "frameId": frame_id,
+                    "preRules": [],
+                    "postRules": [],
+                    "onFail": "stop",
+                    "config": {},
+                },
+            )
+        )
 
     # End node
-    nodes.append(PipelineNode(
-        id='end',
-        type='end',
-        position=Position(x=x_offset + (len(frame_ids) * 200), y=200),
-        data={'type': 'end'}
-    ))
+    nodes.append(
+        PipelineNode(
+            id="end", type="end", position=Position(x=x_offset + (len(frame_ids) * 200), y=200), data={"type": "end"}
+        )
+    )
 
     # Generate edges (linear)
     edges: list[PipelineEdge] = []
     for i in range(len(nodes) - 1):
-        edges.append(PipelineEdge(
-            id=f'e{i}',
-            source=nodes[i].id,
-            target=nodes[i + 1].id
-        ))
+        edges.append(PipelineEdge(id=f"e{i}", source=nodes[i].id, target=nodes[i + 1].id))
 
     return PipelineConfig(
-        id=data.get('id', 'pipeline-1'),
-        name=data['name'],
-        version=data.get('version', '1.0'),
+        id=data.get("id", "pipeline-1"),
+        name=data["name"],
+        version=data.get("version", "1.0"),
         nodes=nodes,
         edges=edges,
-        settings=settings
+        settings=settings,
     )
 
 
@@ -208,80 +201,86 @@ def parse_full_format(data: dict[str, Any]) -> PipelineConfig:
     Full format includes nodes, edges, positions, etc.
     """
     # Required fields
-    required = ['id', 'name', 'nodes', 'edges']
+    required = ["id", "name", "nodes", "edges"]
     for field in required:
         if field not in data:
             raise YAMLParseError(f"Missing required field: {field}")
 
     # Parse project if present
     project = None
-    if 'project' in data:
-        proj_data = data['project']
+    if "project" in data:
+        proj_data = data["project"]
         project = ProjectSummary(
-            id=proj_data['id'],
-            name=proj_data['name'],
-            path=proj_data.get('path'),
-            branch=proj_data.get('branch'),
-            commit=proj_data.get('commit')
+            id=proj_data["id"],
+            name=proj_data["name"],
+            path=proj_data.get("path"),
+            branch=proj_data.get("branch"),
+            commit=proj_data.get("commit"),
         )
 
     # Parse nodes
     nodes: list[PipelineNode] = []
-    for node_data in data['nodes']:
-        pos_data = node_data['position']
-        nodes.append(PipelineNode(
-            id=node_data['id'],
-            type=node_data['type'],
-            position=Position(x=pos_data['x'], y=pos_data['y']),
-            data=node_data.get('data', {})
-        ))
+    for node_data in data["nodes"]:
+        pos_data = node_data["position"]
+        nodes.append(
+            PipelineNode(
+                id=node_data["id"],
+                type=node_data["type"],
+                position=Position(x=pos_data["x"], y=pos_data["y"]),
+                data=node_data.get("data", {}),
+            )
+        )
 
     # Parse edges
     edges: list[PipelineEdge] = []
-    for edge_data in data['edges']:
-        edges.append(PipelineEdge(
-            id=edge_data['id'],
-            source=edge_data['source'],
-            target=edge_data['target'],
-            source_handle=edge_data.get('sourceHandle'),
-            target_handle=edge_data.get('targetHandle'),
-            type=edge_data.get('type', 'smoothstep'),
-            animated=edge_data.get('animated', True),
-            label=edge_data.get('label')
-        ))
+    for edge_data in data["edges"]:
+        edges.append(
+            PipelineEdge(
+                id=edge_data["id"],
+                source=edge_data["source"],
+                target=edge_data["target"],
+                source_handle=edge_data.get("sourceHandle"),
+                target_handle=edge_data.get("targetHandle"),
+                type=edge_data.get("type", "smoothstep"),
+                animated=edge_data.get("animated", True),
+                label=edge_data.get("label"),
+            )
+        )
 
     # Parse global rules
     global_rules: list[CustomRule] = []
-    for rule_data in data.get('global_rules', []):
-        global_rules.append(CustomRule(
-            id=rule_data['id'],
-            name=rule_data.get('name', ''),
-            category=rule_data.get('category', 'security'),
-            severity=rule_data.get('severity', 'medium'),
-            is_blocker=rule_data.get('is_blocker', False),
-            description=rule_data.get('description', ''),
-            type=rule_data.get('type', 'security'),
-            conditions=rule_data.get('conditions', {})
-        ))
+    for rule_data in data.get("global_rules", []):
+        global_rules.append(
+            CustomRule(
+                id=rule_data["id"],
+                name=rule_data.get("name", ""),
+                category=rule_data.get("category", "security"),
+                severity=rule_data.get("severity", "medium"),
+                is_blocker=rule_data.get("is_blocker", False),
+                description=rule_data.get("description", ""),
+                type=rule_data.get("type", "security"),
+                conditions=rule_data.get("conditions", {}),
+            )
+        )
 
     # Parse settings
-    settings_data = data.get('settings', {})
+    settings_data = data.get("settings", {})
     settings = PipelineSettings(
-        fail_fast=settings_data.get('fail_fast', True),
-        timeout=settings_data.get('timeout'),
-        parallel=settings_data.get('parallel', False),
-        enable_issue_validation=settings_data.get('enable_issue_validation', True)
+        fail_fast=settings_data.get("fail_fast", True),
+        timeout=settings_data.get("timeout"),
+        parallel=settings_data.get("parallel", False),
+        enable_issue_validation=settings_data.get("enable_issue_validation", True),
     )
 
     return PipelineConfig(
-        id=data['id'],
-        name=data['name'],
-        version=data.get('version', '1.0'),
+        id=data["id"],
+        name=data["name"],
+        version=data.get("version", "1.0"),
         project=project,
         nodes=nodes,
         edges=edges,
         global_rules=global_rules,
-        settings=settings
+        settings=settings,
     )
 
 
@@ -303,16 +302,14 @@ def parse_yaml(file_path: str) -> PipelineConfig:
     data = load_yaml(file_path)
 
     # Detect format
-    if 'nodes' in data and 'edges' in data:
+    if "nodes" in data and "edges" in data:
         # Full format
         return parse_full_format(data)
-    elif 'frames' in data:
+    elif "frames" in data:
         # Simple format
         return parse_simple_format(data)
     else:
-        raise YAMLParseError(
-            "Invalid format. Must have either 'frames' (simple) or 'nodes'+'edges' (full)"
-        )
+        raise YAMLParseError("Invalid format. Must have either 'frames' (simple) or 'nodes'+'edges' (full)")
 
 
 def parse_yaml_string(yaml_str: str) -> PipelineConfig:
@@ -337,14 +334,12 @@ def parse_yaml_string(yaml_str: str) -> PipelineConfig:
             raise YAMLParseError("YAML root must be a dictionary")
 
         # Detect format
-        if 'nodes' in data and 'edges' in data:
+        if "nodes" in data and "edges" in data:
             return parse_full_format(data)
-        elif 'frames' in data:
+        elif "frames" in data:
             return parse_simple_format(data)
         else:
-            raise YAMLParseError(
-                "Invalid format. Must have either 'frames' (simple) or 'nodes'+'edges' (full)"
-            )
+            raise YAMLParseError("Invalid format. Must have either 'frames' (simple) or 'nodes'+'edges' (full)")
 
     except yaml.YAMLError as e:
         raise YAMLParseError(f"Invalid YAML syntax: {e}")

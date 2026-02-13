@@ -142,9 +142,7 @@ class ModelDefinition:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
-        return {
-            self.name: [f.to_yaml_repr() for f in self.fields]
-        }
+        return {self.name: [f.to_yaml_repr() for f in self.fields]}
 
 
 @dataclass
@@ -166,9 +164,7 @@ class EnumDefinition:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
-        return {
-            self.name: self.values
-        }
+        return {self.name: self.values}
 
 
 @dataclass
@@ -200,28 +196,28 @@ class OperationDefinition:
         # endpoint: METHOD PATH
         # request: [fields]
         # response: [fields]
-        if self.metadata and 'endpoint' in self.metadata:
+        if self.metadata and "endpoint" in self.metadata:
             result = {}
 
             # Construct endpoint string
-            method = self.metadata.get('http_method', 'GET')
-            path = self.metadata.get('endpoint', '/')
-            result['endpoint'] = f"{method} {path}"
+            method = self.metadata.get("http_method", "GET")
+            path = self.metadata.get("endpoint", "/")
+            result["endpoint"] = f"{method} {path}"
 
             # Request/Response fields
-            if 'request_fields' in self.metadata:
-                result['request'] = self.metadata['request_fields']
+            if "request_fields" in self.metadata:
+                result["request"] = self.metadata["request_fields"]
             elif self.input_type:
-                result['request'] = [f"body: {self.input_type}"]
+                result["request"] = [f"body: {self.input_type}"]
 
-            if 'response_fields' in self.metadata:
-                result['response'] = self.metadata['response_fields']
+            if "response_fields" in self.metadata:
+                result["response"] = self.metadata["response_fields"]
             elif self.output_type:
-                result['response'] = [f"body: {self.output_type}"]
+                result["response"] = [f"body: {self.output_type}"]
 
             # Include source_file for modularization support
             if self.source_file:
-                result['source_file'] = self.source_file
+                result["source_file"] = self.source_file
 
             return result
 
@@ -336,17 +332,11 @@ class PlatformConfig:
         # Validate required fields
         name = data.get("name", "").strip()
         if not name:
-            raise ValueError(
-                "Platform 'name' is required. "
-                "Example: name: 'mobile'"
-            )
+            raise ValueError("Platform 'name' is required. Example: name: 'mobile'")
 
         path = data.get("path", "").strip()
         if not path:
-            raise ValueError(
-                f"Platform 'path' is required for platform '{name}'. "
-                f"Example: path: '../my-app'"
-            )
+            raise ValueError(f"Platform 'path' is required for platform '{name}'. Example: path: '../my-app'")
 
         platform_type_str = data.get("type", "").strip()
         if not platform_type_str:
@@ -368,8 +358,7 @@ class PlatformConfig:
         except ValueError:
             valid_types = ", ".join([t.value for t in PlatformType])
             raise ValueError(
-                f"Invalid platform type '{platform_type_str}' for platform '{name}'. "
-                f"Valid options: {valid_types}"
+                f"Invalid platform type '{platform_type_str}' for platform '{name}'. Valid options: {valid_types}"
             )
 
         # Validate role is valid enum
@@ -377,10 +366,7 @@ class PlatformConfig:
             role = PlatformRole(role_str)
         except ValueError:
             valid_roles = ", ".join([r.value for r in PlatformRole])
-            raise ValueError(
-                f"Invalid platform role '{role_str}' for platform '{name}'. "
-                f"Valid options: {valid_roles}"
-            )
+            raise ValueError(f"Invalid platform role '{role_str}' for platform '{name}'. Valid options: {valid_roles}")
 
         return cls(
             name=name,

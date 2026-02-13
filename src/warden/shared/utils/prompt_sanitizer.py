@@ -33,10 +33,7 @@ class PromptSanitizer:
 
     @staticmethod
     def create_safe_prompt(
-        system_instruction: str,
-        user_query: str,
-        code_context: str | None = None,
-        language: str = "unknown"
+        system_instruction: str, user_query: str, code_context: str | None = None, language: str = "unknown"
     ) -> dict:
         """
         Create a safe prompt structure with explicit role separation.
@@ -56,19 +53,17 @@ class PromptSanitizer:
 
         prompt_parts = [
             f"<system_instruction>\n{system_instruction}\n</system_instruction>",
-            f"\n<user_query>\n{safe_query}\n</user_query>"
+            f"\n<user_query>\n{safe_query}\n</user_query>",
         ]
 
         if code_context:
-            prompt_parts.append(
-                f"\n<source_code language=\"{language}\">\n{safe_code}\n</source_code>"
-            )
+            prompt_parts.append(f'\n<source_code language="{language}">\n{safe_code}\n</source_code>')
 
         return {
             "system_prompt": prompt_parts[0],
             "user_message": "".join(prompt_parts[1:]),
             "safe_formatted": True,
-            "injection_protected": True
+            "injection_protected": True,
         }
 
     @staticmethod
@@ -101,8 +96,7 @@ class PromptSanitizer:
     def _escape_xml(text: str) -> str:
         """Escape XML special characters in text."""
         return (
-            text
-            .replace("&", "&amp;")
+            text.replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace('"', "&quot;")

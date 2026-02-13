@@ -35,6 +35,7 @@ class DetectedProject:
         evidence: List of files/patterns that led to detection
         metadata: Additional detection metadata (version, framework info, etc.)
     """
+
     name: str
     path: str
     platform_type: PlatformType
@@ -314,10 +315,7 @@ class PlatformDetector:
         )
 
         # Filter by confidence threshold
-        filtered_projects = [
-            p for p in detected_projects
-            if p.confidence >= self.min_confidence
-        ]
+        filtered_projects = [p for p in detected_projects if p.confidence >= self.min_confidence]
 
         # Sort by confidence (highest first)
         filtered_projects.sort(key=lambda p: p.confidence, reverse=True)
@@ -532,7 +530,7 @@ class PlatformDetector:
         confidence = (file_score * 0.4 + pattern_ratio * 0.6) * weight
 
         # Apply exclusion penalty
-        confidence *= (1.0 - exclusion_penalty)
+        confidence *= 1.0 - exclusion_penalty
 
         return (confidence, evidence, metadata)
 

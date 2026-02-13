@@ -23,8 +23,7 @@ class MemoryManager:
 
     @staticmethod
     async def stream_files_chunked(
-        code_files: list[CodeFile],
-        chunk_size: int = CHUNK_SIZE
+        code_files: list[CodeFile], chunk_size: int = CHUNK_SIZE
     ) -> AsyncIterator[list[CodeFile]]:
         """
         Stream files in chunks to prevent OOM.
@@ -37,7 +36,7 @@ class MemoryManager:
             Async iterator yielding file chunks
         """
         for i in range(0, len(code_files), chunk_size):
-            chunk = code_files[i:i + chunk_size]
+            chunk = code_files[i : i + chunk_size]
             logger.info("processing_chunk", chunk_index=i // chunk_size, size=len(chunk))
             yield chunk
             # Allow garbage collection between chunks
@@ -56,15 +55,11 @@ class MemoryManager:
             return False
 
     @staticmethod
-    async def process_with_memory_limit(
-        items: list,
-        processor_func,
-        batch_size: int = 10
-    ) -> list:
+    async def process_with_memory_limit(items: list, processor_func, batch_size: int = 10) -> list:
         """Process items with memory constraints."""
         results = []
         for i in range(0, len(items), batch_size):
-            batch = items[i:i + batch_size]
+            batch = items[i : i + batch_size]
             batch_results = await processor_func(batch)
             results.extend(batch_results)
             await asyncio.sleep(0)  # Yield control

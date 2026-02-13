@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Optional
 # Lazy import grpc (optional dependency)
 try:
     from grpc import aio
+
     GRPC_AVAILABLE = True
 except ImportError:
     aio = None  # type: ignore
@@ -39,9 +40,11 @@ from warden.grpc.servicer import WardenServicer
 # Optional: structured logging
 try:
     from warden.shared.infrastructure.logging import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -63,7 +66,7 @@ class GrpcServer:
         bridge: WardenBridge | None = None,
         tls_cert_path: Path | None = None,
         tls_key_path: Path | None = None,
-        tls_ca_path: Path | None = None
+        tls_ca_path: Path | None = None,
     ):
         """
         Initialize gRPC server.
@@ -80,10 +83,7 @@ class GrpcServer:
             RuntimeError: If grpcio not installed
         """
         if not GRPC_AVAILABLE:
-            raise RuntimeError(
-                "gRPC dependencies not installed. "
-                "Install with: pip install warden-core[grpc]"
-            )
+            raise RuntimeError("gRPC dependencies not installed. Install with: pip install warden-core[grpc]")
 
         self.port = port
         self.project_root = project_root or Path.cwd()
@@ -121,14 +121,14 @@ class GrpcServer:
                 cert_path = Path(self.tls_cert_path)
                 if not cert_path.exists():
                     raise FileNotFoundError(f"TLS certificate not found: {cert_path}")
-                with open(cert_path, 'rb') as f:
+                with open(cert_path, "rb") as f:
                     cert_data = f.read()
 
                 # Read private key
                 key_path = Path(self.tls_key_path)
                 if not key_path.exists():
                     raise FileNotFoundError(f"TLS private key not found: {key_path}")
-                with open(key_path, 'rb') as f:
+                with open(key_path, "rb") as f:
                     key_data = f.read()
 
                 # Read CA certificate if provided (for client authentication)
@@ -139,16 +139,15 @@ class GrpcServer:
                     ca_path = Path(self.tls_ca_path)
                     if not ca_path.exists():
                         raise FileNotFoundError(f"TLS CA certificate not found: {ca_path}")
-                    with open(ca_path, 'rb') as f:
+                    with open(ca_path, "rb") as f:
                         ca_data = f.read()
                     require_client_auth = True
 
                 # Create SSL server credentials
                 import grpc
+
                 credentials = grpc.ssl_server_credentials(
-                    [(key_data, cert_data)],
-                    root_certificates=ca_data,
-                    require_client_auth=require_client_auth
+                    [(key_data, cert_data)], root_certificates=ca_data, require_client_auth=require_client_auth
                 )
 
                 # Add secure port
@@ -159,7 +158,7 @@ class GrpcServer:
                     cert_path=str(cert_path),
                     key_path=str(key_path),
                     ca_path=str(ca_path) if ca_path else None,
-                    client_auth_required=require_client_auth
+                    client_auth_required=require_client_auth,
                 )
                 return True
 
@@ -173,9 +172,7 @@ class GrpcServer:
         # Fall back to insecure mode
         elif self.tls_cert_path or self.tls_key_path:
             # Only one of cert/key provided - invalid configuration
-            raise RuntimeError(
-                "Both tls_cert_path and tls_key_path must be provided together"
-            )
+            raise RuntimeError("Both tls_cert_path and tls_key_path must be provided together")
 
         # No TLS configuration - use insecure mode
         self.server.add_insecure_port(listen_addr)
@@ -185,28 +182,20 @@ class GrpcServer:
     async def start_async(self) -> None:
         """Start the gRPC server."""
         if warden_pb2_grpc is None:
-            raise RuntimeError(
-                "gRPC code not generated. Run: python scripts/generate_grpc.py"
-            )
+            raise RuntimeError("gRPC code not generated. Run: python scripts/generate_grpc.py")
 
         self.server = aio.server()
 
         # Create servicer with bridge
-        self.servicer = WardenServicer(
-            bridge=self.bridge,
-            project_root=self.project_root
-        )
+        self.servicer = WardenServicer(bridge=self.bridge, project_root=self.project_root)
 
         # Register servicer
-        warden_pb2_grpc.add_WardenServiceServicer_to_server(
-            self.servicer,
-            self.server
-        )
+        warden_pb2_grpc.add_WardenServiceServicer_to_server(self.servicer, self.server)
 
         # Enable gRPC Reflection for Postman auto-discovery
         if reflection is not None and warden_pb2 is not None:
             SERVICE_NAMES = (
-                warden_pb2.DESCRIPTOR.services_by_name['WardenService'].full_name,
+                warden_pb2.DESCRIPTOR.services_by_name["WardenService"].full_name,
                 reflection.SERVICE_NAME,
             )
             reflection.enable_server_reflection(SERVICE_NAMES, self.server)
@@ -217,12 +206,7 @@ class GrpcServer:
         tls_enabled = self._configure_transport(listen_addr)
 
         await self.server.start_async()
-        logger.info(
-            "grpc_server_started",
-            address=listen_addr,
-            endpoints=51,
-            tls_enabled=tls_enabled
-        )
+        logger.info("grpc_server_started", address=listen_addr, endpoints=51, tls_enabled=tls_enabled)
 
     async def stop_async(self, grace: float = 5.0) -> None:
         """Stop the gRPC server gracefully."""
@@ -243,21 +227,9 @@ async def main_async():
     parser = argparse.ArgumentParser(description="Warden gRPC Server")
     parser.add_argument("--port", type=int, default=50051, help="Port to listen on")
     parser.add_argument("--project", type=str, default=".", help="Project root path")
-    parser.add_argument(
-        "--tls-cert",
-        type=str,
-        help="Path to TLS certificate file (enables TLS)"
-    )
-    parser.add_argument(
-        "--tls-key",
-        type=str,
-        help="Path to TLS private key file (required with --tls-cert)"
-    )
-    parser.add_argument(
-        "--tls-ca",
-        type=str,
-        help="Path to TLS CA certificate for client authentication (optional)"
-    )
+    parser.add_argument("--tls-cert", type=str, help="Path to TLS certificate file (enables TLS)")
+    parser.add_argument("--tls-key", type=str, help="Path to TLS private key file (required with --tls-cert)")
+    parser.add_argument("--tls-ca", type=str, help="Path to TLS CA certificate for client authentication (optional)")
     args = parser.parse_args()
 
     # Convert TLS paths to Path objects if provided
@@ -270,7 +242,7 @@ async def main_async():
         project_root=Path(args.project),
         tls_cert_path=tls_cert_path,
         tls_key_path=tls_key_path,
-        tls_ca_path=tls_ca_path
+        tls_ca_path=tls_ca_path,
     )
 
     await server.start_async()

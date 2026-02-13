@@ -12,6 +12,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class LLMHandler(BaseHandler):
     """Handles LLM-powered analysis and chat streaming."""
 
@@ -19,7 +20,9 @@ class LLMHandler(BaseHandler):
         self.llm_config = llm_config
         self.llm_service = llm_service
 
-    async def analyze_with_llm_async(self, prompt: str, provider: str | None = None, stream: bool = True) -> AsyncIterator[str]:
+    async def analyze_with_llm_async(
+        self, prompt: str, provider: str | None = None, stream: bool = True
+    ) -> AsyncIterator[str]:
         """Execute LLM analysis with streaming or full completion."""
         from warden.llm.factory import create_client
         from warden.llm.types import LlmProvider

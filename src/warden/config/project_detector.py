@@ -26,8 +26,11 @@ class ProjectDetector:
     def LANGUAGE_EXTENSIONS(self):
         """Dynamic mapping from LanguageRegistry."""
         from warden.shared.languages.registry import LanguageRegistry
-        return {ext: LanguageRegistry.get_language_from_path(ext).value
-                for ext in LanguageRegistry.get_all_supported_extensions()}
+
+        return {
+            ext: LanguageRegistry.get_language_from_path(ext).value
+            for ext in LanguageRegistry.get_all_supported_extensions()
+        }
 
     def __init__(self, project_root: Path) -> None:
         """Initialize project detector.
@@ -129,9 +132,7 @@ class ProjectDetector:
 
                 # Poetry format
                 if "tool" in data and "poetry" in data["tool"]:
-                    python_req = data["tool"]["poetry"].get("dependencies", {}).get(
-                        "python"
-                    )
+                    python_req = data["tool"]["poetry"].get("dependencies", {}).get("python")
                     if python_req:
                         # Extract version like "^3.13" -> "3.13"
                         match = re.search(r"(\d+\.\d+)", python_req)
@@ -171,9 +172,7 @@ class ProjectDetector:
             try:
                 content = pom_path.read_text()
                 # Look for <maven.compiler.source>17</maven.compiler.source>
-                match = re.search(
-                    r"<maven\.compiler\.(?:source|target)>(\d+)", content
-                )
+                match = re.search(r"<maven\.compiler\.(?:source|target)>(\d+)", content)
                 if match:
                     return match.group(1)
             except (OSError, UnicodeDecodeError):
@@ -401,11 +400,7 @@ class ProjectDetector:
         if pyproject.exists():
             try:
                 data = tomllib.loads(pyproject.read_text())
-                if (
-                    "tool" in data
-                    and "poetry" in data["tool"]
-                    and "packages" in data["tool"]["poetry"]
-                ):
+                if "tool" in data and "poetry" in data["tool"] and "packages" in data["tool"]["poetry"]:
                     return True
             except (OSError, UnicodeDecodeError, ValueError):
                 pass
@@ -461,15 +456,12 @@ class ProjectDetector:
         """Check if project is a microservice."""
         # Docker indicators
         has_dockerfile = (self.project_root / "Dockerfile").exists()
-        has_compose = (
-            (self.project_root / "docker-compose.yml").exists()
-            or (self.project_root / "docker-compose.yaml").exists()
-        )
+        has_compose = (self.project_root / "docker-compose.yml").exists() or (
+            self.project_root / "docker-compose.yaml"
+        ).exists()
 
         # Kubernetes indicators
-        has_k8s = (self.project_root / "k8s").exists() or (
-            self.project_root / "kubernetes"
-        ).exists()
+        has_k8s = (self.project_root / "k8s").exists() or (self.project_root / "kubernetes").exists()
 
         # Microservice frameworks
 

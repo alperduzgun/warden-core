@@ -61,7 +61,9 @@ class LLMFortificationGenerator(LLMPhaseBase):
 
     def get_system_prompt(self) -> str:
         """Get fortification system prompt."""
-        return PromptTemplates.FIX_GENERATION + """
+        return (
+            PromptTemplates.FIX_GENERATION
+            + """
 
 Fix Generation Guidelines:
 1. SECURITY FIRST: Fixes must completely resolve the vulnerability
@@ -99,6 +101,7 @@ Path Traversal:
 - Implement access control
 
 Return fixes as JSON with code examples."""
+        )
 
     def format_user_prompt(self, context: dict[str, Any]) -> str:
         """Format prompt for fortification generation."""
@@ -110,15 +113,15 @@ Return fixes as JSON with code examples."""
         prompt = f"""Generate a security fix for this vulnerability:
 
 VULNERABILITY:
-Type: {self._get_val(finding, 'type', 'unknown')}
-Severity: {self._get_val(finding, 'severity', 'medium')}
-Message: {self._get_val(finding, 'message', '')}
-File: {self._get_val(finding, 'file_path', '')}
-Line: {self._get_val(finding, 'line_number', 0)}
+Type: {self._get_val(finding, "type", "unknown")}
+Severity: {self._get_val(finding, "severity", "medium")}
+Message: {self._get_val(finding, "message", "")}
+File: {self._get_val(finding, "file_path", "")}
+Line: {self._get_val(finding, "line_number", 0)}
 
 VULNERABLE CODE:
 ```{language}
-{self._get_val(finding, 'code_snippet', '')}
+{self._get_val(finding, "code_snippet", "")}
 ```
 
 SURROUNDING CODE CONTEXT:
@@ -217,9 +220,9 @@ Return as JSON with:
             fortification = Fortification(
                 title=llm_result["title"],
                 detail=f"Fix for {self._get_val(finding, 'type', 'vulnerability')}",
-                file_path=self._get_val(finding, 'file_path', ""),
-                line_number=self._get_val(finding, 'line_number', 0),
-                severity=self._get_val(finding, 'severity', "medium"),
+                file_path=self._get_val(finding, "file_path", ""),
+                line_number=self._get_val(finding, "line_number", 0),
+                severity=self._get_val(finding, "severity", "medium"),
                 original_code=llm_result["original_code"],
                 suggested_code=llm_result["suggested_code"],
                 explanation=llm_result["explanation"],
@@ -281,9 +284,9 @@ Return as JSON with:
                 fortification = Fortification(
                     title=llm_result["title"],
                     detail=f"Fix for {self._get_val(finding, 'type', 'vulnerability')}",
-                    file_path=self._get_val(finding, 'file_path', ""),
-                    line_number=self._get_val(finding, 'line_number', 0),
-                    severity=self._get_val(finding, 'severity', "medium"),
+                    file_path=self._get_val(finding, "file_path", ""),
+                    line_number=self._get_val(finding, "line_number", 0),
+                    severity=self._get_val(finding, "severity", "medium"),
                     original_code=llm_result["original_code"],
                     suggested_code=llm_result["suggested_code"],
                     explanation=llm_result["explanation"],
@@ -300,7 +303,7 @@ Return as JSON with:
 
     def _generate_template_fix(
         self,
-        finding: Any, # Use Any to support both dict and Finding
+        finding: Any,  # Use Any to support both dict and Finding
         framework: str,
         language: str,
     ) -> Fortification | None:
@@ -351,7 +354,12 @@ cursor.execute_async(
     (username,)
 )"""
 
-        elif language == CodeLanguage.JAVASCRIPT.value or language == CodeLanguage.JAVASCRIPT or language == CodeLanguage.TYPESCRIPT.value or language == CodeLanguage.TYPESCRIPT:
+        elif (
+            language == CodeLanguage.JAVASCRIPT.value
+            or language == CodeLanguage.JAVASCRIPT
+            or language == CodeLanguage.TYPESCRIPT.value
+            or language == CodeLanguage.TYPESCRIPT
+        ):
             suggested = """// Use parameterized query
 const query = 'SELECT * FROM users WHERE username = ?';
 db.query(query, [username], (err, results) => {
@@ -432,7 +440,12 @@ load_dotenv()
 API_KEY = os.getenv('API_KEY')
 if not API_KEY:
     raise ValueError('API_KEY environment variable not set')"""
-        elif language == CodeLanguage.JAVASCRIPT.value or language == CodeLanguage.JAVASCRIPT or language == CodeLanguage.TYPESCRIPT.value or language == CodeLanguage.TYPESCRIPT:
+        elif (
+            language == CodeLanguage.JAVASCRIPT.value
+            or language == CodeLanguage.JAVASCRIPT
+            or language == CodeLanguage.TYPESCRIPT.value
+            or language == CodeLanguage.TYPESCRIPT
+        ):
             suggested = """// Use environment variables
 require('dotenv').config();
 
@@ -482,7 +495,12 @@ def safe_path_join(user_input):
         raise ValueError('Invalid file path')
 
     return requested_path"""
-        elif language == CodeLanguage.JAVASCRIPT.value or language == CodeLanguage.JAVASCRIPT or language == CodeLanguage.TYPESCRIPT.value or language == CodeLanguage.TYPESCRIPT:
+        elif (
+            language == CodeLanguage.JAVASCRIPT.value
+            or language == CodeLanguage.JAVASCRIPT
+            or language == CodeLanguage.TYPESCRIPT.value
+            or language == CodeLanguage.TYPESCRIPT
+        ):
             suggested = """// Validate and sanitize file paths
 const path = require('path');
 

@@ -73,32 +73,36 @@ class ExceptionDetector(BaseDetector):
                 # Check for empty catch blocks
                 if self._is_empty_catch_block(node, original_type):
                     line = node.location.start_line if node.location else 0
-                    violations.append(AntiPatternViolation(
-                        pattern_id="empty-catch",
-                        pattern_name="Empty Catch Block",
-                        severity=AntiPatternSeverity.CRITICAL,
-                        message="Silently swallows exceptions",
-                        file_path=code_file.path,
-                        line=line,
-                        code_snippet=self.get_line(lines, line),
-                        suggestion="Log the error or handle it properly",
-                        is_blocker=True,
-                    ))
+                    violations.append(
+                        AntiPatternViolation(
+                            pattern_id="empty-catch",
+                            pattern_name="Empty Catch Block",
+                            severity=AntiPatternSeverity.CRITICAL,
+                            message="Silently swallows exceptions",
+                            file_path=code_file.path,
+                            line=line,
+                            code_snippet=self.get_line(lines, line),
+                            suggestion="Log the error or handle it properly",
+                            is_blocker=True,
+                        )
+                    )
 
                 # Check for bare catch (catches everything without proper handling)
                 if self._is_bare_catch(node, original_type, language, lines):
                     line = node.location.start_line if node.location else 0
-                    violations.append(AntiPatternViolation(
-                        pattern_id="bare-catch",
-                        pattern_name="Bare/Broad Catch Block",
-                        severity=AntiPatternSeverity.CRITICAL,
-                        message="Catches all exceptions including system signals",
-                        file_path=code_file.path,
-                        line=line,
-                        code_snippet=self.get_line(lines, line),
-                        suggestion=self._get_catch_suggestion(language),
-                        is_blocker=True,
-                    ))
+                    violations.append(
+                        AntiPatternViolation(
+                            pattern_id="bare-catch",
+                            pattern_name="Bare/Broad Catch Block",
+                            severity=AntiPatternSeverity.CRITICAL,
+                            message="Catches all exceptions including system signals",
+                            file_path=code_file.path,
+                            line=line,
+                            code_snippet=self.get_line(lines, line),
+                            suggestion=self._get_catch_suggestion(language),
+                            is_blocker=True,
+                        )
+                    )
 
             for child in node.children:
                 walk(child, node)
@@ -112,10 +116,7 @@ class ExceptionDetector(BaseDetector):
             return False
 
         # Check if block has no meaningful statements
-        body_children = [
-            c for c in node.children
-            if c.node_type not in {ASTNodeType.COMMENT, ASTNodeType.IDENTIFIER}
-        ]
+        body_children = [c for c in node.children if c.node_type not in {ASTNodeType.COMMENT, ASTNodeType.IDENTIFIER}]
 
         # Empty or only has "pass" equivalent
         if len(body_children) == 0:
@@ -132,9 +133,7 @@ class ExceptionDetector(BaseDetector):
 
         return False
 
-    def _is_bare_catch(
-        self, node: ASTNode, original_type: str, language: CodeLanguage, lines: list[str]
-    ) -> bool:
+    def _is_bare_catch(self, node: ASTNode, original_type: str, language: CodeLanguage, lines: list[str]) -> bool:
         """Check if catch block catches all exceptions without proper handling."""
         if original_type not in {"except_clause", "catch_clause", "rescue"}:
             return False
@@ -150,19 +149,19 @@ class ExceptionDetector(BaseDetector):
         except_line = lines[line_num - 1].strip()
 
         # Check for bare except (no exception type at all)
-        if re.match(r'^except\s*:', except_line):
+        if re.match(r"^except\s*:", except_line):
             return True
 
         # Check for tuple of exceptions - this is always intentional/specific
-        if re.search(r'except\s*\([^)]+,[^)]+\)', except_line):
+        if re.search(r"except\s*\([^)]+,[^)]+\)", except_line):
             return False  # Multiple exceptions = specific handling
 
         # Check for overly broad single exception types
         broad_patterns = [
-            r'except\s+Exception\s*:',
-            r'except\s+Exception\s+as\s+\w+:',
-            r'except\s+BaseException\s*:',
-            r'except\s+BaseException\s+as\s+\w+:',
+            r"except\s+Exception\s*:",
+            r"except\s+Exception\s+as\s+\w+:",
+            r"except\s+BaseException\s*:",
+            r"except\s+BaseException\s+as\s+\w+:",
         ]
 
         is_broad = any(re.search(p, except_line) for p in broad_patterns)
@@ -175,12 +174,14 @@ class ExceptionDetector(BaseDetector):
         end_line = node.location.end_line or start_line + 10
 
         # Check the exception handler body for proper handling patterns
-        handler_lines = lines[start_line - 1:min(end_line, len(lines))]
+        handler_lines = lines[start_line - 1 : min(end_line, len(lines))]
         handler_text = "\n".join(handler_lines).lower()
 
         # Proper handling patterns - if any exist, don't flag
         proper_handling_patterns = [
-            "logger.", "logging.", "log.",  # Logging
+            "logger.",
+            "logging.",
+            "log.",  # Logging
             "raise",  # Re-raising
             "traceback",  # Traceback handling
             "print(",  # Even print is better than silent
@@ -194,7 +195,7 @@ class ExceptionDetector(BaseDetector):
                 return False  # Has proper handling, not a bare catch
 
         # Check for return with meaningful value
-        if re.search(r'return\s+[^N\s]', handler_text) or re.search(r'return\s+\S+[^None]', handler_text):
+        if re.search(r"return\s+[^N\s]", handler_text) or re.search(r"return\s+\S+[^None]", handler_text):
             return False
 
         # No proper handling found = bare/dangerous catch
@@ -221,17 +222,19 @@ class ExceptionDetector(BaseDetector):
                 generic_types = {"Exception", "Error", "RuntimeError", "panic"}
                 if exception_type in generic_types:
                     line = node.location.start_line if node.location else 0
-                    violations.append(AntiPatternViolation(
-                        pattern_id="generic-exception-raise",
-                        pattern_name="Generic Exception Thrown",
-                        severity=AntiPatternSeverity.HIGH,
-                        message=f"Throwing generic exception type: {exception_type}",
-                        file_path=code_file.path,
-                        line=line,
-                        code_snippet=self.get_line(lines, line),
-                        suggestion="Use or create a specific exception type",
-                        is_blocker=False,
-                    ))
+                    violations.append(
+                        AntiPatternViolation(
+                            pattern_id="generic-exception-raise",
+                            pattern_name="Generic Exception Thrown",
+                            severity=AntiPatternSeverity.HIGH,
+                            message=f"Throwing generic exception type: {exception_type}",
+                            file_path=code_file.path,
+                            line=line,
+                            code_snippet=self.get_line(lines, line),
+                            suggestion="Use or create a specific exception type",
+                            is_blocker=False,
+                        )
+                    )
 
             for child in node.children:
                 walk(child)
@@ -282,35 +285,39 @@ class ExceptionDetector(BaseDetector):
         # Bare catch patterns
         for pattern in patterns.get("bare_catch", []):
             for match in re.finditer(pattern, content, re.MULTILINE):
-                line_num = content[:match.start()].count("\n") + 1
-                violations.append(AntiPatternViolation(
-                    pattern_id="bare-catch",
-                    pattern_name="Bare/Broad Catch Block",
-                    severity=AntiPatternSeverity.CRITICAL,
-                    message=f"Catches all exceptions ({lang_str})",
-                    file_path=code_file.path,
-                    line=line_num,
-                    code_snippet=self.get_line(lines, line_num),
-                    suggestion=self._get_catch_suggestion(language),
-                    is_blocker=True,
-                ))
+                line_num = content[: match.start()].count("\n") + 1
+                violations.append(
+                    AntiPatternViolation(
+                        pattern_id="bare-catch",
+                        pattern_name="Bare/Broad Catch Block",
+                        severity=AntiPatternSeverity.CRITICAL,
+                        message=f"Catches all exceptions ({lang_str})",
+                        file_path=code_file.path,
+                        line=line_num,
+                        code_snippet=self.get_line(lines, line_num),
+                        suggestion=self._get_catch_suggestion(language),
+                        is_blocker=True,
+                    )
+                )
 
         # Empty catch pattern
         empty_pattern = patterns.get("empty_catch")
         if empty_pattern:
             for match in re.finditer(empty_pattern, content, re.MULTILINE):
-                line_num = content[:match.start()].count("\n") + 1
-                violations.append(AntiPatternViolation(
-                    pattern_id="empty-catch",
-                    pattern_name="Empty Catch Block",
-                    severity=AntiPatternSeverity.CRITICAL,
-                    message=f"Silently swallows exceptions ({lang_str})",
-                    file_path=code_file.path,
-                    line=line_num,
-                    code_snippet=self.get_line(lines, line_num),
-                    suggestion="Log the error or handle it properly",
-                    is_blocker=True,
-                ))
+                line_num = content[: match.start()].count("\n") + 1
+                violations.append(
+                    AntiPatternViolation(
+                        pattern_id="empty-catch",
+                        pattern_name="Empty Catch Block",
+                        severity=AntiPatternSeverity.CRITICAL,
+                        message=f"Silently swallows exceptions ({lang_str})",
+                        file_path=code_file.path,
+                        line=line_num,
+                        code_snippet=self.get_line(lines, line_num),
+                        suggestion="Log the error or handle it properly",
+                        is_blocker=True,
+                    )
+                )
 
         return violations
 
@@ -332,18 +339,20 @@ class ExceptionDetector(BaseDetector):
 
         for pattern in patterns_to_check:
             for match in re.finditer(pattern, content, re.MULTILINE):
-                line_num = content[:match.start()].count("\n") + 1
-                violations.append(AntiPatternViolation(
-                    pattern_id="generic-exception-raise",
-                    pattern_name="Generic Exception Thrown",
-                    severity=AntiPatternSeverity.HIGH,
-                    message=f"Throwing generic exception type ({lang_str})",
-                    file_path=code_file.path,
-                    line=line_num,
-                    code_snippet=self.get_line(lines, line_num),
-                    suggestion="Use or create a specific exception type",
-                    is_blocker=False,
-                ))
+                line_num = content[: match.start()].count("\n") + 1
+                violations.append(
+                    AntiPatternViolation(
+                        pattern_id="generic-exception-raise",
+                        pattern_name="Generic Exception Thrown",
+                        severity=AntiPatternSeverity.HIGH,
+                        message=f"Throwing generic exception type ({lang_str})",
+                        file_path=code_file.path,
+                        line=line_num,
+                        code_snippet=self.get_line(lines, line_num),
+                        suggestion="Use or create a specific exception type",
+                        is_blocker=False,
+                    )
+                )
 
         return violations
 

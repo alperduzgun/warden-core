@@ -4,6 +4,7 @@ LLM Performance Metrics Tracking
 Collects and aggregates metrics for LLM requests across tiers.
 Supports per-frame cost attribution via context-based scoping.
 """
+
 import threading
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -14,7 +15,7 @@ from typing import Dict, List, Optional
 _global_metrics_collector = None
 
 # Context variable for automatic frame attribution
-_current_frame_scope: ContextVar[str | None] = ContextVar('_current_frame_scope', default=None)
+_current_frame_scope: ContextVar[str | None] = ContextVar("_current_frame_scope", default=None)
 
 
 def get_global_metrics_collector():
@@ -28,6 +29,7 @@ def get_global_metrics_collector():
 @dataclass
 class LLMRequestMetrics:
     """Metrics for a single LLM request."""
+
     tier: str  # "fast" or "smart"
     provider: str  # "ollama", "azure_openai", etc.
     model: str
@@ -43,6 +45,7 @@ class LLMRequestMetrics:
 @dataclass
 class FrameMetrics:
     """Per-frame LLM usage metrics."""
+
     frame_name: str
     llm_calls: int = 0
     input_tokens: int = 0
@@ -55,6 +58,7 @@ class FrameMetrics:
 @dataclass
 class LLMMetricsCollector:
     """Collects and aggregates LLM metrics."""
+
     requests: list[LLMRequestMetrics] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
@@ -77,24 +81,26 @@ class LLMMetricsCollector:
         error: str | None = None,
         frame_name: str | None = None,
         input_tokens: int = 0,
-        output_tokens: int = 0
+        output_tokens: int = 0,
     ):
         """Record a single LLM request with optional frame attribution."""
         # Auto-detect frame from context if not explicitly provided
         effective_frame = frame_name or _current_frame_scope.get(None) or "_unattributed"
 
         with self._lock:
-            self.requests.append(LLMRequestMetrics(
-                tier=tier,
-                provider=provider,
-                model=model,
-                success=success,
-                duration_ms=duration_ms,
-                error=error,
-                frame_name=effective_frame,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens
-            ))
+            self.requests.append(
+                LLMRequestMetrics(
+                    tier=tier,
+                    provider=provider,
+                    model=model,
+                    success=success,
+                    duration_ms=duration_ms,
+                    error=error,
+                    frame_name=effective_frame,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
+            )
 
     def get_frame_metrics(self) -> list[FrameMetrics]:
         """Get per-frame metrics breakdown."""
@@ -110,9 +116,7 @@ class LLMMetricsCollector:
                 fm.input_tokens += req.input_tokens
                 fm.output_tokens += req.output_tokens
                 fm.total_duration_ms += req.duration_ms
-                fm.estimated_cost_usd += self._estimate_cost(
-                    req.input_tokens, req.output_tokens, req.model
-                )
+                fm.estimated_cost_usd += self._estimate_cost(req.input_tokens, req.output_tokens, req.model)
                 if not req.success:
                     fm.errors += 1
 
@@ -144,10 +148,7 @@ class LLMMetricsCollector:
 
         total_time_ms = sum(r.duration_ms for r in requests_snapshot)
 
-        summary = {
-            "totalRequests": len(requests_snapshot),
-            "totalTime": self._format_duration(total_time_ms)
-        }
+        summary = {"totalRequests": len(requests_snapshot), "totalTime": self._format_duration(total_time_ms)}
 
         if fast_requests:
             summary["fastTier"] = self._tier_stats(fast_requests, requests_snapshot)
@@ -164,7 +165,9 @@ class LLMMetricsCollector:
 
         return summary
 
-    def _tier_stats(self, requests: list[LLMRequestMetrics], all_requests: list[LLMRequestMetrics] | None = None) -> dict:
+    def _tier_stats(
+        self, requests: list[LLMRequestMetrics], all_requests: list[LLMRequestMetrics] | None = None
+    ) -> dict:
         """Calculate statistics for a tier."""
         if not requests:
             return None
@@ -187,9 +190,11 @@ class LLMMetricsCollector:
             "percentage": round(len(requests) / len(all_requests) * 100, 1),
             "successRate": round(len(successful) / len(requests) * 100, 1) if requests else 0,
             "timeouts": len([r for r in requests if not r.success and "timeout" in (r.error or "").lower()]),
-            "avgResponseTime": f"{sum(r.duration_ms for r in successful) / len(successful) / 1000:.1f}s" if successful else "N/A",
+            "avgResponseTime": f"{sum(r.duration_ms for r in successful) / len(successful) / 1000:.1f}s"
+            if successful
+            else "N/A",
             "totalTime": self._format_duration(total_time_ms),
-            "timePercentage": round(total_time_ms / total_scan_time_ms * 100, 1) if total_scan_time_ms > 0 else 0
+            "timePercentage": round(total_time_ms / total_scan_time_ms * 100, 1) if total_scan_time_ms > 0 else 0,
         }
 
     def _format_duration(self, ms: int) -> str:
@@ -233,8 +238,10 @@ class LLMMetricsCollector:
             "fastTierRequests": len(fast_requests),
             "explanation": {
                 "cost": f"{len(fast_requests)} requests x ${COST_PER_SMART_REQUEST} = ${cost_savings:.2f} saved",
-                "time": f"{len(fast_requests)} requests x ({smart_avg/1000:.1f}s - {fast_avg/1000:.1f}s) = {self._format_duration(int(time_saved_ms))} saved" if time_saved_ms > 0 else "No time savings"
-            }
+                "time": f"{len(fast_requests)} requests x ({smart_avg / 1000:.1f}s - {fast_avg / 1000:.1f}s) = {self._format_duration(int(time_saved_ms))} saved"
+                if time_saved_ms > 0
+                else "No time savings",
+            },
         }
 
     def _detect_issues(self, requests_snapshot: list[LLMRequestMetrics] | None = None) -> list[dict]:
@@ -251,17 +258,19 @@ class LLMMetricsCollector:
 
             if failure_rate > 0.1:  # >10% failure rate
                 providers = list({r.provider for r in failed})
-                issues.append({
-                    "type": "reliability",
-                    "tier": "fast",
-                    "count": len(failed),
-                    "severity": "warning",
-                    "message": f"{len(failed)} fast tier requests ({', '.join(providers)}) failed or timed out",
-                    "recommendations": [
-                        "Check local service (Ollama) health",
-                        "Increase fast tier timeout",
-                        "Verify Groq/Cloud failover status"
-                    ]
-                })
+                issues.append(
+                    {
+                        "type": "reliability",
+                        "tier": "fast",
+                        "count": len(failed),
+                        "severity": "warning",
+                        "message": f"{len(failed)} fast tier requests ({', '.join(providers)}) failed or timed out",
+                        "recommendations": [
+                            "Check local service (Ollama) health",
+                            "Increase fast tier timeout",
+                            "Verify Groq/Cloud failover status",
+                        ],
+                    }
+                )
 
         return issues

@@ -198,14 +198,16 @@ class ExpressExtractor(BaseContractExtractor):
                 # Try to find request body type
                 input_type = self._extract_body_type(content, i)
 
-                operations.append(OperationDefinition(
-                    name=op_name,
-                    operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
-                    input_type=input_type,
-                    description=f"{method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+                operations.append(
+                    OperationDefinition(
+                        name=op_name,
+                        operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
+                        input_type=input_type,
+                        description=f"{method.upper()} {path}",
+                        source_file=str(file_path),
+                        source_line=i + 1,
+                    )
+                )
 
             # Check for typed request body
             typed_match = typed_handler_pattern.search(line)
@@ -214,21 +216,23 @@ class ExpressExtractor(BaseContractExtractor):
                 path = typed_match.group(2)
                 body_type = typed_match.group(3)
 
-                operations.append(OperationDefinition(
-                    name=self._path_to_operation_name(path, method),
-                    operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
-                    input_type=body_type,
-                    description=f"{method.upper()} {path}",
-                    source_file=str(file_path),
-                    source_line=i + 1,
-                ))
+                operations.append(
+                    OperationDefinition(
+                        name=self._path_to_operation_name(path, method),
+                        operation_type=self.HTTP_METHODS.get(method, OperationType.QUERY),
+                        input_type=body_type,
+                        description=f"{method.upper()} {path}",
+                        source_file=str(file_path),
+                        source_line=i + 1,
+                    )
+                )
 
         return operations
 
     def _extract_body_type(self, content: str, line_index: int) -> str | None:
         """Try to extract request body type from handler."""
         lines = content.split("\n")
-        search_range = "\n".join(lines[line_index:line_index + 10])
+        search_range = "\n".join(lines[line_index : line_index + 10])
 
         # req.body as Type
         body_pattern = re.compile(r"req\.body\s+as\s+(\w+)")
@@ -264,16 +268,14 @@ class ExpressExtractor(BaseContractExtractor):
 
         for match in interface_pattern.finditer(content):
             model = self._parse_model_body(
-                match.group(1), match.group(2), file_path,
-                content[:match.start()].count("\n") + 1
+                match.group(1), match.group(2), file_path, content[: match.start()].count("\n") + 1
             )
             if model:
                 models.append(model)
 
         for match in type_pattern.finditer(content):
             model = self._parse_model_body(
-                match.group(1), match.group(2), file_path,
-                content[:match.start()].count("\n") + 1
+                match.group(1), match.group(2), file_path, content[: match.start()].count("\n") + 1
             )
             if model:
                 models.append(model)
@@ -301,13 +303,15 @@ class ExpressExtractor(BaseContractExtractor):
             is_optional = match.group(2) == "?"
             field_type = match.group(3).strip()
 
-            fields.append(FieldDefinition(
-                name=field_name,
-                type_name=self._clean_type(field_type),
-                is_optional=is_optional,
-                is_array=field_type.endswith("[]") or "Array<" in field_type,
-                source_file=str(file_path),
-            ))
+            fields.append(
+                FieldDefinition(
+                    name=field_name,
+                    type_name=self._clean_type(field_type),
+                    is_optional=is_optional,
+                    is_array=field_type.endswith("[]") or "Array<" in field_type,
+                    source_file=str(file_path),
+                )
+            )
 
         if fields:
             return ModelDefinition(
@@ -324,15 +328,16 @@ class ExpressExtractor(BaseContractExtractor):
         enum_pattern = re.compile(r"(?:export\s+)?enum\s+(\w+)\s*\{([^}]+)\}", re.MULTILINE)
 
         for match in enum_pattern.finditer(content):
-            values = [v.strip().split("=")[0].strip()
-                     for v in match.group(2).split(",") if v.strip()]
+            values = [v.strip().split("=")[0].strip() for v in match.group(2).split(",") if v.strip()]
             if values:
-                enums.append(EnumDefinition(
-                    name=match.group(1),
-                    values=values,
-                    source_file=str(file_path),
-                    source_line=content[:match.start()].count("\n") + 1,
-                ))
+                enums.append(
+                    EnumDefinition(
+                        name=match.group(1),
+                        values=values,
+                        source_file=str(file_path),
+                        source_line=content[: match.start()].count("\n") + 1,
+                    )
+                )
         return enums
 
     def _path_to_operation_name(self, path: str, method: str) -> str:
@@ -345,7 +350,9 @@ class ExpressExtractor(BaseContractExtractor):
 
         resource = parts[-1]
         resource = re.sub(r"[-_](.)", lambda m: m.group(1).upper(), resource)
-        prefix = {"get": "get", "post": "create", "put": "update", "patch": "update", "delete": "delete"}.get(method, method)
+        prefix = {"get": "get", "post": "create", "put": "update", "patch": "update", "delete": "delete"}.get(
+            method, method
+        )
 
         return f"{prefix}{resource[0].upper()}{resource[1:]}" if resource else f"{prefix}Resource"
 
@@ -362,5 +369,12 @@ class ExpressExtractor(BaseContractExtractor):
 
         type_str = re.sub(r"\s*\|\s*(?:null|undefined)", "", type_str)
 
-        mapping = {"string": "string", "number": "float", "boolean": "bool", "Date": "datetime", "any": "any", "void": "void"}
+        mapping = {
+            "string": "string",
+            "number": "float",
+            "boolean": "bool",
+            "Date": "datetime",
+            "any": "any",
+            "void": "void",
+        }
         return mapping.get(type_str, type_str)

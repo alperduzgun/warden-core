@@ -76,7 +76,7 @@ class ModuleBaseline:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "debt_count": self.debt_count,
-            "oldest_debt_age_days": self.get_oldest_debt_age_days()
+            "oldest_debt_age_days": self.get_oldest_debt_age_days(),
         }
 
 
@@ -102,8 +102,9 @@ class BaselineMeta:
             "modules": self.modules,
             "total_findings": self.total_findings,
             "total_debt": self.total_debt,
-            "migrated_from_legacy": self.migrated_from_legacy
+            "migrated_from_legacy": self.migrated_from_legacy,
         }
+
 
 class BaselineManager:
     """
@@ -115,15 +116,15 @@ class BaselineManager:
         self.config = config or {}
 
         # Default Config
-        self.baseline_config = self.config.get('baseline', {})
-        self.enabled = self.baseline_config.get('enabled', False)
+        self.baseline_config = self.config.get("baseline", {})
+        self.enabled = self.baseline_config.get("enabled", False)
 
         # Resolve baseline path
-        raw_path = self.baseline_config.get('path', '.warden/baseline.json')
+        raw_path = self.baseline_config.get("path", ".warden/baseline.json")
         self.baseline_path = self.project_root / raw_path
 
-        self.fetch_command = self.baseline_config.get('fetch_command')
-        self.auto_fetch = self.baseline_config.get('auto_fetch', False)
+        self.fetch_command = self.baseline_config.get("fetch_command")
+        self.auto_fetch = self.baseline_config.get("auto_fetch", False)
 
     def fetch_latest_baseline(self) -> Path | None:
         """
@@ -142,7 +143,7 @@ class BaselineManager:
 
             # Security: Use shlex.split to avoid shell injection.
             # Complex shell commands (pipes, etc.) should be wrapped in a script.
-            shell_chars = set('|><&;$`')
+            shell_chars = set("|><&;$`")
             if any(c in self.fetch_command for c in shell_chars):
                 logger.error(
                     "fetch_command_has_shell_features",
@@ -157,7 +158,7 @@ class BaselineManager:
                 cwd=str(self.project_root),
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if self.baseline_path.exists():
@@ -182,7 +183,7 @@ class BaselineManager:
             return None
 
         try:
-            with open(self.baseline_path, encoding='utf-8') as f:
+            with open(self.baseline_path, encoding="utf-8") as f:
                 data = json.load(f)
                 return data
         except Exception as e:
@@ -213,33 +214,33 @@ class BaselineManager:
 
         findings = []
         # Handle structured report with frameResults
-        if 'frameResults' in data:
-            for fr in data['frameResults']:
-                findings.extend(fr.get('findings', []))
+        if "frameResults" in data:
+            for fr in data["frameResults"]:
+                findings.extend(fr.get("findings", []))
         # Handle flat list or legacy format
-        elif 'findings' in data:
-            findings = data['findings']
+        elif "findings" in data:
+            findings = data["findings"]
 
         fingerprints = set()
         for f in findings:
-            fp = f.get('fingerprint')
+            fp = f.get("fingerprint")
             if fp:
                 fingerprints.add(fp)
             else:
                 # Dynamic fingerprint generation if missing in baseline
-                rule = f.get('id') or f.get('rule_id') or f.get('ruleId', 'unknown')
+                rule = f.get("id") or f.get("rule_id") or f.get("ruleId", "unknown")
 
                 # Extract path from location "file:line" or similar
-                location = f.get('location', '')
-                path = f.get('file_path') or f.get('path') or f.get('file')
+                location = f.get("location", "")
+                path = f.get("file_path") or f.get("path") or f.get("file")
                 if not path and location:
-                    path = location.split(':')[0]
+                    path = location.split(":")[0]
 
-                path = path or 'unknown'
-                msg = f.get('message', '')
+                path = path or "unknown"
+                msg = f.get("message", "")
 
                 # Include code snippet to distinguish findings in same file
-                snippet = f.get('code_snippet') or f.get('codeSnippet') or f.get('code', '')
+                snippet = f.get("code_snippet") or f.get("codeSnippet") or f.get("code", "")
 
                 # We can't easily reproduce context hash without code, so rely on these
                 composite = f"{rule}:{path}:{msg}:{snippet}"
@@ -399,30 +400,33 @@ class BaselineManager:
         total_findings = 0
 
         for module_name, findings in module_findings.items():
-            module_baseline = ModuleBaseline(module_name, {
-                "findings": findings,
-                "debt_items": [],  # Fresh start for debt tracking
-                "created_at": now,
-                "updated_at": now
-            })
+            module_baseline = ModuleBaseline(
+                module_name,
+                {
+                    "findings": findings,
+                    "debt_items": [],  # Fresh start for debt tracking
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
             self.save_module_baseline(module_baseline)
             total_findings += len(findings)
 
         # Create meta
-        meta = BaselineMeta({
-            "version": "2.0",
-            "created_at": now,
-            "updated_at": now,
-            "modules": list(module_findings.keys()),
-            "total_findings": total_findings,
-            "total_debt": 0,
-            "migrated_from_legacy": True
-        })
+        meta = BaselineMeta(
+            {
+                "version": "2.0",
+                "created_at": now,
+                "updated_at": now,
+                "modules": list(module_findings.keys()),
+                "total_findings": total_findings,
+                "total_debt": 0,
+                "migrated_from_legacy": True,
+            }
+        )
         self.save_meta(meta)
 
-        logger.info("baseline_migration_complete",
-                    modules=len(module_findings),
-                    findings=total_findings)
+        logger.info("baseline_migration_complete", modules=len(module_findings), findings=total_findings)
 
         return True
 
@@ -465,11 +469,9 @@ class BaselineManager:
         module_baseline = self.load_module_baseline(module_name)
         if not module_baseline:
             # Create new baseline for this module
-            module_baseline = ModuleBaseline(module_name, {
-                "findings": [],
-                "debt_items": [],
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
+            module_baseline = ModuleBaseline(
+                module_name, {"findings": [], "debt_items": [], "created_at": datetime.now(timezone.utc).isoformat()}
+            )
 
         now = datetime.now(timezone.utc).isoformat()
 
@@ -506,10 +508,14 @@ class BaselineManager:
                 debt_item = {
                     "fingerprint": fp,
                     "first_seen": now,
-                    "rule_id": get_finding_attribute(finding, "id") or get_finding_attribute(finding, "rule_id") or get_finding_attribute(finding, "ruleId"),
-                    "file_path": get_finding_attribute(finding, "file_path") or get_finding_attribute(finding, "path") or get_finding_attribute(finding, "file"),
+                    "rule_id": get_finding_attribute(finding, "id")
+                    or get_finding_attribute(finding, "rule_id")
+                    or get_finding_attribute(finding, "ruleId"),
+                    "file_path": get_finding_attribute(finding, "file_path")
+                    or get_finding_attribute(finding, "path")
+                    or get_finding_attribute(finding, "file"),
                     "message": get_finding_attribute(finding, "message"),
-                    "severity": get_finding_attribute(finding, "severity")
+                    "severity": get_finding_attribute(finding, "severity"),
                 }
                 module_baseline.debt_items.append(debt_item)
                 new_debt += 1
@@ -520,10 +526,7 @@ class BaselineManager:
         resolved_debt = len(resolved_debt_fps)
 
         # Keep only debt items that are still present in current findings
-        module_baseline.debt_items = [
-            d for d in module_baseline.debt_items
-            if d.get("fingerprint") in current_fps
-        ]
+        module_baseline.debt_items = [d for d in module_baseline.debt_items if d.get("fingerprint") in current_fps]
 
         # Update findings
         module_baseline.findings = current_findings
@@ -545,7 +548,7 @@ class BaselineManager:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_debt": 0,
             "modules": {},
-            "warnings": []
+            "warnings": [],
         }
 
         for module_name in self.list_modules():
@@ -559,7 +562,7 @@ class BaselineManager:
             module_report = {
                 "debt_count": debt_count,
                 "oldest_debt_age_days": oldest_age,
-                "debt_items": module_baseline.debt_items
+                "debt_items": module_baseline.debt_items,
             }
 
             report["modules"][module_name] = module_report
@@ -567,23 +570,29 @@ class BaselineManager:
 
             # Generate warnings based on age thresholds
             if oldest_age >= 30:
-                report["warnings"].append({
-                    "level": "critical",
-                    "module": module_name,
-                    "message": f"Module '{module_name}' has debt older than 30 days ({oldest_age} days)"
-                })
+                report["warnings"].append(
+                    {
+                        "level": "critical",
+                        "module": module_name,
+                        "message": f"Module '{module_name}' has debt older than 30 days ({oldest_age} days)",
+                    }
+                )
             elif oldest_age >= 14:
-                report["warnings"].append({
-                    "level": "warning",
-                    "module": module_name,
-                    "message": f"Module '{module_name}' has debt older than 14 days ({oldest_age} days)"
-                })
+                report["warnings"].append(
+                    {
+                        "level": "warning",
+                        "module": module_name,
+                        "message": f"Module '{module_name}' has debt older than 14 days ({oldest_age} days)",
+                    }
+                )
             elif oldest_age >= 7:
-                report["warnings"].append({
-                    "level": "info",
-                    "module": module_name,
-                    "message": f"Module '{module_name}' has debt older than 7 days ({oldest_age} days)"
-                })
+                report["warnings"].append(
+                    {
+                        "level": "info",
+                        "module": module_name,
+                        "message": f"Module '{module_name}' has debt older than 7 days ({oldest_age} days)",
+                    }
+                )
 
         return report
 
@@ -593,7 +602,7 @@ class BaselineManager:
         self,
         scan_results: dict[str, Any],
         modules_to_update: list[str] | None = None,
-        module_map: dict[str, Any] = None
+        module_map: dict[str, Any] = None,
     ) -> dict[str, Any]:
         """
         Update baseline for specific modules based on scan results.
@@ -633,12 +642,7 @@ class BaselineManager:
             findings_by_module[module_name].append(finding)
 
         # Update each module
-        stats = {
-            "modules_updated": 0,
-            "total_new_debt": 0,
-            "total_resolved_debt": 0,
-            "modules": {}
-        }
+        stats = {"modules_updated": 0, "total_new_debt": 0, "total_resolved_debt": 0, "modules": {}}
 
         for module_name, findings in findings_by_module.items():
             new_debt, resolved_debt, total_debt = self.update_debt(module_name, findings)
@@ -647,7 +651,7 @@ class BaselineManager:
                 "findings": len(findings),
                 "new_debt": new_debt,
                 "resolved_debt": resolved_debt,
-                "total_debt": total_debt
+                "total_debt": total_debt,
             }
             stats["modules_updated"] += 1
             stats["total_new_debt"] += new_debt
@@ -658,12 +662,10 @@ class BaselineManager:
         meta.updated_at = datetime.now(timezone.utc).isoformat()
         meta.modules = self.list_modules()
         meta.total_findings = sum(
-            len(self.load_module_baseline(m).findings) if self.load_module_baseline(m) else 0
-            for m in meta.modules
+            len(self.load_module_baseline(m).findings) if self.load_module_baseline(m) else 0 for m in meta.modules
         )
         meta.total_debt = sum(
-            self.load_module_baseline(m).debt_count if self.load_module_baseline(m) else 0
-            for m in meta.modules
+            self.load_module_baseline(m).debt_count if self.load_module_baseline(m) else 0 for m in meta.modules
         )
         self.save_meta(meta)
 

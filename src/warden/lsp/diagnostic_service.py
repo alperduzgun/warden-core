@@ -76,9 +76,7 @@ class LSPDiagnosticService:
                 continue
 
             try:
-                lang_findings = await self._collect_language_diagnostics_async(
-                    language, files, project_root
-                )
+                lang_findings = await self._collect_language_diagnostics_async(language, files, project_root)
                 findings.extend(lang_findings)
             except Exception as e:
                 logger.warning(
@@ -106,9 +104,7 @@ class LSPDiagnosticService:
 
         try:
             # Get or spawn LSP client
-            client = await self.manager.get_client_async(
-                language, str(project_root)
-            )
+            client = await self.manager.get_client_async(language, str(project_root))
 
             if not client:
                 logger.debug("lsp_client_unavailable", language=language)
@@ -132,11 +128,7 @@ class LSPDiagnosticService:
                         file_path = project_root / file_path
 
                     # Open document in LSP
-                    await client.open_document_async(
-                        str(file_path),
-                        language,
-                        file.content
-                    )
+                    await client.open_document_async(str(file_path), language, file.content)
 
                     # Wait a bit for diagnostics to arrive
                     await asyncio.sleep(0.5)
@@ -149,16 +141,11 @@ class LSPDiagnosticService:
                     )
 
             # Remove handler
-            client.remove_notification_handler(
-                "textDocument/publishDiagnostics",
-                diagnostic_handler
-            )
+            client.remove_notification_handler("textDocument/publishDiagnostics", diagnostic_handler)
 
             # Convert diagnostics to findings
             for diagnostic_params in diagnostics_received:
-                file_findings = self._convert_diagnostics_to_findings(
-                    diagnostic_params, language
-                )
+                file_findings = self._convert_diagnostics_to_findings(diagnostic_params, language)
                 findings.extend(file_findings)
 
             # Close documents
@@ -205,9 +192,7 @@ class LSPDiagnosticService:
 
         for diagnostic in diagnostics:
             try:
-                finding = self._convert_single_diagnostic(
-                    diagnostic, file_path, language
-                )
+                finding = self._convert_single_diagnostic(diagnostic, file_path, language)
                 if finding:
                     findings.append(finding)
             except Exception as e:
@@ -229,10 +214,10 @@ class LSPDiagnosticService:
         # Map LSP severity to Warden severity (strings)
         lsp_severity = diagnostic.get("severity", 2)  # 1=Error, 2=Warning, 3=Info, 4=Hint
         severity_map = {
-            1: "critical",   # Error
-            2: "medium",     # Warning
-            3: "low",        # Info
-            4: "low",        # Hint
+            1: "critical",  # Error
+            2: "medium",  # Warning
+            3: "low",  # Info
+            4: "low",  # Hint
         }
         severity = severity_map.get(lsp_severity, "low")
 
@@ -256,15 +241,12 @@ class LSPDiagnosticService:
             detail=f"LSP diagnostic from {source}" + (f" (code: {code})" if code else ""),
             code=f"Line {line}, Column {character}",
             line=line,
-            column=character
+            column=character,
         )
 
         return finding
 
-    def _group_files_by_language(
-        self,
-        code_files: list[CodeFile]
-    ) -> dict[str, list[CodeFile]]:
+    def _group_files_by_language(self, code_files: list[CodeFile]) -> dict[str, list[CodeFile]]:
         """Group code files by language."""
         groups: dict[str, list[CodeFile]] = {}
 

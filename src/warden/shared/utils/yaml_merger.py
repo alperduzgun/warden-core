@@ -6,6 +6,7 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+
 class YAMLMerger:
     """Helper to merge valid Warden YAML configuration files."""
 
@@ -34,7 +35,7 @@ class YAMLMerger:
             "global_rules": [],
             "frame_rules": {},
             "ai_validation": {},
-            "exclude": {}
+            "exclude": {},
         }
 
         if not dir_path.exists() or not dir_path.is_dir():

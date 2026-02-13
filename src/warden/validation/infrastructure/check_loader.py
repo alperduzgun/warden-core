@@ -228,9 +228,7 @@ class CheckLoader:
 
         return checks
 
-    def _load_local_check(
-        self, check_path: Path, manifest_path: Path
-    ) -> type[ValidationCheck]:
+    def _load_local_check(self, check_path: Path, manifest_path: Path) -> type[ValidationCheck]:
         """
         Load a single local check.
 
@@ -268,18 +266,12 @@ class CheckLoader:
         check_class = None
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
-            if (
-                isinstance(attr, type)
-                and issubclass(attr, ValidationCheck)
-                and attr is not ValidationCheck
-            ):
+            if isinstance(attr, type) and issubclass(attr, ValidationCheck) and attr is not ValidationCheck:
                 check_class = attr
                 break
 
         if check_class is None:
-            raise CheckLoadError(
-                f"No ValidationCheck subclass found in {check_module_path}"
-            )
+            raise CheckLoadError(f"No ValidationCheck subclass found in {check_module_path}")
 
         # Validate
         self._validate_check_class(check_class)
@@ -298,21 +290,15 @@ class CheckLoader:
         """
         # Check it's a subclass
         if not issubclass(check_class, ValidationCheck):
-            raise CheckValidationError(
-                f"{check_class.__name__} must inherit from ValidationCheck"
-            )
+            raise CheckValidationError(f"{check_class.__name__} must inherit from ValidationCheck")
 
         # Check required attributes
         required_attrs = ["id", "name", "execute"]
         for attr in required_attrs:
             if not hasattr(check_class, attr):
-                raise CheckValidationError(
-                    f"{check_class.__name__} missing required attribute: {attr}"
-                )
+                raise CheckValidationError(f"{check_class.__name__} missing required attribute: {attr}")
 
-    def _deduplicate_checks(
-        self, checks: list[type[ValidationCheck]]
-    ) -> list[type[ValidationCheck]]:
+    def _deduplicate_checks(self, checks: list[type[ValidationCheck]]) -> list[type[ValidationCheck]]:
         """
         Remove duplicate checks (by check.id).
 

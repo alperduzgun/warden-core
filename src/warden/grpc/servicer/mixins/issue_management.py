@@ -57,22 +57,16 @@ class IssueManagementMixin:
 
             if request.file_path_pattern:
                 pattern = request.file_path_pattern
-                issues = [
-                    i for i in issues
-                    if fnmatch.fnmatch(i.get("file_path", ""), pattern)
-                ]
+                issues = [i for i in issues if fnmatch.fnmatch(i.get("file_path", ""), pattern)]
 
             total_count = len(issues)
 
             if request.offset > 0:
-                issues = issues[request.offset:]
+                issues = issues[request.offset :]
             if request.limit > 0:
-                issues = issues[:request.limit]
+                issues = issues[: request.limit]
 
-            response = warden_pb2.IssueList(
-                total_count=total_count,
-                filtered_count=len(issues)
-            )
+            response = warden_pb2.IssueList(total_count=total_count, filtered_count=len(issues))
 
             for issue in issues:
                 response.issues.append(ProtoConverters.convert_issue(issue))
@@ -137,15 +131,11 @@ class IssueManagementMixin:
                 },
             )
 
-            return warden_pb2.IssueActionResponse(
-                success=True, issue=ProtoConverters.convert_issue(issue)
-            )
+            return warden_pb2.IssueActionResponse(success=True, issue=ProtoConverters.convert_issue(issue))
 
         except Exception as e:
             logger.error("grpc_resolve_issue_error: %s", str(e))
-            return warden_pb2.IssueActionResponse(
-                success=False, error_message=str(e)
-            )
+            return warden_pb2.IssueActionResponse(success=False, error_message=str(e))
 
     async def SuppressIssue(self, request, context) -> "warden_pb2.IssueActionResponse":
         """Mark issue as suppressed (false positive) with persistence."""
@@ -177,15 +167,11 @@ class IssueManagementMixin:
                 },
             )
 
-            return warden_pb2.IssueActionResponse(
-                success=True, issue=ProtoConverters.convert_issue(issue)
-            )
+            return warden_pb2.IssueActionResponse(success=True, issue=ProtoConverters.convert_issue(issue))
 
         except Exception as e:
             logger.error("grpc_suppress_issue_error: %s", str(e))
-            return warden_pb2.IssueActionResponse(
-                success=False, error_message=str(e)
-            )
+            return warden_pb2.IssueActionResponse(success=False, error_message=str(e))
 
     async def ReopenIssue(self, request, context) -> "warden_pb2.IssueActionResponse":
         """Reopen a resolved/suppressed issue with persistence."""
@@ -217,15 +203,11 @@ class IssueManagementMixin:
                 },
             )
 
-            return warden_pb2.IssueActionResponse(
-                success=True, issue=ProtoConverters.convert_issue(issue)
-            )
+            return warden_pb2.IssueActionResponse(success=True, issue=ProtoConverters.convert_issue(issue))
 
         except Exception as e:
             logger.error("grpc_reopen_issue_error: %s", str(e))
-            return warden_pb2.IssueActionResponse(
-                success=False, error_message=str(e)
-            )
+            return warden_pb2.IssueActionResponse(success=False, error_message=str(e))
 
     async def GetIssueHistory(self, request, context) -> "warden_pb2.IssueHistory":
         """Get issue history from repository."""
@@ -244,9 +226,7 @@ class IssueManagementMixin:
                     run_id=event.get("run_id", ""),
                     total_issues=event.get("total_issues", 0),
                     new_issues=1 if event.get("event_type") == "issue_created" else 0,
-                    resolved_issues=(
-                        1 if event.get("to_state") == "resolved" else 0
-                    ),
+                    resolved_issues=(1 if event.get("to_state") == "resolved" else 0),
                     reopened_issues=1 if event.get("to_state") == "open" else 0,
                 )
                 response.snapshots.append(proto_snapshot)
@@ -273,7 +253,7 @@ class IssueManagementMixin:
                 high=sum(1 for i in issues if i.get("severity") == "high"),
                 medium=sum(1 for i in issues if i.get("severity") == "medium"),
                 low=sum(1 for i in issues if i.get("severity") == "low"),
-                info=sum(1 for i in issues if i.get("severity") == "info")
+                info=sum(1 for i in issues if i.get("severity") == "info"),
             )
 
             frame_counts = {}
@@ -286,9 +266,7 @@ class IssueManagementMixin:
             for issue in issues:
                 file_path = issue.get("file_path", "unknown")
                 file_counts[file_path] = file_counts.get(file_path, 0) + 1
-            top_files = dict(
-                sorted(file_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-            )
+            top_files = dict(sorted(file_counts.items(), key=lambda x: x[1], reverse=True)[:10])
             stats.by_file.update(top_files)
 
             return stats

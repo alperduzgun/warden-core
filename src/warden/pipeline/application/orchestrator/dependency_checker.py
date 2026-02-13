@@ -30,7 +30,7 @@ class DependencyChecker:
         2. requires_config: Required config paths must be set
         3. requires_context: Required context attributes must exist
         """
-        required_frames = getattr(frame, 'requires_frames', [])
+        required_frames = getattr(frame, "requires_frames", [])
         for req_frame_id in required_frames:
             if req_frame_id not in context.frame_results:
                 return FrameResult(
@@ -45,10 +45,10 @@ class DependencyChecker:
                         "skip_reason": f"Required frame '{req_frame_id}' has not been executed",
                         "dependency_type": "frame",
                         "missing_dependency": req_frame_id,
-                    }
+                    },
                 )
 
-        required_configs = getattr(frame, 'requires_config', [])
+        required_configs = getattr(frame, "requires_config", [])
         for config_path in required_configs:
             if not DependencyChecker._config_path_exists(frame.config, config_path):
                 return FrameResult(
@@ -64,10 +64,10 @@ class DependencyChecker:
                         "dependency_type": "config",
                         "missing_dependency": config_path,
                         "help": f"Add '{config_path}' to .warden/config.yaml",
-                    }
+                    },
                 )
 
-        required_context = getattr(frame, 'requires_context', [])
+        required_context = getattr(frame, "requires_context", [])
         for ctx_attr in required_context:
             if not DependencyChecker._context_attr_exists(context, ctx_attr):
                 return FrameResult(
@@ -83,7 +83,7 @@ class DependencyChecker:
                         "dependency_type": "context",
                         "missing_dependency": ctx_attr,
                         "help": "Ensure prerequisite phases/frames have run",
-                    }
+                    },
                 )
 
         return None

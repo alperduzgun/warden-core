@@ -55,16 +55,19 @@ class FindingsPostProcessor:
         """
         logger.info("phase_started", phase="VERIFICATION")
         if self._progress_callback:
-            total_findings = len(context.findings) if hasattr(context, 'findings') else 0
+            total_findings = len(context.findings) if hasattr(context, "findings") else 0
             if total_findings > 0:
-                self._progress_callback("progress_update", {
-                    "phase": "VERIFICATION",
-                    "total_units": total_findings,
-                })
+                self._progress_callback(
+                    "progress_update",
+                    {
+                        "phase": "VERIFICATION",
+                        "total_units": total_findings,
+                    },
+                )
 
         try:
             verify_llm = self.llm_service or create_client()
-            verify_mem_manager = getattr(self.config, 'memory_manager', None)
+            verify_mem_manager = getattr(self.config, "memory_manager", None)
 
             verifier = FindingVerificationService(
                 llm_client=verify_llm,
@@ -76,12 +79,9 @@ class FindingsPostProcessor:
             dropped_count = 0
 
             for frame_id, frame_res in context.frame_results.items():
-                result_obj = frame_res.get('result')
+                result_obj = frame_res.get("result")
                 if result_obj and result_obj.findings:
-                    findings_to_verify = [
-                        f.to_dict() if hasattr(f, 'to_dict') else f
-                        for f in result_obj.findings
-                    ]
+                    findings_to_verify = [f.to_dict() if hasattr(f, "to_dict") else f for f in result_obj.findings]
                     total_findings = len(findings_to_verify)
 
                     logger.info(
@@ -90,22 +90,20 @@ class FindingsPostProcessor:
                         findings_count=len(findings_to_verify),
                     )
 
-                    verified_findings_dicts = await verifier.verify_findings_async(
-                        findings_to_verify, context
-                    )
-                    verified_ids = {f['id'] for f in verified_findings_dicts}
+                    verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)
+                    verified_ids = {f["id"] for f in verified_findings_dicts}
 
                     final_findings = []
                     cached_count = 0
 
                     for f in result_obj.findings:
-                        fid = f.get('id') if isinstance(f, dict) else f.id
+                        fid = f.get("id") if isinstance(f, dict) else f.id
                         if fid in verified_ids:
                             final_findings.append(f)
                             if any(
-                                vf.get('verification_metadata', {}).get('cached')
+                                vf.get("verification_metadata", {}).get("cached")
                                 for vf in verified_findings_dicts
-                                if vf['id'] == fid
+                                if vf["id"] == fid
                             ):
                                 cached_count += 1
 
@@ -128,7 +126,7 @@ class FindingsPostProcessor:
             # Synchronize globally in context
             all_verified = []
             for fr in context.frame_results.values():
-                res = fr.get('result')
+                res = fr.get("result")
                 if res and res.findings:
                     all_verified.extend(res.findings)
             context.findings = all_verified
@@ -141,6 +139,7 @@ class FindingsPostProcessor:
 
         except Exception as e:
             import traceback
+
             logger.warning(
                 "verification_phase_failed",
                 error=str(e),
@@ -155,8 +154,8 @@ class FindingsPostProcessor:
         if not baseline_path.exists():
             return
 
-        settings = getattr(self.config, 'settings', {})
-        if settings.get('mode') == 'strict' and not settings.get('use_baseline_in_strict', False):
+        settings = getattr(self.config, "settings", {})
+        if settings.get("mode") == "strict" and not settings.get("use_baseline_in_strict", False):
             pass
 
         try:
@@ -164,10 +163,10 @@ class FindingsPostProcessor:
                 baseline_data = json.load(f)
 
             known_issues = set()
-            for frame_res in baseline_data.get('frame_results', []):
-                for finding in frame_res.get('findings', []):
-                    rid = get_finding_attribute(finding, 'rule_id')
-                    fpath = get_finding_attribute(finding, 'file_path') or get_finding_attribute(finding, 'path')
+            for frame_res in baseline_data.get("frame_results", []):
+                for finding in frame_res.get("findings", []):
+                    rid = get_finding_attribute(finding, "rule_id")
+                    fpath = get_finding_attribute(finding, "file_path") or get_finding_attribute(finding, "path")
 
                     if not fpath:
                         continue
@@ -185,7 +184,7 @@ class FindingsPostProcessor:
             total_suppressed = 0
 
             for _fid, f_res in context.frame_results.items():
-                result_obj = f_res.get('result')
+                result_obj = f_res.get("result")
                 if not result_obj:
                     continue
 
@@ -197,8 +196,8 @@ class FindingsPostProcessor:
                 suppressed_in_frame = 0
 
                 for finding in current_findings:
-                    rid = getattr(finding, 'rule_id', getattr(finding, 'check_id', None))
-                    fpath = getattr(finding, 'file_path', getattr(finding, 'path', str(context.file_path)))
+                    rid = getattr(finding, "rule_id", getattr(finding, "check_id", None))
+                    fpath = getattr(finding, "file_path", getattr(finding, "path", str(context.file_path)))
 
                     rel_path = self._normalize_path(fpath)
                     key = f"{rid}:{rel_path}"
@@ -219,7 +218,7 @@ class FindingsPostProcessor:
 
                 all_findings = []
                 for f_res in context.frame_results.values():
-                    res = f_res.get('result')
+                    res = f_res.get("result")
                     if res and res.findings:
                         all_findings.extend(res.findings)
                 context.findings = all_findings
@@ -240,16 +239,16 @@ class FindingsPostProcessor:
             if not pipeline.completed_at:
                 pipeline.completed_at = datetime.now()
 
-            frame_results = getattr(context, 'frame_results', {})
+            frame_results = getattr(context, "frame_results", {})
             failed_frames = []
             passed_frames = []
 
             for fr_dict in frame_results.values():
-                result_obj = fr_dict.get('result')
+                result_obj = fr_dict.get("result")
                 if result_obj:
-                    if getattr(result_obj, 'status', None) == 'failed':
+                    if getattr(result_obj, "status", None) == "failed":
                         failed_frames.append(fr_dict)
-                    elif getattr(result_obj, 'status', None) == 'passed':
+                    elif getattr(result_obj, "status", None) == "passed":
                         passed_frames.append(fr_dict)
 
             if failed_frames and pipeline.status == PipelineStatus.COMPLETED:

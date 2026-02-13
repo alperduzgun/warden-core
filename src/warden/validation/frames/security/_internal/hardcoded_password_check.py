@@ -78,8 +78,7 @@ class HardcodedPasswordCheck(ValidationCheck):
         # Build and pre-compile patterns (KISS optimization)
         self.patterns = self._build_patterns()
         self._compiled_patterns = [
-            (re.compile(pattern_str, re.IGNORECASE), description)
-            for pattern_str, description in self.patterns
+            (re.compile(pattern_str, re.IGNORECASE), description) for pattern_str, description in self.patterns
         ]
 
         # Pre-compile safe patterns
@@ -240,4 +239,4 @@ class HardcodedPasswordCheck(ValidationCheck):
     def _mask_password(self, line: str) -> str:
         """Mask passwords in line for display."""
         # Mask quoted strings that look like passwords
-        return re.sub(r'(["\'])([^"\']{3,})(["\'])', r'\1***REDACTED***\3', line)
+        return re.sub(r'(["\'])([^"\']{3,})(["\'])', r"\1***REDACTED***\3", line)

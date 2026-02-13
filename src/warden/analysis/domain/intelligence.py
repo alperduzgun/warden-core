@@ -25,10 +25,11 @@ class RiskLevel(Enum):
 
     Determines scan depth and LLM usage priority.
     """
+
     P0_CRITICAL = "P0"  # Always deep scan with LLM (auth, payment, crypto)
-    P1_HIGH = "P1"      # Deep scan, LLM priority (user data, admin)
-    P2_MEDIUM = "P2"    # Standard scan, LLM if budget allows
-    P3_LOW = "P3"       # Fast scan, Rust-only (utils, helpers, tests)
+    P1_HIGH = "P1"  # Deep scan, LLM priority (user data, admin)
+    P2_MEDIUM = "P2"  # Standard scan, LLM if budget allows
+    P3_LOW = "P3"  # Fast scan, Rust-only (utils, helpers, tests)
 
 
 class SecurityPosture(Enum):
@@ -37,10 +38,11 @@ class SecurityPosture(Enum):
 
     Determines default strictness levels.
     """
-    PARANOID = "paranoid"    # Maximum security (fintech, healthcare)
-    STRICT = "strict"        # High security (e-commerce, SaaS)
-    STANDARD = "standard"    # Normal security (internal tools)
-    RELAXED = "relaxed"      # Minimal security (prototypes, demos)
+
+    PARANOID = "paranoid"  # Maximum security (fintech, healthcare)
+    STRICT = "strict"  # High security (e-commerce, SaaS)
+    STANDARD = "standard"  # Normal security (internal tools)
+    RELAXED = "relaxed"  # Minimal security (prototypes, demos)
 
 
 class ModuleInfo(BaseDomainModel):

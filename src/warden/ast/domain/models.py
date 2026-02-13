@@ -97,9 +97,7 @@ class ASTNode:
             node_type=ASTNodeType(data["node_type"]),
             name=data.get("name"),
             value=data.get("value"),
-            location=(
-                SourceLocation.from_dict(data["location"]) if data.get("location") else None
-            ),
+            location=(SourceLocation.from_dict(data["location"]) if data.get("location") else None),
             children=[cls.from_dict(child) for child in data.get("children", [])],
             attributes=data.get("attributes", {}),
         )

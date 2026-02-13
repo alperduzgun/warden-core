@@ -87,42 +87,44 @@ class FrameExecutor:
         logger.info("executing_phase", phase="VALIDATION")
 
         if self.progress_callback:
-            self.progress_callback("phase_started", {
-                "phase": "VALIDATION",
-                "phase_name": "VALIDATION"
-            })
+            self.progress_callback("phase_started", {"phase": "VALIDATION", "phase_name": "VALIDATION"})
 
         try:
             file_contexts = context.file_contexts or {}
-            include_test_files = getattr(self.config, 'include_test_files', False)
+            include_test_files = getattr(self.config, "include_test_files", False)
             filtered_files = FileFilter.filter_by_context(code_files, file_contexts, include_test_files)
 
             logger.info(
                 "validation_file_filtering",
                 total_files=len(code_files),
                 filtered_files=len(filtered_files),
-                filtered_out=len(code_files) - len(filtered_files)
+                filtered_out=len(code_files) - len(filtered_files),
             )
 
-            selected_frames = getattr(context, 'selected_frames', None)
+            selected_frames = getattr(context, "selected_frames", None)
             frames_to_execute = self.frame_matcher.get_frames_to_execute(selected_frames)
 
             if not frames_to_execute:
-                logger.warning("no_frames_to_execute",
-                              selected_frames=getattr(context, 'selected_frames', None),
-                              configured_frames=len(self.frames))
+                logger.warning(
+                    "no_frames_to_execute",
+                    selected_frames=getattr(context, "selected_frames", None),
+                    configured_frames=len(self.frames),
+                )
                 context.findings = []
                 context.validated_issues = []
-                context.add_phase_result("VALIDATION", {
-                    "total_findings": 0,
-                    "validated_issues": 0,
-                    "frames_executed": 0,
-                    "frames_passed": 0,
-                    "frames_failed": 0,
-                    "no_frames_reason": "no_frames_selected"
-                })
+                context.add_phase_result(
+                    "VALIDATION",
+                    {
+                        "total_findings": 0,
+                        "validated_issues": 0,
+                        "frames_executed": 0,
+                        "frames_passed": 0,
+                        "frames_failed": 0,
+                        "no_frames_reason": "no_frames_selected",
+                    },
+                )
 
-            if not hasattr(context, 'frame_results') or context.frame_results is None:
+            if not hasattr(context, "frame_results") or context.frame_results is None:
                 context.frame_results = {}
 
             # Pre-parse ASTs for all files (centralized cache)
@@ -162,16 +164,16 @@ class FrameExecutor:
                         issues_found=len(global_violations),
                         is_blocker=any(v.is_blocker for v in global_violations),
                         findings=[RuleExecutor.convert_to_finding(v) for v in global_violations],
-                        metadata={"engine": "python_rules"}
+                        metadata={"engine": "python_rules"},
                     )
 
-                    if not hasattr(context, 'frame_results') or context.frame_results is None:
+                    if not hasattr(context, "frame_results") or context.frame_results is None:
                         context.frame_results = {}
 
                     context.frame_results[frame_id] = {
-                        'result': frame_result,
-                        'pre_violations': [],
-                        'post_violations': []
+                        "result": frame_result,
+                        "pre_violations": [],
+                        "post_violations": [],
                     }
 
             logger.info("debug_frame_results_before_aggregation", frames=list(context.frame_results.keys()))
@@ -180,7 +182,7 @@ class FrameExecutor:
             logger.info(
                 "phase_completed",
                 phase="VALIDATION",
-                findings=len(context.findings) if hasattr(context, 'findings') else 0,
+                findings=len(context.findings) if hasattr(context, "findings") else 0,
             )
 
         except Exception as e:
@@ -189,12 +191,15 @@ class FrameExecutor:
 
         if self.progress_callback:
             duration = time.perf_counter() - start_time
-            self.progress_callback("phase_completed", {
-                "phase": "VALIDATION",
-                "phase_name": "VALIDATION",
-                "duration": duration,
-                "llm_used": self.llm_service is not None
-            })
+            self.progress_callback(
+                "phase_completed",
+                {
+                    "phase": "VALIDATION",
+                    "phase_name": "VALIDATION",
+                    "duration": duration,
+                    "llm_used": self.llm_service is not None,
+                },
+            )
 
     async def _execute_frames_sequential_async(
         self,
@@ -245,7 +250,7 @@ class FrameExecutor:
         for frame in frames_to_execute:
             result = await self.frame_runner.execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
-            if result and hasattr(result, 'has_blocker_issues') and result.has_blocker_issues:
+            if result and hasattr(result, "has_blocker_issues") and result.has_blocker_issues:
                 logger.info("stopping_on_blocker", frame_id=frame.frame_id)
                 break
 
@@ -275,15 +280,12 @@ class FrameExecutor:
 
         def _dependencies_met(frame: ValidationFrame) -> bool:
             """Check if all required frames have completed."""
-            requires = getattr(frame, 'requires_frames', [])
+            requires = getattr(frame, "requires_frames", [])
             return all(dep in completed for dep in requires)
 
         while pending or running:
             # Find ready frames (dependencies met, not running)
-            ready = [
-                fid for fid in pending
-                if fid in frame_map and _dependencies_met(frame_map[fid])
-            ]
+            ready = [fid for fid in pending if fid in frame_map and _dependencies_met(frame_map[fid])]
 
             # Launch ready frames up to parallel limit
             available_slots = parallel_limit - len(running)
@@ -292,10 +294,8 @@ class FrameExecutor:
                 pending.discard(fid)
 
                 task = asyncio.create_task(
-                    self.frame_runner.execute_frame_with_rules_async(
-                        context, frame, code_files, pipeline
-                    ),
-                    name=f"frame-{fid}"
+                    self.frame_runner.execute_frame_with_rules_async(context, frame, code_files, pipeline),
+                    name=f"frame-{fid}",
                 )
                 running[fid] = task
                 logger.debug("pipeline_frame_launched", frame_id=fid)
@@ -303,11 +303,7 @@ class FrameExecutor:
             if not running:
                 if pending:
                     # Deadlock: pending frames but none can run
-                    logger.error(
-                        "pipeline_deadlock_detected",
-                        pending=list(pending),
-                        completed=list(completed)
-                    )
+                    logger.error("pipeline_deadlock_detected", pending=list(pending), completed=list(completed))
                     # Fail-fast: skip remaining frames
                     for fid in pending:
                         logger.warning("pipeline_frame_skipped_deadlock", frame_id=fid)
@@ -317,9 +313,7 @@ class FrameExecutor:
 
             # Wait for first completion
             done, _ = await asyncio.wait(
-                running.values(),
-                return_when=asyncio.FIRST_COMPLETED,
-                timeout=self.config.frame_timeout
+                running.values(), return_when=asyncio.FIRST_COMPLETED, timeout=self.config.frame_timeout
             )
 
             if not done:
@@ -344,13 +338,12 @@ class FrameExecutor:
 
                     try:
                         result = task.result()
-                        logger.debug("pipeline_frame_completed", frame_id=finished_fid,
-                                    status=getattr(result, 'status', 'unknown'))
+                        logger.debug(
+                            "pipeline_frame_completed",
+                            frame_id=finished_fid,
+                            status=getattr(result, "status", "unknown"),
+                        )
                     except Exception as e:
                         logger.error("pipeline_frame_failed", frame_id=finished_fid, error=str(e))
 
-        logger.info(
-            "pipeline_execution_complete",
-            completed=len(completed),
-            total=len(frames_to_execute)
-        )
+        logger.info("pipeline_execution_complete", completed=len(completed), total=len(frames_to_execute))

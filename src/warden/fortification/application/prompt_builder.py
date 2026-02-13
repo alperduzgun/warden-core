@@ -12,6 +12,7 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class FortificationPromptBuilder:
     """Builder for fortification LLM prompts and response parser."""
 
@@ -44,11 +45,8 @@ class FortificationPromptBuilder:
         # Format issues (Compact)
         issue_details = []
         for issue in issues[:5]:  # Limit to 5
-            snippet = (issue.get('code_snippet') or 'N/A')[:80] # Reduced to 80
-            issue_details.append(
-                f"- {issue.get('file_path', '?')}:{issue.get('line_number', '?')}\n"
-                f"  `{snippet}`"
-            )
+            snippet = (issue.get("code_snippet") or "N/A")[:80]  # Reduced to 80
+            issue_details.append(f"- {issue.get('file_path', '?')}:{issue.get('line_number', '?')}\n  `{snippet}`")
 
         # Format semantic context (Strict limit)
         semantic_section = ""
@@ -62,21 +60,22 @@ class FortificationPromptBuilder:
                 content = ""
 
                 # ... extractor logic same as before ...
-                if hasattr(result, 'chunk'):
-                     chunk = result.chunk
-                     file_path = getattr(chunk, 'file_path', 'unknown')
-                     content = getattr(chunk, 'content', str(chunk))
-                elif hasattr(result, 'file_path'):
+                if hasattr(result, "chunk"):
+                    chunk = result.chunk
+                    file_path = getattr(chunk, "file_path", "unknown")
+                    content = getattr(chunk, "content", str(chunk))
+                elif hasattr(result, "file_path"):
                     file_path = result.file_path
-                    content = getattr(result, 'content', str(result))
+                    content = getattr(result, "content", str(result))
                 elif isinstance(result, dict):
-                    file_path = result.get('file_path', 'unknown')
-                    content = result.get('content', str(result))
+                    file_path = result.get("file_path", "unknown")
+                    content = result.get("content", str(result))
 
-                content = (content or "")[:300] # Reduced from 500
+                content = (content or "")[:300]  # Reduced from 500
 
-                example = f"# Ex{i+1} ({file_path})\n{content}\n"
-                if total_chars + len(example) > max_chars: break
+                example = f"# Ex{i + 1} ({file_path})\n{content}\n"
+                if total_chars + len(example) > max_chars:
+                    break
                 examples.append(example)
                 total_chars += len(example)
 
@@ -106,7 +105,7 @@ Fix must match project style.
         # Look for \ that is NOT followed by " \ / b f n r t u
         # and NOT preceded by \
         pattern = r'(?<!\\)\\(?!["\\/bfnrtu])'
-        return re.sub(pattern, r'\\\\', json_str)
+        return re.sub(pattern, r"\\\\", json_str)
 
     @staticmethod
     def parse_llm_response(
@@ -121,8 +120,8 @@ Fix must match project style.
             if not response:
                 raise ValueError("Empty response from LLM")
 
-            start_idx = response.find('[')
-            end_idx = response.rfind(']')
+            start_idx = response.find("[")
+            end_idx = response.rfind("]")
 
             if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
                 json_str = response[start_idx : end_idx + 1]
@@ -146,12 +145,14 @@ Fix must match project style.
                     }
                     fortifications.append(fortification)
             else:
-                 raise ValueError("No JSON list structure found in response")
+                raise ValueError("No JSON list structure found in response")
 
         except (json.JSONDecodeError, ValueError, AttributeError) as e:
             # Only log error if it's not simply "No JSON found" or empty usage which might be expected in some contexts
             # But here failure to parse means we fallback to raw text description
-            logger.warning("llm_response_parsing_failed", error=str(e), original_response=response[:100] if response else "Empty")
+            logger.warning(
+                "llm_response_parsing_failed", error=str(e), original_response=response[:100] if response else "Empty"
+            )
 
             # Create basic fortification from response as fallback
             fortification = {

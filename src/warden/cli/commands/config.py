@@ -55,6 +55,7 @@ VALID_LLM_PROVIDERS = [p.value for p in LlmProvider]
 # Helper Functions
 # =============================================================================
 
+
 def _find_config_path() -> Path | None:
     """
     Find the Warden config file.
@@ -257,6 +258,7 @@ def _build_config_tree(data: dict, tree: Tree, prefix: str = "") -> None:
 # Commands
 # =============================================================================
 
+
 @config_app.command(name="list")
 def config_list(
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
@@ -272,6 +274,7 @@ def config_list(
 
     if json_output:
         import json
+
         console.print(json.dumps(config, indent=2))
         return
 
@@ -304,6 +307,7 @@ def config_get(
 
     if json_output:
         import json
+
         console.print(json.dumps(value, indent=2) if isinstance(value, (dict, list)) else json.dumps(value))
         return
 
@@ -408,22 +412,10 @@ def _print_provider_hint(provider: str) -> None:
             "   - Ensure 'claude' CLI is installed and authenticated\n"
             "   - Model selection: Run 'claude config' to choose Sonnet/Opus/Haiku[/dim]"
         ),
-        "ollama": (
-            "[dim]💡 Ollama runs locally. Ensure Ollama is running:\n"
-            "   ollama serve[/dim]"
-        ),
-        "anthropic": (
-            "[dim]💡 Set your API key:\n"
-            "   export ANTHROPIC_API_KEY=your-key[/dim]"
-        ),
-        "openai": (
-            "[dim]💡 Set your API key:\n"
-            "   export OPENAI_API_KEY=your-key[/dim]"
-        ),
-        "groq": (
-            "[dim]💡 Set your API key:\n"
-            "   export GROQ_API_KEY=your-key[/dim]"
-        ),
+        "ollama": ("[dim]💡 Ollama runs locally. Ensure Ollama is running:\n   ollama serve[/dim]"),
+        "anthropic": ("[dim]💡 Set your API key:\n   export ANTHROPIC_API_KEY=your-key[/dim]"),
+        "openai": ("[dim]💡 Set your API key:\n   export OPENAI_API_KEY=your-key[/dim]"),
+        "groq": ("[dim]💡 Set your API key:\n   export GROQ_API_KEY=your-key[/dim]"),
         "azure_openai": (
             "[dim]💡 Set Azure credentials:\n"
             "   export AZURE_OPENAI_API_KEY=your-key\n"
@@ -439,6 +431,7 @@ def _print_provider_hint(provider: str) -> None:
 # =============================================================================
 # Shortcut: warden config (without subcommand) shows list
 # =============================================================================
+
 
 @config_app.callback(invoke_without_command=True)
 def config_callback(ctx: typer.Context) -> None:
