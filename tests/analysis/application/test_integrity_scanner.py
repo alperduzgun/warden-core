@@ -8,32 +8,37 @@ from warden.validation.domain.frame import CodeFile
 
 @pytest.mark.asyncio
 async def test_integrity_scanner_syntax_check():
-    # Helper to create mock provider with error tree
+    # Create mock provider that returns ParseResult with syntax error
     mock_registry = MagicMock()
     mock_provider = MagicMock()
-    mock_tree = MagicMock()
-    mock_node = MagicMock()
-    
-    # Simulate syntax error
-    mock_node.has_error = True
-    mock_node.start_point.row = 10
-    mock_tree.root_node = mock_node
-    mock_provider.parse.return_value = mock_tree
-    
+
+    # Mock ParseResult with error
+    mock_result = MagicMock()
+    mock_result.status = "failed"
+    mock_error = MagicMock()
+    mock_error.message = "Syntax error detected at line 1"
+    mock_result.errors = [mock_error]
+
+    # Parse returns ParseResult (async)
+    async def mock_parse(content: str, lang, path: str):
+        return mock_result
+
+    mock_provider.parse = mock_parse
+
     # Configure registry to return mock provider
     mock_registry.get_provider.return_value = mock_provider
-    
+
     scanner = IntegrityScanner(Path("/tmp"), mock_registry)
-    
+
     code_files = [
         CodeFile(path="/tmp/broken.py", content="impot os", language="python")
     ]
-    
+
     issues = await scanner.scan_async(code_files, ProjectContext())
-    
+
     assert len(issues) == 1
     assert issues[0].file_path == "broken.py"
-    assert "Syntax error detected" in issues[0].message
+    assert "Syntax error" in issues[0].message
     assert issues[0].severity == "error"
 
 @pytest.mark.asyncio
