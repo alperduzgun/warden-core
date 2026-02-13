@@ -60,9 +60,12 @@ async def test_integrity_scanner_build_verification_success():
 
         assert len(issues) == 0
         mock_subprocess.assert_called_once()
-        # Verify build command was called (exec uses *args, not single string)
-        args = mock_subprocess.call_args[0][0]
-        assert "python3" in args or "compileall" in " ".join(args)
+        # Verify build command was called (exec passes args as separate params)
+        # call_args[0] is the positional args tuple passed to exec
+        call_positional_args = mock_subprocess.call_args[0]
+        # Convert all args to strings and join for checking
+        all_args_str = " ".join(str(arg) for arg in call_positional_args)
+        assert "python" in all_args_str or "compileall" in all_args_str
 
 @pytest.mark.asyncio
 async def test_integrity_scanner_build_verification_failure():
