@@ -282,8 +282,8 @@ class LSPDiagnosticService:
 
     def _detect_language_from_path(self, path: str) -> str:
         """Detect language from file path extension."""
-        from warden.shared.languages.registry import LanguageRegistry
         from warden.ast.domain.enums import CodeLanguage
+        from warden.shared.languages.registry import LanguageRegistry
 
         lang_enum = LanguageRegistry.get_language_from_path(path)
         if lang_enum != CodeLanguage.UNKNOWN:

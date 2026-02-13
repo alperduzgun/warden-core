@@ -508,7 +508,7 @@ Return JSON:
             return LlmContextDecision(
                 context="unknown",
                 confidence=0.0,
-                reasoning=f"Parse error: {str(e)}",
+                reasoning=f"Parse error: {e!s}",
             )
 
     def _extract_json(self, text: str) -> str:

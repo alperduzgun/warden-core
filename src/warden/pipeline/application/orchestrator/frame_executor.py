@@ -183,7 +183,7 @@ class FrameExecutor:
 
         except Exception as e:
             logger.error("phase_failed", phase="VALIDATION", error=str(e))
-            context.errors.append(f"VALIDATION failed: {str(e)}")
+            context.errors.append(f"VALIDATION failed: {e!s}")
 
         if self.progress_callback:
             duration = time.perf_counter() - start_time

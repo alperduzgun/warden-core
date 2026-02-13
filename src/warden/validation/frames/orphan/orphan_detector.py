@@ -141,7 +141,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 test = node.test
                 # Check for `if TYPE_CHECKING:` or `if typing.TYPE_CHECKING:`
                 is_type_checking = False
-                if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING" or isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING":
+                if (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"):
                     is_type_checking = True
 
                 if is_type_checking:

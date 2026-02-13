@@ -205,7 +205,7 @@ def _setup_semantic_search(config_path: Path):
 
     except Exception as e:
         console.print("\n[red]❌ Semantic Indexing Failed[/red]")
-        console.print(f"[red]Error: {str(e)}[/red]")
+        console.print(f"[red]Error: {e!s}[/red]")
         console.print("[yellow]💡 Suggestion: Run 'warden index' manually to see detailed errors.[/yellow]")
         console.print("[dim]The project is initialized, but AI features (Orphan/Purpose) may be limited until fixed.[/dim]")
 

@@ -281,7 +281,7 @@ class LLMPhaseBase(ABC):
             # Smart Context Truncation for Fast Tier
             # If using Fast Tier (usually Qwen/Ollama), reduce context bloat
             is_fast_tier = False
-            if model and ("qwen" in model.lower() or "llama" in model.lower()) or self.preferred_model_tier == "fast":
+            if (model and ("qwen" in model.lower() or "llama" in model.lower())) or self.preferred_model_tier == "fast":
                 is_fast_tier = True
 
             # Get Context

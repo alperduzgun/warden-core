@@ -295,7 +295,7 @@ class PipelineHandler(BaseHandler):
         for pkg in missing_pkgs:
             # Simple heuristic: pkg name ends with -lang, and target_languages has LANG
             lang_part = pkg.replace("tree-sitter-", "").replace("-", "_").upper()
-            if target_languages is None or lang_part in target_languages or lang_part == "C_SHARP" and "CSHARP" in target_languages or lang_part == "BASH" and "SHELL" in target_languages:
+            if target_languages is None or lang_part in target_languages or (lang_part == "C_SHARP" and "CSHARP" in target_languages) or (lang_part == "BASH" and "SHELL" in target_languages):
                 to_install.append(pkg)
 
         if not to_install:

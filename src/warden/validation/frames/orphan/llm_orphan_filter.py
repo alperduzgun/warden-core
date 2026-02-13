@@ -454,7 +454,7 @@ class LLMOrphanFilter:
 
             except Exception as e:
                 logger.warning("context_extraction_failed", error=str(e))
-                context_str = f"Context Error: {str(e)}"
+                context_str = f"Context Error: {e!s}"
 
         findings_text = ""
         for idx, (f_path, finding) in enumerate(batch):
@@ -912,7 +912,7 @@ Now analyze the findings and return the JSON.
                 FilterDecision(
                     finding_id=i,
                     is_true_orphan=False,  # Conservative: assume false positive
-                    reasoning=f"LLM parse error: {str(e)}. Conservative fallback.",
+                    reasoning=f"LLM parse error: {e!s}. Conservative fallback.",
                     confidence=0.0,
                 )
                 for i in range(expected_count)

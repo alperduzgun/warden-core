@@ -158,7 +158,7 @@ class DuplicationAnalyzer(BaseCleaningAnalyzer):
                 success=False,
                 file_path=code_file.path,
                 issues_found=0,
-                error_message=f"Analysis failed: {str(e)}",
+                error_message=f"Analysis failed: {e!s}",
                 analyzer_name=self.name,
             )
 

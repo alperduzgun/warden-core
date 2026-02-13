@@ -56,7 +56,7 @@ class CIManager:
         - Secure: Sanitize all paths and inputs
     """
 
-    __slots__ = ("_project_root", "_config", "_config_loaded")
+    __slots__ = ("_config", "_config_loaded", "_project_root")
 
     def __init__(
         self,

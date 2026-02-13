@@ -161,7 +161,7 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
                 success=False,
                 file_path=code_file.path,
                 issues_found=0,
-                error_message=f"Analysis failed: {str(e)}",
+                error_message=f"Analysis failed: {e!s}",
                 analyzer_name=self.name,
             )
 
@@ -191,7 +191,7 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
             issues.extend(self._check_complex_boolean_expressions(func_node))
 
         # Python-specific modernization checks
-        if code and "python" in code.lower() or any("def " in line for line in lines[:10]):
+        if (code and "python" in code.lower()) or any("def " in line for line in lines[:10]):
             issues.extend(self._check_python_modernization(code, lines))
 
         return issues
@@ -284,11 +284,7 @@ class CodeSimplifierAnalyzer(BaseCleaningAnalyzer):
                 return True
 
         # Check children recursively
-        for child in node.children:
-            if self._block_has_early_exit(child):
-                return True
-
-        return False
+        return any(self._block_has_early_exit(child) for child in node.children)
 
     def _check_complex_boolean_expressions(self, node: ASTNode) -> list[CleaningIssue]:
         """

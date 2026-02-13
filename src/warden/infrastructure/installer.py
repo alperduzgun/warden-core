@@ -168,7 +168,7 @@ class AutoInstaller:
         except Exception as e:
             # Catch-all for unexpected errors, but log structure
             logger.exception("install_failed_unexpected", error=str(e))
-            raise InstallError(f"Installation error: {str(e)}") from e
+            raise InstallError(f"Installation error: {e!s}") from e
 
     @staticmethod
     def _verify_install() -> InstallResult:
@@ -187,7 +187,7 @@ class AutoInstaller:
         except FileNotFoundError:
              return InstallResult(success=False, message="Warden binary not found in PATH")
         except Exception as e:
-             return InstallResult(success=False, message=f"Verification exception: {str(e)}")
+             return InstallResult(success=False, message=f"Verification exception: {e!s}")
 
     @staticmethod
     def _get_installed_version() -> str | None:

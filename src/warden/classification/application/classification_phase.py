@@ -119,7 +119,7 @@ class ClassificationPhase:
             logger.error("classification_phase_failed", error=str(e))
             # Return default result on error
             result.selected_frames = ["security", "orphan", "chaos"]
-            result.reasoning = f"Failed to classify, using defaults: {str(e)}"
+            result.reasoning = f"Failed to classify, using defaults: {e!s}"
 
         return result
 

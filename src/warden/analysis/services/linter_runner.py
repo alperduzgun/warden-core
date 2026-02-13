@@ -93,7 +93,7 @@ class LinterRunner:
                 return True, data, None
             except json.JSONDecodeError as e:
                 logger.error("linter_output_invalid_json", tool=tool_name, error=str(e), partial_output=stdout_decoded[:100])
-                return False, None, f"Invalid JSON output: {str(e)}"
+                return False, None, f"Invalid JSON output: {e!s}"
 
         except Exception as e:
             logger.error("linter_runner_execution_error", tool=tool_name, error=str(e))

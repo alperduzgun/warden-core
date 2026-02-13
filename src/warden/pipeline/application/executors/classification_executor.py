@@ -182,7 +182,7 @@ class ClassificationExecutor(BasePhaseExecutor):
 
         except Exception as e:
             logger.error("phase_failed", phase="CLASSIFICATION", error=str(e))
-            context.errors.append(f"CLASSIFICATION failed: {str(e)}")
+            context.errors.append(f"CLASSIFICATION failed: {e!s}")
 
             # FALLBACK: Use all configured frames if classification fails
             logger.warning("classification_failed_using_all_frames")

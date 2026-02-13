@@ -199,7 +199,7 @@ class AnalysisExecutor(BasePhaseExecutor):
 
         except Exception as e:
             logger.error("phase_failed", phase="ANALYSIS", error=str(e))
-            context.errors.append(f"ANALYSIS failed: {str(e)}")
+            context.errors.append(f"ANALYSIS failed: {e!s}")
 
         if self.progress_callback:
             duration = time.perf_counter() - start_time

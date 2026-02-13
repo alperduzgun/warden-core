@@ -76,8 +76,8 @@ class AzureKeyVaultProvider(ISecretProvider):
             return self._sdk_available
 
         try:
-            from azure.identity import DefaultAzureCredential  # noqa: F401
-            from azure.keyvault.secrets import SecretClient  # noqa: F401
+            from azure.identity import DefaultAzureCredential
+            from azure.keyvault.secrets import SecretClient
 
             self._sdk_available = True
         except ImportError:

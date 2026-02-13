@@ -83,7 +83,7 @@ class TriagePhase:
                  fallback = TriageDecision(
                         file_path=str(file.path),
                         lane=TriageLane.MIDDLE,
-                        risk_score=RiskScore(score=5, confidence=0, reasoning=f"Phase Error: {str(e)}", category="error"),
+                        risk_score=RiskScore(score=5, confidence=0, reasoning=f"Phase Error: {e!s}", category="error"),
                         processing_time_ms=0
                     )
                  decisions[str(file.path)] = fallback.model_dump()

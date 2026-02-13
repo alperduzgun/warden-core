@@ -167,7 +167,7 @@ Return ONLY a JSON object:
                     self._set(finding, 'verification_metadata', {
                         "is_true_positive": True, # Still include but flag it
                         "confidence": self.FALLBACK_CONFIDENCE,
-                        "reason": f"Fallback: LLM Unavailable ({str(e)}). Manual Verification Required.",
+                        "reason": f"Fallback: LLM Unavailable ({e!s}). Manual Verification Required.",
                         "review_required": True,
                         "fallback": True
                     })

@@ -143,7 +143,7 @@ class PythonASTProvider(IASTProvider):
         except Exception as e:
             errors.append(
                 ParseError(
-                    message=f"Parse error: {str(e)}",
+                    message=f"Parse error: {e!s}",
                     severity="error",
                 )
             )

@@ -314,4 +314,4 @@ class CheckRegistry:
 # CodeFile (temporary import - will be moved to shared/domain)
 # ============================================================================
 
-from warden.validation.domain.frame import CodeFile  # noqa: E402
+from warden.validation.domain.frame import CodeFile
