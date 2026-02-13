@@ -174,7 +174,7 @@ class FortificationExecutor(BasePhaseExecutor):
                         error=str(e),
                         error_type=type(e).__name__,
                         traceback=traceback.format_exc())
-            context.errors.append(f"FORTIFICATION failed: {str(e)}")
+            context.errors.append(f"FORTIFICATION failed: {e!s}")
 
         if self.progress_callback:
             duration = time.perf_counter() - start_time

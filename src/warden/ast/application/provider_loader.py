@@ -110,6 +110,7 @@ class ASTProviderLoader:
         builtin_providers = [
             ("warden.ast.providers.tree_sitter_provider", "TreeSitterProvider"),
             ("warden.ast.providers.python_ast_provider", "PythonASTProvider"),
+            ("warden.ast.providers.rust_ast_provider", "RustASTProvider"),
         ]
 
         for module_name, class_name in builtin_providers:

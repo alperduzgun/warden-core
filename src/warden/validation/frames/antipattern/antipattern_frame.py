@@ -181,7 +181,7 @@ class AntiPatternFrame(ValidationFrame):
         # Try to get Universal AST
         ast_root: ASTNode | None = None
         if self.prefer_ast and isinstance(language, CodeLanguage):
-            ast_root = await self._get_ast(code_file.content, language, code_file.path)
+            ast_root = await self._get_ast(code_file.content, language, code_file.path, code_file=code_file)
 
         # Run detections using modular detectors
         if self.check_exception_handling or self.check_generic_exception:
@@ -319,9 +319,16 @@ class AntiPatternFrame(ValidationFrame):
     # =========================================================================
 
     async def _get_ast(
-        self, content: str, language: CodeLanguage, file_path: str
+        self, content: str, language: CodeLanguage, file_path: str,
+        code_file: Any = None,
     ) -> ASTNode | None:
         """Get Universal AST for content using best available provider."""
+        # Cache-first: use pre-parsed result if available
+        cached = code_file.metadata.get('_cached_parse_result') if code_file and code_file.metadata else None
+        if cached and (cached.is_success() or cached.is_partial()) and cached.ast_root:
+            return cached.ast_root
+
+        # Fallback: on-demand parse
         registry = self._get_registry()
         provider = registry.get_provider(language)
 

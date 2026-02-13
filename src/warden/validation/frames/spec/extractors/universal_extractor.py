@@ -133,6 +133,10 @@ class UniversalContractExtractor:
             "ai_enabled": False, # Added ai_enabled to stats
         }
         self.ai_enabled = False # Default to False, will be set by health check
+        # Internal cache: avoids re-parsing the same file across detect/models/enums
+        self._parse_cache: dict[str, Any] = {}
+        # External cache reference (set by pipeline if available)
+        self.ast_cache: dict[str, Any] | None = None
 
     async def extract(self) -> Contract:
         """
@@ -195,6 +199,21 @@ class UniversalContractExtractor:
             enums=enums,
         )
 
+    async def _cached_parse(self, provider: Any, source: str, language: Any, file_path: str) -> Any:
+        """Parse with local + external cache to avoid redundant parsing."""
+        # Check local instance cache first
+        if file_path in self._parse_cache:
+            return self._parse_cache[file_path]
+        # Check external pipeline ast_cache
+        if self.ast_cache and file_path in self.ast_cache:
+            result = self.ast_cache[file_path]
+            self._parse_cache[file_path] = result
+            return result
+        # On-demand parse
+        result = await provider.parse(source, language, file_path)
+        self._parse_cache[file_path] = result
+        return result
+
     def _discover_code_files(self) -> list[Path]:
         """Discover code files using global SafeFileScanner."""
         from warden.shared.utils.path_utils import SafeFileScanner
@@ -222,7 +241,7 @@ class UniversalContractExtractor:
                 except Exception:
                     continue
 
-                result = await provider.parse(source, language, str(file_path))
+                result = await self._cached_parse(provider, source, language, str(file_path))
 
                 if result.status != ParseStatus.SUCCESS or not result.ast_root:
                     continue
@@ -505,7 +524,7 @@ Extract details.
                 if not provider: continue
 
                 source = file_path.read_text(encoding='utf-8', errors='replace')
-                result = await provider.parse(source, language, str(file_path))
+                result = await self._cached_parse(provider, source, language, str(file_path))
                 if result.status != ParseStatus.SUCCESS or not result.ast_root:
                     continue
 
@@ -530,7 +549,7 @@ Extract details.
                 if not provider: continue
 
                 source = file_path.read_text(encoding='utf-8', errors='replace')
-                result = await provider.parse(source, language, str(file_path))
+                result = await self._cached_parse(provider, source, language, str(file_path))
                 if result.status != ParseStatus.SUCCESS or not result.ast_root:
                     continue
 

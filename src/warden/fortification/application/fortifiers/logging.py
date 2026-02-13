@@ -152,7 +152,7 @@ class LoggingFortifier(BaseFortifier):
                 success=False,
                 original_code=code_file.content,
                 fortified_code=code_file.content,
-                error_message=f"Fortification failed: {str(e)}",
+                error_message=f"Fortification failed: {e!s}",
                 fortifier_name=self.name,
             )
 

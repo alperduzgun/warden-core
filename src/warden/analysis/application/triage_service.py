@@ -130,7 +130,7 @@ class TriageService:
                 # Fallback for entire chunk
                 for cf in chunk:
                     decisions[cf.path] = self._create_decision(
-                        cf, TriageLane.MIDDLE, 5, f"Batch error: {str(e)}", start_time
+                        cf, TriageLane.MIDDLE, 5, f"Batch error: {e!s}", start_time
                     )
 
             i += len(chunk)
@@ -266,7 +266,7 @@ FILES:
             return RiskScore(
                 score=5.0,
                 confidence=0.0,
-                reasoning=f"Parsing Error: {str(e)}",
+                reasoning=f"Parsing Error: {e!s}",
                 category="chaos_fallback"
             )
 

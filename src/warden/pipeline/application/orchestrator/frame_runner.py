@@ -160,6 +160,14 @@ class FrameRunner:
                 "frame_name": frame.name,
             })
 
+        # Inject cached AST parse results into code file metadata
+        if context.ast_cache:
+            for cf in code_files:
+                if cf.path in context.ast_cache:
+                    if cf.metadata is None:
+                        cf.metadata = {}
+                    cf.metadata["_cached_parse_result"] = context.ast_cache[cf.path]
+
         # Get metrics collector for per-frame cost attribution
         from warden.llm.metrics import get_global_metrics_collector
         metrics_collector = get_global_metrics_collector()

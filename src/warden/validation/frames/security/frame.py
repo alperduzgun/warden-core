@@ -10,7 +10,7 @@ import time
 from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
-from warden.validation.domain.check import CheckRegistry, CheckResult
+from warden.validation.domain.check import CheckRegistry, CheckResult, ValidationCheck
 from warden.validation.domain.enums import (
     FrameApplicability,
     FrameCategory,
@@ -508,7 +508,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
         else:
             return "passed"  # Only medium/low = passed
 
-    def register_check(self, check: "ValidationCheck") -> None:  # type: ignore[name-defined]
+    def register_check(self, check: ValidationCheck) -> None:
         """
         Programmatically register a custom check.
 

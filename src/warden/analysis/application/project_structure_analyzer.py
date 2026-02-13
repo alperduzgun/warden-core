@@ -171,7 +171,7 @@ class ProjectStructureAnalyzer:
                 "project_structure_analysis_failed",
                 error=str(e),
             )
-            context.detection_warnings.append(f"Analysis failed: {str(e)}")
+            context.detection_warnings.append(f"Analysis failed: {e!s}")
             context.detection_time = time.perf_counter() - start_time
             return context
 

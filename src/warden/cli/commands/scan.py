@@ -355,6 +355,414 @@ def scan_command(
         raise typer.Exit(1)
 
 
+# ---------------------------------------------------------------------------
+# Extracted helpers for _run_scan_async
+# ---------------------------------------------------------------------------
+
+
+async def _process_stream_events(
+    bridge: WardenBridge,
+    paths: list[str],
+    frames: list[str] | None,
+    verbose: bool,
+    level: str,
+    ci_mode: bool,
+) -> tuple[dict | None, dict, int]:
+    """Process pipeline streaming events with progress tracking.
+
+    Returns ``(final_result_data, frame_stats, total_units)``.
+    """
+    frame_stats = {"passed": 0, "failed": 0, "skipped": 0, "total": 0}
+    final_result_data = None
+    processed_units = 0
+    total_units = 0
+    current_phase = "Initializing..."
+
+    with console.status("[bold blue]🛡️  Scanning...[/bold blue]", spinner="dots") as status:
+        async for event in bridge.execute_pipeline_stream_async(
+            file_path=paths,
+            frames=frames,
+            verbose=verbose,
+            analysis_level=level,
+            ci_mode=ci_mode,
+        ):
+            event_type = event.get("type")
+
+            if event_type == "progress":
+                evt = event['event']
+                data = event.get('data', {})
+
+                if verbose:
+                    console.print(f"[dim]Progress Event: {evt} - {data}[/dim]")
+
+                if evt == "discovery_complete":
+                    total_units = data.get('total_files', 0)
+                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})")
+
+                elif evt == "pipeline_started":
+                    if total_units <= 0:
+                        total_units = data.get('file_count', 0)
+                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Starting pipeline...[/dim] (0/{total_units})")
+
+                elif evt == "progress_init":
+                    new_total = data.get('total_units', 0)
+                    if new_total > 0:
+                        total_units = new_total
+                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+
+                elif evt == "progress_update":
+                    increment = data.get('increment', 0)
+                    if increment > 0:
+                        processed_units += increment
+                    elif "frame_id" in data:
+                        processed_units += 1
+
+                    new_status = data.get('status', data.get('phase'))
+                    if new_status:
+                        current_phase = new_status
+
+                    if total_units > 0 and processed_units > total_units:
+                        processed_units = total_units
+
+                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+
+                elif evt == "phase_started":
+                    current_phase = data.get('phase', current_phase)
+                    status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
+                    if verbose:
+                        console.print(f"[bold blue]▶ Phase:[/bold blue] {current_phase}")
+
+                elif evt == "frame_completed":
+                    frame_stats["total"] += 1
+                    name = data.get('frame_name', data.get('frame_id'))
+                    frame_status = data.get('status', 'unknown')
+                    icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️"
+                    style = "green" if frame_status == "passed" else "red" if frame_status == "failed" else "yellow"
+                    findings_count = data.get('findings', data.get('issues_found', 0))
+
+                    if frame_status == "passed":
+                        frame_stats["passed"] += 1
+                    elif frame_status == "failed":
+                        frame_stats["failed"] += 1
+                    else:
+                        frame_stats["skipped"] += 1
+
+                    if verbose:
+                        console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
+
+            elif event_type == "result":
+                final_result_data = event['data']
+
+    return final_result_data, frame_stats, total_units
+
+
+def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
+    """Render scan results as a Rich text report to the console."""
+    # Classify findings into core vs linter
+    all_findings = (
+        res.get('validated_issues')
+        or res.get('findings')
+        or res.get('true_positives')
+        or res.get('verified_findings')
+        or []
+    )
+
+    for f in all_findings:
+        detail = f.get('detail') or ""
+        if "(Ruff)" in detail or str(f.get('id', '')).startswith("lint_"):
+            pass  # linter finding (counted but not separately displayed yet)
+
+    # Calculate metrics
+    total_findings = len(all_findings)
+    security_issues = sum(
+        1 for f in all_findings
+        if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets']
+    )
+    quality_issues = total_findings - security_issues
+    blocker_issues = sum(1 for f in all_findings if f.get('isBlocker', False) is True)
+    critical_blockers = sum(
+        1 for f in all_findings
+        if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical'
+    )
+
+    total_files_scanned = res.get(
+        'file_count',
+        res.get('total_files_scanned', total_units if total_units > 0 else len({f.get('file_path') for f in all_findings if f.get('file_path')})),
+    )
+
+    baseline_info = res.get('baseline_update', {})
+    technical_debt = baseline_info.get('total_debt', total_findings)
+    new_debt_added = baseline_info.get('new_debt', total_findings)
+
+    # Fallback: try pipeline summary fields when no findings objects exist
+    if total_findings == 0:
+        if 'total_issues_found' in res:
+            total_findings = res['total_issues_found']
+        elif 'final_issue_count' in res:
+            total_findings = res['final_issue_count']
+        elif 'issues_found' in res:
+            total_findings = res['issues_found']
+        elif 'pipeline_summary' in res and isinstance(res['pipeline_summary'], dict):
+            pipeline_summary = res['pipeline_summary']
+            if 'issues_found' in pipeline_summary:
+                total_findings = pipeline_summary['issues_found']
+            elif 'findings_count' in pipeline_summary:
+                total_findings = pipeline_summary['findings_count']
+
+    # Re-check with validated/verified findings
+    validated_findings = (
+        res.get('validated_issues', [])
+        or res.get('true_positives', [])
+        or res.get('verified_findings', [])
+        or res.get('verified_issues', [])
+        or res.get('validated_findings', [])
+        or all_findings
+    )
+    if validated_findings and validated_findings != all_findings:
+        total_findings = len(validated_findings)
+        security_issues = sum(
+            1 for f in validated_findings
+            if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets']
+        )
+        quality_issues = total_findings - security_issues
+        blocker_issues = sum(1 for f in validated_findings if f.get('isBlocker', False) is True)
+        critical_blockers = sum(
+            1 for f in validated_findings
+            if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical'
+        )
+
+    # Final fallback: check verified count fields
+    if total_findings == 0:
+        verified_count = res.get(
+            'verified_count',
+            res.get('total_verified', res.get('final_findings_count', res.get('issues_found', 0))),
+        )
+        if verified_count > 0:
+            total_findings = verified_count
+            security_issues = res.get('security_issues_count', res.get('security_findings', 0))
+            quality_issues = total_findings - security_issues
+            blocker_issues = res.get('blocker_issues_count', res.get('blocker_findings', 0))
+            critical_blockers = res.get('critical_blocker_count', res.get('critical_findings', 0))
+
+    # Build Rich table
+    table = Table(title="Scan Results")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="magenta")
+
+    table.add_row("Total Files Scanned", str(total_files_scanned))
+    table.add_row("Total Frames", str(res.get('total_frames', 0)))
+    table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
+    table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
+
+    table.add_section()
+    table.add_row("Total Findings", str(total_findings))
+    table.add_row("Security Issues", str(security_issues))
+    table.add_row("Quality Issues", str(quality_issues))
+
+    table.add_section()
+    table.add_row("Blocker Issues", str(blocker_issues))
+    table.add_row("Critical Issues", f"[{'red' if critical_blockers > 0 else 'green'}]{critical_blockers}[/]")
+
+    table.add_section()
+    table.add_row("Technical Debt", str(technical_debt))
+    table.add_row("New Debt Added", str(new_debt_added))
+
+    console.print("\n", table)
+
+    # Missing tool hints
+    frame_results = res.get('results', [])
+    missing_tools = []
+    for fr in frame_results:
+        meta = fr.get('metadata', {}) or {}
+        if meta.get('status') == 'skipped_tool_missing':
+            hint = meta.get('install_hint')
+            frame_name = fr.get('frame_name', 'Unknown Frame')
+            if hint:
+                missing_tools.append((frame_name, hint))
+
+    if missing_tools:
+        console.print("\n[bold yellow]⚠️  Missing Dependencies (Action Required):[/bold yellow]")
+        for name, hint in missing_tools:
+            console.print(f"  • [cyan]{name}[/cyan]: {hint}")
+        console.print("")
+
+    # LLM metrics
+    llm_metrics = res.get('llmMetrics', {})
+    if llm_metrics:
+        _display_llm_summary(llm_metrics)
+
+    # Success/fail banner
+    status_raw = res.get('status')
+    is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
+
+    if verbose:
+        console.print(f"[dim]Debug: status={status_raw} ({type(status_raw).__name__}), is_success={is_success}[/dim]")
+
+    if is_success:
+        console.print("\n[bold green]✨ Scan Succeeded![/bold green]")
+    else:
+        console.print("\n[bold red]💥 Scan Failed![/bold red]")
+
+
+def _generate_configured_reports(final_result_data: dict, verbose: bool) -> None:
+    """Generate reports from warden.yaml / .warden/config.yaml output configuration."""
+    try:
+        import yaml
+
+        from warden.reports.generator import ReportGenerator
+
+        root_manifest = Path.cwd() / "warden.yaml"
+        legacy_config = Path.cwd() / ".warden" / "config.yaml"
+        config_path = root_manifest if root_manifest.exists() else legacy_config
+        if not config_path.exists():
+            return
+
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+
+        ci_config = config.get('ci', {})
+        advanced_config = config.get('advanced', {})
+        outputs = ci_config.get('output', []) or advanced_config.get('output', [])
+
+        if not outputs:
+            return
+
+        if verbose:
+            console.print(f"\n[dim]📝 Found {len(outputs)} configured output(s)...[/dim]")
+        generator = ReportGenerator()
+
+        for out in outputs:
+            fmt = out.get('format')
+            path_str = out.get('path')
+            if not fmt or not path_str:
+                continue
+
+            out_path = Path.cwd() / path_str
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+
+            try:
+                if fmt == 'json':
+                    generator.generate_json_report(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]JSON[/cyan]: {path_str}")
+                elif fmt == 'markdown' or fmt == 'md':
+                    pass
+                elif fmt == 'sarif':
+                    generator.generate_sarif_report(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]SARIF[/cyan]: {path_str}")
+                elif fmt == 'junit':
+                    generator.generate_junit_report(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]JUnit[/cyan]: {path_str}")
+                elif fmt == 'html':
+                    generator.generate_html_report(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]HTML[/cyan]: {path_str}")
+                elif fmt == 'pdf':
+                    generator.generate_pdf_report(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]PDF[/cyan]: {path_str}")
+                elif fmt == 'shield':
+                    generator.generate_svg_badge(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]SHIELD (SVG)[/cyan]: {path_str}")
+                elif fmt == 'badge':
+                    generator.generate_svg_badge(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]BADGE (SVG)[/cyan]: {path_str}")
+
+            except Exception as e:
+                console.print(f"  ❌ [red]{fmt.upper()}[/red]: Failed - {e}")
+                if verbose:
+                    console.print(f"     {e!s}")
+
+    except Exception as e:
+        console.print(f"\n[red]⚠️  Report generation failed: {e}[/red]")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+
+
+def _write_ai_status_file(final_result_data: dict) -> None:
+    """Write lightweight AI status file to .warden/ai_status.md."""
+    try:
+        warden_dir = Path(".warden")
+        if not warden_dir.exists():
+            return
+
+        status_raw = final_result_data.get('status')
+        is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
+        status_icon = "✅ PASS" if is_success else "❌ FAIL"
+        critical_count = final_result_data.get('critical_findings', 0)
+        total_count = final_result_data.get('total_findings', 0)
+        scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        status_content = f"""# Warden Security Status
+Updated: {scan_time}
+
+**Status**: {status_icon}
+**Critical Issues**: {critical_count}
+**Total Issues**: {total_count}
+
+> [!NOTE]
+> If status is FAIL, please check the full report or run `warden scan` for details.
+> Do not analyze full code unless you are resolving these specific issues.
+"""
+        status_file = warden_dir / "ai_status.md"
+        with open(status_file, "w") as f:
+            f.write(status_content)
+    except Exception:
+        pass  # Silent fail for aux file
+
+
+def _update_baseline(
+    final_result_data: dict,
+    intelligence_context: dict | None,
+    verbose: bool,
+) -> None:
+    """Update baseline with scan results and display debt report."""
+    try:
+        from warden.cli.commands.helpers.baseline_manager import BaselineManager
+        console.print("\n[bold blue]📉 Updating Baseline...[/bold blue]")
+
+        baseline_mgr = BaselineManager(Path.cwd())
+
+        module_map = None
+        if intelligence_context and intelligence_context.get("modules"):
+            module_map = intelligence_context["modules"]
+
+        if not baseline_mgr.is_module_based():
+            console.print("[dim]Migrating to module-based baseline structure...[/dim]")
+            baseline_mgr.migrate_from_legacy(module_map)
+
+        update_stats = baseline_mgr.update_baseline_for_modules(
+            scan_results=final_result_data,
+            module_map=module_map,
+        )
+
+        console.print(f"[green]✓ Baseline updated![/green]")
+        console.print(f"[dim]   Modules updated: {update_stats['modules_updated']}[/dim]")
+
+        if update_stats['total_new_debt'] > 0:
+            console.print(f"[yellow]   New debt items: {update_stats['total_new_debt']}[/yellow]")
+        if update_stats['total_resolved_debt'] > 0:
+            console.print(f"[green]   Resolved debt: {update_stats['total_resolved_debt']}[/green]")
+
+        debt_report = baseline_mgr.get_debt_report()
+        for warning in debt_report.get("warnings", []):
+            level_color = {
+                "critical": "red",
+                "warning": "yellow",
+                "info": "dim"
+            }.get(warning.get("level"), "dim")
+            console.print(f"[{level_color}]   ⚠️  {warning['message']}[/{level_color}]")
+
+    except Exception as e:
+        console.print(f"[yellow]⚠️  Baseline update failed: {e}[/yellow]")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+
+
+# ---------------------------------------------------------------------------
+# Main async scan orchestrator
+# ---------------------------------------------------------------------------
+
+
 async def _run_scan_async(
     paths: list[str],
     frames: list[str] | None,
@@ -388,356 +796,27 @@ async def _run_scan_async(
 
     console.print()
 
-    # Initialize bridge
     bridge = WardenBridge(project_root=Path.cwd())
 
-    # Setup stats tracking
-    stats = {
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0,
-        "total": 0
-    }
-
-    final_result_data = None
-
-    processed_units = 0
-    total_units = 0
-    current_phase = "Initializing..."
-
     try:
-        with console.status(f"[bold blue]🛡️  Scanning...[/bold blue]", spinner="dots") as status:
-            # Execute pipeline with streaming
-            async for event in bridge.execute_pipeline_stream_async(
-                file_path=paths,
-                frames=frames,
-                verbose=verbose,
-                analysis_level=level,
-                ci_mode=ci_mode
-            ):
-                event_type = event.get("type")
+        # 1. Stream pipeline events and collect results
+        final_result_data, frame_stats, total_units = await _process_stream_events(
+            bridge, paths, frames, verbose, level, ci_mode
+        )
 
-                if event_type == "progress":
-                    evt = event['event']
-                    data = event.get('data', {})
+        # 2. Render text report to console
+        if final_result_data and format == "text":
+            _render_text_report(final_result_data, total_units, verbose)
 
-                    if verbose:
-                        console.print(f"[dim]Progress Event: {evt} - {data}[/dim]")
+            # Display per-frame cost breakdown if requested
+            if cost_report:
+                _display_frame_cost_breakdown()
 
-                    if evt == "discovery_complete":
-                        total_units = data.get('total_files', 0)
-                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})")
+        # 3. Generate configured reports from YAML config
+        if final_result_data:
+            _generate_configured_reports(final_result_data, verbose)
 
-                    elif evt == "pipeline_started":
-                        # Use file_count as baseline if total_units not yet initialized
-                        if total_units <= 0:
-                            total_units = data.get('file_count', 0)
-                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Starting pipeline...[/dim] (0/{total_units})")
-
-                    elif evt == "progress_init":
-                        new_total = data.get('total_units', 0)
-                        if new_total > 0:
-                            total_units = new_total
-                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
-
-                    elif evt == "progress_update":
-                        increment = data.get('increment', 0)
-
-                        # Only increment if we have a valid increment value
-                        if increment > 0:
-                            processed_units += increment
-                        elif "frame_id" in data:
-                            # If no increment but frame_id present, count as 1 unit
-                            processed_units += 1
-
-                        # Update current phase/status
-                        new_status = data.get('status', data.get('phase'))
-                        if new_status:
-                            current_phase = new_status
-
-                        # Clamp processed_units to never exceed total_units
-                        if total_units > 0 and processed_units > total_units:
-                            processed_units = total_units
-
-                        # Update the sticky status line
-                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
-
-                    elif evt == "phase_started":
-                        current_phase = data.get('phase', current_phase)
-                        status.update(f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})")
-                        if verbose:
-                            console.print(f"[bold blue]▶ Phase:[/bold blue] {current_phase}")
-
-                    elif evt == "frame_completed":
-                        # Fallback: if we didn't get a progress_update for this frame, increment here
-                        # But be careful not to double count. Most frames send progress_update.
-                        stats["total"] += 1
-                        name = data.get('frame_name', data.get('frame_id'))
-                        frame_status = data.get('status', 'unknown')
-                        icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️"
-                        style = "green" if frame_status == "passed" else "red" if frame_status == "failed" else "yellow"
-                        findings_count = data.get('findings', data.get('issues_found', 0))
-
-                        if frame_status == "passed":
-                            stats["passed"] += 1
-                        elif frame_status == "failed":
-                            stats["failed"] += 1
-                        else:
-                            stats["skipped"] += 1
-
-                        if verbose:
-                            console.print(f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues")
-
-                elif event_type == "result":
-                    # Final results
-                    final_result_data = event['data']
-                    res = final_result_data
-
-                    # Check critical findings
-                    critical = res.get('critical_findings', 0)
-
-                    if format == "text":
-                        # Get findings - try different possible fields for validated findings after verification
-                        # The pipeline summary shows "Issues Found: 4", so we need to find where this is stored
-                        all_findings = []
-
-                        # Try multiple possible sources for findings after verification
-                        if 'validated_issues' in res and res['validated_issues']:
-                            all_findings = res['validated_issues']
-                        elif 'findings' in res and res['findings']:
-                            all_findings = res['findings']
-                        elif 'true_positives' in res and res['true_positives']:  # Common field for verified findings
-                            all_findings = res['true_positives']
-                        elif 'verified_findings' in res and res['verified_findings']:  # Another possible field
-                            all_findings = res['verified_findings']
-                        else:
-                            # If no specific validated field exists, use the raw findings
-                            all_findings = []
-
-                        linter_findings = []
-                        core_findings = []
-
-                        for f in all_findings:
-                            # Robust check for Linter source
-                            detail = f.get('detail') or ""
-                            if "(Ruff)" in detail or str(f.get('id', '')).startswith("lint_"):
-                                linter_findings.append(f)
-                            else:
-                                core_findings.append(f)
-
-                        # Recalculate stats for cleaner report
-                        core_count = len(core_findings)
-                        core_critical = sum(1 for f in core_findings if str(f.get('severity')).lower() == 'critical')
-
-                        linter_count = len(linter_findings)
-                        linter_critical = sum(1 for f in linter_findings if str(f.get('severity')).lower() == 'critical')
-
-                        # Calculate additional metrics for enhanced reporting
-                        total_findings = len(all_findings)
-                        security_issues = sum(1 for f in all_findings if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets'])
-                        quality_issues = total_findings - security_issues
-
-                        # Count blocker issues (isBlocker: true)
-                        blocker_issues = sum(1 for f in all_findings if f.get('isBlocker', False) is True)
-                        critical_blockers = sum(1 for f in all_findings if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical')
-
-                        # Get file count from results if available - use discovery results
-                        total_files_scanned = res.get('file_count', res.get('total_files_scanned', total_units if total_units > 0 else len({f.get('file_path') for f in all_findings if f.get('file_path')})))
-
-                        # Get technical debt information from baseline update if available
-                        baseline_info = res.get('baseline_update', {})
-                        technical_debt = baseline_info.get('total_debt', total_findings)  # fallback to total findings
-                        new_debt_added = baseline_info.get('new_debt', total_findings)  # fallback to total findings
-
-                        # If we still have 0 findings but the pipeline summary shows issues were found,
-                        # try to get the issue count from other fields in the result
-                        if total_findings == 0:
-                            # Check if there's a field that contains the final count from the pipeline
-                            if 'total_issues_found' in res:
-                                total_findings = res['total_issues_found']
-                            elif 'final_issue_count' in res:
-                                total_findings = res['final_issue_count']
-                            elif 'issues_found' in res:
-                                total_findings = res['issues_found']
-                            elif 'pipeline_summary' in res and isinstance(res['pipeline_summary'], dict):
-                                # Look for issues found in pipeline summary
-                                pipeline_summary = res['pipeline_summary']
-                                if 'issues_found' in pipeline_summary:
-                                    total_findings = pipeline_summary['issues_found']
-                                elif 'findings_count' in pipeline_summary:
-                                    total_findings = pipeline_summary['findings_count']
-
-                        # Also update the individual metrics based on the actual findings list
-                        # Use the validated/verified findings after verification phase
-                        validated_findings = res.get('validated_issues', []) or res.get('true_positives', []) or res.get('verified_findings', []) or res.get('verified_issues', []) or res.get('validated_findings', []) or all_findings
-                        if validated_findings and validated_findings != all_findings:
-                            total_findings = len(validated_findings)
-                            security_issues = sum(1 for f in validated_findings if f.get('category', '').lower() in ['security', 'authentication', 'authorization', 'encryption', 'secrets'])
-                            quality_issues = total_findings - security_issues
-                            blocker_issues = sum(1 for f in validated_findings if f.get('isBlocker', False) is True)
-                            critical_blockers = sum(1 for f in validated_findings if f.get('isBlocker', False) is True and str(f.get('severity')).lower() == 'critical')
-                        else:
-                            # If validated findings are the same as all findings, use the original findings
-                            validated_findings = all_findings
-
-                        # Final fallback: Check for specific fields that might contain the final validated count
-                        # Based on the logs, the verification phase shows "total_verified=4", so look for that
-                        if total_findings == 0:
-                            # Try to get the verified count from the verification results
-                            verified_count = res.get('verified_count', res.get('total_verified', res.get('final_findings_count', res.get('issues_found', 0))))
-                            if verified_count > 0:
-                                total_findings = verified_count
-                                # Since we don't have the actual findings objects, we can't categorize them
-                                # But we can at least show the correct total
-                                security_issues = res.get('security_issues_count', res.get('security_findings', 0))
-                                quality_issues = total_findings - security_issues
-                                blocker_issues = res.get('blocker_issues_count', res.get('blocker_findings', 0))
-                                critical_blockers = res.get('critical_blocker_count', res.get('critical_findings', 0))
-
-                        table = Table(title="Scan Results")
-                        table.add_column("Metric", style="cyan")
-                        table.add_column("Value", style="magenta")
-
-                        # Scanning Overview Section
-                        table.add_row("Total Files Scanned", str(total_files_scanned))
-                        table.add_row("Total Frames", str(res.get('total_frames', 0)))
-                        table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
-                        table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
-
-                        # Findings Overview Section
-                        table.add_section()
-                        table.add_row("Total Findings", str(total_findings))
-                        table.add_row("Security Issues", str(security_issues))
-                        table.add_row("Quality Issues", str(quality_issues))
-
-                        # Priority Issues Section
-                        table.add_section()
-                        table.add_row("Blocker Issues", str(blocker_issues))
-                        table.add_row("Critical Issues", f"[{'red' if critical_blockers > 0 else 'green'}]{critical_blockers}[/]")
-
-                        # Technical Debt Section
-                        table.add_section()
-                        table.add_row("Technical Debt", str(technical_debt))
-                        table.add_row("New Debt Added", str(new_debt_added))
-
-                        console.print("\n", table)
-
-                        # 🚨 NEW: Show Missing Tool Hints (Visibility Improvement)
-                        # Check all frames results (if available in result_data or we need to access them differently)
-                        # Wait, result_data contains 'frames_failed' but not detailed skipped info easily.
-                        # Actually 'stats' object in this function tracks skipped counts, but we don't have the frame objects there locally?
-                        # We need to rely on the streaming events we processed? Or the final result structure.
-                        # Assuming final_result_data['results'] contains detailed frame results.
-
-                        frame_results = res.get('results', [])
-                        missing_tools = []
-                        for fr in frame_results:
-                            meta = fr.get('metadata', {}) or {}
-                            if meta.get('status') == 'skipped_tool_missing':
-                                hint = meta.get('install_hint')
-                                frame_name = fr.get('frame_name', 'Unknown Frame')
-                                if hint:
-                                    missing_tools.append((frame_name, hint))
-
-                        if missing_tools:
-                            console.print("\n[bold yellow]⚠️  Missing Dependencies (Action Required):[/bold yellow]")
-                            for name, hint in missing_tools:
-                                console.print(f"  • [cyan]{name}[/cyan]: {hint}")
-                            console.print("")
-
-
-                        # Display LLM Performance Metrics
-                        llm_metrics = res.get('llmMetrics', {})
-                        if llm_metrics:
-                            _display_llm_summary(llm_metrics)
-
-                        # Display per-frame cost breakdown if requested
-                        if cost_report:
-                            _display_frame_cost_breakdown()
-
-                        # Status check (COMPLETED=2)
-                        status_raw = res.get('status')
-                        # Handle both integer and string statuses (Enums are often serialized to name or value)
-                        is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
-
-                        if verbose:
-                            console.print(f"[dim]Debug: status={status_raw} ({type(status_raw).__name__}), is_success={is_success}[/dim]")
-
-                        if is_success:
-                            console.print("\n[bold green]✨ Scan Succeeded![/bold green]")
-                        else:
-                            console.print("\n[bold red]💥 Scan Failed![/bold red]")
-
-            # Report Generation from Config
-            if final_result_data:
-                try:
-                    import yaml
-
-                    from warden.reports.generator import ReportGenerator
-
-                    root_manifest = Path.cwd() / "warden.yaml"
-                    legacy_config = Path.cwd() / ".warden" / "config.yaml"
-                    config_path = root_manifest if root_manifest.exists() else legacy_config
-                    if config_path.exists():
-                        with open(config_path) as f:
-                            config = yaml.safe_load(f)
-
-                        # Support both 'ci.output' and 'advanced.output' (Legacy vs Modern config)
-                        ci_config = config.get('ci', {})
-                        advanced_config = config.get('advanced', {})
-                        outputs = ci_config.get('output', []) or advanced_config.get('output', [])
-
-                        if outputs:
-                            if verbose:
-                                console.print(f"\n[dim]📝 Found {len(outputs)} configured output(s)...[/dim]")
-                            generator = ReportGenerator()
-
-                            for out in outputs:
-                                fmt = out.get('format')
-                                path_str = out.get('path')
-                                if not fmt or not path_str:
-                                    continue
-
-                                out_path = Path.cwd() / path_str
-                                out_path.parent.mkdir(parents=True, exist_ok=True)
-
-                                try:
-                                    if fmt == 'json':
-                                        generator.generate_json_report(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]JSON[/cyan]: {path_str}")
-                                    elif fmt == 'markdown' or fmt == 'md':
-                                        pass
-                                    elif fmt == 'sarif':
-                                        generator.generate_sarif_report(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]SARIF[/cyan]: {path_str}")
-                                    elif fmt == 'junit':
-                                        generator.generate_junit_report(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]JUnit[/cyan]: {path_str}")
-                                    elif fmt == 'html':
-                                        generator.generate_html_report(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]HTML[/cyan]: {path_str}")
-                                    elif fmt == 'pdf':
-                                        generator.generate_pdf_report(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]PDF[/cyan]: {path_str}")
-                                    elif fmt == 'shield':
-                                        generator.generate_svg_badge(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]SHIELD (SVG)[/cyan]: {path_str}")
-                                    elif fmt == 'badge':
-                                        generator.generate_svg_badge(final_result_data, out_path)
-                                        console.print(f"  ✅ [cyan]BADGE (SVG)[/cyan]: {path_str}")
-
-                                except Exception as e:
-                                    console.print(f"  ❌ [red]{fmt.upper()}[/red]: Failed - {e}")
-                                    if verbose:
-                                        console.print(f"     {str(e)}")
-
-                except Exception as e:
-                    console.print(f"\n[red]⚠️  Report generation failed: {e}[/red]")
-                    if verbose:
-                        import traceback
-                        traceback.print_exc()
-
-        # Generate report if requested (Explicit flag)
+        # 4. Generate explicit --output report
         if output and final_result_data:
             from warden.reports.generator import ReportGenerator
             generator = ReportGenerator()
@@ -757,95 +836,22 @@ async def _run_scan_async(
                     generator.generate_html_report(final_result_data, out_path)
                 elif format == "pdf":
                     generator.generate_pdf_report(final_result_data, out_path)
-                elif format == "shield":
-                    generator.generate_svg_badge(final_result_data, out_path)
-                elif format == "badge":
+                elif format == "shield" or format == "badge":
                     generator.generate_svg_badge(final_result_data, out_path)
 
                 console.print("[bold green]Report saved![/bold green]")
             except Exception as e:
                 console.print(f"[red]❌ Failed to save report: {e}[/red]")
 
-        # Save lightweight AI status file (Token-optimized)
-        try:
-            warden_dir = Path(".warden")
-            if warden_dir.exists() and final_result_data:
-                status_file = warden_dir / "ai_status.md"
+        # 5. Write AI status file
+        if final_result_data:
+            _write_ai_status_file(final_result_data)
 
-                # Status check (COMPLETED=2) - must match other status checks in this file
-                status_raw = final_result_data.get('status')
-                is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
-                status_icon = "✅ PASS" if is_success else "❌ FAIL"
-                critical_count = final_result_data.get('critical_findings', 0)
-                total_count = final_result_data.get('total_findings', 0)
-                scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                status_content = f"""# Warden Security Status
-Updated: {scan_time}
-
-**Status**: {status_icon}
-**Critical Issues**: {critical_count}
-**Total Issues**: {total_count}
-
-> [!NOTE]
-> If status is FAIL, please check the full report or run `warden scan` for details.
-> Do not analyze full code unless you are resolving these specific issues.
-"""
-                with open(status_file, "w") as f:
-                    f.write(status_content)
-        except Exception:
-            pass # Silent fail for aux file
-
-        # Update baseline if requested (Phase 4.2)
+        # 6. Update baseline
         if update_baseline and final_result_data:
-            try:
-                from warden.cli.commands.helpers.baseline_manager import BaselineManager
-                console.print("\n[bold blue]📉 Updating Baseline...[/bold blue]")
+            _update_baseline(final_result_data, intelligence_context, verbose)
 
-                baseline_mgr = BaselineManager(Path.cwd())
-
-                # Load module map from intelligence if available
-                module_map = None
-                if intelligence_context and intelligence_context.get("modules"):
-                    module_map = intelligence_context["modules"]
-
-                # Ensure we're using module-based structure
-                if not baseline_mgr.is_module_based():
-                    console.print("[dim]Migrating to module-based baseline structure...[/dim]")
-                    baseline_mgr.migrate_from_legacy(module_map)
-
-                # Update baseline with scan results
-                stats = baseline_mgr.update_baseline_for_modules(
-                    scan_results=final_result_data,
-                    module_map=module_map
-                )
-
-                # Display update statistics
-                console.print(f"[green]✓ Baseline updated![/green]")
-                console.print(f"[dim]   Modules updated: {stats['modules_updated']}[/dim]")
-
-                if stats['total_new_debt'] > 0:
-                    console.print(f"[yellow]   New debt items: {stats['total_new_debt']}[/yellow]")
-                if stats['total_resolved_debt'] > 0:
-                    console.print(f"[green]   Resolved debt: {stats['total_resolved_debt']}[/green]")
-
-                # Check for debt warnings
-                debt_report = baseline_mgr.get_debt_report()
-                for warning in debt_report.get("warnings", []):
-                    level_color = {
-                        "critical": "red",
-                        "warning": "yellow",
-                        "info": "dim"
-                    }.get(warning.get("level"), "dim")
-                    console.print(f"[{level_color}]   ⚠️  {warning['message']}[/{level_color}]")
-
-            except Exception as e:
-                console.print(f"[yellow]⚠️  Baseline update failed: {e}[/yellow]")
-                if verbose:
-                    import traceback
-                    traceback.print_exc()
-
-        # Auto-fix (after scan results, before exit code)
+        # 6.5 Auto-fix (after scan results, before exit code)
         if auto_fix and final_result_data:
             try:
                 from warden.fortification.application.auto_fixer import AutoFixer
@@ -869,17 +875,15 @@ Updated: {scan_time}
             except Exception as e:
                 console.print(f"[yellow]⚠️  Auto-fix failed: {e}[/yellow]")
 
-        # Final exit code decision
-        # 1. Check pipeline status (must be valid and completed)
-        status_val = final_result_data.get('status')
+        # 7. Exit code decision
+        status_val = final_result_data.get('status') if final_result_data else None
         pipeline_ok = final_result_data and str(status_val).upper() in [
             "2", "5", "SUCCESS", "COMPLETED", "COMPLETED_WITH_FAILURES",
             "PIPELINESTATUS.COMPLETED", "PIPELINESTATUS.COMPLETED_WITH_FAILURES",
         ]
 
-        # 2. Check for critical issues or frame failures
-        critical_count = final_result_data.get('critical_findings', 0)
-        frames_failed = final_result_data.get('frames_failed', 0)
+        critical_count = final_result_data.get('critical_findings', 0) if final_result_data else 0
+        frames_failed = final_result_data.get('frames_failed', 0) if final_result_data else 0
 
         if not pipeline_ok:
              console.print("[bold red]❌ Pipeline did not complete successfully.[/bold red]")

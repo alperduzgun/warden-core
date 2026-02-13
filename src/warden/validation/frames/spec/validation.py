@@ -358,7 +358,7 @@ class SpecConfigValidator:
         except (PermissionError, OSError) as e:
             issues.append(ValidationIssue(
                 severity=IssueSeverity.ERROR,
-                message=f"Platform path is not readable: {str(e)}",
+                message=f"Platform path is not readable: {e!s}",
                 field="path",
                 platform_name=platform_name,
                 suggestion="Check directory permissions",

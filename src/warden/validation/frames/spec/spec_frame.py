@@ -714,7 +714,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
             # Graceful degradation: Return empty contract with warning
             return self._create_degraded_contract(
                 platform,
-                f"Extraction failed: {str(e)}",
+                f"Extraction failed: {e!s}",
             )
 
     def _create_degraded_contract(

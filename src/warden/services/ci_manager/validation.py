@@ -12,7 +12,6 @@ from typing import Final
 
 from .exceptions import SecurityError, ValidationError
 
-
 # Security constraints
 SAFE_BRANCH_PATTERN: Final[re.Pattern] = re.compile(r'^[\w\-./]+$')
 MAX_BRANCH_LENGTH: Final[int] = 256

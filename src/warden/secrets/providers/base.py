@@ -71,7 +71,7 @@ class ISecretProvider(ABC):
         """
         pass
 
-    async def cleanup_async(self) -> None:  # noqa: B027
+    async def cleanup_async(self) -> None:
         """Optional cleanup (close connections, etc.).
 
         Override this method if your provider needs cleanup.

@@ -132,11 +132,17 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
                 use_lsp = self.config.get("use_lsp", False)
                 project_root = getattr(self, 'project_root', None)
 
+                # Build mini ast_cache from code_file metadata if available
+                _file_cache = None
+                if code_file.metadata and '_cached_parse_result' in code_file.metadata:
+                    _file_cache = {code_file.path: code_file.metadata['_cached_parse_result']}
+
                 detector = await OrphanDetectorFactory.create_detector(
                     code_file.content,
                     code_file.path,
                     use_lsp=use_lsp,
-                    project_root=str(project_root) if project_root else None
+                    project_root=str(project_root) if project_root else None,
+                    ast_cache=_file_cache,
                 )
                 if not detector:
                     # Language not supported
@@ -328,11 +334,17 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
             use_lsp = self.config.get("use_lsp", False)
             project_root = getattr(self, 'project_root', None)
 
+            # Build mini ast_cache from code_file metadata if available
+            _file_cache = None
+            if code_file.metadata and '_cached_parse_result' in code_file.metadata:
+                _file_cache = {code_file.path: code_file.metadata['_cached_parse_result']}
+
             detector = await OrphanDetectorFactory.create_detector(
                 code_file.content,
                 code_file.path,
                 use_lsp=use_lsp,
-                project_root=str(project_root) if project_root else None
+                project_root=str(project_root) if project_root else None,
+                ast_cache=_file_cache,
             )
 
             if not detector:

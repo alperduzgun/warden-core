@@ -103,7 +103,7 @@ class GeminiClient(ILlmClient):
             # Extract content
             # Response: { candidates: [ { content: { parts: [ { text: "..." } ] } } ] }
             content = ""
-            if "candidates" in result and result["candidates"]:
+            if result.get("candidates"):
                 candidate = result["candidates"][0]
                 if "content" in candidate and "parts" in candidate["content"]:
                     parts = candidate["content"]["parts"]

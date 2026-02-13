@@ -195,7 +195,7 @@ class IntegrityScanner:
             logger.warning("build_verification_failed", error=str(e))
             issues.append(IntegrityIssue(
                 file_path="BUILD",
-                message=f"Build verification execution error: {str(e)}",
+                message=f"Build verification execution error: {e!s}",
                 severity="warning"
             ))
 

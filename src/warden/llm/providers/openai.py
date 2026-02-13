@@ -130,7 +130,7 @@ class OpenAIClient(ILlmClient):
             return LlmResponse(
                 content="",
                 success=False,
-                error_message=f"HTTP error: {str(e)}",
+                error_message=f"HTTP error: {e!s}",
                 provider=self.provider,
                 duration_ms=duration_ms
             )
@@ -139,7 +139,7 @@ class OpenAIClient(ILlmClient):
             return LlmResponse(
                 content="",
                 success=False,
-                error_message=f"JSON/Data error: {str(e)}",
+                error_message=f"JSON/Data error: {e!s}",
                 provider=self.provider,
                 duration_ms=duration_ms
             )
@@ -149,7 +149,7 @@ class OpenAIClient(ILlmClient):
             return LlmResponse(
                 content="",
                 success=False,
-                error_message=f"Unexpected error: {str(e)}",
+                error_message=f"Unexpected error: {e!s}",
                 provider=self.provider,
                 duration_ms=duration_ms
             )

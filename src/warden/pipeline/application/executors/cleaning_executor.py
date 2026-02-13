@@ -99,7 +99,7 @@ class CleaningExecutor(BasePhaseExecutor):
 
         except Exception as e:
             logger.error("phase_failed", phase="CLEANING", error=str(e))
-            context.errors.append(f"CLEANING failed: {str(e)}")
+            context.errors.append(f"CLEANING failed: {e!s}")
 
         if self.progress_callback:
             duration = time.perf_counter() - start_time

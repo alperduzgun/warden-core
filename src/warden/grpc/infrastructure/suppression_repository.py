@@ -131,7 +131,7 @@ class FileSuppressionRepository(
             if file_pattern is None:
                 # Global suppression, applies to all files
                 result.append(suppression)
-            elif file_pattern == file_path or ("*" in file_pattern or "?" in file_pattern) and fnmatch.fnmatch(file_path, file_pattern):
+            elif file_pattern == file_path or (("*" in file_pattern or "?" in file_pattern) and fnmatch.fnmatch(file_path, file_pattern)):
                 result.append(suppression)
 
         return result

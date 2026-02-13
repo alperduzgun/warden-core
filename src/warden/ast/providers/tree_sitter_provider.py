@@ -358,7 +358,7 @@ class TreeSitterProvider(IASTProvider):
                 ast_root=None,
                 errors=[
                     ParseError(
-                        message=f"Parse error: {str(e)}",
+                        message=f"Parse error: {e!s}",
                         severity="error",
                     )
                 ],

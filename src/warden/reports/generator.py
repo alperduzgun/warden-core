@@ -731,4 +731,4 @@ class ReportGenerator:
                 error_type=type(e).__name__
             )
             # Re-raise with more context
-            raise RuntimeError(f"PDF generation failed: {str(e)}") from e
+            raise RuntimeError(f"PDF generation failed: {e!s}") from e

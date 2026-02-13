@@ -156,6 +156,6 @@ class CommandExecutor:
                 command=cmd_str,
                 exit_code=-2,
                 stdout="",
-                stderr=f"Execution error: {str(e)}",
+                stderr=f"Execution error: {e!s}",
                 duration=time.perf_counter() - start_time
             )
