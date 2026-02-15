@@ -10,6 +10,7 @@ Detects hardcoded passwords in code:
 import re
 from typing import Any, Dict, List
 
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.check import (
     CheckFinding,
     CheckResult,
@@ -17,6 +18,8 @@ from warden.validation.domain.check import (
     ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
+
+logger = get_logger(__name__)
 
 
 class HardcodedPasswordCheck(ValidationCheck):
@@ -150,6 +153,22 @@ class HardcodedPasswordCheck(ValidationCheck):
                 match = compiled_pattern.search(line)
 
                 if match and self._is_likely_password(match.group(0)):
+                    # Check if suppressed via inline comment
+                    suppression_matcher = self._get_suppression_matcher(code_file.path)
+                    if suppression_matcher and suppression_matcher.is_suppressed(
+                        line=line_num,
+                        rule=self.id,
+                        file_path=str(code_file.path),
+                        code=code_file.content,
+                    ):
+                        logger.debug(
+                            "finding_suppressed_inline",
+                            line=line_num,
+                            rule=self.id,
+                            file=code_file.path,
+                        )
+                        break  # Skip this finding
+
                     findings.append(
                         CheckFinding(
                             check_id=self.id,
@@ -248,6 +267,22 @@ class HardcodedPasswordCheck(ValidationCheck):
                 match = compiled_pattern.search(line)
 
                 if match:
+                    # Check if suppressed via inline comment
+                    suppression_matcher = self._get_suppression_matcher(code_file.path)
+                    if suppression_matcher and suppression_matcher.is_suppressed(
+                        line=line_num,
+                        rule=self.id,
+                        file_path=str(code_file.path),
+                        code=code_file.content,
+                    ):
+                        logger.debug(
+                            "weak_password_finding_suppressed_inline",
+                            line=line_num,
+                            rule=self.id,
+                            file=code_file.path,
+                        )
+                        break  # Skip this finding
+
                     findings.append(
                         CheckFinding(
                             check_id=self.id,

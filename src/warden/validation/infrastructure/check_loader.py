@@ -97,7 +97,7 @@ class CheckLoader:
 
         Example pyproject.toml (for SecurityFrame):
             [tool.poetry.plugins."warden.checks.security"]
-            mycompany_api_key = "warden_check_mycompany.security:APIKeyCheck"
+            mycompany_api_key = "warden_check_mycompany.security:APIKeyCheck"  # warden-ignore
 
         Returns:
             List of ValidationCheck classes from entry points

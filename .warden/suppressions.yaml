@@ -1,0 +1,47 @@
+# Warden Suppression Configuration
+# Manages false positive suppressions for self-scans
+
+enabled: true
+
+# Suppression entries
+entries:
+  # Fortification Adapter - Security Pattern Definitions
+  - id: "fortification-security-patterns"
+    type: "config"
+    file: "src/warden/mcp/infrastructure/adapters/fortification_adapter.py"
+    line: 213
+    rules:
+      - "py-no-eval"
+      - "js-eval-usage"
+      - "py-no-exec"
+      - "py-requests-no-verify"
+    reason: "These are security pattern definitions used to DETECT issues, not actual usage of eval/exec/verify=False"
+    enabled: true
+
+  # Check Loader - Docstring Example
+  - id: "check-loader-docstring-example"
+    type: "config"
+    file: "src/warden/validation/infrastructure/check_loader.py"
+    line: 100
+    rules:
+      - "py-hardcoded-password"
+      - "js-hardcoded-secret"
+    reason: "Docstring example showing entry point configuration, not actual API key"
+    enabled: true
+
+  # Badge Generator - Local Dev Fallback
+  - id: "badge-generator-dev-fallback"
+    type: "config"
+    file: "src/warden/reports/generator.py"
+    line: 471
+    rules:
+      - "py-hardcoded-password"
+      - "js-hardcoded-secret"
+    reason: "Weak default for local development only, with env var check and warning. Production uses WARDEN_BADGE_SECRET env var"
+    enabled: true
+
+# Global rules to suppress (empty for now)
+globalRules: []
+
+# Files to ignore globally (handled by .wardenignore)
+ignoredFiles: []

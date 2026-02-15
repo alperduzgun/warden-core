@@ -1,0 +1,53 @@
+{
+  "module": "unknown",
+  "findings": [
+    {
+      "id": "py-hardcoded-password",
+      "severity": "high",
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "location": "src/warden/validation/infrastructure/check_loader.py:100",
+      "detail": null,
+      "code": "mycompany_api_key = \"warden_check_mycompany.security:APIKeyCheck\"  # warden-ignore: hardcoded-password",
+      "line": 100,
+      "column": 23,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c"
+    },
+    {
+      "id": "js-hardcoded-secret",
+      "severity": "high",
+      "message": "Use environment variables for sensitive data",
+      "location": "src/warden/validation/infrastructure/check_loader.py:100",
+      "detail": null,
+      "code": "mycompany_api_key = \"warden_check_mycompany.security:APIKeyCheck\"  # warden-ignore: hardcoded-password",
+      "line": 100,
+      "column": 23,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "653428d7b7b8e0862654f5442b80a7c4f2ba489d0d453146930decf8d8af50ff"
+    }
+  ],
+  "debt_items": [
+    {
+      "fingerprint": "732d33a3f64c87db177fee7fee86709a1eb1b2df968ca5846c572b2a6006a61c",
+      "first_seen": "2026-02-15T21:57:55.092673+00:00",
+      "rule_id": "py-hardcoded-password",
+      "file_path": null,
+      "message": "Use environment variables or secure vaults for sensitive data",
+      "severity": "high"
+    },
+    {
+      "fingerprint": "653428d7b7b8e0862654f5442b80a7c4f2ba489d0d453146930decf8d8af50ff",
+      "first_seen": "2026-02-15T21:57:55.092673+00:00",
+      "rule_id": "js-hardcoded-secret",
+      "file_path": null,
+      "message": "Use environment variables for sensitive data",
+      "severity": "high"
+    }
+  ],
+  "created_at": "2026-02-15T21:24:04.391689+00:00",
+  "updated_at": "2026-02-15T21:58:48.845051+00:00",
+  "debt_count": 2,
+  "oldest_debt_age_days": 0
+}

@@ -24,7 +24,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List
+
+from warden.shared.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class CheckSeverity(str, Enum):
@@ -168,6 +173,10 @@ class ValidationCheck(ABC):
         self.config = config or {}
         self._validate_metadata()
 
+        # Suppression matcher (lazily initialized)
+        self._suppression_matcher: Any | None = None
+        self._project_root: Path | None = None
+
     def _validate_metadata(self) -> None:
         """Validate required metadata is present."""
         if self.id == "unnamed-check":
@@ -220,6 +229,78 @@ class ValidationCheck(ABC):
             return check_config[self.id].get("enabled", self.enabled_by_default)
 
         return self.enabled_by_default
+
+    def _find_project_root(self, file_path: str | Path) -> Path | None:
+        """
+        Find project root by looking for .warden directory in parent paths.
+
+        Args:
+            file_path: Path to the code file
+
+        Returns:
+            Path to project root or None if not found
+        """
+        try:
+            current = Path(file_path).resolve()
+            if current.is_file():
+                current = current.parent
+
+            # Look for .warden directory in parent paths
+            for parent in [current] + list(current.parents):
+                warden_dir = parent / ".warden"
+                if warden_dir.exists() and warden_dir.is_dir():
+                    return parent
+
+            # Fallback to current working directory
+            cwd = Path.cwd()
+            warden_dir = cwd / ".warden"
+            if warden_dir.exists() and warden_dir.is_dir():
+                return cwd
+
+            return None
+        except Exception as e:
+            logger.warning("project_root_detection_failed", error=str(e))
+            return None
+
+    def _get_suppression_matcher(self, file_path: str | Path) -> Any | None:
+        """
+        Get or initialize suppression matcher.
+
+        Args:
+            file_path: Path to the code file (used to find project root)
+
+        Returns:
+            SuppressionMatcher instance or None if initialization fails
+        """
+        if self._suppression_matcher is not None:
+            return self._suppression_matcher
+
+        try:
+            from warden.suppression.config_loader import load_suppression_config
+            from warden.suppression.matcher import SuppressionMatcher
+
+            # Find project root if not already cached
+            if self._project_root is None:
+                self._project_root = self._find_project_root(file_path)
+
+            if self._project_root is None:
+                logger.debug("suppression_disabled_no_project_root", check=self.id)
+                return None
+
+            # Load suppression config
+            config = load_suppression_config(project_root=self._project_root)
+            self._suppression_matcher = SuppressionMatcher(config)
+
+            logger.debug(
+                "suppression_matcher_initialized",
+                check=self.id,
+                project_root=str(self._project_root),
+            )
+
+            return self._suppression_matcher
+        except Exception as e:
+            logger.warning("suppression_matcher_init_failed", check=self.id, error=str(e))
+            return None
 
     def __repr__(self) -> str:
         """String representation for logging."""

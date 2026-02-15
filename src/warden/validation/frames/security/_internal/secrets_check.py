@@ -11,6 +11,7 @@ Detects hardcoded secrets and credentials:
 import re
 from typing import Any, Dict, List
 
+from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.check import (
     CheckFinding,
     CheckResult,
@@ -18,6 +19,8 @@ from warden.validation.domain.check import (
     ValidationCheck,
 )
 from warden.validation.domain.frame import CodeFile
+
+logger = get_logger(__name__)
 
 
 class SecretsCheck(ValidationCheck):
@@ -113,6 +116,22 @@ class SecretsCheck(ValidationCheck):
                 match = compiled_pattern.search(line)
 
                 if match:
+                    # Check if suppressed via inline comment
+                    suppression_matcher = self._get_suppression_matcher(code_file.path)
+                    if suppression_matcher and suppression_matcher.is_suppressed(
+                        line=line_num,
+                        rule=self.id,
+                        file_path=str(code_file.path),
+                        code=code_file.content,
+                    ):
+                        logger.debug(
+                            "finding_suppressed_inline",
+                            line=line_num,
+                            rule=self.id,
+                            file=code_file.path,
+                        )
+                        continue  # Skip this finding
+
                     # Mask the secret in the message
                     masked_secret = self._mask_secret(match.group(0))
 

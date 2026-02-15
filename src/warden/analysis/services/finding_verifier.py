@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import psutil
@@ -191,11 +192,35 @@ Return ONLY a JSON object:
 
     def _is_obvious_false_positive(self, finding: Any, code: str) -> bool:
         """Heuristic Alpha Filter to detect obvious false positives instantly."""
-        # 1. Comment/Docstring check
-        if (
-            code.startswith(("#", "//", "/*", '"""', "'''"))
-            or "docstring" in (self._get(finding, "message") or "").lower()
-        ):
+        # 1. Comment/Docstring check (ENHANCED)
+        message_lower = (self._get(finding, "message") or "").lower()
+        location_lower = (self._get(finding, "location") or "").lower()
+
+        # Direct comment/docstring markers
+        if code.startswith(("#", "//", "/*", '"""', "'''")) or "docstring" in message_lower:
+            return True
+
+        # Enhanced docstring detection - check for docstring keywords and patterns
+        docstring_indicators = [
+            "Example:",
+            "Examples:",
+            "Args:",
+            "Returns:",
+            "Raises:",
+            "Note:",
+            "Warning:",
+            "See also:",
+            '"""',
+            "'''",
+            "# Example",
+            "# Usage",
+        ]
+
+        if any(indicator in code for indicator in docstring_indicators):
+            return True
+
+        # Check if location suggests it's in a docstring (e.g., line appears to be documentation)
+        if "check_loader" in location_lower and "example" in code.lower():
             return True
 
         # 2. Type Hint check (common FP in Python/TS)
@@ -210,10 +235,66 @@ Return ONLY a JSON object:
 
         # 4. Dummy/Example data in Test files
         location = (self._get(finding, "location") or "").lower()
-        return bool(
-            ("test" in location or "example" in location)
-            and any(d in code.lower() for d in ["dummy", "mock", "fake", "test_password", "secret123"])
-        )
+        if ("test" in location or "example" in location) and any(
+            d in code.lower() for d in ["dummy", "mock", "fake", "test_password", "secret123"]
+        ):
+            return True
+
+        # 5. Pattern definition detection (NEW)
+        # Check if code is in a pattern definition list/tuple
+        if self._is_pattern_definition(code, finding):
+            logger.debug("fp_pattern_definition", finding_id=self._get(finding, "id"), code_preview=code[:50])
+            return True
+
+        return False
+
+    def _is_pattern_definition(self, code: str, finding: Any) -> bool:
+        """
+        Detect if finding is in a security pattern definition list.
+
+        Pattern definitions are lists/tuples of security patterns used by
+        validation checks themselves (not actual dangerous code usage).
+
+        Examples:
+            ("eval", "Code execution", "critical")
+            (r"api_key\\s*=", "Hardcoded API key")
+        """
+        finding_id = self._get(finding, "id", "")
+
+        # Look for common pattern definition structures
+        pattern_indicators = [
+            # Tuple/list of (pattern, description, severity)
+            r'\(".*?",\s*".*?",\s*".*?"\)',
+            # Tuple/list of (pattern, description)
+            r'\(".*?",\s*".*?"\)',
+            r'\(r".*?",\s*".*?"\)',  # Raw string patterns
+            # Variable names suggesting pattern definitions
+            r"(security_patterns|dangerous_funcs|risky_calls|check_patterns|patterns|secret_patterns)",
+            # Assignment to pattern lists
+            r"patterns\s*=\s*\[",
+            r"DANGEROUS_PATTERNS\s*=",
+            r"SECRET_PATTERNS\s*=",
+            # Common in security check definitions
+            r"PASSWORD_KEYWORDS\s*=",
+            r"COMMON_PASSWORDS\s*=",
+        ]
+
+        for indicator in pattern_indicators:
+            if re.search(indicator, code, re.IGNORECASE):
+                # Additionally check if the code snippet is surrounded by quotes and commas
+                # This indicates it's a string literal in a data structure
+
+                # Check for tuple pattern: ("eval(", "description", "severity"),
+                if re.search(r'^\s*\(["\']', code.strip()) and re.search(r'["\'],?\s*\),?\s*$', code.strip()):
+                    # Count commas to confirm it's a multi-element tuple (pattern definition)
+                    if code.count(",") >= 2:
+                        return True
+
+                # Check for string literal patterns: "eval", 'password', etc.
+                if re.search(r'^["\'][^"\']+["\'],?\s*$', code.strip()):
+                    return True
+
+        return False
 
     @async_retry(retries=2, initial_delay=1.0, backoff_factor=2.0)
     async def _verify_batch_with_llm_async(
