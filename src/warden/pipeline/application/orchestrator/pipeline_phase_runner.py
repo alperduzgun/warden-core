@@ -223,6 +223,10 @@ class PipelinePhaseRunner:
         for cf in code_files:
             ast_data = context.ast_cache.get(cf.path, {})
 
+            # Only process if ast_data is a dictionary (not a raw AST Module)
+            if not isinstance(ast_data, dict):
+                continue
+
             # Input sources from AST
             for src in ast_data.get("input_sources", []):
                 intel.input_sources.append(
