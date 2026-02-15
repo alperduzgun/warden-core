@@ -134,7 +134,7 @@ class ProjectStructureAnalyzer:
             context.special_dirs = self.special_dirs
 
             # Sequential detection based on collected data
-            context.project_type = self._detect_project_type()
+            context.project_type = await self._detect_project_type()
             context.framework = await self._detect_framework()
             context.architecture = self._detect_architecture()
             context.test_framework = self._detect_test_framework()
@@ -487,7 +487,7 @@ class ProjectStructureAnalyzer:
 
         return versions
 
-    def _detect_project_type(self) -> ProjectType:
+    async def _detect_project_type(self) -> ProjectType:
         """Detect the type of project."""
         # Check for specific indicators
         if "package.json" in self.config_files:
@@ -508,7 +508,7 @@ class ProjectStructureAnalyzer:
                 return ProjectType.LIBRARY
 
         # API indicators (detect framework inline since it's not set yet)
-        framework = self._detect_framework()
+        framework = await self._detect_framework()
         if framework in [Framework.FASTAPI, Framework.FLASK, Framework.EXPRESS]:
             return ProjectType.API
 
@@ -543,7 +543,15 @@ class ProjectStructureAnalyzer:
 
         detector = FrameworkDetector(self.project_root)
         result = await detector.detect()
-        return result.primary_framework if result.primary_framework else Framework.NONE
+
+        # Convert discovery.Framework to project_context.Framework using value
+        if result.primary_framework:
+            try:
+                return Framework(result.primary_framework.value)
+            except ValueError:
+                # If value doesn't exist in project_context.Framework, return NONE
+                return Framework.NONE
+        return Framework.NONE
 
     def _detect_architecture(self) -> Architecture:
         """Detect the architecture pattern."""
