@@ -568,9 +568,12 @@ Top directories:
 {chr(10).join(f"- {d}" for d in sorted(dirs)[:20])}
 
 File types (by extension):
-{chr(10).join(f"- {ext}: {count} files" for ext, count in sorted(extensions.items(), key=lambda x: x[
-                    1
-                ], reverse=True)[:10])}
+{
+            chr(10).join(
+                f"- {ext}: {count} files"
+                for ext, count in sorted(extensions.items(), key=lambda x: x[1], reverse=True)[:10]
+            )
+        }
 
 Total files: {len(file_list)}
 """

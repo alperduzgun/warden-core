@@ -9,7 +9,7 @@ Analyzes pipeline results to:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.analysis.application.issue_tracker import IssueTracker
 from warden.analysis.domain.enums import AnalysisStatus, TrendDirection
@@ -219,6 +219,20 @@ class ResultAnalyzer:
         else:
             return TrendDirection.STABLE
 
+    def _normalize_datetime(self, dt: datetime) -> datetime:
+        """
+        Ensure datetime is timezone-aware (UTC).
+
+        Args:
+            dt: Datetime object to normalize
+
+        Returns:
+            Timezone-aware datetime in UTC
+        """
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
     def _calculate_issue_trends(self) -> list[IssueTrend]:
         """
         Calculate trends for individual issues.
@@ -261,9 +275,13 @@ class ResultAnalyzer:
             else:
                 trend = TrendDirection.STABLE
 
-            # Get first and last seen
-            first_seen = min(i.first_detected for i in issues)
-            last_seen = max(i.last_updated for i in issues)
+            # Get first and last seen (normalized to timezone-aware)
+            first_seen = min(
+                self._normalize_datetime(i.first_detected) for i in issues
+            )
+            last_seen = max(
+                self._normalize_datetime(i.last_updated) for i in issues
+            )
 
             issue_trend = IssueTrend(
                 issue_id=issues[0].id,
