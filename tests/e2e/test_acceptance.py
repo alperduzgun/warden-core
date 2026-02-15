@@ -200,12 +200,32 @@ class TestDoctorInit:
         assert len(out) > 0
 
     def test_init_creates_config(self, empty_dir):
+        """Test that init creates config in non-interactive mode.
+
+        NOTE: WARDEN_NON_INTERACTIVE=true makes init use default selections:
+          - Provider: Ollama (if available) or Claude Code (if detected)
+          - Mode: normal
+          - CI: skip
+          - No prompts for baseline/intelligence generation
+        """
         r = run_warden(
-            "init", "--force", "--skip-mcp", cwd=str(empty_dir), timeout=30,
+            "init", "--force", "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
+            env={"WARDEN_NON_INTERACTIVE": "true"},
         )
-        assert r.returncode == 0
+        assert r.returncode == 0, f"Init failed: {r.stderr}"
+
+        # Verify config created
         config = empty_dir / ".warden" / "config.yaml"
         assert config.exists(), ".warden/config.yaml not created"
+
+        # Verify config has default LLM provider
+        with open(config) as f:
+            cfg = yaml.safe_load(f)
+        assert "llm" in cfg, "LLM config missing"
+        assert cfg["llm"]["provider"] in ["ollama", "claude_code"], \
+            f"Unexpected provider: {cfg['llm'].get('provider')}"
 
     def test_init_directory_structure(self, initialized_project):
         warden_dir = initialized_project / ".warden"
@@ -218,10 +238,12 @@ class TestDoctorInit:
         assert r.returncode in (0, 1)
 
     def test_init_idempotent(self, initialized_project):
-        # Second init should not error out
+        """Second init should not error out (non-interactive mode)."""
         r = run_warden(
             "init", "--force", "--skip-mcp",
-            cwd=str(initialized_project), timeout=30,
+            cwd=str(initialized_project),
+            timeout=30,
+            env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         assert r.returncode == 0
 
