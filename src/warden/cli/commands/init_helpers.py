@@ -355,13 +355,22 @@ def configure_claude_code() -> tuple[dict, dict]:
 
 def _fallback_to_cloud_provider() -> tuple[dict, dict]:
     """Fallback when Ollama setup fails."""
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+
+    if not is_interactive:
+        # Non-interactive mode: return disabled config (for CI/testing)
+        console.print("[dim]Non-interactive mode: Skipping cloud provider setup[/dim]")
+        return {"provider": "ollama", "enabled": False}, {}
+
     console.print("\n[bold yellow]Selecting alternative cloud provider...[/bold yellow]")
+
     # Show only cloud options
     for key in ["2", "3", "4", "7"]:
         p = LLM_PROVIDERS[key]
         console.print(f"  [{key}] {p['emoji']} {p['name']} - {p['description']}")
 
     choice = Prompt.ask("Select cloud provider", choices=["2", "3", "4", "7"], default="7")
+
     provider = LLM_PROVIDERS[choice]
     return configure_cloud_provider(provider)
 
