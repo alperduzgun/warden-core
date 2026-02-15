@@ -258,7 +258,7 @@ async def _check_claude_code_availability() -> bool:
 
     try:
         # Run claude --version to verify it's working
-        process = await asyncio.create_subprocess_exec(  # warden: ignore
+        process = await asyncio.create_subprocess_exec(  # warden-ignore
             "claude",
             "--version",
             stdout=asyncio.subprocess.PIPE,

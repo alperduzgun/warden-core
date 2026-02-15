@@ -253,8 +253,8 @@ class CustomRuleValidator:
 
     def _is_suppressed(self, line: str) -> bool:
         """Check if line has inline suppression."""
-        # Check for Warden specific suppression
-        if "# warden: ignore" in line:
+        # Check for Warden specific suppression (both legacy and standard format)
+        if "# warden-ignore" in line or "# warden: ignore" in line:
             return True
         # Check for common security suppressions
         if "# nosec" in line:
@@ -677,7 +677,7 @@ class CustomRuleValidator:
 
         try:
             # Execute script with timeout (use list args for security)
-            process = await asyncio.create_subprocess_exec(  # warden: ignore
+            process = await asyncio.create_subprocess_exec(  # warden-ignore
                 str(script_path),
                 str(file_path),
                 stdout=asyncio.subprocess.PIPE,

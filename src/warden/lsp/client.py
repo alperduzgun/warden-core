@@ -38,7 +38,7 @@ class LanguageServerClient:
             full_cmd = [self.binary_path] + self.args
             logger.info("lsp_starting", cmd=full_cmd, cwd=self.cwd)
 
-            self.process = await asyncio.create_subprocess_exec(  # warden: ignore
+            self.process = await asyncio.create_subprocess_exec(  # warden-ignore
                 *full_cmd,
                 cwd=self.cwd,
                 stdin=asyncio.subprocess.PIPE,
