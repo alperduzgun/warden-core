@@ -229,7 +229,7 @@ class ResultAnalyzer:
         issue_trends: list[IssueTrend] = []
 
         # Get all issues
-        all_issues = self.issue_tracker.get_all_issues_async()
+        all_issues = self.issue_tracker.get_all_issues()
 
         # Group by issue type
         issue_by_type: dict[str, list[Any]] = {}
