@@ -468,7 +468,7 @@ class ReportGenerator:
                 message="WARDEN_BADGE_SECRET env var not set. Badge signature uses weak default. "
                 "Set WARDEN_BADGE_SECRET for production use.",
             )
-            badge_secret = "warden-local-dev-only"  # warden: ignore
+            badge_secret = "warden-local-dev-only"  # warden-ignore: hardcoded-password
         secret_key = badge_secret.encode()
         payload = f"{score:.1f}|{timestamp}|WARDEN_QUALITY".encode()
         signature = hmac.new(secret_key, payload, hashlib.sha256).hexdigest()

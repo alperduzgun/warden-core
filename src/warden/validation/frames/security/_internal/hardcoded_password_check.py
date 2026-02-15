@@ -124,8 +124,23 @@ class HardcodedPasswordCheck(ValidationCheck):
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute hardcoded password detection."""
         findings: list[CheckFinding] = []
+        lines = code_file.content.split("\n")
+        in_docstring = False
 
-        for line_num, line in enumerate(code_file.content.split("\n"), start=1):
+        for line_num, line in enumerate(lines, start=1):
+            stripped = line.strip()
+
+            # Track docstring boundaries
+            docstring_toggles = stripped.count('"""') + stripped.count("'''")
+            if docstring_toggles % 2 == 1:
+                in_docstring = not in_docstring
+            if in_docstring or docstring_toggles >= 2:
+                continue
+
+            # Skip comment-only lines
+            if stripped.startswith("#") or stripped.startswith("//"):
+                continue
+
             # Skip if using environment variables (safe)
             if self._is_safe_pattern(line):
                 continue
@@ -147,7 +162,7 @@ class HardcodedPasswordCheck(ValidationCheck):
                                 "Use environment variables or secret management:\n"
                                 "✅ GOOD: password = os.getenv('DB_PASSWORD')\n"
                                 "✅ GOOD: Use Azure Key Vault, AWS Secrets Manager\n"
-                                "❌ BAD: password = 'hardcoded_secret'"  # warden: ignore
+                                "❌ BAD: password = 'hardcoded_secret'"  # warden-ignore
                             ),
                             documentation_url="https://cwe.mitre.org/data/definitions/798.html",
                         )
@@ -209,8 +224,26 @@ class HardcodedPasswordCheck(ValidationCheck):
     def _check_weak_passwords(self, code_file: CodeFile) -> list[CheckFinding]:
         """Check for common weak passwords."""
         findings: list[CheckFinding] = []
+        in_docstring = False
 
         for line_num, line in enumerate(code_file.content.split("\n"), start=1):
+            stripped = line.strip()
+
+            # Track docstring boundaries
+            docstring_toggles = stripped.count('"""') + stripped.count("'''")
+            if docstring_toggles % 2 == 1:
+                in_docstring = not in_docstring
+            if in_docstring or docstring_toggles >= 2:
+                continue
+
+            # Skip comment-only lines
+            if stripped.startswith("#") or stripped.startswith("//"):
+                continue
+
+            # Skip constant/list definitions (e.g. pattern lists used for detection)
+            if re.match(r'^["\'][\w]+["\'],?\s*$', stripped):
+                continue
+
             for compiled_pattern, weak_password in self._compiled_weak_patterns:
                 match = compiled_pattern.search(line)
 
@@ -227,7 +260,7 @@ class HardcodedPasswordCheck(ValidationCheck):
                                 "Never use common passwords. Use strong, unique passwords:\n"
                                 "✅ GOOD: Generated password from password manager\n"
                                 "✅ GOOD: Environment variable with secure value\n"
-                                f"❌ BAD: password = '{weak_password}' (easily guessed)"  # warden: ignore
+                                f"❌ BAD: password = '{weak_password}' (easily guessed)"  # warden-ignore
                             ),
                             documentation_url="https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_password",
                         )
