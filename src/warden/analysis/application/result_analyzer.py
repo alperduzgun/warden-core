@@ -260,11 +260,7 @@ class ResultAnalyzer:
 
             # Calculate statistics
             occurrence_count = len(issues)
-            resolution_count = sum(
-                1
-                for i in issues
-                if i.state.value == 1  # RESOLVED
-            )
+            resolution_count = sum(1 for i in issues if i.state.value == 1)  # RESOLVED
             reopen_count = sum(i.reopen_count for i in issues)
 
             # Determine trend
@@ -276,12 +272,8 @@ class ResultAnalyzer:
                 trend = TrendDirection.STABLE
 
             # Get first and last seen (normalized to timezone-aware)
-            first_seen = min(
-                self._normalize_datetime(i.first_detected) for i in issues
-            )
-            last_seen = max(
-                self._normalize_datetime(i.last_updated) for i in issues
-            )
+            first_seen = min(self._normalize_datetime(i.first_detected) for i in issues)
+            last_seen = max(self._normalize_datetime(i.last_updated) for i in issues)
 
             issue_trend = IssueTrend(
                 issue_id=issues[0].id,

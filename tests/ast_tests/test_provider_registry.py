@@ -48,6 +48,9 @@ class MockNativeProvider(IASTProvider):
     async def validate(self) -> bool:
         return True
 
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> list[str]:
+        return []
+
 
 class MockTreeSitterProvider(IASTProvider):
     """Mock tree-sitter provider."""
@@ -77,6 +80,9 @@ class MockTreeSitterProvider(IASTProvider):
 
     async def validate(self) -> bool:
         return True
+
+    def extract_dependencies(self, source_code: str, language: CodeLanguage) -> list[str]:
+        return []
 
 
 class TestASTProviderRegistry:
