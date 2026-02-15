@@ -443,7 +443,8 @@ class FileContextAnalyzer:
             if "from warden.validation.frames" in content:
                 return (FileContext.FRAMEWORK, 0.80)
 
-        except (ValueError, KeyError, AttributeError):  # AST extraction may fail
+        except (ValueError, KeyError, AttributeError, OSError, FileNotFoundError):
+            # AST extraction may fail or file may not exist
             pass
 
         return None
@@ -472,7 +473,8 @@ class FileContextAnalyzer:
             if "# Third-party" in content or "# External library" in content:
                 return (FileContext.VENDOR, 0.9)
 
-        except (ValueError, KeyError, AttributeError):  # AST extraction may fail
+        except (ValueError, KeyError, AttributeError, OSError, FileNotFoundError):
+            # AST extraction may fail or file may not exist
             pass
 
         return None
