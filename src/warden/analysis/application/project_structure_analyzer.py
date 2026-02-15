@@ -135,7 +135,7 @@ class ProjectStructureAnalyzer:
 
             # Sequential detection based on collected data
             context.project_type = self._detect_project_type()
-            context.framework = self._detect_framework()
+            context.framework = await self._detect_framework()
             context.architecture = self._detect_architecture()
             context.test_framework = self._detect_test_framework()
             context.build_tools = self._detect_build_tools()
@@ -537,12 +537,13 @@ class ProjectStructureAnalyzer:
 
         return ProjectType.UNKNOWN
 
-    def _detect_framework(self) -> Framework:
+    async def _detect_framework(self) -> Framework:
         """Detect the main framework used."""
         from warden.analysis.application.discovery.framework_detector import FrameworkDetector
 
-        detector = FrameworkDetector(self.project_root, self.config_files)
-        return detector.detect()
+        detector = FrameworkDetector(self.project_root)
+        result = await detector.detect()
+        return result.primary_framework if result.primary_framework else Framework.NONE
 
     def _detect_architecture(self) -> Architecture:
         """Detect the architecture pattern."""
