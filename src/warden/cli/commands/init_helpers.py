@@ -307,7 +307,7 @@ def configure_claude_code() -> tuple[dict, dict]:
             return _fallback_to_cloud_provider()
 
         # Non-interactive: return with disabled config
-        return {"provider": "claude_code", "enabled": False}, {}
+        return {"provider": "claude_code", "model": "claude-sonnet-4-20250514", "enabled": False}, {}
 
     console.print(f"[green]✓ Claude Code found at: {claude_path}[/green]")
 
@@ -360,7 +360,7 @@ def _fallback_to_cloud_provider() -> tuple[dict, dict]:
     if not is_interactive:
         # Non-interactive mode: return disabled config (for CI/testing)
         console.print("[dim]Non-interactive mode: Skipping cloud provider setup[/dim]")
-        return {"provider": "ollama", "enabled": False}, {}
+        return {"provider": "ollama", "model": "qwen2.5-coder:7b", "enabled": False}, {}
 
     console.print("\n[bold yellow]Selecting alternative cloud provider...[/bold yellow]")
 
