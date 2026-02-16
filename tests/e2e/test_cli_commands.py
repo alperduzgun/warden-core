@@ -488,9 +488,12 @@ class TestCI:
     def test_ci_init_help(self, runner):
         result = runner.invoke(app, ["ci", "init", "--help"])
         assert result.exit_code == 0
-        assert "--provider" in result.stdout
-        assert "--branch" in result.stdout
-        assert "--force" in result.stdout
+        # Strip ANSI codes for reliable assertion
+        import re
+        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
+        assert "--provider" in clean_output
+        assert "--branch" in clean_output
+        assert "--force" in clean_output
 
     def test_ci_fixture_workflow_content(self, isolated_project):
         """Fixture workflow file has correct GitHub Actions structure."""
