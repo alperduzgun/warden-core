@@ -100,7 +100,8 @@ jobs:
           # Test exclusions (VALID for CI):
           # --ignore=tests/chaos/ - Requires Hypothesis (optional dependency)
           # --ignore=tests/integration/ - Requires external services (Ollama, APIs)
-          pytest tests/ -v --tb=short -x --ignore=tests/chaos/ --ignore=tests/integration/ -q
+          # --ignore=tests/e2e/test_acceptance.py - Subprocess tests with different Ollama setup
+          pytest tests/ -v --tb=short -x --ignore=tests/chaos/ --ignore=tests/integration/ --ignore=tests/e2e/test_acceptance.py -q
 
   # ============================================================
   # WARDEN SCAN JOB - Security analysis
