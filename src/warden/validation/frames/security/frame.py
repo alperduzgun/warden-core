@@ -5,7 +5,8 @@ Detects SQL injection, XSS, secrets, and other security vulnerabilities.
 Uses AST analysis, taint tracking, data flow analysis, and LLM verification.
 """
 
-import asyncio
+from __future__ import annotations
+
 import html
 import time
 from typing import TYPE_CHECKING, Any

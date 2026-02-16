@@ -5,7 +5,7 @@ Adds structured logging (structlog) to functions and critical operations.
 """
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any
 
 import structlog
 

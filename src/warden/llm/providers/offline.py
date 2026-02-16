@@ -2,10 +2,6 @@
 Offline LLM Provider
 """
 
-from typing import Optional
-
-from warden.shared.infrastructure.exceptions import ExternalServiceError
-
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 

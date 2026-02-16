@@ -200,14 +200,14 @@ def status_command() -> None:
         # Load meta
         meta = baseline_mgr.load_meta()
         if meta:
-            console.print(f"\n[bold]Metadata:[/bold]")
+            console.print("\n[bold]Metadata:[/bold]")
             console.print(f"  Created: {meta.created_at or 'unknown'}")
             console.print(f"  Updated: {meta.updated_at or 'unknown'}")
             console.print(f"  Modules: {len(meta.modules)}")
             console.print(f"  Total Findings: {meta.total_findings}")
             console.print(f"  Total Debt: {meta.total_debt}")
             if meta.migrated_from_legacy:
-                console.print(f"  [dim]Migrated from legacy format[/dim]")
+                console.print("  [dim]Migrated from legacy format[/dim]")
 
         # List modules
         modules = baseline_mgr.list_modules()
@@ -232,7 +232,7 @@ def status_command() -> None:
             data = baseline_mgr.load_baseline()
             if data:
                 fps = baseline_mgr.get_fingerprints()
-                console.print(f"\n[bold]Legacy Baseline:[/bold]")
+                console.print("\n[bold]Legacy Baseline:[/bold]")
                 console.print(f"  Known Fingerprints: {len(fps)}")
         else:
             console.print("[yellow]No baseline found.[/yellow]")

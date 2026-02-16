@@ -6,7 +6,7 @@ Context-aware frame selection and false positive suppression with AI.
 
 import json
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,
@@ -254,26 +254,6 @@ FILES TO ANALYZE:
         except (json.JSONDecodeError, ValueError, KeyError, TypeError):
             # LLM response parsing failed - return empty list for graceful degradation
             return []
-
-    async def generate_suppression_rules_async(
-        self,
-        findings: list[dict[str, Any]],
-        file_contexts: dict[str, dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        # ... (unchanged) ...
-        return await super().generate_suppression_rules_async(
-            findings, file_contexts
-        )  # Reverting to original flow if not needed
-        # Actually I need to keep the method, I just won't touch it.
-        # But wait, replace_file_content replaces chunks. I should have targeted smaller chunks.
-        # Since I'm targeting big chunks, I need to be careful.
-        # I'll just skip replacing generate_suppression_rules_async in this call and rely on the existing one.
-        # The key is to properly implementation classify_batch_async and the return of execute_async.
-
-    # ... (skipping generate_suppression_rules_async and learn_from_feedback_async as they are fine) ...
-
-    # Wait, I cannot skip methods in the middle of a large replacement block if I claimed to replace up to line 535.
-    # I should restart the strategy and use multiple smaller edits.
 
     async def generate_suppression_rules_async(
         self,

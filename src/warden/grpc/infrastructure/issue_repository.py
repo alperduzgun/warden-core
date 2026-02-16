@@ -7,7 +7,7 @@ Stores issues in .warden/grpc/issues.json
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from warden.grpc.infrastructure.base_file_repository import BaseFileRepository
 from warden.issues.domain.enums import IssueSeverity, IssueState

@@ -9,7 +9,7 @@ import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class MCPErrorCode(IntEnum):

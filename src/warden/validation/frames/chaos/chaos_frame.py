@@ -14,7 +14,6 @@ Usage:
 
 import asyncio
 import random
-from typing import Optional
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (

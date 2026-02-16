@@ -14,14 +14,15 @@ Pipeline: Tree-sitter → LSP → VectorDB → LLM
 Principles: KISS, DRY, SOLID, YAGNI, Fail-Fast, Idempotency
 """
 
+from __future__ import annotations
+
 import html
 import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any
 
-from warden.llm.providers.base import ILlmClient
 from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (

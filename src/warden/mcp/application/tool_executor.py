@@ -12,7 +12,7 @@ Supports:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.mcp.domain.errors import MCPToolExecutionError, MCPToolNotFoundError
 from warden.mcp.domain.models import MCPToolResult

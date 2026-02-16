@@ -9,7 +9,6 @@ Detects inadequate error handling for:
 """
 
 import re
-from typing import List
 
 from warden.validation.domain.check import (
     CheckFinding,

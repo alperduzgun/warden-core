@@ -6,7 +6,6 @@ Runs Warden analysis on staged files before commit.
 
 import subprocess
 from pathlib import Path
-from typing import List, Optional
 
 
 class PreCommitHook:

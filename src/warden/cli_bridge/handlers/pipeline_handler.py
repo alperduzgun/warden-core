@@ -6,7 +6,7 @@ Handles scanning files and streaming pipeline progress.
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from warden.cli_bridge.handlers.base import BaseHandler
 from warden.cli_bridge.protocol import ErrorCode, IPCError

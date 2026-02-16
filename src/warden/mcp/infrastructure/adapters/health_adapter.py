@@ -7,7 +7,7 @@ Maps to gRPC HealthStatusMixin functionality.
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 try:
     from dotenv import dotenv_values
@@ -180,8 +180,6 @@ class HealthAdapter(BaseWardenAdapter):
         Returns detailed status about what's configured and what's missing,
         allowing AI assistants to guide users through setup completion.
         """
-        import json
-        import os
 
         setup_status = {
             "warden_installed": True,  # If this runs, Warden is installed

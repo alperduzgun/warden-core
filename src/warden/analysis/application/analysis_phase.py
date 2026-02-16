@@ -8,7 +8,7 @@ This is the first phase of the 5-phase pipeline.
 import asyncio
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 

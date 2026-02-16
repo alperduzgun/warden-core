@@ -5,7 +5,7 @@ Application service for resource access.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.errors import MCPResourceNotFoundError
 from warden.mcp.domain.models import MCPResourceDefinition

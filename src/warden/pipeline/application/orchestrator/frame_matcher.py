@@ -5,7 +5,6 @@ Handles frame matching and discovery logic.
 """
 
 from pathlib import Path
-from typing import List, Optional
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import ValidationFrame

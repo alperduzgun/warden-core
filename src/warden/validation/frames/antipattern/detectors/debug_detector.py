@@ -9,7 +9,6 @@ Detects debug output in production code:
 """
 
 import re
-from typing import List, Optional
 
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
 from warden.ast.domain.models import ASTNode

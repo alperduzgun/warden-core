@@ -5,9 +5,7 @@ MCP adapter for configuration management tools.
 Maps to gRPC ConfigurationMixin functionality.
 """
 
-import os
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 

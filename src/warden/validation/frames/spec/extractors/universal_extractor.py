@@ -8,12 +8,12 @@ import asyncio
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from warden.ast.application.provider_registry import ASTProviderRegistry
 from warden.ast.domain.enums import ASTNodeType, ParseStatus
 from warden.ast.domain.enums import CodeLanguage as ASTCodeLanguage
-from warden.ast.domain.models import ASTNode, ParseResult
+from warden.ast.domain.models import ASTNode
 from warden.llm.types import LlmRequest
 from warden.shared.infrastructure.exceptions import ExternalServiceError
 from warden.shared.infrastructure.logging import get_logger
@@ -25,7 +25,6 @@ from warden.validation.frames.spec.models import (
     OperationDefinition,
     OperationType,
     PlatformRole,
-    PlatformType,
 )
 
 # =============================================================================
@@ -481,7 +480,6 @@ class UniversalContractExtractor:
             return [self._create_fallback_operation(c) for c in candidates]
 
         # Batch processing with AI
-        batch_size = 50
         from warden.shared.infrastructure.resilience.parallel import ParallelBatchExecutor
 
         executor = ParallelBatchExecutor(concurrency_limit=4, item_timeout=30.0)
@@ -766,7 +764,7 @@ Extract details.
         return OperationDefinition(
             name=call.function_name,
             operation_type=OperationType.QUERY,  # Default to Query for safety
-            description=f"Auto-extracted (AI extraction skipped/failed)",
+            description="Auto-extracted (AI extraction skipped/failed)",
             source_file=call.file_path,
             source_line=call.line,
         )

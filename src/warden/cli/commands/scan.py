@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import typer
 from rich.console import Console
@@ -52,7 +51,7 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
 
         # 3. Prepare Context (Sampled) - SANITIZED to prevent prompt injection
         context_parts = [
-            f"Scan Failed.",
+            "Scan Failed.",
             f"Stats: {critical_count} critical issues, {frames_failed} failed frames.",
             "",
             "Top Issue Categories:",
@@ -215,7 +214,7 @@ def _display_memory_stats(snapshot) -> None:
     # Check for potential leaks (allocations > 10MB)
     large_allocations = [s for s in top_stats if s.size > 10 * 1024 * 1024]
     if large_allocations:
-        console.print(f"\n[yellow]⚠️  Potential Memory Leaks Detected:[/yellow]")
+        console.print("\n[yellow]⚠️  Potential Memory Leaks Detected:[/yellow]")
         for stat in large_allocations:
             console.print(f"  - {stat.traceback.format()[0]}: {stat.size / 1024 / 1024:.2f} MB")
 
@@ -781,7 +780,7 @@ def _update_baseline(
             module_map=module_map,
         )
 
-        console.print(f"[green]✓ Baseline updated![/green]")
+        console.print("[green]✓ Baseline updated![/green]")
         console.print(f"[dim]   Modules updated: {update_stats['modules_updated']}[/dim]")
 
         if update_stats["total_new_debt"] > 0:

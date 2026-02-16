@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
@@ -400,7 +399,7 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
 
     if not existing_key:
         # Prompt for API key
-        console.print(f"[dim]Get your API key from the provider's dashboard.[/dim]")
+        console.print("[dim]Get your API key from the provider's dashboard.[/dim]")
         if key_prefix:
             console.print(f"[dim]Key should start with: {key_prefix}[/dim]")
 
@@ -720,7 +719,7 @@ You are responsible for the security and code quality of this project.
                     f.write("\n\n" + cursorrules_template)
                 console.print(f"[green]✓ Updated {cursorrules_path}[/green]")
             else:
-                console.print(f"[dim].cursorrules already has Warden rules, skipping.[/dim]")
+                console.print("[dim].cursorrules already has Warden rules, skipping.[/dim]")
     except Exception as e:
         console.print(f"[yellow]Warning: Could not create .cursorrules: {e}[/yellow]")
 
@@ -763,7 +762,7 @@ You are responsible for the security and code quality of this project.
         with open(rules_path, "w") as f:
             f.write(rules_template)
         console.print(f"[green]✓ Created {rules_path}[/green]")
-    except Exception as e:
+    except Exception:
         # Fallback if template not found
         fallback_rules = """# Warden AI Protocol
 

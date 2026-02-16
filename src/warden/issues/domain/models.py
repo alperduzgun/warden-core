@@ -31,7 +31,7 @@ TypeScript:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Type
+from typing import Any
 
 from warden.issues.domain.enums import IssueSeverity, IssueState
 from warden.shared.domain.base_model import BaseDomainModel

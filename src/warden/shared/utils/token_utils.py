@@ -63,7 +63,9 @@ def truncate_content_for_llm(
     # Keep start + end with truncation marker
     start_section = "\n".join(lines[:preserve_start_lines])
     end_section = "\n".join(lines[-preserve_end_lines:])
-    truncation_marker = f"\n\n... [{len(lines) - preserve_start_lines - preserve_end_lines} lines truncated for LLM context] ...\n\n"
+    truncation_marker = (
+        f"\n\n... [{len(lines) - preserve_start_lines - preserve_end_lines} lines truncated for LLM context] ...\n\n"
+    )
 
     truncated = start_section + truncation_marker + end_section
 

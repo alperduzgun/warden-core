@@ -9,7 +9,6 @@ All provider implementations must inherit from this interface
 
 import json
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from warden.shared.infrastructure.exceptions import ExternalServiceError
 

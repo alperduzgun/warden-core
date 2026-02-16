@@ -6,8 +6,6 @@ Retrieves relevant code context for AI-powered analysis.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 import structlog
 
 from warden.semantic_search.models import (

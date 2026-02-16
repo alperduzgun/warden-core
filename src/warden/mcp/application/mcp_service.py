@@ -10,7 +10,7 @@ import contextlib
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from warden.mcp.application.resource_provider import ResourceProviderService
 from warden.mcp.application.session_manager import SessionManager

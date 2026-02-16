@@ -15,7 +15,6 @@ import asyncio
 import json
 import shutil
 import time
-from typing import Optional
 
 from warden.shared.infrastructure.logging import get_logger
 

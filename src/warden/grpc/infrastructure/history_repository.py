@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.grpc.infrastructure.base_file_repository import BaseFileRepository
 from warden.shared.domain.repository import IIssueHistoryRepository

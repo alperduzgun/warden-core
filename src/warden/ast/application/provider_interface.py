@@ -6,7 +6,6 @@ This enables pluggable, language-specific parsers.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 from warden.ast.domain.enums import CodeLanguage
 from warden.ast.domain.models import (

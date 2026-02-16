@@ -3,7 +3,7 @@ Bridge Utilities - Serialization and Metadata helpers.
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 def detect_language(path: Path) -> str:

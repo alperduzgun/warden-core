@@ -13,7 +13,7 @@ Resilience Features:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 from warden.ast.domain.enums import CodeLanguage
 from warden.ast.providers.tree_sitter_provider import TreeSitterProvider

@@ -6,7 +6,6 @@ Generates GitHub Actions workflow files for running Warden in CI/CD.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 
 @dataclass

@@ -10,7 +10,7 @@ import os
 import signal
 import stat
 import sys
-from typing import Any, Dict, Optional
+from typing import Any
 
 from warden.cli_bridge.protocol import (
     ErrorCode,

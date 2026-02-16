@@ -18,14 +18,13 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 import yaml
 
 from warden.shared.infrastructure.logging import get_logger
-from warden.validation.frames.spec.models import PlatformRole, PlatformType
+from warden.validation.frames.spec.models import PlatformRole
 from warden.validation.frames.spec.platform_detector import (
     DetectedProject,
     PlatformDetector,
@@ -33,7 +32,6 @@ from warden.validation.frames.spec.platform_detector import (
 from warden.validation.frames.spec.validation import (
     IssueSeverity,
     SpecConfigValidator,
-    ValidationIssue,
     ValidationResult,
 )
 

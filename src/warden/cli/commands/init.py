@@ -331,7 +331,7 @@ async def _generate_intelligence_async(root: Path, config_files: dict = None):
 
     try:
         from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
-        from warden.analysis.domain.intelligence import RiskLevel, SecurityPosture
+        from warden.analysis.domain.intelligence import SecurityPosture
         from warden.analysis.services.intelligence_saver import IntelligenceSaver
 
         # Get all code files for analysis
@@ -383,7 +383,7 @@ async def _generate_intelligence_async(root: Path, config_files: dict = None):
             for info in module_map.values():
                 risk_counts[info.risk_level.value] = risk_counts.get(info.risk_level.value, 0) + 1
 
-            console.print(f"[green]✓ Intelligence generated successfully![/green]")
+            console.print("[green]✓ Intelligence generated successfully![/green]")
             console.print(f"[dim]   Modules: {len(module_map)} | Posture: {security_posture.value}[/dim]")
             console.print(
                 f"[dim]   Risk Distribution: P0={risk_counts['P0']}, P1={risk_counts['P1']}, P2={risk_counts['P2']}, P3={risk_counts['P3']}[/dim]"

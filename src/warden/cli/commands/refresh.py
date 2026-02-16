@@ -6,7 +6,6 @@ Regenerates project intelligence for CI optimization without running a full init
 
 import asyncio
 from pathlib import Path
-from typing import Optional, Set
 
 import typer
 from rich.console import Console
@@ -32,7 +31,7 @@ async def _refresh_intelligence_async(
     from datetime import datetime, timedelta, timezone
 
     from warden.analysis.application.project_purpose_detector import ProjectPurposeDetector
-    from warden.analysis.domain.intelligence import ModuleInfo, RiskLevel, SecurityPosture
+    from warden.analysis.domain.intelligence import SecurityPosture
     from warden.analysis.services.intelligence_loader import IntelligenceLoader
     from warden.analysis.services.intelligence_saver import IntelligenceSaver
 
@@ -180,7 +179,7 @@ async def _refresh_intelligence_async(
         for info in merged_module_map.values():
             risk_counts[info.risk_level.value] = risk_counts.get(info.risk_level.value, 0) + 1
 
-        console.print(f"\n[green]✓ Intelligence refreshed![/green]")
+        console.print("\n[green]✓ Intelligence refreshed![/green]")
         console.print(f"[dim]Modules: {len(merged_module_map)} | Posture: {security_posture.value}[/dim]")
         console.print(
             f"[dim]Risk: P0={risk_counts['P0']}, P1={risk_counts['P1']}, P2={risk_counts['P2']}, P3={risk_counts['P3']}[/dim]"

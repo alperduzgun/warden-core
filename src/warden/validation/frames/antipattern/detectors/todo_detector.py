@@ -8,7 +8,6 @@ Detects TODO/FIXME comments (technical debt markers):
 """
 
 import re
-from typing import List
 
 from warden.ast.domain.enums import CodeLanguage
 from warden.ast.domain.models import ASTNode

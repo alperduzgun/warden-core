@@ -6,7 +6,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from warden.mcp.infrastructure.mcp_config_paths import get_mcp_config_paths, is_safe_to_create_dir
 

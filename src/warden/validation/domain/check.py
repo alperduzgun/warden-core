@@ -25,7 +25,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 

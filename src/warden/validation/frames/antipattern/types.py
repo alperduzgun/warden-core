@@ -6,7 +6,6 @@ Data types for anti-pattern detection results.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class AntiPatternSeverity(Enum):

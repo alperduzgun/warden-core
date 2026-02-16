@@ -5,7 +5,7 @@ Converts between Python dicts and Protocol Buffer messages.
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # Import generated protobuf code
 try:

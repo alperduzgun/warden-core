@@ -9,11 +9,10 @@ This module is part of the SpecFrame setup wizard system.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.models import PlatformRole, PlatformType
@@ -450,7 +449,6 @@ class PlatformDetector:
         Returns:
             Tuple of (confidence_score, evidence_list, metadata_dict)
         """
-        score = 0.0
         evidence: list[str] = []
         metadata: dict[str, str] = {}
 

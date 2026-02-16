@@ -32,7 +32,7 @@ Version: 1.0.0
 
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import (
@@ -795,8 +795,6 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                 analyzer_config.fuzzy_match_threshold = gap_config["fuzzy_threshold"]
             if "enable_fuzzy" in gap_config:
                 analyzer_config.enable_fuzzy_matching = gap_config["enable_fuzzy"]
-
-        from warden.validation.frames.spec.analyzer import GapAnalyzer
 
         analyzer = GapAnalyzer(
             config=analyzer_config,  # Use the analyzer_config created above

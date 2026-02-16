@@ -12,9 +12,8 @@ Supports:
 """
 
 import re
-from typing import Dict, List, Optional, Set
 
-from warden.suppression.models import SuppressionConfig, SuppressionType
+from warden.suppression.models import SuppressionConfig
 
 
 class SuppressionMatcher:

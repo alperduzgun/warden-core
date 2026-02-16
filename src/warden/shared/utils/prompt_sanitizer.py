@@ -6,7 +6,6 @@ malicious users from hijacking LLM behavior through carefully crafted code.
 """
 
 import re
-from typing import Optional
 
 
 class PromptSanitizer:

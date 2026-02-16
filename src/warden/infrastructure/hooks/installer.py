@@ -7,7 +7,6 @@ Manages installation and uninstallation of Git hooks.
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from warden.infrastructure.hooks.commit_message_hook import CommitMessageHook
 from warden.infrastructure.hooks.pre_commit import PreCommitHook

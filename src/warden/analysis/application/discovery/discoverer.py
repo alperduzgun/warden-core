@@ -6,7 +6,6 @@ Orchestrates file discovery, classification, and framework detection.
 
 import time
 from pathlib import Path
-from typing import List, Optional
 
 import structlog
 

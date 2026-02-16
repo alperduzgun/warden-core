@@ -6,7 +6,7 @@ Context-aware quality scoring with AI assistance.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,

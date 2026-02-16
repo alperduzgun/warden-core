@@ -6,10 +6,9 @@ Provides Panel JSON compatibility via Pydantic aliasing.
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Dict, Type, TypeVar
+from typing import Any, TypeVar
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 T = TypeVar("T", bound="BaseDomainModel")

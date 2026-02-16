@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List, Set
 
 from warden.ast.domain.enums import CodeLanguage
 from warden.shared.languages.registry import LanguageRegistry

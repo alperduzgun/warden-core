@@ -11,7 +11,7 @@ with built-in Chaos Engineering protection:
 import asyncio
 import time
 from collections.abc import Callable, Coroutine
-from typing import Any, List, Optional, TypeVar
+from typing import Any, TypeVar
 
 from warden.shared.infrastructure.logging import get_logger
 

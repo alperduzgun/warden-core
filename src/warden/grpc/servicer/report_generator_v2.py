@@ -1,6 +1,5 @@
 """Report generator with atomic writes and memory optimization (ID 41, 42)."""
 
-import asyncio
 import json
 import os
 

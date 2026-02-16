@@ -5,7 +5,7 @@ Provides a foundation for frames that operate on the Universal AST (ASTNode)
 rather than language-specific representations.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 

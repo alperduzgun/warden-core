@@ -8,7 +8,6 @@ enables single-file rollback on syntax errors.
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 

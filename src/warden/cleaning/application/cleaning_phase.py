@@ -7,7 +7,7 @@ Uses LLM to provide intelligent code cleaning recommendations.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.cleaning.application.llm_suggestion_generator import LLMSuggestionGenerator
 from warden.cleaning.application.pattern_analyzer import PatternAnalyzer

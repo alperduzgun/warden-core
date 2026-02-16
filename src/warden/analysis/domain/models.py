@@ -5,7 +5,7 @@ Core entities for code analysis and issue tracking.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 from uuid import uuid4
 
 from pydantic import Field

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any
 
 import structlog
 import tenacity

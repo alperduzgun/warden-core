@@ -7,7 +7,7 @@ Pure domain logic without external dependencies.
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.mcp.domain.enums import ResourceType, ServerStatus, ToolCategory
 

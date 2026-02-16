@@ -4,7 +4,7 @@ Dependency checking for validation frames.
 Handles frame dependency validation and context attribute checking.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.pipeline.domain.models import FrameResult
 from warden.pipeline.domain.pipeline_context import PipelineContext

@@ -3,7 +3,7 @@ Tool Handler for Warden Bridge.
 Handles AST provider discovery and validation.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.cli_bridge.handlers.base import BaseHandler
 from warden.cli_bridge.protocol import ErrorCode, IPCError

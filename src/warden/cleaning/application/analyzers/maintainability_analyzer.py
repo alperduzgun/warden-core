@@ -11,7 +11,7 @@ Calculates Maintainability Index and detects code smells:
 import ast
 import math
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 

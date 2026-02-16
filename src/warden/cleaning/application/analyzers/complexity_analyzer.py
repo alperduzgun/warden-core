@@ -10,7 +10,7 @@ Detects complex and long methods:
 Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-from typing import Any, List, Optional
+from typing import Any
 
 import structlog
 

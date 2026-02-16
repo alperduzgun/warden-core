@@ -4,7 +4,7 @@ File filtering and triage routing for validation frames.
 Handles file context filtering and triage lane routing.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger

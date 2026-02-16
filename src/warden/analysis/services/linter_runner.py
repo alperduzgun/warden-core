@@ -12,7 +12,7 @@ import json
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 
@@ -64,7 +64,7 @@ class LinterRunner:
                 logger.error("linter_timeout", tool=tool_name, timeout=self.timeout)
                 return False, None, f"Timeout exceeded ({self.timeout}s)"
 
-            duration = time.perf_counter() - start_time
+            time.perf_counter() - start_time
 
             # Check exit code
             # Note: Many linters return non-zero on findings.

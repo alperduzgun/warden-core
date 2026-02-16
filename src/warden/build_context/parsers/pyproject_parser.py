@@ -6,7 +6,7 @@ Extracts build configuration and dependencies from pyproject.toml files.
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.build_context.models import (
     BuildContext,

@@ -9,7 +9,7 @@ Issue #25 Fix: Privacy-aware logging with redaction support
 import logging
 import re
 import sys
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 

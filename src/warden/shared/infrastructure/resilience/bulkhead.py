@@ -2,7 +2,6 @@
 
 import asyncio
 from dataclasses import dataclass
-from typing import Optional
 
 from warden.shared.infrastructure.logging import get_logger
 

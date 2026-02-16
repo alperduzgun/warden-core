@@ -8,7 +8,7 @@ Maps to gRPC SuppressionMixin functionality.
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult

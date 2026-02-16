@@ -4,7 +4,7 @@ Classification Phase Executor.
 
 import time
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -219,7 +219,7 @@ class ClassificationExecutor(BasePhaseExecutor):
             for f in findings
         )
 
-        has_auth_issues = any(
+        any(
             "auth" in str(f.get("message", "") if isinstance(f, dict) else getattr(f, "message", "")).lower()
             or "password" in str(f.get("message", "") if isinstance(f, dict) else getattr(f, "message", "")).lower()
             for f in findings

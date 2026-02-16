@@ -4,7 +4,6 @@ Path utilities for security and sanitization.
 
 import os
 from pathlib import Path
-from typing import List, Optional
 
 
 def sanitize_path(path: str | Path, base_dir: str | Path) -> Path:
@@ -88,7 +87,7 @@ class SafeFileScanner:
                         found_files.append(p)
 
             # print(f"  [Scanner] Found {len(found_files)} files total.")
-        except Exception as e:
+        except Exception:
             # print(f"  [Scanner] Error: {e}")
             pass
 

@@ -6,7 +6,7 @@ Implementations handle actual tool logic (built-in tools, bridge tools, etc.).
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 

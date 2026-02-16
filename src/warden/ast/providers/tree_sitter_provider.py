@@ -7,7 +7,7 @@ Priority: TREE_SITTER (fallback for languages without native provider).
 
 import time
 from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import structlog
 

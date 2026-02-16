@@ -2,7 +2,6 @@ import shutil
 import sys
 from enum import Enum, auto
 from pathlib import Path
-from typing import Tuple
 
 import yaml
 from rich.console import Console

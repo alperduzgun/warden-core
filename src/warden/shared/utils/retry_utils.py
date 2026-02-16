@@ -3,7 +3,7 @@ import functools
 import logging
 import random
 from collections.abc import Callable
-from typing import Any, Tuple, Type
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

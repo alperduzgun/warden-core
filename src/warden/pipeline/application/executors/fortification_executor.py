@@ -4,10 +4,9 @@ Fortification Phase Executor.
 
 import time
 import traceback
-from typing import Any, List
+from typing import Any
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
-from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.finding_utils import get_finding_attribute
@@ -107,7 +106,9 @@ class FortificationExecutor(BasePhaseExecutor):
                         "message": normalized.get("message", ""),
                         "detail": normalized.get("message", ""),  # Use message as detail if detail not present
                         "file_path": normalized.get("file_path", "unknown"),
-                        "line_number": int(normalized.get("location", "unknown:0").split(":")[-1]) if ":" in normalized.get("location", "unknown:0") else 0,
+                        "line_number": int(normalized.get("location", "unknown:0").split(":")[-1])
+                        if ":" in normalized.get("location", "unknown:0")
+                        else 0,
                         "code_snippet": normalized.get("code_snippet", ""),
                     }
                     validated_issues.append(issue)

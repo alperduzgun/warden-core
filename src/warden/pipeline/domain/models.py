@@ -5,7 +5,7 @@ Core entities for validation pipeline orchestration.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import Field

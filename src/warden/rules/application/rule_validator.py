@@ -10,7 +10,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 try:
     from warden import warden_core_rust

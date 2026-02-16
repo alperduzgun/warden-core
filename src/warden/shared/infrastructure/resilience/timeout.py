@@ -2,7 +2,7 @@
 
 import asyncio
 import functools
-from typing import Any, Optional
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 

@@ -5,7 +5,7 @@ Handles configuration-based suppression of findings.
 """
 
 import fnmatch
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 

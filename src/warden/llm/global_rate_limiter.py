@@ -7,9 +7,8 @@ Prevents rate limit violations across the entire application.
 Issue #17 Fix: Global rate limiting implementation
 """
 
-import asyncio
 import threading
-from typing import Dict, Optional
+from typing import Optional
 
 from warden.llm.rate_limiter import RateLimitConfig, RateLimiter
 

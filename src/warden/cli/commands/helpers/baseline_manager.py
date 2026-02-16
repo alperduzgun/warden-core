@@ -12,7 +12,7 @@ import shlex
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.finding_utils import get_finding_attribute

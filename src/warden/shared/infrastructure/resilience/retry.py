@@ -5,7 +5,7 @@ import functools
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 

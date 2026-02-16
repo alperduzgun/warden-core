@@ -8,7 +8,7 @@ import asyncio
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 from warden.pipeline.domain.models import FrameResult, PipelineConfig, ValidationPipeline
 from warden.pipeline.domain.pipeline_context import PipelineContext

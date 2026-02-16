@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from itertools import islice
 from pathlib import Path
-from typing import List, Optional
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.frames.spec.models import PlatformRole, PlatformType
@@ -294,15 +293,15 @@ class SpecConfigValidator:
         """
         required_fields = ["name", "path", "type", "role"]
 
-        for field in required_fields:
-            if not platform.get(field):
+        for required_field in required_fields:
+            if not platform.get(required_field):
                 issues.append(
                     ValidationIssue(
                         severity=IssueSeverity.ERROR,
-                        message=f"Missing required field: {field}",
-                        field=field,
+                        message=f"Missing required field: {required_field}",
+                        field=required_field,
                         platform_name=platform_name,
-                        suggestion=f"Add '{field}' to platform configuration",
+                        suggestion=f"Add '{required_field}' to platform configuration",
                     )
                 )
 

@@ -5,7 +5,6 @@ Endpoints: DiscoverFiles, GetFilesByType, DetectFrameworks, GetProjectStats
 """
 
 from pathlib import Path
-from typing import Dict
 
 try:
     from warden.grpc.generated import warden_pb2

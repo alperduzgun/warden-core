@@ -5,7 +5,6 @@ Manages MCP session lifecycle.
 """
 
 import uuid
-from typing import Optional
 
 from warden.mcp.domain.enums import ServerStatus
 from warden.mcp.domain.models import MCPSession

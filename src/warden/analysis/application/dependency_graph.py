@@ -6,7 +6,6 @@ to identify which files are impacted by changes in their dependencies.
 """
 
 from pathlib import Path
-from typing import Dict, List, Set
 
 import structlog
 

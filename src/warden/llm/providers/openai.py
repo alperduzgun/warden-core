@@ -6,8 +6,7 @@ Based on C# OpenAIClient.cs
 
 import json
 import time
-from functools import partial
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 

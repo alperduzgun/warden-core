@@ -6,7 +6,7 @@ for the context-aware analysis system.
 """
 
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 from pydantic import Field
 
@@ -144,7 +144,6 @@ class BuildTool(Enum):
 
 from warden.analysis.domain.intelligence import (
     ModuleInfo,
-    RiskLevel,
     SecurityPosture,
 )
 from warden.ast.domain.enums import CodeLanguage

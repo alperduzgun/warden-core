@@ -10,7 +10,7 @@ import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 import aiofiles
 

@@ -8,7 +8,6 @@ Detects missing circuit breaker implementation for:
 """
 
 import re
-from typing import List
 
 from warden.validation.domain.check import (
     CheckFinding,

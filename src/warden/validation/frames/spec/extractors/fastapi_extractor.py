@@ -19,7 +19,6 @@ Version: 1.0.0
 
 import re
 from pathlib import Path
-from typing import List, Optional, Set
 
 from warden.ast.domain.enums import CodeLanguage
 from warden.shared.infrastructure.logging import get_logger

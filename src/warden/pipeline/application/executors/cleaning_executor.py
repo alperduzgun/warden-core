@@ -3,7 +3,6 @@ Cleaning Phase Executor.
 """
 
 import time
-from typing import List
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext

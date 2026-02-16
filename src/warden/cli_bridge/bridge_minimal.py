@@ -7,7 +7,7 @@ Used for CLI testing and development without full Warden installation.
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.cli_bridge.protocol import ErrorCode, IPCError
 

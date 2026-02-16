@@ -4,7 +4,7 @@ Base exceptions for Warden application.
 All custom exceptions should inherit from WardenException.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 
 class WardenException(Exception):

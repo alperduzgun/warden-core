@@ -11,7 +11,7 @@ Universal AST Support:
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Set
+from typing import Any
 
 import structlog
 

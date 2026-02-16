@@ -11,7 +11,7 @@ Analyzes code testability and test coverage potential:
 
 import ast
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 

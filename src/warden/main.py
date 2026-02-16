@@ -6,13 +6,7 @@ The main entry point for the Warden Python CLI.
 Provides commands for scanning, serving, and launching the interactive chat.
 """
 
-import asyncio
-import signal
-import sys
-from typing import NoReturn
-
 import typer
-from rich.console import Console
 
 from warden.cli.commands.baseline import baseline_app
 from warden.cli.commands.chat import chat_command
@@ -67,8 +61,6 @@ async def graceful_shutdown() -> None:
 
         # Close semantic search services
         try:
-            from warden.shared.services.semantic_search_service import SemanticSearchService
-
             # If there's a global instance, close it
             # This is optional - depends on implementation
             logger.info("semantic_search_cleanup_complete")

@@ -11,7 +11,7 @@ Logic:
 """
 
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile, Finding

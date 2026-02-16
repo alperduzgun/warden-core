@@ -11,7 +11,7 @@ Python internal format: snake_case
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field
 

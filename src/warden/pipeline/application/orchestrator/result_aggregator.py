@@ -4,7 +4,7 @@ Result aggregator module for validation results.
 Handles result storage, aggregation, and false positive detection.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.pipeline.domain.models import ValidationPipeline
 from warden.pipeline.domain.pipeline_context import PipelineContext

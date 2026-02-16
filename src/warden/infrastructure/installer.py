@@ -9,7 +9,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
 
 from warden.shared.domain.exceptions import InstallError
 from warden.shared.infrastructure.logging import get_logger
@@ -170,7 +169,7 @@ class AutoInstaller:
     def _verify_install() -> InstallResult:
         """Verify Warden installation."""
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["warden", "--version"],
                 capture_output=True,
                 text=True,

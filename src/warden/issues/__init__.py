@@ -6,12 +6,7 @@ issue tracking system.
 """
 
 from warden.issues.domain.enums import IssueSeverity, IssueState
-from warden.issues.domain.models import (
-    IssueSeverity,
-    IssueState,
-    StateTransition,
-    WardenIssue,
-)
+from warden.issues.domain.models import StateTransition, WardenIssue
 
 __all__ = [
     "WardenIssue",

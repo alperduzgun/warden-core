@@ -8,7 +8,7 @@ import asyncio
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 from uuid import uuid4
 
 import structlog

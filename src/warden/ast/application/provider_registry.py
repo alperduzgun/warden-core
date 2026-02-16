@@ -4,8 +4,6 @@ AST Provider Registry.
 Manages registration and selection of AST providers with priority-based routing.
 """
 
-from typing import Dict, List, Optional
-
 import structlog
 
 from warden.ast.application.provider_interface import IASTProvider

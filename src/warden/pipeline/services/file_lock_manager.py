@@ -1,6 +1,5 @@
 """File locking for concurrent writes (ID 26)."""
 
-import asyncio
 import fcntl
 import os
 

@@ -1,5 +1,4 @@
 import asyncio
-from typing import List, Optional
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import resilient
@@ -147,7 +146,6 @@ class OrchestratedLlmClient(ILlmClient):
             # CHAOS ENGINEERING: Race providers with FIRST_COMPLETED pattern
             # This prevents slow providers from blocking fast ones
             # Max concurrency limit prevents resource exhaustion
-            MAX_CONCURRENT_PROVIDERS = 3
             fast_timeout = 10  # seconds - fast tier should respond quickly
 
             # Create tasks for all providers

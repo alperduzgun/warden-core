@@ -7,7 +7,6 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 
 import contextlib
 from dataclasses import dataclass, field
-from typing import Optional
 
 from .types import LlmProvider
 
@@ -201,7 +200,6 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
     import asyncio
     from pathlib import Path
 
-    import httpx
     import yaml
 
     # Auto-load from .warden/config.yaml if no override provided

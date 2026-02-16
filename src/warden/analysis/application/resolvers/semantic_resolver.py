@@ -6,7 +6,6 @@ to actual project file paths using heuristics, project context, and LLM fallback
 """
 
 from pathlib import Path
-from typing import Optional
 
 import structlog
 

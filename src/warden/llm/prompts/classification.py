@@ -5,8 +5,6 @@ Based on C# ClassificationPrompt.cs
 Detects code characteristics and recommends validation frames
 """
 
-from typing import Optional
-
 CLASSIFICATION_SYSTEM_PROMPT = """You are an expert code analyzer specializing in detecting code characteristics and security patterns.
 
 Your task is to analyze code and detect the following characteristics:
