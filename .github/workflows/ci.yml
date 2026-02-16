@@ -342,7 +342,7 @@ jobs:
           path: warden.sarif
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() && github.event_name != 'pull_request'
         with:
           sarif_file: warden.sarif
