@@ -101,7 +101,13 @@ jobs:
           # --ignore=tests/chaos/ - Requires Hypothesis (optional dependency)
           # --ignore=tests/integration/ - Requires external services (Ollama, APIs)
           # --ignore=tests/e2e/test_acceptance.py - Subprocess tests with different Ollama setup
-          pytest tests/ -v --tb=short -x --ignore=tests/chaos/ --ignore=tests/integration/ --ignore=tests/e2e/test_acceptance.py -q
+          # -m "not requires_ollama" - Skip tests needing local Ollama
+          pytest tests/ -v --tb=short -x \
+            --ignore=tests/chaos/ \
+            --ignore=tests/integration/ \
+            --ignore=tests/e2e/test_acceptance.py \
+            -m "not requires_ollama" \
+            -q
 
   # ============================================================
   # WARDEN SCAN JOB - Security analysis
