@@ -54,7 +54,7 @@ grpc = [
     "grpcio-tools>=1.64.0,<1.65.0",
 ]
 dev = [
-    "pytest==8.2.2",
+    "pytest==9.0.2",
     "pytest-asyncio==0.23.7",
     "black==24.4.2",
     "isort==5.13.2",
