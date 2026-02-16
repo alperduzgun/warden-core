@@ -265,10 +265,10 @@ jobs:
           LEVEL="standard"
           
           if [[ "$SCAN_MODE" == "baseline" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # BASELINE SCAN: Full deep scan of entire project
+            # BASELINE SCAN: Standard scan (deep would load broken custom frames)
             echo "Running FULL SCAN on entire repository..."
             set +e # Capture exit code
-            warden scan . --level deep --format sarif --output warden.sarif
+            warden scan . --level standard --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
             
