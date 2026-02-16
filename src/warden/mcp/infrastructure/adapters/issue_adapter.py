@@ -159,14 +159,14 @@ class IssueAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute issue management tool."""
         handlers = {
-            "warden_get_all_issues": self._get_all_issues,
-            "warden_get_open_issues": self._get_open_issues,
-            "warden_get_issue_by_hash": self._get_issue_by_hash,
-            "warden_resolve_issue": self._resolve_issue,
-            "warden_suppress_issue": self._suppress_issue,
-            "warden_reopen_issue": self._reopen_issue,
-            "warden_get_issue_history": self._get_issue_history,
-            "warden_get_issue_stats": self._get_issue_stats,
+            "warden_get_all_issues": self._get_all_issues_async,
+            "warden_get_open_issues": self._get_open_issues_async,
+            "warden_get_issue_by_hash": self._get_issue_by_hash_async,
+            "warden_resolve_issue": self._resolve_issue_async,
+            "warden_suppress_issue": self._suppress_issue_async,
+            "warden_reopen_issue": self._reopen_issue_async,
+            "warden_get_issue_history": self._get_issue_history_async,
+            "warden_get_issue_stats": self._get_issue_stats_async,
         }
 
         handler = handlers.get(tool_name)

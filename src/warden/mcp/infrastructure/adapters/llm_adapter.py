@@ -124,11 +124,11 @@ class LlmAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute LLM tool."""
         handlers = {
-            "warden_analyze_with_llm": self._analyze_with_llm,
-            "warden_classify_code": self._classify_code,
-            "warden_test_llm_provider": self._test_llm_provider,
-            "warden_get_available_models": self._get_available_models,
-            "warden_validate_llm_config": self._validate_llm_config,
+            "warden_analyze_with_llm": self._analyze_with_llm_async,
+            "warden_classify_code": self._classify_code_async,
+            "warden_test_llm_provider": self._test_llm_provider_async,
+            "warden_get_available_models": self._get_available_models_async,
+            "warden_validate_llm_config": self._validate_llm_config_async,
         }
 
         handler = handlers.get(tool_name)
