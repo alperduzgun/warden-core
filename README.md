@@ -4,6 +4,7 @@
 
 ![Status](https://img.shields.io/badge/Status-Beta-yellow)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![License](https://img.shields.io/badge/License-Proprietary-red)
 ![AI Ready](https://img.shields.io/badge/AI-Native-purple)
 ![Warden Quality](https://raw.githubusercontent.com/alperduzgun/warden-core/main/warden_badge.svg)
 
@@ -520,4 +521,29 @@ We are transforming Warden from a local tool into a global **Standard of Trust**
 
 ## 📄 License
 
-[License Info]
+**Warden Core** is licensed under a **Proprietary License** with the following terms:
+
+### ✅ Personal Use (FREE)
+- Use Warden for **personal projects**
+- Educational purposes and learning
+- Non-commercial evaluation
+
+### 💼 Commercial Use (LICENSE REQUIRED)
+For commercial usage, including:
+- Use within corporations or enterprises
+- For-profit organizations
+- Production deployments in commercial products
+
+**A commercial license must be purchased.**
+
+### 🚫 Redistribution
+Redistribution of this software (source or binary) is **prohibited** without explicit written permission.
+
+### 📧 Commercial Licensing
+For commercial licensing inquiries, contact: **warden-core@proton.me**
+
+---
+
+**Full License:** See [LICENSE](./LICENSE) file for complete terms.
+
+**Disclaimer:** This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND.
