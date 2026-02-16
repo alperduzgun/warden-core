@@ -58,31 +58,39 @@ class FortificationExecutor(BasePhaseExecutor):
                 rate_limiter=self.rate_limiter,
             )
 
-            # Use findings from context (whether validated or raw)
-            raw_findings = getattr(context, "findings", []) or []
+            # Use validated_issues (FP-filtered) instead of raw findings (Tier 1: Context-Awareness)
+            # ResultAggregator already filters false positives and creates validated_issues
+            raw_findings = getattr(context, "validated_issues", [])
 
-            # Convert objects to dicts expected by FortificationPhase
+            # Fallback to findings if validated_issues not available (shouldn't happen in normal flow)
+            if not raw_findings:
+                raw_findings = getattr(context, "findings", []) or []
+                logger.warning(
+                    "fortification_using_raw_findings",
+                    reason="validated_issues_empty",
+                    findings_count=len(raw_findings),
+                )
+
+            # Convert objects to dicts expected by FortificationPhase (BATCH 1: Type Safety)
+            from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
+
             validated_issues = []
             for f in raw_findings:
-                # Handle Finding object or dict
-                if hasattr(f, "to_json"):
-                    # Parse location for file path
-                    file_path = f.location.split(":")[0] if f.location else ""
+                # Normalize all findings to dicts (handles both Finding objects and dicts)
+                normalized = normalize_finding_to_dict(f)
 
-                    # Map Finding object to Fortification Dictionary Contract
-                    issue = {
-                        "id": f.id,
-                        "type": f.id.split("-")[0] if "-" in f.id else "issue",  # Heuristic for type from ID
-                        "severity": f.severity,
-                        "message": f.message,
-                        "detail": f.detail,
-                        "file_path": file_path,
-                        "line_number": f.line,
-                        "code_snippet": f.code,
-                    }
-                    validated_issues.append(issue)
-                elif isinstance(f, dict):
-                    validated_issues.append(f)
+                # Map to Fortification Dictionary Contract
+                issue = {
+                    "id": normalized.get("id", "unknown"),
+                    "type": normalized.get("type", "unknown"),
+                    "severity": normalized.get("severity", "low"),
+                    "message": normalized.get("message", ""),
+                    "detail": normalized.get("message", ""),  # Use message as detail if detail not present
+                    "file_path": normalized.get("file_path", "unknown"),
+                    "line_number": int(normalized.get("location", "unknown:0").split(":")[-1]) if ":" in normalized.get("location", "unknown:0") else 0,
+                    "code_snippet": normalized.get("code_snippet", ""),
+                }
+                validated_issues.append(issue)
 
             if not validated_issues:
                 logger.info("fortification_skipped", reason="no_findings_to_fortify")
@@ -106,8 +114,22 @@ class FortificationExecutor(BasePhaseExecutor):
             # Link Fortifications back to Findings for Reporting
             from warden.validation.domain.frame import Remediation
 
-            # Create a lookup for findings
-            findings_map = {f.id: f for f in context.findings}
+            # Create a lookup for findings (BATCH 1: Fix duplicate key overwrite)
+            from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
+
+            findings_map = {}
+            for f in context.findings:
+                normalized = normalize_finding_to_dict(f)
+                fid = normalized.get("id", "unknown")
+
+                if fid in findings_map:
+                    logger.warning(
+                        "fortification_duplicate_finding_id",
+                        finding_id=fid,
+                        action="overwriting_previous",
+                    )
+
+                findings_map[fid] = normalized
 
             for fort in result.fortifications:
                 # Handle both object and dict (including camelCase from to_json)

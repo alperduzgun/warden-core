@@ -115,6 +115,73 @@ class FrameRunner:
         if self.semantic_search_service:
             frame.semantic_search_service = self.semantic_search_service
 
+        # Inject project_intelligence for context-aware analysis (BATCH 2: Validated)
+        if hasattr(context, "project_intelligence") and context.project_intelligence:
+            try:
+                pi = context.project_intelligence
+
+                # Validate structure before injecting
+                if not isinstance(pi, object):
+                    logger.warning(
+                        "project_intelligence_wrong_type",
+                        frame_id=frame.frame_id,
+                        type=type(pi).__name__,
+                        action="skipped_injection",
+                    )
+                elif (
+                    not hasattr(pi, "entry_points")
+                    or not hasattr(pi, "auth_patterns")
+                    or not hasattr(pi, "critical_sinks")
+                ):
+                    logger.warning(
+                        "project_intelligence_incomplete",
+                        frame_id=frame.frame_id,
+                        has_entry_points=hasattr(pi, "entry_points"),
+                        has_auth_patterns=hasattr(pi, "auth_patterns"),
+                        has_critical_sinks=hasattr(pi, "critical_sinks"),
+                        action="injected_anyway",
+                    )
+                    # Still inject it - frames can handle incomplete data
+                    frame.project_intelligence = context.project_intelligence
+                    logger.debug(
+                        "project_intelligence_injected",
+                        frame_id=frame.frame_id,
+                        has_entry_points=hasattr(pi, "entry_points"),
+                        has_auth_patterns=hasattr(pi, "auth_patterns"),
+                    )
+                else:
+                    # Valid - inject it
+                    frame.project_intelligence = context.project_intelligence
+                    logger.debug(
+                        "project_intelligence_injected",
+                        frame_id=frame.frame_id,
+                        has_entry_points=bool(getattr(pi, "entry_points", [])),
+                        has_auth_patterns=bool(getattr(pi, "auth_patterns", [])),
+                    )
+            except Exception as e:
+                logger.error(
+                    "project_intelligence_injection_failed",
+                    frame_id=frame.frame_id,
+                    error=str(e),
+                    action="frame_continues_without_context",
+                )
+
+        # Inject prior findings for cross-frame awareness (Tier 1: Context-Awareness)
+        try:
+            if hasattr(context, "findings") and context.findings:
+                frame.prior_findings = context.findings
+                logger.debug(
+                    "prior_findings_injected",
+                    frame_id=frame.frame_id,
+                    findings_count=len(context.findings),
+                )
+        except Exception as e:
+            logger.error(
+                "prior_findings_injection_failed",
+                frame_id=frame.frame_id,
+                error=str(e),
+            )
+
         if isinstance(frame, ProjectContextAware):
             project_context = getattr(context, "project_type", None)
             if project_context and hasattr(project_context, "service_abstractions"):
@@ -187,7 +254,8 @@ class FrameRunner:
                         return None
 
                     try:
-                        result = await frame.execute_async(c_file)
+                        # Pass context to frames that opt-in (Tier 2: Context-Awareness)
+                        result = await frame.execute_async(c_file, context=context)
 
                         if self.progress_callback:
                             self.progress_callback(

@@ -282,9 +282,13 @@ class ResilienceFrame(ValidationFrame):
 
         logger.debug("resilience_frame_initialized", timeout=self._timeout, version=self.version)
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: "PipelineContext | None" = None) -> FrameResult:
         """
         Execute chaos engineering analysis.
+
+        Args:
+            code_file: Code file to analyze
+            context: Optional pipeline context (Tier 2: Context-Awareness)
 
         Pipeline:
         1. Extract structure (tree-sitter) - O(n), instant
@@ -740,6 +744,69 @@ class ResilienceFrame(ValidationFrame):
                 preserve_end_lines=20,
             )
 
+            # Build context-aware prompt (Tier 1: Context-Awareness)
+            additional_context = ""
+
+            # Add project intelligence if available
+            if hasattr(self, "project_intelligence") and self.project_intelligence:
+                pi = self.project_intelligence
+                additional_context += "\n[PROJECT CONTEXT]:\n"
+
+                if hasattr(pi, "entry_points") and pi.entry_points:
+                    entry_points_str = ", ".join(pi.entry_points[:5])
+                    additional_context += f"Entry Points: {entry_points_str}\n"
+
+                if hasattr(pi, "critical_sinks") and pi.critical_sinks:
+                    sinks_str = ", ".join(pi.critical_sinks[:5])
+                    additional_context += f"Critical Operations: {sinks_str}\n"
+
+                logger.debug("project_intelligence_added_to_resilience_prompt", file=code_file.path)
+
+            # Add prior findings if available - BATCH 2: Sanitized
+            if hasattr(self, "prior_findings") and self.prior_findings:
+                import html
+                from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
+
+                # Normalize and filter findings for this file
+                file_findings = []
+                for f in self.prior_findings:
+                    normalized = normalize_finding_to_dict(f)
+                    if normalized.get("location", "").startswith(code_file.path):
+                        file_findings.append(normalized)
+
+                if file_findings:
+                    additional_context += "\n[PRIOR FINDINGS ON THIS FILE]:\n"
+                    for finding in file_findings[:3]:
+                        # BATCH 2: SANITIZE - Escape HTML, truncate, detect injection
+                        raw_msg = finding.get("message", "")
+                        raw_severity = finding.get("severity", "unknown")
+
+                        # Truncate to prevent token overflow
+                        msg = html.escape(raw_msg[:200])  # Max 200 chars
+                        severity = html.escape(raw_severity[:20])  # Max 20 chars
+
+                        # Detect prompt injection attempts
+                        suspicious_patterns = [
+                            "ignore previous",
+                            "system:",
+                            "[system",
+                            "override",
+                            "<script",
+                            "javascript:",
+                        ]
+                        if any(pattern in msg.lower() for pattern in suspicious_patterns):
+                            logger.warning(
+                                "prompt_injection_detected_resilience",
+                                file=code_file.path,
+                                finding_id=finding.get("id", "unknown"),
+                                action="sanitized",
+                            )
+                            msg = "[SANITIZED: Suspicious content removed]"
+
+                        additional_context += f"- [{severity}] {msg}\n"
+
+                    logger.debug("prior_findings_added_to_resilience_prompt", file=code_file.path)
+
             # Build prompt with context
             user_prompt = f"""Analyze this code for chaos engineering:
 
@@ -750,6 +817,8 @@ Context:
 {context.to_llm_context()}
 
 {related_context}
+
+{additional_context}
 
 Code:
 ```{code_file.language}

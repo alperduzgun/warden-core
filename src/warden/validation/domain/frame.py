@@ -20,7 +20,10 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.shared.infrastructure.logging import get_logger
@@ -320,12 +323,19 @@ class ValidationFrame(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'description' attribute")
 
     @abstractmethod
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: CodeFile, context: "PipelineContext | None" = None) -> FrameResult:  # type: ignore[name-defined]
         """
         Execute validation frame on code file.
 
         Args:
             code_file: Code file to validate (contains path, content, language, etc.)
+            context: Optional pipeline context for cross-frame awareness (Tier 2: Context-Awareness).
+                     Frames can opt-in to use context for:
+                     - Accessing prior findings from other frames
+                     - Reading project intelligence (entry points, auth patterns, etc.)
+                     - Checking quality metrics and hotspots
+                     - Viewing suppression rules and false positives
+                     Default: None (backwards compatible)
 
         Returns:
             FrameResult with findings and metadata
@@ -340,6 +350,7 @@ class ValidationFrame(ABC):
             - Set status='failed' if frame execution fails
             - Set status='warning' for non-critical findings
             - Set status='passed' if no issues found
+            - Context parameter is optional - check if not None before using
         """
         pass
 
