@@ -730,6 +730,16 @@ class ResilienceFrame(ValidationFrame):
             if related_patterns:
                 related_context = self._format_related_patterns(related_patterns)
 
+            # Truncate code using token-aware truncation
+            from warden.shared.utils.token_utils import truncate_content_for_llm
+
+            truncated_code = truncate_content_for_llm(
+                code_file.content,
+                max_tokens=3000,  # Reserve tokens for prompt and response
+                preserve_start_lines=40,
+                preserve_end_lines=20,
+            )
+
             # Build prompt with context
             user_prompt = f"""Analyze this code for chaos engineering:
 
@@ -743,7 +753,7 @@ Context:
 
 Code:
 ```{code_file.language}
-{code_file.content[:8000]}
+{truncated_code}
 ```
 
 Identify external dependencies and missing resilience patterns. Return JSON."""

@@ -316,6 +316,15 @@ class OpenAIClient(ILlmClient):
             Dict containing findings list
         """
         from warden.shared.utils.json_parser import parse_json_from_llm
+        from warden.shared.utils.token_utils import truncate_content_for_llm
+
+        # Truncate code using token-aware truncation (not character-based)
+        truncated_code = truncate_content_for_llm(
+            code_content,
+            max_tokens=1800,  # Reserve tokens for prompt and response
+            preserve_start_lines=30,
+            preserve_end_lines=15,
+        )
 
         prompt = f"""
         You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
@@ -339,7 +348,7 @@ class OpenAIClient(ILlmClient):
 
         Code:
         ```{language}
-        {code_content[:4000]}
+        {truncated_code}
         ```
         """
 
