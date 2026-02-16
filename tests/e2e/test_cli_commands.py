@@ -96,10 +96,13 @@ class TestScan:
     def test_scan_help(self, runner):
         result = runner.invoke(app, ["scan", "--help"])
         assert result.exit_code == 0
+        # Strip ANSI codes for reliable assertion
+        import re
+        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
         for flag in ("--level", "--format", "--frame", "--ci", "--diff",
                       "--output", "--verbose", "--base", "--disable-ai",
                       "--memory-profile", "--no-update-baseline"):
-            assert flag in result.stdout, f"Missing flag in scan help: {flag}"
+            assert flag in clean_output, f"Missing flag in scan help: {flag}"
 
     def test_scan_help_formats(self, runner):
         """Help mentions all supported output formats."""
