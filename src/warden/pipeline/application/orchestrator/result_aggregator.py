@@ -119,12 +119,24 @@ class ResultAggregator:
                 # BATCH 2: Limit findings to prevent memory bombs
                 MAX_FINDINGS_PER_FRAME = 1000
                 if len(frame_result.findings) > MAX_FINDINGS_PER_FRAME:
+                    # BATCH 3: Log detailed truncation info (CRITICAL - prevents silent data loss)
+                    truncated_count = len(frame_result.findings) - MAX_FINDINGS_PER_FRAME
+                    dropped_findings = frame_result.findings[MAX_FINDINGS_PER_FRAME:]
+
+                    # Calculate severity distribution of dropped findings
+                    severity_distribution = {}
+                    for f in dropped_findings:
+                        sev = get_finding_attribute(f, "severity", "unknown")
+                        severity_distribution[sev] = severity_distribution.get(sev, 0) + 1
+
                     logger.warning(
-                        "findings_list_too_large",
+                        "findings_truncated",
                         frame_id=frame_id,
-                        count=len(frame_result.findings),
-                        max=MAX_FINDINGS_PER_FRAME,
-                        action="truncating",
+                        total_findings=len(frame_result.findings),
+                        truncated_count=truncated_count,
+                        kept_count=MAX_FINDINGS_PER_FRAME,
+                        dropped_severity_distribution=severity_distribution,
+                        action="keeping_first_1000",
                     )
                     all_findings.extend(frame_result.findings[:MAX_FINDINGS_PER_FRAME])
                 else:
@@ -196,6 +208,15 @@ class ResultAggregator:
         if not findings:
             return []
 
+        # BATCH 3: Track deduplication metrics
+        metrics = {
+            "total_findings": len(findings),
+            "empty_locations": 0,
+            "invalid_severity": 0,
+            "collision_count": 0,
+            "severity_upgraded": 0,
+        }
+
         seen: dict[tuple[str, str], Finding] = {}
 
         for finding in findings:
@@ -205,6 +226,8 @@ class ResultAggregator:
             # CRITICAL FIX: Don't deduplicate findings without valid location
             # Empty location causes multiple distinct findings to map to same key
             if not location or location == "" or location == "unknown:0":
+                # BATCH 3: Track empty locations
+                metrics["empty_locations"] += 1
                 # Treat each finding without location as unique
                 unique_key = f"no_location_{len(seen)}"
                 seen[unique_key] = finding  # type: ignore
@@ -250,6 +273,9 @@ class ResultAggregator:
             if key not in seen:
                 seen[key] = finding
             else:
+                # BATCH 3: Track collision
+                metrics["collision_count"] += 1
+
                 # Keep finding with higher severity
                 existing = seen[key]
                 # CRITICAL FIX: Normalize severity to lowercase (prevent case sensitivity bugs)
@@ -261,6 +287,7 @@ class ResultAggregator:
 
                 # Validate severity values (prevent unknown severity from getting rank 0)
                 if new_severity not in severity_rank:
+                    metrics["invalid_severity"] += 1
                     logger.warning(
                         "invalid_severity_normalized",
                         finding_id=get_finding_attribute(finding, "id", "unknown"),
@@ -270,6 +297,7 @@ class ResultAggregator:
                     new_severity = "low"
 
                 if existing_severity not in severity_rank:
+                    metrics["invalid_severity"] += 1
                     logger.warning(
                         "invalid_severity_normalized",
                         finding_id=get_finding_attribute(existing, "id", "unknown"),
@@ -280,6 +308,7 @@ class ResultAggregator:
 
                 if severity_rank.get(new_severity, 1) > severity_rank.get(existing_severity, 1):
                     seen[key] = finding
+                    metrics["severity_upgraded"] += 1
                     logger.debug(
                         "finding_deduplicated",
                         location=location,
@@ -289,6 +318,19 @@ class ResultAggregator:
                     )
 
         deduplicated = list(seen.values())
+
+        # BATCH 3: Log comprehensive deduplication metrics
+        dedup_rate = 1.0 - (len(deduplicated) / max(1, metrics["total_findings"]))
+        logger.info(
+            "deduplication_metrics",
+            input_count=metrics["total_findings"],
+            output_count=len(deduplicated),
+            collision_count=metrics["collision_count"],
+            empty_locations=metrics["empty_locations"],
+            invalid_severity=metrics["invalid_severity"],
+            severity_upgraded=metrics["severity_upgraded"],
+            dedup_rate=round(dedup_rate, 3),
+        )
 
         if len(deduplicated) < len(findings):
             logger.info(

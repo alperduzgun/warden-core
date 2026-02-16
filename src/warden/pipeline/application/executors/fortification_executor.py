@@ -9,6 +9,7 @@ from typing import Any, List
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.utils.finding_utils import get_finding_attribute
 from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
@@ -74,23 +75,54 @@ class FortificationExecutor(BasePhaseExecutor):
             # Convert objects to dicts expected by FortificationPhase (BATCH 1: Type Safety)
             from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 
+            # BATCH 3: Track normalization metrics
+            normalization_success = 0
+            normalization_failures = []
+
             validated_issues = []
             for f in raw_findings:
-                # Normalize all findings to dicts (handles both Finding objects and dicts)
-                normalized = normalize_finding_to_dict(f)
+                try:
+                    # Normalize all findings to dicts (handles both Finding objects and dicts)
+                    normalized = normalize_finding_to_dict(f)
 
-                # Map to Fortification Dictionary Contract
-                issue = {
-                    "id": normalized.get("id", "unknown"),
-                    "type": normalized.get("type", "unknown"),
-                    "severity": normalized.get("severity", "low"),
-                    "message": normalized.get("message", ""),
-                    "detail": normalized.get("message", ""),  # Use message as detail if detail not present
-                    "file_path": normalized.get("file_path", "unknown"),
-                    "line_number": int(normalized.get("location", "unknown:0").split(":")[-1]) if ":" in normalized.get("location", "unknown:0") else 0,
-                    "code_snippet": normalized.get("code_snippet", ""),
-                }
-                validated_issues.append(issue)
+                    # BATCH 3: Validate contract fields
+                    required_fields = ["id", "severity", "message", "file_path"]
+                    missing_fields = [field for field in required_fields if not normalized.get(field)]
+
+                    if missing_fields:
+                        logger.warning(
+                            "finding_missing_fields",
+                            finding_id=normalized.get("id", "unknown"),
+                            missing_fields=missing_fields,
+                        )
+                        normalization_failures.append(normalized.get("id", "unknown"))
+                        continue
+
+                    # Map to Fortification Dictionary Contract
+                    issue = {
+                        "id": normalized.get("id", "unknown"),
+                        "type": normalized.get("type", "unknown"),
+                        "severity": normalized.get("severity", "low"),
+                        "message": normalized.get("message", ""),
+                        "detail": normalized.get("message", ""),  # Use message as detail if detail not present
+                        "file_path": normalized.get("file_path", "unknown"),
+                        "line_number": int(normalized.get("location", "unknown:0").split(":")[-1]) if ":" in normalized.get("location", "unknown:0") else 0,
+                        "code_snippet": normalized.get("code_snippet", ""),
+                    }
+                    validated_issues.append(issue)
+                    normalization_success += 1
+                except Exception as e:
+                    normalization_failures.append(get_finding_attribute(f, "id", "unknown"))
+                    logger.error("finding_normalization_exception", error=str(e))
+
+            # BATCH 3: Log normalization summary
+            if normalization_failures:
+                logger.info(
+                    "fortification_normalization_summary",
+                    success=normalization_success,
+                    failures=len(normalization_failures),
+                    failure_ids=normalization_failures[:5],
+                )
 
             if not validated_issues:
                 logger.info("fortification_skipped", reason="no_findings_to_fortify")
@@ -131,6 +163,11 @@ class FortificationExecutor(BasePhaseExecutor):
 
                 findings_map[fid] = normalized
 
+            # BATCH 3: Track fortification linking metrics
+            linked_count = 0
+            unlinked_count = 0
+            unlinked_ids = []
+
             for fort in result.fortifications:
                 # Handle both object and dict (including camelCase from to_json)
                 if isinstance(fort, dict):
@@ -145,6 +182,8 @@ class FortificationExecutor(BasePhaseExecutor):
                     original_code = getattr(fort, "original_code", None)
 
                 if fid and fid in findings_map:
+                    # BATCH 3: Track successful linking
+                    linked_count += 1
                     finding = findings_map[fid]
                     # Create Remediation object (matching dataclass field names)
                     remediation = Remediation(
@@ -171,12 +210,26 @@ class FortificationExecutor(BasePhaseExecutor):
 
                     # Assign to finding
                     finding.remediation = remediation
+                else:
+                    # BATCH 3: Track unlinked fortifications
+                    unlinked_count += 1
+                    unlinked_ids.append(fid)
+                    logger.warning(
+                        "fortification_unlinked",
+                        fortification_id=fid,
+                        reason="finding_not_in_map",
+                    )
 
-            # Add phase result
+            # Add phase result (BATCH 3: Include linking metrics)
+            total_forts = len(result.fortifications)
+            link_success_rate = linked_count / max(1, total_forts) if total_forts > 0 else 0.0
             context.add_phase_result(
                 "FORTIFICATION",
                 {
-                    "fortifications_count": len(result.fortifications),
+                    "fortifications_total": total_forts,
+                    "fortifications_linked": linked_count,
+                    "fortifications_unlinked": unlinked_count,
+                    "link_success_rate": round(link_success_rate, 3),
                     "critical_fixes": len([f for f in result.fortifications if fort_get(f, "severity") == "critical"]),
                     "auto_fixable": len(
                         [f for f in result.fortifications if fort_get(f, "auto_fixable") or fort_get(f, "autoFixable")]
