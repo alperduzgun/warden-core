@@ -14,13 +14,15 @@ Pipeline: Tree-sitter → LSP → VectorDB → LLM
 Principles: KISS, DRY, SOLID, YAGNI, Fail-Fast, Idempotency
 """
 
+import html
 import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from warden.llm.providers.base import ILlmClient
+from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
     FrameApplicability,
@@ -34,6 +36,9 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 logger = get_logger(__name__)
 
@@ -282,7 +287,7 @@ class ResilienceFrame(ValidationFrame):
 
         logger.debug("resilience_frame_initialized", timeout=self._timeout, version=self.version)
 
-    async def execute_async(self, code_file: CodeFile, context: "PipelineContext | None" = None) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute chaos engineering analysis.
 
@@ -764,9 +769,6 @@ class ResilienceFrame(ValidationFrame):
 
             # Add prior findings if available - BATCH 2: Sanitized
             if hasattr(self, "prior_findings") and self.prior_findings:
-                import html
-                from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
-
                 # Normalize and filter findings for this file
                 file_findings = []
                 for f in self.prior_findings:

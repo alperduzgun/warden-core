@@ -6,9 +6,11 @@ Uses AST analysis, taint tracking, data flow analysis, and LLM verification.
 """
 
 import asyncio
+import html
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.check import CheckRegistry, CheckResult, ValidationCheck
 from warden.validation.domain.enums import (
@@ -28,6 +30,9 @@ from warden.validation.infrastructure.check_loader import CheckLoader
 
 from .ast_analyzer import extract_ast_context, format_ast_context
 from .batch_processor import batch_verify_security_findings
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 from .data_flow_analyzer import analyze_data_flow, format_data_flow_context
 
 logger = get_logger(__name__)
@@ -140,7 +145,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                     error=str(e),
                 )
 
-    async def execute_async(self, code_file: CodeFile, context: "PipelineContext | None" = None) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute all security checks on code file.
 
@@ -254,9 +259,6 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
 
                 # 2. Prior Findings Context (cross-frame awareness) - BATCH 2: Sanitized
                 if hasattr(self, "prior_findings") and self.prior_findings:
-                    import html
-                    from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
-
                     # Normalize and filter findings for this file
                     file_findings = []
                     for f in self.prior_findings:

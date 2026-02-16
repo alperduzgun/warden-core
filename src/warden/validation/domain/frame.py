@@ -323,7 +323,7 @@ class ValidationFrame(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'description' attribute")
 
     @abstractmethod
-    async def execute_async(self, code_file: CodeFile, context: "PipelineContext | None" = None) -> FrameResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute validation frame on code file.
 

@@ -7,10 +7,11 @@ import traceback
 from typing import Any, List
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
+from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.finding_utils import get_finding_attribute
-from warden.validation.domain.frame import CodeFile
+from warden.validation.domain.frame import CodeFile, Remediation
 
 logger = get_logger(__name__)
 
@@ -144,11 +145,7 @@ class FortificationExecutor(BasePhaseExecutor):
             context.security_improvements = result.security_improvements
 
             # Link Fortifications back to Findings for Reporting
-            from warden.validation.domain.frame import Remediation
-
             # Create a lookup for findings (BATCH 1: Fix duplicate key overwrite)
-            from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
-
             findings_map = {}
             for f in context.findings:
                 normalized = normalize_finding_to_dict(f)
