@@ -97,10 +97,7 @@ def ci_config_command(
     if ci_provider:
         ci_provider_info = _resolve_ci_provider(ci_provider)
         if not ci_provider_info:
-            console.print(
-                f"[red]Unknown CI provider: '{ci_provider}'. "
-                f"Valid options: github, gitlab[/red]"
-            )
+            console.print(f"[red]Unknown CI provider: '{ci_provider}'. Valid options: github, gitlab[/red]")
             raise typer.Exit(code=1)
     else:
         # Interactive selection
@@ -121,9 +118,7 @@ def ci_config_command(
             )
             raise typer.Exit(code=1)
         if not llm_provider_info.get("ci_supported", True):
-            console.print(
-                f"[red]Provider '{llm_provider}' is not supported in CI environments.[/red]"
-            )
+            console.print(f"[red]Provider '{llm_provider}' is not supported in CI environments.[/red]")
             raise typer.Exit(code=1)
     else:
         # Interactive selection with CI context (filters out claude_code)
@@ -132,9 +127,7 @@ def ci_config_command(
     # --- Detect default branch ---
     branch = "main"
     try:
-        branch = subprocess.check_output(
-            ["git", "branch", "--show-current"], text=True, timeout=3
-        ).strip() or "main"
+        branch = subprocess.check_output(["git", "branch", "--show-current"], text=True, timeout=3).strip() or "main"
     except (OSError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
         pass
 
@@ -147,10 +140,7 @@ def ci_config_command(
         ]
         found = [p for p in existing if p.exists()]
         if found:
-            console.print(
-                f"[yellow]Existing CI workflow(s) found: "
-                f"{', '.join(p.name for p in found)}[/yellow]"
-            )
+            console.print(f"[yellow]Existing CI workflow(s) found: {', '.join(p.name for p in found)}[/yellow]")
             console.print("[dim]Use --force to overwrite.[/dim]")
             raise typer.Exit(code=1)
     elif not force and ci_provider_info["id"] == "gitlab":
@@ -164,18 +154,13 @@ def ci_config_command(
     success = configure_ci_workflow(ci_provider_info, llm_config, project_root, branch)
 
     if success:
-        console.print(
-            f"\n[bold green]CI workflow configured:[/bold green] "
-            f"{ci_provider_info['name']}"
-        )
+        console.print(f"\n[bold green]CI workflow configured:[/bold green] {ci_provider_info['name']}")
         console.print(
             f"  Provider: [cyan]{llm_provider_info['id']}[/cyan] (smart) + "
             f"[cyan]ollama[/cyan] (fast, {llm_config['fast_model']})"
         )
         if ci_provider_info["id"] == "github":
-            console.print(
-                "  Run [bold]git add .github/workflows/[/bold] to stage the files."
-            )
+            console.print("  Run [bold]git add .github/workflows/[/bold] to stage the files.")
         elif ci_provider_info["id"] == "gitlab":
             console.print("  Run [bold]git add .gitlab-ci.yml[/bold] to stage the file.")
     else:

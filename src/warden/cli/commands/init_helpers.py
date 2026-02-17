@@ -115,6 +115,7 @@ def _is_ci_environment() -> bool:
         or not sys.stdin.isatty()
     )
 
+
 CI_PROVIDERS = {
     "1": {
         "id": "github",
@@ -478,7 +479,9 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
     llm_config = {"provider": provider["id"], "model": model, "timeout": 300}
 
     # Ask about local LLM for fast tier
-    enable_hybrid = not is_interactive or Confirm.ask("Enable Ollama for fast/cheap checks? (Hybrid mode)", default=True)
+    enable_hybrid = not is_interactive or Confirm.ask(
+        "Enable Ollama for fast/cheap checks? (Hybrid mode)", default=True
+    )
     if enable_hybrid:
         llm_config["use_local_llm"] = True
         llm_config["fast_model"] = "qwen2.5-coder:0.5b"

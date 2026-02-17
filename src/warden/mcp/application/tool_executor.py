@@ -253,6 +253,7 @@ class ToolExecutorService:
                 # the 5-6s blocking WardenBridge init on every status call.
                 if tool.requires_bridge:
                     import asyncio
+
                     loop = asyncio.get_running_loop()
                     is_avail = await loop.run_in_executor(None, lambda: adapter.is_available)
                     if not is_avail:
@@ -268,6 +269,7 @@ class ToolExecutorService:
             # 3. Fall back to legacy bridge adapter
             if self._bridge_adapter.supports(tool_name):
                 import asyncio
+
                 loop = asyncio.get_running_loop()
                 is_avail = await loop.run_in_executor(None, lambda: self._bridge_adapter.is_available)
                 if not is_avail:
