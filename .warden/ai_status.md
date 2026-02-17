@@ -1,11 +1,10 @@
 # Warden Security Status
-Updated: 2026-02-15 14:00:00
+Updated: 2026-02-17 13:59:30
 
-**Status**: ✅ PASS
-**Critical Issues**: 0
-**Total Issues**: 0
+**Status**: ❌ FAIL
+**Critical Issues**: 15
+**Total Issues**: 843
 
 > [!NOTE]
-> Previous FAIL (2 critical, 3 total) was caused by false positives:
-> self-referential scanning in HardcodedPasswordCheck and suppression format mismatch.
-> Fixed by adding docstring/comment awareness and standardizing inline suppression format.
+> If status is FAIL, please check the full report or run `warden scan` for details.
+> Do not analyze full code unless you are resolving these specific issues.
