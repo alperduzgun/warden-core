@@ -88,10 +88,12 @@ class PhaseOrchestrator:
         self.project_root = project_root or Path.cwd()
         self.llm_service = llm_service
 
-        # Initialize rule validator if global rules exist
+        # Initialize rule validator if global rules or frame rules exist
         self.rule_validator = None
-        if self.config.global_rules:
-            self.rule_validator = CustomRuleValidator(self.config.global_rules, llm_service=self.llm_service)
+        if self.config.global_rules or self.config.frame_rules:
+            self.rule_validator = CustomRuleValidator(
+                self.config.global_rules or [], llm_service=self.llm_service
+            )
 
         # Initialize Semantic Search Service if enabled in config
         self.semantic_search_service = None
@@ -503,3 +505,6 @@ class PhaseOrchestrator:
 
         except Exception as e:
             logger.error("cleanup_failed", pipeline_id=context.pipeline_id, error=str(e))
+
+    async def _execute_lsp_diagnostics_async(self, context: PipelineContext) -> None:
+        """Run LSP diagnostics phase (no-op stub, can be patched in tests)."""

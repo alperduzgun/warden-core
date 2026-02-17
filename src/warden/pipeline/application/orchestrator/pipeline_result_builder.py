@@ -105,14 +105,25 @@ class PipelineResultBuilder:
 
     @staticmethod
     def _collect_findings(context: PipelineContext, frame_results: list) -> list:
-        """Collect findings from context or aggregate from frame results."""
-        if hasattr(context, "findings") and context.findings:
-            return context.findings
-
+        """Collect findings from context and aggregate rule violations from frame results."""
         findings: list = []
+
+        # Start with pipeline-level findings (from SecurityFrame, ResilienceFrame, etc.)
+        if hasattr(context, "findings") and context.findings:
+            findings.extend(context.findings)
+        else:
+            for frame_res in frame_results:
+                if hasattr(frame_res, "findings") and frame_res.findings:
+                    findings.extend(frame_res.findings)
+
+        # Also include custom rule violations (pre/post) as findings
         for frame_res in frame_results:
-            if hasattr(frame_res, "findings") and frame_res.findings:
-                findings.extend(frame_res.findings)
+            for attr in ("pre_rule_violations", "post_rule_violations"):
+                violations = getattr(frame_res, attr, None)
+                if violations:
+                    from warden.pipeline.application.orchestrator.rule_executor import RuleExecutor
+                    findings.extend([RuleExecutor.convert_to_finding(v) for v in violations])
+
         return findings
 
     @staticmethod

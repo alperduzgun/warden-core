@@ -252,6 +252,7 @@ class ResilienceFrame(ValidationFrame):
     """
 
     # Metadata
+    frame_id = "resilience"  # Class-level access: ResilienceFrame.frame_id == "resilience"
     name = "Chaos Engineering Analysis"
     description = "Simulate failures, find missing resilience patterns (timeout, retry, circuit breaker)."
     category = FrameCategory.GLOBAL

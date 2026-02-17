@@ -55,7 +55,7 @@ async def test_pre_rule_blocker_stops_frame_execution():
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Frame should fail due to PRE blocker
     assert result.status == PipelineStatus.FAILED
@@ -109,7 +109,7 @@ async def test_post_rule_blocker_detected():
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Frame should fail due to POST blocker
     assert result.status == PipelineStatus.FAILED
@@ -178,7 +178,7 @@ def fetch_data():
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Should fail due to POST blocker
     assert result.status == PipelineStatus.FAILED
@@ -249,7 +249,7 @@ def main():
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     frame_result = result.frame_results[0]
 
@@ -302,7 +302,7 @@ async def test_empty_list_vs_none_handling():
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     frame_result = result.frame_results[0]
 
@@ -355,7 +355,7 @@ password = "admin123"  # Security blocker issue
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Should fail due to SecurityFrame findings (blocker frame)
     assert result.status == PipelineStatus.FAILED
@@ -426,7 +426,7 @@ def fetch():
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     # Should fail due to blocker violations
     assert result.status == PipelineStatus.FAILED
@@ -475,7 +475,7 @@ async def test_on_fail_continue_executes_frame():
         language="python",
     )
 
-    result = await orchestrator.execute_async([code_file])
+    result, _ = await orchestrator.execute_async([code_file])
 
     frame_result = result.frame_results[0]
 

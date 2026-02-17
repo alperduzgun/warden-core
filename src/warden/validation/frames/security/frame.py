@@ -57,6 +57,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
     """
 
     # Required metadata
+    frame_id = "security"  # Class-level access: SecurityFrame.frame_id == "security"
     name = "Security Analysis"
     description = "Detects SQL injection, XSS, secrets, and other security vulnerabilities"
     category = FrameCategory.GLOBAL

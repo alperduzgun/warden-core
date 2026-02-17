@@ -3,6 +3,7 @@ Analysis Phase Executor.
 """
 
 import time
+import traceback
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -214,8 +215,12 @@ class AnalysisExecutor(BasePhaseExecutor):
                 quality_score=result.overall_score,
             )
 
+        except RuntimeError as e:
+            logger.error("phase_failed", phase="ANALYSIS", error=str(e), tb=traceback.format_exc())
+            context.errors.append(f"ANALYSIS failed: {e!s}")
+            raise e
         except Exception as e:
-            logger.error("phase_failed", phase="ANALYSIS", error=str(e))
+            logger.error("phase_failed", phase="ANALYSIS", error=str(e), tb=traceback.format_exc())
             context.errors.append(f"ANALYSIS failed: {e!s}")
 
         if self.progress_callback:

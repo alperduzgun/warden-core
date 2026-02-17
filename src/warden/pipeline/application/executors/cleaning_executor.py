@@ -3,6 +3,7 @@ Cleaning Phase Executor.
 """
 
 import time
+import traceback
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -97,8 +98,12 @@ class CleaningExecutor(BasePhaseExecutor):
                 quality_improvement=result.quality_score_after - context.quality_score_before,
             )
 
+        except RuntimeError as e:
+            logger.error("phase_failed", phase="CLEANING", error=str(e), tb=traceback.format_exc())
+            context.errors.append(f"CLEANING failed: {e!s}")
+            raise e
         except Exception as e:
-            logger.error("phase_failed", phase="CLEANING", error=str(e))
+            logger.error("phase_failed", phase="CLEANING", error=str(e), tb=traceback.format_exc())
             context.errors.append(f"CLEANING failed: {e!s}")
 
         if self.progress_callback:

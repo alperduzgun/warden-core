@@ -3,6 +3,7 @@ Classification Phase Executor.
 """
 
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -173,8 +174,12 @@ class ClassificationExecutor(BasePhaseExecutor):
                 selected_frames=result.selected_frames,
             )
 
+        except RuntimeError as e:
+            logger.error("phase_failed", phase="CLASSIFICATION", error=str(e), tb=traceback.format_exc())
+            context.errors.append(f"CLASSIFICATION failed: {e!s}")
+            raise e
         except Exception as e:
-            logger.error("phase_failed", phase="CLASSIFICATION", error=str(e))
+            logger.error("phase_failed", phase="CLASSIFICATION", error=str(e), tb=traceback.format_exc())
             context.errors.append(f"CLASSIFICATION failed: {e!s}")
 
             # FALLBACK: Use all configured frames if classification fails

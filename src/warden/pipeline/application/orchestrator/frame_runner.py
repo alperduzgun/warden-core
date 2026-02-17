@@ -120,10 +120,19 @@ class FrameRunner:
                 remaining=len(files_for_frame),
             )
 
-        files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
-        code_files = files_for_frame
+        # Pre-rules run on pre-triage files (before triage routing filters out fast-lane files)
+        # so they act as security gates that cannot be bypassed by triage.
+        pre_triage_files = files_for_frame
 
         frame_rules = self.config.frame_rules.get(frame.frame_id) if self.config.frame_rules else None
+
+        if frame_rules:
+            # When custom frame_rules are configured, the frame executes on pre-triage files.
+            # This ensures rule gates and frame analysis see the same file set.
+            code_files = pre_triage_files
+        else:
+            files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
+            code_files = files_for_frame
 
         if self.llm_service:
             frame.llm_service = self.llm_service
@@ -233,7 +242,7 @@ class FrameRunner:
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:
             logger.info("executing_pre_rules", frame_id=frame.frame_id, rule_count=len(frame_rules.pre_rules))
-            pre_violations = await self.rule_executor.execute_rules_async(frame_rules.pre_rules, code_files)
+            pre_violations = await self.rule_executor.execute_rules_async(frame_rules.pre_rules, pre_triage_files)
 
             if pre_violations and RuleExecutor.has_blocker_violations(pre_violations):
                 if frame_rules.on_fail == "stop":
@@ -244,9 +253,10 @@ class FrameRunner:
                         frame_name=frame.name,
                         status="failed",
                         duration=time.perf_counter() - frame_start_time,
-                        issues_found=len(pre_violations),
+                        issues_found=0,  # Frame did not execute; rule violations tracked separately
                         is_blocker=True,
-                        findings=[RuleExecutor.convert_to_finding(v) for v in pre_violations],
+                        findings=[],
+                        pre_rule_violations=pre_violations,
                         metadata={"failure_reason": "pre_rules_blocker_violation"},
                     )
 
@@ -503,19 +513,33 @@ class FrameRunner:
 
         post_violations = []
         if frame_rules and frame_rules.post_rules:
-            post_violations = await self.rule_executor.execute_rules_async(frame_rules.post_rules, code_files)
+            post_violations = await self.rule_executor.execute_rules_async(frame_rules.post_rules, pre_triage_files)
 
             if post_violations and RuleExecutor.has_blocker_violations(post_violations):
                 if frame_rules.on_fail == "stop":
                     logger.error("post_rules_failed_stopping", frame_id=frame.frame_id)
+                    frame_result.status = "failed"
+                    frame_result.is_blocker = True
+                    pipeline.frames_failed += 1
 
-        frame_result.pre_rule_violations = pre_violations if pre_violations else None
-        frame_result.post_rule_violations = post_violations if post_violations else None
+        # Distinguish between "no rules configured" (None) and "rules ran, no violations" ([])
+        has_pre_rules = frame_rules and frame_rules.pre_rules
+        has_post_rules = frame_rules and frame_rules.post_rules
+        frame_result.pre_rule_violations = pre_violations if has_pre_rules else None
+        frame_result.post_rule_violations = post_violations if has_post_rules else None
 
-        if pre_violations:
-            frame_result.findings.extend([RuleExecutor.convert_to_finding(v) for v in pre_violations])
-        if post_violations:
-            frame_result.findings.extend([RuleExecutor.convert_to_finding(v) for v in post_violations])
+        # If any blocker violations exist (regardless of on_fail), mark frame as failed.
+        # on_fail="continue" means execution continues, but the result is still a failure.
+        all_violations = (pre_violations or []) + (post_violations or [])
+        if all_violations and RuleExecutor.has_blocker_violations(all_violations):
+            if frame_result.status != "failed":
+                frame_result.status = "failed"
+                frame_result.is_blocker = True
+                pipeline.frames_failed += 1
+
+        # Rule violations are tracked separately in pre/post_rule_violations.
+        # Do NOT extend frame_result.findings — the pipeline result builder
+        # aggregates rule violations into total_findings independently.
 
         context.frame_results[frame.frame_id] = {
             "result": frame_result,

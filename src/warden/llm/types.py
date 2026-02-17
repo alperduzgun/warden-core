@@ -25,6 +25,7 @@ class LlmProvider(str, Enum):
     OLLAMA = "ollama"
     GEMINI = "gemini"
     CLAUDE_CODE = "claude_code"  # Local Claude Code CLI/SDK integration
+    UNKNOWN = "unknown"  # Fallback/offline mode
 
 
 class LlmRequest(BaseDomainModel):

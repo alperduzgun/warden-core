@@ -3,6 +3,7 @@ Pre-Analysis Phase Executor.
 """
 
 import time
+import traceback
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -76,9 +77,10 @@ class PreAnalysisExecutor(BasePhaseExecutor):
 
         except RuntimeError as e:
             # Re-raise integrity check failures or other critical errors to stop pipeline
+            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), tb=traceback.format_exc())
             raise e
         except Exception as e:
-            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__)
+            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__, tb=traceback.format_exc())
             context.errors.append(f"PRE_ANALYSIS failed: {e!s}")
 
         if self.progress_callback:
