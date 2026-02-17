@@ -86,7 +86,12 @@ class ProjectStructureAnalyzer:
         Returns:
             ProjectContext with detected information
         """
-        self._injected_files = all_files
+        # Filter injected files through gitignore/wardeignore rules so that
+        # .warden/, node_modules/, .git/ and patterns from .wardenignore are
+        # automatically excluded from language analysis without hardcoding dirs.
+        self._injected_files = (
+            [f for f in all_files if not self.gitignore_filter.should_ignore(f)] if all_files is not None else None
+        )
         start_time = time.perf_counter()
 
         logger.info(
@@ -358,8 +363,17 @@ class ProjectStructureAnalyzer:
             percent = (value / total_value) * 100
             breakdown[lang_id] = round(percent, 1)
 
+        # Documentation languages should not be the primary project language.
+        # Prefer programming languages over markup/docs when available.
+        _DOC_LANGS = {"markdown", "rst", "text", "plain"}
+        code_counts = {k: v for k, v in counts.items() if k not in _DOC_LANGS}
+
         threshold_percent = 2.0
-        dominant_lang = max(counts, key=counts.get) if counts else None
+        dominant_lang = (
+            max(code_counts, key=code_counts.get)  # type: ignore[arg-type]
+            if code_counts
+            else (max(counts, key=counts.get) if counts else None)  # type: ignore[arg-type]
+        )
 
         for lang, percent in breakdown.items():
             if percent >= threshold_percent or lang == dominant_lang:
