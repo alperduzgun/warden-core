@@ -16,6 +16,7 @@ Chaos Engineering Principles:
 from __future__ import annotations
 
 from pathlib import Path
+import os
 from typing import Any
 
 import typer
@@ -33,6 +34,10 @@ config_app = typer.Typer(
     help="View and modify Warden configuration",
     no_args_is_help=True,
 )
+
+# Sub-app for LLM helpers
+llm_app = typer.Typer(name="llm", help="Manage LLM provider configuration")
+config_app.add_typer(llm_app, name="llm")
 
 
 # =============================================================================
@@ -438,3 +443,113 @@ def config_callback(ctx: typer.Context) -> None:
     """
     if ctx.invoked_subcommand is None:
         config_list(json_output=False)
+
+
+# =============================================================================
+# LLM Subcommands
+# =============================================================================
+
+
+def _provider_key_var(provider: str) -> str | None:
+    mapping = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+    }
+    if provider == "azure":
+        return "AZURE_OPENAI_API_KEY"
+    return mapping.get(provider)
+
+
+def _env_present(name: str) -> bool:
+    import os
+
+    return bool(os.environ.get(name))
+
+
+@llm_app.command("status")
+def llm_status() -> None:
+    """Show active LLM provider and configuration health."""
+    import os
+    config, _ = _load_config()
+    llm = config.get("llm", {})
+    provider = llm.get("provider") or os.environ.get("WARDEN_LLM_PROVIDER") or "unknown"
+    model = llm.get("model")
+    smart_model = llm.get("smart_model")
+    fast_model = llm.get("fast_model")
+
+    console.print(f"[bold blue]🤖 LLM Status[/bold blue]")
+    console.print(f"Provider: [green]{provider}[/green]")
+    if model:
+        console.print(f"Model: [cyan]{model}[/cyan]")
+    if smart_model:
+        console.print(f"Smart: [cyan]{smart_model}[/cyan]")
+    if fast_model:
+        console.print(f"Fast: [cyan]{fast_model}[/cyan]")
+
+    # Basic secret/endpoint presence check
+    key_var = _provider_key_var(provider)
+    if provider == "ollama":
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        console.print(f"OLLAMA_HOST: [cyan]{host}[/cyan]")
+    elif provider == "claude_code":
+        import shutil
+
+        present = bool(shutil.which("claude"))
+        console.print(f"claude CLI: {'[green]found[/green]' if present else '[red]missing[/red]'}")
+    elif key_var:
+        console.print(f"Key {key_var}: {'[green]present[/green]' if _env_present(key_var) else '[red]missing[/red]'}")
+
+
+@llm_app.command("use")
+def llm_use(provider: str = typer.Argument(..., help="Provider name (e.g., ollama, anthropic, openai, azure, groq, deepseek, gemini, claude_code)")) -> None:
+    """Set active LLM provider and update default models."""
+    provider = provider.strip().lower()
+    if provider not in [p.value for p in LlmProvider] and provider not in ("claude_code",):
+        console.print(f"[red]Invalid provider:[/red] {provider}")
+        raise typer.Exit(1)
+
+    config, config_path = _load_config()
+    _set_nested_value(config, "llm.provider", provider)
+    _update_provider_models(config, provider)
+    _save_config(config, config_path)
+    console.print(f"[green]✓[/green] Using provider: [cyan]{provider}[/cyan]")
+
+
+@llm_app.command("test")
+def llm_test() -> None:
+    """Validate provider configuration (keys/endpoints)."""
+    import json as _json
+    import urllib.request as req
+    from urllib.error import URLError
+
+    config, _ = _load_config()
+    provider = config.get("llm", {}).get("provider", "unknown")
+
+    results: dict[str, str] = {}
+    if provider == "ollama":
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        try:
+            with req.urlopen(f"{host}/api/tags", timeout=3) as r:
+                if r.status == 200:
+                    results["ollama"] = "ok"
+                else:
+                    results["ollama"] = f"http {r.status}"
+        except URLError as e:
+            results["ollama"] = f"error: {e.reason}"
+    elif provider == "claude_code":
+        import shutil
+        results["claude_code"] = "found" if shutil.which("claude") else "missing"
+    else:
+        key_var = _provider_key_var(provider)
+        if key_var:
+            results[provider] = "key_present" if _env_present(key_var) else "key_missing"
+        else:
+            results[provider] = "unknown"
+
+    console.print("[bold blue]🔎 LLM Test[/bold blue]")
+    for k, v in results.items():
+        status = "[green]OK[/green]" if v in ("ok", "found", "key_present") else f"[yellow]{v}[/yellow]"
+        console.print(f"{k}: {status}")

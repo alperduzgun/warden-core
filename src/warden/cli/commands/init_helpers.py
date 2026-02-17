@@ -800,17 +800,30 @@ You are responsible for the security and code quality of this project.
     except Exception as e:
         console.print(f"[yellow]Warning: Could not create ai_status.md: {e}[/yellow]")
 
-    # 4. Create .env.example
+    # 4. Create/Update .env.example
     try:
         env_template = importlib.resources.read_text("warden.templates", "env.example")
         env_example_path = project_root / ".env.example"
 
-        if not env_example_path.exists():
-            with open(env_example_path, "w") as f:
-                f.write(env_template)
-            console.print(f"[green]✓ Created {env_example_path}[/green]")
+        lines: list[str] = []
+        if env_example_path.exists():
+            lines = env_example_path.read_text().splitlines()
+        else:
+            lines = env_template.splitlines()
+
+        def ensure_line(key: str):
+            nonlocal lines
+            if not any(l.split("=")[0] == key for l in lines if "=" in l):
+                lines.append(f"{key}=")
+
+        # Common provider override used in CI/local split
+        ensure_line("WARDEN_LLM_PROVIDER")
+
+        with open(env_example_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        console.print(f"[green]✓ Updated {env_example_path}[/green]")
     except Exception as e:
-        console.print(f"[yellow]Warning: Could not create .env.example: {e}[/yellow]")
+        console.print(f"[yellow]Warning: Could not update .env.example: {e}[/yellow]")
 
     # 5. Create AI_RULES.md (detailed protocol)
     try:

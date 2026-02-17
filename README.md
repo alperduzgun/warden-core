@@ -250,6 +250,10 @@ To setup Warden for your project and **configure your AI Agent**:
 warden init --agent
 ```
 
+Tips:
+– On CI or headless environments, prefer: `warden init --no-agent --skip-mcp --no-grammars`
+– Flags: `--baseline/--no-baseline`, `--intel/--no-intel`, `--grammars/--no-grammars`, `--agent/--no-agent`
+
 This command:
 1.  Analyzes your project structure.
 2.  Creates `.warden/AI_RULES.md`.
@@ -264,7 +268,7 @@ Warden auto-detects available providers and uses the best local option by defaul
 **Option 1: Claude Code (Recommended for Claude Users)**
 ```bash
 # No setup needed! If you have Claude Code CLI installed:
-warden config llm use claude-code
+warden config llm use claude_code
 
 # Verify it's working:
 warden config llm test
@@ -281,12 +285,17 @@ warden scan
 
 **Option 3: Cloud Providers (API Key Required)**
 ```bash
-# Configure via interactive CLI:
-warden config llm add
+# Select a provider:
+warden config llm use anthropic   # or: openai, groq, gemini, deepseek, azure
 
-# Or set via environment:
+# Set environment variables for the chosen provider:
 export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...
+export GROQ_API_KEY=gsk_...
+export GEMINI_API_KEY=...
+export AZURE_OPENAI_API_KEY=...
+export AZURE_OPENAI_ENDPOINT=...
+export AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
 ```
 
 **Check Current Configuration:**
@@ -313,8 +322,7 @@ AI Agents working in a Warden project follow this strict protocol:
 | `warden scan` | Runs the full validation pipeline on the project. |
 | `warden scan --diff` | **(New!)** Incremental scan. Checks only files changed relative to main branch. |
 | `warden scan --diff --baseline` | **(New!)** Smart Autopilot. Uses baseline to hide legacy issues. |
-| `warden validate <file>` | Scans a single file for immediate feedback. |
-| `warden config llm` | **(New!)** Manage LLM providers (add/remove/list/test/use). |
+| `warden config llm` | **(New!)** Manage LLM provider (status/use/test). |
 | `warden config llm status` | Shows current LLM configuration and available providers. |
 | `warden config llm test` | Tests the active LLM provider connection. |
 | `warden serve` | Starts the MCP Server for AI integration. |
@@ -400,7 +408,7 @@ llm:
   auto_detect: true
 
   # Active provider
-  active_provider: claude-code  # or: ollama, anthropic, openai, gemini
+  active_provider: claude_code  # or: ollama, anthropic, openai, gemini
 
   providers:
     claude_code:
@@ -430,7 +438,7 @@ llm:
   # Intelligent routing (optional)
   routing:
     fast_tier: ollama        # For quick checks (linting, parsing)
-    smart_tier: claude-code  # For complex analysis (security, architecture)
+    smart_tier: claude_code  # For complex analysis (security, architecture)
 ```
 
 **Priority Order (Auto-Detection):**

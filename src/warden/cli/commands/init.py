@@ -18,6 +18,7 @@ from warden.cli.commands.init_helpers import (
     configure_vector_db,
     generate_ai_tool_files,
     select_ci_provider,
+    _is_ci_environment,
 )
 from warden.cli.commands.install import install as run_install
 
@@ -403,6 +404,26 @@ def init_command(
     mode: str = typer.Option("normal", "--mode", "-m", help="Initialization mode (vibe, normal, strict)"),
     ci: bool = typer.Option(False, "--ci", help="Generate GitHub Actions CI workflow"),
     skip_mcp: bool = typer.Option(False, "--skip-mcp", help="Skip MCP server registration"),
+    agent: bool = typer.Option(
+        True,
+        "--agent/--no-agent",
+        help="Configure agent files (Claude/Cursor) and register MCP server",
+    ),
+    baseline: bool = typer.Option(
+        True,
+        "--baseline/--no-baseline",
+        help="Create baseline from current issues",
+    ),
+    intel: bool = typer.Option(
+        True,
+        "--intel/--no-intel",
+        help="Generate project intelligence for CI optimization",
+    ),
+    grammars: bool = typer.Option(
+        True,
+        "--grammars/--no-grammars",
+        help="Install missing tree-sitter grammars",
+    ),
     provider: str | None = typer.Option(
         None,
         "--provider",
@@ -592,19 +613,31 @@ def init_command(
                     f.write(f"{k}={v}\n")
         console.print("[green]Updated .env[/green]")
 
-        # Create .env.example
+        # Create or update .env.example with placeholders
         env_example_path = Path(".env.example")
-        if not env_example_path.exists():
-            with open(env_example_path, "w") as f:
-                f.write("# Warden Environment Variables\n")
-                if provider == "azure":
-                    f.write("AZURE_OPENAI_API_KEY=\n")
-                    f.write("AZURE_OPENAI_ENDPOINT=\n")
-                    f.write("AZURE_OPENAI_DEPLOYMENT_NAME=\n")
-                elif provider != "none" and provider != "ollama":
-                    # Generic key
-                    f.write(f"{provider.upper()}_API_KEY=\n")
-            console.print("[green]Created .env.example[/green]")
+        example_lines = []
+        if env_example_path.exists():
+            example_lines = env_example_path.read_text().splitlines()
+        else:
+            example_lines = ["# Warden Environment Variables"]
+
+        def ensure_line(key: str):
+            nonlocal example_lines
+            if not any(l.split("=")[0] == key for l in example_lines if "=" in l):
+                example_lines.append(f"{key}=")
+
+        # Common
+        ensure_line("WARDEN_LLM_PROVIDER")
+        if provider == "azure":
+            ensure_line("AZURE_OPENAI_API_KEY")
+            ensure_line("AZURE_OPENAI_ENDPOINT")
+            ensure_line("AZURE_OPENAI_DEPLOYMENT_NAME")
+        elif provider not in ("none", "ollama", "claude_code"):
+            ensure_line(f"{provider.upper()}_API_KEY")
+
+        with open(env_example_path, "w") as f:
+            f.write("\n".join(example_lines) + "\n")
+        console.print("[green]Updated .env.example[/green]")
 
     # --- Step 4: Vector Database ---
     vector_config = configure_vector_db()
@@ -647,6 +680,16 @@ def init_command(
                 "use_local_llm": llm_config.get("use_local_llm", False),
             },
             "semantic_search": vector_config,
+            "routing": {
+                "fast_tier": "ollama" if llm_config.get("use_local_llm", False) else provider,
+                "smart_tier": provider,
+            },
+            "baseline": {
+                "enabled": True,
+                "path": ".warden/baseline.json",
+                "auto_fetch": False,
+                "fetch_command": "gh run download -n warden-baseline",
+            },
         }
         # Preserve Azure details if selected
         if provider == "azure":
@@ -703,6 +746,24 @@ def init_command(
 
             # Ensure Semantic Search is present
             existing_config["semantic_search"] = vector_config
+
+            # Ensure routing present/updated
+            existing_config["routing"] = existing_config.get(
+                "routing",
+                {
+                    "fast_tier": "ollama" if llm_config.get("use_local_llm", False) else provider,
+                    "smart_tier": provider,
+                },
+            )
+
+            # Ensure baseline defaults
+            if "baseline" not in existing_config:
+                existing_config["baseline"] = {
+                    "enabled": True,
+                    "path": ".warden/baseline.json",
+                    "auto_fetch": False,
+                    "fetch_command": "gh run download -n warden-baseline",
+                }
 
             # Save
             with open(config_path, "w") as f:
@@ -800,24 +861,27 @@ custom_rules:
     # --- Step 9: Semantic Indexing ---
     _setup_semantic_search(config_path)
 
-    # --- Step 10: Agent & MCP Configuration (Always enabled) ---
+    # --- Step 10: Agent & MCP Configuration ---
     console.print("\n[bold blue]🤖 Configuring AI Agent Integration...[/bold blue]")
     try:
-        # Generate AI tool files from templates (CLAUDE.md, .cursorrules, etc.)
-        generate_ai_tool_files(Path.cwd(), llm_config)
-
-        # Configure MCP server registration (unless explicitly skipped)
-        if not skip_mcp:
-            configure_agent_tools(Path.cwd())
+        is_ci = _is_ci_environment()
+        if not agent:
+            console.print("[dim]Agent configuration disabled (--no-agent).[/dim]")
+        elif is_ci:
+            console.print("[dim]CI environment detected — skipping agent/MCP configuration.[/dim]")
         else:
-            console.print("[dim]MCP registration skipped (--skip-mcp flag used)[/dim]")
+            # Generate AI tool files from templates (CLAUDE.md, .cursorrules, etc.)
+            generate_ai_tool_files(Path.cwd(), llm_config)
+            if not skip_mcp:
+                configure_agent_tools(Path.cwd())
+            else:
+                console.print("[dim]MCP registration skipped (--skip-mcp flag used)[/dim]")
     except Exception as e:
         console.print(f"[red]Failed to configure agent tools: {e}[/red]")
 
     # --- Step 11: Baseline ---
-    should_create_baseline = force  # Logic: if force and non-interactive, assume yes? Or just default false.
-    # Usually we want a baseline. For automation, let's default to True if not specified otherwise.
-    if is_interactive:
+    should_create_baseline = force  # default non-interactive behavior unchanged
+    if is_interactive and baseline:
         should_create_baseline = Confirm.ask(
             "\nCreate Baseline from current issues? (Recommended for existing projects)", default=True
         )
@@ -831,8 +895,8 @@ custom_rules:
             console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
     # --- Step 12: Intelligence Generation (CI Optimization) ---
-    should_gen_intel = force  # Generate if --force
-    if not should_gen_intel and is_interactive:
+    should_gen_intel = force
+    if is_interactive and intel:
         should_gen_intel = Confirm.ask(
             "\nGenerate Project Intelligence for CI? (Recommended for faster CI scans)", default=True
         )
@@ -880,6 +944,12 @@ custom_rules:
         console.print(f"[yellow]Warning: Could not verify frames: {e}[/yellow]")
 
     # --- Step 15: Install Tree-Sitter Grammars ---
+    if not grammars:
+        console.print("[dim]Skipping tree-sitter grammar installation (--no-grammars).[/dim]")
+        console.print("\n[bold green]✨ Warden Initialization Complete![/bold green]")
+        console.print("Run [bold cyan]warden scan[/bold cyan] to start.")
+        console.print("[dim]Available frames: security, resilience, orphan, fuzz, property[/dim]")
+        return
     console.print("\n[bold blue]🌳 Installing Tree-Sitter Grammars...[/bold blue]")
     console.print("[dim]Auto-installing parsers for detected languages...[/dim]")
 
