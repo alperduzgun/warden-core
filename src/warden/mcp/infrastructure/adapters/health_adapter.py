@@ -43,6 +43,11 @@ class HealthAdapter(BaseWardenAdapter):
         super().__init__(project_root, bridge)
         self._start_time = datetime.now(timezone.utc)
 
+    @property
+    def is_available(self) -> bool:
+        """Health adapter is always available — no bridge required."""
+        return True
+
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get health tool definitions."""
         return [
@@ -50,16 +55,19 @@ class HealthAdapter(BaseWardenAdapter):
                 name="warden_health_check",
                 description="Check if Warden service is healthy and responsive",
                 properties={},
+                requires_bridge=False,
             ),
             self._create_tool_definition(
                 name="warden_get_server_status",
                 description="Get detailed server status including uptime, memory, and component status",
                 properties={},
+                requires_bridge=False,
             ),
             self._create_tool_definition(
                 name="warden_setup_status",
                 description="Check Warden setup completeness. Use this FIRST to detect if project needs initialization or configuration. Returns missing steps that AI should help user complete.",
                 properties={},
+                requires_bridge=False,
             ),
         ]
 
@@ -80,18 +88,21 @@ class HealthAdapter(BaseWardenAdapter):
 
     async def _health_check_async(self) -> MCPToolResult:
         """Perform health check."""
-        uptime = (datetime.now() - self._start_time).total_seconds()
+        uptime = (datetime.now(timezone.utc) - self._start_time).total_seconds()
+
+        # Use internal _bridge field to avoid triggering lazy bridge init
+        bridge = self._bridge
 
         # Check component availability
         components = {
-            "bridge": self.bridge is not None,
+            "bridge": bridge is not None,
             "project_root": self.project_root.exists(),
         }
 
         # Check if bridge has orchestrator
-        if self.bridge:
-            components["orchestrator"] = getattr(self.bridge, "orchestrator", None) is not None
-            components["llm"] = getattr(self.bridge, "llm_config", None) is not None
+        if bridge:
+            components["orchestrator"] = getattr(bridge, "orchestrator", None) is not None
+            components["llm"] = getattr(bridge, "llm_config", None) is not None
 
         all_healthy = all(components.values())
 
@@ -110,7 +121,7 @@ class HealthAdapter(BaseWardenAdapter):
         """Get detailed server status."""
         import sys
 
-        uptime = (datetime.now() - self._start_time).total_seconds()
+        uptime = (datetime.now(timezone.utc) - self._start_time).total_seconds()
 
         # Get memory usage if available
         memory_mb = None
@@ -138,18 +149,21 @@ class HealthAdapter(BaseWardenAdapter):
             "warden_dir": (self.project_root / ".warden").exists(),
         }
 
+        # Use internal _bridge field to avoid triggering lazy bridge init
+        bridge = self._bridge
+
         # Get bridge status
         bridge_status = {
-            "available": self.bridge is not None,
+            "available": bridge is not None,
             "orchestrator": False,
             "llm": False,
             "config_name": None,
         }
 
-        if self.bridge:
-            bridge_status["orchestrator"] = getattr(self.bridge, "orchestrator", None) is not None
-            bridge_status["llm"] = getattr(self.bridge, "llm_config", None) is not None
-            bridge_status["config_name"] = getattr(self.bridge, "active_config_name", None)
+        if bridge:
+            bridge_status["orchestrator"] = getattr(bridge, "orchestrator", None) is not None
+            bridge_status["llm"] = getattr(bridge, "llm_config", None) is not None
+            bridge_status["config_name"] = getattr(bridge, "active_config_name", None)
 
         return MCPToolResult.json_result(
             {

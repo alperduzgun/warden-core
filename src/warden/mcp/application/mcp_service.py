@@ -79,19 +79,19 @@ class MCPService:
 
         # Handler dispatch table
         self._handlers: dict[str, Any] = {
-            "initialize": self._handle_initialize,
-            "initialized": self._handle_initialized,
-            "ping": self._handle_ping,
-            "resources/list": self._handle_resources_list,
-            "resources/read": self._handle_resources_read,
-            "tools/list": self._handle_tools_list,
-            "tools/call": self._handle_tools_call,
+            "initialize": self._handle_initialize_async,
+            "initialized": self._handle_initialized_async,
+            "ping": self._handle_ping_async,
+            "resources/list": self._handle_resources_list_async,
+            "resources/read": self._handle_resources_read_async,
+            "tools/list": self._handle_tools_list_async,
+            "tools/call": self._handle_tools_call_async,
         }
 
     async def start_async(self) -> None:
         """Start the MCP service main loop."""
         session = self.session_manager.create_session()
-        session.start_async()
+        session.start()
 
         # Start background tasks
         self._watcher_task = asyncio.create_task(self._watch_report_file_async())
@@ -120,7 +120,7 @@ class MCPService:
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._watcher_task
 
-            session.stop_async()
+            session.stop()
             await self.transport.close()
             logger.info("mcp_service_stopped")
 
@@ -206,7 +206,7 @@ class MCPService:
 
     async def _handle_tools_list_async(self, params: dict | None, session: MCPSession) -> dict:
         """Handle tools/list request."""
-        tools = self._tool_registry.list_all(self.tool_executor.bridge_available)
+        tools = self.tool_executor.registry.list_all(self.tool_executor.bridge_available)
         return {"tools": [t.to_mcp_format() for t in tools]}
 
     async def _handle_tools_call_async(self, params: dict | None, session: MCPSession) -> dict:

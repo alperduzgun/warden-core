@@ -230,8 +230,15 @@ class ToolExecutorService:
             # 1. Try to find a registered adapter that supports this tool
             adapter = self._find_adapter_for_tool(tool_name)
             if adapter:
-                if not adapter.is_available:
-                    return MCPToolResult.error(f"Adapter for {tool_name} not available").to_dict()
+                # Only check bridge availability if the tool actually needs it.
+                # Skipping this for bridge-free tools (health, config) avoids
+                # the 5-6s blocking WardenBridge init on every status call.
+                if tool.requires_bridge:
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    is_avail = await loop.run_in_executor(None, lambda: adapter.is_available)
+                    if not is_avail:
+                        return MCPToolResult.error(f"Adapter for {tool_name} not available").to_dict()
                 result = await adapter.execute_async(tool, arguments)
                 return result.to_dict()
 
@@ -242,7 +249,10 @@ class ToolExecutorService:
 
             # 3. Fall back to legacy bridge adapter
             if self._bridge_adapter.supports(tool_name):
-                if not self._bridge_adapter.is_available:
+                import asyncio
+                loop = asyncio.get_running_loop()
+                is_avail = await loop.run_in_executor(None, lambda: self._bridge_adapter.is_available)
+                if not is_avail:
                     return MCPToolResult.error("Warden bridge not available").to_dict()
                 result = await self._bridge_adapter.execute_async(tool, arguments)
                 return result.to_dict()

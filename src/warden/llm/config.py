@@ -322,9 +322,8 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             "WARDEN_LLM_CONCURRENCY",
             "WARDEN_FAST_TIER_PRIORITY",
             "WARDEN_LLM_PROVIDER",
+            "WARDEN_BLOCKED_PROVIDERS",
             "OLLAMA_HOST",
-            "CLAUDE_CODE_ENABLED",
-            "CLAUDE_CODE_MODE",
         ]
     )
 
@@ -344,20 +343,6 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     fast_model_secret = secrets.get("WARDEN_FAST_MODEL")
     if fast_model_secret:
         config.fast_model = fast_model_secret.value
-
-    fast_tier_priority_secret = secrets.get("WARDEN_FAST_TIER_PRIORITY")
-    if fast_tier_priority_secret and fast_tier_priority_secret.found:
-        providers_str = fast_tier_priority_secret.value
-        if providers_str:
-            try:
-                config.fast_tier_providers = [
-                    LlmProvider(p.strip().lower()) for p in providers_str.split(",") if p.strip()
-                ]
-            except ValueError as e:
-                import structlog
-
-                logger = structlog.get_logger(__name__)
-                logger.warning("invalid_fast_tier_priority", value=providers_str, error=str(e))
 
     concurrency_secret = secrets.get("WARDEN_LLM_CONCURRENCY")
     if concurrency_secret and concurrency_secret.found:
@@ -441,34 +426,8 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     config.ollama.enabled = True  # Enabled by default for dual-tier fallback
     configured_providers.append(LlmProvider.OLLAMA)
 
-    # Configure Claude Code (Local CLI/SDK)
-    # Check if CLAUDE_CODE_ENABLED is set, or auto-detect if claude CLI is available
-    # Valid modes: cli (default), sdk
-    _valid_claude_modes = {"cli", "sdk"}
-    claude_code_enabled = secrets.get("CLAUDE_CODE_ENABLED")
-    if claude_code_enabled and claude_code_enabled.found and claude_code_enabled.value.lower() in ("true", "1", "yes"):
-        config.claude_code.enabled = True
-        claude_code_mode = secrets.get("CLAUDE_CODE_MODE")
-        if claude_code_mode and claude_code_mode.found:
-            mode = claude_code_mode.value.lower().strip()
-            # Validate mode (fail-fast)
-            if mode not in _valid_claude_modes:
-                import structlog
-
-                _logger = structlog.get_logger(__name__)
-                _logger.warning(
-                    "invalid_claude_code_mode",
-                    mode=mode,
-                    valid_modes=list(_valid_claude_modes),
-                    fallback="cli",
-                )
-                mode = "cli"
-            config.claude_code.endpoint = mode
-        else:
-            config.claude_code.endpoint = "cli"
-        configured_providers.append(LlmProvider.CLAUDE_CODE)
-    elif await _check_claude_code_availability():
-        # Auto-detected: Claude Code CLI is installed
+    # Configure Claude Code (Local CLI/SDK) - auto-detect only
+    if await _check_claude_code_availability():
         config.claude_code.enabled = True
         config.claude_code.endpoint = "cli"
         configured_providers.append(LlmProvider.CLAUDE_CODE)
@@ -487,9 +446,8 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     if await _check_ollama_availability(ollama_endpoint):
         detected_fast_tier.append(LlmProvider.OLLAMA)
 
-    # Apply Auto-Detected chain if no manual override exists
-    # If WARDEN_FAST_TIER_PRIORITY was set earlier, we honor it.
-    # Otherwise, we use our smart auto-detected list.
+    # Apply Auto-Detected chain if still at default.
+    # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.
     if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
         # If default, replace with auto-detected if we found anything good
         if detected_fast_tier:
@@ -538,5 +496,47 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
 
         if "fast_model" in config_override:
             config.fast_model = config_override["fast_model"]
+
+    # FINAL: Env var override for fast tier — always wins (analogous to WARDEN_LLM_PROVIDER handling)
+    env_fast_tier = os.environ.get("WARDEN_FAST_TIER_PRIORITY", "").strip()
+    if env_fast_tier:
+        try:
+            config.fast_tier_providers = [LlmProvider(p.strip().lower()) for p in env_fast_tier.split(",") if p.strip()]
+        except ValueError as e:
+            logger.warning("invalid_fast_tier_priority_env", value=env_fast_tier, error=str(e))
+
+    # FINAL: Block specified providers from all tiers (e.g. WARDEN_BLOCKED_PROVIDERS=claude_code in CI)
+    env_blocked = os.environ.get("WARDEN_BLOCKED_PROVIDERS", "").strip()
+    if env_blocked:
+        blocked: set[LlmProvider] = set()
+        for p in env_blocked.split(","):
+            p = p.strip().lower()
+            if not p:
+                continue
+            with contextlib.suppress(ValueError):
+                blocked.add(LlmProvider(p))
+
+        if blocked:
+            # Remove from fast tier
+            config.fast_tier_providers = [p for p in config.fast_tier_providers if p not in blocked]
+
+            # Remove from fallback chain; if default provider is blocked, promote first non-blocked fallback
+            if config.default_provider in blocked:
+                non_blocked = [p for p in config.fallback_providers if p not in blocked]
+                if non_blocked:
+                    config.default_provider = non_blocked[0]
+                    config.fallback_providers = non_blocked[1:]
+                else:
+                    logger.warning("all_providers_blocked", blocked=[p.value for p in blocked])
+            else:
+                config.fallback_providers = [p for p in config.fallback_providers if p not in blocked]
+
+            # Disable blocked provider configs
+            for p in blocked:
+                cfg = config.get_provider_config(p)
+                if cfg:
+                    cfg.enabled = False
+
+            logger.debug("providers_blocked", blocked=[p.value for p in blocked])
 
     return config

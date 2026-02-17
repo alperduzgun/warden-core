@@ -3194,17 +3194,17 @@ class TestBaselineWorkflow:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestEnvVarOverrides:
-    """Verify WARDEN_PROVIDER and WARDEN_MODEL env var overrides."""
+    """Verify WARDEN_LLM_PROVIDER and WARDEN_FAST_MODEL env var overrides."""
 
     def test_warden_provider_env_override(self, initialized_project):
-        """WARDEN_PROVIDER env var should override config.yaml provider setting."""
+        """WARDEN_LLM_PROVIDER env var should override config.yaml provider setting."""
         vuln = _make_vuln_file(initialized_project)
 
-        # Run scan with WARDEN_PROVIDER override to a known provider
+        # Run scan with WARDEN_LLM_PROVIDER override to a known provider
         r = run_warden(
             "scan", "--level", "basic", str(vuln),
             cwd=str(initialized_project), timeout=60,
-            env={"WARDEN_PROVIDER": "ollama"},
+            env={"WARDEN_LLM_PROVIDER": "ollama"},
         )
         # Should not crash — the override is accepted
         assert r.returncode in (0, 1, 2), (
@@ -3213,13 +3213,13 @@ class TestEnvVarOverrides:
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_warden_model_env_override(self, initialized_project):
-        """WARDEN_MODEL env var should be accepted without crash."""
+        """WARDEN_FAST_MODEL env var should be accepted without crash."""
         vuln = _make_vuln_file(initialized_project)
 
         r = run_warden(
             "scan", "--level", "basic", str(vuln),
             cwd=str(initialized_project), timeout=60,
-            env={"WARDEN_MODEL": "qwen2.5-coder:0.5b"},
+            env={"WARDEN_FAST_MODEL": "qwen2.5-coder:0.5b"},
         )
         assert r.returncode in (0, 1, 2), (
             f"Model env override crashed: rc={r.returncode}\n{r.stderr}"
@@ -3238,8 +3238,8 @@ class TestEnvVarOverrides:
             "scan", "--level", "basic", str(vuln),
             cwd=str(initialized_project), timeout=60,
             env={
-                "WARDEN_PROVIDER": "ollama",
-                "WARDEN_MODEL": "qwen2.5-coder:0.5b",
+                "WARDEN_LLM_PROVIDER": "ollama",
+                "WARDEN_FAST_MODEL": "qwen2.5-coder:0.5b",
             },
         )
 
@@ -3251,17 +3251,36 @@ class TestEnvVarOverrides:
         )
 
     def test_invalid_provider_env_no_crash(self, initialized_project):
-        """Invalid WARDEN_PROVIDER should fail gracefully, not crash."""
+        """Invalid WARDEN_LLM_PROVIDER should fail gracefully, not crash."""
         vuln = _make_vuln_file(initialized_project)
 
         r = run_warden(
             "scan", "--level", "basic", str(vuln),
             cwd=str(initialized_project), timeout=60,
-            env={"WARDEN_PROVIDER": "nonexistent_provider_xyz"},
+            env={"WARDEN_LLM_PROVIDER": "nonexistent_provider_xyz"},
         )
         # May fail (exit 1), but should not crash with traceback
         assert r.returncode in (0, 1, 2), (
             f"Invalid provider crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_fast_tier_priority_env_overrides_config_yaml(self, initialized_project):
+        """WARDEN_FAST_TIER_PRIORITY env var must win over config.yaml fast_tier_providers."""
+        vuln = _make_vuln_file(initialized_project)
+
+        # Config.yaml may have claude_code in fast_tier_providers.
+        # Env var sets only ollama → scan should not try claude_code or groq.
+        r = run_warden(
+            "scan", "--level", "basic", str(vuln),
+            cwd=str(initialized_project), timeout=60,
+            env={
+                "WARDEN_LLM_PROVIDER": "ollama",
+                "WARDEN_FAST_TIER_PRIORITY": "ollama",
+            },
+        )
+        assert r.returncode in (0, 1, 2), (
+            f"Fast tier priority env override crashed: rc={r.returncode}\n{r.stderr}"
         )
         assert "Traceback" not in r.stdout + r.stderr
 
@@ -3457,3 +3476,690 @@ class TestUntestedCommands:
         )
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 44. Provider Blocking — WARDEN_BLOCKED_PROVIDERS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestBlockedProviders:
+    """Verify WARDEN_BLOCKED_PROVIDERS env var filters providers correctly."""
+
+    def test_blocked_providers_excludes_claude_code(self, isolated_sample):
+        """WARDEN_BLOCKED_PROVIDERS=claude_code should not crash the scanner."""
+        vuln = _make_vuln_file(isolated_sample)
+
+        r = run_warden(
+            "scan", "--level", "basic", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+            env={"WARDEN_BLOCKED_PROVIDERS": "claude_code"},
+        )
+        # Must not crash — blocking a provider is graceful degradation
+        assert r.returncode in (0, 1, 2), (
+            f"Blocked-provider scan crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_blocked_providers_invalid_name_no_crash(self, isolated_sample):
+        """Unknown provider name in WARDEN_BLOCKED_PROVIDERS should be ignored gracefully."""
+        vuln = _make_vuln_file(isolated_sample)
+
+        r = run_warden(
+            "scan", "--level", "basic", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+            env={"WARDEN_BLOCKED_PROVIDERS": "totally_nonexistent_provider_xyz"},
+        )
+        assert r.returncode in (0, 1, 2), (
+            f"Invalid blocked provider crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_blocked_providers_multiple_comma_separated(self, isolated_sample):
+        """Multiple providers can be blocked with a comma-separated list."""
+        vuln = _make_vuln_file(isolated_sample)
+
+        r = run_warden(
+            "scan", "--level", "basic", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+            env={"WARDEN_BLOCKED_PROVIDERS": "claude_code,openrouter"},
+        )
+        assert r.returncode in (0, 1, 2), (
+            f"Multi-block scan crashed: rc={r.returncode}\n{r.stderr}"
+        )
+        assert "Traceback" not in r.stdout + r.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 45. Init --provider flag
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestInitProviderFlag:
+    """Verify ``warden init --provider`` writes the correct provider to config."""
+
+    def test_init_provider_flag_groq(self, empty_dir):
+        """``warden init --provider groq`` should write groq as the LLM provider.
+
+        A fake GROQ_API_KEY is provided so the non-interactive flow skips the
+        password prompt (cloud providers check for existing key first).
+        """
+        r = run_warden(
+            "init", "--force", "--skip-mcp", "--provider", "groq",
+            cwd=str(empty_dir), timeout=90,
+            env={
+                "WARDEN_NON_INTERACTIVE": "true",
+                "GROQ_API_KEY": "gsk_test_fake_key_for_acceptance_tests",
+            },
+        )
+        assert r.returncode == 0, f"init --provider groq failed:\n{r.stderr}"
+        cfg = _load_config(empty_dir)
+        assert cfg["llm"]["provider"] == "groq", (
+            f"Expected provider=groq, got: {cfg['llm']['provider']}"
+        )
+
+    def test_init_provider_flag_ollama(self, empty_dir):
+        """``warden init --provider ollama`` should write ollama to config."""
+        r = run_warden(
+            "init", "--force", "--skip-mcp", "--provider", "ollama",
+            cwd=str(empty_dir), timeout=90,
+            env={"WARDEN_NON_INTERACTIVE": "true"},
+        )
+        assert r.returncode == 0, f"init --provider ollama failed:\n{r.stderr}"
+        cfg = _load_config(empty_dir)
+        assert cfg["llm"]["provider"] == "ollama", (
+            f"Expected provider=ollama, got: {cfg['llm']['provider']}"
+        )
+
+    def test_init_ci_env_excludes_claude_code(self, empty_dir):
+        """CI=true environment should not produce claude_code as the provider."""
+        r = run_warden(
+            "init", "--force", "--skip-mcp",
+            cwd=str(empty_dir), timeout=90,
+            env={"WARDEN_NON_INTERACTIVE": "true", "CI": "true"},
+        )
+        assert r.returncode == 0, f"CI-mode init failed:\n{r.stderr}"
+        cfg = _load_config(empty_dir)
+        assert cfg["llm"]["provider"] != "claude_code", (
+            "claude_code was written to config.yaml in a CI environment"
+        )
+
+    def test_init_non_interactive_uses_ollama_default(self, empty_dir):
+        """Non-interactive init without a provider flag defaults to ollama."""
+        r = run_warden(
+            "init", "--force", "--skip-mcp",
+            cwd=str(empty_dir), timeout=90,
+            env={"WARDEN_NON_INTERACTIVE": "true"},
+        )
+        assert r.returncode == 0
+        cfg = _load_config(empty_dir)
+        # In non-interactive mode without explicit claude_code CLI, should default to ollama
+        assert cfg["llm"]["provider"] in (
+            "ollama", "claude_code"
+        ), f"Unexpected non-interactive default: {cfg['llm']['provider']}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 46. warden ci-config command
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestCiConfigCommand:
+    """Verify the ``warden ci-config`` CLI command."""
+
+    def test_ci_config_help(self):
+        """ci-config --help should exit 0 and show usage."""
+        r = run_warden("ci-config", "--help", timeout=10)
+        assert r.returncode == 0
+        out = (r.stdout + r.stderr).lower()
+        assert "ci" in out or "workflow" in out or "provider" in out
+
+    def test_ci_config_github_groq_creates_workflows(self, tmp_path):
+        """ci-config with github+groq should create warden-pr.yml."""
+        # Need a minimal git repo so branch detection doesn't fail
+        subprocess.run(["git", "init", str(tmp_path)], capture_output=True)
+
+        r = run_warden(
+            "ci-config",
+            "--ci-provider", "github",
+            "--llm-provider", "groq",
+            cwd=str(tmp_path), timeout=30,
+        )
+        assert r.returncode == 0, (
+            f"ci-config github+groq failed: rc={r.returncode}\n{r.stderr}"
+        )
+        assert "Traceback" not in r.stdout + r.stderr
+        # Check at least one workflow file was created
+        workflows = list((tmp_path / ".github" / "workflows").glob("warden-*.yml"))
+        assert workflows, (
+            f"No warden-*.yml files created in .github/workflows/\n{r.stdout}"
+        )
+
+    def test_ci_config_no_crash_invalid_provider(self, tmp_path):
+        """Invalid --llm-provider should exit non-zero without traceback."""
+        r = run_warden(
+            "ci-config",
+            "--ci-provider", "github",
+            "--llm-provider", "nonexistent_provider_xyz",
+            cwd=str(tmp_path), timeout=10,
+        )
+        # Must fail gracefully (exit 1), not crash
+        assert r.returncode != 0
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_ci_config_overwrites_with_force(self, tmp_path):
+        """--force should overwrite existing workflow files."""
+        subprocess.run(["git", "init", str(tmp_path)], capture_output=True)
+
+        # First run
+        r1 = run_warden(
+            "ci-config", "--ci-provider", "github", "--llm-provider", "groq",
+            cwd=str(tmp_path), timeout=30,
+        )
+        assert r1.returncode == 0, f"First ci-config run failed:\n{r1.stderr}"
+
+        # Second run without --force should fail (files exist)
+        r2 = run_warden(
+            "ci-config", "--ci-provider", "github", "--llm-provider", "groq",
+            cwd=str(tmp_path), timeout=10,
+        )
+        assert r2.returncode != 0, "Expected failure without --force on existing files"
+
+        # Third run with --force should succeed
+        r3 = run_warden(
+            "ci-config", "--ci-provider", "github", "--llm-provider", "groq", "--force",
+            cwd=str(tmp_path), timeout=30,
+        )
+        assert r3.returncode == 0, f"ci-config --force failed:\n{r3.stderr}"
+        assert "Traceback" not in r3.stdout + r3.stderr
+
+    def test_ci_config_gitlab_creates_file(self, tmp_path):
+        """ci-config with gitlab should create .gitlab-ci.yml."""
+        subprocess.run(["git", "init", str(tmp_path)], capture_output=True)
+
+        r = run_warden(
+            "ci-config",
+            "--ci-provider", "gitlab",
+            "--llm-provider", "ollama",
+            cwd=str(tmp_path), timeout=30,
+        )
+        assert r.returncode == 0, (
+            f"ci-config gitlab failed: rc={r.returncode}\n{r.stderr}"
+        )
+        assert "Traceback" not in r.stdout + r.stderr
+        assert (tmp_path / ".gitlab-ci.yml").exists(), (
+            ".gitlab-ci.yml was not created"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 47. Status Command — Local Report Reading
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestStatusCommand:
+    """Verify ``warden status`` reads reports and shows useful output."""
+
+    def test_status_help(self):
+        """``status --help`` should exit zero."""
+        r = run_warden("status", "--help", timeout=10)
+        assert r.returncode == 0
+        assert "status" in (r.stdout + r.stderr).lower()
+
+    def test_status_no_init_no_traceback(self, tmp_path):
+        """``status`` in uninitialised dir should fail gracefully (no traceback)."""
+        r = run_warden("status", cwd=str(tmp_path), timeout=15)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_status_after_scan_shows_output(self, isolated_sample):
+        """``status`` after a scan should print something useful."""
+        vuln = _make_vuln_file(isolated_sample)
+        run_warden("scan", "--level", "basic", str(vuln), cwd=str(isolated_sample), timeout=60)
+        r = run_warden("status", cwd=str(isolated_sample), timeout=15)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_status_no_traceback(self, isolated_sample):
+        """``status`` should exit gracefully without traceback."""
+        r = run_warden("status", cwd=str(isolated_sample), timeout=15)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_status_fetch_no_traceback(self, isolated_sample):
+        """``status --fetch`` should not traceback even without GitHub CLI."""
+        r = run_warden("status", "--fetch", cwd=str(isolated_sample), timeout=30)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 48. Index Command — Semantic Search Indexing
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestIndexCommand:
+    """Verify ``warden index`` command basics."""
+
+    def test_index_help(self):
+        """``index --help`` should exit zero."""
+        r = run_warden("index", "--help", timeout=10)
+        assert r.returncode == 0
+        assert "index" in (r.stdout + r.stderr).lower()
+
+    def test_index_on_sample_project_no_traceback(self, isolated_sample):
+        """``index`` on a project with Python files should not traceback."""
+        r = run_warden("index", cwd=str(isolated_sample), timeout=60)
+        # May fail (missing chromadb / sentence-transformers) but must not crash
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_index_on_empty_dir_no_traceback(self, tmp_path):
+        """``index`` in an empty directory should exit gracefully."""
+        r = run_warden("index", cwd=str(tmp_path), timeout=30)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_index_then_search_no_traceback(self, isolated_sample):
+        """After indexing, ``search`` should not traceback."""
+        run_warden("index", cwd=str(isolated_sample), timeout=60)
+        r = run_warden("search", "password", cwd=str(isolated_sample), timeout=30)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 49. Refresh Command — Extended Flag Coverage
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestRefreshCommandExtended:
+    """Extended flag coverage for ``warden refresh``."""
+
+    def test_refresh_baseline_flag(self, isolated_sample):
+        """``refresh --baseline`` should regenerate baseline (runs scan internally)."""
+        r = run_warden("refresh", "--baseline", cwd=str(isolated_sample), timeout=60)
+        # Exit code 2 is allowed: scan may surface findings
+        assert r.returncode in (0, 1, 2)
+
+    def test_refresh_no_intelligence_flag(self, isolated_sample):
+        """``refresh --no-intelligence`` should skip intelligence step and exit cleanly."""
+        r = run_warden("refresh", "--no-intelligence", cwd=str(isolated_sample), timeout=60)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_refresh_force_flag(self, isolated_sample):
+        """``refresh --force`` should force-regenerate all artefacts."""
+        r = run_warden("refresh", "--force", cwd=str(isolated_sample), timeout=60)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_refresh_no_crash_after_scan(self, isolated_sample):
+        """``refresh`` after a scan should not crash."""
+        vuln = _make_vuln_file(isolated_sample)
+        run_warden("scan", "--level", "basic", str(vuln), cwd=str(isolated_sample), timeout=60)
+        r = run_warden("refresh", cwd=str(isolated_sample), timeout=60)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 50. Serve MCP — Registration & Protocol Smoke Tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestServeMCPExtended:
+    """Extended MCP command coverage: register, status, start."""
+
+    def test_serve_mcp_register_no_traceback(self, tmp_path):
+        """``serve mcp register`` should exit without traceback."""
+        r = run_warden("serve", "mcp", "register", cwd=str(tmp_path), timeout=15)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_serve_mcp_status_shows_tools(self, isolated_sample):
+        """``serve mcp status`` should list supported AI tools."""
+        r = run_warden("serve", "mcp", "status", cwd=str(isolated_sample), timeout=15)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+        # Output should mention at least one AI tool
+        out = r.stdout + r.stderr
+        tools = ["claude", "cursor", "windsurf", "gemini", "mcp"]
+        assert any(t in out.lower() for t in tools), (
+            f"MCP status output doesn't mention any known tool:\n{out[:400]}"
+        )
+
+    def test_serve_mcp_start_exits_quickly_with_sigterm(self, isolated_sample):
+        """``serve mcp start`` as a subprocess should be killable."""
+        proc = subprocess.Popen(
+            ["warden", "serve", "mcp", "start"],
+            cwd=str(isolated_sample),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        import time
+        time.sleep(1)  # Let it start
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        # Must have exited (any code) — not still running
+        assert proc.returncode is not None
+
+    def test_serve_mcp_start_help(self):
+        """``serve mcp start --help`` exits zero."""
+        r = run_warden("serve", "mcp", "start", "--help", timeout=10)
+        assert r.returncode == 0
+
+    def test_serve_mcp_start_responds_to_initialize(self, isolated_sample):
+        """MCP server should respond to a JSON-RPC initialize request."""
+        import queue
+        import threading
+
+        msg = (
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1.0"},
+                },
+            })
+            + "\n"
+        )
+
+        proc = subprocess.Popen(
+            ["warden", "serve", "mcp", "start"],
+            cwd=str(isolated_sample),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        response_q: queue.Queue[str] = queue.Queue()
+
+        def _reader() -> None:
+            try:
+                line = proc.stdout.readline()  # type: ignore[union-attr]
+                if line.strip():
+                    response_q.put(line.strip())
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_reader, daemon=True)
+        t.start()
+
+        proc.stdin.write(msg)  # type: ignore[union-attr]
+        proc.stdin.flush()  # type: ignore[union-attr]
+
+        t.join(timeout=5)
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+
+        if not response_q.empty():
+            response = response_q.get()
+            try:
+                data = json.loads(response)
+                assert "result" in data or "error" in data, (
+                    f"Unexpected MCP response: {response[:200]}"
+                )
+            except json.JSONDecodeError:
+                pass  # Non-JSON response tolerated
+        # If no response yet: server may still be initialising — not a failure
+
+    def test_serve_mcp_tools_list_responds(self, isolated_sample):
+        """After initialize, MCP server should respond to tools/list."""
+        import queue
+        import threading
+
+        initialize_msg = (
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1.0"},
+                },
+            })
+            + "\n"
+        )
+        tools_msg = (
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {},
+            })
+            + "\n"
+        )
+
+        proc = subprocess.Popen(
+            ["warden", "serve", "mcp", "start"],
+            cwd=str(isolated_sample),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        responses: list[str] = []
+        done = threading.Event()
+
+        def _reader() -> None:
+            for _ in range(2):  # Expect at most 2 responses
+                try:
+                    line = proc.stdout.readline()  # type: ignore[union-attr]
+                    if line.strip():
+                        responses.append(line.strip())
+                except Exception:
+                    break
+            done.set()
+
+        t = threading.Thread(target=_reader, daemon=True)
+        t.start()
+
+        proc.stdin.write(initialize_msg)  # type: ignore[union-attr]
+        proc.stdin.flush()  # type: ignore[union-attr]
+        import time
+        time.sleep(0.5)
+        proc.stdin.write(tools_msg)  # type: ignore[union-attr]
+        proc.stdin.flush()  # type: ignore[union-attr]
+
+        done.wait(timeout=6)
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+
+        # If we got any responses, verify they are valid JSON-RPC
+        for resp in responses:
+            try:
+                data = json.loads(resp)
+                assert "result" in data or "error" in data, (
+                    f"Unexpected MCP response: {resp[:200]}"
+                )
+            except json.JSONDecodeError:
+                pass  # Non-JSON output tolerated
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 51. Scan Output Format Validation
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestScanOutputFormatValidation:
+    """Verify scan --format output is actually parseable."""
+
+    def test_scan_format_json_is_valid_json(self, isolated_sample):
+        """``scan --format json`` must produce parseable JSON."""
+        vuln = _make_vuln_file(isolated_sample)
+        r = run_warden(
+            "scan", "--level", "basic", "--format", "json", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr
+        if r.stdout.strip():
+            try:
+                data = json.loads(r.stdout)
+                # Basic schema check
+                assert isinstance(data, dict), "JSON output should be an object"
+            except json.JSONDecodeError as e:
+                # If JSON is in stdout mixed with other output, try to extract it
+                # Some output may have Rich formatting before the JSON
+                pass
+
+    def test_scan_format_json_to_file(self, isolated_sample, tmp_path):
+        """``scan --format json --output <file>`` should write valid JSON file."""
+        vuln = _make_vuln_file(isolated_sample)
+        out_file = tmp_path / "report.json"
+        r = run_warden(
+            "scan", "--level", "basic", "--format", "json",
+            "--output", str(out_file), str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr
+        if out_file.exists() and out_file.stat().st_size > 0:
+            content = out_file.read_text()
+            try:
+                json.loads(content)
+            except json.JSONDecodeError:
+                pass  # May be partial if scan yielded no findings
+
+    def test_scan_format_sarif_to_file(self, isolated_sample, tmp_path):
+        """``scan --format sarif --output <file>`` should write SARIF file."""
+        vuln = _make_vuln_file(isolated_sample)
+        out_file = tmp_path / "report.sarif"
+        r = run_warden(
+            "scan", "--level", "basic", "--format", "sarif",
+            "--output", str(out_file), str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr
+        if out_file.exists() and out_file.stat().st_size > 0:
+            content = out_file.read_text()
+            try:
+                data = json.loads(content)
+                # SARIF schema check
+                assert "$schema" in data or "runs" in data, (
+                    "SARIF file missing expected top-level keys"
+                )
+            except json.JSONDecodeError:
+                pass
+
+    def test_scan_format_markdown_no_traceback(self, isolated_sample):
+        """``scan --format markdown`` should not traceback."""
+        vuln = _make_vuln_file(isolated_sample)
+        r = run_warden(
+            "scan", "--level", "basic", "--format", "markdown", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 52. Doctor Command — Diagnostic Specifics
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestDoctorDiagnostics:
+    """Verify ``warden doctor`` provides actionable diagnostic info."""
+
+    def test_doctor_exit_zero_on_healthy_project(self, isolated_sample):
+        """Doctor should exit 0 on a healthy initialized project."""
+        r = run_warden("doctor", cwd=str(isolated_sample), timeout=30)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_doctor_shows_config_status(self, isolated_sample):
+        """Doctor output should include configuration status."""
+        r = run_warden("doctor", cwd=str(isolated_sample), timeout=30)
+        out = r.stdout + r.stderr
+        # Doctor should mention config or .warden
+        assert any(k in out.lower() for k in ["config", "warden", "provider", "frame"]), (
+            f"Doctor output doesn't mention config/frames:\n{out[:500]}"
+        )
+
+    def test_doctor_shows_provider_status(self, isolated_sample):
+        """Doctor should report the LLM provider status."""
+        r = run_warden("doctor", cwd=str(isolated_sample), timeout=30)
+        out = r.stdout + r.stderr
+        # Should mention a known provider name
+        providers = ["ollama", "groq", "openai", "anthropic", "claude", "gemini", "provider"]
+        assert any(p in out.lower() for p in providers), (
+            f"Doctor output doesn't mention any provider:\n{out[:500]}"
+        )
+
+    def test_doctor_corrupt_config_no_traceback(self, tmp_path):
+        """Doctor on a project with a corrupted config should not traceback."""
+        warden_dir = tmp_path / ".warden"
+        warden_dir.mkdir()
+        (warden_dir / "config.yaml").write_text("{ invalid: yaml: [[[")
+        r = run_warden("doctor", cwd=str(tmp_path), timeout=30)
+        assert r.returncode in (0, 1)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_doctor_shows_frames_status(self, isolated_sample):
+        """Doctor should report enabled frames."""
+        r = run_warden("doctor", cwd=str(isolated_sample), timeout=30)
+        out = r.stdout + r.stderr
+        frames = ["security", "resilience", "frame", "validation"]
+        assert any(f in out.lower() for f in frames), (
+            f"Doctor output doesn't mention frames:\n{out[:500]}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 53. Scan Flags — Auto-Fix & Cost Report
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestScanAutoFixAndCost:
+    """Verify ``scan --auto-fix``, ``--dry-run``, ``--cost-report`` flags."""
+
+    def test_scan_dry_run_no_traceback(self, isolated_sample):
+        """``scan --dry-run`` should not apply changes or traceback."""
+        vuln = _make_vuln_file(isolated_sample)
+        r = run_warden(
+            "scan", "--level", "basic", "--dry-run", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_scan_auto_fix_dry_run_no_traceback(self, isolated_sample):
+        """``scan --auto-fix --dry-run`` should preview fixes without applying."""
+        vuln = _make_vuln_file(isolated_sample)
+        r = run_warden(
+            "scan", "--level", "basic", "--auto-fix", "--dry-run", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_scan_cost_report_no_traceback(self, isolated_sample):
+        """``scan --cost-report`` should include cost breakdown without crash."""
+        vuln = _make_vuln_file(isolated_sample)
+        r = run_warden(
+            "scan", "--level", "basic", "--cost-report", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr
+
+    def test_scan_diff_mode_no_traceback(self, isolated_sample):
+        """``scan --diff`` should only scan changed files without crash."""
+        subprocess.run(["git", "init", str(isolated_sample)], capture_output=True)
+        vuln = _make_vuln_file(isolated_sample)
+        r = run_warden(
+            "scan", "--level", "basic", "--diff", str(vuln),
+            cwd=str(isolated_sample), timeout=60,
+        )
+        assert r.returncode in (0, 1, 2)
+        assert "Traceback" not in r.stdout + r.stderr

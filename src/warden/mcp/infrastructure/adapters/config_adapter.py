@@ -5,13 +5,25 @@ MCP adapter for configuration management tools.
 Maps to gRPC ConfigurationMixin functionality.
 """
 
+from __future__ import annotations
+
+import contextlib
 from typing import Any
 
 import yaml
 
+from warden.llm.config import DEFAULT_MODELS
+from warden.llm.types import LlmProvider
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
+
+
+def _default_model_for(provider_id: str) -> str:
+    """Look up the default smart model for a provider from the shared DEFAULT_MODELS dict."""
+    with contextlib.suppress(ValueError):
+        return DEFAULT_MODELS.get(LlmProvider(provider_id), "") or ""
+    return ""
 
 
 class ConfigAdapter(BaseWardenAdapter):
@@ -24,6 +36,8 @@ class ConfigAdapter(BaseWardenAdapter):
         - warden_get_configuration: Get full configuration
         - warden_update_configuration: Update settings
         - warden_update_frame_status: Enable/disable frame
+        - warden_configure: Configure Warden settings
+        - warden_configure_ci: Configure CI/CD workflow
     """
 
     SUPPORTED_TOOLS = frozenset(
@@ -34,6 +48,7 @@ class ConfigAdapter(BaseWardenAdapter):
             "warden_update_configuration",
             "warden_update_frame_status",
             "warden_configure",
+            "warden_configure_ci",
         }
     )
     TOOL_CATEGORY = ToolCategory.CONFIG
@@ -107,6 +122,40 @@ class ConfigAdapter(BaseWardenAdapter):
                 },
                 required=["provider"],
             ),
+            self._create_tool_definition(
+                name="warden_configure_ci",
+                description=(
+                    "Configure CI/CD workflow for Warden. "
+                    "Generates or updates GitHub Actions / GitLab CI files. "
+                    "Call this when the user wants to set up CI for their project via AI."
+                ),
+                properties={
+                    "ci_provider": {
+                        "type": "string",
+                        "description": "CI platform: 'github' (GitHub Actions) or 'gitlab' (GitLab CI).",
+                        "enum": ["github", "gitlab"],
+                    },
+                    "llm_provider": {
+                        "type": "string",
+                        "description": (
+                            "Smart tier LLM provider for CI scans. "
+                            "Options: groq, openai, anthropic, azure_openai, deepseek, gemini, ollama. "
+                            "Note: claude_code is NOT supported in CI."
+                        ),
+                        "enum": ["groq", "openai", "anthropic", "azure_openai", "deepseek", "gemini", "ollama"],
+                    },
+                    "fast_model": {
+                        "type": "string",
+                        "description": "Fast tier model (default: qwen2.5-coder:0.5b via Ollama).",
+                    },
+                    "branch": {
+                        "type": "string",
+                        "description": "Default branch name (default: main).",
+                        "default": "main",
+                    },
+                },
+                required=["ci_provider", "llm_provider"],
+            ),
         ]
 
     async def _execute_tool_async(
@@ -127,6 +176,8 @@ class ConfigAdapter(BaseWardenAdapter):
             return await self._update_frame_status_async(arguments)
         elif tool_name == "warden_configure":
             return await self._configure_warden_async(arguments)
+        elif tool_name == "warden_configure_ci":
+            return await self._configure_ci_async(arguments)
         else:
             return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
@@ -341,3 +392,55 @@ class ConfigAdapter(BaseWardenAdapter):
                 "updated_env": list(env_updates.keys()),
             }
         )
+
+    async def _configure_ci_async(self, arguments: dict[str, Any]) -> MCPToolResult:
+        """
+        Configure CI/CD workflow files (GitHub Actions / GitLab CI).
+
+        Uses shared DEFAULT_MODELS to resolve smart model defaults — no duplicate dict.
+        """
+        ci_provider_id = arguments.get("ci_provider", "")
+        llm_provider_id = arguments.get("llm_provider", "")
+        fast_model = arguments.get("fast_model", "qwen2.5-coder:0.5b")
+        branch = arguments.get("branch", "main")
+
+        if not ci_provider_id or not llm_provider_id:
+            return MCPToolResult.error("Missing required parameters: ci_provider and llm_provider")
+
+        # Build llm_config using shared DEFAULT_MODELS — no duplicate dict needed
+        llm_config = {
+            "provider": llm_provider_id,
+            "model": _default_model_for(llm_provider_id),
+            "fast_model": fast_model,
+        }
+
+        try:
+            from warden.cli.commands.init_helpers import CI_PROVIDERS, configure_ci_workflow
+
+            ci_provider = next(
+                (v for v in CI_PROVIDERS.values() if v["id"] == ci_provider_id),
+                None,
+            )
+            if not ci_provider:
+                return MCPToolResult.error(f"Unknown CI provider: {ci_provider_id}")
+
+            project_root = self.project_root
+            success = configure_ci_workflow(ci_provider, llm_config, project_root, branch)
+
+            if success:
+                return MCPToolResult.json_result(
+                    {
+                        "status": "configured",
+                        "ci_provider": ci_provider_id,
+                        "llm_provider": llm_provider_id,
+                        "fast_model": fast_model,
+                        "branch": branch,
+                        "message": (
+                            f"CI workflow configured for {ci_provider_id}. "
+                            "Commit the generated workflow files."
+                        ),
+                    }
+                )
+            return MCPToolResult.error("Failed to write CI workflow files.")
+        except Exception as e:
+            return MCPToolResult.error(f"CI configuration failed: {e}")

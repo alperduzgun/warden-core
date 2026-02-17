@@ -403,6 +403,16 @@ def init_command(
     mode: str = typer.Option("normal", "--mode", "-m", help="Initialization mode (vibe, normal, strict)"),
     ci: bool = typer.Option(False, "--ci", help="Generate GitHub Actions CI workflow"),
     skip_mcp: bool = typer.Option(False, "--skip-mcp", help="Skip MCP server registration"),
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help=(
+            "LLM provider for non-interactive/CI use. "
+            "Options: ollama, anthropic, openai, groq, azure, deepseek, gemini. "
+            "Note: claude_code is excluded from CI usage."
+        ),
+    ),
 ) -> None:
     """
     Initialize Warden in the current directory with Smart Detection.
@@ -562,6 +572,9 @@ def init_command(
             pass  # Use empty config as default
 
     # --- Step 3: LLM Config ---
+    # Set WARDEN_INIT_PROVIDER so select_llm_provider() picks the forced provider
+    if provider:
+        os.environ["WARDEN_INIT_PROVIDER"] = provider.strip().lower()
     llm_config, new_env_vars = configure_llm(existing_config)
     provider = llm_config["provider"]
     model = llm_config["model"]

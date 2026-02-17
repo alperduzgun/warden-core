@@ -202,7 +202,6 @@ jobs:
           WARDEN_LLM_PROVIDER: "groq"         # Smart Tier: Groq (overrides config.yaml's claude_code)
           WARDEN_FAST_TIER_PRIORITY: "ollama"  # Fast/Local Tier: Ollama qwen2.5-coder:0.5b
           WARDEN_LLM_CONCURRENCY: "5"          # Conservative for Groq rate limits
-          CLAUDE_CODE_ENABLED: "false"         # claude CLI not available in CI
 
           # Local Service Config
           OLLAMA_HOST: http://localhost:11434

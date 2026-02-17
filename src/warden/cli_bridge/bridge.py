@@ -56,8 +56,9 @@ class WardenBridge:
         from warden.llm.factory import create_client
 
         try:
-            # Extract LLM config override from config.yaml
-            llm_override = config_data.get("config", {}).get("llm", {})
+            # Extract LLM config override from PipelineConfig (not a dict)
+            pipeline_cfg = config_data.get("config")
+            llm_override = getattr(pipeline_cfg, "llm_config", None) or {}
             self.llm_config = load_llm_config(config_override=llm_override)
             llm_service = create_client(self.llm_config.default_provider)
             if llm_service:
