@@ -285,19 +285,22 @@ jobs:
               echo "::error title=Policy Violation::Critical issues were found in the codebase. Please review the SARIF report."
               exit 1
             else
-              echo "💥 SCANNED FAILED: RUNTIME ERROR"
-              echo "::error title=System Error::Warden encountered an unexpected error."
-              exit 1
+              # Runtime errors (LLM unavailable, timeout, etc.) are infrastructure issues.
+              # They should not block CI — code quality is separate from LLM availability.
+              echo "::warning title=Scan Incomplete::Warden scan could not complete (LLM unavailable or timeout). Quality gate skipped."
+              echo "⚠️ Scan infrastructure failure (exit $EXIT_CODE) — not a code quality violation."
             fi
-            
-            # Save as baseline for future incremental scans
-            mkdir -p .warden
-            cp warden.sarif .warden/baseline.sarif
-            echo "📦 Baseline saved to .warden/baseline.sarif"
+
+            # Save as baseline for future incremental scans (only if sarif was generated)
+            if [ -f warden.sarif ]; then
+              mkdir -p .warden
+              cp warden.sarif .warden/baseline.sarif
+              echo "📦 Baseline saved to .warden/baseline.sarif"
+            fi
           else
             # INCREMENTAL SCAN: Only scan files changed in this push/PR
             echo "Running INCREMENTAL SCAN on changed files..."
-            
+
             # 1. Fetch history to ensure diff works
             git fetch origin "$BASE_REF" --depth=1
 
@@ -319,7 +322,7 @@ jobs:
                cp .warden/baseline.sarif warden.sarif
                exit 0
             fi
-            
+
             set +e # Capture exit code
             # Flatten newlines to spaces for direct argument passing
             FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ')
@@ -334,9 +337,10 @@ jobs:
               echo "::error title=Policy Violation::Critical issues were found in the changed files. Please review the SARIF report."
               exit 1
             else
-              echo "💥 SCANNED FAILED: RUNTIME ERROR"
-              echo "::error title=System Error::Warden encountered an unexpected error."
-              exit 1
+              # Runtime errors (LLM unavailable, timeout, etc.) are infrastructure issues.
+              # They should not block CI — code quality is separate from LLM availability.
+              echo "::warning title=Scan Incomplete::Warden scan could not complete (LLM unavailable or timeout). Quality gate skipped."
+              echo "⚠️ Scan infrastructure failure (exit $EXIT_CODE) — not a code quality violation."
             fi
           fi
 

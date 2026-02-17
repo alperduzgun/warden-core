@@ -68,6 +68,10 @@ jobs:
         curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
         bash /tmp/ollama-install.sh
         rm /tmp/ollama-install.sh
+        # Stop the systemd service started by the install script (runs as 'ollama' user)
+        # We need to run as 'runner' user to access the model cache
+        sudo systemctl stop ollama || true
+        sudo systemctl disable ollama || true
         ollama serve &
         echo "Waiting for Ollama to be ready..."
         for i in {1..30}; do
@@ -96,6 +100,8 @@ jobs:
         # 3. Smart Tier: Azure OpenAI (High Cost, Only for complex reasoning)
         AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
         AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+        AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+        AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         
         # Enforce Optimized Chain
