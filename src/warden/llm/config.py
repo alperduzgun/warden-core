@@ -6,6 +6,7 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 """
 
 import contextlib
+import os
 from dataclasses import dataclass, field
 
 from .types import LlmProvider
@@ -279,9 +280,15 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     # Use singleton manager to avoid redundant provider initialization
     manager = get_manager()
 
-    # Check if explicit provider override exists - we'll prioritize it
+    # Determine explicit provider override — env var takes precedence over config.yaml.
+    # This allows CI to override local defaults (e.g. WARDEN_LLM_PROVIDER=groq in CI
+    # while config.yaml has provider: claude_code for local development).
     explicit_provider_override = None
-    if config_override and "provider" in config_override:
+    env_provider = os.environ.get("WARDEN_LLM_PROVIDER", "").strip().lower()
+    if env_provider:
+        with contextlib.suppress(ValueError):
+            explicit_provider_override = LlmProvider(env_provider)
+    elif config_override and "provider" in config_override:
         with contextlib.suppress(ValueError):
             explicit_provider_override = LlmProvider(config_override["provider"])
 
@@ -314,6 +321,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             "WARDEN_FAST_MODEL",
             "WARDEN_LLM_CONCURRENCY",
             "WARDEN_FAST_TIER_PRIORITY",
+            "WARDEN_LLM_PROVIDER",
             "OLLAMA_HOST",
             "CLAUDE_CODE_ENABLED",
             "CLAUDE_CODE_MODE",

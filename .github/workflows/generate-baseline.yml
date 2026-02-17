@@ -94,19 +94,14 @@ jobs:
         
     - name: Run Warden Scan
       env:
-        # STRATEGY: 
-        # 1. Fast Tier (Primary): Groq (LPU Speed, Cloud)
-        # 2. Fast Tier (Fallback): Ollama (Local CPU, Free, Handles Rate Limits)
-        # 3. Smart Tier: Azure OpenAI (High Cost, Only for complex reasoning)
-        AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-        AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-        AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
-        AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
+        # STRATEGY:
+        # Smart Tier: Groq (fast cloud API)
+        # Fast/Local Tier: Ollama qwen2.5-coder:0.5b (free, local fallback)
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        
+
         # Enforce Optimized Chain
-        WARDEN_LLM_PROVIDER: "azure_openai"      # Smart Tier (Last Resort)
-        WARDEN_FAST_TIER_PRIORITY: "groq,ollama" # Fast Tier: Groq -> Ollama
+        WARDEN_LLM_PROVIDER: "groq"        # Smart Tier: Groq
+        WARDEN_FAST_TIER_PRIORITY: "ollama" # Fast/Local: Ollama only
         WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency || '10' }}
       run: |
         # Use input values or defaults for scheduled runs

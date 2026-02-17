@@ -24,13 +24,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
-      AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
-      AZURE_OPENAI_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_NAME }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      WARDEN_LLM_PROVIDER: "azure_openai"
-      WARDEN_FAST_TIER_PRIORITY: "groq,ollama"
+      # Smart Tier: Groq | Fast/Local Tier: Ollama qwen2.5-coder:0.5b
+      WARDEN_LLM_PROVIDER: "groq"
+      WARDEN_FAST_TIER_PRIORITY: "ollama"
 
     steps:
       - name: Checkout Code
