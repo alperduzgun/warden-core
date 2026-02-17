@@ -291,14 +291,27 @@ class FortificationPhase:
             elif isinstance(self.context, dict):
                 llm_cfg = self.context.get("llm_config")
 
-            if llm_cfg:
+            # Simple/mechanical fixes use fast tier; complex analysis uses smart tier
+            _FAST_TIER_ISSUE_TYPES = {"hardcoded_secret", "weak_crypto", "missing_header", "insecure_default"}
+            use_fast_tier = issue_type in _FAST_TIER_ISSUE_TYPES
+
+            if llm_cfg and not use_fast_tier:
                 if isinstance(llm_cfg, dict):
                     model = llm_cfg.get("smart_model")
                 else:
                     model = getattr(llm_cfg, "smart_model", None)
 
             # Step 3: Get LLM suggestions
-            response = await self.llm_service.complete_async(prompt=prompt, model=model)
+            _SECURITY_SYSTEM_PROMPT = (
+                "You are a senior security engineer. Analyze security vulnerabilities "
+                "and generate precise, minimal code fixes that match the project style."
+            )
+            response = await self.llm_service.complete_async(
+                prompt=prompt,
+                system_prompt=_SECURITY_SYSTEM_PROMPT,
+                model=model,
+                use_fast_tier=use_fast_tier,
+            )
 
             if not response:
                 logger.warning("llm_security_fix_response_empty", issue_type=issue_type)
