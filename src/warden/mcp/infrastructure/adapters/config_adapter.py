@@ -436,8 +436,7 @@ class ConfigAdapter(BaseWardenAdapter):
                         "fast_model": fast_model,
                         "branch": branch,
                         "message": (
-                            f"CI workflow configured for {ci_provider_id}. "
-                            "Commit the generated workflow files."
+                            f"CI workflow configured for {ci_provider_id}. Commit the generated workflow files."
                         ),
                     }
                 )
