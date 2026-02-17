@@ -80,7 +80,9 @@ class MCPService:
         # Handler dispatch table
         self._handlers: dict[str, Any] = {
             "initialize": self._handle_initialize_async,
+            # Both "initialized" (older) and "notifications/initialized" (standard MCP)
             "initialized": self._handle_initialized_async,
+            "notifications/initialized": self._handle_initialized_async,
             "ping": self._handle_ping_async,
             "resources/list": self._handle_resources_list_async,
             "resources/read": self._handle_resources_read_async,

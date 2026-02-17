@@ -194,8 +194,26 @@ class ToolExecutorService:
 
     @property
     def bridge_available(self) -> bool:
-        """Check if any bridge-based adapter is available."""
-        return self._bridge_adapter.is_available or any(a.is_available for a in self._adapters)
+        """
+        Non-blocking bridge availability check for tools/list.
+
+        Does NOT trigger lazy WardenBridge initialization.
+        If bridge is already initialized, report its actual status.
+        If not yet initialized, return True optimistically so all tools
+        are visible — bridge availability is verified at execution time.
+        """
+        # Check _bridge_adapter without triggering lazy init
+        bridge_adapter = self._bridge_adapter
+        if getattr(bridge_adapter, "_bridge_initialized", False):
+            return getattr(bridge_adapter, "_bridge", None) is not None
+        # Check adapters that have already initialized their bridge
+        for adapter in self._adapters:
+            if getattr(adapter, "_bridge_initialized", False):
+                if getattr(adapter, "_bridge", None) is not None:
+                    return True
+        # Not yet checked — optimistically return True.
+        # Bridge-requiring tools will check availability at execution time.
+        return True
 
     @property
     def registry(self) -> ToolRegistry:
