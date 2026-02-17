@@ -4,7 +4,7 @@ Base Phase Executor module.
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from warden.pipeline.domain.models import PipelineConfig
 from warden.shared.infrastructure.logging import get_logger

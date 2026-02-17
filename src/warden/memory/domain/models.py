@@ -5,7 +5,7 @@ Defines the structure of knowledge stored in Warden's Persistent Memory.
 """
 
 import time
-from typing import Any, Dict, List
+from typing import Any
 from uuid import uuid4
 
 from pydantic import Field

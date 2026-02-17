@@ -1,8 +1,6 @@
 import asyncio
 import importlib.metadata
-import subprocess
 import sys
-from typing import List, Optional
 
 from rich.console import Console
 
@@ -84,7 +82,7 @@ class DependencyManager:
 
             if process.returncode != 0:
                 logger.error("dependency_install_failed", return_code=process.returncode, stderr=stderr.decode())
-                console.print(f"[red]❌ Installation failed[/red]")
+                console.print("[red]❌ Installation failed[/red]")
                 return False
 
             logger.info("dependency_install_success", packages=missing)

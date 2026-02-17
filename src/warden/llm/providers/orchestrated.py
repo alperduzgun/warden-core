@@ -1,8 +1,6 @@
 import asyncio
-from typing import List, Optional
 
 from warden.shared.infrastructure.logging import get_logger
-from warden.shared.infrastructure.resilience import resilient
 
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
@@ -82,21 +80,17 @@ class OrchestratedLlmClient(ILlmClient):
         """
         return self.smart_client.provider
 
-    @resilient(timeout_seconds=60, retry_max_attempts=3, circuit_breaker_enabled=True)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Routes request to the appropriate tier with hierarchical fallback.
 
-        Resilience (Chaos Engineering):
-            - Automatic retries: Up to 3 attempts on transient failures
-            - Total timeout: 60 seconds per request (including retries)
-            - Circuit breaker: Opens after consecutive failures to prevent cascade
+        Resilience is handled per-provider (each provider has its own @resilient
+        decorator with circuit breaker). This avoids the shared circuit breaker
+        problem where one failing provider blocks all others.
+
+        Flow:
             - Parallel racing: Fast providers race, first success wins, losers cancelled
             - Fallback chain: Fast tier → Smart tier → Failure
-
-        Raises:
-            TimeoutError: If request exceeds 60s timeout
-            CircuitBreakerError: If circuit breaker is open (too many failures)
 
         Note:
             In Smart-Only mode (no fast_clients), routes directly to smart tier.
@@ -147,7 +141,6 @@ class OrchestratedLlmClient(ILlmClient):
             # CHAOS ENGINEERING: Race providers with FIRST_COMPLETED pattern
             # This prevents slow providers from blocking fast ones
             # Max concurrency limit prevents resource exhaustion
-            MAX_CONCURRENT_PROVIDERS = 3
             fast_timeout = 10  # seconds - fast tier should respond quickly
 
             # Create tasks for all providers
@@ -259,6 +252,14 @@ class OrchestratedLlmClient(ILlmClient):
 
     async def is_available_async(self) -> bool:
         """
-        Available if at least the smart client is available.
+        Available if smart client OR any fast client is available.
         """
-        return await self.smart_client.is_available_async()
+        if await self.smart_client.is_available_async():
+            return True
+        for client in self.fast_clients:
+            try:
+                if await client.is_available_async():
+                    return True
+            except Exception:
+                continue
+        return False

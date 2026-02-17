@@ -6,7 +6,6 @@ Following project's IRepository pattern from shared/domain/repository.py
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 from warden.mcp.domain.models import MCPResourceDefinition
 

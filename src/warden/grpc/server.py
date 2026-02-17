@@ -7,7 +7,6 @@ Total: 51 endpoints
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
 
 # Lazy import grpc (optional dependency)
 try:

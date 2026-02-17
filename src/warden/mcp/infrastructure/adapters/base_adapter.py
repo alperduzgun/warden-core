@@ -8,7 +8,7 @@ and tool definition management.
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.errors import MCPToolExecutionError
@@ -193,6 +193,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         description: str,
         properties: dict[str, Any] | None = None,
         required: list[str] | None = None,
+        requires_bridge: bool = True,
     ) -> MCPToolDefinition:
         """
         Helper to create tool definitions with consistent structure.
@@ -202,6 +203,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
             description: Tool description
             properties: JSON Schema properties for input
             required: List of required property names
+            requires_bridge: Whether this tool needs WardenBridge initialized
 
         Returns:
             MCPToolDefinition instance
@@ -217,5 +219,5 @@ class BaseWardenAdapter(IToolExecutor, ABC):
             description=description,
             category=self.TOOL_CATEGORY,
             input_schema=input_schema,
-            requires_bridge=True,
+            requires_bridge=requires_bridge,
         )

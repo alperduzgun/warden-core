@@ -6,7 +6,6 @@ All types designed for Panel JSON compatibility (camelCase ↔ snake_case).
 """
 
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import Field
 

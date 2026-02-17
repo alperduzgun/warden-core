@@ -7,7 +7,7 @@ Maps to gRPC ResultAnalysisMixin functionality.
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
@@ -94,11 +94,11 @@ class AnalysisAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute analysis tool."""
         handlers = {
-            "warden_analyze_results": self._analyze_results,
-            "warden_get_trends": self._get_trends,
-            "warden_get_frame_stats": self._get_frame_stats,
-            "warden_get_severity_stats": self._get_severity_stats,
-            "warden_get_quality_score": self._get_quality_score,
+            "warden_analyze_results": self._analyze_results_async,
+            "warden_get_trends": self._get_trends_async,
+            "warden_get_frame_stats": self._get_frame_stats_async,
+            "warden_get_severity_stats": self._get_severity_stats_async,
+            "warden_get_quality_score": self._get_quality_score_async,
         }
 
         handler = handlers.get(tool_name)

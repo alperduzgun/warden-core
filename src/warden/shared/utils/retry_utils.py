@@ -3,9 +3,20 @@ import functools
 import logging
 import random
 from collections.abc import Callable
-from typing import Any, Tuple, Type
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Exceptions that should never be retried (non-transient failures).
+# Retrying circuit breaker errors wastes time — the circuit stays open for 60s.
+_NO_RETRY_EXCEPTIONS: tuple[type[Exception], ...] = ()
+
+try:
+    from warden.shared.infrastructure.resilience.circuit_breaker import CircuitBreakerOpen
+
+    _NO_RETRY_EXCEPTIONS = (CircuitBreakerOpen,)
+except ImportError:
+    pass
 
 
 def async_retry(
@@ -29,6 +40,10 @@ def async_retry(
         backoff_factor: Multiplier for delay (default: 2.0)
         jitter: Whether to add random jitter to delay (default: True)
         exceptions: Tuple of exceptions to catch and retry (default: Exception)
+
+    Note:
+        CircuitBreakerOpen is never retried — the circuit stays open for 60s,
+        so retrying immediately just wastes time and delays the timeout.
     """
 
     def decorator(func: Callable[..., Any]):
@@ -40,6 +55,12 @@ def async_retry(
             for attempt in range(retries + 1):
                 try:
                     return await func(*args, **kwargs)
+                except _NO_RETRY_EXCEPTIONS as e:
+                    # Non-transient: circuit is open, retrying is pointless.
+                    logger.warning(
+                        f"Function {func.__name__} skipping retry — non-transient error: {type(e).__name__}: {e}"
+                    )
+                    raise
                 except exceptions as e:
                     last_exception = e
                     if attempt == retries:

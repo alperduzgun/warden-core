@@ -5,11 +5,10 @@ Functional factory for creating LLM clients with fallback support.
 """
 
 import threading
-from typing import Optional, Union
 
 import structlog as _structlog
 
-from warden.shared.infrastructure.error_handler import ProviderUnavailableError, async_error_handler
+from warden.shared.infrastructure.error_handler import async_error_handler
 
 from .config import LlmConfiguration, ProviderConfig, load_llm_config
 from .metrics import get_global_metrics_collector

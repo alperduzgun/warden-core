@@ -8,7 +8,6 @@ Tracks issues across multiple pipeline runs:
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List
 
 from warden.analysis.domain.models import IssueSnapshot
 from warden.issues.domain.enums import IssueState

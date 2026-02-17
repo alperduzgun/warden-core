@@ -8,7 +8,6 @@ BACKWARD COMPATIBLE: All original imports and usage patterns work unchanged.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from warden.mcp.application.mcp_service import MCPService
 from warden.mcp.infrastructure.stdio_transport import STDIOTransport

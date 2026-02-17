@@ -7,7 +7,7 @@ Uses LLM to create context-aware, framework-specific solutions.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.fortification.application.prompt_builder import FortificationPromptBuilder
 from warden.fortification.domain.models import Fortification

@@ -9,7 +9,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
@@ -127,10 +127,10 @@ class ReportAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute report tool."""
         handlers = {
-            "warden_generate_html_report": self._generate_html_report,
-            "warden_generate_pdf_report": self._generate_pdf_report,
-            "warden_generate_json_report": self._generate_json_report,
-            "warden_get_report_status": self._get_report_status,
+            "warden_generate_html_report": self._generate_html_report_async,
+            "warden_generate_pdf_report": self._generate_pdf_report_async,
+            "warden_generate_json_report": self._generate_json_report_async,
+            "warden_get_report_status": self._get_report_status_async,
         }
 
         handler = handlers.get(tool_name)

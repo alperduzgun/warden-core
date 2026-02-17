@@ -5,7 +5,7 @@ MCP adapter for semantic code search tools.
 Maps to gRPC SemanticSearchMixin functionality.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
@@ -135,12 +135,12 @@ class SearchAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute search tool."""
         handlers = {
-            "warden_search_code": self._search_code,
-            "warden_search_similar_code": self._search_similar_code,
-            "warden_search_by_description": self._search_by_description,
-            "warden_index_project": self._index_project,
-            "warden_get_index_stats": self._get_index_stats,
-            "warden_clear_index": self._clear_index,
+            "warden_search_code": self._search_code_async,
+            "warden_search_similar_code": self._search_similar_code_async,
+            "warden_search_by_description": self._search_by_description_async,
+            "warden_index_project": self._index_project_async,
+            "warden_get_index_stats": self._get_index_stats_async,
+            "warden_clear_index": self._clear_index_async,
         }
 
         handler = handlers.get(tool_name)

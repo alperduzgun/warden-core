@@ -3,7 +3,7 @@ Utilities for safely interacting with Finding objects and dictionaries.
 Ensures resilience across different data representations in the pipeline.
 """
 
-from typing import Any, Dict, Union
+from typing import Any
 
 
 def get_finding_attribute(finding: Any, attr: str, default: Any = None) -> Any:

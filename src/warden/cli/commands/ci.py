@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -104,7 +103,7 @@ def _print_secrets_hint(llm_provider: str) -> None:
     }
 
     if llm_provider in key_map:
-        console.print(f"\n[yellow]Remember to add secrets to your CI:[/yellow]")
+        console.print("\n[yellow]Remember to add secrets to your CI:[/yellow]")
         console.print(f"  - {key_map[llm_provider]}")
 
 

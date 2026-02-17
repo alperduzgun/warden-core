@@ -6,7 +6,7 @@ Translates MCP tool calls to WardenBridge operations.
 """
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from warden.mcp.domain.errors import MCPToolExecutionError
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult

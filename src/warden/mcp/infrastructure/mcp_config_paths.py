@@ -6,7 +6,6 @@ Single source of truth - used by both serve.py and health_adapter.py.
 """
 
 from pathlib import Path
-from typing import Dict, List
 
 
 def get_mcp_config_paths() -> dict[str, Path]:

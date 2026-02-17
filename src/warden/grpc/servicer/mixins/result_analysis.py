@@ -5,7 +5,6 @@ Endpoints: AnalyzeResults, GetTrends, GetFrameStats, GetSeverityStats, GetQualit
 """
 
 from datetime import datetime
-from typing import Dict, List
 
 try:
     from warden.grpc.generated import warden_pb2

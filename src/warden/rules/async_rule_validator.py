@@ -6,7 +6,6 @@ Prevents event loop starvation from expensive regex operations.
 import asyncio
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
 
 import structlog
 

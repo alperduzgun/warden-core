@@ -10,7 +10,7 @@ Extended to support:
 - Dynamic tool registration at runtime
 """
 
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition

@@ -4,8 +4,6 @@ Chaos Engineering & Resilience System Prompt
 Performs Failure Mode & Effects Analysis (FMEA) on code.
 """
 
-from typing import Optional
-
 CHAOS_SYSTEM_PROMPT = """You are a Chaos Engineer. Your mindset: "Everything will fail. The question is HOW and WHEN."
 
 ## YOUR APPROACH (Context-Aware Chaos Engineering)

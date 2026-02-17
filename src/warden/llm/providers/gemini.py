@@ -6,7 +6,7 @@ Avoids heavy dependencies like google-generativeai.
 """
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 

@@ -11,7 +11,7 @@ Supports standard unified diff format from git diff.
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Set
+from typing import Any
 
 
 @dataclass

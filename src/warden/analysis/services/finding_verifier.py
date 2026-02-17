@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import psutil
 
@@ -259,7 +259,7 @@ Return ONLY a JSON object:
             ("eval", "Code execution", "critical")
             (r"api_key\\s*=", "Hardcoded API key")
         """
-        finding_id = self._get(finding, "id", "")
+        self._get(finding, "id", "")
 
         # Look for common pattern definition structures
         pattern_indicators = [

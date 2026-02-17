@@ -4,7 +4,6 @@ Defines risk scores, lanes, and triage decisions with strict validation.
 """
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 

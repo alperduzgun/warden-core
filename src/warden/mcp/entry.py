@@ -15,7 +15,6 @@ import asyncio
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Try to import logging
 try:

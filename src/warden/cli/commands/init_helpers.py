@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
@@ -30,6 +29,7 @@ LLM_PROVIDERS = {
         "emoji": "🏠",
         "requires_key": False,
         "default_model": "qwen2.5-coder:7b",
+        "ci_supported": True,
     },
     "2": {
         "id": "anthropic",
@@ -40,6 +40,7 @@ LLM_PROVIDERS = {
         "key_var": "ANTHROPIC_API_KEY",
         "key_prefix": "sk-ant-",
         "default_model": "claude-sonnet-4-20250514",
+        "ci_supported": True,
     },
     "3": {
         "id": "openai",
@@ -50,6 +51,7 @@ LLM_PROVIDERS = {
         "key_var": "OPENAI_API_KEY",
         "key_prefix": "sk-",
         "default_model": "gpt-4o",
+        "ci_supported": True,
     },
     "4": {
         "id": "groq",
@@ -60,6 +62,7 @@ LLM_PROVIDERS = {
         "key_var": "GROQ_API_KEY",
         "key_prefix": "gsk_",
         "default_model": "llama-3.3-70b-versatile",
+        "ci_supported": True,
     },
     "5": {
         "id": "azure",
@@ -69,6 +72,7 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "AZURE_OPENAI_API_KEY",
         "default_model": "gpt-4o",
+        "ci_supported": True,
     },
     "6": {
         "id": "deepseek",
@@ -78,6 +82,7 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "DEEPSEEK_API_KEY",
         "default_model": "deepseek-coder",
+        "ci_supported": True,
     },
     "7": {
         "id": "gemini",
@@ -87,6 +92,7 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "GEMINI_API_KEY",
         "default_model": "gemini-1.5-flash",
+        "ci_supported": True,
     },
     "8": {
         "id": "claude_code",
@@ -95,8 +101,19 @@ LLM_PROVIDERS = {
         "emoji": "🖥️",
         "requires_key": False,
         "default_model": "claude-sonnet-4-20250514",
+        "ci_supported": False,  # Local CLI only — not available in CI runners
     },
 }
+
+
+def _is_ci_environment() -> bool:
+    """Detect CI/headless environment where local-only providers can't work."""
+    ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "JENKINS_URL", "TRAVIS"]
+    return (
+        any(os.environ.get(v, "").lower() in ("true", "1", "yes") for v in ci_vars)
+        or os.environ.get("WARDEN_NON_INTERACTIVE", "").lower() == "true"
+        or not sys.stdin.isatty()
+    )
 
 CI_PROVIDERS = {
     "1": {
@@ -114,36 +131,58 @@ def select_llm_provider() -> dict:
     """
     Display LLM provider selection UI with smart default detection.
     Returns selected provider info.
+
+    Respects:
+    - ``WARDEN_INIT_PROVIDER`` env var: directly selects a provider (set by --provider flag)
+    - CI environments: filters out providers with ``ci_supported=False`` (e.g. claude_code)
     """
+    is_ci = _is_ci_environment()
+
+    # Filter providers based on CI context
+    available = {k: v for k, v in LLM_PROVIDERS.items() if not is_ci or v.get("ci_supported", True)}
+
+    # --provider flag support: init.py sets WARDEN_INIT_PROVIDER before calling configure_llm()
+    forced = os.environ.get("WARDEN_INIT_PROVIDER", "").strip().lower()
+    if forced:
+        match = next((v for v in available.values() if v["id"] == forced), None)
+        if match:
+            return match
+        # Warn and fall through to interactive/auto selection
+        console.print(f"[yellow]Warning: Provider '{forced}' is unknown or not supported in this context.[/yellow]")
+
     console.print("\n[bold cyan]🧠 Step 1: Select LLM Provider[/bold cyan]")
-    console.print("[dim]Warden requires an LLM for AI-powered analysis.[/dim]\n")
+    if is_ci:
+        console.print("[dim]CI environment detected — local-only providers (claude_code) are hidden.[/dim]\n")
+    else:
+        console.print("[dim]Warden requires an LLM for AI-powered analysis.[/dim]\n")
 
     # SMART DEFAULT: Detect available local providers
     default_choice = "1"  # Ollama
     detected_providers = {}
 
-    # Check Claude Code availability
-    claude_path = shutil.which("claude")
-    if claude_path:
-        try:
-            result = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=2)
-            if result.returncode == 0:
-                default_choice = "8"  # Claude Code detected!
-                detected_providers["8"] = " [green](Detected ✓)[/green]"
-        except (subprocess.TimeoutExpired, Exception):
-            pass
+    if not is_ci:
+        # Check Claude Code availability (only in interactive/local mode)
+        claude_path = shutil.which("claude")
+        if claude_path:
+            try:
+                result = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=2)
+                if result.returncode == 0:
+                    default_choice = "8"  # Claude Code detected!
+                    detected_providers["8"] = " [green](Detected ✓)[/green]"
+            except (subprocess.TimeoutExpired, Exception):
+                pass
 
     # Check Ollama availability
     if shutil.which("ollama"):
         detected_providers["1"] = " [dim](Available)[/dim]"
 
-    # Build selection table with detection status
+    # Build selection table with detection status (only show available providers)
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column("Option", style="bold cyan", width=3)
     table.add_column("Provider", style="bold white", width=30)
     table.add_column("Description", style="dim")
 
-    for key, provider in LLM_PROVIDERS.items():
+    for key, provider in available.items():
         detected = detected_providers.get(key, "")
         table.add_row(f"[{key}]", f"{provider['emoji']} {provider['name']}{detected}", provider["description"])
 
@@ -152,11 +191,15 @@ def select_llm_provider() -> dict:
 
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
 
+    # Ensure default_choice is in available set (CI may have removed claude_code)
+    if default_choice not in available:
+        default_choice = next(iter(available), "1")
+
     choice = default_choice  # Smart default based on detection
     if is_interactive:
-        choice = Prompt.ask("Select provider", choices=list(LLM_PROVIDERS.keys()), default=default_choice)
+        choice = Prompt.ask("Select provider", choices=list(available.keys()), default=default_choice)
 
-    return LLM_PROVIDERS[choice]
+    return available[choice]
 
 
 def configure_ollama() -> tuple[dict, dict]:
@@ -386,6 +429,8 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
     key_prefix = provider.get("key_prefix", "")
     default_model = provider["default_model"]
 
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+
     console.print(f"\n[bold cyan]☁️  Configuring {provider_name}[/bold cyan]")
 
     # Check if key already exists in environment
@@ -393,14 +438,19 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
     if existing_key:
         masked = existing_key[:8] + "..." + existing_key[-4:] if len(existing_key) > 12 else "****"
         console.print(f"[green]✓ Found existing {key_var}: {masked}[/green]")
-        if not Confirm.ask("Use existing key?", default=True):
+        if is_interactive and not Confirm.ask("Use existing key?", default=True):
             existing_key = None
 
     env_vars = {}
 
     if not existing_key:
+        if not is_interactive:
+            # Non-interactive: no key and no prompt possible — skip gracefully
+            console.print(f"[yellow]⚠️  {key_var} not set. Skipping cloud provider setup.[/yellow]")
+            return {"provider": "ollama", "model": "qwen2.5-coder:7b", "enabled": False}, {}
+
         # Prompt for API key
-        console.print(f"[dim]Get your API key from the provider's dashboard.[/dim]")
+        console.print("[dim]Get your API key from the provider's dashboard.[/dim]")
         if key_prefix:
             console.print(f"[dim]Key should start with: {key_prefix}[/dim]")
 
@@ -421,15 +471,19 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
         env_vars[key_var] = api_key
 
     # Model selection
-    model = Prompt.ask("Select model", default=default_model)
+    model = default_model
+    if is_interactive:
+        model = Prompt.ask("Select model", default=default_model)
 
     llm_config = {"provider": provider["id"], "model": model, "timeout": 300}
 
     # Ask about local LLM for fast tier
-    if Confirm.ask("Enable Ollama for fast/cheap checks? (Hybrid mode)", default=True):
+    enable_hybrid = not is_interactive or Confirm.ask("Enable Ollama for fast/cheap checks? (Hybrid mode)", default=True)
+    if enable_hybrid:
         llm_config["use_local_llm"] = True
         llm_config["fast_model"] = "qwen2.5-coder:0.5b"
-        console.print("[green]✓ Hybrid mode enabled (Cloud for smart, Local for fast)[/green]")
+        if is_interactive:
+            console.print("[green]✓ Hybrid mode enabled (Cloud for smart, Local for fast)[/green]")
 
     return llm_config, env_vars
 
@@ -720,7 +774,7 @@ You are responsible for the security and code quality of this project.
                     f.write("\n\n" + cursorrules_template)
                 console.print(f"[green]✓ Updated {cursorrules_path}[/green]")
             else:
-                console.print(f"[dim].cursorrules already has Warden rules, skipping.[/dim]")
+                console.print("[dim].cursorrules already has Warden rules, skipping.[/dim]")
     except Exception as e:
         console.print(f"[yellow]Warning: Could not create .cursorrules: {e}[/yellow]")
 
@@ -763,7 +817,7 @@ You are responsible for the security and code quality of this project.
         with open(rules_path, "w") as f:
             f.write(rules_template)
         console.print(f"[green]✓ Created {rules_path}[/green]")
-    except Exception as e:
+    except Exception:
         # Fallback if template not found
         fallback_rules = """# Warden AI Protocol
 

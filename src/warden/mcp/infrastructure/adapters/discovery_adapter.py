@@ -6,7 +6,7 @@ Maps to gRPC FileDiscoveryMixin functionality.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
@@ -105,10 +105,10 @@ class DiscoveryAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute discovery tool."""
         handlers = {
-            "warden_discover_files": self._discover_files,
-            "warden_get_files_by_type": self._get_files_by_type,
-            "warden_detect_frameworks": self._detect_frameworks,
-            "warden_get_project_stats": self._get_project_stats,
+            "warden_discover_files": self._discover_files_async,
+            "warden_get_files_by_type": self._get_files_by_type_async,
+            "warden_detect_frameworks": self._detect_frameworks_async,
+            "warden_get_project_stats": self._get_project_stats_async,
         }
 
         handler = handlers.get(tool_name)

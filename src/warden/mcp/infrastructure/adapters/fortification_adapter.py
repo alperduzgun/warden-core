@@ -6,7 +6,7 @@ Maps to gRPC FortificationMixin functionality.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
@@ -104,10 +104,10 @@ class FortificationAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute fortification tool."""
         handlers = {
-            "warden_fix": self._execute_fix,
-            "warden_get_fortification_suggestions": self._get_fortification_suggestions,
-            "warden_apply_fortification": self._apply_fortification,
-            "warden_get_security_score": self._get_security_score,
+            "warden_fix": self._execute_fix_async,
+            "warden_get_fortification_suggestions": self._get_fortification_suggestions_async,
+            "warden_apply_fortification": self._apply_fortification_async,
+            "warden_get_security_score": self._get_security_score_async,
         }
 
         handler = handlers.get(tool_name)

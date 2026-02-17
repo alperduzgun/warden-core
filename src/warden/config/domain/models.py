@@ -12,7 +12,7 @@ Python internal format: snake_case
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from warden.shared.domain.base_model import BaseDomainModel
 

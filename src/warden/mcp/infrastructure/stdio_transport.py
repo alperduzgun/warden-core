@@ -7,7 +7,6 @@ Reads JSON-RPC messages from stdin, writes to stdout.
 
 import asyncio
 import sys
-from typing import Optional
 
 from warden.mcp.domain.errors import MCPTransportError
 from warden.mcp.ports.transport import ITransport

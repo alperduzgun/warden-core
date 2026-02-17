@@ -7,7 +7,7 @@ for false positive prevention and context-aware analysis.
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 import structlog
 

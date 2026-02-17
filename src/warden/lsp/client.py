@@ -3,7 +3,7 @@ import contextlib
 import json
 import os
 from collections.abc import Callable
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 

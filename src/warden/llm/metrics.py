@@ -10,7 +10,6 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
 
 _global_metrics_collector = None
 

@@ -8,7 +8,7 @@ Maps to gRPC SuppressionMixin functionality.
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
@@ -125,10 +125,10 @@ class SuppressionAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute suppression tool."""
         handlers = {
-            "warden_add_suppression": self._add_suppression,
-            "warden_remove_suppression": self._remove_suppression,
-            "warden_get_suppressions": self._get_suppressions,
-            "warden_check_suppression": self._check_suppression,
+            "warden_add_suppression": self._add_suppression_async,
+            "warden_remove_suppression": self._remove_suppression_async,
+            "warden_get_suppressions": self._get_suppressions_async,
+            "warden_check_suppression": self._check_suppression_async,
         }
 
         handler = handlers.get(tool_name)

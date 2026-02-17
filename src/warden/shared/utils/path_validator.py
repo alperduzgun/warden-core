@@ -5,7 +5,6 @@ Prevents path traversal attacks by enforcing all paths stay within project_root.
 """
 
 from pathlib import Path
-from typing import Optional
 
 
 class PathTraversalError(Exception):

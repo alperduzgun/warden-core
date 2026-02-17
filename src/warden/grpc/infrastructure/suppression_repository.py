@@ -7,7 +7,7 @@ Stores suppressions in .warden/grpc/suppressions.json
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.grpc.infrastructure.base_file_repository import BaseFileRepository
 from warden.shared.domain.repository import ISuppressionRepository

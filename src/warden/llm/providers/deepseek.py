@@ -105,7 +105,7 @@ class DeepSeekClient(ILlmClient):
         except httpx.HTTPStatusError:
             # HTTP error (4xx/5xx) - auth or server issue
             return False
-        except ValueError as e:
+        except ValueError:
             # Configuration or validation error
             return False
 

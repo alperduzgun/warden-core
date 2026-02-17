@@ -1,6 +1,5 @@
 """Async file I/O (ID 13)."""
 
-import os
 from pathlib import Path
 
 import aiofiles

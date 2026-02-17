@@ -6,7 +6,6 @@ Generates GitLab CI pipeline files for running Warden in CI/CD.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
 
 @dataclass

@@ -6,7 +6,6 @@ Generates Azure Pipelines YAML files for running Warden in CI/CD.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 
 @dataclass

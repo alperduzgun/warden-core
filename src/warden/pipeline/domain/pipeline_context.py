@@ -11,12 +11,12 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import Framework, ProjectType
 from warden.analysis.domain.quality_metrics import QualityMetrics
-from warden.shared.utils.finding_utils import get_finding_attribute, get_finding_severity
+from warden.shared.utils.finding_utils import get_finding_severity
 
 
 @dataclass

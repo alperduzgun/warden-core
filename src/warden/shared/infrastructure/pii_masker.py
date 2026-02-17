@@ -5,7 +5,7 @@ Prevents sensitive data from appearing in logs.
 """
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 
 class PIIMaskingFilter:

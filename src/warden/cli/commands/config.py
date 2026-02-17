@@ -15,16 +15,12 @@ Chaos Engineering Principles:
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 import yaml
 from rich.console import Console
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.table import Table
 from rich.tree import Tree
 
 from warden.llm.types import LlmProvider

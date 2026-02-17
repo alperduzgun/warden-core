@@ -4,7 +4,7 @@ Classification Phase Executor.
 
 import time
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -97,42 +97,24 @@ class ClassificationExecutor(BasePhaseExecutor):
                 if not f_info or not getattr(f_info, "is_unchanged", False):
                     files_to_classify.append(cf)
 
+            # BATCH 1: Fix fragile locals() check - use explicit variable
+            from warden.classification.application.classification_phase import ClassificationResult
+
+            result: ClassificationResult | None = None
+
             if not files_to_classify:
                 logger.info("classification_phase_skipped_optimization", reason="all_files_unchanged")
-                # Reuse previous classification if available (complex, for now just skip)
-                # In a real persistence scenario, we would reload 'selected_frames' from memory here.
-                # For now, we assume if nothing changed, we don't need to re-classify or re-select frames
-                # because specific frame execution will also be skipped.
-
-                # However, we must ensure 'selected_frames' is at least populated if we skip.
-                # If we skip classification, we might default to ALL enabled frames or previous state.
-                # Strategy: If all files unchanged, we rely on FrameExecutor's skip logic,
-                # but we still need a list of frames to *attempt* to run.
-
-                # Create a dummy result with previous selected frames or default
-                from warden.classification.application.classification_phase import ClassificationResult
-
-                # Try to restore from memory (Phase 0 should have populated this if we had a persistent store for it)
-                # Since we don't have per-run persistence for classification yet, we'll assume defaults
-                # BUT: If we skip classification, we might miss new rules.
-                # RISK: If we skip classification, context.selected_frames will be empty?
-
-                # Better approach: If files unchanged, use Memory to get *previous* classification?
-                # Current MemoryManager implementation doesn't store 'last_run_classification'.
-
-                # Compromise: For files that are unchanged, we TRUST that previous classification holds for them.
-                # But we need to output a result.
-
-                # Minimal fallback: Select all configured frames (safest)
-                # The FrameExecutor will then skip individual files.
+                # No files to classify - use all available frames
+                # FrameExecutor will skip execution on unchanged files
                 result = ClassificationResult(
-                    selected_frames=[],  # Will trigger "all frames" fallback in logic below?
+                    selected_frames=[f.frame_id for f in self.available_frames],
                     suppression_rules=[],
                     reasoning="Classification skipped (No changes detected)",
                 )
-                # Wait, if selected_frames is empty, caller logic might warn.
-                # Let's check `result.selected_frames` usage below.
-                pass
+                logger.debug(
+                    "classification_default_all_frames",
+                    frame_count=len(self.available_frames),
+                )
             else:
                 if len(files_to_classify) < len(code_files):
                     logger.info(
@@ -140,29 +122,18 @@ class ClassificationExecutor(BasePhaseExecutor):
                     )
                 result = await phase.execute_async(files_to_classify)
 
-            # If we skipped (result not assigned in if-block), we need to handle it.
-            # Actually, `ClassificationPhase` might return empty if input is empty?
-            if "result" not in locals():
-                # We skipped. We need to populate context.selected_frames so FrameExecutor knows what to do.
-                # If we don't select frames, FrameExecutor might run nothing or everything.
-                # Let's inspect context to see if we have previous run data? No.
-
-                # SAFE FIX: If we skip classification, we simply return "Use All Frames"
-                # because FrameExecutor will skip the *execution* on unchanged files anyway.
-                # This avoids cost of LLM Classification.
-                from warden.classification.application.classification_phase import ClassificationResult
-
-                result = ClassificationResult(
-                    selected_frames=[],  # Empty list often implies "default/all" or "none" depending on logic
-                    suppression_rules=[],
-                    reasoning="Classification skipped (No changes)",
+            # Validate result exists (should always be set by above branches)
+            if result is None:
+                logger.warning(
+                    "classification_result_none",
+                    reason="unexpected_branch",
+                    action="using_all_frames",
                 )
-                # Actually, let's look at line 84: context.selected_frames = result.selected_frames
-                # If it's empty, FrameExecutor checks: `if not frames_to_execute` -> warning.
-
-                # So we MUST provide frames.
-                # Let's use available_frames names
-                result.selected_frames = [f.frame_id for f in self.available_frames]
+                result = ClassificationResult(
+                    selected_frames=[f.frame_id for f in self.available_frames],
+                    suppression_rules=[],
+                    reasoning="Classification fallback (Unexpected None result)",
+                )
 
             # Store results in context
             context.selected_frames = result.selected_frames
@@ -171,6 +142,20 @@ class ClassificationExecutor(BasePhaseExecutor):
             context.classification_reasoning = result.reasoning
             context.learned_patterns = result.learned_patterns
             context.advisories = getattr(result, "advisories", [])
+
+            # Adaptive frame selection based on context (Tier 2: Context-Awareness)
+            if hasattr(context, "findings") and context.findings:
+                # Refine frame selection based on prior findings
+                selected_frames_refined = self._refine_frame_selection(context, result.selected_frames)
+
+                if selected_frames_refined != result.selected_frames:
+                    logger.info(
+                        "adaptive_frame_selection",
+                        original_count=len(result.selected_frames),
+                        refined_count=len(selected_frames_refined),
+                        reason="context_aware_refinement",
+                    )
+                    context.selected_frames = selected_frames_refined
 
             # Add phase result
             context.add_phase_result(
@@ -206,3 +191,59 @@ class ClassificationExecutor(BasePhaseExecutor):
                     context.selected_frames if hasattr(context, "selected_frames") else []
                 )
             self.progress_callback("phase_completed", classification_data)
+
+    def _refine_frame_selection(
+        self,
+        context: PipelineContext,
+        selected_frames: list[str],
+    ) -> list[str]:
+        """
+        Refine frame selection based on context (Tier 2: Adaptive Frame Selection).
+
+        Args:
+            context: Pipeline context with findings and learned patterns
+            selected_frames: Originally selected frames from classification
+
+        Returns:
+            Refined list of frame IDs
+        """
+        if not selected_frames:
+            return selected_frames
+
+        findings = context.findings
+        learned_patterns = context.learned_patterns
+
+        # Analyze findings to identify patterns
+        has_sql_issues = any(
+            "sql" in str(f.get("message", "") if isinstance(f, dict) else getattr(f, "message", "")).lower()
+            for f in findings
+        )
+
+        any(
+            "auth" in str(f.get("message", "") if isinstance(f, dict) else getattr(f, "message", "")).lower()
+            or "password" in str(f.get("message", "") if isinstance(f, dict) else getattr(f, "message", "")).lower()
+            for f in findings
+        )
+
+        has_xss_issues = any(
+            "xss" in str(f.get("message", "") if isinstance(f, dict) else getattr(f, "message", "")).lower()
+            or "injection" in str(f.get("message", "") if isinstance(f, dict) else getattr(f, "message", "")).lower()
+            for f in findings
+        )
+
+        # Refine based on patterns
+        refined_frames = list(selected_frames)
+
+        # If SQL issues found, prioritize security frame
+        if has_sql_issues and "security" not in refined_frames:
+            refined_frames.append("security")
+            logger.debug("adaptive_selection_added_frame", frame="security", reason="sql_issues_detected")
+
+        # If no XSS issues and no web patterns, consider skipping certain frames
+        # (This is conservative - we keep frames unless we're sure)
+        if not has_xss_issues and not learned_patterns:
+            # Could add logic to skip certain frames, but be careful not to miss issues
+            pass
+
+        # Remove duplicates and return
+        return list(set(refined_frames))

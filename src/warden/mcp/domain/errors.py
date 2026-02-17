@@ -5,7 +5,7 @@ DDD-compliant exception hierarchy for MCP operations.
 All domain errors inherit from MCPDomainError.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from warden.mcp.domain.enums import MCPErrorCode
 

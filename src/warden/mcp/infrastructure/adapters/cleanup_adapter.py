@@ -6,7 +6,7 @@ Maps to gRPC CleanupMixin functionality.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
@@ -75,9 +75,9 @@ class CleanupAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Execute cleanup tool."""
         handlers = {
-            "warden_analyze_cleanup": self._analyze_cleanup,
-            "warden_get_cleanup_suggestions": self._get_cleanup_suggestions,
-            "warden_get_cleanup_score": self._get_cleanup_score,
+            "warden_analyze_cleanup": self._analyze_cleanup_async,
+            "warden_get_cleanup_suggestions": self._get_cleanup_suggestions_async,
+            "warden_get_cleanup_score": self._get_cleanup_score_async,
         }
 
         handler = handlers.get(tool_name)

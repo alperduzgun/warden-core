@@ -5,7 +5,6 @@ Loads configuration from environment variables and .env file.
 """
 
 import secrets
-from typing import List
 
 import structlog
 from pydantic import Field, model_validator

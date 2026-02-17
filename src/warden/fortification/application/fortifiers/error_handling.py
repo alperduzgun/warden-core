@@ -6,7 +6,7 @@ Detects risky operations (async, file I/O, network, database) and wraps them.
 """
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any
 
 import structlog
 

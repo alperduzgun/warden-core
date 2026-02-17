@@ -6,7 +6,7 @@ Panel UI compatible with before/after comparison support.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import Field
 

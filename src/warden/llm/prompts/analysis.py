@@ -5,8 +5,6 @@ Based on C# AnalysisPrompt.cs
 Focuses on ACCURACY FIRST with confidence scoring
 """
 
-from typing import Optional
-
 ANALYSIS_SYSTEM_PROMPT = """You are Warden, an expert AI Code Guardian specialized in analyzing code quality and security.
 
 Your mission: Provide ACCURATE analysis that developers can trust. Reduce false positives while catching real issues.

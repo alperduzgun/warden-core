@@ -5,10 +5,13 @@ Detects SQL injection, XSS, secrets, and other security vulnerabilities.
 Uses AST analysis, taint tracking, data flow analysis, and LLM verification.
 """
 
-import asyncio
-import time
-from typing import Any
+from __future__ import annotations
 
+import html
+import time
+from typing import TYPE_CHECKING, Any
+
+from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.check import CheckRegistry, CheckResult, ValidationCheck
 from warden.validation.domain.enums import (
@@ -28,6 +31,9 @@ from warden.validation.infrastructure.check_loader import CheckLoader
 
 from .ast_analyzer import extract_ast_context, format_ast_context
 from .batch_processor import batch_verify_security_findings
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 from .data_flow_analyzer import analyze_data_flow, format_data_flow_context
 
 logger = get_logger(__name__)
@@ -140,12 +146,13 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                     error=str(e),
                 )
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute all security checks on code file.
 
         Args:
             code_file: Code file to validate
+            context: Optional pipeline context (Tier 2: Context-Awareness)
 
         Returns:
             FrameResult with aggregated findings from all checks
@@ -226,8 +233,74 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
             try:
                 logger.info("executing_llm_security_check", file=code_file.path)
 
-                # Get Cross-File Context via Semantic Search
+                # Build context-aware prompt (Tier 1: Context-Awareness)
                 semantic_context = ""
+
+                # 1. Project Intelligence Context
+                if hasattr(self, "project_intelligence") and self.project_intelligence:
+                    pi = self.project_intelligence
+                    semantic_context += "\n[PROJECT CONTEXT]:\n"
+
+                    # Entry points (where untrusted data enters)
+                    if hasattr(pi, "entry_points") and pi.entry_points:
+                        entry_points_str = ", ".join(pi.entry_points[:5])
+                        semantic_context += f"Entry Points: {entry_points_str}\n"
+
+                    # Authentication patterns detected
+                    if hasattr(pi, "auth_patterns") and pi.auth_patterns:
+                        auth_str = ", ".join(pi.auth_patterns[:3])
+                        semantic_context += f"Auth Patterns: {auth_str}\n"
+
+                    # Critical sinks (dangerous operations)
+                    if hasattr(pi, "critical_sinks") and pi.critical_sinks:
+                        sinks_str = ", ".join(pi.critical_sinks[:5])
+                        semantic_context += f"Critical Sinks: {sinks_str}\n"
+
+                    logger.debug("project_intelligence_added_to_prompt", file=code_file.path)
+
+                # 2. Prior Findings Context (cross-frame awareness) - BATCH 2: Sanitized
+                if hasattr(self, "prior_findings") and self.prior_findings:
+                    # Normalize and filter findings for this file
+                    file_findings = []
+                    for f in self.prior_findings:
+                        normalized = normalize_finding_to_dict(f)
+                        if normalized.get("location", "").startswith(code_file.path):
+                            file_findings.append(normalized)
+
+                    if file_findings:
+                        semantic_context += "\n[PRIOR FINDINGS ON THIS FILE]:\n"
+                        for finding in file_findings[:3]:  # Limit to top 3
+                            # BATCH 2: SANITIZE - Escape HTML, truncate, detect injection
+                            raw_msg = finding.get("message", "")
+                            raw_severity = finding.get("severity", "unknown")
+
+                            # Truncate to prevent token overflow
+                            msg = html.escape(raw_msg[:200])  # Max 200 chars
+                            severity = html.escape(raw_severity[:20])  # Max 20 chars
+
+                            # Detect prompt injection attempts
+                            suspicious_patterns = [
+                                "ignore previous",
+                                "system:",
+                                "[system",
+                                "override",
+                                "<script",
+                                "javascript:",
+                            ]
+                            if any(pattern in msg.lower() for pattern in suspicious_patterns):
+                                logger.warning(
+                                    "prompt_injection_detected",
+                                    file=code_file.path,
+                                    finding_id=finding.get("id", "unknown"),
+                                    action="sanitized",
+                                )
+                                msg = "[SANITIZED: Suspicious content removed]"
+
+                            semantic_context += f"- [{severity}] {msg}\n"
+
+                        logger.debug("prior_findings_added_to_prompt", file=code_file.path, count=len(file_findings))
+
+                # 3. Cross-File Context via Semantic Search
                 if (
                     hasattr(self, "semantic_search_service")
                     and self.semantic_search_service
@@ -238,7 +311,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                             query=f"Security sensitive logic related to {code_file.path}", limit=3
                         )
                         if search_results:
-                            semantic_context = "\n[Semantic Context from other files]:\n"
+                            semantic_context += "\n[Semantic Context from other files]:\n"
                             for res in search_results:
                                 if res.chunk.file_path != code_file.path:
                                     semantic_context += (
@@ -275,8 +348,30 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                     use_fast_tier = True
                     logger.debug("using_fast_tier_for_security_analysis", file=code_file.path)
 
+                # BATCH 2: Token truncation to prevent context overflow
+                from warden.shared.utils.token_utils import truncate_content_for_llm
+
+                # Combine code + context, then truncate
+                full_context = code_file.content + "\n\n" + semantic_context
+
+                # Apply token-aware truncation (preserves structure)
+                truncated_context = truncate_content_for_llm(
+                    full_context,
+                    max_tokens=3000,  # Safe limit for most LLMs
+                    preserve_start_lines=50,
+                    preserve_end_lines=20,
+                )
+
+                if len(truncated_context) < len(full_context):
+                    logger.debug(
+                        "llm_prompt_truncated",
+                        file=code_file.path,
+                        original_length=len(full_context),
+                        truncated_length=len(truncated_context),
+                    )
+
                 response = await self.llm_service.analyze_security_async(
-                    code_file.content + semantic_context, code_file.language, use_fast_tier=use_fast_tier
+                    truncated_context, code_file.language, use_fast_tier=use_fast_tier
                 )
                 logger.info(
                     "llm_security_response_received",

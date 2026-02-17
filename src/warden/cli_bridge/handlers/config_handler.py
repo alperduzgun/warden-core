@@ -4,7 +4,7 @@ Handles pipeline configuration loading and frame discovery.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import yaml
 

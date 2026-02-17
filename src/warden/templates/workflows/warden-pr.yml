@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      CI_LLM_PROVIDER: {ci_llm_provider}
+      WARDEN_LLM_PROVIDER: {ci_llm_provider}
 {ci_env_vars}
 
     steps:

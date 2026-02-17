@@ -4,7 +4,7 @@ Anti-Pattern Detection Constants
 Universal AST node type mappings and pattern configurations.
 """
 
-from typing import Any, Dict, List, Set
+from typing import Any
 
 # =============================================================================
 # UNIVERSAL AST NODE TYPE MAPPINGS

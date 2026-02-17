@@ -4,8 +4,6 @@ Rule execution and conversion for validation frames.
 Handles custom rule execution and conversion to findings.
 """
 
-from typing import Any, List, Optional
-
 from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.shared.infrastructure.logging import get_logger

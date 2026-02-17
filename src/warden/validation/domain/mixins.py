@@ -6,7 +6,7 @@ by inheriting from them, reducing the surface area of the base ValidationFrame c
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from warden.validation.domain.frame import CodeFile, FrameResult

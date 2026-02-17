@@ -10,7 +10,7 @@ Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer 
 """
 
 from difflib import SequenceMatcher
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import structlog
 

@@ -6,7 +6,7 @@ Generates intelligent security fixes and suggestions.
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.analysis.application.llm_phase_base import (
     LLMPhaseBase,

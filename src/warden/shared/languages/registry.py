@@ -5,7 +5,6 @@ Provides unified access to language metadata and discovery.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 from warden.ast.domain.enums import CodeLanguage
 from warden.shared.languages.definitions import LANGUAGE_DEFINITIONS, LanguageDefinition

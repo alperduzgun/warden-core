@@ -5,7 +5,6 @@ Detects project conventions and patterns during PRE-ANALYSIS phase.
 """
 
 from pathlib import Path
-from typing import Dict, List, Set
 
 import structlog
 

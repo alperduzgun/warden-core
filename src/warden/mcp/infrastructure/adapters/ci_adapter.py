@@ -13,7 +13,7 @@ Chaos Engineering Principles:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult

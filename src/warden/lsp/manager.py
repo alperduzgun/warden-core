@@ -16,8 +16,7 @@ Supports 30+ languages including:
 
 import shutil
 import threading
-from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 import structlog
 

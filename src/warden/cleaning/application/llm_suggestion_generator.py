@@ -6,7 +6,7 @@ Generates intelligent code quality improvement suggestions using language models
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile

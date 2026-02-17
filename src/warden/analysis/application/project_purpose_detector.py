@@ -7,15 +7,13 @@ from directory structure, dependencies, and code samples.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import structlog
 
 from warden.analysis.domain.intelligence import (
-    FileException,
     ModuleInfo,
     RiskLevel,
-    SecurityPosture,
 )
 from warden.llm.config import LlmConfiguration
 from warden.llm.factory import create_client

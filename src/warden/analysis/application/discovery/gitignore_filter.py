@@ -7,7 +7,6 @@ Parses .gitignore files and filters file paths accordingly.
 import re
 from pathlib import Path
 from re import Pattern
-from typing import List
 
 
 class GitignoreFilter:

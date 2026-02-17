@@ -6,7 +6,6 @@ Extracts dependencies from requirements.txt and related files.
 
 import re
 from pathlib import Path
-from typing import List, Optional, Set
 
 from warden.build_context.models import (
     BuildContext,

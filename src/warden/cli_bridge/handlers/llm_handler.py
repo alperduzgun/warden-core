@@ -4,7 +4,7 @@ Handles AI-driven code analysis and streaming responses.
 """
 
 from collections.abc import AsyncIterator
-from typing import Any, Optional
+from typing import Any
 
 from warden.cli_bridge.handlers.base import BaseHandler
 from warden.cli_bridge.protocol import ErrorCode, IPCError

@@ -6,7 +6,7 @@ Detects file handles, database connections, network sockets without proper dispo
 """
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any
 
 import structlog
 

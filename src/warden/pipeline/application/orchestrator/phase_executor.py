@@ -6,7 +6,7 @@ Refactored to delegate to specific phase executors.
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 from warden.analysis.application.triage_phase import TriagePhase  # Phase 0.5
 from warden.pipeline.application.executors.analysis_executor import AnalysisExecutor

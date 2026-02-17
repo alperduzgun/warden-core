@@ -5,7 +5,6 @@ Detects file types based on file extensions.
 """
 
 from pathlib import Path
-from typing import Set
 
 from warden.analysis.application.discovery.models import FileType
 

@@ -5,7 +5,6 @@ Abstract base class for all fortifiers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from warden.fortification.domain.models import FortificationResult, FortifierPriority
 from warden.validation.domain.frame import CodeFile

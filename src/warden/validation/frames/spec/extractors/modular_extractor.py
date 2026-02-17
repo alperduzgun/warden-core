@@ -9,7 +9,6 @@ and merges them into a single Contract object. This enables:
 """
 
 from pathlib import Path
-from typing import Any, List, Optional
 
 import yaml
 

@@ -11,7 +11,7 @@ Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer 
 """
 
 import re
-from typing import Any, List, Optional
+from typing import Any
 
 import structlog
 

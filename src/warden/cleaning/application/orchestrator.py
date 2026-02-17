@@ -5,8 +5,6 @@ Coordinates all cleanup analyzers to detect code cleanup opportunities.
 Executes analyzers in priority order and combines results.
 """
 
-from typing import List, Optional
-
 import structlog
 
 from warden.cleaning.application.analyzers import (

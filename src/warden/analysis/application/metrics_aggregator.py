@@ -4,7 +4,7 @@ Metrics Aggregator
 Responsible for aggregating results from multiple analyzers into a unified QualityMetrics object.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 import structlog
 

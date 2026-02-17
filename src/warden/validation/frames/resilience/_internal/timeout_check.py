@@ -9,7 +9,6 @@ Detects missing or inadequate timeout configurations on:
 """
 
 import re
-from typing import List
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.check import (

@@ -4,7 +4,7 @@ This module loads custom rules from .warden/rules.yaml files.
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 import yaml

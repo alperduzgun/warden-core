@@ -8,7 +8,7 @@ Designed for resilience, performance, and detailed reporting.
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 from warden.analysis.domain.project_context import ProjectContext
 from warden.ast.domain.enums import CodeLanguage

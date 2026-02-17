@@ -6,7 +6,6 @@ Process files in chunks instead of loading all into RAM.
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import List, Optional
 
 import structlog
 

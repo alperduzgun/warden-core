@@ -8,7 +8,6 @@ Used during `warden init` and `warden refresh` commands.
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
 
 import structlog
 

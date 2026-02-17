@@ -4,7 +4,7 @@ This module defines the core domain models for project-specific validation rules
 All models are Panel-compatible with JSON serialization (camelCase).
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field
 

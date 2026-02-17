@@ -5,7 +5,6 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -116,7 +115,6 @@ def mcp_register():
 
     from warden.mcp.infrastructure.mcp_config_paths import (
         get_mcp_config_paths,
-        is_safe_to_create_dir,
     )
 
     console = Console()

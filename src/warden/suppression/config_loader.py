@@ -10,7 +10,7 @@ Functions:
 """
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -125,7 +125,7 @@ def load_suppression_config(
         for entry_data in data["entries"]:
             # Validate required fields
             if "id" not in entry_data:
-                raise ValueError(f"Missing required field 'id' in suppression entry")
+                raise ValueError("Missing required field 'id' in suppression entry")
 
             if "type" not in entry_data:
                 raise ValueError(f"Missing required field 'type' in suppression entry {entry_data.get('id')}")

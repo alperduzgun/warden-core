@@ -6,7 +6,6 @@ Implementations: STDIOTransport (current), SSETransport (future), WebSocketTrans
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class ITransport(ABC):

@@ -3,7 +3,7 @@ Prompt templates and formatting logic for LLM-based classification.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.analysis.domain.project_context import Framework, ProjectType
 

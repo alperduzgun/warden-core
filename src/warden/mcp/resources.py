@@ -7,7 +7,7 @@ Exposes validation reports, configuration, and status files.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.mcp.protocol import MCPResource, MCPResourceContent
 

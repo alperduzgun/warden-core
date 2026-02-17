@@ -6,7 +6,6 @@ Detects frameworks based on file patterns, imports, and dependencies.
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 from warden.analysis.application.discovery.models import Framework, FrameworkDetectionResult
 

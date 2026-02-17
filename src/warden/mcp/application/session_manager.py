@@ -5,7 +5,6 @@ Manages MCP session lifecycle.
 """
 
 import uuid
-from typing import Optional
 
 from warden.mcp.domain.enums import ServerStatus
 from warden.mcp.domain.models import MCPSession
@@ -61,5 +60,5 @@ class SessionManager:
     def end_session(self) -> None:
         """End current session."""
         if self._current_session is not None:
-            self._current_session.stop_async()
+            self._current_session.stop()
             self._current_session = None

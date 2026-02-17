@@ -7,7 +7,7 @@ Provides type-safe protocol layer for communication between Python backend and I
 import json
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 
 class ErrorCode(IntEnum):

@@ -9,7 +9,7 @@ Detects magic numbers that should be constants:
 Universal multi-language support via tree-sitter AST (uses BaseCleaningAnalyzer helpers).
 """
 
-from typing import Any, List, Optional, Set
+from typing import Any
 
 import structlog
 

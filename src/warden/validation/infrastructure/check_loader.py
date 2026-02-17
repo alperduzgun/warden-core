@@ -10,7 +10,6 @@ Discovers and loads checks from:
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Dict, List, Type
 
 import yaml
 

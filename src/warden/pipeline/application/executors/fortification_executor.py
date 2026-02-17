@@ -4,12 +4,13 @@ Fortification Phase Executor.
 
 import time
 import traceback
-from typing import Any, List
+from typing import Any
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger
-from warden.validation.domain.frame import CodeFile
+from warden.shared.utils.finding_utils import get_finding_attribute
+from warden.validation.domain.frame import CodeFile, Remediation
 
 logger = get_logger(__name__)
 
@@ -58,31 +59,72 @@ class FortificationExecutor(BasePhaseExecutor):
                 rate_limiter=self.rate_limiter,
             )
 
-            # Use findings from context (whether validated or raw)
-            raw_findings = getattr(context, "findings", []) or []
+            # Use validated_issues (FP-filtered) instead of raw findings (Tier 1: Context-Awareness)
+            # ResultAggregator already filters false positives and creates validated_issues
+            raw_findings = getattr(context, "validated_issues", [])
 
-            # Convert objects to dicts expected by FortificationPhase
+            # Fallback to findings if validated_issues not available (shouldn't happen in normal flow)
+            if not raw_findings:
+                raw_findings = getattr(context, "findings", []) or []
+                logger.warning(
+                    "fortification_using_raw_findings",
+                    reason="validated_issues_empty",
+                    findings_count=len(raw_findings),
+                )
+
+            # Convert objects to dicts expected by FortificationPhase (BATCH 1: Type Safety)
+            from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
+
+            # BATCH 3: Track normalization metrics
+            normalization_success = 0
+            normalization_failures = []
+
             validated_issues = []
             for f in raw_findings:
-                # Handle Finding object or dict
-                if hasattr(f, "to_json"):
-                    # Parse location for file path
-                    file_path = f.location.split(":")[0] if f.location else ""
+                try:
+                    # Normalize all findings to dicts (handles both Finding objects and dicts)
+                    normalized = normalize_finding_to_dict(f)
 
-                    # Map Finding object to Fortification Dictionary Contract
+                    # BATCH 3: Validate contract fields
+                    required_fields = ["id", "severity", "message", "file_path"]
+                    missing_fields = [field for field in required_fields if not normalized.get(field)]
+
+                    if missing_fields:
+                        logger.warning(
+                            "finding_missing_fields",
+                            finding_id=normalized.get("id", "unknown"),
+                            missing_fields=missing_fields,
+                        )
+                        normalization_failures.append(normalized.get("id", "unknown"))
+                        continue
+
+                    # Map to Fortification Dictionary Contract
                     issue = {
-                        "id": f.id,
-                        "type": f.id.split("-")[0] if "-" in f.id else "issue",  # Heuristic for type from ID
-                        "severity": f.severity,
-                        "message": f.message,
-                        "detail": f.detail,
-                        "file_path": file_path,
-                        "line_number": f.line,
-                        "code_snippet": f.code,
+                        "id": normalized.get("id", "unknown"),
+                        "type": normalized.get("type", "unknown"),
+                        "severity": normalized.get("severity", "low"),
+                        "message": normalized.get("message", ""),
+                        "detail": normalized.get("message", ""),  # Use message as detail if detail not present
+                        "file_path": normalized.get("file_path", "unknown"),
+                        "line_number": int(normalized.get("location", "unknown:0").split(":")[-1])
+                        if ":" in normalized.get("location", "unknown:0")
+                        else 0,
+                        "code_snippet": normalized.get("code_snippet", ""),
                     }
                     validated_issues.append(issue)
-                elif isinstance(f, dict):
-                    validated_issues.append(f)
+                    normalization_success += 1
+                except Exception as e:
+                    normalization_failures.append(get_finding_attribute(f, "id", "unknown"))
+                    logger.error("finding_normalization_exception", error=str(e))
+
+            # BATCH 3: Log normalization summary
+            if normalization_failures:
+                logger.info(
+                    "fortification_normalization_summary",
+                    success=normalization_success,
+                    failures=len(normalization_failures),
+                    failure_ids=normalization_failures[:5],
+                )
 
             if not validated_issues:
                 logger.info("fortification_skipped", reason="no_findings_to_fortify")
@@ -104,10 +146,25 @@ class FortificationExecutor(BasePhaseExecutor):
             context.security_improvements = result.security_improvements
 
             # Link Fortifications back to Findings for Reporting
-            from warden.validation.domain.frame import Remediation
+            # Create a lookup for findings (BATCH 1: Fix duplicate key overwrite)
+            findings_map = {}
+            for f in context.findings:
+                normalized = normalize_finding_to_dict(f)
+                fid = normalized.get("id", "unknown")
 
-            # Create a lookup for findings
-            findings_map = {f.id: f for f in context.findings}
+                if fid in findings_map:
+                    logger.warning(
+                        "fortification_duplicate_finding_id",
+                        finding_id=fid,
+                        action="overwriting_previous",
+                    )
+
+                findings_map[fid] = normalized
+
+            # BATCH 3: Track fortification linking metrics
+            linked_count = 0
+            unlinked_count = 0
+            unlinked_ids = []
 
             for fort in result.fortifications:
                 # Handle both object and dict (including camelCase from to_json)
@@ -123,6 +180,8 @@ class FortificationExecutor(BasePhaseExecutor):
                     original_code = getattr(fort, "original_code", None)
 
                 if fid and fid in findings_map:
+                    # BATCH 3: Track successful linking
+                    linked_count += 1
                     finding = findings_map[fid]
                     # Create Remediation object (matching dataclass field names)
                     remediation = Remediation(
@@ -149,12 +208,26 @@ class FortificationExecutor(BasePhaseExecutor):
 
                     # Assign to finding
                     finding.remediation = remediation
+                else:
+                    # BATCH 3: Track unlinked fortifications
+                    unlinked_count += 1
+                    unlinked_ids.append(fid)
+                    logger.warning(
+                        "fortification_unlinked",
+                        fortification_id=fid,
+                        reason="finding_not_in_map",
+                    )
 
-            # Add phase result
+            # Add phase result (BATCH 3: Include linking metrics)
+            total_forts = len(result.fortifications)
+            link_success_rate = linked_count / max(1, total_forts) if total_forts > 0 else 0.0
             context.add_phase_result(
                 "FORTIFICATION",
                 {
-                    "fortifications_count": len(result.fortifications),
+                    "fortifications_total": total_forts,
+                    "fortifications_linked": linked_count,
+                    "fortifications_unlinked": unlinked_count,
+                    "link_success_rate": round(link_success_rate, 3),
                     "critical_fixes": len([f for f in result.fortifications if fort_get(f, "severity") == "critical"]),
                     "auto_fixable": len(
                         [f for f in result.fortifications if fort_get(f, "auto_fixable") or fort_get(f, "autoFixable")]

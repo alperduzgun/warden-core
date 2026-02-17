@@ -3,7 +3,7 @@
 import functools
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitState
 from .retry import RetryConfig, with_retry_async

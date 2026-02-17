@@ -6,7 +6,7 @@ import os
 import tempfile
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .html_generator import HtmlReportGenerator
 
@@ -450,8 +450,7 @@ class ReportGenerator:
 
         # Calculate progress circle (circumference = 2 * pi * r)
         # r=16 -> circ ≈ 100
-        progress = (score / 10.0) * 100.0
-        dash_array = f"{progress}, 100"
+        (score / 10.0) * 100.0
 
         # Calculate HMAC Signature (Simple MVP)
         import hashlib

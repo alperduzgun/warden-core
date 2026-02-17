@@ -8,10 +8,10 @@ Follows the pattern established by ISecretProvider and ILlmClient.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, List, Optional, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
-    from typing import Any, Dict
+    from typing import Any
 
     from warden.issues.domain.enums import IssueSeverity, IssueState
     from warden.issues.domain.models import StateTransition, WardenIssue

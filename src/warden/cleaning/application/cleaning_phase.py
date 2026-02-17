@@ -7,7 +7,7 @@ Uses LLM to provide intelligent code cleaning recommendations.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from warden.cleaning.application.llm_suggestion_generator import LLMSuggestionGenerator
 from warden.cleaning.application.pattern_analyzer import PatternAnalyzer
@@ -137,8 +137,66 @@ class CleaningPhase:
         files_for_llm = []
         rule_based_suggestions = {}
 
+        # Get critical files from context (Tier 2: Context-Aware Cleaning)
+        critical_files = set()
+        quality_files = set()
+
+        if hasattr(self.context, "get"):
+            # Dict-style context
+            findings = self.context.get("findings", [])
+            quick_wins = self.context.get("quick_wins", [])
+        else:
+            # Object-style context
+            findings = getattr(self.context, "findings", [])
+            quick_wins = getattr(self.context, "quick_wins", [])
+
+        # Identify files with critical security issues
+        for finding in findings:
+            if isinstance(finding, dict):
+                severity = finding.get("severity", "").lower()
+                location = finding.get("location", "")
+            else:
+                severity = getattr(finding, "severity", "").lower()
+                location = getattr(finding, "location", "")
+
+            if severity in ["critical", "high"] and location:
+                file_path = location.split(":")[0]
+                critical_files.add(file_path)
+
+        # Identify files with quality quick wins
+        for qw in quick_wins:
+            if isinstance(qw, dict):
+                file_path = qw.get("file_path", "")
+            else:
+                file_path = getattr(qw, "file_path", "")
+
+            if file_path:
+                quality_files.add(file_path)
+
+        if critical_files:
+            logger.info(
+                "cleaning_skipping_critical_files",
+                skipped=len(critical_files),
+                reason="security_issues_present",
+            )
+
+        if quality_files:
+            logger.info(
+                "cleaning_prioritizing_quality_files",
+                prioritized=len(quality_files),
+                reason="quality_quick_wins_available",
+            )
+
         # Analyze each file for improvements
         for code_file in code_files:
+            # Skip files with critical security issues (Tier 2: Context-Aware)
+            if code_file.path in critical_files:
+                logger.debug(
+                    "cleaning_skipped_file",
+                    file=code_file.path,
+                    reason="critical_security_issue",
+                )
+                continue
             # Skip non-production files based on context
             file_context = self.context.get("file_contexts", {}).get(code_file.path)
             if file_context:

@@ -5,9 +5,6 @@ Provides the 'warden://setup/guide' resource to teach Agents
 how to conduct an interactive setup interview.
 """
 
-from pathlib import Path
-from typing import List, Optional
-
 from warden.mcp.domain.enums import ResourceType, ToolCategory
 from warden.mcp.domain.models import MCPResourceDefinition, MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter

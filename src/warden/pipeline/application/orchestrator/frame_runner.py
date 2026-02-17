@@ -6,8 +6,9 @@ Handles the execution of individual frames with rules and dependencies.
 
 import asyncio
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 from warden.pipeline.domain.models import FrameResult, PipelineConfig, ValidationPipeline
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -23,6 +24,20 @@ from .rule_executor import RuleExecutor
 from .suppression_filter import SuppressionFilter
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class ContextInjectionMetrics:
+    """Track context injection health."""
+
+    frames_with_pi: int = 0
+    frames_with_findings: int = 0
+    pi_injection_errors: int = 0
+    findings_injection_errors: int = 0
+    total_injection_time_ms: float = 0.0
+
+
+_context_metrics = ContextInjectionMetrics()
 
 
 class FrameRunner:
@@ -115,6 +130,100 @@ class FrameRunner:
         if self.semantic_search_service:
             frame.semantic_search_service = self.semantic_search_service
 
+        # Inject project_intelligence for context-aware analysis (BATCH 2: Validated)
+        # BATCH 3: Add metrics tracking
+        if hasattr(context, "project_intelligence") and context.project_intelligence:
+            pi_start_time = time.perf_counter()
+            try:
+                pi = context.project_intelligence
+
+                # Validate structure before injecting
+                if not isinstance(pi, object):
+                    logger.warning(
+                        "project_intelligence_wrong_type",
+                        frame_id=frame.frame_id,
+                        type=type(pi).__name__,
+                        action="skipped_injection",
+                    )
+                    _context_metrics.pi_injection_errors += 1
+                elif (
+                    not hasattr(pi, "entry_points")
+                    or not hasattr(pi, "auth_patterns")
+                    or not hasattr(pi, "critical_sinks")
+                ):
+                    logger.warning(
+                        "project_intelligence_incomplete",
+                        frame_id=frame.frame_id,
+                        has_entry_points=hasattr(pi, "entry_points"),
+                        has_auth_patterns=hasattr(pi, "auth_patterns"),
+                        has_critical_sinks=hasattr(pi, "critical_sinks"),
+                        action="injected_anyway",
+                    )
+                    # Still inject it - frames can handle incomplete data
+                    frame.project_intelligence = context.project_intelligence
+                    _context_metrics.frames_with_pi += 1
+                    injection_time_ms = (time.perf_counter() - pi_start_time) * 1000
+                    _context_metrics.total_injection_time_ms += injection_time_ms
+                    logger.debug(
+                        "project_intelligence_injected",
+                        frame_id=frame.frame_id,
+                        has_entry_points=hasattr(pi, "entry_points"),
+                        has_auth_patterns=hasattr(pi, "auth_patterns"),
+                        injection_time_ms=injection_time_ms,
+                    )
+                else:
+                    # Valid - inject it
+                    frame.project_intelligence = context.project_intelligence
+                    _context_metrics.frames_with_pi += 1
+                    injection_time_ms = (time.perf_counter() - pi_start_time) * 1000
+                    _context_metrics.total_injection_time_ms += injection_time_ms
+                    logger.debug(
+                        "project_intelligence_injected",
+                        frame_id=frame.frame_id,
+                        has_entry_points=bool(getattr(pi, "entry_points", [])),
+                        has_auth_patterns=bool(getattr(pi, "auth_patterns", [])),
+                        injection_time_ms=injection_time_ms,
+                    )
+            except Exception as e:
+                _context_metrics.pi_injection_errors += 1
+                injection_time_ms = (time.perf_counter() - pi_start_time) * 1000
+                _context_metrics.total_injection_time_ms += injection_time_ms
+                logger.error(
+                    "project_intelligence_injection_failed",
+                    frame_id=frame.frame_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    injection_time_ms=injection_time_ms,
+                    action="frame_continues_without_context",
+                )
+
+        # Inject prior findings for cross-frame awareness (Tier 1: Context-Awareness)
+        # BATCH 3: Add metrics tracking
+        if hasattr(context, "findings") and context.findings:
+            findings_start_time = time.perf_counter()
+            try:
+                frame.prior_findings = context.findings
+                _context_metrics.frames_with_findings += 1
+                injection_time_ms = (time.perf_counter() - findings_start_time) * 1000
+                _context_metrics.total_injection_time_ms += injection_time_ms
+                logger.debug(
+                    "prior_findings_injected",
+                    frame_id=frame.frame_id,
+                    findings_count=len(context.findings),
+                    injection_time_ms=injection_time_ms,
+                )
+            except Exception as e:
+                _context_metrics.findings_injection_errors += 1
+                injection_time_ms = (time.perf_counter() - findings_start_time) * 1000
+                _context_metrics.total_injection_time_ms += injection_time_ms
+                logger.error(
+                    "prior_findings_injection_failed",
+                    frame_id=frame.frame_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    injection_time_ms=injection_time_ms,
+                )
+
         if isinstance(frame, ProjectContextAware):
             project_context = getattr(context, "project_type", None)
             if project_context and hasattr(project_context, "service_abstractions"):
@@ -187,7 +296,8 @@ class FrameRunner:
                         return None
 
                     try:
-                        result = await frame.execute_async(c_file)
+                        # Pass context to frames that opt-in (Tier 2: Context-Awareness)
+                        result = await frame.execute_async(c_file, context=context)
 
                         if self.progress_callback:
                             self.progress_callback(
@@ -406,6 +516,20 @@ class FrameRunner:
             "pre_violations": pre_violations,
             "post_violations": post_violations,
         }
+
+        # BATCH 3: Log context injection summary
+        total_injections = _context_metrics.frames_with_pi + _context_metrics.frames_with_findings
+        if total_injections > 0:
+            total_errors = _context_metrics.pi_injection_errors + _context_metrics.findings_injection_errors
+            avg_time_ms = _context_metrics.total_injection_time_ms / max(1, total_injections)
+            logger.info(
+                "context_injection_summary",
+                frames_with_pi=_context_metrics.frames_with_pi,
+                frames_with_findings=_context_metrics.frames_with_findings,
+                total_errors=total_errors,
+                avg_injection_time_ms=round(avg_time_ms, 2),
+                total_injection_time_ms=round(_context_metrics.total_injection_time_ms, 2),
+            )
 
         if self.progress_callback:
             self.progress_callback(

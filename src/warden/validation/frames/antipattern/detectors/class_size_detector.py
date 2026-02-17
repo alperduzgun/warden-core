@@ -7,7 +7,6 @@ Detects class/file size anti-patterns:
 """
 
 import ast
-from typing import List
 
 from warden.ast.domain.enums import ASTNodeType, CodeLanguage
 from warden.ast.domain.models import ASTNode

@@ -11,7 +11,6 @@ Adheres to Chaos Engineering principles:
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Optional
 
 from warden.shared.infrastructure.logging import get_logger
 
