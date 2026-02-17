@@ -7,7 +7,7 @@ Usage:
     from . import ResilienceFrame
 
     frame = ResilienceFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 """
 
 from ..resilience_frame import ResilienceFrame

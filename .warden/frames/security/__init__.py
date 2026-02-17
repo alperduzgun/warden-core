@@ -16,7 +16,7 @@ Usage:
     from . import SecurityFrame
 
     frame = SecurityFrame()
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 """
 
 from ..security_frame import SecurityFrame

@@ -78,7 +78,7 @@ class DemoSecurityFrame(ValidationFrame):
             file_size=code_file.size_bytes,
         )
 
-        lines = code_file.content.split('\n')
+        lines = code_file.content.split("\n")
 
         # Check 1: Hardcoded passwords (if enabled)
         if self.check_passwords:
@@ -118,23 +118,25 @@ class DemoSecurityFrame(ValidationFrame):
             # Check for password patterns
             for pattern in self.password_patterns:
                 if re.search(rf'{pattern}\s*=\s*["\']', line, re.IGNORECASE):
-                    findings.append(Finding(
-                        id=f"{self.frame_id}-password-{i}",
-                        severity=self.severity_level,
-                        message="Potential hardcoded password detected",
-                        location=f"{file_path}:{i}",
-                        detail=(
-                            f"Found password pattern: '{pattern}'\n"
-                            "\n"
-                            "Why this is a problem:\n"
-                            "- Hardcoded credentials are a security risk\n"
-                            "- Credentials should be in environment variables\n"
-                            "\n"
-                            "Fix:\n"
-                            "  password = os.getenv('PASSWORD')\n"
-                        ),
-                        code=line.strip(),
-                    ))
+                    findings.append(
+                        Finding(
+                            id=f"{self.frame_id}-password-{i}",
+                            severity=self.severity_level,
+                            message="Potential hardcoded password detected",
+                            location=f"{file_path}:{i}",
+                            detail=(
+                                f"Found password pattern: '{pattern}'\n"
+                                "\n"
+                                "Why this is a problem:\n"
+                                "- Hardcoded credentials are a security risk\n"
+                                "- Credentials should be in environment variables\n"
+                                "\n"
+                                "Fix:\n"
+                                "  password = os.getenv('PASSWORD')\n"
+                            ),
+                            code=line.strip(),
+                        )
+                    )
 
         return findings
 
@@ -146,23 +148,25 @@ class DemoSecurityFrame(ValidationFrame):
 
         for i, line in enumerate(lines, 1):
             if sql_pattern.search(line):
-                findings.append(Finding(
-                    id=f"{self.frame_id}-sql-{i}",
-                    severity=self.severity_level,
-                    message="Potential SQL injection vulnerability",
-                    location=f"{file_path}:{i}",
-                    detail=(
-                        "SQL query uses string formatting or f-strings\n"
-                        "\n"
-                        "Why this is a problem:\n"
-                        "- String interpolation can lead to SQL injection\n"
-                        "- User input can manipulate the query\n"
-                        "\n"
-                        "Fix:\n"
-                        "  query = 'SELECT * FROM users WHERE id = ?'\n"
-                        "  cursor.execute(query, (user_id,))\n"
-                    ),
-                    code=line.strip(),
-                ))
+                findings.append(
+                    Finding(
+                        id=f"{self.frame_id}-sql-{i}",
+                        severity=self.severity_level,
+                        message="Potential SQL injection vulnerability",
+                        location=f"{file_path}:{i}",
+                        detail=(
+                            "SQL query uses string formatting or f-strings\n"
+                            "\n"
+                            "Why this is a problem:\n"
+                            "- String interpolation can lead to SQL injection\n"
+                            "- User input can manipulate the query\n"
+                            "\n"
+                            "Fix:\n"
+                            "  query = 'SELECT * FROM users WHERE id = ?'\n"
+                            "  cursor.execute(query, (user_id,))\n"
+                        ),
+                        code=line.strip(),
+                    )
+                )
 
         return findings

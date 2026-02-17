@@ -53,7 +53,7 @@ class XSSCheck(ValidationCheck):
         (r"<[^>]*>\$\{", "Template literal in HTML (potential XSS)"),
     ]
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute XSS detection."""
         findings: List[CheckFinding] = []
 

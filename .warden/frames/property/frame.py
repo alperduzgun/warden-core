@@ -62,31 +62,31 @@ class PropertyFrame(ValidationFrame):
     # Property check patterns
     PATTERNS = {
         "missing_precondition": {
-            "pattern": r'def\s+\w+\s*\([^)]+\):|function\s+\w+\s*\([^)]+\)\s*{',
+            "pattern": r"def\s+\w+\s*\([^)]+\):|function\s+\w+\s*\([^)]+\)\s*{",
             "severity": "high",
             "message": "Function may be missing input validation (precondition)",
             "suggestion": "Add parameter validation at function start",
         },
         "state_change_no_validation": {
-            "pattern": r'self\.\w+\s*=|this\.\w+\s*=',
+            "pattern": r"self\.\w+\s*=|this\.\w+\s*=",
             "severity": "medium",
             "message": "State change without validation",
             "suggestion": "Validate state transitions to maintain invariants",
         },
         "division_no_zero_check": {
-            "pattern": r'\/\s*\w+(?!\s*(?:if|&&|\|\||\?|assert))',
+            "pattern": r"\/\s*\w+(?!\s*(?:if|&&|\|\||\?|assert))",
             "severity": "high",
             "message": "Division operation without zero check",
             "suggestion": "Check divisor is not zero before division",
         },
         "comparison_always_true": {
-            "pattern": r'if\s+true|if\s+True|while\s+true|while\s+True',
+            "pattern": r"if\s+true|if\s+True|while\s+true|while\s+True",
             "severity": "low",
             "message": "Always-true condition detected",
             "suggestion": "Review logic - condition always evaluates to true",
         },
         "negative_index_possible": {
-            "pattern": r'\[\s*-?\w+\s*-\s*\w+\s*\]',
+            "pattern": r"\[\s*-?\w+\s*-\s*\w+\s*\]",
             "severity": "medium",
             "message": "Array access with possible negative index",
             "suggestion": "Ensure index is non-negative",
@@ -125,35 +125,35 @@ Output must be a valid JSON object with the following structure:
         """
         Execute property testing on multiple files using chunked LLM calls.
         """
-        if not hasattr(self, 'llm_service') or not self.llm_service:
+        if not hasattr(self, "llm_service") or not self.llm_service:
             # Fallback to default serial execution for local checks
             return await super().execute_batch(code_files)
 
         logger.info("property_frame_batch_execution_started", file_count=len(code_files))
-        
+
         # 1. Run local checks for all files first
         all_results = []
-        
+
         # 2. Chunk files for LLM analysis (e.g., 5 files per chunk to stay safe with token limits)
         chunk_size = self.config.get("batch_size", 5)
         for i in range(0, len(code_files), chunk_size):
-            chunk = code_files[i:i + chunk_size]
-            
+            chunk = code_files[i : i + chunk_size]
+
             # Run local checks for this chunk
             for code_file in chunk:
                 # We still call execute() per file but we can skip the LLM part in execute
                 # and call it here in batch for the chunk.
                 # However, to keep it simple and compatible, we'll just use the serial
                 # default and maybe implement a "BatchLlmAnalyzer" later.
-                
-                # FOR NOW: Let's just fix the bugs and keep it serial to avoid overengineering 
+
+                # FOR NOW: Let's just fix the bugs and keep it serial to avoid overengineering
                 # unless a clear batch LLM prompt is designed.
-                result = await self.execute(code_file)
+                result = await self.execute_async(code_file)
                 all_results.append(result)
-                
+
         return all_results
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute property testing checks on code file.
 
@@ -187,10 +187,9 @@ Output must be a valid JSON object with the following structure:
             findings.extend(pattern_findings)
 
         # Run LLM analysis if available
-        if hasattr(self, 'llm_service') and self.llm_service:
+        if hasattr(self, "llm_service") and self.llm_service:
             llm_findings = await self._analyze_with_llm(code_file)
             findings.extend(llm_findings)
-
 
         # Check for assertion usage (good practice)
         assertion_findings = self._check_assertions(code_file)
@@ -312,8 +311,8 @@ Output must be a valid JSON object with the following structure:
         findings: List[Finding] = []
 
         # Count assertions vs functions
-        assertion_pattern = r'\bassert\b|Assert\.|assertThat'
-        function_pattern = r'def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\('
+        assertion_pattern = r"\bassert\b|Assert\.|assertThat"
+        function_pattern = r"def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\("
 
         assertion_count = len(re.findall(assertion_pattern, code_file.content))
         function_count = len(re.findall(function_pattern, code_file.content))
@@ -362,53 +361,53 @@ Output must be a valid JSON object with the following structure:
         findings: List[Finding] = []
         try:
             logger.info("property_llm_analysis_started", file=code_file.path)
-            
+
             client: ILlmClient = self.llm_service
-            
+
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
                 user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
-                temperature=0.1
+                temperature=0.1,
             )
-            
+
             response = await client.send_async(request)
-            
+
             if response.success and response.content:
                 # Parse JSON response
                 import json
-                
+
                 # Handle markdown code blocks if present
                 content = response.content
                 if "```json" in content:
                     content = content.split("```json")[1].split("```")[0].strip()
                 elif "```" in content:
                     content = content.split("```")[0].strip()
-                
+
                 try:
                     # Parse result with Pydantic
                     data = json.loads(content)
                     result = AnalysisResult.from_json(data)
-                    
+
                     for issue in result.issues:
-                        findings.append(Finding(
-                            id=f"{self.frame_id}-llm-{issue.line}",
-                            severity=issue.severity,
-                            message=issue.title,
-                            location=f"{code_file.path}:{issue.line}",
-                            detail=issue.description,
-                            code=issue.evidence_quote
-                        ))
-                    
-                    logger.info("property_llm_analysis_completed", 
-                              findings=len(findings), 
-                              confidence=result.confidence)
-                              
+                        findings.append(
+                            Finding(
+                                id=f"{self.frame_id}-llm-{issue.line}",
+                                severity=issue.severity,
+                                message=issue.title,
+                                location=f"{code_file.path}:{issue.line}",
+                                detail=issue.description,
+                                code=issue.evidence_quote,
+                            )
+                        )
+
+                    logger.info("property_llm_analysis_completed", findings=len(findings), confidence=result.confidence)
+
                 except Exception as e:
                     logger.warning("property_llm_parsing_failed", error=str(e), content_preview=content[:100])
             else:
-                 logger.warning("property_llm_request_failed", error=response.error_message)
+                logger.warning("property_llm_request_failed", error=response.error_message)
 
         except Exception as e:
             logger.error("property_llm_error", error=str(e))
-            
+
         return findings

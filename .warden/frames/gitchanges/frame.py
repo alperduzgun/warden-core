@@ -90,7 +90,7 @@ class GitChangesFrame(ValidationFrame):
         # Parser
         self.diff_parser = GitDiffParser()
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute git changes analysis on code file.
 
@@ -253,9 +253,7 @@ class GitChangesFrame(ValidationFrame):
 
         return result.stdout
 
-    def _analyze_changed_lines(
-        self, code_file: CodeFile, file_diff: FileDiff
-    ) -> List[Finding]:
+    def _analyze_changed_lines(self, code_file: CodeFile, file_diff: FileDiff) -> List[Finding]:
         """
         Analyze changed lines and generate findings.
 
@@ -318,9 +316,7 @@ class GitChangesFrame(ValidationFrame):
 
         return findings
 
-    def _create_summary_detail(
-        self, file_diff: FileDiff, added_lines: Set[int]
-    ) -> str:
+    def _create_summary_detail(self, file_diff: FileDiff, added_lines: Set[int]) -> str:
         """
         Create detailed summary of changes.
 

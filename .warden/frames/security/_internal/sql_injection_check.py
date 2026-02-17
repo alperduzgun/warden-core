@@ -87,7 +87,7 @@ class SQLInjectionCheck(ValidationCheck):
             (pattern, "Custom SQL injection pattern") for pattern in custom_patterns
         ]
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """
         Execute SQL injection detection.
 

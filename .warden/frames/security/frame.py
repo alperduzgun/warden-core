@@ -79,12 +79,12 @@ class SecurityFrame(ValidationFrame):
         """Register built-in security checks."""
         import sys
         from pathlib import Path
-        
+
         # Add current directory to path to allow imports from _internal
         current_dir = str(Path(__file__).parent)
         if current_dir not in sys.path:
             sys.path.append(current_dir)
-            
+
         try:
             from _internal.sql_injection_check import SQLInjectionCheck
             from _internal.xss_check import XSSCheck
@@ -100,9 +100,7 @@ class SecurityFrame(ValidationFrame):
         self.checks.register(SQLInjectionCheck(self.config.get("sql_injection", {})))
         self.checks.register(XSSCheck(self.config.get("xss", {})))
         self.checks.register(SecretsCheck(self.config.get("secrets", {})))
-        self.checks.register(
-            HardcodedPasswordCheck(self.config.get("hardcoded_password", {}))
-        )
+        self.checks.register(HardcodedPasswordCheck(self.config.get("hardcoded_password", {})))
 
         logger.info(
             "builtin_checks_registered",
@@ -119,7 +117,8 @@ class SecurityFrame(ValidationFrame):
             try:
                 # Get check-specific config from frame config
                 check_config = self.config.get("checks", {}).get(
-                    check_class.id, {}  # type: ignore[attr-defined]
+                    check_class.id,
+                    {},  # type: ignore[attr-defined]
                 )
                 check_instance = check_class(config=check_config)
                 self.checks.register(check_instance)
@@ -133,11 +132,11 @@ class SecurityFrame(ValidationFrame):
                 logger.error(
                     "community_check_registration_failed",
                     frame=self.name,
-                    check=check_class.__name__ if hasattr(check_class, '__name__') else "unknown",
+                    check=check_class.__name__ if hasattr(check_class, "__name__") else "unknown",
                     error=str(e),
                 )
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute all security checks on code file.
 
@@ -172,7 +171,7 @@ class SecurityFrame(ValidationFrame):
                     file_path=code_file.path,
                 )
 
-                result = await check.execute(code_file)
+                result = await check.execute_async(code_file)
                 check_results.append(result)
 
                 logger.debug(
@@ -193,17 +192,20 @@ class SecurityFrame(ValidationFrame):
                 # Continue with other checks even if one fails
 
         # AI-Powered Security Verification (Real Implementation)
-        if hasattr(self, 'llm_service') and self.llm_service:
+        if hasattr(self, "llm_service") and self.llm_service:
             try:
                 logger.info("executing_llm_security_check", file=code_file.path)
-                
+
                 # Get Cross-File Context via Semantic Search
                 semantic_context = ""
-                if hasattr(self, 'semantic_search_service') and self.semantic_search_service and self.semantic_search_service.is_available():
+                if (
+                    hasattr(self, "semantic_search_service")
+                    and self.semantic_search_service
+                    and self.semantic_search_service.is_available()
+                ):
                     try:
                         search_results = await self.semantic_search_service.search(
-                            query=f"Security sensitive logic related to {code_file.path}",
-                            limit=3
+                            query=f"Security sensitive logic related to {code_file.path}", limit=3
                         )
                         if search_results:
                             semantic_context = "\n[Semantic Context from other files]:\n"
@@ -213,49 +215,51 @@ class SecurityFrame(ValidationFrame):
                     except Exception as e:
                         logger.warning("security_semantic_search_failed", error=str(e))
 
-                
                 # Use the shared JSON parsing utility (which we will create next) or a robust method
                 # for now using a direct call pattern assuming service has structured output or we parse it
                 response = await self.llm_service.analyze_security_async(
-                    code_file.content + semantic_context, 
-                    code_file.language
+                    code_file.content + semantic_context, code_file.language
                 )
-                logger.info("llm_security_response_received", response_count=len(response.get('findings', [])) if response else 0)
-                
-                if response and isinstance(response, dict) and 'findings' in response:
+                logger.info(
+                    "llm_security_response_received",
+                    response_count=len(response.get("findings", [])) if response else 0,
+                )
+
+                if response and isinstance(response, dict) and "findings" in response:
                     from warden.validation.domain.check import CheckFinding, CheckSeverity
+
                     llm_findings = []
-                    for f in response['findings']:
+                    for f in response["findings"]:
                         severity_map = {
-                            'critical': CheckSeverity.CRITICAL,
-                            'high': CheckSeverity.HIGH,
-                            'medium': CheckSeverity.MEDIUM,
-                            'low': CheckSeverity.LOW
+                            "critical": CheckSeverity.CRITICAL,
+                            "high": CheckSeverity.HIGH,
+                            "medium": CheckSeverity.MEDIUM,
+                            "low": CheckSeverity.LOW,
                         }
-                        sev = f.get('severity', 'medium').lower()
+                        sev = f.get("severity", "medium").lower()
                         ai_finding = CheckFinding(
                             check_id="llm-security",
                             check_name="AI Security Analysis",
                             severity=severity_map.get(sev, CheckSeverity.MEDIUM),
-                            message=f.get('message', 'Potential issue detected'),
+                            message=f.get("message", "Potential issue detected"),
                             location=f"{code_file.path}:{f.get('line_number', 1)}",
-                            suggestion=f.get('detail', 'AI identified a potential vulnerability.'),
-                            code_snippet=None
+                            suggestion=f.get("detail", "AI identified a potential vulnerability."),
+                            code_snippet=None,
                         )
                         llm_findings.append(ai_finding)
-                    
+
                     if llm_findings:
                         llm_result = CheckResult(
                             check_id="llm-security-check",
                             check_name="LLM Enhanced Security Analysis",
                             passed=False,
-                            findings=llm_findings
+                            findings=llm_findings,
                         )
                         check_results.append(llm_result)
 
             except (AttributeError, RuntimeError) as e:
                 logger.error("llm_security_check_failed", error=str(e))
-        
+
         all_findings = self._aggregate_findings(check_results)
 
         # Determine frame status

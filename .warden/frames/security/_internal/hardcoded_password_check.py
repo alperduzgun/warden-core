@@ -101,7 +101,7 @@ class HardcodedPasswordCheck(ValidationCheck):
 
         return patterns
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute hardcoded password detection."""
         findings: List[CheckFinding] = []
 
@@ -235,4 +235,4 @@ class HardcodedPasswordCheck(ValidationCheck):
     def _mask_password(self, line: str) -> str:
         """Mask passwords in line for display."""
         # Mask quoted strings that look like passwords
-        return re.sub(r'(["\'])([^"\']{3,})(["\'])', r'\1***REDACTED***\3', line)
+        return re.sub(r'(["\'])([^"\']{3,})(["\'])', r"\1***REDACTED***\3", line)

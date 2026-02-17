@@ -78,9 +78,7 @@ class SecretsCheck(ValidationCheck):
 
         # Load custom patterns from config
         custom_patterns = self.config.get("custom_patterns", [])
-        self.patterns = self.SECRET_PATTERNS + [
-            (pattern, "Custom secret pattern") for pattern in custom_patterns
-        ]
+        self.patterns = self.SECRET_PATTERNS + [(pattern, "Custom secret pattern") for pattern in custom_patterns]
 
         # Exclusions (environment variable usage is OK)
         self.allowed_patterns = self.config.get(
@@ -94,7 +92,7 @@ class SecretsCheck(ValidationCheck):
             ],
         )
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute secrets detection."""
         findings: List[CheckFinding] = []
 
