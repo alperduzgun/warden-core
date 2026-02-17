@@ -136,16 +136,16 @@ class LLMOrphanFilter:
             self.llm = llm_service
         else:
             self.llm = create_client(llm_config)
-            
+
         self.semantic_search_service = semantic_search_service
         self.batch_size = batch_size
         self.max_retries = max_retries
-        
+
         # Pattern decision cache: stores LLM decisions by pattern key
         # Key: (orphan_type, reason_pattern) -> Value: (is_true_orphan, reasoning)
         # When LLM decides a pattern is false positive, we cache it to avoid redundant calls
         self._pattern_cache: Dict[str, tuple[bool, str]] = {}
-        
+
         # Persistence
         self._cache_file = Path(".warden/memory/orphan_patterns.json")
         self._load_cache()
@@ -155,7 +155,7 @@ class LLMOrphanFilter:
             batch_size=batch_size,
             max_retries=max_retries,
             injected_service=llm_service is not None,
-            cached_patterns=len(self._pattern_cache)
+            cached_patterns=len(self._pattern_cache),
         )
 
     def _load_cache(self):
@@ -206,22 +206,17 @@ class LLMOrphanFilter:
         if not is_true_orphan:
             self._pattern_cache[key] = (is_true_orphan, reasoning)
             self._save_cache()  # Persist immediately
-            logger.debug(
-                "pattern_cached",
-                key=key,
-                is_true_orphan=is_true_orphan,
-                cache_size=len(self._pattern_cache)
-            )
+            logger.debug("pattern_cached", key=key, is_true_orphan=is_true_orphan, cache_size=len(self._pattern_cache))
 
     async def filter_findings_batch(
         self,
-        findings_map: Dict[str, List[OrphanFinding]], # file_path -> findings
+        findings_map: Dict[str, List[OrphanFinding]],  # file_path -> findings
         code_files: Dict[str, CodeFile],
         project_context: Optional[Any] = None,
     ) -> Dict[str, List[OrphanFinding]]:
         """
         Filter findings for multiple files in efficient batches.
-        
+
         This method groups findings from all files, batches them by token/count limit,
         processes them via LLM, and redistributes results back to files.
         """
@@ -229,37 +224,33 @@ class LLMOrphanFilter:
             return {}
 
         start_time = time.perf_counter()
-        
+
         # 1. Flatten all findings
-        all_flattened: List[tuple[str, OrphanFinding]] = [] # (file_path, finding)
+        all_flattened: List[tuple[str, OrphanFinding]] = []  # (file_path, finding)
         total_findings = 0
-        
+
         for f_path, f_list in findings_map.items():
             for finding in f_list:
                 all_flattened.append((f_path, finding))
             total_findings += len(f_list)
-            
-        logger.info(
-            "llm_batch_filter_started", 
-            total_files=len(findings_map), 
-            total_findings=total_findings
-        )
-        
+
+        logger.info("llm_batch_filter_started", total_files=len(findings_map), total_findings=total_findings)
+
         # 2. Check cache & Create batches
         batch_size = self.batch_size
         batches = []
         current_batch = []
-        
+
         # Track pre-decided findings (from cache)
         # f_path -> list of findings that are CONFIRMED true orphans by cache
         cached_results: Dict[str, List[OrphanFinding]] = {path: [] for path in findings_map.keys()}
-        
+
         skipped_count = 0
         cached_count = 0
 
         for item in all_flattened:
             f_path, finding = item
-            
+
             # Check pattern cache first
             cached_decision = self._check_pattern_cache(finding, f_path)
             if cached_decision:
@@ -267,7 +258,7 @@ class LLMOrphanFilter:
                 is_true_orphan, reasoning = cached_decision
                 if is_true_orphan:
                     # It's a true orphan according to cache, keep it
-                    # (But usually we only cache false positives to skip them. 
+                    # (But usually we only cache false positives to skip them.
                     # If we cache true orphans too, we add them here.)
                     cached_results[f_path].append(finding)
                 else:
@@ -281,37 +272,33 @@ class LLMOrphanFilter:
             if len(current_batch) >= batch_size:
                 batches.append(current_batch)
                 current_batch = []
-        
+
         # Add remaining items
         if current_batch:
             batches.append(current_batch)
-            
+
         logger.info(
-            "smart_filter_optimization", 
+            "smart_filter_optimization",
             total_items=len(all_flattened),
             cached_hits=cached_count,
             skipped_false_positives=skipped_count,
-            items_to_process=sum(len(b) for b in batches)
+            items_to_process=sum(len(b) for b in batches),
         )
-        
+
         # 3. Process batches
         results_map: Dict[str, List[OrphanFinding]] = cached_results
-        
+
         for i, batch in enumerate(batches):
-            logger.info("processing_smart_batch", index=i+1, total=len(batches), items=len(batch))
-            
+            logger.info("processing_smart_batch", index=i + 1, total=len(batches), items=len(batch))
+
             try:
                 # Process via LLM
-                batch_results = await self._filter_multi_file_batch(
-                    batch, 
-                    code_files,
-                    project_context
-                )
-                
+                batch_results = await self._filter_multi_file_batch(batch, code_files, project_context)
+
                 # Redistribute results & update cache
                 # Note: filter_multi_file_batch returns only TRUE orphans
                 # We need to know which ones were dropped to cache them as false positives.
-                
+
                 # Create a set of kept finding IDs (or objects)
                 kept_findings = set()
                 for f_path, finding in batch_results:
@@ -324,10 +311,10 @@ class LLMOrphanFilter:
                         # This finding was filtered out -> FALSE POSITIVE
                         # Cache this pattern so we skip it next time
                         self._cache_pattern_decision(
-                            finding, 
+                            finding,
                             f_path,
-                            is_true_orphan=False, 
-                            reasoning="Marked as false positive by LLM batch filter"
+                            is_true_orphan=False,
+                            reasoning="Marked as false positive by LLM batch filter",
                         )
 
             except Exception as e:
@@ -335,7 +322,7 @@ class LLMOrphanFilter:
                 # Fallback: keep all as potential orphans (conservative)
                 for f_path, finding in batch:
                     results_map[f_path].append(finding)
-                    
+
         return results_map
 
     async def _filter_multi_file_batch(
@@ -363,23 +350,23 @@ class LLMOrphanFilter:
 
         # Construct prompt
         prompt = self._build_multi_file_prompt(batch, code_files, project_context)
-        
+
         # Send to LLM with semantic context
         response = await self._call_llm(
-            code="", # No single code file
+            code="",  # No single code file
             prompt=prompt + (f"\n# SEMANTIC CONTEXT\n{semantic_context}" if semantic_context else ""),
-            language="mixed"
+            language="mixed",
         )
-        
+
         # Parse
         decisions = self._parse_llm_response(response.content, len(batch))
-        
+
         # Filter
         true_orphans = []
         for (f_path, finding), decision in zip(batch, decisions):
             if decision.is_true_orphan:
                 true_orphans.append((f_path, finding))
-                
+
         return true_orphans
 
     def _build_multi_file_prompt(
@@ -391,21 +378,21 @@ class LLMOrphanFilter:
         # Build project context string
         context_str = "Type: Unknown Generic Project"
         project_rules = "- Interface/Abstractions are NOT orphans\n- Framework hooks/decorators are NOT orphans"
-        
+
         if project_context:
             try:
                 # Robust extraction from Pydantic model or similar object
-                name = getattr(project_context, 'project_name', 'Unknown')
-                p_type = getattr(project_context, 'project_type', None)
-                framework = getattr(project_context, 'framework', None)
-                arch = getattr(project_context, 'architecture', None)
-                purpose = getattr(project_context, 'purpose', 'No specific purpose defined')
-                
+                name = getattr(project_context, "project_name", "Unknown")
+                p_type = getattr(project_context, "project_type", None)
+                framework = getattr(project_context, "framework", None)
+                arch = getattr(project_context, "architecture", None)
+                purpose = getattr(project_context, "purpose", "No specific purpose defined")
+
                 # Convert Enums to string if needed
-                p_type_str = p_type.value if hasattr(p_type, 'value') else str(p_type)
-                fw_str = framework.value if hasattr(framework, 'value') else str(framework)
-                arch_str = arch.value if hasattr(arch, 'value') else str(arch)
-                
+                p_type_str = p_type.value if hasattr(p_type, "value") else str(p_type)
+                fw_str = framework.value if hasattr(framework, "value") else str(framework)
+                arch_str = arch.value if hasattr(arch, "value") else str(arch)
+
                 context_str = (
                     f"Project: {name}\n"
                     f"Type: {p_type_str.upper()}\n"
@@ -413,16 +400,22 @@ class LLMOrphanFilter:
                     f"Architecture: {arch_str}\n"
                     f"Purpose: {purpose}\n"
                 )
-                
+
                 # Dynamic Rule Generation Phase
                 rules = []
-                
+
                 # 1. Project Type Rules
                 if "library" in p_type_str.lower() or "monorepo" in p_type_str.lower():
-                    rules.append("LIBRARY/SDK DETECTED: Assume public classes/functions are EXTERNAL APIs (Not orphans).")
+                    rules.append(
+                        "LIBRARY/SDK DETECTED: Assume public classes/functions are EXTERNAL APIs (Not orphans)."
+                    )
                 elif "cli" in p_type_str.lower():
-                    rules.append("CLI TOOL STRICT MODE: The ONLY public entry points are functions decorated as commands (e.g. @click.command).")
-                    rules.append("ANY other public function that is unused by commands is DEAD CODE (TRUE ORPHAN). Do not assume external usage.")
+                    rules.append(
+                        "CLI TOOL STRICT MODE: The ONLY public entry points are functions decorated as commands (e.g. @click.command)."
+                    )
+                    rules.append(
+                        "ANY other public function that is unused by commands is DEAD CODE (TRUE ORPHAN). Do not assume external usage."
+                    )
                 elif "microservice" in p_type_str.lower() or "api" in p_type_str.lower():
                     rules.append("WEB SERVICE DETECTED: Controller endpoints / Route handlers are entry points.")
                     rules.append("Service layer methods not called by controllers or other services ARE orphans.")
@@ -432,13 +425,15 @@ class LLMOrphanFilter:
                 # 2. Framework Rules
                 if "django" in fw_str.lower() or "flask" in fw_str.lower() or "fastapi" in fw_str.lower():
                     rules.append(f"{fw_str.upper()} DETECTED: Views/Models/Serializers are often implicitly used.")
-                
+
                 # 3. Architecture Rules
                 if "clean" in arch_str.lower():
-                    rules.append("CLEAN ARCHITECTURE: Domain entities and use-cases might be defined but awaiting implementation.")
-                    
+                    rules.append(
+                        "CLEAN ARCHITECTURE: Domain entities and use-cases might be defined but awaiting implementation."
+                    )
+
                 project_rules = "\n".join([f"- {r}" for r in rules])
-                
+
             except Exception as e:
                 logger.warning("context_extraction_failed", error=str(e))
                 context_str = f"Context Error: {str(e)}"
@@ -453,7 +448,7 @@ class LLMOrphanFilter:
                 f"  - Code:\n```\n{finding.code_snippet}\n```\n"
                 f"  - Reason: {finding.reason}\n\n"
             )
-            
+
         prompt = f"""You are an expert code analyzer.
         
         # PROJECT CONTEXT
@@ -532,9 +527,7 @@ class LLMOrphanFilter:
 
             try:
                 # Filter batch using LLM
-                filtered_batch = await self._filter_batch(
-                    batch, code_file, language
-                )
+                filtered_batch = await self._filter_batch(batch, code_file, language)
 
                 true_orphans.extend(filtered_batch)
                 total_decisions += len(batch)
@@ -599,11 +592,7 @@ class LLMOrphanFilter:
                 decisions = self._parse_llm_response(response.content, len(batch))
 
                 # Filter based on LLM decisions
-                true_orphans = [
-                    finding
-                    for finding, decision in zip(batch, decisions)
-                    if decision.is_true_orphan
-                ]
+                true_orphans = [finding for finding, decision in zip(batch, decisions) if decision.is_true_orphan]
 
                 # Log filtering stats
                 filtered_count = len(batch) - len(true_orphans)
@@ -867,9 +856,7 @@ Now analyze the findings and return the JSON.
 
             # Validate count
             if len(decisions_data) != expected_count:
-                raise ValueError(
-                    f"Expected {expected_count} decisions, got {len(decisions_data)}"
-                )
+                raise ValueError(f"Expected {expected_count} decisions, got {len(decisions_data)}")
 
             # Convert to FilterDecision objects
             decisions = []
@@ -956,7 +943,7 @@ Now analyze the findings and return the JSON.
         """
         batches = []
         for i in range(0, len(findings), self.batch_size):
-            batches.append(findings[i:i + self.batch_size])
+            batches.append(findings[i : i + self.batch_size])
 
         logger.debug(
             "findings_batched",
@@ -977,7 +964,7 @@ Now analyze the findings and return the JSON.
         import asyncio
 
         # Exponential backoff: 1s, 2s, 4s, ...
-        delay = 2 ** attempt
+        delay = 2**attempt
 
         logger.debug(
             "retry_backoff",

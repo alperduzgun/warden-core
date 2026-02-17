@@ -5,6 +5,7 @@ Handles the execution of individual frames with rules and dependencies.
 """
 
 import asyncio
+import inspect
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -296,8 +297,13 @@ class FrameRunner:
                         return None
 
                     try:
-                        # Pass context to frames that opt-in (Tier 2: Context-Awareness)
-                        result = await frame.execute_async(c_file, context=context)
+                        # Pass context only to frames whose signature accepts it
+                        # (Tier 2: Context-Awareness opt-in, backwards compatible)
+                        sig = inspect.signature(frame.execute_async)
+                        if "context" in sig.parameters:
+                            result = await frame.execute_async(c_file, context=context)
+                        else:
+                            result = await frame.execute_async(c_file)
 
                         if self.progress_callback:
                             self.progress_callback(

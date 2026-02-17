@@ -112,39 +112,53 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         self.check_placement = config_dict.get("check_placement", True)
 
         # Standard project structure for placement checks
-        self.standard_structure = config_dict.get("standard_structure", {
-            "src/warden/semantic_search": "Top-level feature module",
-            "src/warden/analysis/application": "Core analysis orchestration",
-            "src/warden/validation/frames": "Validation frame definitions",
-            "src/warden/shared/services": "Cross-cutting shared services",
-        })
+        self.standard_structure = config_dict.get(
+            "standard_structure",
+            {
+                "src/warden/semantic_search": "Top-level feature module",
+                "src/warden/analysis/application": "Core analysis orchestration",
+                "src/warden/validation/frames": "Validation frame definitions",
+                "src/warden/shared/services": "Cross-cutting shared services",
+            },
+        )
 
         # Root Hygiene
         self.check_root_hygiene = config_dict.get("check_root_hygiene", True)
         self.allowed_root_files = {
-            "README.md", "LICENSE", "pyproject.toml", "setup.py", ".gitignore",
-            ".dockerignore", "Dockerfile", "Makefile", "requirements.txt",
-            ".env", ".env.example", ".warden", ".git", ".github", ".vscode",
-            ".idea", "warden.yaml", "warden.yml", "GEMINI.md", "CLAUDE.md",
-            "poetry.lock", "start_warden_chat.sh"
+            "README.md",
+            "LICENSE",
+            "pyproject.toml",
+            "setup.py",
+            ".gitignore",
+            ".dockerignore",
+            "Dockerfile",
+            "Makefile",
+            "requirements.txt",
+            ".env",
+            ".env.example",
+            ".warden",
+            ".git",
+            ".github",
+            ".vscode",
+            ".idea",
+            "warden.yaml",
+            "warden.yml",
+            "GEMINI.md",
+            "CLAUDE.md",
+            "poetry.lock",
+            "start_warden_chat.sh",
         }
-        
+
         # Module Placement Rules (Forbidden Path -> Correct Path)
         self.placement_rules = {
             "semantic_search": {
                 "forbidden": "src/warden/analysis/application/semantic_search",
-                "expected": "src/warden/semantic_search"
+                "expected": "src/warden/semantic_search",
             },
-            "mcp_cli_leak": {
-                "forbidden": "src/warden/cli/mcp",
-                "expected": "src/warden/mcp"
-            },
-            "mcp_service_leak": {
-                "forbidden": "src/warden/services/mcp",
-                "expected": "src/warden/mcp"
-            }
+            "mcp_cli_leak": {"forbidden": "src/warden/cli/mcp", "expected": "src/warden/mcp"},
+            "mcp_service_leak": {"forbidden": "src/warden/services/mcp", "expected": "src/warden/mcp"},
         }
-        
+
         # Load custom rules from conventions.yaml
         self.custom_rules = self._load_custom_rules()
 
@@ -155,18 +169,18 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             # Heuristic: go up until .warden is found, or use CWD
             cwd = Path.cwd()
             rules_path = cwd / ".warden" / "rules" / "conventions.yaml"
-            
+
             if not rules_path.exists():
                 return []
-                
-            with open(rules_path, 'r') as f:
+
+            with open(rules_path, "r") as f:
                 data = yaml.safe_load(f)
-                return data.get('custom_rules', [])
+                return data.get("custom_rules", [])
         except Exception as e:
             logger.error(f"Failed to load custom rules: {e}")
             return []
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute architectural validation.
 
@@ -230,7 +244,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 scenarios_executed.append("Async naming check")
                 async_violations = self._check_async_naming(code_file)
                 violations.extend(async_violations)
-            
+
             # 7. Custom Rules (YAML)
             if self.custom_rules:
                 scenarios_executed.append("Custom YAML rules check")
@@ -244,7 +258,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                 violations.extend(placement_violations)
 
             # 9. Service abstraction consistency check (context-aware)
-            if hasattr(self, 'project_context') and self.project_context:
+            if hasattr(self, "project_context") and self.project_context:
                 scenarios_executed.append("Service abstraction consistency check")
                 abstraction_violations = self._check_service_abstraction_consistency(code_file)
                 violations.extend(abstraction_violations)
@@ -319,17 +333,19 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         """Check if file exceeds size limit."""
         violations = []
 
-        line_count = len(code_file.content.split('\n'))
+        line_count = len(code_file.content.split("\n"))
 
         if line_count > self.max_file_lines:
-            violations.append(OrganizationViolation(
-                rule="max_file_lines",
-                severity="error",
-                message=f"File exceeds {self.max_file_lines} lines ({line_count} lines) - violates Single Responsibility Principle",
-                file_path=code_file.path,
-                expected=f"≤ {self.max_file_lines} lines",
-                actual=f"{line_count} lines",
-            ))
+            violations.append(
+                OrganizationViolation(
+                    rule="max_file_lines",
+                    severity="error",
+                    message=f"File exceeds {self.max_file_lines} lines ({line_count} lines) - violates Single Responsibility Principle",
+                    file_path=code_file.path,
+                    expected=f"≤ {self.max_file_lines} lines",
+                    actual=f"{line_count} lines",
+                )
+            )
 
         return violations
 
@@ -342,18 +358,20 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
-                    if hasattr(node, 'end_lineno') and hasattr(node, 'lineno'):
+                    if hasattr(node, "end_lineno") and hasattr(node, "lineno"):
                         func_lines = node.end_lineno - node.lineno
 
                         if func_lines > self.max_function_lines:
-                            violations.append(OrganizationViolation(
-                                rule="max_function_lines",
-                                severity="warning",
-                                message=f"Function '{node.name}' is {func_lines} lines - should be ≤ {self.max_function_lines} lines",
-                                file_path=f"{code_file.path}:{node.lineno}",
-                                expected=f"≤ {self.max_function_lines} lines",
-                                actual=f"{func_lines} lines",
-                            ))
+                            violations.append(
+                                OrganizationViolation(
+                                    rule="max_function_lines",
+                                    severity="warning",
+                                    message=f"Function '{node.name}' is {func_lines} lines - should be ≤ {self.max_function_lines} lines",
+                                    file_path=f"{code_file.path}:{node.lineno}",
+                                    expected=f"≤ {self.max_function_lines} lines",
+                                    actual=f"{func_lines} lines",
+                                )
+                            )
 
         except SyntaxError:
             # Skip if file has syntax errors
@@ -371,14 +389,16 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             class_count = sum(1 for node in ast.walk(tree) if isinstance(node, ast.ClassDef))
 
             if class_count > self.max_classes_per_file:
-                violations.append(OrganizationViolation(
-                    rule="max_classes_per_file",
-                    severity="warning",
-                    message=f"{class_count} classes in one file - consider splitting (max {self.max_classes_per_file})",
-                    file_path=code_file.path,
-                    expected=f"≤ {self.max_classes_per_file} classes",
-                    actual=f"{class_count} classes",
-                ))
+                violations.append(
+                    OrganizationViolation(
+                        rule="max_classes_per_file",
+                        severity="warning",
+                        message=f"{class_count} classes in one file - consider splitting (max {self.max_classes_per_file})",
+                        file_path=code_file.path,
+                        expected=f"≤ {self.max_classes_per_file} classes",
+                        actual=f"{class_count} classes",
+                    )
+                )
 
         except SyntaxError:
             pass
@@ -419,14 +439,16 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             parent_dir = path.parent.name
 
             if parent_dir != frame_name:
-                violations.append(OrganizationViolation(
-                    rule="frame_per_directory",
-                    severity="error",
-                    message=f"Frame file should be in '{frame_name}/' directory (frame-per-directory pattern)",
-                    file_path=file_path,
-                    expected=f"frames/{frame_name}/{frame_name}_frame.py",
-                    actual=f"frames/{parent_dir}/{path.name}",
-                ))
+                violations.append(
+                    OrganizationViolation(
+                        rule="frame_per_directory",
+                        severity="error",
+                        message=f"Frame file should be in '{frame_name}/' directory (frame-per-directory pattern)",
+                        file_path=file_path,
+                        expected=f"frames/{frame_name}/{frame_name}_frame.py",
+                        actual=f"frames/{parent_dir}/{path.name}",
+                    )
+                )
 
         return violations
 
@@ -453,7 +475,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         parts = path.parts
         try:
             warden_idx = parts.index("warden")
-            relative_parts = parts[warden_idx + 1:]  # After "warden"
+            relative_parts = parts[warden_idx + 1 :]  # After "warden"
 
             # Build test path
             test_filename = f"test_{path.name}"
@@ -466,14 +488,16 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
             expected_test_path = project_root / Path(*test_path_parts)
 
             if not expected_test_path.exists():
-                violations.append(OrganizationViolation(
-                    rule="test_mirror_structure",
-                    severity="warning",
-                    message=f"No corresponding test file found",
-                    file_path=file_path,
-                    expected=str(expected_test_path),
-                    actual="Test file missing",
-                ))
+                violations.append(
+                    OrganizationViolation(
+                        rule="test_mirror_structure",
+                        severity="warning",
+                        message=f"No corresponding test file found",
+                        file_path=file_path,
+                        expected=str(expected_test_path),
+                        actual="Test file missing",
+                    )
+                )
 
         except (ValueError, IndexError):
             # Can't determine expected test path
@@ -496,14 +520,16 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         init_file = parent_dir / "__init__.py"
 
         if not init_file.exists():
-            violations.append(OrganizationViolation(
-                rule="init_py_presence",
-                severity="error",
-                message=f"Package directory missing __init__.py",
-                file_path=str(parent_dir),
-                expected="__init__.py present",
-                actual="__init__.py missing",
-            ))
+            violations.append(
+                OrganizationViolation(
+                    rule="init_py_presence",
+                    severity="error",
+                    message=f"Package directory missing __init__.py",
+                    file_path=str(parent_dir),
+                    expected="__init__.py present",
+                    actual="__init__.py missing",
+                )
+            )
 
         return violations
 
@@ -526,25 +552,29 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
 
             # Check for uppercase
             if filename != filename.lower():
-                violations.append(OrganizationViolation(
-                    rule="filename_lowercase",
-                    severity="warning",
-                    message=f"File name should be lowercase with underscores",
-                    file_path=file_path,
-                    expected="lowercase_with_underscores.py",
-                    actual=path.name,
-                ))
+                violations.append(
+                    OrganizationViolation(
+                        rule="filename_lowercase",
+                        severity="warning",
+                        message=f"File name should be lowercase with underscores",
+                        file_path=file_path,
+                        expected="lowercase_with_underscores.py",
+                        actual=path.name,
+                    )
+                )
 
             # Check for hyphens
             if "-" in filename:
-                violations.append(OrganizationViolation(
-                    rule="filename_no_hyphens",
-                    severity="warning",
-                    message="File name should use underscores, not hyphens",
-                    file_path=file_path,
-                    expected=filename.replace("-", "_") + ".py",
-                    actual=path.name,
-                ))
+                violations.append(
+                    OrganizationViolation(
+                        rule="filename_no_hyphens",
+                        severity="warning",
+                        message="File name should use underscores, not hyphens",
+                        file_path=file_path,
+                        expected=filename.replace("-", "_") + ".py",
+                        actual=path.name,
+                    )
+                )
 
         return violations
 
@@ -561,60 +591,64 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
 
         try:
             tree = ast.parse(code_file.content)
-            
+
             for node in ast.walk(tree):
                 if isinstance(node, ast.AsyncFunctionDef):
                     name = node.name
-                    
+
                     # Exceptions
                     if (
-                        name.startswith("test_") or 
-                        name.startswith("__") or
-                        name in ["setup", "teardown", "setUp", "tearDown"]
+                        name.startswith("test_")
+                        or name.startswith("__")
+                        or name in ["setup", "teardown", "setUp", "tearDown"]
                     ):
                         continue
-                        
+
                     if not name.endswith("_async"):
-                        violations.append(OrganizationViolation(
-                            rule="async_naming_convention",
-                            severity="warning",
-                            message=f"Async method '{name}' should end with '_async' suffix",
-                            file_path=f"{code_file.path}:{node.lineno}",
-                            expected=f"{name}_async",
-                            actual=name,
-                        ))
+                        violations.append(
+                            OrganizationViolation(
+                                rule="async_naming_convention",
+                                severity="warning",
+                                message=f"Async method '{name}' should end with '_async' suffix",
+                                file_path=f"{code_file.path}:{node.lineno}",
+                                expected=f"{name}_async",
+                                actual=name,
+                            )
+                        )
         except SyntaxError:
             pass
-            
+
         return violations
 
     def _check_module_placement(self, file_path: str) -> List[OrganizationViolation]:
         """
         Check if the file is placed in the correct architectural layer.
-        
-        Example: 
+
+        Example:
         - semantic_search should be top-level feature, not under analysis/application
         """
         violations = []
-        path_str = file_path.replace("\\", "/") # Normalize paths
-        
+        path_str = file_path.replace("\\", "/")  # Normalize paths
+
         violations = []
-        path_str = file_path.replace("\\", "/") # Normalize paths
-        
+        path_str = file_path.replace("\\", "/")  # Normalize paths
+
         for rule_name, rule in self.placement_rules.items():
             forbidden = rule["forbidden"]
             expected = rule["expected"]
-            
+
             if forbidden in path_str:
-                violations.append(OrganizationViolation(
-                    rule=f"module_placement_{rule_name}",
-                    severity="error",
-                    message=f"Feature found in forbidden path '{forbidden}'. Should be in '{expected}'.",
-                    file_path=file_path,
-                    expected=f"{expected}/...",
-                    actual=path_str,
-                ))
-        
+                violations.append(
+                    OrganizationViolation(
+                        rule=f"module_placement_{rule_name}",
+                        severity="error",
+                        message=f"Feature found in forbidden path '{forbidden}'. Should be in '{expected}'.",
+                        file_path=file_path,
+                        expected=f"{expected}/...",
+                        actual=path_str,
+                    )
+                )
+
         return violations
 
     # ============================================
@@ -639,7 +673,8 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                     f"**Rule:** {violation.rule}\n\n"
                     f"**Expected:** {violation.expected}\n\n"
                     f"**Actual:** {violation.actual}\n\n"
-                    if violation.expected else violation.message
+                    if violation.expected
+                    else violation.message
                 ),
                 code=None,  # No code snippet for organization violations
             )
@@ -647,39 +682,36 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
 
         return findings
 
-    def _check_service_abstraction_consistency(
-        self, 
-        code_file: CodeFile
-    ) -> List[OrganizationViolation]:
+    def _check_service_abstraction_consistency(self, code_file: CodeFile) -> List[OrganizationViolation]:
         """
         Check if code bypasses detected service abstractions.
-        
+
         Uses context-aware detection: if the project has a SecretManager,
         flag direct os.getenv usage for secrets.
-        
+
         Example:
             Project has: SecretManager (handles secrets)
             File uses: os.getenv("API_KEY")
             → Violation: Use SecretManager instead
         """
         violations = []
-        
+
         # Get service abstractions from project context
-        service_abstractions = getattr(self.project_context, 'service_abstractions', {})
-        
+        service_abstractions = getattr(self.project_context, "service_abstractions", {})
+
         if not service_abstractions:
             return violations
-        
+
         # Check each line for bypass patterns
-        lines = code_file.content.split('\n')
-        
+        lines = code_file.content.split("\n")
+
         for line_num, line in enumerate(lines, 1):
             for service_name, abstraction in service_abstractions.items():
                 # Get bypass patterns for this service
-                bypass_patterns = abstraction.get('bypass_patterns', [])
-                keywords = abstraction.get('responsibility_keywords', [])
-                category = abstraction.get('category', 'custom')
-                
+                bypass_patterns = abstraction.get("bypass_patterns", [])
+                keywords = abstraction.get("responsibility_keywords", [])
+                category = abstraction.get("category", "custom")
+
                 # Check if line contains any bypass pattern
                 for pattern in bypass_patterns:
                     if pattern in line:
@@ -687,26 +719,28 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
                         # e.g., os.getenv("API_KEY") where API_KEY is relevant
                         line_upper = line.upper()
                         relevant = any(kw in line_upper for kw in keywords)
-                        
+
                         if relevant:
-                            violations.append(OrganizationViolation(
-                                rule="service_abstraction_bypass",
-                                severity="warning",
-                                message=f"Use {service_name} instead of direct '{pattern}'",
-                                file_path=f"{code_file.path}:{line_num}",
-                                expected=f"Use {service_name} (project has {category} abstraction)",
-                                actual=line.strip()[:80],
-                            ))
+                            violations.append(
+                                OrganizationViolation(
+                                    rule="service_abstraction_bypass",
+                                    severity="warning",
+                                    message=f"Use {service_name} instead of direct '{pattern}'",
+                                    file_path=f"{code_file.path}:{line_num}",
+                                    expected=f"Use {service_name} (project has {category} abstraction)",
+                                    actual=line.strip()[:80],
+                                )
+                            )
                             break  # One violation per line per service
-        
+
         return violations
 
     def set_project_context(self, context: Any) -> None:
         """
         Set the project context for context-aware checks.
-        
+
         Called by FrameExecutor to inject project context.
-        
+
         Args:
             context: ProjectContext with service_abstractions
         """
@@ -718,21 +752,26 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         """
         violations = []
         path = Path(code_file.path)
-        
+
         # 1. Determine Project Root
         # If project_context is available, use it. Otherwise assume cwd or git root logic.
         project_root = None
-        if hasattr(self, 'project_context') and self.project_context:
-            if hasattr(self.project_context, 'project_root'):
+        if hasattr(self, "project_context") and self.project_context:
+            if hasattr(self.project_context, "project_root"):
                 project_root = Path(self.project_context.project_root)
-        
+
         if not project_root:
             # Fallback: assume running from root
             project_root = Path.cwd()
 
         # Check if file is directly in root
         if path.parent.resolve() != project_root.resolve():
-            logger.info("root_hygiene_skip_not_root", path=str(path), parent=str(path.parent.resolve()), root=str(project_root.resolve()))
+            logger.info(
+                "root_hygiene_skip_not_root",
+                path=str(path),
+                parent=str(path.parent.resolve()),
+                root=str(project_root.resolve()),
+            )
             return violations  # Not a root file, skip
 
         logger.info("root_hygiene_checking", path=str(path))
@@ -740,82 +779,90 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         # 2. Fast Pass (Allowlist)
         if path.name in self.allowed_root_files:
             return violations
-        
+
         # Common false positives & Garbage Detection
-        if path.suffix in ['.lock', '.log', '.xml']:
-             # Logs
-             if path.suffix == '.log':
-                 violations.append(OrganizationViolation(
-                    rule="root_hygiene_log",
-                    severity="warning",
-                    message=f"Log file '{path.name}' found in root. Move to logs/ directory.",
-                    file_path=code_file.path,
-                    expected="logs/*.log",
-                    actual=f"/{path.name}"
-                ))
-                 return violations
-             
-             # Coverage artifacts
-             if path.name in ['coverage.xml', '.coverage']:
-                 violations.append(OrganizationViolation(
-                    rule="root_hygiene_artifact",
-                    severity="warning",
-                    message=f"Build/Test artifact '{path.name}' found in root. Add to .gitignore or clean up.",
-                    file_path=code_file.path,
-                    expected="Artifacts in .gitignore",
-                    actual=f"/{path.name}"
-                 ))
-                 return violations
+        if path.suffix in [".lock", ".log", ".xml"]:
+            # Logs
+            if path.suffix == ".log":
+                violations.append(
+                    OrganizationViolation(
+                        rule="root_hygiene_log",
+                        severity="warning",
+                        message=f"Log file '{path.name}' found in root. Move to logs/ directory.",
+                        file_path=code_file.path,
+                        expected="logs/*.log",
+                        actual=f"/{path.name}",
+                    )
+                )
+                return violations
+
+            # Coverage artifacts
+            if path.name in ["coverage.xml", ".coverage"]:
+                violations.append(
+                    OrganizationViolation(
+                        rule="root_hygiene_artifact",
+                        severity="warning",
+                        message=f"Build/Test artifact '{path.name}' found in root. Add to .gitignore or clean up.",
+                        file_path=code_file.path,
+                        expected="Artifacts in .gitignore",
+                        actual=f"/{path.name}",
+                    )
+                )
+                return violations
 
         # Temporary Scripts match
         if path.name.startswith("verify_") or path.name.startswith("tmp_") or path.name.startswith("temp_"):
-             violations.append(OrganizationViolation(
-                rule="root_hygiene_script",
-                severity="warning",
-                message=f"Temporary script '{path.name}' found in root. Move to scripts/ or delete.",
-                file_path=code_file.path,
-                expected="scripts/*.py",
-                actual=f"/{path.name}"
-            ))
-             return violations
-        
+            violations.append(
+                OrganizationViolation(
+                    rule="root_hygiene_script",
+                    severity="warning",
+                    message=f"Temporary script '{path.name}' found in root. Move to scripts/ or delete.",
+                    file_path=code_file.path,
+                    expected="scripts/*.py",
+                    actual=f"/{path.name}",
+                )
+            )
+            return violations
+
         # Binary/Script detection (no extension)
         if not path.suffix and path.name not in self.allowed_root_files:
-             # Likely a binary or shell script
-             violations.append(OrganizationViolation(
-                rule="root_hygiene_binary",
-                severity="warning",
-                message=f"Unknown executable/file '{path.name}' found in root. Move to bin/ or scripts/.",
-                file_path=code_file.path,
-                expected="bin/",
-                actual=f"/{path.name}"
-            ))
-             return violations
+            # Likely a binary or shell script
+            violations.append(
+                OrganizationViolation(
+                    rule="root_hygiene_binary",
+                    severity="warning",
+                    message=f"Unknown executable/file '{path.name}' found in root. Move to bin/ or scripts/.",
+                    file_path=code_file.path,
+                    expected="bin/",
+                    actual=f"/{path.name}",
+                )
+            )
+            return violations
 
         # 3. Semantic Similarity Pass (Find clones in src/)
         # If this file is a copy-paste or refactor of something in src/, it's misplaced.
-        if hasattr(self, 'semantic_search_service') and self.semantic_search_service:
+        if hasattr(self, "semantic_search_service") and self.semantic_search_service:
             try:
                 # Search for similar code in project
                 # We assume semantic_search_service has a search method returning results with score
                 search_results = await self.semantic_search_service.search_async(
-                    query=code_file.content, 
-                    k=1,
-                    threshold=0.85 
+                    query=code_file.content, k=1, threshold=0.85
                 )
-                
+
                 if search_results:
                     best_match = search_results[0]
                     # If match is in src/, then this root file is likely a duplicate or misplaced code
                     if "src/" in best_match.metadata.get("path", ""):
-                        violations.append(OrganizationViolation(
-                            rule="root_hygiene_misplaced_code",
-                            severity="warning",
-                            message=f"File content is {best_match.score:.2f} similar to {best_match.metadata.get('path')}. Move implementation to src/.",
-                            file_path=code_file.path,
-                            expected=f"Consolidate with {best_match.metadata.get('path')}",
-                            actual="Duplicate in root",
-                        ))
+                        violations.append(
+                            OrganizationViolation(
+                                rule="root_hygiene_misplaced_code",
+                                severity="warning",
+                                message=f"File content is {best_match.score:.2f} similar to {best_match.metadata.get('path')}. Move implementation to src/.",
+                                file_path=code_file.path,
+                                expected=f"Consolidate with {best_match.metadata.get('path')}",
+                                actual="Duplicate in root",
+                            )
+                        )
                         return violations
             except Exception as e:
                 logger.error(f"Semantic search failed during hygiene check: {e}")
@@ -823,7 +870,7 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         # 4. LLM Judgment (Slow Pass) - Only if enabled and ambiguous
         # (This section is computationally expensive, so it's the last resort)
         # We'll skip implementation here as requested by user to focus on rules
-        
+
         return violations
 
     def _check_custom_rules(self, code_file: CodeFile) -> List[OrganizationViolation]:
@@ -832,46 +879,48 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         """
         violations = []
         path = Path(code_file.path)
-        
+
         for rule in self.custom_rules:
             # Check applicability
             matches_file = False
-            file_patterns = rule.get('files', ["*"])
+            file_patterns = rule.get("files", ["*"])
             for pattern in file_patterns:
                 if fnmatch.fnmatch(path.name, pattern):
                     matches_file = True
                     break
-            
+
             if not matches_file:
                 continue
-                
+
             # Check exclusion
             excluded = False
-            for pattern in rule.get('exclude', []):
+            for pattern in rule.get("exclude", []):
                 # Simple exclusion check on name or full path components
                 if fnmatch.fnmatch(path.name, pattern) or fnmatch.fnmatch(str(path), pattern):
                     excluded = True
                     break
-            
+
             if excluded:
                 continue
-                
+
             # Regex check
-            regex_pattern = rule.get('pattern')
+            regex_pattern = rule.get("pattern")
             if not regex_pattern:
                 continue
-                
+
             try:
                 if re.search(regex_pattern, code_file.content, re.MULTILINE):
-                    violations.append(OrganizationViolation(
-                        rule=f"custom_{rule.get('id', 'unknown')}",
-                        severity=rule.get('severity', 'warning'),
-                        message=rule.get('message', f"Matches pattern '{regex_pattern}'"),
-                        file_path=code_file.path,
-                        expected=f"Not match '{regex_pattern}'",
-                        actual="Pattern found",
-                    ))
+                    violations.append(
+                        OrganizationViolation(
+                            rule=f"custom_{rule.get('id', 'unknown')}",
+                            severity=rule.get("severity", "warning"),
+                            message=rule.get("message", f"Matches pattern '{regex_pattern}'"),
+                            file_path=code_file.path,
+                            expected=f"Not match '{regex_pattern}'",
+                            actual="Pattern found",
+                        )
+                    )
             except re.error as e:
                 logger.error(f"Invalid regex pattern in rule {rule.get('id')}: {e}")
-                
+
         return violations

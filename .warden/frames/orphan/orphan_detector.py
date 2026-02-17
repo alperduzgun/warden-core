@@ -84,7 +84,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
     def __init__(self, code: str, file_path: str) -> None:
         super().__init__(code, file_path)
-        
+
         # Parse AST
         try:
             self.tree = ast.parse(code)
@@ -129,12 +129,12 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                     is_type_checking = True
                 elif isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING":
                     is_type_checking = True
-                
+
                 if is_type_checking:
                     # Mark all lines in the body as type checking imports
                     for stmt in node.body:
                         for child in ast.walk(stmt):
-                            if hasattr(child, 'lineno'):
+                            if hasattr(child, "lineno"):
                                 type_checking_lines.add(child.lineno)
 
         # Collect all imports (excluding TYPE_CHECKING blocks)
@@ -204,7 +204,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
             # Skip if name is in __all__ (re-exported)
             if import_name in all_exports:
                 continue
-            
+
             if import_name not in references:
                 code_snippet = self._get_line(line_num)
                 findings.append(
@@ -284,7 +284,7 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
                 # Get accurate snippet including decorators
                 code_snippet = self._get_definition_snippet(node)
-                
+
                 findings.append(
                     OrphanFinding(
                         orphan_type=f"unreferenced_{def_type}",
@@ -301,34 +301,34 @@ class PythonOrphanDetector(AbstractOrphanDetector):
         """
         Get full definition snippet including decorators.
         """
-        if not hasattr(node, 'lineno'):
+        if not hasattr(node, "lineno"):
             return ""
-            
+
         start_line = node.lineno
-        end_line = getattr(node, 'end_lineno', start_line)
-        
+        end_line = getattr(node, "end_lineno", start_line)
+
         # Include decorators if present
-        if hasattr(node, 'decorator_list') and node.decorator_list:
+        if hasattr(node, "decorator_list") and node.decorator_list:
             # Find the earliest line among decorators
             for dec in node.decorator_list:
-                if hasattr(dec, 'lineno'):
+                if hasattr(dec, "lineno"):
                     start_line = min(start_line, dec.lineno)
-        
+
         lines = []
         # Get lines from start_line to end_line (or limit to 20 lines)
         max_lines = 20
         current_line = start_line
-        
+
         while current_line <= len(self.lines) and len(lines) < max_lines:
-            line = self.lines[current_line - 1] # 0-indexed list
+            line = self.lines[current_line - 1]  # 0-indexed list
             lines.append(line)
-            
+
             # Stop if we reach the end of the node
             if end_line and current_line >= end_line:
                 break
-                
+
             current_line += 1
-            
+
         return "\n".join(lines).strip()
 
     def detect_dead_code(self) -> List[OrphanFinding]:
@@ -400,16 +400,13 @@ class PythonOrphanDetector(AbstractOrphanDetector):
 
             def _is_terminal(self, stmt: ast.stmt) -> bool:
                 """Check if statement terminates execution."""
-                return isinstance(
-                    stmt, (ast.Return, ast.Break, ast.Continue, ast.Raise)
-                )
+                return isinstance(stmt, (ast.Return, ast.Break, ast.Continue, ast.Raise))
 
         finder = DeadCodeFinder(self)
         finder.visit(self.tree)
         findings.extend(finder.findings)
 
         return findings
-
 
 
 class UniversalOrphanDetector(AbstractOrphanDetector):
@@ -431,9 +428,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         definitions = self._collect_definitions(self.ast_root)
 
         # 2. Collect node IDs to exclude (definition sites) - using id() since ASTNode isn't hashable
-        exclude_node_ids = set(
-            id(node) for _, (_, _, node) in definitions.items()
-        )
+        exclude_node_ids = set(id(node) for _, (_, _, node) in definitions.items())
 
         # 3. Collect all identifier references
         references = self._collect_references(self.ast_root, exclude_node_ids=exclude_node_ids)
@@ -463,14 +458,9 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         Collect function, class, and interface definitions.
         """
         definitions: Dict[str, Tuple[int, str, ASTNode]] = {}
-        
+
         # Types we consider as "definitions" that can be orphans
-        target_types = {
-            ASTNodeType.FUNCTION,
-            ASTNodeType.CLASS,
-            ASTNodeType.INTERFACE,
-            ASTNodeType.METHOD
-        }
+        target_types = {ASTNodeType.FUNCTION, ASTNodeType.CLASS, ASTNodeType.INTERFACE, ASTNodeType.METHOD}
 
         def walk(node: ASTNode):
             if node.node_type in target_types:
@@ -479,9 +469,9 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
                     definitions[name] = (
                         node.location.start_line if node.location else 0,
                         node.node_type.value.capitalize(),
-                        node
+                        node,
                     )
-            
+
             for child in node.children:
                 walk(child)
 
@@ -505,7 +495,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
             if node.node_type == ASTNodeType.IDENTIFIER:
                 if node.name:
                     references.add(node.name)
-            
+
             for child in node.children:
                 walk(child)
 
@@ -522,7 +512,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
 
         # In many languages (TS, Go), anything exported is effectively "used"
         # We check metadata if available (use getattr for safety)
-        metadata = getattr(node, 'metadata', None) or {}
+        metadata = getattr(node, "metadata", None) or {}
         if isinstance(metadata, dict) and metadata.get("is_exported"):
             return True
 
@@ -534,10 +524,10 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         """
         if not node.location:
             return ""
-        
+
         start = node.location.start_line - 1
         end = min(node.location.end_line, start + 5)
-        
+
         lines = self.lines[start:end]
         return "\n".join(lines).strip()
 
@@ -551,13 +541,13 @@ class TreeSitterOrphanDetector(AbstractOrphanDetector):
 class OrphanDetectorFactory:
     """
     Factory for creating the appropriate OrphanDetector strategy.
-    
+
     Selection Logic:
     1. Python Native AST (if language is Python)
     2. Universal AST via TreeSitterProvider (for other supported languages)
     3. None (Unsupported language)
     """
-    
+
     @staticmethod
     async def create_detector(code: str, file_path: str) -> Optional[AbstractOrphanDetector]:
         """
@@ -565,11 +555,11 @@ class OrphanDetectorFactory:
         """
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
-        
+
         # Python uses Native AST (more mature)
         if ext == ".py":
             return PythonOrphanDetector(code, file_path)
-            
+
         # Non-Python uses Universal AST via TreeSitterProvider
         try:
             language = CodeLanguage.UNKNOWN
@@ -593,5 +583,5 @@ class OrphanDetectorFactory:
                         return UniversalOrphanDetector(code, file_path, parse_result.ast_root)
         except Exception as e:
             logger.warning("factory_universal_detector_failed", file=file_path, error=str(e))
-            
+
         return None

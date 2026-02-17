@@ -62,25 +62,25 @@ class FuzzFrame(ValidationFrame):
     # Fuzz patterns (language-agnostic)
     PATTERNS = {
         "missing_null_check": {
-            "pattern": r'\b(if|while)\s*\([^)]*\w+\s*[!=<>]+\s*[^)]*\)',
+            "pattern": r"\b(if|while)\s*\([^)]*\w+\s*[!=<>]+\s*[^)]*\)",
             "severity": "medium",
             "message": "Function may not handle null/None input",
             "suggestion": "Add null/None checks before using values",
         },
         "no_empty_string_check": {
-            "pattern": r'(\.split\(|\.replace\(|\.substring\(|\.trim\()',
+            "pattern": r"(\.split\(|\.replace\(|\.substring\(|\.trim\()",
             "severity": "low",
             "message": "String operation without empty string check",
             "suggestion": "Check if string is empty before operations",
         },
         "array_access_no_bounds": {
-            "pattern": r'\w+\[\w+\](?!\s*(?:if|&&|\|\|))',
+            "pattern": r"\w+\[\w+\](?!\s*(?:if|&&|\|\|))",
             "severity": "medium",
             "message": "Array/list access without bounds checking",
             "suggestion": "Validate index is within bounds before access",
         },
         "type_conversion_no_validation": {
-            "pattern": r'(int\(|float\(|parseInt\(|parseFloat\()',
+            "pattern": r"(int\(|float\(|parseInt\(|parseFloat\()",
             "severity": "medium",
             "message": "Type conversion without validation",
             "suggestion": "Wrap conversion in try-catch or validate input",
@@ -131,7 +131,7 @@ Output must be a valid JSON object with the following structure:
         # Serial execution for now to ensure reliability, bug fixes first.
         return await super().execute_batch(code_files)
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute fuzz testing checks on code file.
 
@@ -164,7 +164,7 @@ Output must be a valid JSON object with the following structure:
             findings.extend(pattern_findings)
 
         # Run LLM analysis if available
-        if hasattr(self, 'llm_service') and self.llm_service:
+        if hasattr(self, "llm_service") and self.llm_service:
             llm_findings = await self._analyze_with_llm(code_file)
             findings.extend(llm_findings)
 
@@ -249,6 +249,7 @@ Output must be a valid JSON object with the following structure:
             )
 
         return findings
+
     async def _analyze_with_llm(self, code_file: CodeFile) -> List[Finding]:
         """
         Analyze code using LLM for deeper fuzzing insights.
@@ -256,52 +257,52 @@ Output must be a valid JSON object with the following structure:
         findings: List[Finding] = []
         try:
             logger.info("fuzz_llm_analysis_started", file=code_file.path)
-            
+
             client: ILlmClient = self.llm_service
-            
+
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
                 user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
-                temperature=0.1
+                temperature=0.1,
             )
-            
+
             response = await client.send_async(request)
-            
+
             if response.success and response.content:
                 # Parse JSON response
                 import json
-                
+
                 # Handle markdown code blocks if present
                 content = response.content
                 if "```json" in content:
                     content = content.split("```json")[1].split("```")[0].strip()
                 elif "```" in content:
                     content = content.split("```")[0].strip()
-                
+
                 try:
                     # Parse result with Pydantic
                     result = AnalysisResult.from_json(content)
-                    
+
                     for issue in result.issues:
-                        findings.append(Finding(
-                            id=f"{self.frame_id}-llm-{issue.line}",
-                            severity=issue.severity,
-                            message=issue.title,
-                            location=f"{code_file.path}:{issue.line}",
-                            detail=issue.description,
-                            code=issue.evidence_quote
-                        ))
-                    
-                    logger.info("fuzz_llm_analysis_completed", 
-                              findings=len(findings), 
-                              confidence=result.confidence)
-                              
+                        findings.append(
+                            Finding(
+                                id=f"{self.frame_id}-llm-{issue.line}",
+                                severity=issue.severity,
+                                message=issue.title,
+                                location=f"{code_file.path}:{issue.line}",
+                                detail=issue.description,
+                                code=issue.evidence_quote,
+                            )
+                        )
+
+                    logger.info("fuzz_llm_analysis_completed", findings=len(findings), confidence=result.confidence)
+
                 except Exception as e:
                     logger.warning("fuzz_llm_parsing_failed", error=str(e), content_preview=content[:100])
             else:
-                 logger.warning("fuzz_llm_request_failed", error=response.error_message)
+                logger.warning("fuzz_llm_request_failed", error=response.error_message)
 
         except Exception as e:
             logger.error("fuzz_llm_error", error=str(e))
-            
+
         return findings

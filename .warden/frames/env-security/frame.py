@@ -62,12 +62,10 @@ class EnvironmentSecurityFrame(ValidationFrame):
         self.check_hardcoded = self.config.get("check_hardcoded_credentials", True)
         self.check_validation = self.config.get("check_missing_env_validation", True)
         self.check_defaults = self.config.get("check_insecure_defaults", True)
-        self.sensitive_patterns = self.config.get("sensitive_patterns", [
-            "API_KEY", "SECRET", "TOKEN", "PASSWORD", "PRIVATE_KEY"
-        ])
-        self.allowed_defaults = self.config.get("allowed_default_values", [
-            "localhost", "127.0.0.1", "development"
-        ])
+        self.sensitive_patterns = self.config.get(
+            "sensitive_patterns", ["API_KEY", "SECRET", "TOKEN", "PASSWORD", "PRIVATE_KEY"]
+        )
+        self.allowed_defaults = self.config.get("allowed_default_values", ["localhost", "127.0.0.1", "development"])
         self.severity = self.config.get("severity_level", "critical")
 
         logger.info(
@@ -90,7 +88,7 @@ class EnvironmentSecurityFrame(ValidationFrame):
             language=code_file.language,
         )
 
-        lines = code_file.content.split('\n')
+        lines = code_file.content.split("\n")
 
         # Check 1: Hardcoded credentials
         if self.check_hardcoded:
@@ -132,44 +130,46 @@ class EnvironmentSecurityFrame(ValidationFrame):
 
         # Patterns for hardcoded credentials
         patterns = [
-            (r'(api[_-]?key|apikey)\s*=\s*["\']([a-zA-Z0-9_\-]{20,})["\']', 'API Key'),
-            (r'(secret|secret[_-]?key)\s*=\s*["\']([a-zA-Z0-9_\-]{20,})["\']', 'Secret'),
-            (r'(token|access[_-]?token)\s*=\s*["\']([a-zA-Z0-9_\-]{20,})["\']', 'Access Token'),
-            (r'(password|passwd)\s*=\s*["\'](.{8,})["\']', 'Password'),
-            (r'(private[_-]?key|privatekey)\s*=\s*["\'](.+)["\']', 'Private Key'),
-            (r'(aws[_-]?access[_-]?key|AWS_ACCESS_KEY_ID)\s*=\s*["\']([A-Z0-9]{20})["\']', 'AWS Access Key'),
+            (r'(api[_-]?key|apikey)\s*=\s*["\']([a-zA-Z0-9_\-]{20,})["\']', "API Key"),
+            (r'(secret|secret[_-]?key)\s*=\s*["\']([a-zA-Z0-9_\-]{20,})["\']', "Secret"),
+            (r'(token|access[_-]?token)\s*=\s*["\']([a-zA-Z0-9_\-]{20,})["\']', "Access Token"),
+            (r'(password|passwd)\s*=\s*["\'](.{8,})["\']', "Password"),
+            (r'(private[_-]?key|privatekey)\s*=\s*["\'](.+)["\']', "Private Key"),
+            (r'(aws[_-]?access[_-]?key|AWS_ACCESS_KEY_ID)\s*=\s*["\']([A-Z0-9]{20})["\']', "AWS Access Key"),
         ]
 
         for i, line in enumerate(lines, 1):
             # Skip comments
-            if line.strip().startswith('#') or line.strip().startswith('//'):
+            if line.strip().startswith("#") or line.strip().startswith("//"):
                 continue
 
             for pattern, cred_type in patterns:
                 match = re.search(pattern, line, re.IGNORECASE)
                 if match:
-                    findings.append(Finding(
-                        id=f"{self.frame_id}-hardcoded-{i}",
-                        severity=self.severity,
-                        message=f"Hardcoded {cred_type} detected",
-                        location=f"{file_path}:{i}",
-                        detail=(
-                            f"Found hardcoded {cred_type} in source code\n"
-                            "\n"
-                            "⚠️  SECURITY RISK:\n"
-                            "- Credentials in source code can be exposed in version control\n"
-                            "- Anyone with repo access can see the credentials\n"
-                            "- Credentials cannot be rotated without code changes\n"
-                            "\n"
-                            "✅ Fix:\n"
-                            "  # Use environment variables\n"
-                            "  import os\n"
-                            f"  {cred_type.lower().replace(' ', '_')} = os.getenv('{cred_type.upper().replace(' ', '_')}')\n"
-                            "  if not {0}:\n"
-                            f"      raise ValueError('{cred_type} not configured')\n"
-                        ),
-                        code=line.strip(),
-                    ))
+                    findings.append(
+                        Finding(
+                            id=f"{self.frame_id}-hardcoded-{i}",
+                            severity=self.severity,
+                            message=f"Hardcoded {cred_type} detected",
+                            location=f"{file_path}:{i}",
+                            detail=(
+                                f"Found hardcoded {cred_type} in source code\n"
+                                "\n"
+                                "⚠️  SECURITY RISK:\n"
+                                "- Credentials in source code can be exposed in version control\n"
+                                "- Anyone with repo access can see the credentials\n"
+                                "- Credentials cannot be rotated without code changes\n"
+                                "\n"
+                                "✅ Fix:\n"
+                                "  # Use environment variables\n"
+                                "  import os\n"
+                                f"  {cred_type.lower().replace(' ', '_')} = os.getenv('{cred_type.upper().replace(' ', '_')}')\n"
+                                "  if not {0}:\n"
+                                f"      raise ValueError('{cred_type} not configured')\n"
+                            ),
+                            code=line.strip(),
+                        )
+                    )
 
         return findings
 
@@ -190,11 +190,11 @@ class EnvironmentSecurityFrame(ValidationFrame):
                 used_vars.add((var_name, i))
 
             # Find validation (if not ... raise)
-            if re.search(r'if\s+not\s+\w+.*raise|assert\s+\w+', line):
+            if re.search(r"if\s+not\s+\w+.*raise|assert\s+\w+", line):
                 # Try to extract validated variable from previous lines
                 if i > 1:
                     prev_line = lines[i - 2] if i > 1 else ""
-                    var_match = re.search(r'(\w+)\s*=\s*os\.getenv', prev_line)
+                    var_match = re.search(r"(\w+)\s*=\s*os\.getenv", prev_line)
                     if var_match:
                         validated_vars.add(var_match.group(1))
 
@@ -209,26 +209,28 @@ class EnvironmentSecurityFrame(ValidationFrame):
             is_sensitive = any(pattern in var_name for pattern in self.sensitive_patterns)
 
             if is_sensitive:
-                findings.append(Finding(
-                    id=f"{self.frame_id}-no-validation-{line_num}",
-                    severity="high",
-                    message=f"Sensitive environment variable '{var_name}' not validated",
-                    location=f"{file_path}:{line_num}",
-                    detail=(
-                        f"Environment variable '{var_name}' appears to be sensitive but lacks validation\n"
-                        "\n"
-                        "⚠️  POTENTIAL ISSUE:\n"
-                        "- Missing or empty env vars can cause runtime errors\n"
-                        "- Silent failures in production are hard to debug\n"
-                        "- Security configs should fail fast if not set\n"
-                        "\n"
-                        "✅ Fix:\n"
-                        f"  {var_name.lower()} = os.getenv('{var_name}')\n"
-                        f"  if not {var_name.lower()}:\n"
-                        f"      raise ValueError('{var_name} environment variable is required')\n"
-                    ),
-                    code=line.strip(),
-                ))
+                findings.append(
+                    Finding(
+                        id=f"{self.frame_id}-no-validation-{line_num}",
+                        severity="high",
+                        message=f"Sensitive environment variable '{var_name}' not validated",
+                        location=f"{file_path}:{line_num}",
+                        detail=(
+                            f"Environment variable '{var_name}' appears to be sensitive but lacks validation\n"
+                            "\n"
+                            "⚠️  POTENTIAL ISSUE:\n"
+                            "- Missing or empty env vars can cause runtime errors\n"
+                            "- Silent failures in production are hard to debug\n"
+                            "- Security configs should fail fast if not set\n"
+                            "\n"
+                            "✅ Fix:\n"
+                            f"  {var_name.lower()} = os.getenv('{var_name}')\n"
+                            f"  if not {var_name.lower()}:\n"
+                            f"      raise ValueError('{var_name} environment variable is required')\n"
+                        ),
+                        code=line.strip(),
+                    )
+                )
 
         return findings
 
@@ -250,25 +252,27 @@ class EnvironmentSecurityFrame(ValidationFrame):
                 is_safe_default = default_value in self.allowed_defaults
 
                 if is_sensitive and not is_safe_default:
-                    findings.append(Finding(
-                        id=f"{self.frame_id}-insecure-default-{i}",
-                        severity="high",
-                        message=f"Insecure default value for sensitive variable '{var_name}'",
-                        location=f"{file_path}:{i}",
-                        detail=(
-                            f"Sensitive variable '{var_name}' has a default value: '{default_value}'\n"
-                            "\n"
-                            "⚠️  SECURITY RISK:\n"
-                            "- Sensitive configs should not have defaults\n"
-                            "- Defaults can leak into production accidentally\n"
-                            "- Forces explicit configuration in all environments\n"
-                            "\n"
-                            "✅ Fix:\n"
-                            f"  {var_name.lower()} = os.getenv('{var_name}')\n"
-                            f"  if not {var_name.lower()}:\n"
-                            f"      raise ValueError('{var_name} must be explicitly set')\n"
-                        ),
-                        code=line.strip(),
-                    ))
+                    findings.append(
+                        Finding(
+                            id=f"{self.frame_id}-insecure-default-{i}",
+                            severity="high",
+                            message=f"Insecure default value for sensitive variable '{var_name}'",
+                            location=f"{file_path}:{i}",
+                            detail=(
+                                f"Sensitive variable '{var_name}' has a default value: '{default_value}'\n"
+                                "\n"
+                                "⚠️  SECURITY RISK:\n"
+                                "- Sensitive configs should not have defaults\n"
+                                "- Defaults can leak into production accidentally\n"
+                                "- Forces explicit configuration in all environments\n"
+                                "\n"
+                                "✅ Fix:\n"
+                                f"  {var_name.lower()} = os.getenv('{var_name}')\n"
+                                f"  if not {var_name.lower()}:\n"
+                                f"      raise ValueError('{var_name} must be explicitly set')\n"
+                            ),
+                            code=line.strip(),
+                        )
+                    )
 
         return findings

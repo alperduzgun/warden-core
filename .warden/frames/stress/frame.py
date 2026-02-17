@@ -60,25 +60,25 @@ class StressFrame(ValidationFrame):
     # Stress testing patterns
     PATTERNS = {
         "unclosed_file": {
-            "pattern": r'open\(|File\(|FileReader\(|FileWriter\(',
+            "pattern": r"open\(|File\(|FileReader\(|FileWriter\(",
             "severity": "high",
             "message": "File opened without context manager - potential resource leak",
             "suggestion": "Use 'with' statement (Python) or try-finally to ensure file closure",
         },
         "nested_loops": {
-            "pattern": r'for\s+\w+\s+in.*:\s*\n\s+for\s+\w+\s+in',
+            "pattern": r"for\s+\w+\s+in.*:\s*\n\s+for\s+\w+\s+in",
             "severity": "medium",
             "message": "Nested loops detected - O(n²) complexity",
             "suggestion": "Consider using dictionary/set for O(1) lookup or optimizing algorithm",
         },
         "blocking_in_async": {
-            "pattern": r'async\s+def\s+\w+.*(?:open\(|requests\.get|time\.sleep)',
+            "pattern": r"async\s+def\s+\w+.*(?:open\(|requests\.get|time\.sleep)",
             "severity": "high",
             "message": "Blocking operation in async function",
             "suggestion": "Use async I/O (aiofiles, httpx, asyncio.sleep) instead",
         },
         "no_pagination": {
-            "pattern": r'\.all\(\)|SELECT \* FROM|find\(\{',
+            "pattern": r"\.all\(\)|SELECT \* FROM|find\(\{",
             "severity": "medium",
             "message": "Query fetching all records - missing pagination",
             "suggestion": "Add limit/offset or cursor-based pagination for large datasets",
@@ -90,7 +90,7 @@ class StressFrame(ValidationFrame):
             "suggestion": "Use list and join() (Python) or StringBuilder (Java/C#)",
         },
         "global_state_mutation": {
-            "pattern": r'global\s+\w+|var\s+\w+\s*=|let\s+\w+\s*=.*(?:window|document)',
+            "pattern": r"global\s+\w+|var\s+\w+\s*=|let\s+\w+\s*=.*(?:window|document)",
             "severity": "low",
             "message": "Global state mutation detected",
             "suggestion": "Minimize global state - can cause issues under load",
@@ -106,7 +106,7 @@ class StressFrame(ValidationFrame):
         """
         super().__init__(config)
 
-    async def execute(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
         Execute stress testing checks on code file.
 
@@ -226,9 +226,7 @@ class StressFrame(ValidationFrame):
 
         return findings
 
-    def _should_report(
-        self, check_id: str, line: str, all_lines: List[str], line_num: int
-    ) -> bool:
+    def _should_report(self, check_id: str, line: str, all_lines: List[str], line_num: int) -> bool:
         """
         Additional filtering to reduce false positives.
 

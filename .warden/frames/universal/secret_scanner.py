@@ -50,7 +50,7 @@ def calculate_entropy(s: str) -> float:
 class UniversalSecretScanner(BaseUniversalFrame):
     """
     Cross-language hardcoded secret detection frame.
-    
+
     Uses Universal AST to find string literals and analyzes them for:
     1. Known secret patterns (API keys, tokens)
     2. High-entropy strings (potential secrets)
@@ -97,10 +97,7 @@ class UniversalSecretScanner(BaseUniversalFrame):
         status = "failed" if findings else "passed"
 
         logger.info(
-            "secret_scan_completed",
-            file=code_file.path,
-            findings_count=len(findings),
-            duration=f"{duration:.2f}s"
+            "secret_scan_completed", file=code_file.path, findings_count=len(findings), duration=f"{duration:.2f}s"
         )
 
         return FrameResult(
@@ -111,7 +108,7 @@ class UniversalSecretScanner(BaseUniversalFrame):
             issues_found=len(findings),
             is_blocker=self.is_blocker and len(findings) > 0,
             findings=findings,
-            metadata={"scan_mode": "ast" if ast_root else "regex"}
+            metadata={"scan_mode": "ast" if ast_root else "regex"},
         )
 
     def _extract_literals_with_location(self, root: ASTNode) -> List[tuple]:
@@ -171,15 +168,17 @@ class UniversalSecretScanner(BaseUniversalFrame):
         for i, line in enumerate(lines, 1):
             for pattern, secret_type in SECRET_PATTERNS:
                 if re.search(pattern, line, re.IGNORECASE):
-                    findings.append(Finding(
-                        id=f"secret-{secret_type.lower().replace(' ', '-')}-{i}",
-                        severity="critical",
-                        message=f"Potential {secret_type} detected",
-                        location=f"{code_file.path}:{i}",
-                        detail=f"Found pattern matching {secret_type}.",
-                        code=line.strip()[:80],
-                        line=i,
-                    ))
+                    findings.append(
+                        Finding(
+                            id=f"secret-{secret_type.lower().replace(' ', '-')}-{i}",
+                            severity="critical",
+                            message=f"Potential {secret_type} detected",
+                            location=f"{code_file.path}:{i}",
+                            detail=f"Found pattern matching {secret_type}.",
+                            code=line.strip()[:80],
+                            line=i,
+                        )
+                    )
                     break  # One finding per line
 
         return findings

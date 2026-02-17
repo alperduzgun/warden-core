@@ -12,7 +12,7 @@ Usage:
     from . import GitChangesFrame
 
     frame = GitChangesFrame(config={"compare_mode": "staged"})
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 """
 
 from ..gitchanges_frame import GitChangesFrame

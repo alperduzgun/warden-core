@@ -4,12 +4,40 @@ Pre-flight checks run once per session to detect environment capabilities.
 Tests that need specific services use markers to auto-skip when unavailable.
 """
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
+from typer.testing import CliRunner as _BaseCliRunner
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
+_ANSI_RE_BYTES = re.compile(rb"\x1b\[[0-9;]*[mGKHF]")
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from terminal output for reliable assertions."""
+    return _ANSI_RE.sub("", text)
+
+
+class CliRunner(_BaseCliRunner):
+    """CliRunner that strips ANSI escape codes from captured output.
+
+    GitHub Actions sets FORCE_COLOR=1, which causes Rich to inject ANSI
+    codes even through the in-process test runner.  This subclass strips
+    them so plain-string assertions on option names (e.g. ``--dry-run``)
+    work regardless of the colour environment.
+    """
+
+    def invoke(self, *args, **kwargs):  # type: ignore[override]
+        result = super().invoke(*args, **kwargs)
+        try:
+            result.stdout_bytes = _ANSI_RE_BYTES.sub(b"", result.stdout_bytes)
+            result.output_bytes = _ANSI_RE_BYTES.sub(b"", result.output_bytes)
+        except AttributeError:
+            pass
+        return result
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 SAMPLE_PROJECT = FIXTURES_DIR / "sample_project"

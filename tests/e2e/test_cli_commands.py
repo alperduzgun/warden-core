@@ -16,6 +16,8 @@ import pytest
 import yaml
 from warden.main import app
 
+from tests.e2e.conftest import strip_ansi
+
 
 # ============================================================================
 # Helper: extract JSON from structlog-polluted stdout
@@ -568,7 +570,9 @@ class TestCI:
     def test_ci_update_help(self, runner):
         result = runner.invoke(app, ["ci", "update", "--help"])
         assert result.exit_code == 0
-        assert "--dry-run" in result.stdout
+        # strip_ansi is needed because FORCE_COLOR=1 (GitHub Actions) causes
+        # Rich to inject ANSI codes that split "--dry-run" into fragments.
+        assert "--dry-run" in strip_ansi(result.stdout)
 
     def test_ci_update_dry_run_no_side_effects(self, runner, isolated_project, monkeypatch):
         """CI update --dry-run reports changes without mutating files."""

@@ -92,12 +92,10 @@ class ProjectArchitectureFrame(ValidationFrame):
         self.detect_empty_modules = self.config.get("detect_empty_modules", True)
         self.detect_duplicates = self.config.get("detect_duplicates", True)
         self.detect_pattern_mixing = self.config.get("detect_pattern_mixing", True)
-        self.detect_unnecessary_layers = self.config.get(
-            "detect_unnecessary_layers", True
-        )
+        self.detect_unnecessary_layers = self.config.get("detect_unnecessary_layers", True)
         self.strict_mode = self.config.get("strict_mode", False)
 
-    async def execute(self, project_context: ProjectContext) -> FrameResult:
+    async def execute_async(self, project_context: ProjectContext) -> FrameResult:
         """
         Execute project-level architectural validation.
 
@@ -159,12 +157,8 @@ class ProjectArchitectureFrame(ValidationFrame):
                 total_violations=len(violations),
                 empty_modules=sum(1 for v in violations if v.rule == "empty_module"),
                 duplicates=sum(1 for v in violations if v.rule == "duplicate_module"),
-                pattern_issues=sum(
-                    1 for v in violations if v.rule == "mixed_architecture"
-                ),
-                layer_issues=sum(
-                    1 for v in violations if v.rule == "unnecessary_layer"
-                ),
+                pattern_issues=sum(1 for v in violations if v.rule == "mixed_architecture"),
+                layer_issues=sum(1 for v in violations if v.rule == "unnecessary_layer"),
                 duration=f"{duration:.2f}s",
             )
 
@@ -178,18 +172,10 @@ class ProjectArchitectureFrame(ValidationFrame):
                 findings=findings,
                 metadata={
                     "total_violations": len(violations),
-                    "empty_modules": sum(
-                        1 for v in violations if v.rule == "empty_module"
-                    ),
-                    "duplicate_modules": sum(
-                        1 for v in violations if v.rule == "duplicate_module"
-                    ),
-                    "architectural_issues": sum(
-                        1 for v in violations if v.rule == "mixed_architecture"
-                    ),
-                    "unnecessary_layers": sum(
-                        1 for v in violations if v.rule == "unnecessary_layer"
-                    ),
+                    "empty_modules": sum(1 for v in violations if v.rule == "empty_module"),
+                    "duplicate_modules": sum(1 for v in violations if v.rule == "duplicate_module"),
+                    "architectural_issues": sum(1 for v in violations if v.rule == "mixed_architecture"),
+                    "unnecessary_layers": sum(1 for v in violations if v.rule == "unnecessary_layer"),
                     "project_modules": len(project_context.modules),
                     "total_files": len(project_context.all_files),
                 },
@@ -221,9 +207,7 @@ class ProjectArchitectureFrame(ValidationFrame):
     # DETECTION METHODS
     # ==============================================
 
-    def _detect_empty_modules(
-        self, project_context: ProjectContext
-    ) -> List[ArchitecturalViolation]:
+    def _detect_empty_modules(self, project_context: ProjectContext) -> List[ArchitecturalViolation]:
         """
         Detect empty modules (only __init__.py with minimal content).
 
@@ -252,9 +236,7 @@ class ProjectArchitectureFrame(ValidationFrame):
 
         return violations
 
-    def _detect_duplicate_modules(
-        self, project_context: ProjectContext
-    ) -> List[ArchitecturalViolation]:
+    def _detect_duplicate_modules(self, project_context: ProjectContext) -> List[ArchitecturalViolation]:
         """
         Detect duplicate module implementations with smart filtering.
 
@@ -339,9 +321,7 @@ class ProjectArchitectureFrame(ValidationFrame):
 
         return violations
 
-    def _detect_pattern_mixing(
-        self, project_context: ProjectContext
-    ) -> List[ArchitecturalViolation]:
+    def _detect_pattern_mixing(self, project_context: ProjectContext) -> List[ArchitecturalViolation]:
         """
         Detect mixed architectural patterns.
 
@@ -373,9 +353,7 @@ class ProjectArchitectureFrame(ValidationFrame):
 
         return violations
 
-    def _detect_unnecessary_layers(
-        self, project_context: ProjectContext
-    ) -> List[ArchitecturalViolation]:
+    def _detect_unnecessary_layers(self, project_context: ProjectContext) -> List[ArchitecturalViolation]:
         """
         Detect unnecessary architectural layers for project type.
 

@@ -17,7 +17,7 @@ Usage:
     from . import OrphanFrame
 
     frame = OrphanFrame(config={"use_llm_filter": True})
-    result = await frame.execute(code_file)
+    result = await frame.execute_async(code_file)
 """
 
 from ..orphan_frame import OrphanFrame

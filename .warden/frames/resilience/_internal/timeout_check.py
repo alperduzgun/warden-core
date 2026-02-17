@@ -92,7 +92,7 @@ class TimeoutCheck(ValidationCheck):
         ),
     ]
 
-    async def execute(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute timeout configuration check."""
         findings: List[CheckFinding] = []
 
