@@ -56,7 +56,7 @@ Warden is built to integrate directly with your AI Agent:
 
 ### 2. ⚡ Offline-First Intelligence (New!)
 Warden is built for resilience. Unlike SaaS tools that go dark without internet:
-*   **Local Models:** Multiple options - Claude Code CLI (uses desktop app), Ollama (Qwen), or any local LLM server.
+*   **Local Models:** Multiple options - Claude Code CLI (uses desktop app), Codex CLI (OpenAI local agent), Ollama (Qwen), or any local LLM server.
 *   **Network Resilience:** Automatically detects connection timeouts and switches to local cache instantly.
 *   **Zero Latency:** No API round-trips for standard scans.
 *   **Zero API Costs:** Claude Code leverages your existing subscription without consuming API credits.
@@ -65,13 +65,14 @@ Warden is built for resilience. Unlike SaaS tools that go dark without internet:
 Warden balances cost, privacy, and intelligence using a smart routing system:
 *   **Local Tier (Privacy-First):**
     - **Claude Code CLI** (uses your existing subscription, zero API costs)
+    - **Codex CLI** (OpenAI local agent, read-only sandbox mode)
     - **Qwen 2.5-Coder** (via Ollama) for high-frequency tasks
     - **Free & Private** - Code never leaves your machine
 *   **Cloud Tier (Advanced Analysis):** Routes only complex logic (security fixes, architecture audits) to **GPT-4o/Claude API/Gemini**.
 *   **Result:** 90% cost reduction compared to pure cloud agents.
 
 **Supported Providers:**
-- 🏠 **Local:** Claude Code, Ollama (Qwen), Any OpenAI-compatible local server
+- 🏠 **Local:** Claude Code, Codex CLI, Ollama (Qwen), Any OpenAI-compatible local server
 - ☁️ **Cloud:** Anthropic (Claude), OpenAI (GPT-4), Google (Gemini), Groq, DeepSeek
 
 #### ⚡ Performance & Optimization
@@ -92,12 +93,14 @@ Warden implements global performance optimizations that benefit ALL providers:
 - Fast tier (local models) for syntax/lint checks
 - Smart tier (cloud models) for complex security analysis
 - Automatic fallback if fast providers unavailable
+- **Single-provider mode:** CLI tools (Claude Code, Codex) route all requests through themselves — no tier split needed
 
 **Provider Performance Profiles:**
 
 | Provider | Avg Response | Overhead | Best Use Case |
 |----------|-------------|----------|---------------|
 | **Ollama (Qwen)** | ~0.7s | 50ms | Quick checks, lint validation |
+| **Codex CLI** | ~5-15s | 100ms | Deep analysis, read-only sandbox |
 | **Claude Code** | ~10s | 200ms | Deep analysis, security audits |
 | **Azure (GPT-4)** | ~2.2s | 100ms | Complex logic, architecture review |
 | **Anthropic API** | ~1.5s | 80ms | Security fixes, context-aware analysis |
@@ -274,7 +277,20 @@ warden config llm use claude_code
 warden config llm test
 ```
 
-**Option 2: Ollama (Free & Offline)**
+**Option 2: Codex CLI (Recommended for Codex Users)**
+```bash
+# No setup needed! If you have the Codex CLI installed:
+warden init --provider codex
+
+# Register Warden as an MCP tool in Codex (optional):
+warden codex mcp-setup
+
+# Or use it directly:
+warden config llm use codex
+warden config llm test
+```
+
+**Option 3: Ollama (Free & Offline)**
 ```bash
 # Install Ollama and pull Qwen model:
 ollama pull qwen2.5-coder:7b
@@ -283,7 +299,7 @@ ollama pull qwen2.5-coder:7b
 warden scan
 ```
 
-**Option 3: Cloud Providers (API Key Required)**
+**Option 4: Cloud Providers (API Key Required)**
 ```bash
 # Select a provider:
 warden config llm use anthropic   # or: openai, groq, gemini, deepseek, azure
@@ -417,6 +433,12 @@ llm:
       timeout_seconds: 120
       # No API key needed - uses your Claude Code CLI subscription
 
+    codex:
+      enabled: true
+      timeout_seconds: 120
+      # No API key needed - uses your Codex CLI (OpenAI local agent)
+      # Model is managed via ~/.codex/config.toml
+
     ollama:
       enabled: true
       endpoint: http://localhost:11434
@@ -443,10 +465,13 @@ llm:
 
 **Priority Order (Auto-Detection):**
 1. Claude Code (if CLI installed)
-2. Ollama (if running with Qwen model)
-3. Anthropic (if API key set)
-4. OpenAI (if API key set)
-5. Gemini (if API key set)
+2. Codex CLI (if installed)
+3. Ollama (if running with Qwen model)
+4. Anthropic (if API key set)
+5. OpenAI (if API key set)
+6. Gemini (if API key set)
+
+> **Note:** Claude Code and Codex are **single-provider** tools — they manage their own model selection internally. When either is selected as the primary provider, all Warden requests (triage, analysis, classification) route through that one tool. There is no fast/smart tier split.
 
 ---
 
@@ -536,7 +561,7 @@ We maintain a clear separation of responsibilities between Warden Core (OSS) and
 
 Feature Matrix (Summary)
 - Core (OSS, Apache‑2.0): CLI & pipeline engine, Frames SDK, AST/LSP integration, diff scanning, baseline autopilot,
-  local LLM providers (Ollama, Claude Code), JSON/SARIF reporting, suppression/verification phases.
+  local LLM providers (Ollama, Claude Code, Codex), JSON/SARIF reporting, suppression/verification phases.
 - Cloud (Commercial): Multi‑repo/org management, SSO/SAML, RBAC, centralized policy and approval workflows, advanced dashboards,
   team‑level suppression rules, audit logs, enterprise integrations, hosted LLM routing/telemetry.
 
