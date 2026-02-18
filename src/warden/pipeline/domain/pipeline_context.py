@@ -58,6 +58,11 @@ class PipelineContext:
 
     # Phase 0: PRE-ANALYSIS Results
     project_type: ProjectType | None = None
+    # Dedicated field for the full ProjectContext object from analysis/domain/project_context.py.
+    # pre_analysis_executor sets this; frame_runner uses it for ProjectContextAware injection.
+    # NOTE: project_type above may also hold the full object for legacy reasons (hasattr dance
+    # in summary/to_dict methods), but new code should read/write project_context directly.
+    project_context: Any | None = None
     framework: Framework | None = None
     file_context: FileContext | None = None
     file_contexts: dict[str, dict[str, Any]] = field(default_factory=dict)

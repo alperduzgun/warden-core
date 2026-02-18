@@ -53,7 +53,8 @@ class PreAnalysisExecutor(BasePhaseExecutor):
             result = await phase.execute_async(code_files, pipeline_context=context)
 
             # Store results in context
-            context.project_type = result.project_context
+            context.project_type = result.project_context  # legacy field (may hold full object)
+            context.project_context = result.project_context  # dedicated typed field
             context.framework = result.project_context.framework if result.project_context else None
             context.file_contexts = result.file_contexts
             context.project_metadata = {}  # Will be populated later if needed

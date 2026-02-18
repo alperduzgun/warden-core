@@ -235,7 +235,11 @@ class FrameRunner:
                 )
 
         if isinstance(frame, ProjectContextAware):
-            project_context = getattr(context, "project_type", None)
+            # Prefer the dedicated project_context field (set by pre_analysis_executor).
+            # Fall back to project_type for legacy compatibility (it may hold the full object).
+            project_context = getattr(context, "project_context", None) or getattr(
+                context, "project_type", None
+            )
             if project_context and hasattr(project_context, "service_abstractions"):
                 frame.set_project_context(project_context)
 
