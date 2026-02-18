@@ -4,7 +4,7 @@
 
 ![Status](https://img.shields.io/badge/Status-Beta-yellow)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![License](https://img.shields.io/badge/License-Proprietary-red)
+![License](https://img.shields.io/badge/License-Apache_2.0-green)
 ![AI Ready](https://img.shields.io/badge/AI-Native-purple)
 
 <p align="center">
@@ -530,31 +530,38 @@ We are transforming Warden from a local tool into a global **Standard of Trust**
 
 ---
 
-## 📄 License
+## 🧭 Core vs Cloud (Open‑Core Model)
 
-**Warden Core** is licensed under a **Proprietary License** with the following terms:
+We maintain a clear separation of responsibilities between Warden Core (OSS) and Warden Cloud (Commercial).
 
-### ✅ Personal Use (FREE)
-- Use Warden for **personal projects**
-- Educational purposes and learning
-- Non-commercial evaluation
+Feature Matrix (Summary)
+- Core (OSS, Apache‑2.0): CLI & pipeline engine, Frames SDK, AST/LSP integration, diff scanning, baseline autopilot,
+  local LLM providers (Ollama, Claude Code), JSON/SARIF reporting, suppression/verification phases.
+- Cloud (Commercial): Multi‑repo/org management, SSO/SAML, RBAC, centralized policy and approval workflows, advanced dashboards,
+  team‑level suppression rules, audit logs, enterprise integrations, hosted LLM routing/telemetry.
 
-### 💼 Commercial Use (LICENSE REQUIRED)
-For commercial usage, including:
-- Use within corporations or enterprises
-- For-profit organizations
-- Production deployments in commercial products
-
-**A commercial license must be purchased.**
-
-### 🚫 Redistribution
-Redistribution of this software (source or binary) is **prohibited** without explicit written permission.
-
-### 📧 Commercial Licensing
-For commercial licensing inquiries, contact: **warden-core@proton.me**
+Note: Core will always remain under an OSI‑approved license. Cloud ships as a separate product/repository.
 
 ---
 
-**Full License:** See [LICENSE](./LICENSE) file for complete terms.
+## 📄 License
 
-**Disclaimer:** This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND.
+**Warden Core** is open source and licensed under **Apache License 2.0**.
+
+- Full text: see [LICENSE](./LICENSE)
+- Summary: Permissive use, modification, and distribution; no warranty.
+
+Note: **Warden Cloud** (enterprise features like SSO/RBAC, centralized policy, multi‑repo management, etc.) is a separate
+commercial product and is licensed independently of this repository. Warden Core will remain open source.
+
+---
+
+## 🤝 Contributing & Policies
+
+- Contribution guide: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md)
+- Code of Conduct: [.github/CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md)
+- Security policy: [.github/SECURITY.md](.github/SECURITY.md)
+- Governance: [docs/governance/GOVERNANCE.md](docs/governance/GOVERNANCE.md)
+- DCO: [docs/contributing/DCO](docs/contributing/DCO)
+- Trademark policy: [docs/legal/TRADEMARKS.md](docs/legal/TRADEMARKS.md)
+- NOTICE: [docs/legal/NOTICE](docs/legal/NOTICE)

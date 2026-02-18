@@ -33,6 +33,14 @@ WARDEN_RESOURCES: list[ResourceDefinition] = [
         file_path=".warden/reports/warden-report.sarif",
     ),
     ResourceDefinition(
+        uri="warden://context",
+        name="Warden Context",
+        description="Warden machine-readable project context (.warden/context.yaml)",
+        resource_type=ResourceType.CONFIG,
+        mime_type="application/x-yaml",
+        file_path=".warden/context.yaml",
+    ),
+    ResourceDefinition(
         uri="warden://reports/json",
         name="JSON Report",
         description="Warden scan results in JSON format",

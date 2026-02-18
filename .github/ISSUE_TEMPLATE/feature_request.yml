@@ -1,0 +1,78 @@
+name: "Feature request"
+description: "Propose an idea for Warden Core"
+labels: ["enhancement", "needs-triage"]
+title: "feat: <short summary>"
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Architecture / Refactor
+        - New Frame / Rule
+        - LLM Providers / Orchestration
+        - CLI / UX
+        - Performance / Scale
+        - Reports / Baseline / Diff
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI / UX
+        - Pipeline / Phases
+        - Frames / Rules
+        - LLM Providers / Orchestration
+        - LSP / AST
+        - Reports / Baseline / Diff
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+      placeholder: Describe the pain point in user terms.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Warden do? Include UX/CLI examples if relevant.
+      placeholder: e.g., Add `--fail-on` to control exit code by severity.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: Other approaches you tried or considered.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact/Risks
+      placeholder: Performance, security, backward compatibility concerns.
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Backward compatibility / Migration
+      placeholder: Breaking changes? Deprecations? Migration plan?
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Warden Core (OSS)
+        - label: Warden Cloud (Commercial) — open a ticket in the Cloud repo/support
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and discussions.
+        - label: This is not a security vulnerability (see SECURITY.md).

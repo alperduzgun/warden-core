@@ -1,5 +1,7 @@
 include pyproject.toml
 include setup.py
+include LICENSE
+include docs/legal/NOTICE
 recursive-include src/warden_rust *
 include src/warden_rust/Cargo.toml
 recursive-include src/warden/templates *

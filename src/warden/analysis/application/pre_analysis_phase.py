@@ -200,9 +200,31 @@ class PreAnalysisPhase:
 
             self.trust_memory_context = is_env_valid
 
+            # Load user-provided context (.warden/context.yaml) if available
+            _user_ctx_style: dict = {}
+            try:
+                ctx_file = self.project_root / ".warden" / "context.yaml"
+                if ctx_file.exists():
+                    import yaml  # local import to avoid import cost if unused
+
+                    with open(ctx_file, encoding="utf-8") as f:
+                        user_ctx = yaml.safe_load(f) or {}
+                    logger.info("user_context_loaded", path=str(ctx_file))
+                    # Persist full context under project_context.spec_analysis['user_context']
+                    project_context.spec_analysis["user_context"] = user_ctx
+                    _user_ctx_style = (user_ctx or {}).get("style") or {}
+            except Exception as e:
+                logger.warning("user_context_load_failed", error=str(e))
+
             # Analyze structure (will only discover purpose if missing after enrichment)
             all_paths = [Path(cf.path) for cf in code_files]
             project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
+
+            # Re-apply user context conventions after structure analysis (structure analysis may reset them)
+            if _user_ctx_style.get("line_length"):
+                project_context.conventions.max_line_length = int(_user_ctx_style["line_length"])  # type: ignore[arg-type]
+            if _user_ctx_style.get("indent"):
+                project_context.conventions.indent_style = str(_user_ctx_style["indent"])  # type: ignore[assignment]
 
             # Ensure AST providers are loaded for integrity check
             await self.ast_loader.load_all()

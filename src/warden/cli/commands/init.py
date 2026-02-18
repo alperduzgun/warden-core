@@ -1028,6 +1028,41 @@ custom_rules:
             console.print(f"[yellow]Warning: Hub install failed: {e}[/yellow]")
             console.print("[dim]Built-in frames are still available.[/dim]")
 
+    # --- Step 16: Generate Context (Structure/Style/Testing/Commands) ---
+    try:
+        from warden.cli.commands.context import (
+            _detect_commands,
+            _detect_commit_convention,
+            _detect_structure,
+            _detect_style,
+            _detect_testing,
+            _load_yaml,
+            _merge,
+            _read_pyproject,
+            _safe_yaml_dump,
+        )
+
+        root = Path.cwd()
+        pyproj = _read_pyproject(root)
+        context_data = {
+            "structure": _detect_structure(root),
+            "style": _detect_style(pyproj),
+            "testing": _detect_testing(pyproj),
+            "commands": _detect_commands(),
+            "repo": {"commit_convention": _detect_commit_convention(root)},
+        }
+        ctx_path = root / ".warden" / "context.yaml"
+        existing_ctx = _load_yaml(ctx_path)
+        merged = _merge(existing_ctx, context_data)
+        if merged != existing_ctx:
+            ctx_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx_path.write_text(_safe_yaml_dump(merged), encoding="utf-8")
+            console.print(f"[green]Created context:[/green] {ctx_path}")
+        else:
+            console.print("[dim]Context unchanged (.warden/context.yaml)[/dim]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Context generation skipped: {e}[/yellow]")
+
     console.print("\n[bold green]✨ Warden Initialization Complete![/bold green]")
     console.print("Run [bold cyan]warden scan[/bold cyan] to start.")
     console.print("[dim]Available frames: security, resilience, orphan, fuzz, property[/dim]")

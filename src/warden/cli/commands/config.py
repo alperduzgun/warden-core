@@ -499,6 +499,10 @@ def llm_status() -> None:
 
         present = bool(shutil.which("claude"))
         console.print(f"claude CLI: {'[green]found[/green]' if present else '[red]missing[/red]'}")
+    elif provider == "codex":
+        import shutil
+        present = bool(shutil.which("codex"))
+        console.print(f"codex CLI: {'[green]found[/green]' if present else '[red]missing[/red]'}")
     elif key_var:
         console.print(f"Key {key_var}: {'[green]present[/green]' if _env_present(key_var) else '[red]missing[/red]'}")
 
@@ -542,6 +546,9 @@ def llm_test() -> None:
     elif provider == "claude_code":
         import shutil
         results["claude_code"] = "found" if shutil.which("claude") else "missing"
+    elif provider == "codex":
+        import shutil
+        results["codex"] = "found" if shutil.which("codex") else "missing"
     else:
         key_var = _provider_key_var(provider)
         if key_var:

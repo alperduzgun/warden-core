@@ -15,6 +15,8 @@ NEW: LLM-powered intelligent filtering (optional)
 Priority: MEDIUM (warning)
 """
 
+import fnmatch
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,7 +34,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
-from warden.validation.domain.mixins import BatchExecutable
+from warden.validation.domain.mixins import BatchExecutable, ProjectContextAware
 
 # Add current directory to path to allow importing sibling modules
 current_dir = str(Path(__file__).parent)
@@ -47,7 +49,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 
-class OrphanFrame(ValidationFrame, BatchExecutable):
+class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware):
     """
     Orphan code validation frame - Detects dead and unused code.
 
@@ -107,6 +109,10 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
         # Log if enabled but defer creation until execution (when llm_service is injected)
         if self.use_llm_filter:
             logger.info("llm_orphan_filter_enabled", mode="intelligent_filtering")
+
+    # ProjectContextAware implementation: allow FrameRunner to inject context
+    def set_project_context(self, context: Any) -> None:  # type: ignore[override]
+        self.project_context = context
 
     async def execute_batch_async(self, code_files: list[CodeFile]) -> list[FrameResult]:
         """
@@ -515,6 +521,23 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
         _, ext = os.path.splitext(code_file.path)
         ext = ext.lower()
+
+        # Skip test files if configured and user context indicates test locations/patterns
+        try:
+            if self.ignore_test_files and getattr(self, "project_context", None):
+                user_ctx = getattr(self.project_context, "spec_analysis", {}).get("user_context", {})
+                # Directory-based skip
+                test_dirs = set((user_ctx.get("structure") or {}).get("tests", []))
+                path_norm = code_file.path.replace("\\", "/")
+                if any((td.rstrip("/") + "/") in path_norm for td in test_dirs if td):
+                    return False
+                # Naming pattern-based skip
+                patterns = (user_ctx.get("testing") or {}).get("naming", [])
+                base = os.path.basename(code_file.path)
+                if any(fnmatch.fnmatch(base, pat) for pat in patterns):
+                    return False
+        except Exception as e:
+            logger.debug("orphan_applicability_context_parse_failed", error=str(e))
 
         # Supported extensions: Python (native) + Universal AST languages
         supported_extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".cs"}

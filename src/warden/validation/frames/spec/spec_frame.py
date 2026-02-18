@@ -979,8 +979,8 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
             "metadata": metadata,
         }
 
-        # Store in project_context
-        self.project_context.spec_analysis = spec_data
+        # Store in project_context (merge to preserve user_context written by pre_analysis_phase)
+        self.project_context.spec_analysis.update(spec_data)
 
         logger.info(
             "project_context_enriched",

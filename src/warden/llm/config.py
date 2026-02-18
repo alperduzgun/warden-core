@@ -7,6 +7,7 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 
 import contextlib
 import os
+import shutil
 from dataclasses import dataclass, field
 
 from .types import LlmProvider
@@ -36,13 +37,12 @@ class ProviderConfig:
             List of validation errors (empty if valid)
         """
         errors = []
+        local_providers = {"ollama", "claude_code", "codex"}
 
         if not self.api_key:
-            # Local providers don't require an API key
-            local_providers = {"ollama", "claude_code"}
             if provider_name.lower() not in local_providers:
                 errors.append(f"{provider_name}: API key is required but not configured")
-        elif len(self.api_key) < 10 and provider_name.lower() not in {"ollama", "claude_code"}:
+        elif len(self.api_key) < 10 and provider_name.lower() not in local_providers:
             errors.append(f"{provider_name}: API key appears invalid (too short)")
 
         if not self.default_model:
@@ -96,6 +96,7 @@ class LlmConfiguration:
     openrouter: ProviderConfig = field(default_factory=ProviderConfig)
     ollama: ProviderConfig = field(default_factory=ProviderConfig)
     claude_code: ProviderConfig = field(default_factory=ProviderConfig)  # Local Claude Code CLI/SDK
+    codex: ProviderConfig = field(default_factory=ProviderConfig)  # Local Codex CLI
 
     # Model Tiering (Optional)
     smart_model: str | None = None  # High-reasoning model (e.g. gpt-4o)
@@ -123,6 +124,7 @@ class LlmConfiguration:
             LlmProvider.OPENROUTER: self.openrouter,
             LlmProvider.OLLAMA: self.ollama,
             LlmProvider.CLAUDE_CODE: self.claude_code,
+            LlmProvider.CODEX: self.codex,
         }
         return mapping.get(provider)
 
@@ -432,6 +434,15 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.claude_code.endpoint = "cli"
         configured_providers.append(LlmProvider.CLAUDE_CODE)
 
+    # Configure Codex (Local CLI) - auto-detect only
+    try:
+        if shutil.which("codex"):
+            config.codex.enabled = True
+            config.codex.endpoint = "cli"
+            configured_providers.append(LlmProvider.CODEX)
+    except Exception:
+        pass
+
     # --- AUTO-PILOT LOGIC ---
     # Determine Fast Tier Chain based on available credentials and service health
 
@@ -445,6 +456,14 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     # This fail-fast check prevents adding a dead service to the chain
     if await _check_ollama_availability(ollama_endpoint):
         detected_fast_tier.append(LlmProvider.OLLAMA)
+
+    # Priority 3: Claude Code (Local subscription) - fast for simple queries
+    if LlmProvider.CLAUDE_CODE in configured_providers:
+        detected_fast_tier.append(LlmProvider.CLAUDE_CODE)
+
+    # Priority 4: Codex (Local CLI) - read-only analysis via codex exec
+    if LlmProvider.CODEX in configured_providers:
+        detected_fast_tier.append(LlmProvider.CODEX)
 
     # Apply Auto-Detected chain if still at default.
     # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.

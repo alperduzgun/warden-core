@@ -103,6 +103,15 @@ LLM_PROVIDERS = {
         "default_model": "claude-sonnet-4-20250514",
         "ci_supported": False,  # Local CLI only — not available in CI runners
     },
+    "9": {
+        "id": "codex",
+        "name": "Codex (Local)",
+        "description": "Use local Codex CLI integration (file-based)",
+        "emoji": "🧩",
+        "requires_key": False,
+        "default_model": "codex-local",
+        "ci_supported": False,
+    },
 }
 
 
@@ -143,9 +152,10 @@ def select_llm_provider() -> dict:
     available = {k: v for k, v in LLM_PROVIDERS.items() if not is_ci or v.get("ci_supported", True)}
 
     # --provider flag support: init.py sets WARDEN_INIT_PROVIDER before calling configure_llm()
+    # Explicit --provider bypasses CI filter (user made an intentional choice)
     forced = os.environ.get("WARDEN_INIT_PROVIDER", "").strip().lower()
     if forced:
-        match = next((v for v in available.values() if v["id"] == forced), None)
+        match = next((v for v in LLM_PROVIDERS.values() if v["id"] == forced), None)
         if match:
             return match
         # Warn and fall through to interactive/auto selection
@@ -172,6 +182,10 @@ def select_llm_provider() -> dict:
                     detected_providers["8"] = " [green](Detected ✓)[/green]"
             except (subprocess.TimeoutExpired, Exception):
                 pass
+        # Check Codex availability as alternative local option
+        codex_path = shutil.which("codex")
+        if codex_path:
+            detected_providers["9"] = " [dim](Available)[/dim]"
 
     # Check Ollama availability
     if shutil.which("ollama"):
@@ -397,6 +411,52 @@ def configure_claude_code() -> tuple[dict, dict]:
     return llm_config, env_vars
 
 
+def configure_codex() -> tuple[dict, dict]:
+    """
+    Configure Codex (local Codex CLI).
+    Checks if Codex is installed, then writes a minimal CLI-based config.
+    Returns (llm_config, env_vars).
+    """
+    console.print("\n[bold cyan]🧩  Configuring Codex (Local)[/bold cyan]")
+
+    codex_path = shutil.which("codex")
+    is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
+
+    if not codex_path:
+        console.print("[yellow]⚠️  Codex CLI not found on PATH.[/yellow]")
+        console.print("[dim]Install it via: npm install -g @openai/codex[/dim]")
+
+        if is_interactive and Confirm.ask("Try a different provider?", default=True):
+            return _fallback_to_cloud_provider()
+
+        return {"provider": "codex", "model": "codex-local", "enabled": False}, {}
+
+    console.print(f"[green]✓ Codex CLI found at: {codex_path}[/green]")
+
+    try:
+        result = subprocess.run(["codex", "--version"], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            console.print(f"[green]✓ Codex version: {result.stdout.strip()}[/green]")
+        else:
+            console.print("[yellow]⚠️  Could not verify Codex version.[/yellow]")
+    except (subprocess.TimeoutExpired, Exception) as e:
+        console.print(f"[yellow]⚠️  Could not verify Codex: {e}[/yellow]")
+
+    console.print("[dim]💡 Codex operates via file-based CLI — no API key required.[/dim]")
+
+    llm_config = {
+        "provider": "codex",
+        "model": "codex-local",
+        "smart_model": "codex-local",
+        "fast_model": "codex-local",
+        "endpoint": "cli",
+        "timeout": 120,
+        "use_local_llm": True,
+    }
+
+    return llm_config, {}
+
+
 def _fallback_to_cloud_provider() -> tuple[dict, dict]:
     """Fallback when Ollama setup fails."""
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
@@ -551,6 +611,8 @@ def configure_llm(existing_config: dict = None) -> tuple[dict, dict]:
         return configure_azure()
     elif provider["id"] == "claude_code":
         return configure_claude_code()
+    elif provider["id"] == "codex":
+        return configure_codex()
     else:
         # For non-interactive fallback to deepseek or whatever if key exists,
         # but usually we want ollama for zero-config.

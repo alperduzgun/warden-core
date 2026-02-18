@@ -13,6 +13,8 @@ from warden.cli.commands.chat import chat_command
 from warden.cli.commands.ci import ci_app
 from warden.cli.commands.ci_config import ci_config_command
 from warden.cli.commands.config import config_app
+from warden.cli.commands.context import context_app
+from warden.cli.commands.codex import codex_app
 from warden.cli.commands.doctor import doctor as doctor_command
 from warden.cli.commands.init import init_command
 from warden.cli.commands.install import install as install_command
@@ -86,6 +88,8 @@ app.add_typer(serve_app, name="serve")
 app.add_typer(baseline_app, name="baseline")
 app.add_typer(ci_app, name="ci")
 app.add_typer(config_app, name="config")
+app.add_typer(context_app, name="context")
+app.add_typer(codex_app, name="codex")
 
 # Register Top-Level Commands
 app.command(name="version")(version_command)

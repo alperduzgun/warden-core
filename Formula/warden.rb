@@ -11,7 +11,7 @@ class Warden < Formula
   # Development Head
   head "https://github.com/alperduzgun/warden-core.git", branch: "main"
 
-  license "Proprietary"
+  license "Apache-2.0"
 
   depends_on "python@3.11"
 

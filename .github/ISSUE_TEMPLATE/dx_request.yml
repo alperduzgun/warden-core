@@ -1,0 +1,45 @@
+name: "DX improvement"
+description: "Improve developer experience (CLI, messages, config, docs)"
+labels: ["dx", "needs-triage"]
+title: "dx: <short summary>"
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI / Command UX
+        - Output / Messaging
+        - Config / Defaults
+        - Install / Setup
+        - Docs / Examples
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Friction
+      description: What makes the experience confusing or slow?
+      placeholder: Describe current behavior and why it’s painful.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What would a great experience look like?
+      placeholder: Include CLI examples, text copy, or config suggestions.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      placeholder: Who benefits, how often, and expected improvement.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues.
+        - label: Not a security vulnerability (see SECURITY.md).
+

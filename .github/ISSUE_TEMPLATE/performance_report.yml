@@ -1,0 +1,67 @@
+name: "Performance report"
+description: "Report performance, scaling, or token/window issues"
+labels: ["performance", "needs-triage"]
+title: "perf: <short summary>"
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario / Command
+      placeholder: e.g., `warden scan --diff` on mono‑repo, Python+TS, baseline enabled.
+    validations:
+      required: true
+  - type: input
+    id: p95
+    attributes:
+      label: p95 duration
+      placeholder: e.g., 58s
+  - type: input
+    id: repo_size
+    attributes:
+      label: Repo size / files
+      placeholder: e.g., ~4k files (~450k LOC)
+  - type: dropdown
+    id: llm_provider
+    attributes:
+      label: LLM Provider
+      options:
+        - ollama
+        - claude_code
+        - openai
+        - anthropic
+        - gemini
+        - groq
+        - deepseek
+        - azure_openai
+        - none / not applicable
+  - type: input
+    id: model
+    attributes:
+      label: Model name
+      placeholder: e.g., qwen2.5-coder:7b
+  - type: checkboxes
+    id: tier
+    attributes:
+      label: Execution tier
+      options:
+        - label: Fast tier (local)
+        - label: Smart tier (cloud)
+        - label: Offline (zombie mode)
+  - type: textarea
+    id: token_window
+    attributes:
+      label: Token/Context window symptoms
+      placeholder: Truncation warnings, degraded results, file sizes.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Output
+      render: bash
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: Verified on latest release
+        - label: Tested with `--diff` and baseline enabled
+        - label: Considered model context window limits
