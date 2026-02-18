@@ -12,13 +12,13 @@ from rich.prompt import Confirm, Prompt
 
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 from warden.cli.commands.init_helpers import (
+    _is_ci_environment,
     configure_agent_tools,
     configure_ci_workflow,
     configure_llm,
     configure_vector_db,
     generate_ai_tool_files,
     select_ci_provider,
-    _is_ci_environment,
 )
 from warden.cli.commands.install import install as run_install
 
