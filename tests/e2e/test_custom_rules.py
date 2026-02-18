@@ -273,6 +273,7 @@ class TestCustomRuleScan:
         ])
         # Should not crash with Python errors related to custom rules
         # Exit codes: 0=clean, 1=error, 2=policy failure
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2), f"Unexpected exit code {result.exit_code}"
         # Should not have custom rule parse errors
         assert "Missing required field 'conditions'" not in result.stdout
@@ -293,6 +294,7 @@ class TestCustomRuleScan:
             "--no-update-baseline"
         ])
         # Should complete without custom rule errors
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
         assert "Missing required field" not in result.stdout
 
@@ -310,6 +312,7 @@ class TestCustomRuleScan:
             "--no-update-baseline"
         ])
         # Should not crash, should gracefully handle missing rules
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_with_empty_rules_file(self, runner, isolated_project, monkeypatch):
@@ -324,6 +327,7 @@ class TestCustomRuleScan:
             "--no-update-baseline"
         ])
         # Should complete without errors loading empty rules
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
         assert "rules_loaded" in result.stdout or result.exit_code != 1
 
@@ -342,6 +346,7 @@ class TestCustomRuleScan:
             "--no-update-baseline"
         ])
         # Should complete without errors
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
         assert "Missing required field" not in result.stdout
 
@@ -361,6 +366,7 @@ class TestCustomRuleScan:
             "--no-update-baseline"
         ])
         # Should complete without errors
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
         assert "Invalid YAML" not in result.stdout
 
@@ -426,6 +432,7 @@ class TestCustomRuleDirectoryMerge:
             "--no-update-baseline"
         ])
         # Should load both files without crashing
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
         assert "Invalid YAML" not in result.stdout
 
@@ -462,6 +469,7 @@ class TestCustomRuleFileStructure:
             "--no-update-baseline"
         ])
         # Should ignore non-YAML files and not crash
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
         assert "Invalid YAML" not in result.stdout
 

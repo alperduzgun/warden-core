@@ -21,6 +21,7 @@ class ResourceDefinition:
     description: str
     mime_type: str
     file_path: str  # Relative to project root
+    resource_type: str = "file"  # Optional type hint (informational only)
 
 
 # Standard Warden resources
@@ -36,7 +37,7 @@ WARDEN_RESOURCES: list[ResourceDefinition] = [
         uri="warden://context",
         name="Warden Context",
         description="Warden machine-readable project context (.warden/context.yaml)",
-        resource_type=ResourceType.CONFIG,
+        resource_type="config",
         mime_type="application/x-yaml",
         file_path=".warden/context.yaml",
     ),

@@ -194,6 +194,7 @@ class TestSuppressionScan:
             "--no-update-baseline"
         ])
         # Should not crash with exit codes 0 (clean), 1 (error), or 2 (policy fail)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_with_disabled_suppression(self, runner, isolated_project, monkeypatch):
@@ -209,6 +210,7 @@ class TestSuppressionScan:
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_without_suppression_file(self, runner, isolated_project, monkeypatch):
@@ -224,6 +226,7 @@ class TestSuppressionScan:
             "--no-update-baseline"
         ])
         # Should not crash
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_with_inline_suppressed_file(self, runner, isolated_project, monkeypatch):
@@ -240,6 +243,7 @@ API_KEY = "test-secret-key"
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_with_global_rule_suppression(self, runner, isolated_project, monkeypatch):
@@ -255,6 +259,7 @@ API_KEY = "test-secret-key"
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_with_ignored_files_pattern(self, runner, isolated_project, monkeypatch):
@@ -270,6 +275,7 @@ API_KEY = "test-secret-key"
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
 
@@ -289,6 +295,7 @@ class TestSuppressionEdgeCases:
             "--no-update-baseline"
         ])
         # Should handle error gracefully
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_empty_suppression_file(self, runner, isolated_project, monkeypatch):
@@ -302,6 +309,7 @@ class TestSuppressionEdgeCases:
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_suppression_with_missing_type_field(self, runner, isolated_project, monkeypatch):
@@ -322,6 +330,7 @@ entries:
             "--no-update-baseline"
         ])
         # May fail due to validation error, but should not crash
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_suppression_with_invalid_type(self, runner, isolated_project, monkeypatch):
@@ -341,6 +350,7 @@ entries:
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_suppression_entry_with_line_number(self, isolated_project):

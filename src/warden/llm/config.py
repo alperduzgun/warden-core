@@ -7,7 +7,6 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 
 import contextlib
 import os
-import shutil
 from dataclasses import dataclass, field
 
 from .types import LlmProvider
@@ -171,7 +170,15 @@ DEFAULT_MODELS = {
     LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
     LlmProvider.OLLAMA: "qwen2.5-coder:0.5b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
+    LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
 }
+
+# CLI-tool providers that manage their own model selection.
+# Duplicated from factory.py to avoid circular imports (config ← types, factory ← config).
+_SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset({
+    LlmProvider.CLAUDE_CODE,
+    LlmProvider.CODEX,
+})
 
 
 def create_default_config() -> LlmConfiguration:
@@ -242,6 +249,30 @@ async def _check_ollama_availability(endpoint: str) -> bool:
             response = await client.get(endpoint)
             return response.status_code == 200
     except Exception:
+        return False
+
+
+async def _check_codex_availability() -> bool:
+    """
+    Fast check if Codex CLI is installed and responsive.
+    Mirrors the Claude Code check: require both PATH presence AND a working binary.
+    """
+    import asyncio
+    import shutil
+
+    if not shutil.which("codex"):
+        return False
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "codex",
+            "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(process.communicate(), timeout=2.0)
+        return process.returncode == 0
+    except (asyncio.TimeoutError, Exception):
         return False
 
 
@@ -434,14 +465,11 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.claude_code.endpoint = "cli"
         configured_providers.append(LlmProvider.CLAUDE_CODE)
 
-    # Configure Codex (Local CLI) - auto-detect only
-    try:
-        if shutil.which("codex"):
-            config.codex.enabled = True
-            config.codex.endpoint = "cli"
-            configured_providers.append(LlmProvider.CODEX)
-    except Exception:
-        pass
+    # Configure Codex (Local CLI) - auto-detect only (mirrors Claude Code check)
+    if await _check_codex_availability():
+        config.codex.enabled = True
+        config.codex.endpoint = "cli"
+        configured_providers.append(LlmProvider.CODEX)
 
     # --- AUTO-PILOT LOGIC ---
     # Determine Fast Tier Chain based on available credentials and service health
@@ -557,5 +585,12 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
                     cfg.enabled = False
 
             logger.debug("providers_blocked", blocked=[p.value for p in blocked])
+
+    # FINAL: CLI-tool providers (Codex, Claude Code) are single-tier by design.
+    # They manage model selection internally — fast_tier is irrelevant when they are primary.
+    # Clearing here keeps config state consistent with factory.py's SINGLE_TIER_PROVIDERS logic.
+    if config.default_provider in _SINGLE_TIER_PROVIDERS:
+        config.fast_tier_providers = []
+        logger.debug("fast_tier_cleared_single_provider_mode", provider=config.default_provider.value)
 
     return config

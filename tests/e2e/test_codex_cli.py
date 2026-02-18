@@ -99,6 +99,41 @@ def test_codex_send_async_no_cli(monkeypatch):
 
 
 @pytest.mark.e2e
+def test_codex_exec_cmd_has_argument_terminator():
+    """Bug #6 – 'codex exec' must include '--' before the prompt to prevent flag injection."""
+    import asyncio as _asyncio
+
+    from warden.llm.providers.codex import CodexClient
+    from warden.llm.types import LlmRequest
+
+    captured_cmd: list[str] = []
+
+    mock_proc = Mock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
+
+    async def _capture_exec(*cmd, **_kwargs):
+        captured_cmd.extend(cmd)
+        return mock_proc
+
+    # No Path.read_text mock: temp file is empty → CodexClient falls back to stdout.
+    # This exercises the real stdout-fallback path in send_async.
+    with patch("shutil.which", return_value="/usr/local/bin/codex"), \
+         patch("asyncio.create_subprocess_exec", side_effect=_capture_exec):
+        client = CodexClient()
+        req = LlmRequest(systemPrompt="sys", userMessage="--inject-flag if unguarded")
+        _asyncio.run(client.send_async(req))
+
+    # "--" must appear in the command and come BEFORE the prompt
+    assert "--" in captured_cmd, "'--' argument terminator missing from codex exec command"
+    terminator_idx = captured_cmd.index("--")
+    prompt_idx = next(
+        i for i, a in enumerate(captured_cmd) if "--inject-flag" in a
+    )
+    assert terminator_idx < prompt_idx, "'--' must come before the prompt argument"
+
+
+@pytest.mark.e2e
 def test_codex_send_async_with_cli():
     """send_async succeeds when codex exec returns output."""
     import asyncio
@@ -108,13 +143,18 @@ def test_codex_send_async_with_cli():
     from warden.llm.providers.codex import CodexClient
     from warden.llm.types import LlmRequest
 
+    captured_cmd: list[str] = []
     mock_proc = Mock()
     mock_proc.returncode = 0
+    # Stdout carries the response — temp file is empty, exercises real stdout-fallback path.
     mock_proc.communicate = AsyncMock(return_value=(b"analysis result", b""))
 
+    async def _capture(  *cmd, **_kw):
+        captured_cmd.extend(cmd)
+        return mock_proc
+
     with patch("shutil.which", return_value="/usr/local/bin/codex"), \
-         patch("asyncio.create_subprocess_exec", return_value=mock_proc), \
-         patch("pathlib.Path.read_text", return_value="analysis result"):
+         patch("asyncio.create_subprocess_exec", side_effect=_capture):
         client = CodexClient()
         req = LlmRequest(systemPrompt="Analyze code.", userMessage="def foo(): pass")
         resp = asyncio.run(client.send_async(req))
@@ -122,6 +162,11 @@ def test_codex_send_async_with_cli():
     assert resp.success is True
     assert resp.content == "analysis result"
     assert resp.provider.value == "codex"
+    # Key flags must be present in the command
+    assert "exec" in captured_cmd
+    assert "--sandbox" in captured_cmd
+    assert "read-only" in captured_cmd
+    assert "--" in captured_cmd
 
 
 @pytest.mark.e2e
@@ -149,6 +194,85 @@ def test_codex_send_async_real_invocation():
 
 
 @pytest.mark.e2e
+def test_codex_mcp_setup_registers_in_toml(runner, tmp_path, monkeypatch):
+    """mcp-setup writes [mcp_servers.warden] into ~/.codex/config.toml."""
+    fake_codex_dir = tmp_path / ".codex"
+    fake_codex_dir.mkdir()
+    fake_config = fake_codex_dir / "config.toml"
+
+    # Patch get_mcp_config_paths to return our tmp path
+    with patch(
+        "warden.mcp.infrastructure.mcp_config_paths.get_mcp_config_paths",
+        return_value={"Codex": fake_config},
+    ), patch("shutil.which", side_effect=lambda cmd: f"/usr/local/bin/{cmd}"):
+        res = runner.invoke(app, ["codex", "mcp-setup"])
+
+    assert res.exit_code == 0, res.stdout
+    assert "registered" in res.stdout.lower() or "✓" in res.stdout
+
+    content = fake_config.read_text(encoding="utf-8")
+    assert "[mcp_servers.warden]" in content
+    assert "warden" in content
+    assert '"serve", "mcp", "start"' in content or "serve" in content
+
+
+@pytest.mark.e2e
+def test_codex_mcp_setup_idempotent(runner, tmp_path):
+    """Running mcp-setup twice skips the second registration."""
+    fake_config = tmp_path / "config.toml"
+
+    with patch(
+        "warden.mcp.infrastructure.mcp_config_paths.get_mcp_config_paths",
+        return_value={"Codex": fake_config},
+    ), patch("shutil.which", side_effect=lambda cmd: f"/usr/local/bin/{cmd}"):
+        runner.invoke(app, ["codex", "mcp-setup"])  # first
+        res2 = runner.invoke(app, ["codex", "mcp-setup"])  # second
+
+    assert res2.exit_code == 0
+    assert "already" in res2.stdout.lower() or "skipped" in res2.stdout.lower()
+
+    # Section appears exactly once
+    content = fake_config.read_text(encoding="utf-8")
+    assert content.count("[mcp_servers.warden]") == 1
+
+
+@pytest.mark.e2e
+def test_codex_mcp_setup_appends_to_existing_toml(runner, tmp_path):
+    """mcp-setup preserves existing TOML content when appending."""
+    fake_config = tmp_path / "config.toml"
+    fake_config.write_text('[projects."/Users/alper"]\ntrust_level = "trusted"\n', encoding="utf-8")
+
+    with patch(
+        "warden.mcp.infrastructure.mcp_config_paths.get_mcp_config_paths",
+        return_value={"Codex": fake_config},
+    ), patch("shutil.which", side_effect=lambda cmd: f"/usr/local/bin/{cmd}"):
+        res = runner.invoke(app, ["codex", "mcp-setup"])
+
+    assert res.exit_code == 0
+    content = fake_config.read_text(encoding="utf-8")
+    # Existing content preserved
+    assert 'trust_level = "trusted"' in content
+    # Warden section added
+    assert "[mcp_servers.warden]" in content
+
+
+@pytest.mark.e2e
+def test_serve_mcp_register_includes_codex(runner, tmp_path):
+    """warden serve mcp register also handles Codex TOML config."""
+    fake_config = tmp_path / "config.toml"
+
+    with patch(
+        "warden.mcp.infrastructure.mcp_config_paths.get_mcp_config_paths",
+        return_value={"Codex": fake_config},
+    ), patch("shutil.which", side_effect=lambda cmd: f"/usr/local/bin/{cmd}"):
+        res = runner.invoke(app, ["serve", "mcp", "register"])
+
+    assert res.exit_code == 0
+    content = fake_config.read_text(encoding="utf-8")
+    assert "[mcp_servers.warden]" in content
+
+
+@pytest.mark.e2e
 def test_scan_uses_codex_as_provider(monkeypatch, tmp_path):
     """
     Integration: warden scan pipeline uses CodexClient when WARDEN_LLM_PROVIDER=codex.
@@ -170,9 +294,9 @@ def test_scan_uses_codex_as_provider(monkeypatch, tmp_path):
 
     monkeypatch.setenv("WARDEN_LLM_PROVIDER", "codex")
 
+    # No Path.read_text mock: temp file is empty → falls back to stdout content.
     with patch("shutil.which", side_effect=lambda cmd: f"/usr/local/bin/{cmd}"), \
-         patch("asyncio.create_subprocess_exec", return_value=mock_proc), \
-         patch("pathlib.Path.read_text", return_value="No critical issues found."):
+         patch("asyncio.create_subprocess_exec", return_value=mock_proc):
 
         from warden.cli.commands.scan import _run_scan_async
         exit_code = asyncio.run(_run_scan_async(

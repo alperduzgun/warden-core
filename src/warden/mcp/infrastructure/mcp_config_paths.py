@@ -24,6 +24,7 @@ def get_mcp_config_paths() -> dict[str, Path]:
         "Cursor": home / ".cursor" / "mcp.json",
         "Windsurf": home / ".windsurf" / "mcp.json",
         "Gemini (Antigravity)": home / ".gemini" / "antigravity" / "mcp_config.json",
+        "Codex": home / ".codex" / "config.toml",
     }
 
 
@@ -47,6 +48,7 @@ SAFE_CONFIG_DIR_PATTERNS = frozenset(
         ".cursor",  # Cursor IDE
         ".windsurf",  # Windsurf IDE
         ".gemini",  # Google Gemini
+        ".codex",   # OpenAI Codex CLI
     }
 )
 

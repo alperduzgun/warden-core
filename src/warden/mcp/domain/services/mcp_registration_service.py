@@ -66,6 +66,10 @@ class MCPRegistrationService:
             else:
                 return RegistrationResult(tool_name, "skipped", config_path, "Unsafe directory creation prevented")
 
+        # Codex uses TOML format; all others use JSON
+        if config_path.suffix == ".toml":
+            return self._register_toml(tool_name, config_path)
+
         try:
             # 2. Read existing (Self-Healing)
             data = self._read_config_safe(config_path)
@@ -84,6 +88,47 @@ class MCPRegistrationService:
 
             # 5. Atomic Write
             self._write_config_atomic(config_path, data)
+
+            return RegistrationResult(tool_name, "registered", config_path)
+
+        except Exception as e:
+            return RegistrationResult(tool_name, "error", config_path, str(e))
+
+    def _register_toml(self, tool_name: str, config_path: Path) -> RegistrationResult:
+        """Register warden MCP in a TOML config file (e.g. ~/.codex/config.toml)."""
+        section = "[mcp_servers.warden]"
+        entry = (
+            f"\n{section}\n"
+            f'command = "{self.warden_path}"\n'
+            f'args = ["serve", "mcp", "start"]\n'
+        )
+        try:
+            existing = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+
+            # Idempotency: section already present with same command
+            if section in existing and self.warden_path in existing:
+                return RegistrationResult(tool_name, "skipped", config_path, "Already registered")
+
+            # Remove stale warden section if command differs, then re-append
+            if section in existing:
+                import re
+                existing = re.sub(
+                    r"\n?\[mcp_servers\.warden\][^\[]*",
+                    "",
+                    existing,
+                    flags=re.DOTALL,
+                ).rstrip()
+
+            updated = existing.rstrip() + entry
+            fd, tmp = tempfile.mkstemp(dir=config_path.parent, prefix=".mcp_reg_", suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(updated)
+                os.replace(tmp, config_path)
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp)
+                raise
 
             return RegistrationResult(tool_name, "registered", config_path)
 

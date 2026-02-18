@@ -84,7 +84,8 @@ class CodexClient(ILlmClient):
             # Only pass -m when user has configured a real model (not the placeholder)
             if model and model != "codex-local":
                 cmd.extend(["-m", model])
-            cmd.append(full_prompt)
+            # "--" terminates option parsing so a prompt starting with "--" is safe
+            cmd.extend(["--", full_prompt])
 
             proc = await asyncio.create_subprocess_exec(
                 *cmd,

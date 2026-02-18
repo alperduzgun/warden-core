@@ -53,9 +53,21 @@ class OrchestratedLlmClient(ILlmClient):
         self.metrics = metrics_collector
 
         if not self.fast_clients:
-            logger.warning(
-                "orchestrated_client_no_fast_tier", message="Running in Smart-Only mode (slower, higher cost)"
-            )
+            # CLI-tool providers (Codex, Claude Code) are intentionally single-tier:
+            # they manage model selection internally so no fast/smart split is needed.
+            # Avoid misleading "slower, higher cost" log for these providers.
+            _single_tier = {LlmProvider.CLAUDE_CODE, LlmProvider.CODEX}
+            if smart_client.provider in _single_tier:
+                logger.info(
+                    "orchestrated_client_single_provider_mode",
+                    provider=smart_client.provider.value,
+                    message="CLI tool manages its own model — all requests route through one provider",
+                )
+            else:
+                logger.warning(
+                    "orchestrated_client_no_fast_tier",
+                    message="Running in Smart-Only mode (no fast tier configured)",
+                )
         else:
             fast_providers = [c.provider.value for c in self.fast_clients]
             logger.info(

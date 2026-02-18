@@ -89,6 +89,7 @@ class TestScanExitCodes:
         ])
         # Exit codes: 0=clean, 1=error (e.g., config issue), 2=policy failure
         # The scan may fail with exit 1 if there are config/frame errors
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2), f"Unexpected exit code {result.exit_code}"
 
     def test_scan_basic_vulnerable_file(self, runner, isolated_project, monkeypatch):
@@ -101,6 +102,7 @@ class TestScanExitCodes:
             "--format", "text"
         ])
         # Vulnerable file may exit 0 (basic level misses issues) or 2 (finds issues)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2), f"Unexpected exit code {result.exit_code}"
 
     def test_scan_nonexistent_path_fails(self, runner, isolated_project, monkeypatch):
@@ -131,6 +133,7 @@ class TestScanFormats:
         ])
 
         # Should complete (0=clean, 2=findings)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Note: --format json without --output may not print JSON to stdout
@@ -148,6 +151,7 @@ class TestScanFormats:
         ])
 
         # Should complete
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_format_text_readable(self, runner, isolated_project, monkeypatch):
@@ -160,6 +164,7 @@ class TestScanFormats:
             "--format", "text"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Text format should produce some output
@@ -191,6 +196,7 @@ class TestScanOutputFiles:
             "--output", str(output_file)
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # File should exist only if scan completed (exit 0 or 2)
@@ -221,6 +227,7 @@ class TestScanOutputFiles:
             "--output", str(output_file)
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # File should exist only if scan completed
@@ -252,6 +259,7 @@ class TestScanOutputFiles:
             "--output", str(output_file)
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Only verify file exists if scan completed successfully
@@ -276,6 +284,7 @@ class TestScanOutputStructure:
             "--output", str(output_file)
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Only validate structure if scan completed
@@ -306,6 +315,7 @@ class TestScanOutputStructure:
             "--output", str(output_file)
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Only validate structure if scan completed
@@ -384,6 +394,7 @@ class TestScanFlags:
             "--no-update-baseline"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Marker file should not be modified
@@ -401,6 +412,7 @@ class TestScanFlags:
             "--verbose"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # In verbose mode, should see security frame execution
@@ -447,6 +459,7 @@ class TestScanFlags:
         ])
 
         # Should complete without LLM errors
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Should show zombie mode warning
@@ -497,6 +510,7 @@ class TestScanErrorHandling:
 
         # Typer should handle invalid choice gracefully
         # May exit with error or proceed with default format
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
 
@@ -515,6 +529,7 @@ class TestScanMultipleFiles:
             "--level", "basic"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_entire_directory(self, runner, isolated_project, monkeypatch):
@@ -527,6 +542,7 @@ class TestScanMultipleFiles:
             "--level", "basic"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Should scan multiple files
@@ -542,6 +558,7 @@ class TestScanMultipleFiles:
         ])
 
         # Should scan current directory (project root)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
 
@@ -562,6 +579,7 @@ class TestScanAdvancedFlags:
 
         # Should accept the flag without error
         # May exit 0, 1 (no git), or 2 (findings)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_ci_flag_accepted(self, runner, isolated_project, monkeypatch):
@@ -576,6 +594,7 @@ class TestScanAdvancedFlags:
         ])
 
         # Should accept the flag
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # CI mode may suppress interactive output
@@ -593,6 +612,7 @@ class TestScanAdvancedFlags:
         ])
 
         # Should run only security frame
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Note: This is tested in TestScanFlags, but included here for completeness
@@ -610,6 +630,7 @@ class TestScanAdvancedFlags:
         ])
 
         # Should accept the flag (requires git context)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_output_to_custom_path(self, runner, isolated_project, monkeypatch, tmp_path):
@@ -625,6 +646,7 @@ class TestScanAdvancedFlags:
             "--level", "basic"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # File should exist only if scan completed
@@ -649,6 +671,7 @@ class TestScanAdvancedFlags:
         ])
 
         # Should accept multiple --frame flags
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Should run both security and antipattern frames
@@ -665,6 +688,7 @@ class TestScanAdvancedFlags:
 
         # Deep level may fail without LLM or complete with findings
         # Accept any exit code as long as command is processed
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_diff_without_base_uses_default(self, runner, isolated_project, monkeypatch):
@@ -679,6 +703,7 @@ class TestScanAdvancedFlags:
         ])
 
         # Should use default base (e.g., main or origin/main)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_ci_mode_with_output(self, runner, isolated_project, monkeypatch, tmp_path):
@@ -695,6 +720,7 @@ class TestScanAdvancedFlags:
             "--level", "basic"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # In CI mode, output should still be written if scan completes
@@ -718,6 +744,7 @@ class TestScanAdvancedFlags:
             "--level", "basic"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         # Should show verbose output for security frame
@@ -735,6 +762,7 @@ class TestScanAdvancedFlags:
             "--level", "basic"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         if result.exit_code in (0, 2):
@@ -756,6 +784,7 @@ class TestScanAdvancedFlags:
             "--level", "basic"
         ])
 
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
         if result.exit_code in (0, 2):

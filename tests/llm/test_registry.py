@@ -35,6 +35,7 @@ def test_ensure_providers_registered():
         LlmProvider.OLLAMA,
         LlmProvider.GEMINI,
         LlmProvider.CLAUDE_CODE,
+        LlmProvider.CODEX,
     }
 
     assert registered == expected
@@ -47,7 +48,7 @@ def test_ensure_providers_idempotent():
     _ensure_providers_registered()
     count_second = len(ProviderRegistry.available())
 
-    assert count_first == count_second == 9
+    assert count_first == count_second == 10
 
 
 def test_registry_is_registered():
@@ -58,8 +59,8 @@ def test_registry_is_registered():
 
 
 def test_registry_available_count():
-    """Registry should have all 9 providers available"""
-    assert len(ProviderRegistry.available()) == 9
+    """Registry should have all 10 providers available"""
+    assert len(ProviderRegistry.available()) == 10
 
 
 def test_registry_create_anthropic():
