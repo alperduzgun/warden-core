@@ -329,12 +329,13 @@ class PhaseOrchestrator:
             raise RuntimeError(error_msg)
 
         except RuntimeError as e:
+            self.pipeline.status = PipelineStatus.FAILED
+            context.errors.append(str(e))
             if "Integrity check failed" in str(e):
                 logger.error("integrity_check_failed", error=str(e))
-                self.pipeline.status = PipelineStatus.FAILED
-                context.errors.append(str(e))
                 # Add a dummy result so CLI can show it
                 return context
+            logger.error("pipeline_runtime_error", error=str(e), pipeline_id=context.pipeline_id)
             raise e
 
         except Exception as e:
