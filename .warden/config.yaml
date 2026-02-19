@@ -166,7 +166,7 @@ settings:
     enabled: true
     model: qwen2.5-coder:0.5b
     batch_size: 2
-  timeout: 300
+  timeout: 1800
 custom_rules:
 - .warden/rules/my_custom_rules.yaml
 - .warden/rules/warden_core_rules.yaml

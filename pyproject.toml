@@ -1,9 +1,10 @@
 [build-system]
-requires = ["setuptools>=46.1.0", "setuptools_scm>=6.2", "setuptools-rust>=1.5.0", "wheel"]
+requires = ["setuptools>=46.1.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "warden-core"
+version = "2.2.2"
 description = "Warden - AI Code Guardian for comprehensive code validation"
 requires-python = ">=3.10"
 authors = [{name = "Warden Team", email = "warden-core@proton.me"}]
@@ -19,13 +20,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-
-[project.urls]
-Homepage = "https://github.com/alperduzgun/warden-core"
-Repository = "https://github.com/alperduzgun/warden-core"
-Issues = "https://github.com/alperduzgun/warden-core/issues"
-Documentation = "https://github.com/alperduzgun/warden-core#readme"
-dynamic = ["version"]
 dependencies = [
     "typer>=0.15.0",
     "rich>=13.7.0,<14.0.0",
@@ -50,6 +44,12 @@ dependencies = [
     "python-dotenv>=1.0.0,<2.0.0",
     "tomli>=2.0; python_version < '3.11'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/alperduzgun/warden-core"
+Repository = "https://github.com/alperduzgun/warden-core"
+Issues = "https://github.com/alperduzgun/warden-core/issues"
+Documentation = "https://github.com/alperduzgun/warden-core#readme"
 
 [project.optional-dependencies]
 semantic = [
@@ -77,8 +77,16 @@ cloud = [
 [project.scripts]
 warden = "warden.main:main"
 
+[tool.setuptools.package-data]
+"warden" = [
+    "validation/frames/security/models/**/*.yaml",
+    "validation/frames/security/models/*.yaml",
+    "templates/**/*",
+]
+
 [tool.setuptools_scm]
 write_to = "src/warden/_version.py"
+fallback_version = "2.2.2"
 
 # ============================================================
 # Ruff - Fast Python linter and formatter

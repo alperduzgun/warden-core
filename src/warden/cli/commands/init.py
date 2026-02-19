@@ -120,6 +120,84 @@ def _generate_ignore_file(root: Path, meta):
     console.print("[green]Created .wardenignore (Smart Deduplication Active)[/green]")
 
 
+def _write_default_taint_catalog(catalog_path: Path) -> None:
+    """Write a commented-out taint_catalog.yaml scaffold for user extension."""
+    from warden.validation.frames.security._internal.taint_analyzer import (  # noqa: PLC0415
+        JS_SANITIZERS,
+        JS_TAINT_SINKS,
+        JS_TAINT_SOURCES,
+        KNOWN_SANITIZERS,
+        TAINT_SINKS,
+        TAINT_SOURCES,
+    )
+
+    def _comment_list(items: list[str], indent: str = "    ") -> str:
+        return "\n".join(f"{indent}# - {item}" for item in sorted(items))
+
+    def _comment_dict_keys(d: dict[str, str], sink_type: str, indent: str = "    ") -> str:
+        keys = sorted(k for k, v in d.items() if v == sink_type)
+        return "\n".join(f"{indent}# - {k}" for k in keys)
+
+    sink_types = ["SQL-value", "CMD-argument", "HTML-content", "CODE-execution", "FILE-path"]
+
+    sinks_section = ""
+    for st in sink_types:
+        py_keys = _comment_dict_keys(TAINT_SINKS, st)
+        js_keys = _comment_dict_keys(JS_TAINT_SINKS, st)
+        builtin_comments = "\n".join(filter(None, [py_keys, js_keys]))
+        sinks_section += f"  {st}:\n"
+        if builtin_comments:
+            sinks_section += f"    # Built-in (always active — shown for reference):\n"
+            sinks_section += builtin_comments + "\n"
+        sinks_section += "    # Add your custom sinks below:\n\n"
+
+    sanitizers_section = ""
+    for st in sink_types:
+        py_sans = KNOWN_SANITIZERS.get(st, set())
+        js_sans = JS_SANITIZERS.get(st, set())
+        all_sans = sorted(py_sans | js_sans)
+        sanitizers_section += f"  {st}:\n"
+        if all_sans:
+            sanitizers_section += "    # Built-in (always active — shown for reference):\n"
+            sanitizers_section += "\n".join(f"    # - {s}" for s in all_sans) + "\n"
+        sanitizers_section += "    # Add your custom sanitizers below:\n\n"
+
+    content = f"""# Warden Taint Catalog
+# Built-in defaults are always active. Add entries here to EXTEND them.
+# Warden performs a UNION — your custom entries are added, never replacing built-ins.
+#
+# Format:
+#   sources:
+#     python:
+#       - my.custom.source
+#     javascript:
+#       - ctx.request.body
+#   sinks:
+#     SQL-value:
+#       - prisma.raw
+#   sanitizers:
+#     HTML-content:
+#       - myCustomSanitizer
+
+sources:
+  python:
+    # Built-in Python sources (always active — shown for reference):
+{_comment_list(list(TAINT_SOURCES))}
+    # Add your custom Python sources below:
+
+  javascript:
+    # Built-in JavaScript/TypeScript sources (always active — shown for reference):
+{_comment_list(list(JS_TAINT_SOURCES))}
+    # Add your custom JavaScript sources below:
+
+sinks:
+{sinks_section}
+sanitizers:
+{sanitizers_section}
+"""
+    catalog_path.write_text(content, encoding="utf-8")
+
+
 def _setup_semantic_search(config_path: Path):
     """
     Initialize semantic search:
@@ -649,6 +727,21 @@ def init_command(
         for frame in meta.suggested_frames:
             frames_config[frame] = {"enabled": True}
 
+        # Add taint thresholds for security frame (import central defaults)
+        if "security" in frames_config:
+            from warden.validation.frames.security._internal.taint_analyzer import TAINT_DEFAULTS  # noqa: PLC0415
+
+            taint_init = {
+                "confidence_threshold": TAINT_DEFAULTS["confidence_threshold"],
+                "sanitizer_penalty": TAINT_DEFAULTS["sanitizer_penalty"],
+            }
+            # Mode-based adjustment
+            if mode_choice == "3":  # Strict — catch more taint flows
+                taint_init["confidence_threshold"] = 0.7
+            elif mode_choice == "1":  # Vibe — only high-confidence
+                taint_init["confidence_threshold"] = 0.9
+            frames_config["security"]["taint"] = taint_init
+
         # Apply mode settings
         if mode_choice == "1":  # Vibe
             for f in frames_config:
@@ -769,6 +862,15 @@ def init_command(
             with open(config_path, "w") as f:
                 yaml.dump(existing_config, f, default_flow_style=False)
             console.print("[green]Merged configuration successfully.[/green]")
+
+    # --- Step 5.5: Taint Catalog Scaffold ---
+    catalog_path = warden_dir / "taint_catalog.yaml"
+    if not catalog_path.exists():
+        try:
+            _write_default_taint_catalog(catalog_path)
+            console.print(f"[green]Created taint catalog: [bold]{catalog_path}[/bold][/green]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not create taint_catalog.yaml: {e}[/yellow]")
 
     # --- Step 6: Ignore Files ---
     _generate_ignore_file(Path.cwd(), meta)

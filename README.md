@@ -37,12 +37,12 @@ Warden provides the **"Verify-Loop"** mechanism to ensure every AI-generated cha
 ## 🌍 Universal Language Support
 Warden's **Engine** runs on Python/Rust, but it validates code in **any language**.
 
-| Category | Supported Languages (Native) |
-| :--- | :--- |
-| **Mobile** | **Flutter (Dart)**, Swift, Kotlin, React Native |
-| **Backend** | Python, **Go**, **Rust**, Node.js (TS/JS), Java |
-| **Frontend** | React, Vue, Angular, HTML/CSS |
-| **Scripting** | Shell (Bash), Lua, Perl |
+| Category | Supported Languages (Native) | Taint Analysis |
+| :--- | :--- | :--- |
+| **Mobile** | **Flutter (Dart)**, Swift, Kotlin, React Native | - |
+| **Backend** | Python, **Go**, **Rust**, Node.js (TS/JS), **Java** | Python, Go, Java, JS/TS |
+| **Frontend** | React, Vue, Angular, HTML/CSS | JS/TS (DOM XSS) |
+| **Scripting** | Shell (Bash), Lua, Perl | - |
 
 > **Pro Tip:** Warden can orchestrate *existing* tools. Already using `very_good_analysis` for Flutter? Warden wraps it, giving it a unified interface and fixing capabilities.
 
@@ -127,13 +127,97 @@ llm:
 
 ### 4. 🛡️ Core Validation Frames (Built-in)
 Warden ships with 6 powerful core frames:
-1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS).
+1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS) with **multi-language taint analysis**.
 2.  **ResilienceFrame:** Validates error handling, retry, and circuit-breaker patterns.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
 4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
     - **Why SpecFrame?** Unit tests only prove that components work *internally*. SpecFrame is the only mechanism that audits both sides simultaneously to detect "Invisible Drift" (e.g., when the Frontend and Backend start speaking different languages). It automatically identifies what is missing or incorrect in the Consumer/Provider pair.
 5.  **AntiPatternFrame:** Detects code smells, god classes, and bad practices.
 6.  **OrphanFrame:** Detects dead code and unreferenced assets.
+
+#### 🔍 Source-to-Sink Taint Analysis (Shared Service)
+
+Warden includes a multi-language **taint tracking engine** that traces untrusted user input from its source to dangerous sinks (SQL queries, shell commands, HTML rendering, etc.).
+
+Taint analysis runs as a **shared service** during the Pre-Analysis phase — computed once per pipeline run, consumed by multiple frames:
+
+| Frame | How It Uses Taint Data |
+| :--- | :--- |
+| **SecurityFrame** | Direct vulnerability detection — unsanitized source-to-sink paths become findings |
+| **FuzzFrame** | Taint sources become **high-priority fuzz targets** — focused edge-case testing on real input paths |
+| **ResilienceFrame** | Findings on tainted paths get **severity boost** (medium → high) — missing resilience on user-controlled data is riskier |
+
+```
+Pipeline Phase 0 (PRE-ANALYSIS)
+  └── TaintAnalysisService           ← catalog loaded once, all files scanned
+        └── context.taint_paths = {file → [TaintPath, ...]}
+                │
+    ┌───────────┼───────────┐
+    ▼           ▼           ▼
+SecurityFrame  FuzzFrame  ResilienceFrame
+ (shared-first, inline fallback)
+```
+
+**Supported Languages:**
+
+| Language | Analysis Method | Frameworks |
+| :--- | :--- | :--- |
+| **Python** | AST-based (single-function scope) | Flask, FastAPI, Django, stdlib |
+| **JavaScript/TypeScript** | Regex-based (3-pass propagation) | Express.js, Koa.js, Browser DOM, Node.js |
+| **Go** | Regex-based (3-pass propagation) | net/http, database/sql |
+| **Java** | Regex-based (3-pass propagation) | Servlet, Spring (JdbcTemplate) |
+
+**Three-Layer Catalog Architecture:**
+
+```
+Layer 1  Built-in YAML model packs   (models/{lang}/*.yaml)
+Layer 2  Hardcoded constants          (baseline guarantee, always active)
+Layer 3  User overrides               (.warden/taint_catalog.yaml)
+```
+
+All layers are **unioned** — user entries never replace built-in defaults.
+
+**Heuristic Signal Inference:**
+For unknown frameworks, a signal-based inference engine (`signals.yaml`) detects potential sources and sinks by analyzing method names, parameter hints, and module patterns. Confidence scores are lower (0.60-0.70) compared to explicit model packs (0.99).
+
+**Extending the Catalog:**
+
+Add custom sources, sinks, or sanitizers via `.warden/taint_catalog.yaml`:
+
+```yaml
+sources:
+  python:
+    - fastapi.Request.query_params
+  go:
+    - gin.Context.Query
+  javascript:
+    - ctx.request.body
+
+sinks:
+  SQL-value:
+    - prisma.raw
+    - mongoose.exec
+
+sanitizers:
+  HTML-content:
+    - myCustomSanitizer
+```
+
+**Adding Taint Awareness to Custom Frames:**
+
+Any frame can consume taint data by implementing the `TaintAware` mixin:
+
+```python
+from warden.validation.domain.mixins import TaintAware
+
+class MyCustomFrame(ValidationFrame, TaintAware):
+    def set_taint_paths(self, taint_paths):
+        self._taint_paths = taint_paths
+
+    async def execute_async(self, code_file):
+        paths = self._taint_paths.get(code_file.path, [])
+        # Use taint paths in your analysis logic
+```
 
 ### 5. 🧩 Warden Hub (Marketplace)
 Need more power? Install specialized frames from the community:

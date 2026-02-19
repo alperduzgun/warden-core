@@ -89,3 +89,28 @@ class Cleanable(ABC):
         Subclasses should override this to nullify large objects, close connections, etc.
         """
         raise NotImplementedError
+
+
+class TaintAware(ABC):
+    """
+    Mixin for frames that consume pre-computed taint analysis results.
+
+    Frames implementing this mixin receive taint paths (source-to-sink flows)
+    from the shared ``TaintAnalysisService``.  The pipeline's ``FrameRunner``
+    calls ``set_taint_paths`` before frame execution.
+
+    Example:
+        class MyFrame(ValidationFrame, TaintAware):
+            def set_taint_paths(self, taint_paths):
+                self._taint_paths = taint_paths
+    """
+
+    @abstractmethod
+    def set_taint_paths(self, taint_paths: dict[str, list[Any]]) -> None:
+        """
+        Inject pre-computed taint paths for all files.
+
+        Args:
+            taint_paths: Mapping of file_path to list of TaintPath objects.
+        """
+        raise NotImplementedError

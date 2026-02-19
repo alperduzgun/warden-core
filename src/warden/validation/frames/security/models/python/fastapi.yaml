@@ -1,0 +1,30 @@
+meta:
+  framework: fastapi
+  language: python
+
+sources:
+  - pattern: "Request.query_params"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "Request.body"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "Request.form"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "Request.headers"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "Request.cookies"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "request.query_params"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.body"
+    role: HTTP_INPUT
+    confidence: 0.99
+
+sinks: []
+
+sanitizers: []

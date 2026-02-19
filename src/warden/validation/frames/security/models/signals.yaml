@@ -1,0 +1,107 @@
+# Signal-based heuristic inference for unknown frameworks.
+# Used as fallback when no explicit model pack matches.
+#
+# Confidence scores:
+#   Explicit model pack: 0.99
+#   Hardcoded constants: 0.90
+#   Signal inference:    0.60-0.70
+
+sources:
+  - role: HTTP_INPUT
+    confidence: 0.65
+    signals:
+      type_names:
+        - Request
+        - HttpRequest
+        - IncomingMessage
+        - Context
+        - HttpServletRequest
+        - ServerHttpRequest
+      method_names:
+        - get_json
+        - get_data
+        - form_data
+        - get_params
+        - getParameter
+        - getQueryString
+        - getHeader
+        - getCookies
+        - getInputStream
+        - getReader
+      module_hints:
+        - flask
+        - django
+        - fastapi
+        - express
+        - koa
+        - gin
+        - spring
+        - servlet
+
+  - role: ENV_INPUT
+    confidence: 0.65
+    signals:
+      method_names:
+        - getenv
+        - Getenv
+        - getProperty
+        - environ
+      module_hints:
+        - os
+        - process
+        - System
+        - env
+
+sinks:
+  - role: SQL_EXEC
+    type: SQL-value
+    confidence: 0.60
+    signals:
+      method_names:
+        - execute
+        - executemany
+        - executeQuery
+        - executeUpdate
+        - run_query
+        - createNativeQuery
+      param_hints:
+        - sql
+        - query
+        - stmt
+        - statement
+
+  - role: CMD_EXEC
+    type: CMD-argument
+    confidence: 0.60
+    signals:
+      method_names:
+        - system
+        - popen
+        - exec
+        - spawn
+        - run
+        - call
+        - Command
+        - CommandContext
+        - StartProcess
+      module_hints:
+        - subprocess
+        - os
+        - child_process
+        - shell
+        - exec
+
+  - role: HTML_RENDER
+    type: HTML-content
+    confidence: 0.55
+    signals:
+      method_names:
+        - render_string
+        - render_template_string
+        - write
+        - writeln
+        - println
+      param_hints:
+        - template
+        - html
+        - markup

@@ -68,6 +68,9 @@ class PipelineContext:
     file_contexts: dict[str, dict[str, Any]] = field(default_factory=dict)
     project_metadata: dict[str, Any] = field(default_factory=dict)
 
+    # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
+    taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
+
     # Phase 0.5: TRIAGE Results (Adaptive Hybrid Triage)
     triage_decisions: dict[str, Any] = field(default_factory=dict)  # Key: file_path, Value: TriageDecision.model_dump()
 
@@ -276,6 +279,7 @@ class PipelineContext:
                     "classification_reasoning": self.classification_reasoning,
                     "learned_patterns": self.learned_patterns,
                     "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
+                    "taint_paths_count": sum(len(v) for v in self.taint_paths.values()),
                 }
             )
 
@@ -410,6 +414,7 @@ class PipelineContext:
             "llm_interactions": len(self.llm_history),
             "llm_requests": self.request_count,
             "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
+            "taint_paths_count": sum(len(v) for v in self.taint_paths.values()),
             "metadata": self.metadata,
         }
 

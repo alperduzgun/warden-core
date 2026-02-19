@@ -17,7 +17,7 @@ from warden.shared.infrastructure.error_handler import async_error_handler
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile, ValidationFrame
-from warden.validation.domain.mixins import BatchExecutable, Cleanable, ProjectContextAware
+from warden.validation.domain.mixins import BatchExecutable, Cleanable, ProjectContextAware, TaintAware
 
 from .dependency_checker import DependencyChecker
 from .file_filter import FileFilter
@@ -242,6 +242,23 @@ class FrameRunner:
             )
             if project_context and hasattr(project_context, "service_abstractions"):
                 frame.set_project_context(project_context)
+
+        # Inject taint paths into TaintAware frames
+        if isinstance(frame, TaintAware):
+            if hasattr(context, "taint_paths") and context.taint_paths:
+                try:
+                    frame.set_taint_paths(context.taint_paths)
+                    logger.debug(
+                        "taint_paths_injected",
+                        frame_id=frame.frame_id,
+                        files_with_paths=len(context.taint_paths),
+                    )
+                except Exception as e:
+                    logger.error(
+                        "taint_injection_failed",
+                        frame_id=frame.frame_id,
+                        error=str(e),
+                    )
 
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:

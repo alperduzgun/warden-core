@@ -266,14 +266,37 @@ FILES:
             return RiskScore(score=5.0, confidence=0.0, reasoning=f"Parsing Error: {e!s}", category="chaos_fallback")
 
     def _extract_json(self, text: str) -> str:
-        """Regex-based JSON extraction to ignore LLM chatter."""
-        # Simple balanced brace search
-        match = re.search(r"(\{.*\})", text, re.DOTALL)
-        if match:
-            return match.group(1)
+        """Extract JSON object from LLM response, ignoring surrounding chatter."""
+        text = text.strip()
 
-        # Fallback to cleaning markdown
-        return text.replace("```json", "").replace("```", "").strip()
+        # 1. Try markdown code block first
+        if "```json" in text:
+            start = text.find("```json") + 7
+            snippet = text[start:]
+            end = snippet.find("```")
+            if end != -1:
+                return snippet[:end].strip()
+
+        # 2. Find the first top-level JSON object via brace balancing
+        depth = 0
+        obj_start = -1
+        for i, ch in enumerate(text):
+            if ch == "{":
+                if depth == 0:
+                    obj_start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and obj_start != -1:
+                    return text[obj_start : i + 1]
+
+        # 3. Last resort: greedy match from first { to last }
+        first_brace = text.find("{")
+        last_brace = text.rfind("}")
+        if first_brace != -1 and last_brace > first_brace:
+            return text[first_brace : last_brace + 1]
+
+        return text
 
     def _get_safe_batch_size(self, max_allowed: int) -> int:
         """Adaptive batch size based on RAM/CPU."""

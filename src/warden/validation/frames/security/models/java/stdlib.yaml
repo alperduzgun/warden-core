@@ -1,0 +1,63 @@
+meta:
+  framework: stdlib
+  language: java
+
+sources:
+  - pattern: "request.getParameter"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.getHeader"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "request.getCookies"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "request.getQueryString"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.getInputStream"
+    role: HTTP_INPUT
+    confidence: 0.90
+  - pattern: "request.getReader"
+    role: HTTP_INPUT
+    confidence: 0.90
+  - pattern: "System.getenv"
+    role: ENV_INPUT
+    confidence: 0.95
+  - pattern: "System.getProperty"
+    role: ENV_INPUT
+    confidence: 0.90
+
+sinks:
+  - pattern: "Statement.execute"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "Statement.executeQuery"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "Statement.executeUpdate"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "createStatement"
+    type: SQL-value
+    confidence: 0.90
+  - pattern: "Runtime.exec"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "ProcessBuilder"
+    type: CMD-argument
+    confidence: 0.95
+  - pattern: "response.getWriter"
+    type: HTML-content
+    confidence: 0.80
+  - pattern: "out.println"
+    type: HTML-content
+    confidence: 0.75
+
+sanitizers:
+  - pattern: "ESAPI.encoder"
+    clears: HTML-content
+  - pattern: "StringEscapeUtils.escapeHtml4"
+    clears: HTML-content
+  - pattern: "PreparedStatement"
+    clears: SQL-value

@@ -26,7 +26,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
-from warden.validation.domain.mixins import BatchExecutable
+from warden.validation.domain.mixins import BatchExecutable, TaintAware
 from warden.validation.infrastructure.check_loader import CheckLoader
 
 from .ast_analyzer import extract_ast_context, format_ast_context
@@ -39,7 +39,7 @@ from .data_flow_analyzer import analyze_data_flow, format_data_flow_context
 logger = get_logger(__name__)
 
 
-class SecurityFrame(ValidationFrame, BatchExecutable):
+class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
     """
     Security validation frame - Critical security checks.
 
@@ -76,6 +76,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
             config: Frame configuration
         """
         super().__init__(config)
+
+        # Shared taint paths (injected by pipeline via TaintAware mixin)
+        self._taint_paths: dict[str, list] = {}
 
         # Check registry
         self.checks = CheckRegistry()
@@ -147,6 +150,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                     error=str(e),
                 )
 
+    def set_taint_paths(self, taint_paths: dict[str, list]) -> None:
+        """TaintAware implementation — receive shared taint analysis results."""
+        self._taint_paths = taint_paths
+
     async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute all security checks on code file.
@@ -209,17 +216,31 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
             logger.debug("ast_extraction_failed", error=str(e))
 
         # STEP 2.5: Taint Analysis (Source-to-Sink tracking)
+        # Prefer shared results from TaintAnalysisService (pipeline pre-computed).
+        # Fallback: inline analysis for standalone mode (no pipeline) or missing files.
+        _TAINT_SUPPORTED_LANGUAGES = {"python", "javascript", "typescript", "go", "java"}
         taint_paths: list = []
-        if code_file.language == "python":
-            try:
-                from ._internal.taint_analyzer import TaintAnalyzer
+        if code_file.language in _TAINT_SUPPORTED_LANGUAGES:
+            if self._taint_paths and code_file.path in self._taint_paths:
+                taint_paths = self._taint_paths[code_file.path]
+                logger.debug("taint_from_shared_service", count=len(taint_paths), file=code_file.path)
+            else:
+                # Fallback: standalone mode (no pipeline) or file not in shared results
+                try:
+                    from pathlib import Path  # noqa: PLC0415
 
-                taint_analyzer = TaintAnalyzer()
-                taint_paths = taint_analyzer.analyze(code_file.content, code_file.language)
-                if taint_paths:
-                    logger.info("taint_paths_detected", count=len(taint_paths), file=code_file.path)
-            except Exception as e:
-                logger.debug("taint_analysis_failed", error=str(e))
+                    from ._internal.taint_analyzer import TaintAnalyzer  # noqa: PLC0415
+                    from ._internal.taint_catalog import TaintCatalog  # noqa: PLC0415
+
+                    project_root = context.project_root if context and context.project_root else Path.cwd()
+                    taint_config = self.config.get("taint", {})
+                    catalog = TaintCatalog.load(project_root)
+                    taint_analyzer = TaintAnalyzer(catalog=catalog, taint_config=taint_config)
+                    taint_paths = taint_analyzer.analyze(code_file.content, code_file.language)
+                    if taint_paths:
+                        logger.info("taint_paths_detected", count=len(taint_paths), file=code_file.path)
+                except Exception as e:
+                    logger.debug("taint_analysis_failed", error=str(e))
 
         # STEP 3: LSP Data Flow Analysis (Taint Tracking)
         data_flow_context: dict[str, Any] = {}
@@ -343,6 +364,31 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                             blast_radius=len(data_flow_context.get("blast_radius", [])),
                         )
 
+                # Add Taint Analysis Context (source-to-sink paths)
+                if taint_paths:
+                    unsanitized = [p for p in taint_paths if not p.is_sanitized]
+                    if unsanitized:
+                        semantic_context += "\n\n[Taint Analysis - Source-to-Sink Paths (HIGH RISK)]:\n"
+                        for tp in unsanitized[:5]:
+                            semantic_context += (
+                                f"  - SOURCE: {tp.source.name} (line {tp.source.line})"
+                                f" -> SINK: {tp.sink.name} [{tp.sink_type}] (line {tp.sink.line})"
+                                f" confidence={tp.confidence:.2f}\n"
+                            )
+                    sanitized = [p for p in taint_paths if p.is_sanitized]
+                    if sanitized:
+                        semantic_context += "\n[Taint Analysis - Sanitized Paths (lower risk)]:\n"
+                        for tp in sanitized[:3]:
+                            semantic_context += (
+                                f"  - {tp.source.name} -> {tp.sink.name}"
+                                f" (sanitized by: {', '.join(tp.sanitizers)})\n"
+                            )
+                    logger.debug(
+                        "taint_context_added_to_llm",
+                        unsanitized=len(unsanitized),
+                        sanitized=len(sanitized),
+                    )
+
                 # Determine tier from metadata (Adaptive Hybrid Triage)
                 use_fast_tier = False
                 if code_file.metadata and code_file.metadata.get("triage_lane") == "middle_lane":
@@ -413,6 +459,12 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
 
             except (AttributeError, RuntimeError) as e:
                 logger.error("llm_security_check_failed", error=str(e))
+
+        # Convert unsanitized taint paths to findings (shared helper)
+        if taint_paths:
+            taint_result = self._convert_taint_paths_to_findings(taint_paths, code_file.path)
+            if taint_result:
+                check_results.append(taint_result)
 
         all_findings = self._aggregate_findings(check_results)
 
@@ -494,9 +546,11 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
         logger.info("security_batch_started", file_count=len(code_files))
         batch_start = time.perf_counter()
 
-        # PHASE 1: Pattern/AST Analysis (Fast, per-file)
+        # PHASE 1: Pattern/AST + Taint Analysis (Fast, per-file)
         findings_map: dict[str, list[Finding]] = {}
         check_results_map: dict[str, list[CheckResult]] = {}
+
+        _TAINT_SUPPORTED_LANGUAGES = {"python", "javascript", "typescript", "go", "java"}
 
         for code_file in code_files:
             # Get enabled checks
@@ -510,6 +564,31 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
                     check_results.append(result)
                 except Exception as e:
                     logger.error("batch_check_failed", check=check.name, file=code_file.path, error=str(e))
+
+            # Taint analysis (prefer shared, fallback to inline)
+            if code_file.language in _TAINT_SUPPORTED_LANGUAGES:
+                file_taint_paths = []
+                if self._taint_paths and code_file.path in self._taint_paths:
+                    file_taint_paths = self._taint_paths[code_file.path]
+                else:
+                    try:
+                        from pathlib import Path as _Path  # noqa: PLC0415
+
+                        from ._internal.taint_analyzer import TaintAnalyzer  # noqa: PLC0415
+                        from ._internal.taint_catalog import TaintCatalog  # noqa: PLC0415
+
+                        taint_config = self.config.get("taint", {})
+                        project_root = _Path.cwd()
+                        catalog = TaintCatalog.load(project_root)
+                        taint_analyzer = TaintAnalyzer(catalog=catalog, taint_config=taint_config)
+                        file_taint_paths = taint_analyzer.analyze(code_file.content, code_file.language)
+                    except Exception as e:
+                        logger.debug("batch_taint_analysis_failed", file=code_file.path, error=str(e))
+
+                if file_taint_paths:
+                    taint_result = self._convert_taint_paths_to_findings(file_taint_paths, code_file.path)
+                    if taint_result:
+                        check_results.append(taint_result)
 
             check_results_map[code_file.path] = check_results
 
@@ -556,6 +635,50 @@ class SecurityFrame(ValidationFrame, BatchExecutable):
         )
 
         return results
+
+    def _convert_taint_paths_to_findings(self, taint_paths: list, file_path: str) -> CheckResult | None:
+        """Convert unsanitized taint paths to a CheckResult with findings.
+
+        Reads ``confidence_threshold`` from ``self.config["taint"]`` with validated
+        defaults from ``TAINT_DEFAULTS``.  Findings whose confidence >= threshold
+        get HIGH severity **and** ``is_blocker=True``.
+        """
+        from warden.validation.domain.check import CheckFinding, CheckSeverity  # noqa: PLC0415
+
+        from ._internal.taint_analyzer import validate_taint_config  # noqa: PLC0415
+
+        taint_config = validate_taint_config(self.config.get("taint"))
+        threshold = taint_config["confidence_threshold"]
+
+        taint_findings: list[CheckFinding] = []
+        for tp in taint_paths:
+            if tp.is_sanitized:
+                continue
+            is_high_conf = tp.confidence >= threshold
+            severity = CheckSeverity.HIGH if is_high_conf else CheckSeverity.MEDIUM
+            taint_findings.append(
+                CheckFinding(
+                    check_id="taint-analysis",
+                    check_name="Taint Analysis",
+                    severity=severity,
+                    message=(
+                        f"Unsanitized data flow: {tp.source.name} (line {tp.source.line})"
+                        f" -> {tp.sink.name} [{tp.sink_type}] (line {tp.sink.line})"
+                    ),
+                    location=f"{file_path}:{tp.sink.line}",
+                    suggestion=f"Sanitize the tainted value before passing to {tp.sink.name}.",
+                    code_snippet=None,
+                    is_blocker=is_high_conf,
+                )
+            )
+        if not taint_findings:
+            return None
+        return CheckResult(
+            check_id="taint-analysis",
+            check_name="Source-to-Sink Taint Analysis",
+            passed=False,
+            findings=taint_findings,
+        )
 
     def _aggregate_findings(self, check_results: list[CheckResult]) -> list[Finding]:
         """

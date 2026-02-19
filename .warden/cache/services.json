@@ -1,4 +1,307 @@
 {
+  "JavaParserProvider": {
+    "name": "JavaParserProvider",
+    "file_path": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides metadata functionality",
+      "Provides supports language functionality",
+      "Provides parse functionality",
+      "Provides validate functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "metadata",
+      "supports_language",
+      "parse",
+      "validate"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "OrphanService": {
+    "name": "OrphanService",
+    "file_path": "examples/dogfooding/python/orphan_test.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides do nothing functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "do_nothing"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ActiveService": {
+    "name": "ActiveService",
+    "file_path": "examples/dogfooding/python/orphan_test.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides process functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "process"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "UserManager": {
+    "name": "UserManager",
+    "file_path": "examples/dogfooding/python/architectural_test.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides connect database functionality",
+      "Provides create user functionality",
+      "Provides update user functionality",
+      "Provides delete user functionality",
+      "Provides validate email functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "connect_database",
+      "create_user",
+      "update_user",
+      "delete_user",
+      "validate_email",
+      "validate_password",
+      "cache_user",
+      "get_cached_user",
+      "send_welcome_email",
+      "send_password_reset",
+      "generate_user_report",
+      "export_to_csv"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "OrderService": {
+    "name": "OrderService",
+    "file_path": "examples/dogfooding/python/architectural_test.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides process order functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "process_order"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ServiceA": {
+    "name": "ServiceA",
+    "file_path": "examples/dogfooding/python/architectural_test.py",
+    "category": "custom",
+    "responsibilities": [],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ServiceB": {
+    "name": "ServiceB",
+    "file_path": "examples/dogfooding/python/architectural_test.py",
+    "category": "custom",
+    "responsibilities": [],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "UserRepository": {
+    "name": "UserRepository",
+    "file_path": "examples/dogfooding/python/architectural_test.py",
+    "category": "database_access",
+    "responsibilities": [
+      "Manages database connections and queries",
+      "Provides find functionality",
+      "Provides save functionality"
+    ],
+    "bypass_patterns": [
+      "psycopg2.connect",
+      "pymysql.connect",
+      "sqlite3.connect"
+    ],
+    "responsibility_keywords": [
+      "DATABASE",
+      "DB",
+      "CONNECTION",
+      "QUERY"
+    ],
+    "public_methods": [
+      "find",
+      "save"
+    ],
+    "confidence": 1.0,
+    "description": ""
+  },
+  "MemoryManager": {
+    "name": "MemoryManager",
+    "file_path": "src/warden/pipeline/application/orchestrator/memory_manager.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides stream files chunked functionality",
+      "Provides validate file size functionality",
+      "Provides process with memory limit functionality",
+      "Provides estimate memory usage functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "stream_files_chunked",
+      "validate_file_size",
+      "process_with_memory_limit",
+      "estimate_memory_usage"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "FileLockManager": {
+    "name": "FileLockManager",
+    "file_path": "src/warden/pipeline/services/file_lock_manager.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides atomic write functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "atomic_write"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ProviderConfig": {
+    "name": "ProviderConfig",
+    "file_path": "src/warden/llm/config.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides validate functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "validate"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ProviderRegistry": {
+    "name": "ProviderRegistry",
+    "file_path": "src/warden/llm/registry.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides register functionality",
+      "Provides create functionality",
+      "Provides available functionality",
+      "Provides is registered functionality",
+      "Provides clear functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "register",
+      "create",
+      "available",
+      "is_registered",
+      "clear"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "PromptManager": {
+    "name": "PromptManager",
+    "file_path": "src/warden/llm/prompts/prompt_manager.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides load functionality",
+      "Provides register variables functionality",
+      "Provides invalidate cache functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "load",
+      "register_variables",
+      "invalidate_cache"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ConfigManager": {
+    "name": "ConfigManager",
+    "file_path": "src/warden/cli_bridge/config_manager.py",
+    "category": "config_management",
+    "responsibilities": [
+      "Manages application configuration",
+      "Provides read config functionality",
+      "Provides write config functionality",
+      "Provides update frame status functionality",
+      "Provides get frame status functionality"
+    ],
+    "bypass_patterns": [
+      "yaml.safe_load",
+      "json.load",
+      "toml.load",
+      "configparser"
+    ],
+    "responsibility_keywords": [
+      "CONFIG",
+      "SETTING",
+      "CONFIGURATION"
+    ],
+    "public_methods": [
+      "read_config",
+      "write_config",
+      "update_frame_status",
+      "get_frame_status",
+      "read_rules",
+      "validate_frame_consistency"
+    ],
+    "confidence": 0.8,
+    "description": ""
+  },
+  "TaintAnalysisService": {
+    "name": "TaintAnalysisService",
+    "file_path": "src/warden/analysis/taint/service.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides analyze all async functionality",
+      "Provides get paths for file functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "analyze_all_async",
+      "get_paths_for_file"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "TriageService": {
+    "name": "TriageService",
+    "file_path": "src/warden/analysis/application/triage_service.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides batch assess risk async functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "batch_assess_risk_async"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
   "ServiceAbstraction": {
     "name": "ServiceAbstraction",
     "file_path": "src/warden/analysis/application/service_abstraction_detector.py",
@@ -25,21 +328,6 @@
     "responsibility_keywords": [],
     "public_methods": [
       "detect_async"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "FindingVerificationService": {
-    "name": "FindingVerificationService",
-    "file_path": "src/warden/analysis/services/finding_verifier.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides verify findings async functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "verify_findings_async"
     ],
     "confidence": 0.5,
     "description": ""
@@ -86,256 +374,168 @@
     "confidence": 0.5,
     "description": ""
   },
-  "IASTProvider": {
-    "name": "IASTProvider",
-    "file_path": "src/warden/ast/application/provider_interface.py",
+  "FindingVerificationService": {
+    "name": "FindingVerificationService",
+    "file_path": "src/warden/analysis/services/finding_verifier.py",
     "category": "custom",
     "responsibilities": [
-      "Provides metadata functionality",
-      "Provides parse functionality",
-      "Provides extract dependencies functionality",
-      "Provides supports language functionality",
-      "Provides validate functionality"
+      "Provides verify findings async functionality"
     ],
     "bypass_patterns": [],
     "responsibility_keywords": [],
     "public_methods": [
-      "metadata",
-      "parse",
-      "extract_dependencies",
-      "supports_language",
-      "validate",
-      "get_priority",
-      "cleanup"
+      "verify_findings_async"
     ],
     "confidence": 0.5,
     "description": ""
   },
-  "ASTProviderLoader": {
-    "name": "ASTProviderLoader",
-    "file_path": "src/warden/ast/application/provider_loader.py",
+  "WardenServiceStub": {
+    "name": "WardenServiceStub",
+    "file_path": "src/warden/grpc/generated/warden_pb2_grpc.py",
+    "category": "custom",
+    "responsibilities": [],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "WardenServiceServicer": {
+    "name": "WardenServiceServicer",
+    "file_path": "src/warden/grpc/generated/warden_pb2_grpc.py",
     "category": "custom",
     "responsibilities": [
-      "Provides load all functionality"
+      "Provides ExecutePipeline functionality",
+      "Provides ExecutePipelineStream functionality",
+      "Provides GetAllIssues functionality",
+      "Provides GetOpenIssues functionality",
+      "Provides GetIssueByHash functionality"
     ],
     "bypass_patterns": [],
     "responsibility_keywords": [],
     "public_methods": [
-      "load_all"
+      "ExecutePipeline",
+      "ExecutePipelineStream",
+      "GetAllIssues",
+      "GetOpenIssues",
+      "GetIssueByHash",
+      "ResolveIssue",
+      "SuppressIssue",
+      "ReopenIssue",
+      "GetIssueHistory",
+      "GetIssueStats",
+      "AnalyzeResults",
+      "GetTrends",
+      "GetFrameStats",
+      "GetSeverityStats",
+      "GetQualityScore",
+      "GenerateHtmlReport",
+      "GeneratePdfReport",
+      "GenerateJsonReport",
+      "GetReportStatus",
+      "SearchCode",
+      "SearchSimilarCode",
+      "SearchByDescription",
+      "IndexProject",
+      "GetIndexStats",
+      "ClearIndex",
+      "DiscoverFiles",
+      "GetFilesByType",
+      "DetectFrameworks",
+      "GetProjectStats",
+      "AnalyzeWithLlm",
+      "ClassifyCode",
+      "TestLlmProvider",
+      "GetAvailableModels",
+      "ValidateLlmConfig",
+      "AnalyzeCleanup",
+      "GetCleanupSuggestions",
+      "GetCleanupScore",
+      "GetFortificationSuggestions",
+      "ApplyFortification",
+      "GetSecurityScore",
+      "AddSuppression",
+      "RemoveSuppression",
+      "GetSuppressions",
+      "CheckSuppression",
+      "GetAvailableFrames",
+      "GetAvailableProviders",
+      "GetConfiguration",
+      "UpdateConfiguration",
+      "UpdateFrameStatus",
+      "HealthCheck",
+      "GetStatus"
     ],
     "confidence": 0.5,
     "description": ""
   },
-  "ASTProviderRegistry": {
-    "name": "ASTProviderRegistry",
-    "file_path": "src/warden/ast/application/provider_registry.py",
+  "WardenService": {
+    "name": "WardenService",
+    "file_path": "src/warden/grpc/generated/warden_pb2_grpc.py",
     "category": "custom",
     "responsibilities": [
-      "Provides register functionality",
-      "Provides unregister functionality",
-      "Provides get provider functionality",
-      "Provides get all providers functionality",
-      "Provides list providers functionality"
+      "Provides ExecutePipeline functionality",
+      "Provides ExecutePipelineStream functionality",
+      "Provides GetAllIssues functionality",
+      "Provides GetOpenIssues functionality",
+      "Provides GetIssueByHash functionality"
     ],
     "bypass_patterns": [],
     "responsibility_keywords": [],
     "public_methods": [
-      "register",
-      "unregister",
-      "get_provider",
-      "get_all_providers",
-      "list_providers",
-      "list_supported_languages",
-      "get_provider_by_name",
-      "clear",
-      "discover_providers"
+      "ExecutePipeline",
+      "ExecutePipelineStream",
+      "GetAllIssues",
+      "GetOpenIssues",
+      "GetIssueByHash",
+      "ResolveIssue",
+      "SuppressIssue",
+      "ReopenIssue",
+      "GetIssueHistory",
+      "GetIssueStats",
+      "AnalyzeResults",
+      "GetTrends",
+      "GetFrameStats",
+      "GetSeverityStats",
+      "GetQualityScore",
+      "GenerateHtmlReport",
+      "GeneratePdfReport",
+      "GenerateJsonReport",
+      "GetReportStatus",
+      "SearchCode",
+      "SearchSimilarCode",
+      "SearchByDescription",
+      "IndexProject",
+      "GetIndexStats",
+      "ClearIndex",
+      "DiscoverFiles",
+      "GetFilesByType",
+      "DetectFrameworks",
+      "GetProjectStats",
+      "AnalyzeWithLlm",
+      "ClassifyCode",
+      "TestLlmProvider",
+      "GetAvailableModels",
+      "ValidateLlmConfig",
+      "AnalyzeCleanup",
+      "GetCleanupSuggestions",
+      "GetCleanupScore",
+      "GetFortificationSuggestions",
+      "ApplyFortification",
+      "GetSecurityScore",
+      "AddSuppression",
+      "RemoveSuppression",
+      "GetSuppressions",
+      "CheckSuppression",
+      "GetAvailableFrames",
+      "GetAvailableProviders",
+      "GetConfiguration",
+      "UpdateConfiguration",
+      "UpdateFrameStatus",
+      "HealthCheck",
+      "GetStatus"
     ],
     "confidence": 0.5,
-    "description": ""
-  },
-  "ASTProviderMetadata": {
-    "name": "ASTProviderMetadata",
-    "file_path": "src/warden/ast/domain/models.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides supports language functionality",
-      "Provides to dict functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "supports_language",
-      "to_dict"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "PythonASTProvider": {
-    "name": "PythonASTProvider",
-    "file_path": "src/warden/ast/providers/python_ast_provider.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides metadata functionality",
-      "Provides parse functionality",
-      "Provides supports language functionality",
-      "Provides validate functionality",
-      "Provides extract dependencies functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "metadata",
-      "parse",
-      "supports_language",
-      "validate",
-      "extract_dependencies"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "TreeSitterProvider": {
-    "name": "TreeSitterProvider",
-    "file_path": "src/warden/ast/providers/tree_sitter_provider.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides missing grammars functionality",
-      "Provides auto install grammar functionality",
-      "Provides ensure grammar functionality",
-      "Provides metadata functionality",
-      "Provides parse functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "missing_grammars",
-      "auto_install_grammar",
-      "ensure_grammar",
-      "metadata",
-      "parse",
-      "supports_language",
-      "validate",
-      "extract_dependencies"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "BaselineManager": {
-    "name": "BaselineManager",
-    "file_path": "src/warden/cli/commands/helpers/baseline_manager.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides fetch latest baseline functionality",
-      "Provides load baseline functionality",
-      "Provides is outdated functionality",
-      "Provides get fingerprints functionality",
-      "Provides baseline dir functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "fetch_latest_baseline",
-      "load_baseline",
-      "is_outdated",
-      "get_fingerprints",
-      "baseline_dir",
-      "meta_path",
-      "is_module_based",
-      "get_module_path",
-      "load_meta",
-      "save_meta",
-      "load_module_baseline",
-      "save_module_baseline",
-      "list_modules",
-      "get_module_fingerprints",
-      "get_all_fingerprints_by_module",
-      "migrate_from_legacy",
-      "update_debt",
-      "get_debt_report",
-      "update_baseline_for_modules"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "ConfigManager": {
-    "name": "ConfigManager",
-    "file_path": "src/warden/cli_bridge/config_manager.py",
-    "category": "config_management",
-    "responsibilities": [
-      "Manages application configuration",
-      "Provides read config functionality",
-      "Provides write config functionality",
-      "Provides update frame status functionality",
-      "Provides get frame status functionality"
-    ],
-    "bypass_patterns": [
-      "yaml.safe_load",
-      "json.load",
-      "toml.load",
-      "configparser"
-    ],
-    "responsibility_keywords": [
-      "CONFIG",
-      "SETTING",
-      "CONFIGURATION"
-    ],
-    "public_methods": [
-      "read_config",
-      "write_config",
-      "update_frame_status",
-      "get_frame_status",
-      "read_rules",
-      "validate_frame_consistency"
-    ],
-    "confidence": 0.8,
-    "description": ""
-  },
-  "GitCheckpointManager": {
-    "name": "GitCheckpointManager",
-    "file_path": "src/warden/fortification/infrastructure/git_checkpoint.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides create checkpoint functionality",
-      "Provides rollback file functionality",
-      "Provides validate syntax functionality",
-      "Provides record modification functionality",
-      "Provides modified files functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "create_checkpoint",
-      "rollback_file",
-      "validate_syntax",
-      "record_modification",
-      "modified_files",
-      "checkpoint_ref"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "BaseFileRepository": {
-    "name": "BaseFileRepository",
-    "file_path": "src/warden/grpc/infrastructure/base_file_repository.py",
-    "category": "database_access",
-    "responsibilities": [
-      "Manages database connections and queries",
-      "Provides clear all async functionality"
-    ],
-    "bypass_patterns": [
-      "psycopg2.connect",
-      "pymysql.connect",
-      "sqlite3.connect"
-    ],
-    "responsibility_keywords": [
-      "DATABASE",
-      "DB",
-      "CONNECTION",
-      "QUERY"
-    ],
-    "public_methods": [
-      "clear_all_async"
-    ],
-    "confidence": 0.8,
     "description": ""
   },
   "FileHistoryRepository": {
@@ -452,6 +652,42 @@
     "confidence": 1.0,
     "description": ""
   },
+  "BaseFileRepository": {
+    "name": "BaseFileRepository",
+    "file_path": "src/warden/grpc/infrastructure/base_file_repository.py",
+    "category": "database_access",
+    "responsibilities": [
+      "Manages database connections and queries",
+      "Provides clear all async functionality"
+    ],
+    "bypass_patterns": [
+      "psycopg2.connect",
+      "pymysql.connect",
+      "sqlite3.connect"
+    ],
+    "responsibility_keywords": [
+      "DATABASE",
+      "DB",
+      "CONNECTION",
+      "QUERY"
+    ],
+    "public_methods": [
+      "clear_all_async"
+    ],
+    "confidence": 0.8,
+    "description": ""
+  },
+  "WardenServicer": {
+    "name": "WardenServicer",
+    "file_path": "src/warden/grpc/servicer/__init__.py",
+    "category": "custom",
+    "responsibilities": [],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [],
+    "confidence": 0.5,
+    "description": ""
+  },
   "WardenServicerBase": {
     "name": "WardenServicerBase",
     "file_path": "src/warden/grpc/servicer/base.py",
@@ -481,59 +717,135 @@
     "confidence": 0.5,
     "description": ""
   },
-  "ProviderConfig": {
-    "name": "ProviderConfig",
-    "file_path": "src/warden/llm/config.py",
+  "AzureKeyVaultProvider": {
+    "name": "AzureKeyVaultProvider",
+    "file_path": "src/warden/secrets/providers/azure_keyvault_provider.py",
     "category": "custom",
     "responsibilities": [
-      "Provides validate functionality"
+      "Provides source functionality",
+      "Provides priority functionality",
+      "Provides get secret async functionality",
+      "Provides is available async functionality",
+      "Provides cleanup async functionality"
     ],
     "bypass_patterns": [],
     "responsibility_keywords": [],
     "public_methods": [
-      "validate"
+      "source",
+      "priority",
+      "get_secret_async",
+      "is_available_async",
+      "cleanup_async"
     ],
     "confidence": 0.5,
     "description": ""
   },
-  "PromptManager": {
-    "name": "PromptManager",
-    "file_path": "src/warden/llm/prompts/prompt_manager.py",
-    "category": "custom",
+  "ISecretProvider": {
+    "name": "ISecretProvider",
+    "file_path": "src/warden/secrets/providers/base.py",
+    "category": "secret_management",
     "responsibilities": [
-      "Provides load functionality",
-      "Provides register variables functionality",
-      "Provides invalidate cache functionality"
+      "Manages secret and credential access",
+      "Provides environment-aware secret loading",
+      "Provides source functionality",
+      "Provides priority functionality",
+      "Provides get secret async functionality"
     ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
+    "bypass_patterns": [
+      "os.getenv",
+      "os.environ.get",
+      "os.environ["
+    ],
+    "responsibility_keywords": [
+      "API_KEY",
+      "SECRET",
+      "TOKEN",
+      "PASSWORD",
+      "CREDENTIAL",
+      "KEY_VAULT"
+    ],
     "public_methods": [
-      "load",
-      "register_variables",
-      "invalidate_cache"
+      "source",
+      "priority",
+      "get_secret_async",
+      "is_available_async",
+      "cleanup_async"
     ],
-    "confidence": 0.5,
+    "confidence": 1.0,
     "description": ""
   },
-  "ProviderRegistry": {
-    "name": "ProviderRegistry",
-    "file_path": "src/warden/llm/registry.py",
+  "SecretManager": {
+    "name": "SecretManager",
+    "file_path": "src/warden/secrets/application/secret_manager.py",
+    "category": "secret_management",
+    "responsibilities": [
+      "Manages secret and credential access",
+      "Provides environment-aware secret loading",
+      "Provides get secret async functionality",
+      "Provides get secrets async functionality",
+      "Provides clear cache functionality"
+    ],
+    "bypass_patterns": [
+      "os.getenv",
+      "os.environ.get",
+      "os.environ["
+    ],
+    "responsibility_keywords": [
+      "API_KEY",
+      "SECRET",
+      "TOKEN",
+      "PASSWORD",
+      "CREDENTIAL",
+      "KEY_VAULT"
+    ],
+    "public_methods": [
+      "get_secret_async",
+      "get_secrets_async",
+      "clear_cache",
+      "cleanup_async",
+      "providers"
+    ],
+    "confidence": 1.0,
+    "description": ""
+  },
+  "SecretProviderConfig": {
+    "name": "SecretProviderConfig",
+    "file_path": "src/warden/secrets/domain/models.py",
+    "category": "secret_management",
+    "responsibilities": [
+      "Manages secret and credential access",
+      "Provides environment-aware secret loading"
+    ],
+    "bypass_patterns": [
+      "os.getenv",
+      "os.environ.get",
+      "os.environ["
+    ],
+    "responsibility_keywords": [
+      "API_KEY",
+      "SECRET",
+      "TOKEN",
+      "PASSWORD",
+      "CREDENTIAL",
+      "KEY_VAULT"
+    ],
+    "public_methods": [],
+    "confidence": 0.8,
+    "description": ""
+  },
+  "LSPDiagnosticService": {
+    "name": "LSPDiagnosticService",
+    "file_path": "src/warden/lsp/diagnostic_service.py",
     "category": "custom",
     "responsibilities": [
-      "Provides register functionality",
-      "Provides create functionality",
-      "Provides available functionality",
-      "Provides is registered functionality",
-      "Provides clear functionality"
+      "Provides collect diagnostics async functionality",
+      "Provides shutdown async functionality"
     ],
     "bypass_patterns": [],
     "responsibility_keywords": [],
     "public_methods": [
-      "register",
-      "create",
-      "available",
-      "is_registered",
-      "clear"
+      "collect_diagnostics_async",
+      "shutdown_async"
     ],
     "confidence": 0.5,
     "description": ""
@@ -579,27 +891,6 @@
     "confidence": 0.5,
     "description": ""
   },
-  "ResourceProviderService": {
-    "name": "ResourceProviderService",
-    "file_path": "src/warden/mcp/application/resource_provider.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides list resources functionality",
-      "Provides read resource functionality",
-      "Provides resource exists functionality",
-      "Provides list all reports functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "list_resources",
-      "read_resource",
-      "resource_exists",
-      "list_all_reports"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
   "SessionManager": {
     "name": "SessionManager",
     "file_path": "src/warden/mcp/application/session_manager.py",
@@ -624,6 +915,27 @@
     "confidence": 0.5,
     "description": ""
   },
+  "ResourceProviderService": {
+    "name": "ResourceProviderService",
+    "file_path": "src/warden/mcp/application/resource_provider.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides list resources functionality",
+      "Provides read resource functionality",
+      "Provides resource exists functionality",
+      "Provides list all reports functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "list_resources",
+      "read_resource",
+      "resource_exists",
+      "list_all_reports"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
   "ToolExecutorService": {
     "name": "ToolExecutorService",
     "file_path": "src/warden/mcp/application/tool_executor.py",
@@ -641,21 +953,6 @@
       "bridge_available",
       "registry",
       "execute_async"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "MCPRegistrationService": {
-    "name": "MCPRegistrationService",
-    "file_path": "src/warden/mcp/domain/services/mcp_registration_service.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides register all functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "register_all"
     ],
     "confidence": 0.5,
     "description": ""
@@ -724,98 +1021,67 @@
     "confidence": 0.8,
     "description": ""
   },
-  "MCPResourceManager": {
-    "name": "MCPResourceManager",
-    "file_path": "src/warden/mcp/resources.py",
+  "MCPRegistrationService": {
+    "name": "MCPRegistrationService",
+    "file_path": "src/warden/mcp/domain/services/mcp_registration_service.py",
     "category": "custom",
     "responsibilities": [
-      "Provides list resources functionality",
-      "Provides read resource functionality",
-      "Provides get resource info functionality",
-      "Provides resource exists functionality",
-      "Provides get reports dir functionality"
+      "Provides register all functionality"
     ],
     "bypass_patterns": [],
     "responsibility_keywords": [],
     "public_methods": [
-      "list_resources",
-      "read_resource",
-      "get_resource_info",
-      "resource_exists",
-      "get_reports_dir",
-      "list_all_reports"
+      "register_all"
     ],
     "confidence": 0.5,
     "description": ""
   },
-  "MemoryManager": {
-    "name": "MemoryManager",
-    "file_path": "src/warden/memory/application/memory_manager.py",
-    "category": "custom",
+  "Settings": {
+    "name": "Settings",
+    "file_path": "src/warden/shared/infrastructure/config.py",
+    "category": "config_management",
     "responsibilities": [
-      "Provides initialize async functionality",
-      "Provides load async functionality",
-      "Provides save async functionality",
-      "Provides add fact functionality",
-      "Provides get facts by category functionality"
+      "Manages application configuration",
+      "Provides is development functionality",
+      "Provides is production functionality"
     ],
+    "bypass_patterns": [
+      "yaml.safe_load",
+      "json.load",
+      "toml.load",
+      "configparser"
+    ],
+    "responsibility_keywords": [
+      "CONFIG",
+      "SETTING",
+      "CONFIGURATION"
+    ],
+    "public_methods": [
+      "is_development",
+      "is_production"
+    ],
+    "confidence": 0.8,
+    "description": ""
+  },
+  "ExternalServiceError": {
+    "name": "ExternalServiceError",
+    "file_path": "src/warden/shared/infrastructure/exceptions.py",
+    "category": "custom",
+    "responsibilities": [],
     "bypass_patterns": [],
     "responsibility_keywords": [],
-    "public_methods": [
-      "initialize_async",
-      "load_async",
-      "save_async",
-      "add_fact",
-      "get_facts_by_category",
-      "get_service_abstractions",
-      "store_service_abstraction",
-      "get_file_state",
-      "update_file_state",
-      "get_llm_cache",
-      "set_llm_cache",
-      "get_project_purpose",
-      "update_project_purpose",
-      "get_environment_hash",
-      "update_environment_hash",
-      "get_module_map",
-      "update_module_map",
-      "get_security_posture",
-      "update_security_posture"
-    ],
+    "public_methods": [],
     "confidence": 0.5,
     "description": ""
   },
-  "FileLockManager": {
-    "name": "FileLockManager",
-    "file_path": "src/warden/pipeline/services/file_lock_manager.py",
+  "ProviderUnavailableError": {
+    "name": "ProviderUnavailableError",
+    "file_path": "src/warden/shared/infrastructure/error_handler.py",
     "category": "custom",
-    "responsibilities": [
-      "Provides atomic write functionality"
-    ],
+    "responsibilities": [],
     "bypass_patterns": [],
     "responsibility_keywords": [],
-    "public_methods": [
-      "atomic_write"
-    ],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "DependencyManager": {
-    "name": "DependencyManager",
-    "file_path": "src/warden/services/dependencies/dependency_manager.py",
-    "category": "custom",
-    "responsibilities": [
-      "Provides is venv functionality",
-      "Provides is installed functionality",
-      "Provides install packages async functionality"
-    ],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [
-      "is_venv",
-      "is_installed",
-      "install_packages_async"
-    ],
+    "public_methods": [],
     "confidence": 0.5,
     "description": ""
   },
@@ -955,55 +1221,6 @@
     "confidence": 0.8,
     "description": ""
   },
-  "Settings": {
-    "name": "Settings",
-    "file_path": "src/warden/shared/infrastructure/config.py",
-    "category": "config_management",
-    "responsibilities": [
-      "Manages application configuration",
-      "Provides is development functionality",
-      "Provides is production functionality"
-    ],
-    "bypass_patterns": [
-      "yaml.safe_load",
-      "json.load",
-      "toml.load",
-      "configparser"
-    ],
-    "responsibility_keywords": [
-      "CONFIG",
-      "SETTING",
-      "CONFIGURATION"
-    ],
-    "public_methods": [
-      "is_development",
-      "is_production"
-    ],
-    "confidence": 0.8,
-    "description": ""
-  },
-  "ProviderUnavailableError": {
-    "name": "ProviderUnavailableError",
-    "file_path": "src/warden/shared/infrastructure/error_handler.py",
-    "category": "custom",
-    "responsibilities": [],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [],
-    "confidence": 0.5,
-    "description": ""
-  },
-  "ExternalServiceError": {
-    "name": "ExternalServiceError",
-    "file_path": "src/warden/shared/infrastructure/exceptions.py",
-    "category": "custom",
-    "responsibilities": [],
-    "bypass_patterns": [],
-    "responsibility_keywords": [],
-    "public_methods": [],
-    "confidence": 0.5,
-    "description": ""
-  },
   "LLMService": {
     "name": "LLMService",
     "file_path": "src/warden/shared/services/__init__.py",
@@ -1068,6 +1285,278 @@
       "search",
       "get_context",
       "index_project"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "BaselineManager": {
+    "name": "BaselineManager",
+    "file_path": "src/warden/cli/commands/helpers/baseline_manager.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides fetch latest baseline functionality",
+      "Provides load baseline functionality",
+      "Provides is outdated functionality",
+      "Provides get fingerprints functionality",
+      "Provides baseline dir functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "fetch_latest_baseline",
+      "load_baseline",
+      "is_outdated",
+      "get_fingerprints",
+      "baseline_dir",
+      "meta_path",
+      "is_module_based",
+      "get_module_path",
+      "load_meta",
+      "save_meta",
+      "load_module_baseline",
+      "save_module_baseline",
+      "list_modules",
+      "get_module_fingerprints",
+      "get_all_fingerprints_by_module",
+      "migrate_from_legacy",
+      "update_debt",
+      "get_debt_report",
+      "update_baseline_for_modules"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "GitCheckpointManager": {
+    "name": "GitCheckpointManager",
+    "file_path": "src/warden/fortification/infrastructure/git_checkpoint.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides create checkpoint functionality",
+      "Provides rollback file functionality",
+      "Provides validate syntax functionality",
+      "Provides record modification functionality",
+      "Provides modified files functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "create_checkpoint",
+      "rollback_file",
+      "validate_syntax",
+      "record_modification",
+      "modified_files",
+      "checkpoint_ref"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "TreeSitterProvider": {
+    "name": "TreeSitterProvider",
+    "file_path": "src/warden/ast/providers/tree_sitter_provider.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides missing grammars functionality",
+      "Provides auto install grammar functionality",
+      "Provides ensure grammar functionality",
+      "Provides metadata functionality",
+      "Provides parse functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "missing_grammars",
+      "auto_install_grammar",
+      "ensure_grammar",
+      "metadata",
+      "parse",
+      "supports_language",
+      "validate",
+      "extract_dependencies"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "PythonASTProvider": {
+    "name": "PythonASTProvider",
+    "file_path": "src/warden/ast/providers/python_ast_provider.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides metadata functionality",
+      "Provides parse functionality",
+      "Provides supports language functionality",
+      "Provides validate functionality",
+      "Provides extract dependencies functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "metadata",
+      "parse",
+      "supports_language",
+      "validate",
+      "extract_dependencies"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "RustASTProvider": {
+    "name": "RustASTProvider",
+    "file_path": "src/warden/ast/providers/rust_ast_provider.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides metadata functionality",
+      "Provides supports language functionality",
+      "Provides validate functionality",
+      "Provides parse functionality",
+      "Provides extract dependencies functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "metadata",
+      "supports_language",
+      "validate",
+      "parse",
+      "extract_dependencies"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ASTProviderLoader": {
+    "name": "ASTProviderLoader",
+    "file_path": "src/warden/ast/application/provider_loader.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides load all functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "load_all"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ASTProviderRegistry": {
+    "name": "ASTProviderRegistry",
+    "file_path": "src/warden/ast/application/provider_registry.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides register functionality",
+      "Provides unregister functionality",
+      "Provides get provider functionality",
+      "Provides get all providers functionality",
+      "Provides list providers functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "register",
+      "unregister",
+      "get_provider",
+      "get_all_providers",
+      "list_providers",
+      "list_supported_languages",
+      "get_provider_by_name",
+      "clear",
+      "discover_providers"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "IASTProvider": {
+    "name": "IASTProvider",
+    "file_path": "src/warden/ast/application/provider_interface.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides metadata functionality",
+      "Provides parse functionality",
+      "Provides extract dependencies functionality",
+      "Provides supports language functionality",
+      "Provides validate functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "metadata",
+      "parse",
+      "extract_dependencies",
+      "supports_language",
+      "validate",
+      "get_priority",
+      "cleanup"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "ASTProviderMetadata": {
+    "name": "ASTProviderMetadata",
+    "file_path": "src/warden/ast/domain/models.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides supports language functionality",
+      "Provides to dict functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "supports_language",
+      "to_dict"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "DependencyManager": {
+    "name": "DependencyManager",
+    "file_path": "src/warden/services/dependencies/dependency_manager.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides is venv functionality",
+      "Provides is installed functionality",
+      "Provides install packages async functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "is_venv",
+      "is_installed",
+      "install_packages_async"
+    ],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "CIManagerError": {
+    "name": "CIManagerError",
+    "file_path": "src/warden/services/ci_manager/exceptions.py",
+    "category": "custom",
+    "responsibilities": [],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [],
+    "confidence": 0.5,
+    "description": ""
+  },
+  "CIManager": {
+    "name": "CIManager",
+    "file_path": "src/warden/services/ci_manager/manager.py",
+    "category": "custom",
+    "responsibilities": [
+      "Provides project root functionality",
+      "Provides config functionality",
+      "Provides get status functionality",
+      "Provides init functionality",
+      "Provides update functionality"
+    ],
+    "bypass_patterns": [],
+    "responsibility_keywords": [],
+    "public_methods": [
+      "project_root",
+      "config",
+      "get_status",
+      "init",
+      "update",
+      "sync",
+      "to_dict"
     ],
     "confidence": 0.5,
     "description": ""

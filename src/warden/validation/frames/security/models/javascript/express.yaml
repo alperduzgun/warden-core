@@ -1,0 +1,67 @@
+meta:
+  framework: express
+  language: javascript
+
+sources:
+  - pattern: "req.body"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "req.query"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "req.params"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "req.headers"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "req.cookies"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "request.body"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.query"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.params"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.headers"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "request.cookies"
+    role: HTTP_INPUT
+    confidence: 0.95
+
+sinks:
+  - pattern: "db.query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "pool.query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "connection.query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "client.query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "sequelize.query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "knex.raw"
+    type: SQL-value
+    confidence: 0.99
+
+sanitizers:
+  - pattern: "db.escape"
+    clears: SQL-value
+  - pattern: "connection.escape"
+    clears: SQL-value
+  - pattern: "mysql.escape"
+    clears: SQL-value
+  - pattern: "sequelize.escape"
+    clears: SQL-value
+  - pattern: "knex.escape"
+    clears: SQL-value

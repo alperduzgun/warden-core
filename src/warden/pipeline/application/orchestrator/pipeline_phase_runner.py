@@ -61,6 +61,9 @@ class PipelinePhaseRunner:
             # Populate ProjectIntelligence from AST context (zero LLM cost)
             self._populate_project_intelligence(context, code_files)
 
+            # Populate taint analysis (zero LLM cost, per-file static analysis)
+            await self._populate_taint_paths_async(context, code_files)
+
         # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
         from warden.pipeline.domain.enums import AnalysisLevel
 
@@ -275,6 +278,39 @@ class PipelinePhaseRunner:
             entry_points=len(intel.entry_points),
             primary_language=intel.primary_language,
         )
+
+    async def _populate_taint_paths_async(
+        self, context: PipelineContext, code_files: list[CodeFile]
+    ) -> None:
+        """Populate taint analysis results into context (zero LLM cost).
+
+        Runs the shared ``TaintAnalysisService`` once per pipeline and stores
+        the results in ``context.taint_paths`` for consumption by any
+        ``TaintAware`` frame.
+        """
+        try:
+            from warden.analysis.taint.service import TaintAnalysisService
+
+            project_root = self.project_root or context.project_root
+            if not project_root:
+                return
+
+            # Read taint config from frames_config.security.taint
+            taint_config: dict = {}
+            if hasattr(self.config, "frames_config") and self.config.frames_config:
+                taint_config = (
+                    self.config.frames_config.get("security", {}).get("taint", {})
+                )
+
+            from pathlib import Path as _Path
+
+            service = TaintAnalysisService(
+                project_root=_Path(str(project_root)),
+                taint_config=taint_config,
+            )
+            context.taint_paths = await service.analyze_all_async(code_files)
+        except Exception as e:
+            logger.warning("taint_population_failed", error=str(e))
 
     def _finalize_pipeline_status(self, context: PipelineContext, pipeline: ValidationPipeline) -> None:
         """Update pipeline status based on results and capture LLM usage."""

@@ -1,0 +1,27 @@
+meta:
+  framework: koa
+  language: javascript
+
+sources:
+  - pattern: "ctx.request.body"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "ctx.query"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "ctx.params"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "ctx.headers"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "ctx.cookies"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "ctx.request.query"
+    role: HTTP_INPUT
+    confidence: 0.99
+
+sinks: []
+
+sanitizers: []

@@ -1,0 +1,66 @@
+meta:
+  framework: nodejs
+  language: javascript
+
+sources:
+  - pattern: "process.env"
+    role: ENV_INPUT
+    confidence: 0.95
+  - pattern: "event.data"
+    role: EVENT_INPUT
+    confidence: 0.90
+
+sinks:
+  - pattern: "eval"
+    type: CODE-execution
+    confidence: 0.99
+  - pattern: "Function"
+    type: CODE-execution
+    confidence: 0.99
+  - pattern: "setTimeout"
+    type: CODE-execution
+    confidence: 0.85
+  - pattern: "setInterval"
+    type: CODE-execution
+    confidence: 0.85
+  - pattern: "exec"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "execSync"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "spawn"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "spawnSync"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "child_process.exec"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "child_process.execSync"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "child_process.spawn"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "fs.readFile"
+    type: FILE-path
+    confidence: 0.99
+  - pattern: "fs.readFileSync"
+    type: FILE-path
+    confidence: 0.99
+  - pattern: "fs.writeFile"
+    type: FILE-path
+    confidence: 0.99
+  - pattern: "fs.writeFileSync"
+    type: FILE-path
+    confidence: 0.99
+
+sanitizers:
+  - pattern: "path.basename"
+    clears: FILE-path
+  - pattern: "path.resolve"
+    clears: FILE-path
+  - pattern: "encodeURIComponent"
+    clears: FILE-path

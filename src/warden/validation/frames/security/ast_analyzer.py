@@ -94,18 +94,32 @@ def _walk_ast_for_security(node: Any, context: dict[str, Any], source: str) -> N
     node_type = getattr(node, "type", "") or ""
 
     # Detect dangerous function calls
-    if node_type in ("call_expression", "call"):
+    # call_expression: JS/Go, call: Python, method_invocation: Java
+    if node_type in ("call_expression", "call", "method_invocation", "selector_expression"):
         call_name = _get_call_name(node)
         if call_name:
-            # Check for dangerous functions
-            dangerous_funcs = {"eval", "exec", "compile", "subprocess", "shell", "system", "popen", "spawn", "execfile"}
-            if any(d in call_name.lower() for d in dangerous_funcs):
+            # Check for dangerous functions (multi-language)
+            dangerous_funcs = {
+                "eval", "exec", "compile", "subprocess", "shell", "system", "popen",
+                "spawn", "execfile",
+                # Go
+                "Command", "CommandContext", "StartProcess",
+                # Java
+                "Runtime.exec", "ProcessBuilder",
+            }
+            if any(d in call_name for d in dangerous_funcs) or any(d in call_name.lower() for d in {"eval", "exec", "system", "popen", "spawn"}):
                 line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
                 context["dangerous_calls"].append({"function": call_name, "line": line, "risk": "high"})
 
-            # Check for SQL-related calls
-            sql_funcs = {"execute", "executemany", "raw", "query", "cursor"}
-            if any(s in call_name.lower() for s in sql_funcs):
+            # Check for SQL-related calls (multi-language)
+            sql_funcs = {
+                "execute", "executemany", "raw", "query", "cursor",
+                # Go
+                "Exec", "Query", "QueryRow",
+                # Java
+                "executeQuery", "executeUpdate", "createNativeQuery",
+            }
+            if any(s in call_name for s in sql_funcs) or any(s in call_name.lower() for s in {"execute", "query", "raw"}):
                 line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
                 context["sql_queries"].append({"function": call_name, "line": line})
 
@@ -116,11 +130,18 @@ def _walk_ast_for_security(node: Any, context: dict[str, Any], source: str) -> N
             line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
             context["string_concatenations"].append({"line": line, "snippet": text[:100]})
 
-    # Detect input sources
-    if node_type in ("call_expression", "call", "attribute"):
+    # Detect input sources (multi-language)
+    if node_type in ("call_expression", "call", "attribute", "method_invocation", "selector_expression"):
         call_name = _get_call_name(node) or ""
-        input_patterns = {"request", "input", "argv", "stdin", "getenv", "form", "params"}
-        if any(p in call_name.lower() for p in input_patterns):
+        input_patterns = {
+            "request", "input", "argv", "stdin", "getenv", "form", "params",
+            # Go
+            "FormValue", "PostFormValue", "URL.Query", "r.Body", "r.Header",
+            # Java
+            "getParameter", "getHeader", "getCookies", "getInputStream", "getReader",
+            "getQueryString",
+        }
+        if any(p in call_name for p in input_patterns) or any(p in call_name.lower() for p in {"request", "input", "argv", "stdin", "getenv", "form", "params"}):
             line = getattr(node, "start_point", (0,))[0] if hasattr(node, "start_point") else 0
             context["input_sources"].append({"source": call_name, "line": line})
 
