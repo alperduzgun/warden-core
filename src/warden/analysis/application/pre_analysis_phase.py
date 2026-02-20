@@ -71,6 +71,65 @@ CRITICALITY_MAP = {
 }
 
 
+# Framework-specific entry point file patterns.
+# Files matching these patterns are managed by the framework and should not
+# be flagged as orphan or unreachable in gap analysis.
+FRAMEWORK_ENTRY_PATTERNS: dict[str, list[str]] = {
+    "django": [
+        "manage.py", "wsgi.py", "asgi.py", "urls.py", "admin.py",
+        "views.py", "models.py", "apps.py", "settings.py", "settings/*.py",
+        "*/migrations/*.py",
+    ],
+    "flask": [
+        "app.py", "wsgi.py", "create_app", "__init__.py",
+    ],
+    "fastapi": [
+        "main.py", "app.py",
+    ],
+    "pyramid": [
+        "app.py", "__init__.py", "views.py", "routes.py",
+    ],
+    "react": [
+        "src/App.*", "src/index.*", "pages/**/*", "app/**/*",
+    ],
+    "nextjs": [
+        "pages/**/*", "app/**/*", "src/pages/**/*", "src/app/**/*",
+        "middleware.*",
+    ],
+    "vue": [
+        "src/App.vue", "src/main.*", "pages/**/*", "src/router/*",
+    ],
+    "angular": [
+        "src/main.ts", "src/app/app.module.ts", "src/app/app.component.ts",
+    ],
+    "svelte": [
+        "src/App.svelte", "src/main.*", "src/routes/**/*",
+    ],
+    "express": [
+        "src/main.*", "src/app.*", "src/server.*", "app.*", "server.*",
+        "src/routes/**/*",
+    ],
+    "nest": [
+        "src/main.ts", "src/app.module.ts", "src/app.controller.ts",
+    ],
+    "spring": [
+        "src/main/java/**/*Application.java",
+        "src/main/java/**/*Controller.java",
+    ],
+    "rails": [
+        "config/routes.rb", "app/controllers/**/*", "app/models/**/*",
+    ],
+    "laravel": [
+        "routes/*.php", "app/Http/Controllers/**/*",
+    ],
+}
+
+
+def _get_framework_entry_points(framework_value: str) -> list[str]:
+    """Return known entry-point file patterns for a detected framework."""
+    return FRAMEWORK_ENTRY_PATTERNS.get(framework_value, [])
+
+
 class PreAnalysisPhase:
     """
     PRE-ANALYSIS Phase orchestrator (Phase 0).
@@ -367,6 +426,10 @@ class PreAnalysisPhase:
                             )):
                                 entry_points_list.append(rp)
 
+                    # Collect framework metadata for gap analysis
+                    fw_value = project_context.framework.value if project_context.framework else "none"
+                    fw_entry_patterns = _get_framework_entry_points(fw_value)
+
                     gap_analyzer = GapAnalyzer(project_files=all_rel_paths)
                     gap_report = gap_analyzer.analyze(
                         code_graph,
@@ -377,6 +440,8 @@ class PreAnalysisPhase:
                             "dynamic_imports": code_graph_builder.dynamic_import_files,
                             "type_checking_imports": code_graph_builder.type_checking_imports,
                             "unparseable_files": code_graph_builder.unparseable_files,
+                            "detected_framework": fw_value,
+                            "framework_entry_points": fw_entry_patterns,
                         },
                     )
 

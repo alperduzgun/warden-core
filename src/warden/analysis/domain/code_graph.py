@@ -242,8 +242,11 @@ class GapReport(BaseDomainModel):
     circular_deps: list[list[str]] = Field(default_factory=list)
     unreachable_from_entry: list[str] = Field(default_factory=list)
     missing_mixin_impl: list[str] = Field(default_factory=list)
-    shadow_re_exports: list[str] = Field(default_factory=list)
     coverage: float = 0.0
+
+    # Framework-aware analysis
+    detected_framework: str = ""  # e.g. "django", "flask", "fastapi"
+    framework_excluded_count: int = 0  # Files excluded from orphan/unreachable by framework rules
 
     # Chaos analysis additions
     star_imports: list[str] = Field(default_factory=list)  # Y5
@@ -271,6 +274,8 @@ class GapReport(BaseDomainModel):
             "dynamic_imports": len(self.dynamic_imports),
             "unparseable_files": len(self.unparseable_files),
             "coverage": self.coverage,
+            "detected_framework": self.detected_framework,
+            "framework_excluded_count": self.framework_excluded_count,
         }
 
 

@@ -14,6 +14,7 @@ Chaos Fixes Applied:
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from typing import Any
 
@@ -33,6 +34,33 @@ _TEST_PATH_RE = re.compile(
     r"(^|/)tests?/|test_[^/]+\.py$|[^/]+_test\.py$|conftest\.py$|/fixtures/",
     re.IGNORECASE,
 )
+
+
+def _matches_framework_pattern(file_path: str, patterns: list[str]) -> bool:
+    """Check if a file path matches any framework entry-point pattern.
+
+    Supports both exact filename matches (e.g. "manage.py") and
+    glob patterns (e.g. "*/migrations/*.py", "pages/**/*").
+    """
+    # Normalise separators
+    normalized = file_path.replace("\\", "/")
+    basename = normalized.rsplit("/", 1)[-1] if "/" in normalized else normalized
+
+    for pattern in patterns:
+        # Exact basename match (e.g. "manage.py", "urls.py")
+        if "/" not in pattern and "*" not in pattern:
+            if basename == pattern:
+                return True
+            continue
+        # Convert ** to work with fnmatch (** matches any path segments)
+        fn_pattern = pattern.replace("**/*", "*").replace("**/", "*/")
+        # Glob match against full path
+        if fnmatch.fnmatch(normalized, fn_pattern):
+            return True
+        # Also try matching the filename only for patterns like "settings/*.py"
+        if fnmatch.fnmatch(basename, fn_pattern):
+            return True
+    return False
 
 
 class GapAnalyzer:
@@ -74,9 +102,26 @@ class GapAnalyzer:
 
         report = GapReport()
 
+        # Extract framework info from builder_meta for filtering
+        detected_framework = ""
+        framework_entry_patterns: list[str] = []
+        if builder_meta:
+            detected_framework = builder_meta.get("detected_framework", "")
+            framework_entry_patterns = builder_meta.get("framework_entry_points", [])
+
+        fw_excluded = 0
+
         # 1. Orphan files (in dependency graph but no edges)
         if dep_graph:
-            report.orphan_files = self._find_orphan_files(dep_graph)
+            raw_orphans = self._find_orphan_files(dep_graph)
+            if framework_entry_patterns:
+                report.orphan_files = [
+                    f for f in raw_orphans
+                    if not _matches_framework_pattern(f, framework_entry_patterns)
+                ]
+                fw_excluded += len(raw_orphans) - len(report.orphan_files)
+            else:
+                report.orphan_files = raw_orphans
 
         # 2. Orphan symbols (in code graph but no edges)
         orphan_nodes = code_graph.find_orphan_symbols()
@@ -91,7 +136,7 @@ class GapAnalyzer:
         # 5. Unreachable from entry points (Gemini fix: exclude test files)
         if entry_points:
             report.unreachable_from_entry = self._find_unreachable(
-                dep_graph, entry_points
+                dep_graph, entry_points, framework_entry_patterns
             )
 
         # 6. Missing mixin implementations
@@ -110,6 +155,10 @@ class GapAnalyzer:
             report.type_checking_only = builder_meta.get("type_checking_imports", [])
             report.unparseable_files = builder_meta.get("unparseable_files", [])
 
+        # 10. Framework metadata
+        report.detected_framework = detected_framework
+        report.framework_excluded_count = fw_excluded
+
         logger.info(
             "gap_analysis_completed",
             orphan_files=len(report.orphan_files),
@@ -118,6 +167,8 @@ class GapAnalyzer:
             circular_deps=len(report.circular_deps),
             unreachable=len(report.unreachable_from_entry),
             coverage=f"{report.coverage:.1%}",
+            detected_framework=detected_framework or "none",
+            framework_excluded=fw_excluded,
         )
 
         return report
@@ -177,6 +228,7 @@ class GapAnalyzer:
         self,
         dep_graph: Any | None,
         entry_points: list[str],
+        framework_entry_patterns: list[str] | None = None,
     ) -> list[str]:
         """
         Find files unreachable from entry points via DFS.
@@ -184,6 +236,9 @@ class GapAnalyzer:
         Gemini fix: Test files are excluded from the unreachable list
         because they are never reachable from main entry points by design.
         Test files should be treated as secondary entry points.
+
+        Framework-aware: Files matching framework entry patterns are also
+        excluded since they are implicitly reachable via the framework.
         """
         if not dep_graph:
             return []
@@ -203,6 +258,12 @@ class GapAnalyzer:
         reachable: set[str] = set()
         stack = list(entry_points)
 
+        # Also seed with framework entry point files found in the project
+        if framework_entry_patterns:
+            for f in all_files:
+                if _matches_framework_pattern(f, framework_entry_patterns):
+                    stack.append(f)
+
         while stack:
             current = stack.pop()
             if current in reachable:
@@ -217,6 +278,11 @@ class GapAnalyzer:
         for f in sorted(all_files - reachable):
             # Gemini fix: skip test files — they're entry points themselves
             if _TEST_PATH_RE.search(f):
+                continue
+            # Skip framework-managed files
+            if framework_entry_patterns and _matches_framework_pattern(
+                f, framework_entry_patterns
+            ):
                 continue
             unreachable.append(f)
 

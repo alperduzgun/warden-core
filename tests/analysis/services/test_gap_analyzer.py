@@ -19,8 +19,7 @@ from warden.analysis.domain.code_graph import (
     SymbolKind,
     SymbolNode,
 )
-from warden.analysis.services.gap_analyzer import GapAnalyzer
-
+from warden.analysis.services.gap_analyzer import GapAnalyzer, _matches_framework_pattern
 
 # --- Helpers ---
 
@@ -290,3 +289,183 @@ class TestBuilderMetadata:
         assert report.dynamic_imports == ["src/b.py"]
         assert report.type_checking_only == ["src/c.py"]
         assert report.unparseable_files == ["src/d.py"]
+
+
+# --- Framework Pattern Matching ---
+
+
+class TestFrameworkPatternMatching:
+    """Tests for _matches_framework_pattern helper."""
+
+    def test_exact_basename_match(self):
+        assert _matches_framework_pattern("src/myapp/manage.py", ["manage.py"])
+
+    def test_exact_basename_no_match(self):
+        assert not _matches_framework_pattern("src/utils.py", ["manage.py"])
+
+    def test_glob_pattern_match(self):
+        assert _matches_framework_pattern("src/myapp/migrations/0001.py", ["*/migrations/*.py"])
+
+    def test_glob_double_star(self):
+        # fnmatch doesn't support ** natively, but we test the pattern
+        assert _matches_framework_pattern("pages/index.tsx", ["pages/**/*"])
+
+    def test_no_match_returns_false(self):
+        assert not _matches_framework_pattern("src/helpers.py", ["manage.py", "views.py"])
+
+
+# --- Framework-Aware Orphan Filtering ---
+
+
+class TestFrameworkAwareOrphans:
+    """Framework entry point files should not be flagged as orphan."""
+
+    def test_django_manage_py_not_orphan(self):
+        dep_graph = _mock_dep_graph(
+            forward={"src/a.py": ["src/b.py"]},
+            reverse={"src/b.py": ["src/a.py"]},
+        )
+        # manage.py has no deps or dependents → raw orphan
+        dep_graph._forward_graph[Path("manage.py")] = set()
+        dep_graph._reverse_graph[Path("manage.py")] = set()
+
+        analyzer = GapAnalyzer()
+        code_graph = CodeGraph()
+        report = analyzer.analyze(
+            code_graph,
+            dep_graph=dep_graph,
+            builder_meta={
+                "detected_framework": "django",
+                "framework_entry_points": [
+                    "manage.py", "wsgi.py", "asgi.py", "urls.py",
+                    "admin.py", "views.py", "models.py",
+                ],
+            },
+        )
+
+        assert "manage.py" not in report.orphan_files
+        assert report.detected_framework == "django"
+        assert report.framework_excluded_count >= 1
+
+    def test_flask_app_py_not_orphan(self):
+        dep_graph = _mock_dep_graph(
+            forward={"src/core.py": ["src/db.py"]},
+            reverse={"src/db.py": ["src/core.py"]},
+        )
+        dep_graph._forward_graph[Path("app.py")] = set()
+        dep_graph._reverse_graph[Path("app.py")] = set()
+
+        analyzer = GapAnalyzer()
+        code_graph = CodeGraph()
+        report = analyzer.analyze(
+            code_graph,
+            dep_graph=dep_graph,
+            builder_meta={
+                "detected_framework": "flask",
+                "framework_entry_points": ["app.py", "wsgi.py"],
+            },
+        )
+
+        assert "app.py" not in report.orphan_files
+
+    def test_no_framework_no_exclusion(self):
+        """Without framework info, orphan detection is unchanged."""
+        dep_graph = _mock_dep_graph(
+            forward={"src/a.py": ["src/b.py"]},
+            reverse={"src/b.py": ["src/a.py"]},
+        )
+        dep_graph._forward_graph[Path("manage.py")] = set()
+        dep_graph._reverse_graph[Path("manage.py")] = set()
+
+        analyzer = GapAnalyzer()
+        code_graph = CodeGraph()
+        report = analyzer.analyze(code_graph, dep_graph=dep_graph)
+
+        # Without framework info, manage.py IS orphan
+        assert "manage.py" in report.orphan_files
+        assert report.framework_excluded_count == 0
+
+    def test_non_framework_file_still_orphan(self):
+        """Files not matching framework patterns remain orphan."""
+        dep_graph = _mock_dep_graph(
+            forward={"src/a.py": ["src/b.py"]},
+            reverse={"src/b.py": ["src/a.py"]},
+        )
+        dep_graph._forward_graph[Path("manage.py")] = set()
+        dep_graph._reverse_graph[Path("manage.py")] = set()
+        dep_graph._forward_graph[Path("random_script.py")] = set()
+        dep_graph._reverse_graph[Path("random_script.py")] = set()
+
+        analyzer = GapAnalyzer()
+        code_graph = CodeGraph()
+        report = analyzer.analyze(
+            code_graph,
+            dep_graph=dep_graph,
+            builder_meta={
+                "detected_framework": "django",
+                "framework_entry_points": ["manage.py", "urls.py"],
+            },
+        )
+
+        assert "manage.py" not in report.orphan_files
+        assert "random_script.py" in report.orphan_files
+
+
+# --- Framework-Aware Unreachable Filtering ---
+
+
+class TestFrameworkAwareUnreachable:
+    """Framework entry point files should seed DFS for unreachable analysis."""
+
+    def test_django_views_reachable_via_framework(self):
+        """Django views.py imports utils.py — both should be reachable."""
+        dep_graph = _mock_dep_graph(
+            forward={
+                "src/main.py": ["src/core.py"],
+                "myapp/views.py": ["myapp/utils.py"],
+                "myapp/utils.py": [],
+                "src/isolated.py": [],
+            }
+        )
+
+        analyzer = GapAnalyzer()
+        graph = CodeGraph()
+        report = analyzer.analyze(
+            graph,
+            dep_graph=dep_graph,
+            entry_points=["src/main.py"],
+            builder_meta={
+                "detected_framework": "django",
+                "framework_entry_points": [
+                    "manage.py", "views.py", "urls.py", "models.py",
+                ],
+            },
+        )
+
+        # views.py is a framework entry point → reachable
+        assert "myapp/views.py" not in report.unreachable_from_entry
+        # utils.py is reachable via views.py
+        assert "myapp/utils.py" not in report.unreachable_from_entry
+        # isolated.py has no framework match → still unreachable
+        assert "src/isolated.py" in report.unreachable_from_entry
+
+    def test_no_framework_unreachable_unchanged(self):
+        """Without framework info, unreachable behavior is unchanged."""
+        dep_graph = _mock_dep_graph(
+            forward={
+                "src/main.py": ["src/core.py"],
+                "myapp/views.py": ["myapp/utils.py"],
+                "src/isolated.py": [],
+            }
+        )
+
+        analyzer = GapAnalyzer()
+        graph = CodeGraph()
+        report = analyzer.analyze(
+            graph,
+            dep_graph=dep_graph,
+            entry_points=["src/main.py"],
+        )
+
+        # Without framework, views.py IS unreachable from main.py
+        assert "myapp/views.py" in report.unreachable_from_entry

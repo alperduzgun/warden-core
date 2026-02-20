@@ -229,6 +229,8 @@ class CodeGraphBuilder:
 
         module = self._path_to_module(file_path)
 
+        decorators = node.attributes.get("decorators", [])
+
         symbol = SymbolNode(
             fqn=fqn,
             name=class_name,
@@ -238,6 +240,7 @@ class CodeGraphBuilder:
             module=module,
             is_test=is_test,
             bases=bases,
+            metadata={"decorators": decorators} if decorators else {},
         )
         self._graph.add_node(symbol)
 
@@ -295,6 +298,7 @@ class CodeGraphBuilder:
 
         fqn = self._make_fqn(file_path, full_name)
         module = self._path_to_module(file_path)
+        decorators = node.attributes.get("decorators", [])
 
         symbol = SymbolNode(
             fqn=fqn,
@@ -304,6 +308,7 @@ class CodeGraphBuilder:
             line=node.location.start_line if node.location else 0,
             module=module,
             is_test=is_test,
+            metadata={"decorators": decorators} if decorators else {},
         )
         self._graph.add_node(symbol)
 
