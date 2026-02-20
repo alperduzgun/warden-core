@@ -312,12 +312,13 @@ Warden doesn't just check *correctness*; it checks *appropriateness*.
     *   *Crypto Wallet:* 🛡️ Paranoid Mode (No http, strict types)
     *   *CLI Tool:* ⚡ Relaxed Mode (Allow print statements, rapid I/O)
 
-### 14. 🧠 Project Intelligence & CI Optimization (New!)
-Warden now features a **"Discovery Canvas"** that creates a semantic map of your project to optimize CI performance.
-*   **Semantic Mapping:** Automatically identifies modules (e.g., "Payment Service", "Auth Module") and assigns them **Risk Levels (P0-P3)**.
-*   **Context-Aware CI:** During a PR scan, Warden uses this intelligence to decide which files need a "Deep LLM Audit" and which ones can be handled by fast, local rules.
-*   **Zero Noise:** Automatically ignores Warden's internal meta-files and project artifacts, focusing purely on your business logic.
-*   **One-Command Refresh:** Keep your project's "Intelligence" up to date with `warden refresh`.
+### 14. 🧠 LLM Audit Context & Code Intelligence (New!)
+Traditional LLM bots run "blind" reading text streams without structure. Warden acts differently: it maps your codebase deterministically to provide **Zero-Hallucination Audit Context** for LLMs.
+*   **Layer 1 (Dependencies):** Automatically builds a file-to-file structural `DependencyGraph`.
+*   **Layer 2 (Symbol Graph):** Uses AST traversal to extract relationships (`CodeGraph`) meaning Class inheritance, Method calls, and Mixin implementations without LLM token cost.
+*   **Layer 3 (Runtime Validation):** Validates the AST connections using the Language Server Protocol (LSP) to ensure the map matches actual runtime execution perfectly.
+*   **Self-Auditing (`--check`):** Warden computes a `GapReport` identifying broken imports, orphaned files, circular dependencies, and unreachable code.
+*   **LLM Integration:** Run `warden audit-context --format markdown` to generate an optimized summary of your project's DNA. Feed this to Grok, ChatGPT, or Claude before starting code audits so they instantly understand your architecture. MCP (Claude Code/Cursor) uses `warden_get_audit_context` and `warden_query_symbol` under the hood.
 
 ---
 
