@@ -135,6 +135,11 @@ class PipelineContext:
     # Shared Project Intelligence (populated in PRE-ANALYSIS, consumed by frames)
     project_intelligence: Any | None = None  # ProjectIntelligence instance
 
+    # Phase 0.7: Code Graph & Gap Analysis (K2 fix: explicit fields, not dynamic attrs)
+    code_graph: Any | None = None  # CodeGraph instance
+    gap_report: Any | None = None  # GapReport instance
+    chain_validation: Any | None = None  # ChainValidation instance (Phase 0.8, LSP)
+
     # State Tracking
     completed_phases: set[str] = field(default_factory=set)
 
@@ -415,6 +420,8 @@ class PipelineContext:
             "llm_requests": self.request_count,
             "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
             "taint_paths_count": sum(len(v) for v in self.taint_paths.values()),
+            "code_graph_stats": self.code_graph.stats() if self.code_graph else None,
+            "gap_report_summary": self.gap_report.summary() if self.gap_report else None,
             "metadata": self.metadata,
         }
 

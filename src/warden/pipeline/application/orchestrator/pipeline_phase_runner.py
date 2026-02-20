@@ -68,8 +68,15 @@ class PipelinePhaseRunner:
         from warden.pipeline.domain.enums import AnalysisLevel
 
         if getattr(self.config, "use_llm", True) and self.config.analysis_level != AnalysisLevel.BASIC:
-            logger.info("phase_enabled", phase="TRIAGE", enabled=True)
-            await self.phase_executor.execute_triage_async(context, code_files)
+            if self._is_single_tier_provider():
+                # CLI-tool providers (Codex, Claude Code) spawn a subprocess per
+                # LLM call (~20s each).  Running 100+ triage calls is prohibitive.
+                # Use heuristic-only triage: safe files → FAST, rest → MIDDLE.
+                logger.info("triage_bypass_single_tier", provider=self._detect_primary_provider())
+                self._apply_heuristic_triage(context, code_files)
+            else:
+                logger.info("phase_enabled", phase="TRIAGE", enabled=True)
+                await self.phase_executor.execute_triage_async(context, code_files)
 
         # Phase 1: ANALYSIS
         if getattr(self.config, "enable_analysis", True):
@@ -311,6 +318,102 @@ class PipelinePhaseRunner:
             context.taint_paths = await service.analyze_all_async(code_files)
         except Exception as e:
             logger.warning("taint_population_failed", error=str(e))
+
+    # ------------------------------------------------------------------
+    # Single-tier provider triage bypass helpers
+    # ------------------------------------------------------------------
+
+    def _detect_primary_provider(self) -> str:
+        """Return the lowercase provider name of the primary LLM client."""
+        client = self.llm_service
+        if client is None:
+            return ""
+
+        # OrchestratedLlmClient wraps a smart_client
+        inner = getattr(client, "_smart_client", None) or getattr(client, "smart_client", None)
+        if inner:
+            return str(getattr(inner, "provider", "")).lower()
+        return str(getattr(client, "provider", "")).lower()
+
+    def _is_single_tier_provider(self) -> bool:
+        """True when the primary provider is a CLI-tool (subprocess-based)."""
+        from warden.llm.factory import SINGLE_TIER_PROVIDERS
+        from warden.llm.types import LlmProvider
+
+        provider_str = self._detect_primary_provider()
+        if not provider_str:
+            return False
+        try:
+            return LlmProvider(provider_str) in SINGLE_TIER_PROVIDERS
+        except ValueError:
+            return False
+
+    def _apply_heuristic_triage(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
+        """Assign triage lanes using heuristics only (zero LLM calls).
+
+        Safe files go to FAST lane; everything else goes to MIDDLE lane so
+        that all validation frames still run — there is no coverage loss.
+        """
+        import time
+
+        from warden.analysis.domain.triage_heuristics import is_heuristic_safe
+        from warden.analysis.domain.triage_models import RiskScore, TriageDecision, TriageLane
+
+        start = time.time()
+        decisions: dict[str, dict] = {}
+        fast_count = 0
+
+        for cf in code_files:
+            if is_heuristic_safe(cf):
+                lane = TriageLane.FAST
+                score = 0.0
+                reason = "Heuristic bypass: safe file"
+                fast_count += 1
+            else:
+                lane = TriageLane.MIDDLE
+                score = 5.0
+                reason = "Heuristic bypass: non-trivial file"
+
+            decision = TriageDecision(
+                file_path=str(cf.path),
+                lane=lane,
+                risk_score=RiskScore(score=score, confidence=1.0, reasoning=reason, category="heuristic"),
+                processing_time_ms=(time.time() - start) * 1000,
+            )
+            decisions[str(cf.path)] = decision.model_dump()
+
+        context.triage_decisions = decisions
+
+        duration_ms = (time.time() - start) * 1000
+        logger.info(
+            "heuristic_triage_completed",
+            total=len(code_files),
+            fast=fast_count,
+            middle=len(code_files) - fast_count,
+            duration_ms=f"{duration_ms:.1f}",
+        )
+
+        context.add_phase_result(
+            "TRIAGE",
+            {
+                "mode": "heuristic_bypass",
+                "total_files": len(code_files),
+                "fast_lane": fast_count,
+                "middle_lane": len(code_files) - fast_count,
+                "deep_lane": 0,
+                "duration_ms": duration_ms,
+            },
+        )
+
+        if self._progress_callback:
+            self._progress_callback(
+                "triage_completed",
+                {
+                    "duration": f"{duration_ms / 1000:.2f}s",
+                    "mode": "heuristic_bypass",
+                    "stats": {"fast": fast_count, "middle": len(code_files) - fast_count, "deep": 0},
+                },
+            )
 
     def _finalize_pipeline_status(self, context: PipelineContext, pipeline: ValidationPipeline) -> None:
         """Update pipeline status based on results and capture LLM usage."""

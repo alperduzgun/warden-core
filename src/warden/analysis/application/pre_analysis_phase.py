@@ -322,7 +322,96 @@ class PreAnalysisPhase:
                 self.memory_manager.update_environment_hash(self.env_hash)
                 await self.memory_manager.save_async()
 
-            # Step 9: Trigger Semantic Indexing (Smart Incremental)
+            # Step 9: Code Graph & Gap Analysis (Phase 0.7)
+            # Build symbol-level graph from AST cache (zero LLM cost)
+            if pipeline_context and hasattr(pipeline_context, "ast_cache") and pipeline_context.ast_cache:
+                try:
+                    from warden.analysis.services.code_graph_builder import CodeGraphBuilder
+                    from warden.analysis.services.gap_analyzer import GapAnalyzer
+                    from warden.analysis.services.intelligence_saver import IntelligenceSaver
+
+                    code_graph_builder = CodeGraphBuilder(
+                        pipeline_context.ast_cache,
+                        project_root=self.project_root,
+                    )
+
+                    # O4 fix: explicit timeout for graph build
+                    code_graph = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(
+                            None, code_graph_builder.build, self.dependency_graph
+                        ),
+                        timeout=60,
+                    )
+
+                    # Compute project file list for coverage
+                    all_rel_paths = []
+                    for cf in code_files:
+                        try:
+                            all_rel_paths.append(str(Path(cf.path).relative_to(self.project_root)))
+                        except ValueError:
+                            all_rel_paths.append(cf.path)
+
+                    # Entry points from project intelligence or heuristic detection
+                    entry_points_list: list[str] = []
+                    if hasattr(project_context, "entry_points") and project_context.entry_points:
+                        entry_points_list = [str(e) for e in project_context.entry_points]
+                    elif hasattr(project_context, "main_files") and project_context.main_files:
+                        entry_points_list = [str(e) for e in project_context.main_files]
+                    else:
+                        # Heuristic: common entry point patterns
+                        for rp in all_rel_paths:
+                            if any(rp.endswith(p) for p in (
+                                "main.py", "__main__.py", "app.py", "cli.py",
+                                "manage.py", "wsgi.py", "asgi.py", "index.ts",
+                                "index.js", "server.py", "server.ts",
+                            )):
+                                entry_points_list.append(rp)
+
+                    gap_analyzer = GapAnalyzer(project_files=all_rel_paths)
+                    gap_report = gap_analyzer.analyze(
+                        code_graph,
+                        dep_graph=self.dependency_graph,
+                        entry_points=entry_points_list,
+                        builder_meta={
+                            "star_imports": code_graph_builder.star_import_files,
+                            "dynamic_imports": code_graph_builder.dynamic_import_files,
+                            "type_checking_imports": code_graph_builder.type_checking_imports,
+                            "unparseable_files": code_graph_builder.unparseable_files,
+                        },
+                    )
+
+                    # K2 fix: Set on pipeline context (explicit fields, no AttributeError)
+                    pipeline_context.code_graph = code_graph
+                    pipeline_context.gap_report = gap_report
+
+                    # Persist to disk (O5: atomic write)
+                    saver = IntelligenceSaver(self.project_root)
+                    if self.dependency_graph:
+                        saver.save_dependency_graph(self.dependency_graph)
+                    saver.save_code_graph(code_graph)
+                    saver.save_gap_report(gap_report)
+
+                    # Coverage warning
+                    if gap_report.coverage < 0.8:
+                        logger.warning(
+                            "code_graph_low_coverage",
+                            coverage=f"{gap_report.coverage:.1%}",
+                            message="Code graph covers less than 80% of project files",
+                        )
+
+                    logger.info(
+                        "code_graph_phase_completed",
+                        nodes=code_graph.stats()["total_nodes"],
+                        edges=code_graph.stats()["total_edges"],
+                        coverage=f"{gap_report.coverage:.1%}",
+                    )
+
+                except asyncio.TimeoutError:
+                    logger.warning("code_graph_build_timeout", timeout=60)
+                except Exception as e:
+                    logger.warning("code_graph_build_failed", error=str(e))
+
+            # Step 10: Trigger Semantic Indexing (Smart Incremental)
             try:
                 from warden.pipeline.domain.enums import AnalysisLevel
                 from warden.shared.services.semantic_search_service import SemanticSearchService
