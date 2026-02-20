@@ -64,6 +64,9 @@ class PipelinePhaseRunner:
             # Populate taint analysis (zero LLM cost, per-file static analysis)
             await self._populate_taint_paths_async(context, code_files)
 
+            # Phase 0.8: LSP Audit (optional, zero LLM cost)
+            await self._populate_lsp_audit_async(context)
+
         # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
         from warden.pipeline.domain.enums import AnalysisLevel
 
@@ -318,6 +321,36 @@ class PipelinePhaseRunner:
             context.taint_paths = await service.analyze_all_async(code_files)
         except Exception as e:
             logger.warning("taint_population_failed", error=str(e))
+
+    async def _populate_lsp_audit_async(self, context: PipelineContext) -> None:
+        """Phase 0.8: Validate CodeGraph edges via LSP (optional, zero LLM cost).
+
+        Only runs if a CodeGraph was built in Phase 0.7 and LSP is available.
+        Stores results in ``context.chain_validation``.
+        """
+        if not context.code_graph:
+            return
+        try:
+            from warden.lsp.audit_service import LSPAuditService
+
+            project_root = self.project_root or context.project_root
+            service = LSPAuditService(project_root=str(project_root) if project_root else None)
+
+            if not await service.health_check_async():
+                logger.debug("lsp_audit_skipped", reason="lsp_unavailable")
+                return
+
+            chain_validation = await service.validate_dependency_chain_async(context.code_graph)
+            context.chain_validation = chain_validation
+
+            logger.info(
+                "lsp_audit_completed",
+                confirmed=chain_validation.confirmed,
+                unconfirmed=chain_validation.unconfirmed,
+                dead_symbols=len(chain_validation.dead_symbols),
+            )
+        except Exception as e:
+            logger.warning("lsp_audit_failed", error=str(e))
 
     # ------------------------------------------------------------------
     # Single-tier provider triage bypass helpers

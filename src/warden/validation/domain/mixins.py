@@ -91,6 +91,32 @@ class Cleanable(ABC):
         raise NotImplementedError
 
 
+class LSPAware(ABC):
+    """
+    Mixin for frames that consume LSP-based semantic analysis results.
+
+    Frames implementing this mixin receive call chains, type hierarchies,
+    and dead symbol data from the ``LSPAuditService``.  The pipeline's
+    ``FrameRunner`` calls ``set_lsp_context`` before frame execution.
+
+    Example:
+        class MyFrame(ValidationFrame, LSPAware):
+            def set_lsp_context(self, lsp_context):
+                self._lsp_context = lsp_context
+    """
+
+    @abstractmethod
+    def set_lsp_context(self, lsp_context: dict[str, Any]) -> None:
+        """
+        Inject LSP audit context for semantic analysis.
+
+        Args:
+            lsp_context: Dict with keys like 'call_chains', 'type_hierarchy',
+                         'dead_symbols', 'chain_validation'.
+        """
+        raise NotImplementedError
+
+
 class TaintAware(ABC):
     """
     Mixin for frames that consume pre-computed taint analysis results.

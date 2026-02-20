@@ -196,6 +196,8 @@ def refresh_command(
     baseline: bool = typer.Option(False, "--baseline", "-b", help="Also refresh baseline (runs scan)"),
     module: str | None = typer.Option(None, "--module", "-m", help="Refresh only specific module"),
     quick: bool = typer.Option(False, "--quick", "-q", help="Quick mode: only analyze new files"),
+    audit_context: bool = typer.Option(False, "--audit-context", help="Show markdown audit context after refresh"),
+    check_gaps: bool = typer.Option(False, "--check-gaps", help="Warn if critical gaps detected"),
 ) -> None:
     """
     Refresh Warden intelligence and optionally baseline.
@@ -211,6 +213,8 @@ def refresh_command(
         warden refresh --module auth    # Refresh only auth module
         warden refresh --quick          # Only analyze new files
         warden refresh --baseline       # Also update baseline (slow)
+        warden refresh --audit-context  # Show audit context after refresh
+        warden refresh --check-gaps     # Warn if critical gaps found
     """
     console.print("\n[bold cyan]🔄 Warden Refresh[/bold cyan]")
 
@@ -253,5 +257,18 @@ def refresh_command(
             asyncio.run(_create_baseline_async(root, config_path))
         except Exception as e:
             console.print(f"[red]Baseline refresh failed: {e}[/red]")
+
+    # Audit context display
+    if audit_context or check_gaps:
+        from warden.cli.commands.audit_context import _check_gaps, _load_intelligence, _render_markdown
+
+        code_graph, gap_report, dep_graph = _load_intelligence(root)
+        if audit_context and (code_graph or gap_report or dep_graph):
+            console.print("\n[bold blue]📊 Audit Context[/bold blue]")
+            console.print(_render_markdown(code_graph, gap_report, dep_graph))
+        if check_gaps:
+            exit_code = _check_gaps(gap_report)
+            if exit_code != 0:
+                console.print("[yellow]Tip: Run 'warden audit-context --check' for details.[/yellow]")
 
     console.print("\n[green]✨ Refresh complete![/green]")

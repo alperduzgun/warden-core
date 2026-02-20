@@ -153,6 +153,13 @@ class ToolExecutorService:
         except ImportError:
             pass
 
+        try:
+            from warden.mcp.infrastructure.adapters.audit_adapter import AuditAdapter
+
+            self.register_adapter(AuditAdapter(self.project_root))
+        except ImportError:
+            pass
+
         logger.info(
             "tool_adapters_initialized",
             adapter_count=len(self._adapters),

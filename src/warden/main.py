@@ -8,6 +8,7 @@ Provides commands for scanning, serving, and launching the interactive chat.
 
 import typer
 
+from warden.cli.commands.audit_context import audit_context_command
 from warden.cli.commands.baseline import baseline_app
 from warden.cli.commands.chat import chat_command
 from warden.cli.commands.ci import ci_app
@@ -104,6 +105,7 @@ app.command(name="doctor")(doctor_command)
 app.command(name="update")(update_command)
 app.command(name="refresh")(refresh_command)
 app.command(name="ci-config")(ci_config_command)
+app.command(name="audit-context")(audit_context_command)
 
 
 def _normalize_color_env() -> None:

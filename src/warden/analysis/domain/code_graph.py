@@ -272,3 +272,50 @@ class GapReport(BaseDomainModel):
             "unparseable_files": len(self.unparseable_files),
             "coverage": self.coverage,
         }
+
+
+class ChainValidationEntry(BaseDomainModel):
+    """A single validated dependency chain entry."""
+
+    source_fqn: str
+    target_fqn: str
+    chain_depth: int = 0
+    lsp_confirmed: bool = False  # LSP confirmed the relationship
+    lsp_error: str = ""  # Error message if LSP check failed
+
+
+class ChainValidation(BaseDomainModel):
+    """
+    LSP-validated dependency chain integrity report.
+
+    Cross-references CodeGraph edges against LSP call hierarchy
+    and type hierarchy to confirm or refute relationships.
+    """
+
+    schema_version: str = "1.0.0"
+    total_chains_checked: int = 0
+    confirmed: int = 0
+    unconfirmed: int = 0
+    errors: int = 0
+    entries: list[ChainValidationEntry] = Field(default_factory=list)
+    dead_symbols: list[str] = Field(default_factory=list)
+    lsp_available: bool = False
+
+    @property
+    def confirmation_rate(self) -> float:
+        """Percentage of chains confirmed by LSP."""
+        if self.total_chains_checked == 0:
+            return 0.0
+        return self.confirmed / self.total_chains_checked
+
+    def summary(self) -> dict[str, Any]:
+        """Get summary statistics."""
+        return {
+            "total_checked": self.total_chains_checked,
+            "confirmed": self.confirmed,
+            "unconfirmed": self.unconfirmed,
+            "errors": self.errors,
+            "confirmation_rate": round(self.confirmation_rate, 3),
+            "dead_symbols": len(self.dead_symbols),
+            "lsp_available": self.lsp_available,
+        }
