@@ -55,6 +55,12 @@ class PipelinePhaseRunner:
         """Execute all pipeline phases in order."""
 
         # Phase 0: PRE-ANALYSIS
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Pre-Analysis", "phase_name": "Pre-Analysis", "total_units": len(code_files)},
+            )
+
         if self.config.enable_pre_analysis:
             await self.phase_executor.execute_pre_analysis_async(context, code_files)
 
@@ -70,6 +76,12 @@ class PipelinePhaseRunner:
         # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
         from warden.pipeline.domain.enums import AnalysisLevel
 
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Triage", "phase_name": "Triage", "total_units": len(code_files)},
+            )
+
         if getattr(self.config, "use_llm", True) and self.config.analysis_level != AnalysisLevel.BASIC:
             if self._is_single_tier_provider():
                 # CLI-tool providers (Codex, Claude Code) spawn a subprocess per
@@ -81,35 +93,46 @@ class PipelinePhaseRunner:
                 logger.info("phase_enabled", phase="TRIAGE", enabled=True)
                 await self.phase_executor.execute_triage_async(context, code_files)
 
+        # Batch phase done — jump counter to completion
+        if self._progress_callback:
+            self._progress_callback("progress_update", {"increment": len(code_files)})
+
         # Phase 1: ANALYSIS
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Analysis", "phase_name": "Analysis", "total_units": len(code_files)},
+            )
+
         if getattr(self.config, "enable_analysis", True):
             await self.phase_executor.execute_analysis_async(context, code_files)
             context.quality_score_after = context.quality_score_before
 
+        # Batch phase done — jump counter to completion
+        if self._progress_callback:
+            self._progress_callback("progress_update", {"increment": len(code_files)})
+
         # Phase 2: CLASSIFICATION
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Classification", "phase_name": "Classification", "total_units": len(code_files)},
+            )
+
         if frames_to_execute:
             self._apply_manual_frame_override(context, frames_to_execute)
         else:
             logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
             await self.phase_executor.execute_classification_async(context, code_files)
 
+        # Batch phase done — jump counter to completion
+        if self._progress_callback:
+            self._progress_callback("progress_update", {"increment": len(code_files)})
+
         # Phase 3: VALIDATION
         enable_validation = getattr(self.config, "enable_validation", True)
         if enable_validation:
             logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
-            total_work_units = self._calculate_total_work_units(context, code_files)
-            if self._progress_callback:
-                self._progress_callback(
-                    "progress_init",
-                    {
-                        "total_units": total_work_units,
-                        "phase_units": {
-                            "VALIDATION": len(context.selected_frames or []) * len(code_files)
-                            if context.selected_frames
-                            else 0,
-                        },
-                    },
-                )
             await self.frame_executor.execute_validation_with_strategy_async(context, code_files, pipeline)
         else:
             logger.info("phase_skipped", phase="VALIDATION", reason="disabled_in_config")
@@ -129,13 +152,30 @@ class PipelinePhaseRunner:
 
         # Phase 3.5: VERIFICATION (False Positive Reduction)
         if getattr(self.config, "enable_issue_validation", False):
+            findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
+            if self._progress_callback:
+                self._progress_callback(
+                    "phase_started",
+                    {"phase": "Verification", "phase_name": "Verification", "total_units": findings_count},
+                )
             await self.post_processor.verify_findings_async(context)
 
         # Phase 4: FORTIFICATION
+        findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Fortification", "phase_name": "Fortification", "total_units": findings_count},
+            )
+
         enable_fortification = getattr(self.config, "enable_fortification", True)
         if enable_fortification:
             logger.info("phase_enabled", phase="FORTIFICATION", enabled=enable_fortification)
             await self.phase_executor.execute_fortification_async(context, code_files)
+
+            # Batch phase done — jump counter to completion
+            if self._progress_callback and findings_count > 0:
+                self._progress_callback("progress_update", {"increment": findings_count})
         else:
             logger.info("phase_skipped", phase="FORTIFICATION", reason="disabled_in_config")
             if self._progress_callback:
@@ -149,10 +189,20 @@ class PipelinePhaseRunner:
                 )
 
         # Phase 5: CLEANING
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Cleaning", "phase_name": "Cleaning", "total_units": len(code_files)},
+            )
+
         enable_cleaning = getattr(self.config, "enable_cleaning", True)
         if enable_cleaning:
             logger.info("phase_enabled", phase="CLEANING", enabled=enable_cleaning)
             await self.phase_executor.execute_cleaning_async(context, code_files)
+
+            # Batch phase done — jump counter to completion
+            if self._progress_callback:
+                self._progress_callback("progress_update", {"increment": len(code_files)})
         else:
             logger.info("phase_skipped", phase="CLEANING", reason="disabled_in_config")
             if self._progress_callback:
@@ -342,6 +392,18 @@ class PipelinePhaseRunner:
 
             chain_validation = await service.validate_dependency_chain_async(context.code_graph)
             context.chain_validation = chain_validation
+
+            # Persist to disk (matches pre_analysis_phase.py pattern)
+            try:
+                from warden.analysis.services.intelligence_saver import IntelligenceSaver
+
+                _root = self.project_root or context.project_root
+                if _root:
+                    from pathlib import Path as _Path
+
+                    IntelligenceSaver(_Path(str(_root))).save_chain_validation(chain_validation)
+            except Exception as exc:
+                logger.warning("chain_validation_save_failed", error=str(exc))
 
             logger.info(
                 "lsp_audit_completed",

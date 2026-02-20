@@ -27,9 +27,7 @@ class AnalysisExecutor(BasePhaseExecutor):
 
         logger.info("executing_phase", phase="ANALYSIS", verbose=verbose)
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "ANALYSIS", "phase_name": "ANALYSIS", "verbose": verbose})
+        start_time = time.perf_counter()
 
         try:
             # Respect global use_llm flag and LLM service availability

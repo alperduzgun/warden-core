@@ -24,9 +24,7 @@ class CleaningExecutor(BasePhaseExecutor):
         """Execute CLEANING phase."""
         logger.info("executing_phase", phase="CLEANING")
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "CLEANING", "phase_name": "CLEANING"})
+        start_time = time.perf_counter()
 
         try:
             from warden.cleaning.application.cleaning_phase import CleaningPhase

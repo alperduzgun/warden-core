@@ -10,7 +10,7 @@ def service():
 
 def test_register_single_tool_success(service, tmp_path):
     config_path = tmp_path / "config.json"
-    config_path.parent.mkdir()
+    config_path.parent.mkdir(exist_ok=True)
     
     with patch('warden.mcp.domain.services.mcp_registration_service.is_safe_to_create_dir', return_value=True):
          result = service._register_single_tool("TestTool", config_path, {"cmd": "warden"})

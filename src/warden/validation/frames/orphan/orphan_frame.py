@@ -34,7 +34,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
-from warden.validation.domain.mixins import BatchExecutable, ProjectContextAware
+from warden.validation.domain.mixins import BatchExecutable, LSPAware, ProjectContextAware
 
 # Add current directory to path to allow importing sibling modules
 current_dir = str(Path(__file__).parent)
@@ -49,7 +49,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 
-class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware):
+class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAware):
     """
     Orphan code validation frame - Detects dead and unused code.
 
@@ -106,6 +106,9 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware):
         # LLM filter (lazy initialization)
         self.llm_filter: LLMOrphanFilter | None = None
 
+        # LSP context (injected by FrameRunner for LSPAware frames)
+        self._lsp_context: dict[str, Any] | None = None
+
         # Log if enabled but defer creation until execution (when llm_service is injected)
         if self.use_llm_filter:
             logger.info("llm_orphan_filter_enabled", mode="intelligent_filtering")
@@ -113,6 +116,10 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware):
     # ProjectContextAware implementation: allow FrameRunner to inject context
     def set_project_context(self, context: Any) -> None:  # type: ignore[override]
         self.project_context = context
+
+    # LSPAware implementation: receive dead symbols from LSP audit
+    def set_lsp_context(self, lsp_context: dict[str, Any]) -> None:
+        self._lsp_context = lsp_context
 
     async def execute_batch_async(self, code_files: list[CodeFile]) -> list[FrameResult]:
         """
@@ -224,6 +231,18 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware):
             for path, findings in findings_map.items():
                 code_file = valid_files_map[path]
                 final_findings_map[path] = self._filter_findings(findings, code_file)
+
+        # 2.5. Enrich with LSP dead symbols (if available)
+        # NOTE: Mutation applied to final_findings_map (post-filter) to avoid
+        # modifying objects that may be excluded during filtering.
+        if self._lsp_context:
+            lsp_dead = self._lsp_context.get("dead_symbols", [])
+            if lsp_dead:
+                logger.info("lsp_dead_symbols_available", count=len(lsp_dead))
+                for _path, findings_list in list(final_findings_map.items()):
+                    for finding in findings_list:
+                        if finding.name in lsp_dead:
+                            finding.reason = f"[LSP-confirmed] {finding.reason}"
 
         # 3. Result Construction Phase
         for path, filtered_findings in final_findings_map.items():

@@ -288,7 +288,8 @@ class IntelligenceSaver:
             for deps in reverse.values():
                 all_nodes.update(deps)
 
-            nodes_with_edges = set(forward.keys()) | set(reverse.keys())
+            # Only count nodes that have at least one actual edge (non-empty list)
+            nodes_with_edges = {k for k, v in forward.items() if v} | {k for k, v in reverse.items() if v}
             orphan_files = sorted(all_nodes - nodes_with_edges)
 
             # Integrity: every forward target should appear in reverse

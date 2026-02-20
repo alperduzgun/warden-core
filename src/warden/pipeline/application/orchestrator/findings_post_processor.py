@@ -54,16 +54,6 @@ class FindingsPostProcessor:
         Uses centralized error handler to prevent verification failures from blocking pipeline.
         """
         logger.info("phase_started", phase="VERIFICATION")
-        if self._progress_callback:
-            total_findings = len(context.findings) if hasattr(context, "findings") else 0
-            if total_findings > 0:
-                self._progress_callback(
-                    "progress_update",
-                    {
-                        "phase": "VERIFICATION",
-                        "total_units": total_findings,
-                    },
-                )
 
         try:
             verify_llm = self.llm_service or create_client()
@@ -93,6 +83,12 @@ class FindingsPostProcessor:
                     verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)
                     verified_ids = {f["id"] for f in verified_findings_dicts}
 
+                    if self._progress_callback:
+                        self._progress_callback(
+                            "progress_update",
+                            {"increment": total_findings, "phase": f"Verified {frame_id}"},
+                        )
+
                     final_findings = []
                     cached_count = 0
 
@@ -106,6 +102,10 @@ class FindingsPostProcessor:
                                 if vf["id"] == fid
                             ):
                                 cached_count += 1
+                        else:
+                            # Track dropped findings as false positives
+                            if hasattr(context, "false_positives"):
+                                context.false_positives.append(fid)
 
                     dropped = len(result_obj.findings) - len(final_findings)
                     dropped_count += dropped

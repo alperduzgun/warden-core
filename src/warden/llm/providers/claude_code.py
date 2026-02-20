@@ -33,6 +33,7 @@ logger = get_logger(__name__)
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_MODEL = "claude-code-default"  # Placeholder - actual model set in `claude config`
 MAX_PROMPT_LENGTH = 100_000
+_TRUNCATION_RETRY_THRESHOLD = 8_000  # Only retry with truncation for prompts > 8K chars
 
 
 # =============================================================================
@@ -78,7 +79,6 @@ class ClaudeCodeClient(ILlmClient):
 
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """Send a request to Claude Code CLI."""
-        start_time = time.perf_counter()
         model = request.model or self._default_model
 
         # Input validation (fail-fast)
@@ -94,7 +94,28 @@ class ClaudeCodeClient(ILlmClient):
         if request.system_prompt:
             full_prompt = f"{request.system_prompt}\n\n{request.user_message}"
 
-        # Execute CLI
+        timeout = request.timeout_seconds or self._timeout
+        response = await self._execute_cli(full_prompt, model, timeout)
+
+        # Retry once with truncated prompt on empty content (likely context overflow)
+        if (
+            not response.success
+            and "Empty content" in (response.error_message or "")
+            and len(full_prompt) > _TRUNCATION_RETRY_THRESHOLD
+        ):
+            truncated = self._truncate_prompt(full_prompt)
+            logger.warning(
+                "claude_code_empty_retrying_truncated",
+                original_length=len(full_prompt),
+                truncated_length=len(truncated),
+            )
+            response = await self._execute_cli(truncated, model, timeout)
+
+        return response
+
+    async def _execute_cli(self, prompt: str, model: str, timeout: int) -> LlmResponse:
+        """Execute a single CLI call and return the response."""
+        start_time = time.perf_counter()
         try:
             process = await asyncio.create_subprocess_exec(  # warden-ignore
                 self._cli_path,
@@ -104,12 +125,11 @@ class ClaudeCodeClient(ILlmClient):
                 "--max-turns",
                 "1",
                 "-p",
-                full_prompt,
+                prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            timeout = request.timeout_seconds or self._timeout
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
             duration_ms = self._calc_duration_ms(start_time)
@@ -151,6 +171,10 @@ class ClaudeCodeClient(ILlmClient):
             if not isinstance(content, str):
                 content = str(content) if content else ""
 
+            # Empty content after JSON parse = provider returned no useful data
+            if not content.strip():
+                return self._error_response("Empty content in response", model, duration_ms)
+
             usage = result.get("usage", {})
 
             logger.info(
@@ -190,6 +214,14 @@ class ClaudeCodeClient(ILlmClient):
             model=model,
             duration_ms=duration_ms,
         )
+
+    @staticmethod
+    def _truncate_prompt(prompt: str, ratio: float = 0.5) -> str:
+        """Truncate prompt preserving start (system prompt) and end (code)."""
+        target = int(len(prompt) * ratio)
+        head = int(target * 0.7)
+        tail = target - head
+        return f"{prompt[:head]}\n\n[...truncated for retry...]\n\n{prompt[-tail:]}"
 
     @staticmethod
     def _calc_duration_ms(start_time: float) -> int:

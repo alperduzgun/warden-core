@@ -157,7 +157,7 @@ class PreAnalysisPhase:
             rate_limiter: Optional rate limiter for LLM calls
             llm_service: Optional shared LLM service.
         """
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).resolve()
         self.progress_callback = progress_callback
         self.config = config or {}
         self.rate_limiter = rate_limiter
@@ -225,13 +225,14 @@ class PreAnalysisPhase:
             file_count=len(code_files),
         )
 
-        # Notify progress
+        # Notify progress — emit phase_started with total so CLI counter resets
         if self.progress_callback:
             self.progress_callback(
-                "pre_analysis_started",
+                "phase_started",
                 {
-                    "phase": "pre_analysis",
-                    "total_files": len(code_files),
+                    "phase": "Pre-Analysis",
+                    "phase_name": "Pre-Analysis",
+                    "total_units": len(code_files),
                 },
             )
 
@@ -276,7 +277,7 @@ class PreAnalysisPhase:
                 logger.warning("user_context_load_failed", error=str(e))
 
             # Analyze structure (will only discover purpose if missing after enrichment)
-            all_paths = [Path(cf.path) for cf in code_files]
+            all_paths = [Path(cf.path).resolve() for cf in code_files]
             project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
 
             # Re-apply user context conventions after structure analysis (structure analysis may reset them)
@@ -406,7 +407,7 @@ class PreAnalysisPhase:
                     all_rel_paths = []
                     for cf in code_files:
                         try:
-                            all_rel_paths.append(str(Path(cf.path).relative_to(self.project_root)))
+                            all_rel_paths.append(str(Path(cf.path).resolve().relative_to(self.project_root)))
                         except ValueError:
                             all_rel_paths.append(cf.path)
 
@@ -662,6 +663,8 @@ class PreAnalysisPhase:
             except Exception as e:
                 logger.warning("rule_pass_failed", file=file_path, error=str(e))
                 raw_contexts[file_path] = self._get_default_context(file_path)
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"increment": 1})
 
         # STEP 2: Semantic Spread (Directory-based context propagation)
         # Group by directory to spread context from clear files to ambiguous ones
@@ -740,7 +743,7 @@ class PreAnalysisPhase:
         # CI OPTIMIZATION: Check intelligence risk level first
         if self.intelligence_loader and self.intelligence_loader.is_loaded:
             try:
-                rel_path = str(Path(file_path).relative_to(self.project_root))
+                rel_path = str(Path(file_path).resolve().relative_to(self.project_root))
             except ValueError:
                 rel_path = file_path
 
@@ -802,7 +805,7 @@ class PreAnalysisPhase:
 
         # Normalize path to relative for memory portability (CI vs Local)
         try:
-            rel_path = str(Path(code_file.path).relative_to(self.project_root))
+            rel_path = str(Path(code_file.path).resolve().relative_to(self.project_root))
         except ValueError:
             # Fallback if path is not relative (e.g. symlinks outside root)
             rel_path = code_file.path
@@ -1074,7 +1077,7 @@ class PreAnalysisPhase:
             if info.content_hash:
                 # Normalize path for saving
                 try:
-                    rel_path = str(Path(path).relative_to(self.project_root))
+                    rel_path = str(Path(path).resolve().relative_to(self.project_root))
                 except ValueError:
                     rel_path = path
 
@@ -1171,7 +1174,7 @@ class PreAnalysisPhase:
         changed_physically = []
         for cf in code_files:
             content_hash = self._calculate_file_hash(cf.content, cf.path)
-            rel_path = str(Path(cf.path).relative_to(self.project_root))
+            rel_path = str(Path(cf.path).resolve().relative_to(self.project_root))
 
             # Check memory for existing state
             if self.memory_manager and self.memory_manager._is_loaded:

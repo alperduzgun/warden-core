@@ -24,9 +24,7 @@ class PreAnalysisExecutor(BasePhaseExecutor):
         """Execute PRE-ANALYSIS phase."""
         logger.info("executing_phase", phase="PRE_ANALYSIS")
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "PRE_ANALYSIS", "phase_name": "PRE_ANALYSIS"})
+        start_time = time.perf_counter()
 
         try:
             from warden.analysis.application.pre_analysis_phase import PreAnalysisPhase
@@ -48,6 +46,7 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 config=phase_config,
                 rate_limiter=self.rate_limiter,
                 llm_service=self.llm_service,
+                progress_callback=self.progress_callback,
             )
 
             result = await phase.execute_async(code_files, pipeline_context=context)

@@ -12,7 +12,8 @@ import pytest
 from unittest.mock import AsyncMock
 
 from warden.llm.providers.orchestrated import OrchestratedLlmClient
-from warden.llm.types import LlmProvider
+from warden.llm.types import LlmProvider, LlmResponse
+from warden.shared.infrastructure.exceptions import ExternalServiceError
 
 
 # Helper to create mock client
@@ -129,3 +130,155 @@ class TestOrchestratedAvailability:
         )
 
         assert orchestrated.provider == LlmProvider.OPENAI
+
+
+class TestSmartTierFallback:
+    """Test smart tier failure triggers fallback to fast clients."""
+
+    @pytest.mark.asyncio
+    async def test_smart_failure_falls_back_to_fast_client(self):
+        """When smart tier returns empty content, should try fast clients."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="", success=False, error_message="Empty content in response"
+            )
+        )
+
+        fast_client = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
+        fast_client.send_async = AsyncMock(
+            return_value=LlmResponse(content="fallback result", success=True)
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[fast_client],
+        )
+
+        from warden.llm.types import LlmRequest
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.success is True
+        assert response.content == "fallback result"
+        fast_client.send_async.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_smart_failure_no_fast_clients_raises(self):
+        """When smart tier fails and no fast clients, should raise."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="", success=False, error_message="Empty content in response"
+            )
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[],
+        )
+
+        from warden.llm.types import LlmRequest
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        with pytest.raises(ExternalServiceError, match="Smart tier failed"):
+            await orchestrated.send_async(request)
+
+    @pytest.mark.asyncio
+    async def test_smart_failure_skips_unavailable_fast_clients(self):
+        """Should skip fast clients that report unavailable."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="", success=False, error_message="Empty content"
+            )
+        )
+
+        unavailable_fast = _make_client(provider_val=LlmProvider.OLLAMA, available=False)
+        available_fast = _make_client(provider_val=LlmProvider.GROQ, available=True)
+        available_fast.send_async = AsyncMock(
+            return_value=LlmResponse(content="groq result", success=True)
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[unavailable_fast, available_fast],
+        )
+
+        from warden.llm.types import LlmRequest
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.success is True
+        assert response.content == "groq result"
+        unavailable_fast.send_async.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_smart_failure_all_fast_fail_raises_original(self):
+        """When smart and all fast clients fail, raises original smart error."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="", success=False, error_message="Empty content in response"
+            )
+        )
+
+        fast_client = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
+        fast_client.send_async = AsyncMock(side_effect=Exception("Ollama down"))
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[fast_client],
+        )
+
+        from warden.llm.types import LlmRequest
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        with pytest.raises(ExternalServiceError, match="Empty content in response"):
+            await orchestrated.send_async(request)
+
+    @pytest.mark.asyncio
+    async def test_smart_failure_fast_returns_empty_continues(self):
+        """Fast client returning empty content should be skipped."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="", success=False, error_message="Empty content"
+            )
+        )
+
+        # First fast client returns success but empty content
+        fast1 = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
+        fast1.send_async = AsyncMock(
+            return_value=LlmResponse(content="", success=True)
+        )
+
+        # Second fast client returns actual content
+        fast2 = _make_client(provider_val=LlmProvider.GROQ, available=True)
+        fast2.send_async = AsyncMock(
+            return_value=LlmResponse(content="real result", success=True)
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[fast1, fast2],
+        )
+
+        from warden.llm.types import LlmRequest
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.content == "real result"

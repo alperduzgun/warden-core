@@ -59,7 +59,7 @@ class ProjectStructureAnalyzer:
             llm_config: Optional LLM configuration
             llm_service: Optional shared LLM service
         """
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).resolve()
         self.llm_config = llm_config
         self.llm_service = llm_service
         self.config_files: dict[str, str] = {}

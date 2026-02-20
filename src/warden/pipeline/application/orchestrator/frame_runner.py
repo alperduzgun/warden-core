@@ -17,7 +17,7 @@ from warden.shared.infrastructure.error_handler import async_error_handler
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile, ValidationFrame
-from warden.validation.domain.mixins import BatchExecutable, Cleanable, ProjectContextAware, TaintAware
+from warden.validation.domain.mixins import BatchExecutable, Cleanable, LSPAware, ProjectContextAware, TaintAware
 
 from .dependency_checker import DependencyChecker
 from .file_filter import FileFilter
@@ -104,7 +104,10 @@ class FrameRunner:
         if self.ignore_matcher is None:
             project_root = getattr(context, "project_root", None) or Path.cwd()
             use_gitignore = getattr(self.config, "use_gitignore", True)
-            self.ignore_matcher = IgnoreMatcher(project_root, use_gitignore=use_gitignore)
+            frame_ignores = self._collect_frame_ignores()
+            self.ignore_matcher = IgnoreMatcher(
+                project_root, use_gitignore=use_gitignore, frame_ignores=frame_ignores
+            )
 
         frame_id = frame.frame_id
         original_count = len(code_files)
@@ -260,6 +263,27 @@ class FrameRunner:
                         error=str(e),
                     )
 
+        # Inject LSP context into LSPAware frames
+        if isinstance(frame, LSPAware):
+            if hasattr(context, "chain_validation") and context.chain_validation:
+                try:
+                    cv = context.chain_validation
+                    lsp_context = {
+                        "dead_symbols": getattr(cv, "dead_symbols", []),
+                        "confirmed": getattr(cv, "confirmed", 0),
+                        "unconfirmed": getattr(cv, "unconfirmed", 0),
+                        "lsp_available": getattr(cv, "lsp_available", False),
+                        "chain_validation": cv,
+                    }
+                    frame.set_lsp_context(lsp_context)
+                    logger.debug("lsp_context_injected", frame_id=frame.frame_id)
+                except Exception as e:
+                    logger.error(
+                        "lsp_injection_failed",
+                        frame_id=frame.frame_id,
+                        error=str(e),
+                    )
+
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:
             logger.info("executing_pre_rules", frame_id=frame.frame_id, rule_count=len(frame_rules.pre_rules))
@@ -324,8 +348,10 @@ class FrameRunner:
                 async def execute_single_file_async(c_file: CodeFile) -> FrameResult | None:
                     file_context = context.file_contexts.get(c_file.path)
                     if file_context and getattr(file_context, "is_unchanged", False):
-                        logger.debug("skipping_unchanged_file", file=c_file.path, frame=frame.frame_id)
-                        return None
+                        # Only trust cache if frame was already executed in this pipeline run
+                        if frame.frame_id in context.frame_results:
+                            logger.debug("skipping_unchanged_file", file=c_file.path, frame=frame.frame_id)
+                            return None
 
                     try:
                         # Pass context only to frames whose signature accepts it
@@ -386,9 +412,22 @@ class FrameRunner:
                             )
 
                     if not files_to_scan:
-                        logger.debug("all_files_cached_skipping_batch", frame=frame.frame_id)
-                        f_results = []
-                    else:
+                        # Only trust cache if this frame was previously executed in this pipeline run.
+                        # On first run, stale cache state (e.g. from a different scan context) can cause
+                        # all files to appear unchanged, leading to 0 findings and a false "passed" status.
+                        frame_was_run = frame.frame_id in context.frame_results
+                        if frame_was_run:
+                            logger.debug("all_files_cached_skipping_batch", frame=frame.frame_id)
+                            f_results = []
+                        else:
+                            logger.info(
+                                "cache_override_first_run",
+                                frame=frame.frame_id,
+                                reason="no prior results in this pipeline run",
+                            )
+                            files_to_scan = list(code_files)
+
+                    if files_to_scan:
                         try:
                             if isinstance(frame, BatchExecutable):
                                 f_results = []
@@ -595,6 +634,24 @@ class FrameRunner:
             )
 
         return frame_result
+
+    def _collect_frame_ignores(self) -> dict[str, list[str]]:
+        """Collect frame-specific ignore patterns from frames_config."""
+        frame_ignores: dict[str, list[str]] = {}
+        frames_config = getattr(self.config, "frames_config", None)
+        if not frames_config:
+            return frame_ignores
+
+        config_dict = frames_config if isinstance(frames_config, dict) else {}
+        for frame_id, frame_cfg in config_dict.items():
+            if isinstance(frame_cfg, dict):
+                patterns = frame_cfg.get("ignore_patterns", [])
+            else:
+                patterns = getattr(frame_cfg, "ignore_patterns", [])
+            if patterns:
+                frame_ignores[frame_id] = list(patterns)
+
+        return frame_ignores
 
     def _calculate_coverage(self, code_files: list[CodeFile], findings: list[Any]) -> float:
         """

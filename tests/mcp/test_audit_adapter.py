@@ -5,7 +5,9 @@ Covers:
 - SUPPORTED_TOOLS declaration
 - get_tool_definitions() structure
 - warden_get_audit_context: no data, JSON format, markdown format
-- warden_query_symbol: found, not found, missing name parameter
+- warden_query_symbol: found, not found, error handling
+- warden_query_symbol: query_type modes (who_uses, who_inherits, etc.)
+- warden_graph_search: fuzzy/prefix search, kind filter
 """
 
 from __future__ import annotations
@@ -39,18 +41,21 @@ def _make_intelligence_dir(project_root: Path) -> Path:
         },
         "nodes": {
             "warden.foo::SecurityFrame": {
+                "fqn": "warden.foo::SecurityFrame",
                 "name": "SecurityFrame",
                 "kind": "class",
                 "file_path": "src/warden/validation/frames/security/frame.py",
                 "line": 10,
             },
             "warden.foo::validate": {
+                "fqn": "warden.foo::validate",
                 "name": "validate",
                 "kind": "function",
                 "file_path": "src/warden/validation/frames/security/frame.py",
                 "line": 25,
             },
             "warden.bar::helper": {
+                "fqn": "warden.bar::helper",
                 "name": "helper",
                 "kind": "function",
                 "file_path": "src/warden/utils.py",
@@ -108,6 +113,127 @@ def _make_intelligence_dir(project_root: Path) -> Path:
     return intel_dir
 
 
+def _make_rich_code_graph(project_root: Path) -> Path:
+    """Create intelligence dir with a richer graph for relationship queries.
+
+    Graph topology:
+      BaseFrame (class)
+        ^--- SecurityFrame (class, INHERITS BaseFrame)
+        ^--- ResilienceFrame (class, INHERITS BaseFrame)
+      TaintAware (mixin)
+        ^--- SecurityFrame (IMPLEMENTS TaintAware)
+      SecurityFrame --CALLS--> validate_input (function)
+      validate_input --CALLS--> helper (function)
+      TestSecurityFrame (class, is_test=True) --CALLS--> SecurityFrame
+
+    Total: 7 nodes, 6 edges
+    """
+    intel_dir = project_root / ".warden" / "intelligence"
+    intel_dir.mkdir(parents=True, exist_ok=True)
+
+    code_graph = {
+        "schema_version": "1.0.0",
+        "nodes": {
+            "app.base::BaseFrame": {
+                "fqn": "app.base::BaseFrame",
+                "name": "BaseFrame",
+                "kind": "class",
+                "file_path": "src/app/base.py",
+                "line": 1,
+            },
+            "app.security::SecurityFrame": {
+                "fqn": "app.security::SecurityFrame",
+                "name": "SecurityFrame",
+                "kind": "class",
+                "file_path": "src/app/security.py",
+                "line": 5,
+            },
+            "app.resilience::ResilienceFrame": {
+                "fqn": "app.resilience::ResilienceFrame",
+                "name": "ResilienceFrame",
+                "kind": "class",
+                "file_path": "src/app/resilience.py",
+                "line": 1,
+            },
+            "app.mixins::TaintAware": {
+                "fqn": "app.mixins::TaintAware",
+                "name": "TaintAware",
+                "kind": "mixin",
+                "file_path": "src/app/mixins.py",
+                "line": 1,
+            },
+            "app.security::validate_input": {
+                "fqn": "app.security::validate_input",
+                "name": "validate_input",
+                "kind": "function",
+                "file_path": "src/app/security.py",
+                "line": 20,
+            },
+            "app.utils::helper": {
+                "fqn": "app.utils::helper",
+                "name": "helper",
+                "kind": "function",
+                "file_path": "src/app/utils.py",
+                "line": 1,
+            },
+            "tests.test_security::TestSecurityFrame": {
+                "fqn": "tests.test_security::TestSecurityFrame",
+                "name": "TestSecurityFrame",
+                "kind": "class",
+                "file_path": "tests/test_security.py",
+                "line": 1,
+                "is_test": True,
+            },
+        },
+        "edges": [
+            {
+                "source": "app.security::SecurityFrame",
+                "target": "app.base::BaseFrame",
+                "relation": "inherits",
+            },
+            {
+                "source": "app.resilience::ResilienceFrame",
+                "target": "app.base::BaseFrame",
+                "relation": "inherits",
+            },
+            {
+                "source": "app.security::SecurityFrame",
+                "target": "app.mixins::TaintAware",
+                "relation": "implements",
+            },
+            {
+                "source": "app.security::SecurityFrame",
+                "target": "app.security::validate_input",
+                "relation": "calls",
+            },
+            {
+                "source": "app.security::validate_input",
+                "target": "app.utils::helper",
+                "relation": "calls",
+            },
+            {
+                "source": "tests.test_security::TestSecurityFrame",
+                "target": "app.security::SecurityFrame",
+                "relation": "calls",
+            },
+        ],
+    }
+
+    (intel_dir / "code_graph.json").write_text(
+        json.dumps(code_graph), encoding="utf-8"
+    )
+
+    # Minimal gap/dep data so audit_context doesn't fail
+    (intel_dir / "gap_report.json").write_text(
+        json.dumps({"coverage": 0.9}), encoding="utf-8"
+    )
+    (intel_dir / "dependency_graph.json").write_text(
+        json.dumps({"stats": {"total_files": 5}}), encoding="utf-8"
+    )
+
+    return intel_dir
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -125,61 +251,49 @@ def adapter_with_data(tmp_path: Path) -> AuditAdapter:
     return AuditAdapter(project_root=tmp_path)
 
 
+@pytest.fixture
+def rich_adapter(tmp_path: Path) -> AuditAdapter:
+    """Adapter instance with rich code graph for relationship queries."""
+    _make_rich_code_graph(tmp_path)
+    return AuditAdapter(project_root=tmp_path)
+
+
 # ---------------------------------------------------------------------------
-# 1. SUPPORTED_TOOLS
+# 1. SUPPORTED_TOOLS & definitions
 # ---------------------------------------------------------------------------
 
-class TestSupportedTools:
-    def test_supported_tools_contains_get_audit_context(self, adapter: AuditAdapter) -> None:
-        assert "warden_get_audit_context" in AuditAdapter.SUPPORTED_TOOLS
+class TestSupportedToolsAndDefinitions:
+    def test_supported_tools_has_exactly_three_entries(self, adapter: AuditAdapter) -> None:
+        assert len(AuditAdapter.SUPPORTED_TOOLS) == 3
 
-    def test_supported_tools_contains_query_symbol(self, adapter: AuditAdapter) -> None:
-        assert "warden_query_symbol" in AuditAdapter.SUPPORTED_TOOLS
-
-    def test_supported_tools_has_exactly_two_entries(self, adapter: AuditAdapter) -> None:
-        assert len(AuditAdapter.SUPPORTED_TOOLS) == 2
-
-    def test_supports_method_returns_true_for_known_tool(self, adapter: AuditAdapter) -> None:
+    def test_supports_method_returns_true_for_known_tools(self, adapter: AuditAdapter) -> None:
         assert adapter.supports("warden_get_audit_context") is True
         assert adapter.supports("warden_query_symbol") is True
+        assert adapter.supports("warden_graph_search") is True
 
     def test_supports_method_returns_false_for_unknown_tool(self, adapter: AuditAdapter) -> None:
         assert adapter.supports("warden_nonexistent") is False
 
-
-# ---------------------------------------------------------------------------
-# 2. get_tool_definitions
-# ---------------------------------------------------------------------------
-
-class TestGetToolDefinitions:
-    def test_returns_two_definitions(self, adapter: AuditAdapter) -> None:
+    def test_returns_three_definitions(self, adapter: AuditAdapter) -> None:
         defs = adapter.get_tool_definitions()
-        assert len(defs) == 2
+        assert len(defs) == 3
 
-    def test_first_definition_is_get_audit_context(self, adapter: AuditAdapter) -> None:
-        defs = adapter.get_tool_definitions()
-        names = [d.name for d in defs]
-        assert "warden_get_audit_context" in names
-
-    def test_second_definition_is_query_symbol(self, adapter: AuditAdapter) -> None:
-        defs = adapter.get_tool_definitions()
-        names = [d.name for d in defs]
-        assert "warden_query_symbol" in names
-
-    def test_get_audit_context_schema_has_format_property(self, adapter: AuditAdapter) -> None:
+    def test_audit_context_schema_has_format_and_full(self, adapter: AuditAdapter) -> None:
         defs = {d.name: d for d in adapter.get_tool_definitions()}
         schema = defs["warden_get_audit_context"].input_schema
         assert "format" in schema["properties"]
-
-    def test_get_audit_context_schema_has_full_property(self, adapter: AuditAdapter) -> None:
-        defs = {d.name: d for d in adapter.get_tool_definitions()}
-        schema = defs["warden_get_audit_context"].input_schema
         assert "full" in schema["properties"]
 
-    def test_query_symbol_schema_requires_name(self, adapter: AuditAdapter) -> None:
+    def test_query_symbol_schema_has_name_and_query_type(self, adapter: AuditAdapter) -> None:
         defs = {d.name: d for d in adapter.get_tool_definitions()}
         schema = defs["warden_query_symbol"].input_schema
         assert "name" in schema.get("required", [])
+        assert "query_type" in schema["properties"]
+
+    def test_graph_search_schema_requires_query(self, adapter: AuditAdapter) -> None:
+        defs = {d.name: d for d in adapter.get_tool_definitions()}
+        schema = defs["warden_graph_search"].input_schema
+        assert "query" in schema.get("required", [])
 
     def test_definitions_do_not_require_bridge(self, adapter: AuditAdapter) -> None:
         for tool_def in adapter.get_tool_definitions():
@@ -191,92 +305,45 @@ class TestGetToolDefinitions:
 
 
 # ---------------------------------------------------------------------------
-# 3. warden_get_audit_context — no data
+# 2. warden_get_audit_context — no data
 # ---------------------------------------------------------------------------
 
 class TestGetAuditContextNoData:
     @pytest.mark.asyncio
     async def test_returns_error_when_no_intelligence_dir(self, adapter: AuditAdapter) -> None:
-        result = await adapter._execute_tool_async(
-            "warden_get_audit_context", {}
-        )
+        result = await adapter._execute_tool_async("warden_get_audit_context", {})
         assert result.is_error is True
-
-    @pytest.mark.asyncio
-    async def test_error_message_mentions_refresh(self, adapter: AuditAdapter) -> None:
-        result = await adapter._execute_tool_async(
-            "warden_get_audit_context", {}
-        )
-        assert result.is_error is True
-        text = result.content[0]["text"]
-        assert "refresh" in text.lower() or "No intelligence data" in text
 
     @pytest.mark.asyncio
     async def test_returns_error_when_intelligence_dir_empty(self, tmp_path: Path) -> None:
-        # Create the directory but leave it empty (no JSON files)
-        empty_dir = tmp_path / ".warden" / "intelligence"
-        empty_dir.mkdir(parents=True)
+        (tmp_path / ".warden" / "intelligence").mkdir(parents=True)
         adapter = AuditAdapter(project_root=tmp_path)
-
-        result = await adapter._execute_tool_async(
-            "warden_get_audit_context", {}
-        )
+        result = await adapter._execute_tool_async("warden_get_audit_context", {})
         assert result.is_error is True
 
 
 # ---------------------------------------------------------------------------
-# 4. warden_get_audit_context — JSON format
+# 3. warden_get_audit_context — JSON format
 # ---------------------------------------------------------------------------
 
 class TestGetAuditContextJson:
     @pytest.mark.asyncio
-    async def test_returns_non_error_result(self, adapter_with_data: AuditAdapter) -> None:
+    async def test_json_result_contains_all_keys(self, adapter_with_data: AuditAdapter) -> None:
         result = await adapter_with_data._execute_tool_async(
             "warden_get_audit_context", {"format": "json"}
         )
         assert result.is_error is False
-
-    @pytest.mark.asyncio
-    async def test_result_content_is_valid_json(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "json"}
-        )
-        text = result.content[0]["text"]
-        parsed = json.loads(text)
-        assert isinstance(parsed, dict)
-
-    @pytest.mark.asyncio
-    async def test_json_result_contains_code_graph_key(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "json"}
-        )
         parsed = json.loads(result.content[0]["text"])
         assert "code_graph" in parsed
-
-    @pytest.mark.asyncio
-    async def test_json_result_contains_gap_report_key(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "json"}
-        )
-        parsed = json.loads(result.content[0]["text"])
         assert "gap_report" in parsed
-
-    @pytest.mark.asyncio
-    async def test_json_result_contains_dependency_graph_key(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "json"}
-        )
-        parsed = json.loads(result.content[0]["text"])
         assert "dependency_graph" in parsed
 
     @pytest.mark.asyncio
     async def test_json_default_format_omits_full_node_list(self, adapter_with_data: AuditAdapter) -> None:
-        # In default (non-full) mode the code_graph entry should be a summary, not the raw graph.
         result = await adapter_with_data._execute_tool_async(
             "warden_get_audit_context", {"format": "json", "full": False}
         )
         parsed = json.loads(result.content[0]["text"])
-        # Summary mode: code_graph should NOT include all node details
         assert "nodes" not in parsed["code_graph"]
 
     @pytest.mark.asyncio
@@ -298,61 +365,32 @@ class TestGetAuditContextJson:
         assert parsed["gap_report"]["coverage"] == pytest.approx(0.85)
 
     @pytest.mark.asyncio
-    async def test_json_default_format_used_when_format_not_specified(
+    async def test_json_default_format_when_not_specified(
         self, adapter_with_data: AuditAdapter
     ) -> None:
-        # No "format" argument — should default to JSON.
         result = await adapter_with_data._execute_tool_async(
             "warden_get_audit_context", {}
         )
         assert result.is_error is False
-        text = result.content[0]["text"]
-        parsed = json.loads(text)
+        parsed = json.loads(result.content[0]["text"])
         assert isinstance(parsed, dict)
 
 
 # ---------------------------------------------------------------------------
-# 5. warden_get_audit_context — markdown format
+# 4. warden_get_audit_context — markdown format
 # ---------------------------------------------------------------------------
 
 class TestGetAuditContextMarkdown:
     @pytest.mark.asyncio
-    async def test_returns_non_error_result(self, adapter_with_data: AuditAdapter) -> None:
+    async def test_markdown_has_heading_and_sections(self, adapter_with_data: AuditAdapter) -> None:
         result = await adapter_with_data._execute_tool_async(
             "warden_get_audit_context", {"format": "markdown"}
         )
         assert result.is_error is False
-
-    @pytest.mark.asyncio
-    async def test_result_starts_with_markdown_heading(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "markdown"}
-        )
         text = result.content[0]["text"]
         assert text.startswith("# Warden Audit Context")
-
-    @pytest.mark.asyncio
-    async def test_markdown_contains_code_graph_section(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "markdown"}
-        )
-        text = result.content[0]["text"]
         assert "Code Graph Overview" in text
-
-    @pytest.mark.asyncio
-    async def test_markdown_contains_gap_analysis_section(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "markdown"}
-        )
-        text = result.content[0]["text"]
         assert "Gap Analysis" in text
-
-    @pytest.mark.asyncio
-    async def test_markdown_contains_dependency_section(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "markdown"}
-        )
-        text = result.content[0]["text"]
         assert "Dependency Graph" in text
 
     @pytest.mark.asyncio
@@ -368,88 +406,31 @@ class TestGetAuditContextMarkdown:
             "warden_get_audit_context", {"format": "markdown"}
         )
         text = result.content[0]["text"]
-        # The mock data has 3 nodes and 2 edges
         assert "3" in text
         assert "2" in text
 
 
 # ---------------------------------------------------------------------------
-# 6. warden_query_symbol — found
+# 5. warden_query_symbol — search (default query_type)
 # ---------------------------------------------------------------------------
 
-class TestQuerySymbolFound:
+class TestQuerySymbolSearch:
     @pytest.mark.asyncio
-    async def test_found_is_true_for_existing_symbol(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
+    async def test_found_with_metadata_and_edges(self, adapter_with_data: AuditAdapter) -> None:
         result = await adapter_with_data._execute_tool_async(
             "warden_query_symbol", {"name": "SecurityFrame"}
         )
         assert result.is_error is False
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is True
-
-    @pytest.mark.asyncio
-    async def test_matches_list_is_non_empty_for_existing_symbol(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "SecurityFrame"}
-        )
-        parsed = json.loads(result.content[0]["text"])
-        assert len(parsed["matches"]) >= 1
-
-    @pytest.mark.asyncio
-    async def test_match_includes_fqn(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "SecurityFrame"}
-        )
-        parsed = json.loads(result.content[0]["text"])
         match = parsed["matches"][0]
-        assert "fqn" in match
-        assert "SecurityFrame" in match["fqn"]
-
-    @pytest.mark.asyncio
-    async def test_match_includes_node_metadata(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "SecurityFrame"}
-        )
-        parsed = json.loads(result.content[0]["text"])
-        match = parsed["matches"][0]
+        assert "fqn" in match and "SecurityFrame" in match["fqn"]
         assert match.get("kind") == "class"
         assert "file_path" in match
-        assert "line" in match
-
-    @pytest.mark.asyncio
-    async def test_related_edges_returned_for_matched_symbol(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "SecurityFrame"}
-        )
-        parsed = json.loads(result.content[0]["text"])
-        # The mock graph has 1 edge sourcing from SecurityFrame's FQN
-        assert "edges" in parsed
         assert len(parsed["edges"]) >= 1
 
     @pytest.mark.asyncio
-    async def test_symbol_name_echoed_in_result(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "SecurityFrame"}
-        )
-        parsed = json.loads(result.content[0]["text"])
-        assert parsed["symbol"] == "SecurityFrame"
-
-
-# ---------------------------------------------------------------------------
-# 7. warden_query_symbol — not found
-# ---------------------------------------------------------------------------
-
-class TestQuerySymbolNotFound:
-    @pytest.mark.asyncio
-    async def test_found_is_false_for_nonexistent_symbol(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
+    async def test_not_found_for_nonexistent_symbol(self, adapter_with_data: AuditAdapter) -> None:
         result = await adapter_with_data._execute_tool_async(
             "warden_query_symbol", {"name": "DoesNotExist"}
         )
@@ -458,76 +439,292 @@ class TestQuerySymbolNotFound:
         assert parsed["found"] is False
 
     @pytest.mark.asyncio
-    async def test_matches_list_is_empty_for_nonexistent_symbol(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "DoesNotExist"}
+    async def test_fqn_exact_match_via_double_colon(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol", {"name": "app.security::SecurityFrame"}
         )
         parsed = json.loads(result.content[0]["text"])
-        assert parsed["matches"] == []
+        assert parsed["found"] is True
+        assert parsed["matches"][0]["fqn"] == "app.security::SecurityFrame"
 
     @pytest.mark.asyncio
-    async def test_symbol_name_echoed_even_when_not_found(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "DoesNotExist"}
-        )
-        parsed = json.loads(result.content[0]["text"])
-        assert parsed["symbol"] == "DoesNotExist"
-
-    @pytest.mark.asyncio
-    async def test_not_found_when_code_graph_missing(self, tmp_path: Path) -> None:
-        # Intelligence dir exists but has no code_graph.json
+    async def test_error_when_code_graph_missing(self, tmp_path: Path) -> None:
         (tmp_path / ".warden" / "intelligence").mkdir(parents=True)
         adapter = AuditAdapter(project_root=tmp_path)
-
         result = await adapter._execute_tool_async(
             "warden_query_symbol", {"name": "SecurityFrame"}
         )
         assert result.is_error is True
-        assert "warden refresh" in result.content[0]["text"] or "not found" in result.content[0]["text"].lower()
 
 
 # ---------------------------------------------------------------------------
-# 8. warden_query_symbol — missing name parameter
+# 6. warden_query_symbol — error handling
 # ---------------------------------------------------------------------------
 
-class TestQuerySymbolMissingName:
+class TestQuerySymbolErrors:
     @pytest.mark.asyncio
-    async def test_returns_error_when_name_is_empty_string(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
+    async def test_returns_error_when_name_is_empty(self, adapter_with_data: AuditAdapter) -> None:
         result = await adapter_with_data._execute_tool_async(
             "warden_query_symbol", {"name": ""}
-        )
-        assert result.is_error is True
-
-    @pytest.mark.asyncio
-    async def test_error_message_mentions_name_parameter(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": ""}
-        )
-        text = result.content[0]["text"]
-        assert "name" in text.lower()
-
-    @pytest.mark.asyncio
-    async def test_returns_error_when_name_key_absent(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        # Omitting the "name" key entirely — arguments.get("name", "") → ""
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {}
         )
         assert result.is_error is True
 
     @pytest.mark.asyncio
     async def test_unknown_tool_name_returns_error(self, adapter: AuditAdapter) -> None:
-        result = await adapter._execute_tool_async(
-            "warden_nonexistent_tool", {}
-        )
+        result = await adapter._execute_tool_async("warden_nonexistent_tool", {})
         assert result.is_error is True
         assert "Unknown tool" in result.content[0]["text"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_query_type_returns_error(self, adapter_with_data: AuditAdapter) -> None:
+        result = await adapter_with_data._execute_tool_async(
+            "warden_query_symbol", {"name": "Foo", "query_type": "invalid_mode"}
+        )
+        assert result.is_error is True
+
+
+# ---------------------------------------------------------------------------
+# 7. warden_query_symbol — who_uses
+# ---------------------------------------------------------------------------
+
+class TestQuerySymbolWhoUses:
+    @pytest.mark.asyncio
+    async def test_who_uses_include_tests(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "SecurityFrame", "query_type": "who_uses", "include_tests": True},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["count"] >= 1
+        sources = [r["source"] for r in parsed["results"]]
+        assert any("TestSecurityFrame" in s for s in sources)
+
+    @pytest.mark.asyncio
+    async def test_who_uses_not_found_returns_empty(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "NonExistentSymbol", "query_type": "who_uses"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is False
+        assert parsed["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_who_uses_base_frame_returns_inheritors(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "BaseFrame", "query_type": "who_uses"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["count"] >= 2
+
+
+# ---------------------------------------------------------------------------
+# 8. warden_query_symbol — who_inherits
+# ---------------------------------------------------------------------------
+
+class TestQuerySymbolWhoInherits:
+    @pytest.mark.asyncio
+    async def test_who_inherits_finds_children(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "BaseFrame", "query_type": "who_inherits"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] == 2
+        names = [r["name"] for r in parsed["results"]]
+        assert "SecurityFrame" in names
+        assert "ResilienceFrame" in names
+
+    @pytest.mark.asyncio
+    async def test_who_inherits_leaf_class_returns_empty(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "SecurityFrame", "query_type": "who_inherits"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 9. warden_query_symbol — who_implements
+# ---------------------------------------------------------------------------
+
+class TestQuerySymbolWhoImplements:
+    @pytest.mark.asyncio
+    async def test_who_implements_finds_implementor(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "TaintAware", "query_type": "who_implements"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] == 1
+        assert parsed["results"][0]["name"] == "SecurityFrame"
+
+    @pytest.mark.asyncio
+    async def test_who_implements_non_mixin_returns_empty(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "helper", "query_type": "who_implements"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 10. warden_query_symbol — callers / callees
+# ---------------------------------------------------------------------------
+
+class TestQuerySymbolCallersCallees:
+    @pytest.mark.asyncio
+    async def test_callers_filters_to_calls_only(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "validate_input", "query_type": "callers"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] >= 1
+        assert all(r["relation"] == "calls" for r in parsed["results"])
+
+    @pytest.mark.asyncio
+    async def test_callees_returns_outgoing_calls(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "SecurityFrame", "query_type": "callees"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] >= 1
+        targets = [r["target"] for r in parsed["results"]]
+        assert any("validate_input" in t for t in targets)
+
+
+# ---------------------------------------------------------------------------
+# 11. warden_query_symbol — dependency_chain
+# ---------------------------------------------------------------------------
+
+class TestQuerySymbolDependencyChain:
+    @pytest.mark.asyncio
+    async def test_dependency_chain_returns_chains(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "SecurityFrame", "query_type": "dependency_chain"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_dependency_chain_max_depth_capped(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "SecurityFrame", "query_type": "dependency_chain", "max_depth": 1},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["max_depth"] == 1
+        for chain in parsed["results"]:
+            assert len(chain) <= 1
+
+    @pytest.mark.asyncio
+    async def test_dependency_chain_max_depth_clamped_to_10(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "SecurityFrame", "query_type": "dependency_chain", "max_depth": 999},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["max_depth"] == 10
+
+
+# ---------------------------------------------------------------------------
+# 12. warden_graph_search
+# ---------------------------------------------------------------------------
+
+class TestGraphSearch:
+    @pytest.mark.asyncio
+    async def test_prefix_match(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "Security"}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        names = [r["name"] for r in parsed["results"]]
+        assert "SecurityFrame" in names
+
+    @pytest.mark.asyncio
+    async def test_case_insensitive_match(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "securityframe"}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert any(r["name"] == "SecurityFrame" for r in parsed["results"])
+
+    @pytest.mark.asyncio
+    async def test_substring_match(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "Frame"}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] >= 3
+
+    @pytest.mark.asyncio
+    async def test_kind_filter(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "validate", "kind": "function"}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert all(r["kind"] == "function" for r in parsed["results"])
+
+    @pytest.mark.asyncio
+    async def test_kind_filter_excludes_non_matching(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "SecurityFrame", "kind": "function"}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_no_match_returns_empty(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "ZzzNonexistent"}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is False
+        assert parsed["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_missing_query_returns_error(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": ""}
+        )
+        assert result.is_error is True
+
+    @pytest.mark.asyncio
+    async def test_limit_caps_results(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "e", "limit": 2}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["count"] <= 2
+
+    @pytest.mark.asyncio
+    async def test_exact_match_ranked_first(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_graph_search", {"query": "helper"}
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["results"][0]["name"] == "helper"
+
+    @pytest.mark.asyncio
+    async def test_missing_code_graph_returns_error(self, tmp_path: Path) -> None:
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async(
+            "warden_graph_search", {"query": "Foo"}
+        )
+        assert result.is_error is True

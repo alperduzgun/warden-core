@@ -66,17 +66,46 @@ class TestSaveDependencyGraph:
         assert "reverse" in data
         assert data["stats"]["total_edges"] > 0
 
-    def test_orphan_detection(self, saver, tmp_project):
+    def test_orphan_detection_empty_forward_set(self, saver, tmp_project):
+        """B1 regression: node with empty forward edge set must be detected as orphan."""
         graph = _mock_dep_graph(tmp_project)
-        # Add orphan: node in graph but no edges
+        # Add orphan: node in forward_graph but with empty edge set
         graph._forward_graph[tmp_project / "src/orphan.py"] = set()
 
         saver.save_dependency_graph(graph)
 
         path = tmp_project / ".warden/intelligence/dependency_graph.json"
         data = json.loads(path.read_text())
-        # orphan.py has no outgoing or incoming edges
-        assert data["stats"]["orphan_count"] >= 0
+        # orphan.py has no outgoing or incoming edges — must be counted
+        assert "src/orphan.py" in data["orphan_files"]
+        assert data["stats"]["orphan_count"] == 1
+
+    def test_orphan_detection_connected_nodes_not_orphan(self, saver, tmp_project):
+        """Nodes with actual edges should not appear as orphans."""
+        graph = _mock_dep_graph(tmp_project)
+        saver.save_dependency_graph(graph)
+
+        path = tmp_project / ".warden/intelligence/dependency_graph.json"
+        data = json.loads(path.read_text())
+        # a.py, b.py, c.py all have edges — none should be orphans
+        assert data["stats"]["orphan_count"] == 0
+        assert data["orphan_files"] == []
+
+    def test_missing_target_detection(self, saver, tmp_project):
+        """Forward targets missing from reverse graph should be flagged."""
+        graph = MagicMock()
+        graph.project_root = tmp_project
+        graph._forward_graph = {
+            tmp_project / "src/a.py": {tmp_project / "src/missing.py"},
+        }
+        graph._reverse_graph = {}  # missing.py not in reverse
+
+        saver.save_dependency_graph(graph)
+
+        path = tmp_project / ".warden/intelligence/dependency_graph.json"
+        data = json.loads(path.read_text())
+        assert data["integrity"]["forward_reverse_match"] is False
+        assert "src/missing.py" in data["integrity"]["missing_targets"]
 
     def test_integrity_check(self, saver, tmp_project):
         graph = _mock_dep_graph(tmp_project)

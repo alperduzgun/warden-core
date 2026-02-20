@@ -152,7 +152,7 @@ class ServiceAbstractionDetector:
             llm_config: Optional LLM configuration for bypass synthesis
             llm_service: Optional shared LLM service
         """
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).resolve()
         self.project_context = project_context
         self.abstractions: dict[str, ServiceAbstraction] = {}
         self.analysis_level = analysis_level

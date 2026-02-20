@@ -47,6 +47,11 @@ frames_config:
     ignore_private: false
     ignore_test_files: true
     use_llm_filter: true
+    ignore_patterns:
+    - "scripts/**"
+    - "**/__main__.py"
+    - "**/cli.py"
+    - "**/main.py"
   security:
     checks:
     - sql-injection

@@ -1,0 +1,53 @@
+{
+  "module": "unknown",
+  "findings": [
+    {
+      "id": "resilience-no-error-handling",
+      "severity": "medium",
+      "message": "6 async functions with no error handling",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/phase_executor.py:1",
+      "detail": "Async operations should have try/catch for resilience",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "021c004b14beca1f52d41e211f5f859525cbd7109b1998c3e5d8bfe92287b20e"
+    },
+    {
+      "id": "resilience-insufficient-handlers",
+      "severity": "low",
+      "message": "25 function calls with only 0 error handlers",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/phase_executor.py:1",
+      "detail": "Consider adding more error handling for external calls",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "932224a042c57dd7761a46d69c1e47dd74bb56f4efe584d01e1ea3a768dd807b"
+    }
+  ],
+  "debt_items": [
+    {
+      "fingerprint": "021c004b14beca1f52d41e211f5f859525cbd7109b1998c3e5d8bfe92287b20e",
+      "first_seen": "2026-02-20T21:03:52.505835+00:00",
+      "rule_id": "resilience-no-error-handling",
+      "file_path": null,
+      "message": "6 async functions with no error handling",
+      "severity": "medium"
+    },
+    {
+      "fingerprint": "932224a042c57dd7761a46d69c1e47dd74bb56f4efe584d01e1ea3a768dd807b",
+      "first_seen": "2026-02-20T21:37:51.595397+00:00",
+      "rule_id": "resilience-insufficient-handlers",
+      "file_path": null,
+      "message": "25 function calls with only 0 error handlers",
+      "severity": "low"
+    }
+  ],
+  "created_at": "2026-02-20T21:03:52.505822+00:00",
+  "updated_at": "2026-02-20T21:37:51.595440+00:00",
+  "debt_count": 2,
+  "oldest_debt_age_days": 0
+}

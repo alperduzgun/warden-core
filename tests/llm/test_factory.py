@@ -80,10 +80,9 @@ class TestSingleTierProviders:
         assert errors == [], f"Test config has validation errors: {errors}"
         return cfg
 
-    def test_codex_single_provider_mode_has_empty_fast_clients(self):
-        """When provider is Codex, fast_clients must be empty."""
+    def test_codex_single_provider_adds_emergency_fallback(self):
+        """When provider is Codex, available fast providers are added as emergency fallback."""
         config = self._make_config(LlmProvider.CODEX)
-        # Inject a fake fast-tier so we can confirm it is ignored
         config.fast_tier_providers = [LlmProvider.OLLAMA]
         ollama_cfg = ProviderConfig(enabled=True, default_model="qwen")
         config.ollama = ollama_cfg
@@ -91,10 +90,11 @@ class TestSingleTierProviders:
         client = create_client(config)
 
         assert isinstance(client, OrchestratedLlmClient)
-        assert client.fast_clients == [], "Codex must use single-provider mode (no fast clients)"
+        assert len(client.fast_clients) == 1, "Codex should have Ollama as emergency fallback"
+        assert client.fast_clients[0].provider == LlmProvider.OLLAMA
 
-    def test_claude_code_single_provider_mode_has_empty_fast_clients(self):
-        """When provider is Claude Code, fast_clients must be empty."""
+    def test_claude_code_single_provider_adds_emergency_fallback(self):
+        """When provider is Claude Code, available fast providers are added as emergency fallback."""
         config = self._make_config(LlmProvider.CLAUDE_CODE)
         config.fast_tier_providers = [LlmProvider.OLLAMA]
         ollama_cfg = ProviderConfig(enabled=True, default_model="qwen")
@@ -103,7 +103,29 @@ class TestSingleTierProviders:
         client = create_client(config)
 
         assert isinstance(client, OrchestratedLlmClient)
-        assert client.fast_clients == [], "Claude Code must use single-provider mode (no fast clients)"
+        assert len(client.fast_clients) == 1, "Claude Code should have Ollama as emergency fallback"
+        assert client.fast_clients[0].provider == LlmProvider.OLLAMA
+
+    def test_single_provider_no_fallback_when_disabled(self):
+        """When fast providers are disabled, single-tier has no fallback."""
+        config = self._make_config(LlmProvider.CLAUDE_CODE)
+        config.fast_tier_providers = [LlmProvider.OLLAMA]
+        config.ollama = ProviderConfig(enabled=False, default_model="qwen")
+
+        client = create_client(config)
+
+        assert isinstance(client, OrchestratedLlmClient)
+        assert client.fast_clients == [], "No fallback when providers are disabled"
+
+    def test_single_provider_no_fallback_when_unconfigured(self):
+        """When no fast providers are configured at all, single-tier has no fallback."""
+        config = self._make_config(LlmProvider.CODEX)
+        config.fast_tier_providers = []
+
+        client = create_client(config)
+
+        assert isinstance(client, OrchestratedLlmClient)
+        assert client.fast_clients == [], "No fallback when no fast providers configured"
 
     def test_non_cli_provider_still_builds_fast_tier(self):
         """Regular providers (Groq, Anthropic…) still get a fast tier when available."""

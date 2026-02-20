@@ -124,11 +124,36 @@ def _write_mock_dependency_graph(intel_dir: Path) -> None:
     )
 
 
-def _write_all_mock_data(intel_dir: Path, broken_imports: list[str] | None = None) -> None:
-    """Populate intel_dir with all three mock data files."""
+def _write_mock_chain_validation(
+    intel_dir: Path,
+    dead_symbols: list[str] | None = None,
+    lsp_available: bool = True,
+) -> None:
+    """Write a minimal chain_validation.json."""
+    chain_val = {
+        "confirmed": 15,
+        "unconfirmed": 3,
+        "dead_symbols": dead_symbols or [],
+        "lsp_available": lsp_available,
+        "generated_at": "2026-02-20T12:00:00Z",
+    }
+    (intel_dir / "chain_validation.json").write_text(
+        json.dumps(chain_val, indent=2), encoding="utf-8"
+    )
+
+
+def _write_all_mock_data(
+    intel_dir: Path,
+    broken_imports: list[str] | None = None,
+    include_chain_validation: bool = False,
+    dead_symbols: list[str] | None = None,
+) -> None:
+    """Populate intel_dir with all mock data files."""
     _write_mock_code_graph(intel_dir)
     _write_mock_gap_report(intel_dir, broken_imports=broken_imports)
     _write_mock_dependency_graph(intel_dir)
+    if include_chain_validation:
+        _write_mock_chain_validation(intel_dir, dead_symbols=dead_symbols)
 
 
 # ---------------------------------------------------------------------------
@@ -845,3 +870,167 @@ class TestAuditContextEdgeCases:
         assert result.exit_code == 0
         dep = json.loads(result.stdout)["dependency_graph"]
         assert dep["integrity"]["forward_reverse_match"] is True
+
+
+# ---------------------------------------------------------------------------
+# Tests: chain_validation rendering
+# ---------------------------------------------------------------------------
+
+@pytest.mark.e2e
+class TestAuditContextChainValidation:
+
+    def test_yaml_includes_lsp_validation_section(self, runner, tmp_path, monkeypatch):
+        """YAML output includes lsp_validation when chain_validation.json exists."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir, include_chain_validation=True)
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "yaml"])
+
+        assert result.exit_code == 0
+        parsed = yaml.safe_load(result.stdout)
+        assert "lsp_validation" in parsed
+        assert parsed["lsp_validation"]["confirmed"] == 15
+        assert parsed["lsp_validation"]["unconfirmed"] == 3
+
+    def test_json_includes_chain_validation_key(self, runner, tmp_path, monkeypatch):
+        """JSON output includes chain_validation when data exists."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir, include_chain_validation=True)
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "json"])
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.stdout)
+        assert "chain_validation" in parsed
+        assert parsed["chain_validation"]["confirmed"] == 15
+        assert parsed["chain_validation"]["unconfirmed"] == 3
+
+    def test_markdown_includes_lsp_chain_validation_section(self, runner, tmp_path, monkeypatch):
+        """Markdown output includes LSP Chain Validation section when data exists."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir, include_chain_validation=True)
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "markdown"])
+
+        assert result.exit_code == 0
+        assert "## LSP Chain Validation" in result.stdout
+        assert "Confirmation rate" in result.stdout
+
+    def test_markdown_shows_dead_symbols_in_full_mode(self, runner, tmp_path, monkeypatch):
+        """--full markdown shows dead symbol list from chain_validation."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(
+            intel_dir,
+            include_chain_validation=True,
+            dead_symbols=["unused_func", "dead_class"],
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "markdown", "--full"])
+
+        assert result.exit_code == 0
+        assert "Dead Symbols" in result.stdout
+        assert "unused_func" in result.stdout
+        assert "dead_class" in result.stdout
+
+    def test_check_warns_on_dead_symbols(self, runner, tmp_path, monkeypatch):
+        """--check exits 1 when chain_validation has dead symbols."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(
+            intel_dir,
+            include_chain_validation=True,
+            dead_symbols=["orphan_symbol"],
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--check"])
+
+        assert result.exit_code == 1
+        stdout = result.stdout.lower()
+        assert "dead symbols" in stdout or "warning" in stdout
+
+    def test_check_passes_with_no_dead_symbols(self, runner, tmp_path, monkeypatch):
+        """--check exits 0 when chain_validation has no dead symbols."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir, include_chain_validation=True, dead_symbols=[])
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--check"])
+
+        assert result.exit_code == 0
+
+    def test_no_chain_validation_still_works(self, runner, tmp_path, monkeypatch):
+        """Command works fine when chain_validation.json is absent."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir)
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "yaml"])
+
+        assert result.exit_code == 0
+        parsed = yaml.safe_load(result.stdout)
+        assert "lsp_validation" not in parsed
+
+    def test_yaml_confirmation_rate_format(self, runner, tmp_path, monkeypatch):
+        """YAML lsp_validation shows confirmation_rate as a percentage string."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir, include_chain_validation=True)
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "yaml"])
+
+        assert result.exit_code == 0
+        parsed = yaml.safe_load(result.stdout)
+        # 15/(15+3) = 83.3%
+        rate = parsed["lsp_validation"]["confirmation_rate"]
+        assert "83" in rate
+
+
+# ---------------------------------------------------------------------------
+# Tests: custom template override
+# ---------------------------------------------------------------------------
+
+@pytest.mark.e2e
+class TestAuditContextCustomTemplate:
+
+    def test_custom_template_overrides_markdown(self, runner, tmp_path, monkeypatch):
+        """Custom template from .warden/templates/audit_prompt.md is used for markdown."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir, include_chain_validation=True)
+
+        # Write custom template
+        tmpl_dir = tmp_path / ".warden" / "templates"
+        tmpl_dir.mkdir(parents=True)
+        (tmpl_dir / "audit_prompt.md").write_text(
+            "# Custom Report\nStats: $stats\nGaps: $gap_summary\nLSP: $chain_validation\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "markdown"])
+
+        assert result.exit_code == 0
+        assert "# Custom Report" in result.stdout
+        assert "Stats:" in result.stdout
+        # Should NOT have default header
+        assert "# Warden Audit Context" not in result.stdout
+
+    def test_custom_template_does_not_affect_yaml(self, runner, tmp_path, monkeypatch):
+        """Custom template only applies to markdown, not yaml format."""
+        intel_dir = _make_intelligence_dir(tmp_path)
+        _write_all_mock_data(intel_dir)
+
+        tmpl_dir = tmp_path / ".warden" / "templates"
+        tmpl_dir.mkdir(parents=True)
+        (tmpl_dir / "audit_prompt.md").write_text("# Custom", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["audit-context", "--format", "yaml"])
+
+        assert result.exit_code == 0
+        parsed = yaml.safe_load(result.stdout)
+        assert isinstance(parsed, dict)
+        assert "graph" in parsed

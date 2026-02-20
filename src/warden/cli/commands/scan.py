@@ -126,7 +126,8 @@ def _display_llm_summary(metrics: dict):
 
     if metrics.get("fastTier"):
         fast = metrics["fastTier"]
-        console.print("\n  [green]⚡ Fast Tier (Qwen):[/green]")
+        fast_provider = fast.get("provider", "Ollama").title()
+        console.print(f"\n  [green]⚡ Fast Tier ({fast_provider}):[/green]")
         console.print(f"    Requests: {fast['requests']} ({fast['percentage']}%)")
         console.print(f"    Success Rate: {fast['successRate']}%")
         console.print(f"    Avg Response: {fast['avgResponseTime']}")
@@ -136,7 +137,8 @@ def _display_llm_summary(metrics: dict):
 
     if metrics.get("smartTier"):
         smart = metrics["smartTier"]
-        console.print("\n  [blue]🧠 Smart Tier (Azure):[/blue]")
+        smart_provider = smart.get("provider", "LLM").title()
+        console.print(f"\n  [blue]🧠 Smart Tier ({smart_provider}):[/blue]")
         console.print(f"    Requests: {smart['requests']} ({smart['percentage']}%)")
         console.print(f"    Avg Response: {smart['avgResponseTime']}")
         console.print(f"    Total Time: {smart['totalTime']} ({smart['timePercentage']}% of total)")
@@ -462,7 +464,11 @@ async def _process_stream_events(
                     )
 
                 elif evt == "phase_started":
-                    current_phase = data.get("phase", current_phase)
+                    current_phase = data.get("phase_name", data.get("phase", current_phase))
+                    phase_total = data.get("total_units", 0)
+                    if phase_total > 0:
+                        total_units = phase_total
+                        processed_units = 0
                     status.update(
                         f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})"
                     )
@@ -858,6 +864,21 @@ async def _run_scan_async(
         # 3. Generate configured reports from YAML config
         if final_result_data:
             _generate_configured_reports(final_result_data, verbose)
+
+            # Auto-generate badge in root directory
+            try:
+                from warden.reports.generator import ReportGenerator
+
+                generator = ReportGenerator()
+                badge_path = Path.cwd() / "warden_badge.svg"
+                generator.generate_svg_badge(final_result_data, badge_path)
+                console.print("\n[bold green]🛡️  Warden Badge Generated![/bold green]")
+                console.print(f"  [dim]Badge saved to: {badge_path}[/dim]")
+                console.print("  [dim]Add this to your README.md:[/dim]")
+                console.print("  [cyan]![Warden Quality](./warden_badge.svg)[/cyan]")
+            except Exception as e:
+                if verbose:
+                    console.print(f"[dim]Failed to auto-generate root badge: {e}[/dim]")
 
         # 4. Generate explicit --output report
         if output and final_result_data:

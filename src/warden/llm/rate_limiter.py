@@ -40,6 +40,9 @@ class RateLimiter:
         await self.token_limiter.acquire(tokens)
         await self.request_limiter.acquire(1)  # One request
 
+    # Alias used by callers across the codebase
+    acquire_async = acquire
+
 
 class TokenBucketLimiter:
     """Token bucket rate limiter implementation."""

@@ -34,12 +34,12 @@ def _make_context(**overrides) -> PipelineContext:
     return PipelineContext(**defaults)
 
 
-def _make_finding(id: str, severity: str = "medium", msg: str = "test") -> Finding:
+def _make_finding(id: str, severity: str = "medium", msg: str | None = None) -> Finding:
     return Finding(
         id=id,
         severity=severity,
-        message=msg,
-        location="test.py:1",
+        message=msg or f"issue {id}",
+        location=f"test.py:{hash(id) % 100 + 1}",
     )
 
 

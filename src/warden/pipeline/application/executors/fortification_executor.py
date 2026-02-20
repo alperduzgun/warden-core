@@ -33,9 +33,7 @@ class FortificationExecutor(BasePhaseExecutor):
         """Execute FORTIFICATION phase."""
         logger.info("executing_phase", phase="FORTIFICATION")
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "FORTIFICATION", "phase_name": "FORTIFICATION"})
+        start_time = time.perf_counter()
 
         try:
             from warden.fortification.application.fortification_phase import FortificationPhase

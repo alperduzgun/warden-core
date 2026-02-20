@@ -552,49 +552,56 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
 
         _TAINT_SUPPORTED_LANGUAGES = {"python", "javascript", "typescript", "go", "java"}
 
+        error_files: set[str] = set()
         for code_file in code_files:
-            # Get enabled checks
-            enabled_checks = self.checks.get_enabled(self.config)
+            try:
+                # Get enabled checks
+                enabled_checks = self.checks.get_enabled(self.config)
 
-            # Execute pattern checks (fast!)
-            check_results: list[CheckResult] = []
-            for check in enabled_checks:
-                try:
-                    result = await check.execute_async(code_file)
-                    check_results.append(result)
-                except Exception as e:
-                    logger.error("batch_check_failed", check=check.name, file=code_file.path, error=str(e))
-
-            # Taint analysis (prefer shared, fallback to inline)
-            if code_file.language in _TAINT_SUPPORTED_LANGUAGES:
-                file_taint_paths = []
-                if self._taint_paths and code_file.path in self._taint_paths:
-                    file_taint_paths = self._taint_paths[code_file.path]
-                else:
+                # Execute pattern checks (fast!)
+                check_results: list[CheckResult] = []
+                for check in enabled_checks:
                     try:
-                        from pathlib import Path as _Path  # noqa: PLC0415
-
-                        from ._internal.taint_analyzer import TaintAnalyzer  # noqa: PLC0415
-                        from ._internal.taint_catalog import TaintCatalog  # noqa: PLC0415
-
-                        taint_config = self.config.get("taint", {})
-                        project_root = _Path.cwd()
-                        catalog = TaintCatalog.load(project_root)
-                        taint_analyzer = TaintAnalyzer(catalog=catalog, taint_config=taint_config)
-                        file_taint_paths = taint_analyzer.analyze(code_file.content, code_file.language)
+                        result = await check.execute_async(code_file)
+                        check_results.append(result)
                     except Exception as e:
-                        logger.debug("batch_taint_analysis_failed", file=code_file.path, error=str(e))
+                        logger.error("batch_check_failed", check=check.name, file=code_file.path, error=str(e))
 
-                if file_taint_paths:
-                    taint_result = self._convert_taint_paths_to_findings(file_taint_paths, code_file.path)
-                    if taint_result:
-                        check_results.append(taint_result)
+                # Taint analysis (prefer shared, fallback to inline)
+                if code_file.language in _TAINT_SUPPORTED_LANGUAGES:
+                    file_taint_paths = []
+                    if self._taint_paths and code_file.path in self._taint_paths:
+                        file_taint_paths = self._taint_paths[code_file.path]
+                    else:
+                        try:
+                            from pathlib import Path as _Path  # noqa: PLC0415
 
-            check_results_map[code_file.path] = check_results
+                            from ._internal.taint_analyzer import TaintAnalyzer  # noqa: PLC0415
+                            from ._internal.taint_catalog import TaintCatalog  # noqa: PLC0415
 
-            # Convert to findings
-            all_findings = self._aggregate_findings(check_results)
-            findings_map[code_file.path] = all_findings
+                            taint_config = self.config.get("taint", {})
+                            project_root = _Path.cwd()
+                            catalog = TaintCatalog.load(project_root)
+                            taint_analyzer = TaintAnalyzer(catalog=catalog, taint_config=taint_config)
+                            file_taint_paths = taint_analyzer.analyze(code_file.content, code_file.language)
+                        except Exception as e:
+                            logger.debug("batch_taint_analysis_failed", file=code_file.path, error=str(e))
+
+                    if file_taint_paths:
+                        taint_result = self._convert_taint_paths_to_findings(file_taint_paths, code_file.path)
+                        if taint_result:
+                            check_results.append(taint_result)
+
+                check_results_map[code_file.path] = check_results
+
+                # Convert to findings
+                all_findings = self._aggregate_findings(check_results)
+                findings_map[code_file.path] = all_findings
+            except Exception as e:
+                logger.error("batch_file_failed", file=code_file.path, error=str(e))
+                error_files.add(code_file.path)
+                findings_map[code_file.path] = []
+                check_results_map[code_file.path] = []
 
         # PHASE 2: Batch LLM Verification (if LLM available)
         if hasattr(self, "llm_service") and self.llm_service:
@@ -606,7 +613,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
             findings = findings_map.get(code_file.path, [])
             check_results = check_results_map.get(code_file.path, [])
 
-            status = self._determine_status(findings)
+            status = "error" if code_file.path in error_files else self._determine_status(findings)
 
             metadata: dict[str, Any] = {
                 "checks_executed": len(check_results),

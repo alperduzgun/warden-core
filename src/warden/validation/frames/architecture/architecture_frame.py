@@ -488,7 +488,7 @@ def _gaps_to_findings(
         short_name = fqn.split("::")[-1] if "::" in fqn else fqn
         findings.append(
             Finding(
-                id=f"{frame_id}-missing-mixin-{idx}",
+                id=f"{frame_id}-missing-mixin-impl-{idx}",
                 severity=_SEVERITY_MAP["missing_mixin_impl"],
                 message=_MESSAGE_MAP["missing_mixin_impl"].format(short_name),
                 location=f"{code_file.path}:1",

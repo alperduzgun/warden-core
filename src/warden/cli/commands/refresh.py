@@ -262,12 +262,12 @@ def refresh_command(
     if audit_context or check_gaps:
         from warden.cli.commands.audit_context import _check_gaps, _load_intelligence, _render_markdown
 
-        code_graph, gap_report, dep_graph = _load_intelligence(root)
-        if audit_context and (code_graph or gap_report or dep_graph):
+        code_graph, gap_report, dep_graph, chain_val = _load_intelligence(root)
+        if audit_context and (code_graph or gap_report or dep_graph or chain_val):
             console.print("\n[bold blue]📊 Audit Context[/bold blue]")
-            console.print(_render_markdown(code_graph, gap_report, dep_graph))
+            console.print(_render_markdown(code_graph, gap_report, dep_graph, chain_validation=chain_val))
         if check_gaps:
-            exit_code = _check_gaps(gap_report)
+            exit_code = _check_gaps(gap_report, chain_validation=chain_val)
             if exit_code != 0:
                 console.print("[yellow]Tip: Run 'warden audit-context --check' for details.[/yellow]")
 

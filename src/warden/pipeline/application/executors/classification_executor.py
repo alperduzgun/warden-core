@@ -42,9 +42,7 @@ class ClassificationExecutor(BasePhaseExecutor):
         """Execute CLASSIFICATION phase."""
         logger.info("executing_phase", phase="CLASSIFICATION", file_count=len(code_files))
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "CLASSIFICATION", "phase_name": "CLASSIFICATION"})
+        start_time = time.perf_counter()
 
         try:
             # Respect global use_llm flag and LLM service availability

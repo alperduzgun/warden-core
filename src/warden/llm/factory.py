@@ -137,6 +137,34 @@ def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | Non
 
     if provider in SINGLE_TIER_PROVIDERS:
         _factory_logger.info("single_provider_mode", provider=provider.value)
+        # Probe for emergency fallback providers (e.g., Ollama).
+        # Normal flow unchanged: all requests → smart client (Claude Code/Codex).
+        # Fallback only activates when smart tier returns empty/error.
+        for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
+            if fast_provider == provider:
+                continue
+            try:
+                fast_cfg = config.get_provider_config(fast_provider)
+                if fast_cfg and fast_cfg.enabled:
+                    client = create_provider_client(fast_provider, fast_cfg)
+                    fast_clients.append(client)
+                    _factory_logger.info(
+                        "emergency_fallback_added",
+                        primary=provider.value,
+                        fallback=fast_provider.value,
+                    )
+            except Exception as e:
+                _factory_logger.debug(
+                    "emergency_fallback_unavailable",
+                    provider=fast_provider.value,
+                    error=str(e),
+                )
+        if not fast_clients:
+            _factory_logger.info(
+                "no_emergency_fallback",
+                provider=provider.value,
+                message="No fallback providers available",
+            )
     else:
         for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
             if fast_provider == provider:

@@ -262,10 +262,13 @@ class ResultAggregator:
                     # "sql-injection" -> "sql-injection" (use full ID as type)
                     rule_type = finding_id
             else:
-                # Simple ID without structure: use full ID as type
-                # "R1", "G1", "S1" -> each is distinct, use full ID
-                # This ensures findings with different IDs are not deduplicated
-                rule_type = finding_id
+                # Simple ID without structure (e.g. "F1", "R1", "G1")
+                # Use message as dedup key — same location + same message = duplicate
+                message = get_finding_attribute(finding, "message", "")
+                if message:
+                    rule_type = message
+                else:
+                    rule_type = finding_id
 
             # Create deduplication key: (location, rule_type)
             key = (location, rule_type)

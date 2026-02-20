@@ -254,9 +254,43 @@ class OrchestratedLlmClient(ILlmClient):
             output_tokens=output_tokens,
         )
 
-        # CORE RESILIENCE: Raise exception on failure so Circuit Breaker can track it
+        # CORE RESILIENCE: If smart tier fails, try fast clients as degraded fallback
         if not response.success:
             from warden.shared.infrastructure.exceptions import ExternalServiceError
+
+            if self.fast_clients:
+                logger.warning(
+                    "smart_tier_failed_trying_fallback",
+                    error=response.error_message,
+                    fast_clients_available=len(self.fast_clients),
+                )
+                for fast_client in self.fast_clients:
+                    try:
+                        if not await fast_client.is_available_async():
+                            continue
+                        fallback_request = LlmRequest(
+                            system_prompt=request.system_prompt,
+                            user_message=request.user_message,
+                            model=self.fast_model,
+                            max_tokens=request.max_tokens,
+                            temperature=request.temperature,
+                            timeout_seconds=request.timeout_seconds,
+                            use_fast_tier=True,
+                        )
+                        fallback_response = await fast_client.send_async(fallback_request)
+                        if fallback_response.success and fallback_response.content:
+                            logger.info(
+                                "smart_tier_fallback_succeeded",
+                                provider=fast_client.provider.value,
+                            )
+                            return fallback_response
+                    except Exception as fallback_err:
+                        logger.debug(
+                            "smart_tier_fallback_failed",
+                            provider=fast_client.provider.value,
+                            error=str(fallback_err),
+                        )
+                        continue
 
             raise ExternalServiceError(f"Smart tier failed: {response.error_message}")
 

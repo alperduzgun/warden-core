@@ -86,9 +86,6 @@ class FrameExecutor:
         start_time = time.perf_counter()
         logger.info("executing_phase", phase="VALIDATION")
 
-        if self.progress_callback:
-            self.progress_callback("phase_started", {"phase": "VALIDATION", "phase_name": "VALIDATION"})
-
         try:
             file_contexts = context.file_contexts or {}
             include_test_files = getattr(self.config, "include_test_files", False)
@@ -103,6 +100,16 @@ class FrameExecutor:
 
             selected_frames = getattr(context, "selected_frames", None)
             frames_to_execute = self.frame_matcher.get_frames_to_execute(selected_frames)
+
+            # Emit phase_started with accurate total (frames * filtered_files + rules files)
+            rules_file_count = len(filtered_files) if self.rule_validator and self.rule_validator.rules else 0
+            frame_units = len(frames_to_execute) * len(filtered_files) if frames_to_execute else 0
+            validation_total = frame_units + rules_file_count
+            if self.progress_callback:
+                self.progress_callback(
+                    "phase_started",
+                    {"phase": "Validation", "phase_name": "Validation", "total_units": max(validation_total, 1)},
+                )
 
             if not frames_to_execute:
                 logger.warning(
@@ -147,10 +154,17 @@ class FrameExecutor:
 
             if self.rule_validator and self.rule_validator.rules:
                 logger.info("executing_global_rules", rule_count=len(self.rule_validator.rules))
+                if self.progress_callback:
+                    self.progress_callback(
+                        "progress_update",
+                        {"phase": "Validating Rules", "increment": 0},
+                    )
                 global_violations = []
                 for code_file in filtered_files:
                     file_violations = await self.rule_validator.validate_file_async(code_file.path)
                     global_violations.extend(file_violations)
+                    if self.progress_callback:
+                        self.progress_callback("progress_update", {"increment": 1})
 
                 if global_violations:
                     logger.info("global_rules_found_violations", count=len(global_violations))
