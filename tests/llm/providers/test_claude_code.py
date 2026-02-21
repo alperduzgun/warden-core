@@ -300,6 +300,75 @@ class TestCliArgs:
         assert "--disallowedTools" in args
 
 
+class TestCliErrorLogging:
+    """Test CLI error handling with empty/non-empty stderr."""
+
+    @pytest.mark.asyncio
+    async def test_empty_stderr_uses_stdout_preview(self, client):
+        """When stderr is empty, error message should include stdout preview."""
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.communicate.return_value = (
+                b'{"error": "rate_limited"}',  # error info in stdout
+                b"",  # empty stderr
+            )
+            mock_proc.returncode = 1
+            mock_exec.return_value = mock_proc
+
+            request = LlmRequest(
+                system_prompt="system",
+                user_message="analyze this",
+                use_fast_tier=False,
+            )
+            response = await client.send_async(request)
+
+        assert response.success is False
+        assert "stderr empty" in response.error_message
+        assert "rate_limited" in response.error_message
+
+    @pytest.mark.asyncio
+    async def test_empty_stderr_empty_stdout(self, client):
+        """When both stderr and stdout are empty, error message says '(no output)'."""
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.communicate.return_value = (b"", b"")
+            mock_proc.returncode = 1
+            mock_exec.return_value = mock_proc
+
+            request = LlmRequest(
+                system_prompt="system",
+                user_message="analyze this",
+                use_fast_tier=False,
+            )
+            response = await client.send_async(request)
+
+        assert response.success is False
+        assert "(no output)" in response.error_message
+
+    @pytest.mark.asyncio
+    async def test_nonempty_stderr_used_directly(self, client):
+        """When stderr has content, it's used directly (stdout not checked)."""
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.communicate.return_value = (
+                b"some stdout",
+                b"permission denied",
+            )
+            mock_proc.returncode = 1
+            mock_exec.return_value = mock_proc
+
+            request = LlmRequest(
+                system_prompt="system",
+                user_message="analyze this",
+                use_fast_tier=False,
+            )
+            response = await client.send_async(request)
+
+        assert response.success is False
+        assert "permission denied" in response.error_message
+        assert "stderr empty" not in response.error_message
+
+
 class TestTruncatePrompt:
     """Test prompt truncation preserves structure."""
 

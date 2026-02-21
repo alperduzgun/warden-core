@@ -2,10 +2,62 @@
   "module": "unknown",
   "findings": [
     {
+      "id": "RUF003",
+      "severity": "low",
+      "message": "Comment contains ambiguous `\u0131` (LATIN SMALL LETTER DOTLESS I). Did you mean `i` (LATIN SMALL LETTER I)?",
+      "location": "claude_code.py:164",
+      "detail": "Rule: RUF003 (Ruff)",
+      "code": null,
+      "line": 164,
+      "column": 60,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "c625d7406eeab0516c7fb9adb4a7115824bf651deaf99219f37b0d29d9a3b46b"
+    },
+    {
+      "id": "RUF003",
+      "severity": "low",
+      "message": "Comment contains ambiguous `\u0131` (LATIN SMALL LETTER DOTLESS I). Did you mean `i` (LATIN SMALL LETTER I)?",
+      "location": "claude_code.py:164",
+      "detail": "Rule: RUF003 (Ruff)",
+      "code": null,
+      "line": 164,
+      "column": 69,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "c625d7406eeab0516c7fb9adb4a7115824bf651deaf99219f37b0d29d9a3b46b"
+    },
+    {
+      "id": "architecturalconsistency-max_function_lines-0",
+      "severity": "low",
+      "message": "Function '__init__' is 78 lines - should be \u2264 50 lines",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/phase_executor.py:34",
+      "detail": "**Rule:** max_function_lines\n\n**Expected:** \u2264 50 lines\n\n**Actual:** 78 lines\n\n",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "54a37848f0d9822b40478b8e9cad80de04cf26b8465d7f8f64b6e575b7e97ba5"
+    },
+    {
+      "id": "architecturalconsistency-test_mirror_structure-1",
+      "severity": "low",
+      "message": "No corresponding test file found",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/phase_executor.py",
+      "detail": "**Rule:** test_mirror_structure\n\n**Expected:** /Users/alper/Documents/Development/Personal/warden-core/tests/pipeline/application/orchestrator/test_phase_executor.py\n\n**Actual:** Test file missing\n\n",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "a774b7951f4a37a72e29c5487a55d09a93a4a55abed87ed54d26fc42627db732"
+    },
+    {
       "id": "architecturalconsistency-max_function_lines-0",
       "severity": "low",
       "message": "Function 'apply_baseline' is 77 lines - should be \u2264 50 lines",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/findings_post_processor.py:161",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/findings_post_processor.py:180",
       "detail": "**Rule:** max_function_lines\n\n**Expected:** \u2264 50 lines\n\n**Actual:** 77 lines\n\n",
       "code": null,
       "line": 0,
@@ -18,7 +70,7 @@
       "id": "architecturalconsistency-max_function_lines-1",
       "severity": "low",
       "message": "Function 'ensure_state_consistency' is 75 lines - should be \u2264 50 lines",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/findings_post_processor.py:240",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/findings_post_processor.py:259",
       "detail": "**Rule:** max_function_lines\n\n**Expected:** \u2264 50 lines\n\n**Actual:** 75 lines\n\n",
       "code": null,
       "line": 0,
@@ -26,6 +78,45 @@
       "isBlocker": false,
       "remediation": null,
       "fingerprint": "f8cd5ac5504f5376ca17bd5a3dd53a8e375d56c3128011327da37e937fce658e"
+    },
+    {
+      "id": "architecturalconsistency-max_function_lines-0",
+      "severity": "low",
+      "message": "Function '_parse_response' is 73 lines - should be \u2264 50 lines",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/llm/providers/claude_code.py:189",
+      "detail": "**Rule:** max_function_lines\n\n**Expected:** \u2264 50 lines\n\n**Actual:** 73 lines\n\n",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "d177d2c89da7a787b891fa75923db8c32d031472b027be1d60ef462002271ad5"
+    },
+    {
+      "id": "architecturalconsistency-async_naming_convention-1",
+      "severity": "low",
+      "message": "Async method 'detect_claude_code' should end with '_async' suffix",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/llm/providers/claude_code.py:315",
+      "detail": "**Rule:** async_naming_convention\n\n**Expected:** detect_claude_code_async\n\n**Actual:** detect_claude_code\n\n",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "72bb914b73c49ddbae06e85788988fcd856d36c3bc6c4209d2000a557a8b7382"
+    },
+    {
+      "id": "architecturalconsistency-async_naming_convention-2",
+      "severity": "low",
+      "message": "Async method '_execute_cli' should end with '_async' suffix",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/llm/providers/claude_code.py:131",
+      "detail": "**Rule:** async_naming_convention\n\n**Expected:** _execute_cli_async\n\n**Actual:** _execute_cli\n\n",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "9ad3e51b9223e1f3504eae5c035d54b114e9d53fc04b0da9c63ca167fea33d3d"
     }
   ],
   "debt_items": [
@@ -44,10 +135,66 @@
       "file_path": null,
       "message": "Function 'ensure_state_consistency' is 75 lines - should be \u2264 50 lines",
       "severity": "low"
+    },
+    {
+      "fingerprint": "c625d7406eeab0516c7fb9adb4a7115824bf651deaf99219f37b0d29d9a3b46b",
+      "first_seen": "2026-02-21T23:13:02.480782+00:00",
+      "rule_id": "RUF003",
+      "file_path": null,
+      "message": "Comment contains ambiguous `\u0131` (LATIN SMALL LETTER DOTLESS I). Did you mean `i` (LATIN SMALL LETTER I)?",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "c625d7406eeab0516c7fb9adb4a7115824bf651deaf99219f37b0d29d9a3b46b",
+      "first_seen": "2026-02-21T23:13:02.480782+00:00",
+      "rule_id": "RUF003",
+      "file_path": null,
+      "message": "Comment contains ambiguous `\u0131` (LATIN SMALL LETTER DOTLESS I). Did you mean `i` (LATIN SMALL LETTER I)?",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "54a37848f0d9822b40478b8e9cad80de04cf26b8465d7f8f64b6e575b7e97ba5",
+      "first_seen": "2026-02-21T23:13:02.480782+00:00",
+      "rule_id": "architecturalconsistency-max_function_lines-0",
+      "file_path": null,
+      "message": "Function '__init__' is 78 lines - should be \u2264 50 lines",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "a774b7951f4a37a72e29c5487a55d09a93a4a55abed87ed54d26fc42627db732",
+      "first_seen": "2026-02-21T23:13:02.480782+00:00",
+      "rule_id": "architecturalconsistency-test_mirror_structure-1",
+      "file_path": null,
+      "message": "No corresponding test file found",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "d177d2c89da7a787b891fa75923db8c32d031472b027be1d60ef462002271ad5",
+      "first_seen": "2026-02-21T23:13:02.480782+00:00",
+      "rule_id": "architecturalconsistency-max_function_lines-0",
+      "file_path": null,
+      "message": "Function '_parse_response' is 73 lines - should be \u2264 50 lines",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "72bb914b73c49ddbae06e85788988fcd856d36c3bc6c4209d2000a557a8b7382",
+      "first_seen": "2026-02-21T23:13:02.480782+00:00",
+      "rule_id": "architecturalconsistency-async_naming_convention-1",
+      "file_path": null,
+      "message": "Async method 'detect_claude_code' should end with '_async' suffix",
+      "severity": "low"
+    },
+    {
+      "fingerprint": "9ad3e51b9223e1f3504eae5c035d54b114e9d53fc04b0da9c63ca167fea33d3d",
+      "first_seen": "2026-02-21T23:13:02.480782+00:00",
+      "rule_id": "architecturalconsistency-async_naming_convention-2",
+      "file_path": null,
+      "message": "Async method '_execute_cli' should end with '_async' suffix",
+      "severity": "low"
     }
   ],
   "created_at": "2026-02-20T21:03:52.505822+00:00",
-  "updated_at": "2026-02-21T22:42:57.434200+00:00",
-  "debt_count": 2,
+  "updated_at": "2026-02-21T23:13:02.480856+00:00",
+  "debt_count": 9,
   "oldest_debt_age_days": 0
 }

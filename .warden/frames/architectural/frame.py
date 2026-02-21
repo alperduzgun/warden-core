@@ -664,8 +664,14 @@ class ArchitecturalConsistencyFrame(ValidationFrame):
         findings = []
 
         for i, violation in enumerate(violations):
+            # Build unique suffix: prefer line number from file_path, fallback to file hash + counter
+            if ":" in violation.file_path:
+                suffix = violation.file_path.split(":")[-1]
+            else:
+                path_hash = abs(hash(violation.file_path)) % 10000
+                suffix = f"{path_hash}-{i}"
             finding = Finding(
-                id=f"{self.frame_id}-{violation.rule}-{i}",
+                id=f"{self.frame_id}-{violation.rule}-{suffix}",
                 severity="medium" if violation.severity == "error" else "low",
                 message=violation.message,
                 location=violation.file_path,

@@ -161,13 +161,17 @@ class ClaudeCodeClient(ILlmClient):
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="replace").strip()
-                logger.error(
+                # If stderr is empty, check stdout for error hints (CLI may write errors as JSON to stdout)
+                if not error_msg:
+                    stdout_preview = stdout.decode("utf-8", errors="replace").strip()[:200]
+                    error_msg = f"(stderr empty, stdout: {stdout_preview})" if stdout_preview else "(no output)"
+                logger.warning(  # warning — pipeline recovers via fallback lane
                     "claude_code_cli_failed",
                     returncode=process.returncode,
-                    error=error_msg[:200],
+                    error=error_msg[:300],
                 )
                 return self._error_response(
-                    f"CLI error (exit {process.returncode}): {error_msg[:200]}", model, duration_ms
+                    f"CLI error (exit {process.returncode}): {error_msg[:300]}", model, duration_ms
                 )
 
             return self._parse_response(stdout, model, duration_ms)

@@ -142,6 +142,25 @@ class FindingsPostProcessor:
                     all_verified.extend(res.findings)
             context.findings = all_verified
 
+            # Re-sync validated_issues — remove findings dropped by verification
+            if context.validated_issues:
+                surviving_ids = {
+                    getattr(f, "id", None) or (f.get("id") if isinstance(f, dict) else None)
+                    for f in context.findings
+                }
+                before_count = len(context.validated_issues)
+                context.validated_issues = [
+                    vi for vi in context.validated_issues
+                    if vi.get("id") in surviving_ids
+                ]
+                if len(context.validated_issues) < before_count:
+                    logger.info(
+                        "validated_issues_synced",
+                        before=before_count,
+                        after=len(context.validated_issues),
+                        reason="verification_filtering",
+                    )
+
             logger.info(
                 "verification_phase_completed",
                 total_verified=verified_count,

@@ -233,6 +233,86 @@ class TestVerifyFindingsAsync:
             # Should not raise
             await proc.verify_findings_async(ctx)
 
+    @pytest.mark.asyncio
+    async def test_validated_issues_synced_after_verification(self):
+        """validated_issues are filtered to match surviving findings after verification."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        f2 = make_finding("F2")
+        fr = make_frame_result("sec", [f1, f2])
+        ctx.frame_results = {"sec": {"result": fr}}
+        # Simulate pre-existing validated_issues (set by result_aggregator)
+        ctx.validated_issues = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+            {"id": "F2", "severity": "medium", "message": "ok"},
+        ]
+
+        # Verifier drops F2
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+        ]
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        # validated_issues should only contain F1
+        assert len(ctx.validated_issues) == 1
+        assert ctx.validated_issues[0]["id"] == "F1"
+
+    @pytest.mark.asyncio
+    async def test_validated_issues_empty_when_all_dropped(self):
+        """validated_issues emptied when all findings dropped by verification."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        fr = make_frame_result("sec", [f1])
+        ctx.frame_results = {"sec": {"result": fr}}
+        ctx.validated_issues = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+        ]
+
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = []
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        assert len(ctx.validated_issues) == 0
+
+    @pytest.mark.asyncio
+    async def test_validated_issues_untouched_when_empty(self):
+        """Empty validated_issues are not modified."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        fr = make_frame_result("sec", [f1])
+        ctx.frame_results = {"sec": {"result": fr}}
+        ctx.validated_issues = []
+
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+        ]
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        assert ctx.validated_issues == []
+
 
 # ---------------------------------------------------------------------------
 # apply_baseline

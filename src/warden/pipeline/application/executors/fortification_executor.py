@@ -10,7 +10,7 @@ from warden.pipeline.application.executors.base_phase_executor import BasePhaseE
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.finding_utils import get_finding_attribute
-from warden.validation.domain.frame import CodeFile, Remediation
+from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
@@ -149,20 +149,16 @@ class FortificationExecutor(BasePhaseExecutor):
             context.security_improvements = result.security_improvements
 
             # Link Fortifications back to Findings for Reporting
-            # Create a lookup for findings (BATCH 1: Fix duplicate key overwrite)
+            # Build map from the same validated_issues sent to LLM (guarantees ID match)
             findings_map = {}
-            for f in context.findings:
-                normalized = normalize_finding_to_dict(f)
-                fid = normalized.get("id", "unknown")
-
+            for issue in validated_issues:
+                fid = issue.get("id", "unknown")
                 if fid in findings_map:
                     logger.warning(
                         "fortification_duplicate_finding_id",
                         finding_id=fid,
-                        action="overwriting_previous",
                     )
-
-                findings_map[fid] = normalized
+                findings_map[fid] = issue
 
             # BATCH 3: Track fortification linking metrics
             linked_count = 0
@@ -186,14 +182,9 @@ class FortificationExecutor(BasePhaseExecutor):
                     # BATCH 3: Track successful linking
                     linked_count += 1
                     finding = findings_map[fid]
-                    # Create Remediation object (matching dataclass field names)
-                    remediation = Remediation(
-                        description=title,
-                        code=suggested_code or "",
-                        unified_diff=None,  # Can be generated if original_code exists
-                    )
 
-                    # Log diff generation attempt
+                    # Generate unified diff if both code versions available
+                    unified_diff = None
                     if original_code and suggested_code:
                         try:
                             import difflib
@@ -205,12 +196,16 @@ class FortificationExecutor(BasePhaseExecutor):
                                 tofile="fixed",
                                 lineterm="",
                             )
-                            remediation.unified_diff = "\n".join(list(diff))
+                            unified_diff = "\n".join(list(diff))
                         except (ValueError, TypeError, RuntimeError):  # Fortification isolated
                             pass
 
-                    # Assign to finding
-                    finding.remediation = remediation
+                    # Assign remediation (dict-compatible — findings_map contains dicts)
+                    finding["remediation"] = {
+                        "description": title,
+                        "code": suggested_code or "",
+                        "unified_diff": unified_diff,
+                    }
                 else:
                     # BATCH 3: Track unlinked fortifications
                     unlinked_count += 1

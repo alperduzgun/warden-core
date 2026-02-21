@@ -282,8 +282,15 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
         try:
             data = _json.loads(content)
         except _json.JSONDecodeError:
-            logger.warning("property_batch_parse_failed", content_preview=content[:200])
-            return
+            # Try recovering valid entries from truncated JSON array
+            data = self._recover_truncated_json_array(content)
+            if not data:
+                logger.warning("property_batch_parse_failed", content_preview=content[:200])
+                return
+            logger.info(
+                "property_batch_partial_recovery",
+                recovered_items=len(data),
+            )
 
         if not isinstance(data, list):
             data = [data]
@@ -313,6 +320,33 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
                     )
             except Exception as e:
                 logger.warning("property_batch_item_parse_failed", file_idx=file_idx, error=str(e))
+
+    @staticmethod
+    def _recover_truncated_json_array(content: str) -> list[dict] | None:
+        """Try to recover valid entries from a truncated JSON array.
+
+        LLM responses may be cut off mid-token. This finds the last complete
+        object in the array and parses everything up to that point.
+        """
+        content = content.strip()
+        if not content.startswith("["):
+            return None
+
+        # Find last complete object by searching for "}," or "}\n]" backwards
+        last_brace = content.rfind("}")
+        if last_brace < 0:
+            return None
+
+        # Try parsing [... up to last complete }]
+        candidate = content[: last_brace + 1].rstrip(",").rstrip() + "]"
+        try:
+            data = _json.loads(candidate)
+            if isinstance(data, list) and data:
+                return data
+        except _json.JSONDecodeError:
+            pass
+
+        return None
 
     async def _serial_llm_fallback(self, code_files: list[CodeFile]) -> dict[str, list[Finding]]:
         """Fallback: run LLM analysis file-by-file."""
