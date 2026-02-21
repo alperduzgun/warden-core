@@ -377,10 +377,19 @@ class PipelinePhaseRunner:
 
         Only runs if a CodeGraph was built in Phase 0.7 and LSP is available.
         Stores results in ``context.chain_validation``.
+        Hard-capped at 30 seconds to prevent scan stalls.
         """
         if not context.code_graph:
             return
+
+        # Config-level skip
+        if hasattr(self, "config") and self.config and not getattr(self.config, "enable_lsp_audit", True):
+            logger.debug("lsp_audit_skipped", reason="disabled_by_config")
+            return
+
         try:
+            import asyncio as _asyncio
+
             from warden.lsp.audit_service import LSPAuditService
 
             project_root = self.project_root or context.project_root
@@ -390,7 +399,11 @@ class PipelinePhaseRunner:
                 logger.debug("lsp_audit_skipped", reason="lsp_unavailable")
                 return
 
-            chain_validation = await service.validate_dependency_chain_async(context.code_graph)
+            # Hard cap: entire LSP phase must finish within 30 seconds
+            chain_validation = await _asyncio.wait_for(
+                service.validate_dependency_chain_async(context.code_graph),
+                timeout=30.0,
+            )
             context.chain_validation = chain_validation
 
             # Persist to disk (matches pre_analysis_phase.py pattern)
@@ -411,6 +424,8 @@ class PipelinePhaseRunner:
                 unconfirmed=chain_validation.unconfirmed,
                 dead_symbols=len(chain_validation.dead_symbols),
             )
+        except TimeoutError:
+            logger.warning("lsp_audit_timeout", timeout=30.0)
         except Exception as e:
             logger.warning("lsp_audit_failed", error=str(e))
 

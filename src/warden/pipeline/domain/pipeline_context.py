@@ -71,6 +71,10 @@ class PipelineContext:
     # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
     taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
 
+    # Phase 0: File-level Dependency Graph (forward/reverse maps for prompt enrichment)
+    dependency_graph_forward: dict[str, list[str]] = field(default_factory=dict)  # file -> [dependencies]
+    dependency_graph_reverse: dict[str, list[str]] = field(default_factory=dict)  # file -> [dependents]
+
     # Phase 0.5: TRIAGE Results (Adaptive Hybrid Triage)
     triage_decisions: dict[str, Any] = field(default_factory=dict)  # Key: file_path, Value: TriageDecision.model_dump()
 

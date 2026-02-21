@@ -67,6 +67,7 @@ class PipelineConfig(BaseDomainModel):
     enable_discovery: bool = True  # Run file discovery before validation
     enable_build_context: bool = True  # Load build context at pipeline start
     enable_pre_analysis: bool = True  # Run PRE-ANALYSIS phase for context detection (NEW!)
+    enable_lsp_audit: bool = True  # Run LSP chain validation (Phase 0.8)
 
     # Main pipeline phases (6-phase system)
     enable_analysis: bool = True  # Run ANALYSIS phase for quality metrics

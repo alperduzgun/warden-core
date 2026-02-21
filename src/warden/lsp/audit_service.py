@@ -102,7 +102,7 @@ class LSPAuditService:
         self,
         code_graph: CodeGraph,
         *,
-        max_checks: int = 100,
+        max_checks: int = 50,
     ) -> ChainValidation:
         """
         Validate CodeGraph edges against LSP data.
@@ -242,7 +242,7 @@ class LSPAuditService:
         self,
         analyzer: SemanticAnalyzer,
         code_graph: CodeGraph,
-        max_checks: int = 50,
+        max_checks: int = 25,
     ) -> list[str]:
         """
         Detect symbols that have zero references via LSP.

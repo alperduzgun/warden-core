@@ -18,6 +18,13 @@ from warden.llm.config import ProviderConfig
 from warden.llm.types import LlmRequest, LlmResponse
 
 
+@pytest.fixture(autouse=True)
+def _bypass_nested_session(monkeypatch):
+    """Remove nested session env vars so tests can exercise the CLI code path."""
+    monkeypatch.delenv("CLAUDE_CODE_ENTRYPOINT", raising=False)
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+
+
 @pytest.fixture
 def client():
     return ClaudeCodeClient(ProviderConfig(enabled=True, default_model="test"))
@@ -268,8 +275,8 @@ class TestCliArgs:
     """Test CLI subprocess arguments."""
 
     @pytest.mark.asyncio
-    async def test_tools_disabled_and_max_turns_one(self, client):
-        """CLI should pass --tools '' and --max-turns 1 to prevent tool-call exhaustion."""
+    async def test_tools_disabled_and_max_turns(self, client):
+        """CLI should pass --disallowedTools and --max-turns 2 to prevent tool-call exhaustion."""
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_proc = AsyncMock()
             mock_proc.communicate.return_value = (
@@ -289,9 +296,8 @@ class TestCliArgs:
         assert response.success is True
         args = mock_exec.call_args[0]
         assert "--max-turns" in args
-        assert args[args.index("--max-turns") + 1] == "1"
-        assert "--tools" in args
-        assert args[args.index("--tools") + 1] == ""
+        assert args[args.index("--max-turns") + 1] == "2"
+        assert "--disallowedTools" in args
 
 
 class TestTruncatePrompt:

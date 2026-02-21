@@ -46,7 +46,17 @@ class ChromaDBAdapter(VectorStoreAdapter):
                 name=collection_name, metadata={"hnsw:space": "cosine"}
             )
         except ImportError:
-            raise ImportError("chromadb not installed.")
+            from warden.services.dependencies.auto_resolver import require_package
+
+            if not require_package("chromadb"):
+                raise ImportError("chromadb not installed and auto-install failed.")
+            import chromadb
+
+            self.client = chromadb.PersistentClient(path=chroma_path)
+            self.collection_name = collection_name
+            self.collection = self.client.get_or_create_collection(
+                name=collection_name, metadata={"hnsw:space": "cosine"}
+            )
         except Exception as e:
             logger.error("chroma_init_failed", error=str(e))
             raise
@@ -105,7 +115,20 @@ class QdrantAdapter(VectorStoreAdapter):
                     vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
                 )
         except ImportError:
-            raise ImportError("qdrant-client not installed. Run 'pip install warden-core[cloud]'")
+            from warden.services.dependencies.auto_resolver import require_package
+
+            if not require_package("qdrant-client"):
+                raise ImportError("qdrant-client not installed and auto-install failed. Run 'pip install warden-core[cloud]'")
+            from qdrant_client import QdrantClient
+            from qdrant_client.http import models
+
+            self.client = QdrantClient(url=url, api_key=api_key)
+            self.collection_name = collection_name
+            if not self.client.collection_exists(collection_name):
+                self.client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
+                )
         except Exception as e:
             logger.error("qdrant_init_failed", error=str(e))
             raise

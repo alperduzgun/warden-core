@@ -335,6 +335,25 @@ class PreAnalysisPhase:
                 logger.info("skipping_dependency_impact_analysis_for_basic_level")
                 impacted_files = set()
 
+            # Populate dependency graph on pipeline context for downstream frame enrichment
+            if pipeline_context and self.dependency_graph:
+                for src_path, deps in self.dependency_graph._forward_graph.items():
+                    try:
+                        rel_src = str(src_path.relative_to(self.project_root))
+                    except ValueError:
+                        rel_src = str(src_path)
+                    pipeline_context.dependency_graph_forward[rel_src] = [
+                        self._path_to_relative(d) for d in deps
+                    ]
+                for dep_path, dependents in self.dependency_graph._reverse_graph.items():
+                    try:
+                        rel_dep = str(dep_path.relative_to(self.project_root))
+                    except ValueError:
+                        rel_dep = str(dep_path)
+                    pipeline_context.dependency_graph_reverse[rel_dep] = [
+                        self._path_to_relative(d) for d in dependents
+                    ]
+
             # Step 4: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
 
@@ -1223,6 +1242,13 @@ class PreAnalysisPhase:
             )
 
         return impacted_paths
+
+    def _path_to_relative(self, path: Path) -> str:
+        """Convert a Path to a project-relative string."""
+        try:
+            return str(path.relative_to(self.project_root))
+        except ValueError:
+            return str(path)
 
     def _guess_language_by_extension(self, file_path: str) -> CodeLanguage:
         """Guess language by file extension using centralized utility."""

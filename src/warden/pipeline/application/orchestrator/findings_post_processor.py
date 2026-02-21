@@ -114,6 +114,17 @@ class FindingsPostProcessor:
                     result_obj.findings = final_findings
                     result_obj.issues_found = len(final_findings)
 
+                    # Correct stale frame status after FP filtering
+                    if not final_findings and getattr(result_obj, "status", None) == "failed":
+                        result_obj.status = "passed"
+                        logger.info(
+                            "frame_status_corrected",
+                            frame_id=frame_id,
+                            old_status="failed",
+                            new_status="passed",
+                            reason="all_findings_filtered_by_verification",
+                        )
+
                     logger.info(
                         "finding_verification_complete",
                         frame_id=frame_id,
@@ -243,22 +254,48 @@ class FindingsPostProcessor:
             failed_frames = []
             passed_frames = []
 
-            for fr_dict in frame_results.values():
+            for fr_id, fr_dict in frame_results.items():
                 result_obj = fr_dict.get("result")
-                if result_obj:
-                    if getattr(result_obj, "status", None) == "failed":
-                        failed_frames.append(fr_dict)
-                    elif getattr(result_obj, "status", None) == "passed":
-                        passed_frames.append(fr_dict)
+                if not result_obj:
+                    continue
 
-            if failed_frames and pipeline.status == PipelineStatus.COMPLETED:
+                status = getattr(result_obj, "status", None)
+                remaining_findings = getattr(result_obj, "findings", [])
+
+                # Recalculate: frame marked "failed" but all findings were filtered → correct to "passed"
+                if status == "failed" and not remaining_findings:
+                    result_obj.status = "passed"
+                    logger.info(
+                        "frame_status_corrected",
+                        frame_id=fr_id,
+                        old_status="failed",
+                        new_status="passed",
+                        reason="all_findings_filtered",
+                    )
+                    passed_frames.append(fr_dict)
+                elif status == "failed":
+                    failed_frames.append(fr_dict)
+                elif status == "passed":
+                    passed_frames.append(fr_dict)
+
+            if failed_frames and pipeline.status in (PipelineStatus.COMPLETED, PipelineStatus.COMPLETED_WITH_FAILURES):
                 logger.warning(
                     "state_inconsistency_detected",
-                    expected_status="COMPLETED_WITH_FAILURES",
+                    expected_status="FAILED",
                     actual_status=pipeline.status,
                     failed_frames=len(failed_frames),
                 )
                 pipeline.status = PipelineStatus.FAILED
+            elif not failed_frames and pipeline.status in (PipelineStatus.FAILED, PipelineStatus.COMPLETED_WITH_FAILURES):
+                # All frames passed after post-filtering — correct pipeline status
+                if not context.errors:
+                    logger.info(
+                        "pipeline_status_corrected",
+                        old_status=pipeline.status.value,
+                        new_status="COMPLETED",
+                        reason="all_frame_findings_filtered",
+                    )
+                    pipeline.status = PipelineStatus.COMPLETED
 
             if pipeline.status == PipelineStatus.FAILED and not context.errors:
                 context.errors.append("Pipeline marked FAILED but no errors recorded")

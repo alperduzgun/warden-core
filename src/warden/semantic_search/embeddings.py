@@ -17,7 +17,7 @@ from openai import AsyncAzureOpenAI, AsyncOpenAI, RateLimitError
 try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
-    SentenceTransformer = None
+    SentenceTransformer = None  # Will attempt auto-install when needed
 
 from warden.semantic_search.models import CodeChunk, EmbeddingMetadata
 
@@ -86,9 +86,16 @@ class EmbeddingGenerator:
 
         elif provider == "local":
             if not SentenceTransformer:
-                raise ValueError(
-                    "sentence-transformers not installed. Please install it with 'pip install sentence-transformers'"
-                )
+                from warden.services.dependencies.auto_resolver import require_package
+
+                if require_package("sentence-transformers"):
+                    from sentence_transformers import SentenceTransformer as _ST
+                    globals()["SentenceTransformer"] = _ST
+                else:
+                    raise ValueError(
+                        "sentence-transformers not installed and auto-install failed. "
+                        "Please install it with 'pip install sentence-transformers'"
+                    )
 
             # Initialize local model
             # For Jina embeddings v2, trust_remote_code=True is required

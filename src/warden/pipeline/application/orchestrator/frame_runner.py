@@ -560,16 +560,44 @@ class FrameRunner:
                 )
                 pipeline.frames_failed += 1
             except Exception as e:
-                logger.error(
-                    "frame_execution_error", frame_id=frame.frame_id, error=str(e), error_type=type(e).__name__
-                )
-                frame_result = FrameResult(
-                    frame_id=frame.frame_id,
-                    frame_name=frame.name,
-                    status="error",
-                    findings=[],
-                )
-                pipeline.frames_failed += 1
+                _healed = False
+                # Try self-healing for ImportError/ModuleNotFoundError
+                if isinstance(e, (ImportError, ModuleNotFoundError)):
+                    _healed = await self._try_heal_import_error(e, frame.frame_id)
+                    if _healed:
+                        try:
+                            retry_files = files_to_scan if files_to_scan else code_files
+                            for cf in retry_files:
+                                result = await execute_single_file_async(cf)
+                                if result:
+                                    if result.findings:
+                                        frame_findings.extend(result.findings)
+                                    files_scanned += 1
+                            logger.info(
+                                "frame_healed_and_retried",
+                                frame_id=frame.frame_id,
+                                files_scanned=files_scanned,
+                                findings=len(frame_findings),
+                            )
+                        except Exception as retry_err:
+                            logger.error(
+                                "frame_retry_after_healing_failed",
+                                frame_id=frame.frame_id,
+                                error=str(retry_err),
+                            )
+                            _healed = False  # Retry failed, fall through to error
+
+                if not _healed:
+                    logger.error(
+                        "frame_execution_error", frame_id=frame.frame_id, error=str(e), error_type=type(e).__name__
+                    )
+                    frame_result = FrameResult(
+                        frame_id=frame.frame_id,
+                        frame_name=frame.name,
+                        status="error",
+                        findings=[],
+                    )
+                    pipeline.frames_failed += 1
 
         post_violations = []
         if frame_rules and frame_rules.post_rules:
@@ -634,6 +662,41 @@ class FrameRunner:
             )
 
         return frame_result
+
+    async def _try_heal_import_error(self, error: Exception, frame_id: str) -> bool:
+        """Attempt to self-heal an ImportError during frame execution."""
+        try:
+            from warden.self_healing import SelfHealingOrchestrator
+
+            diagnostic = SelfHealingOrchestrator()
+            result = await diagnostic.diagnose_and_fix(
+                error,
+                context=f"Frame execution: {frame_id}",
+            )
+
+            if result.fixed:
+                logger.info(
+                    "frame_import_error_healed",
+                    frame_id=frame_id,
+                    packages_installed=result.packages_installed,
+                )
+                return True
+
+            if result.diagnosis:
+                logger.warning(
+                    "frame_import_error_diagnosis",
+                    frame_id=frame_id,
+                    diagnosis=result.diagnosis,
+                )
+            return False
+
+        except Exception as heal_err:
+            logger.debug(
+                "frame_self_healing_failed",
+                frame_id=frame_id,
+                error=str(heal_err),
+            )
+            return False
 
     def _collect_frame_ignores(self) -> dict[str, list[str]]:
         """Collect frame-specific ignore patterns from frames_config."""

@@ -1,220 +1,388 @@
 {
   "schemaVersion": "1.0.0",
-  "totalChainsChecked": 28,
+  "totalChainsChecked": 50,
   "confirmed": 0,
   "unconfirmed": 0,
-  "errors": 28,
+  "errors": 50,
   "entries": [
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "asyncio",
+      "sourceFqn": "test_script.py",
+      "targetFqn": "sys",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "itertools",
+      "sourceFqn": "test_script.py",
+      "targetFqn": "unittest.mock",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "logging",
+      "sourceFqn": "test_script.py",
+      "targetFqn": "warden.shared.utils.token_utils.truncate_with_ast_hints",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "datetime.datetime",
+      "sourceFqn": "test_script.py",
+      "targetFqn": "warden.shared.utils.token_utils.estimate_tokens",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "sourceFqn": "extensions/warden-ast-java/verify.py",
+      "targetFqn": "sys",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/verify.py",
       "targetFqn": "pathlib.Path",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "typing.Optional",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
       "targetFqn": "typing.Any",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "typing.List",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
       "targetFqn": "structlog",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "typer",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "javalang",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.box",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "javalang.tree.Node",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.console.Console",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.application.provider_interface.IASTProvider",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.console.Group",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.enums.CodeLanguage",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.live.Live",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.enums.ASTProviderPriority",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.padding.Padding",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.enums.ParseStatus",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.rule.Rule",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.enums.ASTNodeType",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.syntax.Syntax",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.models.ASTProviderMetadata",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.table.Table",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.models.ParseResult",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "rich.text.Text",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.models.ParseError",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "warden.cli_bridge.bridge.WardenBridge",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.models.ASTNode",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/fortification/application/auto_fixer.py",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "warden.ast.domain.models.SourceLocation",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/analysis/services/intelligence_loader.py",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/llm/factory.py",
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "IASTProvider",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.metadata",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.supports_language",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.parse",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.validate",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._convert_to_universal_ast",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._map_node_type",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._extract_name",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._extract_location",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._extract_attributes",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+      "targetFqn": "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._count_nodes",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "extensions/warden-ast-java/src/warden_ast_java/__init__.py",
+      "targetFqn": "warden_ast_java.provider.JavaParserProvider",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/cli_bridge/bridge.py",
+      "sourceFqn": "setup.py",
+      "targetFqn": "setuptools.setup",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/cli/commands/helpers/git_helper.py",
+      "sourceFqn": "scripts/generate_grpc.py",
+      "targetFqn": "subprocess",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/reports/generator.py",
+      "sourceFqn": "scripts/generate_grpc.py",
+      "targetFqn": "sys",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/shared/utils/prompt_sanitizer.py",
+      "sourceFqn": "scripts/generate_grpc.py",
+      "targetFqn": "pathlib.Path",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/llm/metrics.py",
+      "sourceFqn": "scripts/generate_api_docs.py",
+      "targetFqn": "ast",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/cli/commands/__init__.py",
+      "sourceFqn": "scripts/generate_api_docs.py",
+      "targetFqn": "os",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/cli/commands/scan.py",
-      "targetFqn": "src/warden/cli/commands/helpers/baseline_manager.py",
+      "sourceFqn": "scripts/generate_api_docs.py",
+      "targetFqn": "pathlib.Path",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py",
+      "targetFqn": "typing.List",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py",
+      "targetFqn": "typing.Dict",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py",
+      "targetFqn": "typing.Any",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py",
+      "targetFqn": "scripts/generate_api_docs.py::DocstringExtractor",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py::DocstringExtractor",
+      "targetFqn": "NodeVisitor",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py::DocstringExtractor",
+      "targetFqn": "scripts/generate_api_docs.py::DocstringExtractor.__init__",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py::DocstringExtractor",
+      "targetFqn": "scripts/generate_api_docs.py::DocstringExtractor.visit_FunctionDef",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "scripts/generate_api_docs.py::DocstringExtractor",
+      "targetFqn": "scripts/generate_api_docs.py::DocstringExtractor.visit_ClassDef",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
     }
   ],
   "deadSymbols": [
-    "src/warden/cli/commands/scan.py::_generate_smart_failure_summary",
-    "src/warden/cli/commands/scan.py::_display_llm_summary",
-    "src/warden/cli/commands/scan.py::_display_frame_cost_breakdown",
-    "src/warden/cli/commands/scan.py::_display_memory_stats",
-    "src/warden/cli/commands/scan.py::scan_command",
-    "src/warden/cli/commands/scan.py::_process_stream_events",
-    "src/warden/cli/commands/scan.py::_render_text_report",
-    "src/warden/cli/commands/scan.py::_generate_configured_reports",
-    "src/warden/cli/commands/scan.py::_write_ai_status_file",
-    "src/warden/cli/commands/scan.py::_update_baseline",
-    "src/warden/cli/commands/scan.py::_run_scan_async"
+    "extensions/warden-ast-java/verify.py::check_file_exists",
+    "extensions/warden-ast-java/verify.py::check_package_structure",
+    "extensions/warden-ast-java/verify.py::check_imports",
+    "extensions/warden-ast-java/verify.py::check_provider_metadata",
+    "extensions/warden-ast-java/verify.py::check_line_counts",
+    "extensions/warden-ast-java/verify.py::check_build_artifacts",
+    "extensions/warden-ast-java/verify.py::main",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.metadata",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.supports_language",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.parse",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider.validate",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._convert_to_universal_ast",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._map_node_type",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._extract_name",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._extract_location",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._extract_attributes",
+    "extensions/warden-ast-java/src/warden_ast_java/provider.py::JavaParserProvider._count_nodes",
+    "scripts/generate_grpc.py::main",
+    "scripts/generate_api_docs.py::DocstringExtractor",
+    "scripts/generate_api_docs.py::DocstringExtractor.__init__",
+    "scripts/generate_api_docs.py::DocstringExtractor.visit_FunctionDef",
+    "scripts/generate_api_docs.py::DocstringExtractor.visit_ClassDef",
+    "scripts/generate_api_docs.py::generate_markdown",
+    "scripts/generate_api_docs.py::generate_docs_for_directory"
   ],
   "lspAvailable": true,
-  "generated_at": "2026-02-21T00:14:43.170358+00:00"
+  "generated_at": "2026-02-21T22:34:49.613551+00:00"
 }

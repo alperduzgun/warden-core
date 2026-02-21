@@ -1,7 +1,10 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-02-21T00:18:02.037944+00:00",
+  "generated_at": "2026-02-21T22:34:44.496012+00:00",
   "forward": {
+    "test_script.py": [
+      "src/warden/shared/utils/token_utils.py"
+    ],
     "extensions/warden-ast-java/src/warden_ast_java/provider.py": [
       "src/warden/ast/application/provider_interface.py",
       "src/warden/ast/domain/enums.py",
@@ -200,6 +203,7 @@
       "src/warden/llm/metrics.py",
       "src/warden/pipeline/domain/models.py",
       "src/warden/pipeline/domain/pipeline_context.py",
+      "src/warden/self_healing/__init__.py",
       "src/warden/shared/infrastructure/error_handler.py",
       "src/warden/shared/infrastructure/ignore_matcher.py",
       "src/warden/shared/infrastructure/logging.py",
@@ -314,6 +318,7 @@
     "src/warden/llm/providers/base.py": [
       "src/warden/shared/infrastructure/exceptions.py",
       "src/warden/shared/utils/json_parser.py",
+      "src/warden/shared/utils/prompt_sanitizer.py",
       "src/warden/shared/utils/token_utils.py"
     ],
     "src/warden/llm/providers/claude_code.py": [
@@ -327,6 +332,9 @@
     ],
     "src/warden/llm/prompts/analysis.py": [
       "src/warden/shared/utils/prompt_sanitizer.py"
+    ],
+    "src/warden/llm/prompts/classification.py": [
+      "src/warden/shared/utils/token_utils.py"
     ],
     "src/warden/llm/prompts/prompt_manager.py": [
       "src/warden/shared/infrastructure/logging.py"
@@ -575,7 +583,8 @@
       "src/warden/analysis/domain/file_context.py",
       "src/warden/analysis/domain/quality_metrics.py",
       "src/warden/shared/infrastructure/logging.py",
-      "src/warden/shared/utils/language_utils.py"
+      "src/warden/shared/utils/language_utils.py",
+      "src/warden/shared/utils/token_utils.py"
     ],
     "src/warden/analysis/application/service_abstraction_detector.py": [
       "src/warden/analysis/domain/project_context.py",
@@ -677,6 +686,79 @@
       "src/warden/analysis/domain/code_graph.py",
       "src/warden/ast/domain/enums.py",
       "src/warden/ast/domain/models.py"
+    ],
+    "src/warden/analysis/services/symbol_context_formatter.py": [
+      "src/warden/analysis/domain/code_graph.py"
+    ],
+    "src/warden/self_healing/metrics.py": [
+      "src/warden/self_healing/models.py"
+    ],
+    "src/warden/self_healing/classifier.py": [
+      "src/warden/self_healing/models.py"
+    ],
+    "src/warden/self_healing/registry.py": [
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/strategies/base.py"
+    ],
+    "src/warden/self_healing/strategies/config_healer.py": [
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/base.py",
+      "src/warden/shared/infrastructure/logging.py"
+    ],
+    "src/warden/self_healing/strategies/provider_healer.py": [
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/base.py"
+    ],
+    "src/warden/self_healing/strategies/llm_healer.py": [
+      "src/warden/llm/factory.py",
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/base.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/shared/infrastructure/logging.py"
+    ],
+    "src/warden/self_healing/strategies/import_healer.py": [
+      "src/warden/llm/factory.py",
+      "src/warden/self_healing/classifier.py",
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/base.py",
+      "src/warden/services/dependencies/dependency_manager.py",
+      "src/warden/shared/infrastructure/logging.py"
+    ],
+    "src/warden/self_healing/strategies/model_healer.py": [
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/base.py",
+      "src/warden/shared/infrastructure/logging.py"
+    ],
+    "src/warden/self_healing/strategies/base.py": [
+      "src/warden/self_healing/models.py"
+    ],
+    "src/warden/self_healing/cache.py": [
+      "src/warden/self_healing/models.py",
+      "src/warden/shared/infrastructure/logging.py"
+    ],
+    "src/warden/self_healing/__init__.py": [
+      "src/warden/self_healing/classifier.py",
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/orchestrator.py",
+      "src/warden/self_healing/registry.py"
+    ],
+    "src/warden/self_healing/orchestrator.py": [
+      "src/warden/self_healing/cache.py",
+      "src/warden/self_healing/classifier.py",
+      "src/warden/self_healing/metrics.py",
+      "src/warden/self_healing/models.py",
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/config_healer.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/self_healing/strategies/llm_healer.py",
+      "src/warden/self_healing/strategies/model_healer.py",
+      "src/warden/self_healing/strategies/provider_healer.py",
+      "src/warden/shared/infrastructure/logging.py"
     ],
     "src/warden/memory/application/memory_manager.py": [
       "src/warden/memory/domain/models.py"
@@ -1115,6 +1197,9 @@
     "src/warden/shared/utils/quality_calculator.py": [
       "src/warden/shared/utils/finding_utils.py"
     ],
+    "src/warden/shared/utils/token_utils.py": [
+      "src/warden/shared/infrastructure/logging.py"
+    ],
     "src/warden/shared/utils/hasher.py": [
       "src/warden/ast/domain/enums.py"
     ],
@@ -1220,6 +1305,8 @@
       "src/warden/llm/factory.py",
       "src/warden/llm/metrics.py",
       "src/warden/reports/generator.py",
+      "src/warden/self_healing/__init__.py",
+      "src/warden/services/dependencies/auto_resolver.py",
       "src/warden/shared/utils/prompt_sanitizer.py"
     ],
     "src/warden/cli/commands/search.py": [
@@ -1443,13 +1530,17 @@
       "src/warden/semantic_search/models.py"
     ],
     "src/warden/semantic_search/embeddings.py": [
-      "src/warden/semantic_search/models.py"
+      "src/warden/semantic_search/models.py",
+      "src/warden/services/dependencies/auto_resolver.py"
     ],
     "src/warden/semantic_search/indexer.py": [
       "src/warden/semantic_search/adapters.py",
       "src/warden/semantic_search/chunker.py",
       "src/warden/semantic_search/embeddings.py",
       "src/warden/semantic_search/models.py"
+    ],
+    "src/warden/semantic_search/adapters.py": [
+      "src/warden/services/dependencies/auto_resolver.py"
     ],
     "src/warden/main.py": [
       "src/warden/cli/commands/audit_context.py",
@@ -1633,6 +1724,16 @@
     "src/warden/services/dependencies/dependency_manager.py": [
       "src/warden/shared/infrastructure/logging.py"
     ],
+    "src/warden/services/dependencies/auto_resolver.py": [
+      "src/warden/self_healing/__init__.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/services/dependencies/dependency_manager.py",
+      "src/warden/shared/infrastructure/logging.py"
+    ],
+    "src/warden/services/dependencies/self_healing.py": [
+      "src/warden/self_healing/__init__.py",
+      "src/warden/self_healing/strategies/import_healer.py"
+    ],
     "src/warden/services/ci_manager/template_operations.py": [
       "src/warden/shared/infrastructure/logging.py"
     ],
@@ -1764,6 +1865,7 @@
       "src/warden/validation/frames/security/security_frame.py"
     ],
     "src/warden/validation/frames/security/frame.py": [
+      "src/warden/analysis/services/symbol_context_formatter.py",
       "src/warden/pipeline/application/orchestrator/result_aggregator.py",
       "src/warden/pipeline/domain/pipeline_context.py",
       "src/warden/shared/infrastructure/logging.py",
@@ -2092,6 +2194,15 @@
     ]
   },
   "reverse": {
+    "src/warden/shared/utils/token_utils.py": [
+      "src/warden/analysis/application/llm_analysis_phase.py",
+      "src/warden/llm/prompts/classification.py",
+      "src/warden/llm/providers/base.py",
+      "src/warden/llm/providers/openai.py",
+      "src/warden/validation/frames/resilience/resilience_frame.py",
+      "src/warden/validation/frames/security/frame.py",
+      "test_script.py"
+    ],
     "src/warden/ast/application/provider_interface.py": [
       "extensions/warden-ast-java/src/warden_ast_java/provider.py",
       "src/warden/ast/application/__init__.py",
@@ -2324,10 +2435,17 @@
       "src/warden/pipeline/application/orchestrator/rust_pre_filter.py",
       "src/warden/pipeline/application/orchestrator/suppression_filter.py",
       "src/warden/reports/generator.py",
+      "src/warden/self_healing/cache.py",
+      "src/warden/self_healing/orchestrator.py",
+      "src/warden/self_healing/strategies/config_healer.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/self_healing/strategies/llm_healer.py",
+      "src/warden/self_healing/strategies/model_healer.py",
       "src/warden/services/ci_manager/file_operations.py",
       "src/warden/services/ci_manager/manager.py",
       "src/warden/services/ci_manager/provider_detection.py",
       "src/warden/services/ci_manager/template_operations.py",
+      "src/warden/services/dependencies/auto_resolver.py",
       "src/warden/services/dependencies/dependency_manager.py",
       "src/warden/services/package_manager/doctor.py",
       "src/warden/services/package_manager/fetcher.py",
@@ -2341,6 +2459,7 @@
       "src/warden/shared/infrastructure/resilience/timeout.py",
       "src/warden/shared/services/__init__.py",
       "src/warden/shared/utils/json_parser.py",
+      "src/warden/shared/utils/token_utils.py",
       "src/warden/validation/application/alpha_judgment.py",
       "src/warden/validation/domain/check.py",
       "src/warden/validation/domain/frame.py",
@@ -2759,6 +2878,8 @@
       "src/warden/pipeline/application/orchestrator/findings_post_processor.py",
       "src/warden/pipeline/application/orchestrator/pipeline_phase_runner.py",
       "src/warden/pipeline/domain/models.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/self_healing/strategies/llm_healer.py",
       "src/warden/shared/services/__init__.py",
       "src/warden/validation/frames/orphan/llm_orphan_filter.py"
     ],
@@ -2766,6 +2887,12 @@
       "src/warden/cli/commands/scan.py",
       "src/warden/llm/providers/orchestrated.py",
       "src/warden/pipeline/application/orchestrator/frame_runner.py"
+    ],
+    "src/warden/self_healing/__init__.py": [
+      "src/warden/cli/commands/scan.py",
+      "src/warden/pipeline/application/orchestrator/frame_runner.py",
+      "src/warden/services/dependencies/auto_resolver.py",
+      "src/warden/services/dependencies/self_healing.py"
     ],
     "src/warden/shared/infrastructure/ignore_matcher.py": [
       "src/warden/analysis/application/analysis_phase.py",
@@ -2911,15 +3038,10 @@
       "src/warden/llm/providers/ollama.py",
       "src/warden/llm/providers/openai.py"
     ],
-    "src/warden/shared/utils/token_utils.py": [
-      "src/warden/llm/providers/base.py",
-      "src/warden/llm/providers/openai.py",
-      "src/warden/validation/frames/resilience/resilience_frame.py",
-      "src/warden/validation/frames/security/frame.py"
-    ],
     "src/warden/shared/utils/prompt_sanitizer.py": [
       "src/warden/cli/commands/scan.py",
-      "src/warden/llm/prompts/analysis.py"
+      "src/warden/llm/prompts/analysis.py",
+      "src/warden/llm/providers/base.py"
     ],
     "src/warden/cli_bridge/protocol.py": [
       "src/warden/cli_bridge/__init__.py",
@@ -3003,7 +3125,9 @@
       "src/warden/cli_bridge/handlers/tool_handler.py"
     ],
     "src/warden/services/dependencies/dependency_manager.py": [
-      "src/warden/cli_bridge/handlers/pipeline_handler.py"
+      "src/warden/cli_bridge/handlers/pipeline_handler.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/services/dependencies/auto_resolver.py"
     ],
     "src/warden/rules/infrastructure/yaml_loader.py": [
       "src/warden/cli_bridge/handlers/config_handler.py",
@@ -3198,6 +3322,7 @@
       "src/warden/analysis/services/gap_analyzer.py",
       "src/warden/analysis/services/graph_query_service.py",
       "src/warden/analysis/services/intelligence_saver.py",
+      "src/warden/analysis/services/symbol_context_formatter.py",
       "src/warden/lsp/audit_service.py",
       "src/warden/mcp/infrastructure/adapters/audit_adapter.py",
       "src/warden/validation/frames/architecture/architecture_frame.py"
@@ -3221,6 +3346,69 @@
       "src/warden/validation/frames/security/frame.py",
       "src/warden/validation/frames/spec/spec_frame.py",
       "src/warden/validation/infrastructure/frame_metadata.py"
+    ],
+    "src/warden/self_healing/models.py": [
+      "src/warden/self_healing/__init__.py",
+      "src/warden/self_healing/cache.py",
+      "src/warden/self_healing/classifier.py",
+      "src/warden/self_healing/metrics.py",
+      "src/warden/self_healing/orchestrator.py",
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/base.py",
+      "src/warden/self_healing/strategies/config_healer.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/self_healing/strategies/llm_healer.py",
+      "src/warden/self_healing/strategies/model_healer.py",
+      "src/warden/self_healing/strategies/provider_healer.py"
+    ],
+    "src/warden/self_healing/strategies/base.py": [
+      "src/warden/self_healing/registry.py",
+      "src/warden/self_healing/strategies/config_healer.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/self_healing/strategies/llm_healer.py",
+      "src/warden/self_healing/strategies/model_healer.py",
+      "src/warden/self_healing/strategies/provider_healer.py"
+    ],
+    "src/warden/self_healing/registry.py": [
+      "src/warden/self_healing/__init__.py",
+      "src/warden/self_healing/orchestrator.py",
+      "src/warden/self_healing/strategies/config_healer.py",
+      "src/warden/self_healing/strategies/import_healer.py",
+      "src/warden/self_healing/strategies/llm_healer.py",
+      "src/warden/self_healing/strategies/model_healer.py",
+      "src/warden/self_healing/strategies/provider_healer.py"
+    ],
+    "src/warden/self_healing/strategies/import_healer.py": [
+      "src/warden/self_healing/orchestrator.py",
+      "src/warden/self_healing/strategies/llm_healer.py",
+      "src/warden/services/dependencies/auto_resolver.py",
+      "src/warden/services/dependencies/self_healing.py"
+    ],
+    "src/warden/self_healing/classifier.py": [
+      "src/warden/self_healing/__init__.py",
+      "src/warden/self_healing/orchestrator.py",
+      "src/warden/self_healing/strategies/import_healer.py"
+    ],
+    "src/warden/self_healing/orchestrator.py": [
+      "src/warden/self_healing/__init__.py"
+    ],
+    "src/warden/self_healing/cache.py": [
+      "src/warden/self_healing/orchestrator.py"
+    ],
+    "src/warden/self_healing/metrics.py": [
+      "src/warden/self_healing/orchestrator.py"
+    ],
+    "src/warden/self_healing/strategies/config_healer.py": [
+      "src/warden/self_healing/orchestrator.py"
+    ],
+    "src/warden/self_healing/strategies/llm_healer.py": [
+      "src/warden/self_healing/orchestrator.py"
+    ],
+    "src/warden/self_healing/strategies/model_healer.py": [
+      "src/warden/self_healing/orchestrator.py"
+    ],
+    "src/warden/self_healing/strategies/provider_healer.py": [
+      "src/warden/self_healing/orchestrator.py"
     ],
     "src/warden/memory/domain/models.py": [
       "src/warden/memory/application/memory_manager.py"
@@ -3678,6 +3866,11 @@
     "src/warden/reports/generator.py": [
       "src/warden/cli/commands/scan.py"
     ],
+    "src/warden/services/dependencies/auto_resolver.py": [
+      "src/warden/cli/commands/scan.py",
+      "src/warden/semantic_search/adapters.py",
+      "src/warden/semantic_search/embeddings.py"
+    ],
     "src/warden/services/package_manager/fetcher.py": [
       "src/warden/cli/commands/install.py",
       "src/warden/services/package_manager/doctor.py"
@@ -3956,6 +4149,9 @@
     "src/warden/validation/frames/security/security_frame.py": [
       "src/warden/validation/frames/security/__init__.py"
     ],
+    "src/warden/analysis/services/symbol_context_formatter.py": [
+      "src/warden/validation/frames/security/frame.py"
+    ],
     "src/warden/validation/infrastructure/check_loader.py": [
       "src/warden/validation/frames/security/frame.py",
       "src/warden/validation/infrastructure/__init__.py"
@@ -4117,8 +4313,8 @@
   },
   "orphan_files": [],
   "stats": {
-    "total_files": 442,
-    "total_edges": 1336,
+    "total_files": 460,
+    "total_edges": 1400,
     "orphan_count": 0
   },
   "integrity": {

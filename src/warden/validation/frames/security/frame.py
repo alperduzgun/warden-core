@@ -24,6 +24,7 @@ from warden.validation.domain.frame import (
     CodeFile,
     Finding,
     FrameResult,
+    MachineContext,
     ValidationFrame,
 )
 from warden.validation.domain.mixins import BatchExecutable, TaintAware
@@ -251,6 +252,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                 logger.debug("data_flow_analysis_failed", error=str(e))
 
         # STEP 4: AI-Powered Security Verification
+        _llm_mc_map: list[dict | None] = []
         if hasattr(self, "llm_service") and self.llm_service:
             try:
                 logger.info("executing_llm_security_check", file=code_file.path)
@@ -278,7 +280,29 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         sinks_str = ", ".join(pi.critical_sinks[:5])
                         semantic_context += f"Critical Sinks: {sinks_str}\n"
 
+                    # Framework detection (reduces FPs for framework-managed patterns)
+                    if hasattr(pi, "detected_frameworks") and pi.detected_frameworks:
+                        fw_str = ", ".join(pi.detected_frameworks[:3])
+                        semantic_context += f"Framework: {fw_str}\n"
+
                     logger.debug("project_intelligence_added_to_prompt", file=code_file.path)
+
+                # 1b. File dependency context (import graph)
+                if context and hasattr(context, "dependency_graph_forward"):
+                    rel_path = code_file.path
+                    try:
+                        from pathlib import Path as _P  # noqa: PLC0415
+
+                        if context.project_root:
+                            rel_path = str(_P(code_file.path).resolve().relative_to(context.project_root))
+                    except (ValueError, TypeError):
+                        pass
+                    deps = context.dependency_graph_forward.get(rel_path, [])
+                    dependents = context.dependency_graph_reverse.get(rel_path, [])
+                    if deps:
+                        semantic_context += f"Depends on: {', '.join(deps[:5])}\n"
+                    if dependents:
+                        semantic_context += f"Depended by: {', '.join(dependents[:5])}\n"
 
                 # 2. Prior Findings Context (cross-frame awareness) - BATCH 2: Sanitized
                 if hasattr(self, "prior_findings") and self.prior_findings:
@@ -370,8 +394,15 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                     if unsanitized:
                         semantic_context += "\n\n[Taint Analysis - Source-to-Sink Paths (HIGH RISK)]:\n"
                         for tp in unsanitized[:5]:
+                            transforms = getattr(tp, "transformations", [])
+                            transform_str = (
+                                f" via [{' -> '.join(transforms[:3])}]"
+                                if transforms
+                                else ""
+                            )
                             semantic_context += (
                                 f"  - SOURCE: {tp.source.name} (line {tp.source.line})"
+                                f"{transform_str}"
                                 f" -> SINK: {tp.sink.name} [{tp.sink_type}] (line {tp.sink.line})"
                                 f" confidence={tp.confidence:.2f}\n"
                             )
@@ -379,9 +410,12 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                     if sanitized:
                         semantic_context += "\n[Taint Analysis - Sanitized Paths (lower risk)]:\n"
                         for tp in sanitized[:3]:
+                            sanitizer_list = (
+                                list(tp.sanitizers) if tp.sanitizers else ["unknown"]
+                            )
                             semantic_context += (
                                 f"  - {tp.source.name} -> {tp.sink.name}"
-                                f" (sanitized by: {', '.join(tp.sanitizers)})\n"
+                                f" (sanitized by: {', '.join(sanitizer_list)})\n"
                             )
                     logger.debug(
                         "taint_context_added_to_llm",
@@ -389,31 +423,76 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         sanitized=len(sanitized),
                     )
 
+                # Code graph symbol context (class/function signatures)
+                if context and hasattr(context, "code_graph") and context.code_graph:
+                    try:
+                        from warden.analysis.services.symbol_context_formatter import (  # noqa: PLC0415
+                            format_file_symbols_for_prompt,
+                        )
+
+                        symbol_ctx = format_file_symbols_for_prompt(
+                            context.code_graph, code_file.path
+                        )
+                        if symbol_ctx:
+                            semantic_context += f"\n{symbol_ctx}"
+                    except Exception as e:
+                        logger.debug("symbol_context_failed", error=str(e))
+
                 # Determine tier from metadata (Adaptive Hybrid Triage)
                 use_fast_tier = False
                 if code_file.metadata and code_file.metadata.get("triage_lane") == "middle_lane":
                     use_fast_tier = True
                     logger.debug("using_fast_tier_for_security_analysis", file=code_file.path)
 
-                # BATCH 2: Token truncation to prevent context overflow
-                from warden.shared.utils.token_utils import truncate_content_for_llm
+                # BATCH 2: Token truncation with separate budgets + AST hints
+                from warden.shared.utils.token_utils import (
+                    truncate_content_for_llm,
+                    truncate_with_ast_hints,
+                )
 
-                # Combine code + context, then truncate
-                full_context = code_file.content + "\n\n" + semantic_context
+                # Extract dangerous line numbers from AST for smart truncation
+                dangerous_lines: list[int] = []
+                if ast_context:
+                    for call in ast_context.get("dangerous_calls", []):
+                        if isinstance(call, dict) and "line" in call:
+                            dangerous_lines.append(call["line"])
+                    for query in ast_context.get("sql_queries", []):
+                        if isinstance(query, dict) and "line" in query:
+                            dangerous_lines.append(query["line"])
+                    for src in ast_context.get("input_sources", []):
+                        if isinstance(src, dict) and "line" in src:
+                            dangerous_lines.append(src["line"])
 
-                # Apply token-aware truncation (preserves structure)
-                truncated_context = truncate_content_for_llm(
-                    full_context,
-                    max_tokens=3000,  # Safe limit for most LLMs
+                # Add taint source/sink lines
+                if taint_paths:
+                    for tp in taint_paths:
+                        if hasattr(tp, "source") and hasattr(tp.source, "line"):
+                            dangerous_lines.append(tp.source.line)
+                        if hasattr(tp, "sink") and hasattr(tp.sink, "line"):
+                            dangerous_lines.append(tp.sink.line)
+
+                # Code gets 80% budget — use AST-aware truncation when hints available
+                truncated_code = truncate_with_ast_hints(
+                    code_file.content,
+                    max_tokens=2400,
+                    dangerous_lines=dangerous_lines or None,
                     preserve_start_lines=50,
                     preserve_end_lines=20,
                 )
+                truncated_semantic = truncate_content_for_llm(
+                    semantic_context,
+                    max_tokens=600,
+                    preserve_start_lines=30,
+                    preserve_end_lines=10,
+                )
+                truncated_context = truncated_code + "\n\n" + truncated_semantic
 
-                if len(truncated_context) < len(full_context):
+                original_length = len(code_file.content) + len(semantic_context)
+                if len(truncated_context) < original_length:
                     logger.debug(
                         "llm_prompt_truncated",
                         file=code_file.path,
-                        original_length=len(full_context),
+                        original_length=original_length,
                         truncated_length=len(truncated_context),
                     )
 
@@ -445,6 +524,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                             location=f"{code_file.path}:{f.get('line_number', 1)}",
                             suggestion=f.get("detail", "AI identified a potential vulnerability."),
                             code_snippet=None,
+                            machine_context_raw=f.get("_machine_context"),
                         )
                         llm_findings.append(ai_finding)
 
@@ -467,6 +547,16 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                 check_results.append(taint_result)
 
         all_findings = self._aggregate_findings(check_results)
+
+        # Post-aggregation: enrich findings with taint paths (Source-to-Sink tracking)
+        if taint_paths:
+            for finding in all_findings:
+                if finding.location:
+                    self._enrich_finding_with_taint(finding, taint_paths)
+            
+            enriched = sum(1 for f in all_findings if f.machine_context is not None)
+            if enriched:
+                logger.info("machine_context_populated", count=enriched, total=len(all_findings))
 
         # Determine frame status
         status = self._determine_status(all_findings)
@@ -568,6 +658,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         logger.error("batch_check_failed", check=check.name, file=code_file.path, error=str(e))
 
                 # Taint analysis (prefer shared, fallback to inline)
+                file_taint_paths: list = []
                 if code_file.language in _TAINT_SUPPORTED_LANGUAGES:
                     file_taint_paths = []
                     if self._taint_paths and code_file.path in self._taint_paths:
@@ -594,8 +685,12 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
 
                 check_results_map[code_file.path] = check_results
 
-                # Convert to findings
+                # Convert to findings (pass taint context for MachineContext enrichment)
                 all_findings = self._aggregate_findings(check_results)
+                if file_taint_paths:
+                    for f in all_findings:
+                        if f.location:
+                            self._enrich_finding_with_taint(f, file_taint_paths)
                 findings_map[code_file.path] = all_findings
             except Exception as e:
                 logger.error("batch_file_failed", file=code_file.path, error=str(e))
@@ -605,7 +700,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
 
         # PHASE 2: Batch LLM Verification (if LLM available)
         if hasattr(self, "llm_service") and self.llm_service:
-            findings_map = await batch_verify_security_findings(findings_map, code_files, self.llm_service)
+            batch_ctx = self._build_batch_context()
+            findings_map = await batch_verify_security_findings(
+                findings_map, code_files, self.llm_service, semantic_context=batch_ctx
+            )
 
         # PHASE 3: Build Results
         results = []
@@ -642,6 +740,19 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
         )
 
         return results
+
+    def _build_batch_context(self) -> str:
+        """Build compact project-level context for batch LLM verification."""
+        parts: list[str] = []
+        if hasattr(self, "project_intelligence") and self.project_intelligence:
+            pi = self.project_intelligence
+            if hasattr(pi, "detected_frameworks") and pi.detected_frameworks:
+                parts.append(f"Framework: {', '.join(pi.detected_frameworks[:3])}")
+            if hasattr(pi, "entry_points") and pi.entry_points:
+                parts.append(f"Entry points: {', '.join(pi.entry_points[:3])}")
+            if hasattr(pi, "auth_patterns") and pi.auth_patterns:
+                parts.append(f"Auth: {', '.join(pi.auth_patterns[:2])}")
+        return "\n".join(parts)
 
     def _convert_taint_paths_to_findings(self, taint_paths: list, file_path: str) -> CheckResult | None:
         """Convert unsanitized taint paths to a CheckResult with findings.
@@ -687,7 +798,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
             findings=taint_findings,
         )
 
-    def _aggregate_findings(self, check_results: list[CheckResult]) -> list[Finding]:
+    def _aggregate_findings(
+        self,
+        check_results: list[CheckResult]
+    ) -> list[Finding]:
         """
         Aggregate findings from all check results.
 
@@ -711,9 +825,60 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                     code=check_finding.code_snippet,
                     is_blocker=check_finding.is_blocker,
                 )
+
+                # Populate explicitly tagged LLM context instances on creation
+                if getattr(check_finding, "machine_context_raw", None):
+                    mc_data = getattr(check_finding, "machine_context_raw")
+                    finding.machine_context = MachineContext(
+                        vulnerability_class=finding.id.split("-")[1] if "-" in finding.id else "unknown",
+                        source=mc_data.get("source"),
+                        sink=mc_data.get("sink"),
+                        data_flow_path=mc_data.get("data_flow_path", []),
+                    )
+
                 findings.append(finding)
 
         return findings
+
+    @staticmethod
+    def _enrich_finding_with_taint(finding: Finding, taint_paths: list) -> None:
+        """Populate finding.machine_context from matching taint paths."""
+        # Extract line number from finding location ("file.py:45" -> 45)
+        line_num = finding.line
+        if not line_num and ":" in finding.location:
+            try:
+                line_num = int(finding.location.rsplit(":", 1)[-1])
+            except (ValueError, IndexError):
+                return
+
+        if not line_num:
+            return
+
+        # Find taint paths that cover this line (source or sink on/near this line)
+        for tp in taint_paths:
+            if not hasattr(tp, "source") or not hasattr(tp, "sink"):
+                continue
+            # Match if finding line is near source or sink (within 3 lines)
+            source_match = abs(tp.source.line - line_num) <= 3
+            sink_match = abs(tp.sink.line - line_num) <= 3
+            if source_match or sink_match:
+                vuln_class = "unknown"
+                finding_id = finding.id
+                if "-" in finding_id:
+                    parts = finding_id.split("-")
+                    # e.g. "security-sql-injection-0" -> "sql-injection"
+                    if len(parts) >= 3:
+                        vuln_class = "-".join(parts[1:-1])
+
+                finding.machine_context = MachineContext(
+                    vulnerability_class=vuln_class,
+                    source=f"{tp.source.name} (line {tp.source.line})",
+                    sink=f"{tp.sink.name} (line {tp.sink.line})",
+                    sink_type=tp.sink.sink_type if hasattr(tp.sink, "sink_type") else None,
+                    data_flow_path=[tp.source.name] + getattr(tp, "transformations", []) + [tp.sink.name],
+                    sanitizers_applied=list(tp.sanitizers) if tp.sanitizers else [],
+                )
+                break  # Use first matching taint path
 
     def _determine_status(self, findings: list[Finding]) -> str:
         """

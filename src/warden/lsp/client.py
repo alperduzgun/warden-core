@@ -134,7 +134,7 @@ class LanguageServerClient:
         self._pending_requests[req_id] = future
 
         # Heavier operations (references) get longer timeout
-        timeout = 60.0 if "references" in method else 30.0
+        timeout = 15.0 if "references" in method else 10.0
 
         try:
             await self._write_message_async(request)
@@ -501,8 +501,8 @@ class LanguageServerClient:
         # Notification or Request from Server
         elif "method" in msg:
             if "id" in msg:
-                # Server Request (e.g. workspace/configuration) - Not responding yet
-                logger.debug("lsp_server_request_ignored", method=msg["method"])
+                # Server Request — MUST respond per LSP spec to avoid blocking pyright
+                self._respond_to_server_request(msg)
             else:
                 # Notification
                 handlers = self._notification_handlers.get(msg["method"], [])
@@ -511,3 +511,26 @@ class LanguageServerClient:
                         handler(msg.get("params"))
                     except Exception as e:
                         logger.error("lsp_notification_handler_error", error=str(e))
+
+    def _respond_to_server_request(self, msg: dict[str, Any]) -> None:
+        """Respond to server-initiated requests (LSP spec requires a response for every request with an id)."""
+        req_id = msg["id"]
+        method = msg["method"]
+
+        if method == "workspace/configuration":
+            # Return empty config object for each requested scope
+            items = msg.get("params", {}).get("items", [{}])
+            result: Any = [{} for _ in items]
+        elif method in ("client/registerCapability", "window/workDoneProgress/create"):
+            result = None
+        else:
+            logger.debug("lsp_server_request_unknown", method=method)
+            result = None
+
+        response = {"jsonrpc": "2.0", "id": req_id, "result": result}
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._write_message_async(response))
+        except RuntimeError:
+            # No running loop (shouldn't happen in normal flow)
+            logger.debug("lsp_server_response_no_loop", method=method)

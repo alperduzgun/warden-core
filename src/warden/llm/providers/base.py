@@ -141,11 +141,15 @@ class ILlmClient(ABC):
                     "severity": "critical|high|medium",
                     "message": "Short description",
                     "line_number": 1,
-                    "detail": "Detailed explanation of the exploit vector"
+                    "detail": "Detailed explanation of the exploit vector",
+                    "source": "Where tainted data enters, e.g. request.args['id'] (line 14)",
+                    "sink": "Where tainted data is consumed unsafely, e.g. cursor.execute() (line 45)",
+                    "data_flow": ["function_or_variable_names", "showing", "the path"]
                 }}
             ]
         }}
 
+        The source, sink, and data_flow fields are optional but highly valuable for triage.
         If no issues found, return {{ "findings": [] }}.
 
         Code:
@@ -164,7 +168,46 @@ class ILlmClient(ABC):
                 return {"findings": []}
 
             parsed = parse_json_from_llm(response.content)
-            return parsed or {"findings": []}
+            if not parsed:
+                return {"findings": []}
+
+            # Enrich findings with MachineContext from structured LLM output
+            self._enrich_findings_from_llm(parsed)
+            return parsed
         except (json.JSONDecodeError, ValueError, KeyError):
             # Log but don't crash - return safe default
             return {"findings": []}
+
+    @staticmethod
+    def _enrich_findings_from_llm(parsed: dict) -> None:
+        """Attach machine_context to parsed findings when source/sink/data_flow present."""
+        import html
+        from warden.shared.utils.prompt_sanitizer import PromptSanitizer
+
+        for item in parsed.get("findings", []):
+            has_structured = item.get("source") or item.get("sink") or item.get("data_flow")
+            if not has_structured:
+                continue
+            # Validate types before assignment (LLM output is untrusted)
+            source = item.get("source")
+            sink = item.get("sink")
+            data_flow = item.get("data_flow")
+            if source and not isinstance(source, str):
+                source = str(source)
+            if source:
+                source = html.escape(PromptSanitizer.escape_prompt_injection(source))
+
+            if sink and not isinstance(sink, str):
+                sink = str(sink)
+            if sink:
+                sink = html.escape(PromptSanitizer.escape_prompt_injection(sink))
+                
+            if data_flow and not isinstance(data_flow, list):
+                data_flow = []
+            else:
+                data_flow = [html.escape(PromptSanitizer.escape_prompt_injection(str(x))) for x in (data_flow or [])]
+            item["_machine_context"] = {
+                "source": source,
+                "sink": sink,
+                "data_flow_path": data_flow,
+            }

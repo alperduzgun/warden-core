@@ -13,6 +13,7 @@ Design Principles:
 
 import asyncio
 import json
+import os
 import shutil
 import time
 
@@ -89,10 +90,19 @@ class ClaudeCodeClient(ILlmClient):
         if prompt_length > MAX_PROMPT_LENGTH:
             return self._error_response(f"Prompt too large: {prompt_length} > {MAX_PROMPT_LENGTH}", model, 0)
 
-        # Build prompt
+        # Build prompt with explicit no-tool instruction
+        # The --disallowedTools flag can be overridden by project config,
+        # so we also instruct the model directly to respond with text only.
+        no_tool_prefix = (
+            "IMPORTANT: Respond with text only. Do NOT use any tools "
+            "(no Bash, Read, Write, Edit, Glob, Grep, or any other tool calls). "
+            "Provide your analysis as plain text.\n\n"
+        )
         full_prompt = request.user_message
         if request.system_prompt:
-            full_prompt = f"{request.system_prompt}\n\n{request.user_message}"
+            full_prompt = f"{request.system_prompt}\n\n{no_tool_prefix}{request.user_message}"
+        else:
+            full_prompt = f"{no_tool_prefix}{request.user_message}"
 
         timeout = max(request.timeout_seconds or 0, self._timeout)
         response = await self._execute_cli(full_prompt, model, timeout)
@@ -113,8 +123,21 @@ class ClaudeCodeClient(ILlmClient):
 
         return response
 
+    @staticmethod
+    def _is_nested_session() -> bool:
+        """Detect if running inside another Claude Code session."""
+        return bool(os.environ.get("CLAUDE_CODE_ENTRYPOINT") or os.environ.get("CLAUDECODE"))
+
     async def _execute_cli(self, prompt: str, model: str, timeout: int) -> LlmResponse:
         """Execute a single CLI call and return the response."""
+        if self._is_nested_session():
+            return self._error_response(
+                "Nested Claude Code session detected — cannot spawn subprocess. "
+                "Use a different provider (ollama/openai) or run outside Claude Code.",
+                model,
+                0,
+            )
+
         start_time = time.perf_counter()
         try:
             process = await asyncio.create_subprocess_exec(  # warden-ignore
@@ -123,9 +146,9 @@ class ClaudeCodeClient(ILlmClient):
                 "--output-format",
                 "json",
                 "--max-turns",
-                "1",
-                "--tools",
-                "",
+                "2",
+                "--disallowedTools",
+                "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Task",
                 "-p",
                 prompt,
                 stdout=asyncio.subprocess.PIPE,
@@ -168,7 +191,7 @@ class ClaudeCodeClient(ILlmClient):
 
         try:
             result = json.loads(output)
-            
+
             # Check if Claude returned an explicit error object
             is_error = result.get("is_error", False) if isinstance(result, dict) else False
             if is_error or (isinstance(result, dict) and result.get("type") == "error"):
@@ -259,7 +282,11 @@ class ClaudeCodeClient(ILlmClient):
         return int((time.perf_counter() - start_time) * 1000)
 
     async def is_available_async(self) -> bool:
-        """Check if Claude Code CLI is installed."""
+        """Check if Claude Code CLI is installed and usable."""
+        if self._is_nested_session():
+            logger.debug("claude_code_unavailable_nested_session")
+            return False
+
         if not shutil.which("claude"):
             return False
 

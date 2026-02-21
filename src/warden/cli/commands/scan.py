@@ -11,6 +11,7 @@ from rich import box as rbox
 from rich.console import Console, Group
 from rich.live import Live
 from rich.padding import Padding
+from rich.panel import Panel
 from rich.rule import Rule
 from rich.syntax import Syntax
 from rich.table import Table
@@ -231,6 +232,66 @@ def _display_memory_stats(snapshot) -> None:
             console.print(f"  - {stat.traceback.format()[0]}: {stat.size / 1024 / 1024:.2f} MB")
 
 
+def _attempt_self_healing_sync(error: Exception, level: str) -> bool:
+    """
+    Attempt LLM-powered self-healing for a scan error.
+
+    Returns True if the error was fixed and the scan should be retried.
+    """
+    try:
+        from warden.self_healing import SelfHealingOrchestrator
+
+        diagnostic = SelfHealingOrchestrator()
+        context = f"warden scan --level {level}"
+
+        console.print("\n[bold blue]🔧 Self-Healing: Analyzing error...[/bold blue]")
+
+        result = asyncio.run(diagnostic.diagnose_and_fix(error, context=context))
+
+        if result.fixed:
+            console.print(f"[green]✓ Self-healed: {result.diagnosis}[/green]")
+            if result.packages_installed:
+                console.print(f"[dim]  Installed: {', '.join(result.packages_installed)}[/dim]")
+            if getattr(result, "models_pulled", None):
+                console.print(f"[dim]  Pulled models: {', '.join(result.models_pulled)}[/dim]")
+            console.print("[dim]  Retrying scan...[/dim]\n")
+            return True
+
+        # Not fixed — show diagnosis
+        if result.diagnosis:
+            console.print(f"[yellow]Diagnosis:[/yellow] {result.diagnosis}")
+        if result.suggested_action:
+            console.print(f"[yellow]💡 Suggested:[/yellow] {result.suggested_action}")
+
+        return False
+
+    except Exception:
+        # Self-healing itself failed — fall through to original error handling
+        return False
+
+
+def _ensure_scan_dependencies(level: str) -> None:
+    """Auto-install missing packages needed for the given scan level."""
+    try:
+        from warden.services.dependencies.auto_resolver import ensure_dependencies
+
+        needed: list[str] = []
+        if level in ("standard", "deep"):
+            needed.append("tiktoken")
+
+        if not needed:
+            return
+
+        still_missing = ensure_dependencies(needed, context=f"scan --level {level}")
+        if still_missing:
+            console.print(
+                f"[yellow]Optional dependencies unavailable: {', '.join(still_missing)}. "
+                f"Scan will use fallback heuristics.[/yellow]"
+            )
+    except Exception:
+        pass  # Dependency check is best-effort, never block the scan
+
+
 def scan_command(
     paths: list[str] | None = typer.Argument(None, help="Files or directories to scan"),
     frames: list[str] | None = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
@@ -273,7 +334,7 @@ def scan_command(
 
     # Structlog processor-level filter — drop events below threshold.
     # Named sentinel class so the idempotency check is reliable.
-    class _CliLevelFilter:  # noqa: E306 — intentional local class
+    class _CliLevelFilter:
         """Structlog processor: drops events with level < cli threshold."""
         _LEVELS: dict[str, int] = {"debug": 10, "info": 20, "warning": 30, "warn": 30, "error": 40, "critical": 50}
 
@@ -289,6 +350,8 @@ def scan_command(
     # ─────────────────────────────────────────────────────────────────────────
 
     # Run async scan function
+    baseline_fingerprints = None
+    intelligence_context = None
     try:
         # Handle --no-ai shorthand
         if no_ai:
@@ -299,6 +362,10 @@ def scan_command(
             console.print("\n[bold red blink]💀 CRITICAL WARNING: ZOMBIE MODE ACTIVE[/bold red blink]")
             console.print("[bold red]Warden is running without AI. Capability is reduced by 99%.[/bold red]")
             console.print("[red]Heuristic scanning is a fallback, not a feature. Expect poor results.[/red]\n")
+
+        # Auto-install scan dependencies based on analysis level
+        if level != "basic":
+            _ensure_scan_dependencies(level)
 
         # Default to "." if no paths provided AND no diff mode
         if not paths and not diff:
@@ -413,6 +480,36 @@ def scan_command(
     except (SystemExit, typer.Exit):
         raise
     except Exception as e:
+        # Try self-healing before giving up
+        healed = _attempt_self_healing_sync(e, level)
+        if healed:
+            try:
+                exit_code = asyncio.run(
+                    _run_scan_async(
+                        paths if paths else ["."],
+                        frames,
+                        format,
+                        output,
+                        verbose,
+                        level,
+                        memory_profile,
+                        ci,
+                        baseline_fingerprints,
+                        intelligence_context,
+                        update_baseline=not no_update_baseline,
+                        cost_report=cost_report,
+                        auto_fix=auto_fix,
+                        dry_run=dry_run,
+                    )
+                )
+                if exit_code != 0:
+                    raise typer.Exit(exit_code)
+                return
+            except (SystemExit, typer.Exit):
+                raise
+            except Exception as retry_err:
+                console.print(f"\n[bold red]Error after self-healing retry:[/bold red] {retry_err}")
+
         console.print(f"\n[bold red]Error:[/bold red] {e}")
         console.print(
             "[yellow]💡 Tip:[/yellow] Run [bold cyan]warden doctor[/bold cyan] to check your setup, or [bold cyan]warden init --force[/bold cyan] to reconfigure."
@@ -438,6 +535,7 @@ async def _process_stream_events(
     Returns ``(final_result_data, frame_stats, total_units)``.
     """
     import time
+
     from rich.spinner import Spinner
 
     _spinner_widget = Spinner("dots", style="bold blue")

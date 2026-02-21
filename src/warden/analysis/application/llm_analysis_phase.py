@@ -16,6 +16,7 @@ from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.quality_metrics import QualityMetrics
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.language_utils import get_language_from_path
+from warden.shared.utils.token_utils import truncate_content_for_llm
 
 logger = get_logger(__name__)
 
@@ -79,7 +80,7 @@ IMPACTED_BY_DEPENDENCY: {is_impacted}
 
 CODE:
 ```{language}
-{code[:1500]}  # Truncate for token limit
+{truncate_content_for_llm(code, max_tokens=400)}
 ```
 
 INITIAL METRICS (rule-based):
@@ -342,7 +343,7 @@ Impacted: {impacted}
 Initial Metrics: {json.dumps(metrics)}
 Code Snippet:
 ```{self._detect_language(path)}
-{code[:1000]}
+{truncate_content_for_llm(code, max_tokens=250)}
 ```
 ---
 """

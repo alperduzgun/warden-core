@@ -1,0 +1,29 @@
+{
+  "672355ae23db5953": {
+    "error_key": "672355ae23db5953",
+    "error_category": "module_not_found",
+    "strategy_used": "import_healer",
+    "fixed": true,
+    "action_taken": "pip_install:tiktoken",
+    "timestamp": 1771710884.1893241,
+    "duration_ms": 821
+  },
+  "40b8000de7205e28": {
+    "error_key": "40b8000de7205e28",
+    "error_category": "module_not_found",
+    "strategy_used": "import_healer",
+    "fixed": true,
+    "action_taken": "pip_install:chromadb",
+    "timestamp": 1771710885.176468,
+    "duration_ms": 986
+  },
+  "56756b93e5caa680": {
+    "error_key": "56756b93e5caa680",
+    "error_category": "module_not_found",
+    "strategy_used": "import_healer",
+    "fixed": true,
+    "action_taken": "pip_install:arrow",
+    "timestamp": 1771710912.3454652,
+    "duration_ms": 2002
+  }
+}

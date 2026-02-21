@@ -20,7 +20,10 @@ except ImportError:
 
 
 async def batch_verify_security_findings(
-    findings_map: dict[str, list[Any]], code_files: list[Any], llm_service: Any
+    findings_map: dict[str, list[Any]],
+    code_files: list[Any],
+    llm_service: Any,
+    semantic_context: str = "",
 ) -> dict[str, list[Any]]:
     """
     Batch LLM verification of security findings.
@@ -31,6 +34,7 @@ async def batch_verify_security_findings(
         findings_map: Dict of file_path -> findings
         code_files: List of code files for context
         llm_service: LLM service for verification
+        semantic_context: Optional project-level context for LLM enrichment
 
     Returns:
         Updated findings_map with LLM-verified findings
@@ -58,7 +62,7 @@ async def batch_verify_security_findings(
     for i, batch in enumerate(batches):
         try:
             logger.debug(f"Processing security batch {i + 1}/{len(batches)}")
-            verified_batch = await _verify_security_batch(batch, code_files, llm_service)
+            verified_batch = await _verify_security_batch(batch, code_files, llm_service, semantic_context)
 
             # Map back to files
             for item in verified_batch:
@@ -106,7 +110,10 @@ def _smart_batch_findings(
 
 
 async def _verify_security_batch(
-    batch: list[dict[str, Any]], code_files: list[Any], llm_service: Any
+    batch: list[dict[str, Any]],
+    code_files: list[Any],
+    llm_service: Any,
+    semantic_context: str = "",
 ) -> list[dict[str, Any]]:
     """
     Single LLM call for multiple security findings.
@@ -115,12 +122,17 @@ async def _verify_security_batch(
         batch: List of {finding, file_path, code_file}
         code_files: All code files for context
         llm_service: LLM service
+        semantic_context: Optional project-level context
 
     Returns:
         List of verified findings with same structure
     """
     # Build batch prompt
     prompt_parts = ["Review these security findings and verify if they are true vulnerabilities:\n\n"]
+
+    # Inject project-level context (compact, max 300 chars)
+    if semantic_context:
+        prompt_parts.append(f"[PROJECT CONTEXT]:\n{semantic_context[:300]}\n\n")
 
     for i, item in enumerate(batch):
         finding = item["finding"]
@@ -167,6 +179,12 @@ Return JSON array with verification results:
 
         try:
             content = response.content or ""
+            # Extract JSON from markdown fences if LLM wrapped the response
+            if "```" in content:
+                import re
+                match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", content)
+                if match:
+                    content = match.group(1).strip()
             parsed = json.loads(content)
 
             if isinstance(parsed, list):
