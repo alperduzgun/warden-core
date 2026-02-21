@@ -29,6 +29,10 @@ class AnalysisExecutor(BasePhaseExecutor):
 
         start_time = time.perf_counter()
 
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
+
         try:
             # Respect global use_llm flag and LLM service availability
             use_llm = getattr(self.config, "use_llm", True) and self.llm_service is not None
@@ -110,14 +114,11 @@ class AnalysisExecutor(BasePhaseExecutor):
             # -------------------------------------------------------------
             # LINTER METRICS (Fast Quality Health Check)
             # -------------------------------------------------------------
+            _emit("Running linter metrics (Ruff, ESLint, etc.)")
             from warden.analysis.services.linter_service import LinterService
 
             linter_service = LinterService()
-
-            # Re-detect if not already set (safety net) or use shared instance pattern
-            # For now, relying on fresh instance checking availability (fast check)
             await linter_service.detect_and_setup(context)
-
             linter_metrics = await linter_service.run_metrics(code_files)
             context.linter_metrics = linter_metrics
 
@@ -136,30 +137,32 @@ class AnalysisExecutor(BasePhaseExecutor):
             linter_penalty = min(linter_penalty, 5.0)
 
             # Filter out unchanged files to save LLM tokens
+            _emit("Filtering unchanged files (incremental optimization)")
             files_to_analyze = []
             file_contexts = getattr(context, "file_contexts", {})
 
             for cf in code_files:
                 f_info = file_contexts.get(cf.path)
-                # If no context info or not marked unchanged, we analyze it
                 if not f_info or not getattr(f_info, "is_unchanged", False):
                     files_to_analyze.append(cf)
 
             if not files_to_analyze:
                 logger.info("analysis_phase_skipped_optimization", reason="all_files_unchanged")
-                # Create a dummy result to satisfy pipeline expectations
+                # Create a baseline result from objective linter metrics to satisfy pipeline expectations
                 from warden.analysis.domain.quality_metrics import QualityMetrics
+                from warden.shared.utils.quality_calculator import calculate_base_score
 
+                base_score = calculate_base_score(linter_metrics)
                 result = QualityMetrics(
-                    complexity_score=5.0,
-                    duplication_score=5.0,
-                    maintainability_score=5.0,
-                    naming_score=5.0,
-                    documentation_score=5.0,
-                    testability_score=5.0,
-                    overall_score=5.0,
+                    complexity_score=base_score,
+                    duplication_score=base_score,
+                    maintainability_score=base_score,
+                    naming_score=base_score,
+                    documentation_score=base_score,
+                    testability_score=base_score,
+                    overall_score=base_score,
                     technical_debt_hours=0.0,
-                    summary="Analysis skipped (No changes detected)",
+                    summary=f"Analysis skipped (No changes detected). Base structural score: {base_score:.1f}/10",
                 )
                 llm_duration = 0.0
             else:
@@ -172,6 +175,7 @@ class AnalysisExecutor(BasePhaseExecutor):
                 ]
 
                 llm_start_time = time.perf_counter()
+                _emit(f"Analyzing {len(files_to_analyze)} files with LLM")
                 result = await phase.execute_async(
                     files_to_analyze, pipeline_context=context, impacted_files=impacted_paths
                 )
@@ -192,7 +196,6 @@ class AnalysisExecutor(BasePhaseExecutor):
             context.quick_wins = result.quick_wins
             context.technical_debt_hours = result.technical_debt_hours
 
-            # Add phase result
             # Add phase result
             context.add_phase_result(
                 "ANALYSIS",

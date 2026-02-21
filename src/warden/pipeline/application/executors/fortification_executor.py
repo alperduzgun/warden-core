@@ -35,6 +35,10 @@ class FortificationExecutor(BasePhaseExecutor):
 
         start_time = time.perf_counter()
 
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
+
         try:
             from warden.fortification.application.fortification_phase import FortificationPhase
 
@@ -71,9 +75,9 @@ class FortificationExecutor(BasePhaseExecutor):
                 )
 
             # Convert objects to dicts expected by FortificationPhase (BATCH 1: Type Safety)
+            _emit(f"Normalizing {len(raw_findings)} findings for patch generation")
             from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 
-            # BATCH 3: Track normalization metrics
             normalization_success = 0
             normalization_failures = []
 
@@ -136,6 +140,7 @@ class FortificationExecutor(BasePhaseExecutor):
                 )
                 return
 
+            _emit(f"Generating fix patches for {len(validated_issues)} issues")
             result = await phase.execute_async(validated_issues)
 
             # Store results in context

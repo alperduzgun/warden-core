@@ -47,12 +47,16 @@ class PipelineResultBuilder:
         manual_review_count = sum(1 for f in findings if self._is_review_required(f))
         total_findings = len(findings)
 
-        # Calculate quality score
-        quality_score = getattr(context, "quality_score_before", None)
-        if quality_score is None or quality_score == 0.0:
-            from warden.shared.utils.quality_calculator import calculate_quality_score
+        # Calculate quality score: findings penalty applied to analysis base score.
+        # Analysis phase already produces an objective base score from linter metrics
+        # when LLM is unavailable, so we only guard against truly invalid values here.
+        from warden.shared.utils.quality_calculator import calculate_base_score, calculate_quality_score
 
-            quality_score = calculate_quality_score(findings)
+        base_score = getattr(context, "quality_score_before", None)
+        if not base_score or base_score <= 0.0:
+            base_score = calculate_base_score(getattr(context, "linter_metrics", None))
+
+        quality_score = calculate_quality_score(findings, base_score)
         context.quality_score_after = quality_score
 
         # Calculate frame counts

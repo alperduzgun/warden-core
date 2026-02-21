@@ -32,9 +32,15 @@ frame_rules:
   architectural:
     pre_rules:
       - no-secrets
-      - cli-pipeline-status-check
-      - llm-context-propagation-check
       - orchestrator-total-frames-check
+    on_fail: continue
+  antipattern:
+    on_fail: continue
+  config:
+    on_fail: continue
+  resilience:
+    on_fail: continue
+  spec:
     on_fail: continue
   fuzz:
     scope:

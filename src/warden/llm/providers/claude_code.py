@@ -94,7 +94,7 @@ class ClaudeCodeClient(ILlmClient):
         if request.system_prompt:
             full_prompt = f"{request.system_prompt}\n\n{request.user_message}"
 
-        timeout = request.timeout_seconds or self._timeout
+        timeout = max(request.timeout_seconds or 0, self._timeout)
         response = await self._execute_cli(full_prompt, model, timeout)
 
         # Retry once with truncated prompt on empty content (likely context overflow)
@@ -124,6 +124,8 @@ class ClaudeCodeClient(ILlmClient):
                 "json",
                 "--max-turns",
                 "1",
+                "--tools",
+                "",
                 "-p",
                 prompt,
                 stdout=asyncio.subprocess.PIPE,
@@ -166,6 +168,29 @@ class ClaudeCodeClient(ILlmClient):
 
         try:
             result = json.loads(output)
+            
+            # Check if Claude returned an explicit error object
+            is_error = result.get("is_error", False) if isinstance(result, dict) else False
+            if is_error or (isinstance(result, dict) and result.get("type") == "error"):
+                error_msg = result.get("error") or result.get("message") or "Unknown Claude Code error"
+                logger.error("claude_code_explicit_error", error=error_msg, raw_output=output[:500])
+                return self._error_response(f"Claude error: {error_msg}", model, duration_ms)
+
+            # Detect max-turns exhaustion (model used tool calls, ran out of turns)
+            subtype = result.get("subtype", "") if isinstance(result, dict) else ""
+            if subtype == "error_max_turns":
+                num_turns = result.get("num_turns", "?")
+                logger.error(
+                    "claude_code_max_turns_exhausted",
+                    num_turns=num_turns,
+                    subtype=subtype,
+                )
+                return self._error_response(
+                    f"Max turns exhausted ({num_turns} turns used) - model used tool calls before responding",
+                    model,
+                    duration_ms,
+                )
+
             content = result.get("result") or result.get("content") or ""
 
             if not isinstance(content, str):
@@ -173,6 +198,11 @@ class ClaudeCodeClient(ILlmClient):
 
             # Empty content after JSON parse = provider returned no useful data
             if not content.strip():
+                logger.error(
+                    "claude_code_empty_content_json",
+                    raw_output=output[:1000],
+                    parsed_keys=list(result.keys()) if isinstance(result, dict) else type(result)
+                )
                 return self._error_response("Empty content in response", model, duration_ms)
 
             usage = result.get("usage", {})

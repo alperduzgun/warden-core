@@ -2,52 +2,94 @@
   "module": "unknown",
   "findings": [
     {
-      "id": "resilience-no-error-handling",
-      "severity": "medium",
-      "message": "6 async functions with no error handling",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/phase_executor.py:1",
-      "detail": "Async operations should have try/catch for resilience",
-      "code": null,
+      "id": "security-sql-injection-0",
+      "severity": "critical",
+      "message": "[SQL Injection Detection] Potential SQL injection: f-string interpolation in SQL query",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/test_vuln.py:3",
+      "detail": "Use parameterized queries instead:\n\u2705 GOOD: cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))\n\u2705 GOOD: cursor.execute('SELECT * FROM users WHERE id = :id', {'id': user_id})\n\u274c BAD: f'SELECT * FROM users WHERE id = {user_id}'",
+      "code": "query = f\"SELECT * FROM users WHERE id = {user_id}\"",
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "021c004b14beca1f52d41e211f5f859525cbd7109b1998c3e5d8bfe92287b20e"
+      "fingerprint": "b9baa60475e6cabeb495659b2179c4f58c6f1e11cc1056bde0e90beeb245fec4"
     },
     {
-      "id": "resilience-insufficient-handlers",
-      "severity": "low",
-      "message": "25 function calls with only 0 error handlers",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/pipeline/application/orchestrator/phase_executor.py:1",
-      "detail": "Consider adding more error handling for external calls",
-      "code": null,
+      "id": "property-llm-3",
+      "severity": "critical",
+      "message": "SQL Injection via f-string interpolation",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/test_vuln.py:3",
+      "detail": "user_id is interpolated directly into the SQL query string using an f-string. An attacker can pass arbitrary SQL (e.g., '1; DROP TABLE users--') to execute unintended commands. This violates the precondition that query parameters must be sanitized before reaching the database engine. Use parameterized queries (db.execute('SELECT * FROM users WHERE id = ?', (user_id,))) instead.",
+      "code": "query = f\"SELECT * FROM users WHERE id = {user_id}\"",
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "932224a042c57dd7761a46d69c1e47dd74bb56f4efe584d01e1ea3a768dd807b"
+      "fingerprint": "882238809dfb76c57d89d7b5fdf4c7b37fd32b50ede640730a635f47ddf3e4f2"
+    },
+    {
+      "id": "property-llm-4",
+      "severity": "medium",
+      "message": "No postcondition guarantee on return value",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/test_vuln.py:4",
+      "detail": "db.execute() may return None, an empty result set, a cursor object, or raise an exception (connection error, syntax error, timeout). The caller has no contract about what to expect. If the caller assumes a non-None iterable, a NoneType or cursor-without-results will propagate as a downstream AttributeError or TypeError.",
+      "code": "return db.execute(query)",
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "749718a31e6959730ecf1526b846e6ed27a97ef4bb0b368784bfac657f6eb95b"
+    },
+    {
+      "id": "property-llm-4",
+      "severity": "low",
+      "message": "Unhandled exception from db.execute",
+      "location": "/Users/alper/Documents/Development/Personal/warden-core/test_vuln.py:4",
+      "detail": "db.execute() can raise OperationalError, ProgrammingError, InterfaceError, or other database exceptions. Without a try/except, any database failure propagates an uncontrolled exception to the caller, potentially leaking internal schema details in stack traces (information disclosure).",
+      "code": "return db.execute(query)",
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "9f5e9485e0734f4b2232a40908a888ecf89f17f86b32807dd1e5def3f99a720d"
     }
   ],
   "debt_items": [
     {
-      "fingerprint": "021c004b14beca1f52d41e211f5f859525cbd7109b1998c3e5d8bfe92287b20e",
-      "first_seen": "2026-02-20T21:03:52.505835+00:00",
-      "rule_id": "resilience-no-error-handling",
+      "fingerprint": "b9baa60475e6cabeb495659b2179c4f58c6f1e11cc1056bde0e90beeb245fec4",
+      "first_seen": "2026-02-20T23:02:28.838017+00:00",
+      "rule_id": "security-sql-injection-0",
       "file_path": null,
-      "message": "6 async functions with no error handling",
+      "message": "[SQL Injection Detection] Potential SQL injection: f-string interpolation in SQL query",
+      "severity": "critical"
+    },
+    {
+      "fingerprint": "882238809dfb76c57d89d7b5fdf4c7b37fd32b50ede640730a635f47ddf3e4f2",
+      "first_seen": "2026-02-20T23:05:22.834180+00:00",
+      "rule_id": "property-llm-3",
+      "file_path": null,
+      "message": "SQL Injection via f-string interpolation",
+      "severity": "critical"
+    },
+    {
+      "fingerprint": "749718a31e6959730ecf1526b846e6ed27a97ef4bb0b368784bfac657f6eb95b",
+      "first_seen": "2026-02-20T23:07:02.286796+00:00",
+      "rule_id": "property-llm-4",
+      "file_path": null,
+      "message": "No postcondition guarantee on return value",
       "severity": "medium"
     },
     {
-      "fingerprint": "932224a042c57dd7761a46d69c1e47dd74bb56f4efe584d01e1ea3a768dd807b",
-      "first_seen": "2026-02-20T21:37:51.595397+00:00",
-      "rule_id": "resilience-insufficient-handlers",
+      "fingerprint": "9f5e9485e0734f4b2232a40908a888ecf89f17f86b32807dd1e5def3f99a720d",
+      "first_seen": "2026-02-20T23:07:02.286796+00:00",
+      "rule_id": "property-llm-4",
       "file_path": null,
-      "message": "25 function calls with only 0 error handlers",
+      "message": "Unhandled exception from db.execute",
       "severity": "low"
     }
   ],
   "created_at": "2026-02-20T21:03:52.505822+00:00",
-  "updated_at": "2026-02-20T21:37:51.595440+00:00",
-  "debt_count": 2,
+  "updated_at": "2026-02-20T23:07:02.286862+00:00",
+  "debt_count": 4,
   "oldest_debt_age_days": 0
 }

@@ -145,7 +145,7 @@ class CodexClient(ILlmClient):
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            timeout = request.timeout_seconds or self._timeout
+            timeout = max(request.timeout_seconds or 0, self._timeout)
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
             except asyncio.TimeoutError:

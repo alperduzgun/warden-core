@@ -103,7 +103,7 @@ class IntegrityScanner:
                     if pipeline_context and hasattr(pipeline_context, "ast_cache"):
                         # Store the native AST node if available (provider specific)
                         if result.ast_root.raw_node:
-                            pipeline_context.ast_cache[cf.path] = result.ast_root.raw_node
+                            pipeline_context.ast_cache[cf.path] = result
                             logger.debug("ast_cached_in_context", file=cf.path)
 
             except Exception as e:

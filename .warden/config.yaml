@@ -20,6 +20,7 @@ frames:
 - property
 - antipattern
 - spec
+- architectural
 frames_config:
   architectural:
     enabled: true

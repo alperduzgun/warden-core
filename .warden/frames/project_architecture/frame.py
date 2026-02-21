@@ -107,6 +107,20 @@ class ProjectArchitectureFrame(ValidationFrame):
         Returns:
             FrameResult with architectural violations
         """
+        # Guard: frame_runner passes CodeFile to all frames, but this frame
+        # requires ProjectContext. Detect CodeFile and skip gracefully.
+        if hasattr(project_context, "content") and not hasattr(project_context, "root_path"):
+            return FrameResult(
+                frame_id=self.frame_id,
+                frame_name=self.name,
+                status="skipped",
+                duration=0,
+                issues_found=0,
+                is_blocker=False,
+                findings=[],
+                metadata={"reason": "requires ProjectContext, received CodeFile"},
+            )
+
         start_time = time.perf_counter()
 
         logger.info(

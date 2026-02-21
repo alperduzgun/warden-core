@@ -10,6 +10,7 @@ Validates business logic correctness:
 Priority: HIGH
 """
 
+import json as _json
 import re
 import time
 from typing import Any
@@ -27,11 +28,12 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
+from warden.validation.domain.mixins import BatchExecutable
 
 logger = get_logger(__name__)
 
 
-class PropertyFrame(ValidationFrame):
+class PropertyFrame(ValidationFrame, BatchExecutable):
     """
     Property-based testing validation frame.
 
@@ -107,6 +109,31 @@ Output must be a valid JSON object with the following structure:
     ]
 }"""
 
+    BATCH_SIZE = 3  # Conservative for subprocess-based providers (Claude Code)
+
+    BATCH_SYSTEM_PROMPT = """You are an expert Formal Verification and Property Testing analyst. Analyze the provided code files for logical errors, invariant violations, and precondition failures.
+
+For EACH file, output a JSON object. Return a JSON array where each element corresponds to a file:
+[
+  {
+    "file_idx": 0,
+    "score": <0-10 integer>,
+    "confidence": <0.0-1.0>,
+    "summary": "<brief summary>",
+    "issues": [
+      {
+        "severity": "critical|high|medium|low",
+        "category": "logic",
+        "title": "<short title>",
+        "description": "<detailed description>",
+        "line": <line number>,
+        "confidence": <0.0-1.0>,
+        "evidenceQuote": "<exact code triggering issue>"
+      }
+    ]
+  }
+]"""
+
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize PropertyFrame."""
         super().__init__(config)
@@ -123,6 +150,180 @@ Output must be a valid JSON object with the following structure:
         # Pre-compile assertion check patterns
         self._assertion_pattern = re.compile(r"\bassert\b|Assert\.|assertThat")
         self._function_pattern = re.compile(r"def\s+\w+|function\s+\w+|public\s+\w+\s+\w+\(")
+
+    async def execute_batch_async(self, code_files: list[CodeFile], context: Any = None) -> list[FrameResult]:
+        """
+        Execute property checks on multiple files with batch LLM processing.
+
+        Pattern checks run per-file (fast). LLM analysis batches multiple files
+        into a single prompt for subprocess-based providers.
+
+        Falls back to serial execution on batch parse failure.
+        """
+        if not code_files:
+            return []
+
+        batch_start = time.perf_counter()
+        logger.info("property_batch_started", file_count=len(code_files))
+
+        # Phase 1: Pattern checks per file (fast, no LLM)
+        pattern_findings_map: dict[str, list[Finding]] = {}
+        assertion_findings_map: dict[str, list[Finding]] = {}
+
+        for code_file in code_files:
+            findings: list[Finding] = []
+            for check_id, check_config in self._compiled_patterns.items():
+                findings.extend(
+                    self._check_pattern_compiled(
+                        code_file=code_file,
+                        check_id=check_id,
+                        compiled_pattern=check_config["compiled"],
+                        severity=check_config["severity"],
+                        message=check_config["message"],
+                        suggestion=check_config.get("suggestion"),
+                    )
+                )
+            pattern_findings_map[code_file.path] = findings
+            assertion_findings_map[code_file.path] = self._check_assertions(code_file)
+
+        # Phase 2: Batch LLM analysis (if available)
+        llm_findings_map: dict[str, list[Finding]] = {f.path: [] for f in code_files}
+        if hasattr(self, "llm_service") and self.llm_service:
+            llm_findings_map = await self._batch_llm_analysis(code_files)
+
+        # Phase 3: Build results
+        results: list[FrameResult] = []
+        for code_file in code_files:
+            all_findings = (
+                pattern_findings_map.get(code_file.path, [])
+                + assertion_findings_map.get(code_file.path, [])
+                + llm_findings_map.get(code_file.path, [])
+            )
+            status = self._determine_status(all_findings)
+            results.append(
+                FrameResult(
+                    frame_id=self.frame_id,
+                    frame_name=self.name,
+                    status=status,
+                    duration=time.perf_counter() - batch_start,
+                    issues_found=len(all_findings),
+                    is_blocker=False,
+                    findings=all_findings,
+                    metadata={
+                        "checks_executed": len(self.PATTERNS) + 1,
+                        "file_size": code_file.size_bytes,
+                        "line_count": code_file.line_count,
+                        "batch_mode": True,
+                    },
+                )
+            )
+
+        batch_duration = time.perf_counter() - batch_start
+        logger.info(
+            "property_batch_completed",
+            file_count=len(code_files),
+            total_findings=sum(r.issues_found for r in results),
+            duration=f"{batch_duration:.2f}s",
+        )
+        return results
+
+    async def _batch_llm_analysis(self, code_files: list[CodeFile]) -> dict[str, list[Finding]]:
+        """Run batched LLM analysis across multiple files."""
+        findings_map: dict[str, list[Finding]] = {f.path: [] for f in code_files}
+
+        try:
+            from warden.llm.types import LlmRequest  # noqa: PLC0415
+
+            # Build combined prompt
+            parts = []
+            for idx, cf in enumerate(code_files):
+                parts.append(f"=== FILE {idx}: {cf.path} ({cf.language}) ===")
+                parts.append(cf.content[:3000])  # Cap per-file content for context limits
+                parts.append("")
+
+            combined = "\n".join(parts)
+
+            request = LlmRequest(
+                system_prompt=self.BATCH_SYSTEM_PROMPT,
+                user_message=f"Analyze these {len(code_files)} files:\n\n{combined}",
+                temperature=0.1,
+                use_fast_tier=True,
+            )
+
+            response = await self.llm_service.send_async(request)
+
+            if response.success and response.content:
+                self._parse_batch_llm_response(response.content, code_files, findings_map)
+            else:
+                logger.warning("property_batch_llm_failed", error=response.error_message)
+                # Fallback: serial LLM analysis
+                findings_map = await self._serial_llm_fallback(code_files)
+
+        except Exception as e:
+            logger.error("property_batch_llm_error", error=str(e))
+            # Fallback: serial LLM analysis
+            try:
+                findings_map = await self._serial_llm_fallback(code_files)
+            except Exception:
+                pass
+
+        return findings_map
+
+    def _parse_batch_llm_response(
+        self, content: str, code_files: list[CodeFile], findings_map: dict[str, list[Finding]]
+    ) -> None:
+        """Parse batch LLM JSON response into per-file findings."""
+        # Strip markdown code fences
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        try:
+            data = _json.loads(content)
+        except _json.JSONDecodeError:
+            logger.warning("property_batch_parse_failed", content_preview=content[:200])
+            return
+
+        if not isinstance(data, list):
+            data = [data]
+
+        from warden.llm.types import AnalysisResult  # noqa: PLC0415
+
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            file_idx = item.get("file_idx", -1)
+            if not (0 <= file_idx < len(code_files)):
+                continue
+
+            code_file = code_files[file_idx]
+            try:
+                result = AnalysisResult.from_json(item)
+                for issue in result.issues:
+                    findings_map[code_file.path].append(
+                        Finding(
+                            id=f"{self.frame_id}-llm-batch-{file_idx}-{issue.line}",
+                            severity=issue.severity,
+                            message=issue.title,
+                            location=f"{code_file.path}:{issue.line}",
+                            detail=issue.description,
+                            code=issue.evidence_quote,
+                        )
+                    )
+            except Exception as e:
+                logger.warning("property_batch_item_parse_failed", file_idx=file_idx, error=str(e))
+
+    async def _serial_llm_fallback(self, code_files: list[CodeFile]) -> dict[str, list[Finding]]:
+        """Fallback: run LLM analysis file-by-file."""
+        findings_map: dict[str, list[Finding]] = {f.path: [] for f in code_files}
+        for code_file in code_files:
+            try:
+                llm_findings = await self._analyze_with_llm(code_file)
+                findings_map[code_file.path] = llm_findings
+            except Exception as e:
+                logger.warning("property_serial_fallback_failed", file=code_file.path, error=str(e))
+        return findings_map
 
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """

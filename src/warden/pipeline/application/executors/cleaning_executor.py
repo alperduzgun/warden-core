@@ -26,6 +26,10 @@ class CleaningExecutor(BasePhaseExecutor):
 
         start_time = time.perf_counter()
 
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
+
         try:
             from warden.cleaning.application.cleaning_phase import CleaningPhase
 
@@ -71,6 +75,7 @@ class CleaningExecutor(BasePhaseExecutor):
             else:
                 if len(files_to_clean) < len(code_files):
                     logger.info("cleaning_phase_optimizing", total=len(code_files), cleaning=len(files_to_clean))
+                _emit(f"Generating refactoring suggestions for {len(files_to_clean)} files")
                 result = await phase.execute_async(files_to_clean)
 
             # Store results in context

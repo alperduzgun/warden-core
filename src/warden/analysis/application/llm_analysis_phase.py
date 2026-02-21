@@ -282,12 +282,15 @@ Return as JSON."""
                 # Prepare Batch Prompt
                 prompt = self._format_batch_user_prompt(batch_items, initial_metrics)
 
-                # Call LLM
-                response = await self.llm.complete_async(
-                    prompt,
-                    self.get_system_prompt(),
-                    use_fast_tier=True,  # Use Qwen for cost optimization (Phase 1 migration)
+                # Call LLM with retry + fallback
+                response = await self._call_llm_with_retry_async(
+                    system_prompt=self.get_system_prompt(),
+                    user_prompt=prompt,
+                    use_fast_tier=True,
                 )
+
+                if not response or not response.content:
+                    raise RuntimeError("LLM returned no content after retries")
 
                 # Parse Batch Results
                 batch_results = self._parse_batch_llm_response(response.content, len(batch_items))

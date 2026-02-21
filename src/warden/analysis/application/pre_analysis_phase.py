@@ -236,11 +236,18 @@ class PreAnalysisPhase:
                 },
             )
 
+        # Convenience helper — keeps callsites DRY
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
+
         try:
             # Step 1: Initialize LLM analyzer if enabled
+            _emit("Initializing LLM analyzer")
             await self._initialize_llm_analyzer_async()
 
             # Initialize memory
+            _emit("Loading project memory cache")
             await self.memory_manager.initialize_async()
 
             # Step 2: Analyze project structure
@@ -261,6 +268,7 @@ class PreAnalysisPhase:
             self.trust_memory_context = is_env_valid
 
             # Load user-provided context (.warden/context.yaml) if available
+            _emit("Loading user context (.warden/context.yaml)")
             _user_ctx_style: dict = {}
             try:
                 ctx_file = self.project_root / ".warden" / "context.yaml"
@@ -277,6 +285,7 @@ class PreAnalysisPhase:
                 logger.warning("user_context_load_failed", error=str(e))
 
             # Analyze structure (will only discover purpose if missing after enrichment)
+            _emit("Analyzing project structure & framework")
             all_paths = [Path(cf.path).resolve() for cf in code_files]
             project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
 
@@ -287,6 +296,7 @@ class PreAnalysisPhase:
                 project_context.conventions.indent_style = str(_user_ctx_style["indent"])  # type: ignore[assignment]
 
             # Ensure AST providers are loaded for integrity check
+            _emit("Loading AST providers (tree-sitter)")
             await self.ast_loader.load_all()
 
             # Step 2.5: Integrity Check (Fail-Fast)
@@ -297,6 +307,7 @@ class PreAnalysisPhase:
             analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
 
             if analysis_level != AnalysisLevel.BASIC:
+                _emit("Running syntax integrity checks")
                 integrity_issues = await self.integrity_scanner.scan_async(
                     code_files, project_context, pipeline_context
                 )
@@ -318,6 +329,7 @@ class PreAnalysisPhase:
             # Step 3: Dependency Awareness (Impact Analysis)
             # Skip in BASIC level to hit performance targets
             if analysis_level != AnalysisLevel.BASIC:
+                _emit("Building dependency graph")
                 impacted_files = await self._identify_impacted_files_async(code_files, project_context)
             else:
                 logger.info("skipping_dependency_impact_analysis_for_basic_level")
@@ -327,6 +339,7 @@ class PreAnalysisPhase:
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
 
             # Step 5: Analyze file contexts in parallel
+            _emit(f"Classifying {len(code_files)} file contexts")
             file_contexts = await self._analyze_file_contexts_async(code_files, impacted_files)
 
             # Step 5: Calculate statistics
@@ -335,6 +348,7 @@ class PreAnalysisPhase:
             # Step 6: Tool Discovery (Pre-Flight Check)
             # Detect available linters (Fail Fast / Degradation)
             if self.linter_service:
+                _emit("Detecting available linters")
                 await self.linter_service.detect_and_setup(project_context)
 
             # Create result
@@ -395,6 +409,7 @@ class PreAnalysisPhase:
                         project_root=self.project_root,
                     )
 
+                    _emit("Building code graph (symbol-level)")
                     # O4 fix: explicit timeout for graph build
                     code_graph = await asyncio.wait_for(
                         asyncio.get_event_loop().run_in_executor(
@@ -457,12 +472,18 @@ class PreAnalysisPhase:
                     saver.save_code_graph(code_graph)
                     saver.save_gap_report(gap_report)
 
-                    # Coverage warning
-                    if gap_report.coverage < 0.8:
+                    # Coverage warning (only alert below 70%)
+                    if gap_report.coverage < 0.7:
                         logger.warning(
                             "code_graph_low_coverage",
                             coverage=f"{gap_report.coverage:.1%}",
-                            message="Code graph covers less than 80% of project files",
+                            message="Code graph covers less than 70% of project files",
+                        )
+                    elif gap_report.coverage < 0.8:
+                        logger.info(
+                            "code_graph_coverage_note",
+                            coverage=f"{gap_report.coverage:.1%}",
+                            message="Code graph coverage below 80%",
                         )
 
                     logger.info(
@@ -490,6 +511,7 @@ class PreAnalysisPhase:
 
                 if ss_service.is_available() and analysis_level != AnalysisLevel.BASIC:
                     logger.info("triggering_semantic_indexing")
+                    _emit("Indexing codebase for semantic search")
                     if self.progress_callback:
                         self.progress_callback(
                             "semantic_indexing_started", {"phase": "pre_analysis", "action": "indexing_codebase"}

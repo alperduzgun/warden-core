@@ -4,7 +4,10 @@ Batch Processor Module
 Batch LLM processing for security findings verification.
 """
 
+import json
 from typing import Any
+
+from warden.llm.types import LlmRequest
 
 try:
     from warden.shared.infrastructure.logging import get_logger
@@ -146,16 +149,24 @@ Return JSON array with verification results:
 
     # Single LLM call
     try:
-        response = await llm_service.send_async(
-            prompt=full_prompt,
-            system="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives.",
+        request = LlmRequest(
+            user_message=full_prompt,
+            system_prompt="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives."
         )
+        response = await llm_service.send_async(request)
 
         # Parse LLM response and filter false positives
-        import json
+        # LlmResponse is a Pydantic model — use attribute access, not .get()
+        if not response.success:
+            logger.warning(
+                "security_batch_llm_not_successful",
+                error=response.error_message,
+                fallback="keeping_all_findings"
+            )
+            return batch
 
         try:
-            content = response.get("content", "")
+            content = response.content or ""
             parsed = json.loads(content)
 
             if isinstance(parsed, list):

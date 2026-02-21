@@ -237,7 +237,7 @@ Return a JSON array of objects with schema:
 }}
 
 FILES TO ANALYZE:
-{{batch_summary}}
+{batch_summary}
 """
 
     def _parse_classification_batch_response(self, response: str, count: int) -> list[dict[str, Any]]:
@@ -245,13 +245,23 @@ FILES TO ANALYZE:
             from warden.shared.utils.json_parser import parse_json_from_llm
 
             result = parse_json_from_llm(response)
-            if isinstance(result, list):
-                return result
-            # Try to handle if it returns a single object instead of list
+
+            # If the LLM returned a single dict (common when count=1), wrap it
             if isinstance(result, dict):
-                return [result]
+                result = [result]
+
+            if isinstance(result, list):
+                # Ensure all items have an 'idx' field or map them sequentially
+                for i, item in enumerate(result):
+                    if not isinstance(item, dict):
+                        continue
+                    if "idx" not in item:
+                        item["idx"] = i
+                return result
+
             return []
-        except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+            logger.error("batch_classification_parse_error", error=str(e), response=response[:200])
             # LLM response parsing failed - return empty list for graceful degradation
             return []
 

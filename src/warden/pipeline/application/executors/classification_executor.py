@@ -44,6 +44,10 @@ class ClassificationExecutor(BasePhaseExecutor):
 
         start_time = time.perf_counter()
 
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
+
         try:
             # Respect global use_llm flag and LLM service availability
             use_llm = getattr(self.config, "use_llm", True) and self.llm_service is not None
@@ -87,12 +91,12 @@ class ClassificationExecutor(BasePhaseExecutor):
                 )
 
             # Optimization: Filter out unchanged files to save LLM tokens/Validation time
+            _emit("Filtering unchanged files (incremental optimization)")
             files_to_classify = []
             file_contexts = getattr(context, "file_contexts", {})
 
             for cf in code_files:
                 f_info = file_contexts.get(cf.path)
-                # If no context info or not marked unchanged, we classify it
                 if not f_info or not getattr(f_info, "is_unchanged", False):
                     files_to_classify.append(cf)
 
@@ -119,6 +123,7 @@ class ClassificationExecutor(BasePhaseExecutor):
                     logger.info(
                         "classification_phase_optimizing", total=len(code_files), classifying=len(files_to_classify)
                     )
+                _emit(f"Selecting frames for {len(files_to_classify)} files with AI")
                 result = await phase.execute_async(files_to_classify)
 
             # Validate result exists (should always be set by above branches)
