@@ -1167,6 +1167,14 @@ async def _run_scan_async(
     _proj_label  = Path.cwd().name
     _file_label  = f"{len(paths)} path{'s' if len(paths) != 1 else ''}"
 
+    # \u2500\u2500 ASCII art logo \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    from warden.cli.commands import _scan_ux as _UX_h
+    console.print()
+    _max_w = max(10, console.width - 4)
+    for _line in _UX_h.LOGO_LINES:
+        console.print(f"  [bold steel_blue1]{_line[:_max_w]}[/]")
+
+    # \u2500\u2500 Info line \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     header = Text()
     header.append(" Warden ", style="bold white on dark_blue")
     header.append(f" v{_warden_ver} ", style="dim")
@@ -1178,7 +1186,7 @@ async def _run_scan_async(
     header.append(_level_label, style="dim")
     console.print()
     console.print(header)
-    console.print(Text("─" * min(console.width - 2, 72), style="dim bright_black"))
+    console.print(Text("\u2500" * min(console.width - 2, 72), style="dim bright_black"))
     console.print()
 
     bridge = WardenBridge(project_root=Path.cwd())

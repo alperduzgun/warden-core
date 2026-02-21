@@ -1,11 +1,220 @@
 {
   "schemaVersion": "1.0.0",
-  "totalChainsChecked": 0,
+  "totalChainsChecked": 28,
   "confirmed": 0,
   "unconfirmed": 0,
-  "errors": 0,
-  "entries": [],
-  "deadSymbols": [],
+  "errors": 28,
+  "entries": [
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "asyncio",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "itertools",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "logging",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "datetime.datetime",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "pathlib.Path",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "typing.Any",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "structlog",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "typer",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.box",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.console.Console",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.console.Group",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.live.Live",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.padding.Padding",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.rule.Rule",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.syntax.Syntax",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.table.Table",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "rich.text.Text",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "warden.cli_bridge.bridge.WardenBridge",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/fortification/application/auto_fixer.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/analysis/services/intelligence_loader.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/llm/factory.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/cli_bridge/bridge.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/cli/commands/helpers/git_helper.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/reports/generator.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/shared/utils/prompt_sanitizer.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/llm/metrics.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/cli/commands/__init__.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/cli/commands/scan.py",
+      "targetFqn": "src/warden/cli/commands/helpers/baseline_manager.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    }
+  ],
+  "deadSymbols": [
+    "src/warden/cli/commands/scan.py::_generate_smart_failure_summary",
+    "src/warden/cli/commands/scan.py::_display_llm_summary",
+    "src/warden/cli/commands/scan.py::_display_frame_cost_breakdown",
+    "src/warden/cli/commands/scan.py::_display_memory_stats",
+    "src/warden/cli/commands/scan.py::scan_command",
+    "src/warden/cli/commands/scan.py::_process_stream_events",
+    "src/warden/cli/commands/scan.py::_render_text_report",
+    "src/warden/cli/commands/scan.py::_generate_configured_reports",
+    "src/warden/cli/commands/scan.py::_write_ai_status_file",
+    "src/warden/cli/commands/scan.py::_update_baseline",
+    "src/warden/cli/commands/scan.py::_run_scan_async"
+  ],
   "lspAvailable": true,
-  "generated_at": "2026-02-20T23:56:23.049341+00:00"
+  "generated_at": "2026-02-21T00:14:43.170358+00:00"
 }
