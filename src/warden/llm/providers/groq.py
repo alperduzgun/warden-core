@@ -83,6 +83,16 @@ class GroqClient(ILlmClient):
                 duration_ms=duration_ms,
             )
 
+        except httpx.HTTPStatusError as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            body = e.response.text[:500] if e.response else ""
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"{e} | body={body}",
+                provider=self.provider,
+                duration_ms=duration_ms,
+            )
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return LlmResponse(
