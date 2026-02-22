@@ -25,9 +25,10 @@ class TestEstimateTokens:
         assert estimate_tokens("abcd") == 1
 
     def test_long_repeated_chars(self):
-        # tiktoken compresses repeated chars: "a"*400 → 50 tokens (not 100)
+        # tiktoken compresses repeated chars: "a"*400 → ~50 tokens (BPE)
+        # Without tiktoken (CI), fallback is len//4 = 100
         result = estimate_tokens("a" * 400)
-        assert 30 <= result <= 80  # BPE-compressed range
+        assert 30 <= result <= 100  # BPE-compressed or heuristic fallback
 
     def test_monotonically_increases(self):
         """More text → more tokens (not necessarily linear due to BPE)."""
@@ -121,21 +122,24 @@ class TestTruncateContentForLlm:
         assert result == content
         assert "truncated" not in result
 
+
 class TestTruncateWithAstHints:
     def test_within_budget_unchanged(self):
         content = "line1\\nline2\\nline3"
         result = truncate_with_ast_hints(content, max_tokens=2000)
         assert result == content
 
-    @patch('warden.shared.utils.token_utils.estimate_tokens')
+    @patch("warden.shared.utils.token_utils.estimate_tokens")
     def test_overlapping_windows_merged(self, mock_est):
         mock_est.side_effect = lambda text: 1000 if len(text) > 500 else 10
-        lines = [f"line_{i}" for i in range(1, 101)] # 100 lines
+        lines = [f"line_{i}" for i in range(1, 101)]  # 100 lines
         content = "\n".join(lines)
-        
+
         # dangerous lines 20 and 22. With +/- 5 window, they overlap (15-25 and 17-27 -> 15-27)
-        result = truncate_with_ast_hints(content, max_tokens=100, dangerous_lines=[20, 22], preserve_start_lines=5, preserve_end_lines=5)
-        
+        result = truncate_with_ast_hints(
+            content, max_tokens=100, dangerous_lines=[20, 22], preserve_start_lines=5, preserve_end_lines=5
+        )
+
         assert "line_1\n" in result
         assert "line_5\n" in result
         assert "  ... [9 lines omitted] ..." in result
@@ -145,31 +149,34 @@ class TestTruncateWithAstHints:
         assert "line_96\n" in result
         assert "line_100" in result
 
-    @patch('warden.shared.utils.token_utils.estimate_tokens')
+    @patch("warden.shared.utils.token_utils.estimate_tokens")
     def test_out_of_bounds_lines_handled(self, mock_est):
         mock_est.side_effect = lambda text: 1000 if len(text) > 500 else 10
-        lines = [f"line_{i}" for i in range(1, 101)] # 100 lines
+        lines = [f"line_{i}" for i in range(1, 101)]  # 100 lines
         content = "\n".join(lines)
-        
+
         # dangerous line 200 (out of bounds)
-        result = truncate_with_ast_hints(content, max_tokens=100, dangerous_lines=[200], preserve_start_lines=2, preserve_end_lines=2)
-        
+        result = truncate_with_ast_hints(
+            content, max_tokens=100, dangerous_lines=[200], preserve_start_lines=2, preserve_end_lines=2
+        )
+
         assert "line_1\n" in result
         assert "line_2\n" in result
         assert "line_99\n" in result
         assert "line_100" in result
 
-    @patch('warden.shared.utils.token_utils.estimate_tokens')
+    @patch("warden.shared.utils.token_utils.estimate_tokens")
     def test_no_dangerous_lines(self, mock_est):
         mock_est.side_effect = lambda text: 1000 if len(text) > 500 else 10
-        lines = [f"line_{i}" for i in range(1, 101)] # 100 lines
+        lines = [f"line_{i}" for i in range(1, 101)]  # 100 lines
         content = "\n".join(lines)
-        
+
         # Empty dangerous lines
-        result = truncate_with_ast_hints(content, max_tokens=100, dangerous_lines=[], preserve_start_lines=5, preserve_end_lines=5)
-        
+        result = truncate_with_ast_hints(
+            content, max_tokens=100, dangerous_lines=[], preserve_start_lines=5, preserve_end_lines=5
+        )
+
         assert "line_1\n" in result
         assert "line_5\n" in result
         assert "... [90 lines truncated for LLM context] ..." in result
         assert "line_96\n" in result
-
