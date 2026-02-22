@@ -24,10 +24,7 @@ jobs:
           df -h || echo "df failed"
       - name: Network Speed Test
         run: |
-          echo "=== NETWORK DOWNLOAD SPEED ==="
-          # Download a 100MB test file from Hetzner and measure speed
-          curl -o /dev/null -s -w "Download speed: %{speed_download} Bytes/sec\nTime Total: %{time_total} sec\nTime Connect: %{time_connect} sec\n" https://speed.hetzner.de/100MB.bin
-          
           echo "=== SPEEDTEST-CLI ==="
-          sudo apt-get install -y speedtest-cli
+          sudo apt-get update > /dev/null
+          sudo apt-get install -y speedtest-cli > /dev/null
           speedtest-cli --simple
