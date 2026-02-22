@@ -252,7 +252,7 @@ class ReportGenerator:
             for advice in advisories:
                 notifications.append(
                     {
-                        "descriptor": {"id": "AI001", "name": "AI Advisor Note"},
+                        "descriptor": {"id": "AI001"},
                         "message": {"text": advice},
                         "level": "note",
                     }
