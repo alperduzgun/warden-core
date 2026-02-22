@@ -76,51 +76,88 @@ CRITICALITY_MAP = {
 # be flagged as orphan or unreachable in gap analysis.
 FRAMEWORK_ENTRY_PATTERNS: dict[str, list[str]] = {
     "django": [
-        "manage.py", "wsgi.py", "asgi.py", "urls.py", "admin.py",
-        "views.py", "models.py", "apps.py", "settings.py", "settings/*.py",
+        "manage.py",
+        "wsgi.py",
+        "asgi.py",
+        "urls.py",
+        "admin.py",
+        "views.py",
+        "models.py",
+        "apps.py",
+        "settings.py",
+        "settings/*.py",
         "*/migrations/*.py",
     ],
     "flask": [
-        "app.py", "wsgi.py", "create_app", "__init__.py",
+        "app.py",
+        "wsgi.py",
+        "create_app",
+        "__init__.py",
     ],
     "fastapi": [
-        "main.py", "app.py",
+        "main.py",
+        "app.py",
     ],
     "pyramid": [
-        "app.py", "__init__.py", "views.py", "routes.py",
+        "app.py",
+        "__init__.py",
+        "views.py",
+        "routes.py",
     ],
     "react": [
-        "src/App.*", "src/index.*", "pages/**/*", "app/**/*",
+        "src/App.*",
+        "src/index.*",
+        "pages/**/*",
+        "app/**/*",
     ],
     "nextjs": [
-        "pages/**/*", "app/**/*", "src/pages/**/*", "src/app/**/*",
+        "pages/**/*",
+        "app/**/*",
+        "src/pages/**/*",
+        "src/app/**/*",
         "middleware.*",
     ],
     "vue": [
-        "src/App.vue", "src/main.*", "pages/**/*", "src/router/*",
+        "src/App.vue",
+        "src/main.*",
+        "pages/**/*",
+        "src/router/*",
     ],
     "angular": [
-        "src/main.ts", "src/app/app.module.ts", "src/app/app.component.ts",
+        "src/main.ts",
+        "src/app/app.module.ts",
+        "src/app/app.component.ts",
     ],
     "svelte": [
-        "src/App.svelte", "src/main.*", "src/routes/**/*",
+        "src/App.svelte",
+        "src/main.*",
+        "src/routes/**/*",
     ],
     "express": [
-        "src/main.*", "src/app.*", "src/server.*", "app.*", "server.*",
+        "src/main.*",
+        "src/app.*",
+        "src/server.*",
+        "app.*",
+        "server.*",
         "src/routes/**/*",
     ],
     "nest": [
-        "src/main.ts", "src/app.module.ts", "src/app.controller.ts",
+        "src/main.ts",
+        "src/app.module.ts",
+        "src/app.controller.ts",
     ],
     "spring": [
         "src/main/java/**/*Application.java",
         "src/main/java/**/*Controller.java",
     ],
     "rails": [
-        "config/routes.rb", "app/controllers/**/*", "app/models/**/*",
+        "config/routes.rb",
+        "app/controllers/**/*",
+        "app/models/**/*",
     ],
     "laravel": [
-        "routes/*.php", "app/Http/Controllers/**/*",
+        "routes/*.php",
+        "app/Http/Controllers/**/*",
     ],
 }
 
@@ -342,17 +379,13 @@ class PreAnalysisPhase:
                         rel_src = str(src_path.relative_to(self.project_root))
                     except ValueError:
                         rel_src = str(src_path)
-                    pipeline_context.dependency_graph_forward[rel_src] = [
-                        self._path_to_relative(d) for d in deps
-                    ]
+                    pipeline_context.dependency_graph_forward[rel_src] = [self._path_to_relative(d) for d in deps]
                 for dep_path, dependents in self.dependency_graph._reverse_graph.items():
                     try:
                         rel_dep = str(dep_path.relative_to(self.project_root))
                     except ValueError:
                         rel_dep = str(dep_path)
-                    pipeline_context.dependency_graph_reverse[rel_dep] = [
-                        self._path_to_relative(d) for d in dependents
-                    ]
+                    pipeline_context.dependency_graph_reverse[rel_dep] = [self._path_to_relative(d) for d in dependents]
 
             # Step 4: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
@@ -431,9 +464,7 @@ class PreAnalysisPhase:
                     _emit("Building code graph (symbol-level)")
                     # O4 fix: explicit timeout for graph build
                     code_graph = await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
-                            None, code_graph_builder.build, self.dependency_graph
-                        ),
+                        asyncio.get_event_loop().run_in_executor(None, code_graph_builder.build, self.dependency_graph),
                         timeout=60,
                     )
 
@@ -454,11 +485,22 @@ class PreAnalysisPhase:
                     else:
                         # Heuristic: common entry point patterns
                         for rp in all_rel_paths:
-                            if any(rp.endswith(p) for p in (
-                                "main.py", "__main__.py", "app.py", "cli.py",
-                                "manage.py", "wsgi.py", "asgi.py", "index.ts",
-                                "index.js", "server.py", "server.ts",
-                            )):
+                            if any(
+                                rp.endswith(p)
+                                for p in (
+                                    "main.py",
+                                    "__main__.py",
+                                    "app.py",
+                                    "cli.py",
+                                    "manage.py",
+                                    "wsgi.py",
+                                    "asgi.py",
+                                    "index.ts",
+                                    "index.js",
+                                    "server.py",
+                                    "server.ts",
+                                )
+                            ):
                                 entry_points_list.append(rp)
 
                     # Collect framework metadata for gap analysis

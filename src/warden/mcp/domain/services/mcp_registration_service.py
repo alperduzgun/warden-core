@@ -97,11 +97,7 @@ class MCPRegistrationService:
     def _register_toml(self, tool_name: str, config_path: Path) -> RegistrationResult:
         """Register warden MCP in a TOML config file (e.g. ~/.codex/config.toml)."""
         section = "[mcp_servers.warden]"
-        entry = (
-            f"\n{section}\n"
-            f'command = "{self.warden_path}"\n'
-            f'args = ["serve", "mcp", "start"]\n'
-        )
+        entry = f'\n{section}\ncommand = "{self.warden_path}"\nargs = ["serve", "mcp", "start"]\n'
         try:
             existing = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
 
@@ -112,6 +108,7 @@ class MCPRegistrationService:
             # Remove stale warden section if command differs, then re-append
             if section in existing:
                 import re
+
                 existing = re.sub(
                     r"\n?\[mcp_servers\.warden\][^\[]*",
                     "",

@@ -28,8 +28,7 @@ def format_file_symbols_for_prompt(
         Formatted string or empty string if no symbols found.
     """
     symbols = [
-        node for node in code_graph.nodes.values()
-        if node.file_path == file_path or file_path.endswith(node.file_path)
+        node for node in code_graph.nodes.values() if node.file_path == file_path or file_path.endswith(node.file_path)
     ]
 
     if not symbols:

@@ -105,9 +105,7 @@ class FrameRunner:
             project_root = getattr(context, "project_root", None) or Path.cwd()
             use_gitignore = getattr(self.config, "use_gitignore", True)
             frame_ignores = self._collect_frame_ignores()
-            self.ignore_matcher = IgnoreMatcher(
-                project_root, use_gitignore=use_gitignore, frame_ignores=frame_ignores
-            )
+            self.ignore_matcher = IgnoreMatcher(project_root, use_gitignore=use_gitignore, frame_ignores=frame_ignores)
 
         frame_id = frame.frame_id
         original_count = len(code_files)
@@ -240,9 +238,7 @@ class FrameRunner:
         if isinstance(frame, ProjectContextAware):
             # Prefer the dedicated project_context field (set by pre_analysis_executor).
             # Fall back to project_type for legacy compatibility (it may hold the full object).
-            project_context = getattr(context, "project_context", None) or getattr(
-                context, "project_type", None
-            )
+            project_context = getattr(context, "project_context", None) or getattr(context, "project_type", None)
             if project_context and hasattr(project_context, "service_abstractions"):
                 frame.set_project_context(project_context)
 

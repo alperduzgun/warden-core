@@ -15,19 +15,28 @@ from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 # Lazy import types — used at runtime only inside methods
-_QUERY_TYPES = frozenset({
-    "search",
-    "who_uses",
-    "who_inherits",
-    "who_implements",
-    "dependency_chain",
-    "callers",
-    "callees",
-})
+_QUERY_TYPES = frozenset(
+    {
+        "search",
+        "who_uses",
+        "who_inherits",
+        "who_implements",
+        "dependency_chain",
+        "callers",
+        "callees",
+    }
+)
 
-_SYMBOL_KINDS = frozenset({
-    "class", "function", "method", "mixin", "interface", "module",
-})
+_SYMBOL_KINDS = frozenset(
+    {
+        "class",
+        "function",
+        "method",
+        "mixin",
+        "interface",
+        "module",
+    }
+)
 
 # Result caps
 _MAX_EDGES = 50
@@ -98,8 +107,7 @@ class AuditAdapter(BaseWardenAdapter):
                     "name": {
                         "type": "string",
                         "description": (
-                            "Symbol name or FQN (e.g., 'SecurityFrame' or "
-                            "'src/warden/foo.py::SecurityFrame')"
+                            "Symbol name or FQN (e.g., 'SecurityFrame' or 'src/warden/foo.py::SecurityFrame')"
                         ),
                     },
                     "query_type": {
@@ -128,8 +136,7 @@ class AuditAdapter(BaseWardenAdapter):
             self._create_tool_definition(
                 name="warden_graph_search",
                 description=(
-                    "Fuzzy/prefix search across the code graph symbols. "
-                    "Returns matching symbols sorted by relevance."
+                    "Fuzzy/prefix search across the code graph symbols. Returns matching symbols sorted by relevance."
                 ),
                 properties={
                     "query": {
@@ -184,9 +191,7 @@ class AuditAdapter(BaseWardenAdapter):
 
         cg_path = self.project_root / ".warden" / "intelligence" / "code_graph.json"
         if not cg_path.exists():
-            raise FileNotFoundError(
-                "Code graph not found. Run 'warden refresh --force' first."
-            )
+            raise FileNotFoundError("Code graph not found. Run 'warden refresh --force' first.")
 
         data = json.loads(cg_path.read_text(encoding="utf-8"))
 
@@ -195,9 +200,7 @@ class AuditAdapter(BaseWardenAdapter):
         self._code_graph_cache = CodeGraph.model_validate(data)
         return self._code_graph_cache
 
-    def _resolve_symbol(
-        self, code_graph: Any, name: str
-    ) -> tuple[str | None, list[Any]]:
+    def _resolve_symbol(self, code_graph: Any, name: str) -> tuple[str | None, list[Any]]:
         """Resolve a symbol name to FQN and matching nodes.
 
         If name contains '::' it is treated as an exact FQN lookup.
@@ -236,14 +239,15 @@ class AuditAdapter(BaseWardenAdapter):
             code_graph, gap_report, dep_graph, chain_val = _load_intelligence(self.project_root)
 
             if not code_graph and not gap_report and not dep_graph and not chain_val:
-                return MCPToolResult.error(
-                    "No intelligence data found. Run 'warden refresh --force' first."
-                )
+                return MCPToolResult.error("No intelligence data found. Run 'warden refresh --force' first.")
 
             if fmt == "markdown":
                 output = _render_markdown(
-                    code_graph, gap_report, dep_graph,
-                    full=full, chain_validation=chain_val,
+                    code_graph,
+                    gap_report,
+                    dep_graph,
+                    full=full,
+                    chain_validation=chain_val,
                     project_root=self.project_root,
                 )
                 return MCPToolResult(content=[{"type": "text", "text": output}])
@@ -267,8 +271,7 @@ class AuditAdapter(BaseWardenAdapter):
         query_type = arguments.get("query_type", "search")
         if query_type not in _QUERY_TYPES:
             return MCPToolResult.error(
-                f"Invalid query_type '{query_type}'. "
-                f"Must be one of: {', '.join(sorted(_QUERY_TYPES))}"
+                f"Invalid query_type '{query_type}'. Must be one of: {', '.join(sorted(_QUERY_TYPES))}"
             )
 
         try:
@@ -285,14 +288,16 @@ class AuditAdapter(BaseWardenAdapter):
 
         # All other query types require at least one resolved symbol
         if not fqn:
-            return MCPToolResult.json_result({
-                "symbol": name,
-                "fqn": None,
-                "query_type": query_type,
-                "found": False,
-                "count": 0,
-                "results": [],
-            })
+            return MCPToolResult.json_result(
+                {
+                    "symbol": name,
+                    "fqn": None,
+                    "query_type": query_type,
+                    "found": False,
+                    "count": 0,
+                    "results": [],
+                }
+            )
 
         include_tests = arguments.get("include_tests", False)
         max_depth = min(arguments.get("max_depth", _DEFAULT_DEPTH), _MAX_DEPTH)
@@ -322,23 +327,22 @@ class AuditAdapter(BaseWardenAdapter):
     ) -> MCPToolResult:
         """Original search behavior: find symbol + related edges."""
         if not matches:
-            return MCPToolResult.json_result({
-                "symbol": name,
-                "query_type": "search",
-                "found": False,
-                "matches": [],
-            })
+            return MCPToolResult.json_result(
+                {
+                    "symbol": name,
+                    "query_type": "search",
+                    "found": False,
+                    "matches": [],
+                }
+            )
 
         serialized_matches = [
-            {"fqn": m.fqn, **m.model_dump(by_alias=False, exclude={"fqn"})}
-            for m in matches[:_MAX_NODES]
+            {"fqn": m.fqn, **m.model_dump(by_alias=False, exclude={"fqn"})} for m in matches[:_MAX_NODES]
         ]
 
         match_fqns = {m.fqn for m in matches}
         related_edges = [
-            e.model_dump(by_alias=False)
-            for e in code_graph.edges
-            if e.source in match_fqns or e.target in match_fqns
+            e.model_dump(by_alias=False) for e in code_graph.edges if e.source in match_fqns or e.target in match_fqns
         ][:_MAX_EDGES]
 
         # Check LSP confirmation
@@ -365,113 +369,101 @@ class AuditAdapter(BaseWardenAdapter):
 
         return MCPToolResult.json_result(result_data)
 
-    def _result_who_uses(
-        self, name: str, fqn: str, code_graph: Any, include_tests: bool
-    ) -> MCPToolResult:
+    def _result_who_uses(self, name: str, fqn: str, code_graph: Any, include_tests: bool) -> MCPToolResult:
         """Return edges where target == fqn."""
         edges = code_graph.who_uses(fqn, include_tests=include_tests)
         serialized = [e.model_dump(by_alias=False) for e in edges[:_MAX_EDGES]]
-        return MCPToolResult.json_result({
-            "symbol": name,
-            "fqn": fqn,
-            "query_type": "who_uses",
-            "found": True,
-            "count": len(serialized),
-            "results": serialized,
-        })
+        return MCPToolResult.json_result(
+            {
+                "symbol": name,
+                "fqn": fqn,
+                "query_type": "who_uses",
+                "found": True,
+                "count": len(serialized),
+                "results": serialized,
+            }
+        )
 
-    def _result_who_inherits(
-        self, name: str, fqn: str, code_graph: Any
-    ) -> MCPToolResult:
+    def _result_who_inherits(self, name: str, fqn: str, code_graph: Any) -> MCPToolResult:
         """Return nodes that inherit from fqn."""
         nodes = code_graph.who_inherits(fqn)
-        serialized = [
-            {"fqn": n.fqn, **n.model_dump(by_alias=False, exclude={"fqn"})}
-            for n in nodes[:_MAX_NODES]
-        ]
-        return MCPToolResult.json_result({
-            "symbol": name,
-            "fqn": fqn,
-            "query_type": "who_inherits",
-            "found": True,
-            "count": len(serialized),
-            "results": serialized,
-        })
+        serialized = [{"fqn": n.fqn, **n.model_dump(by_alias=False, exclude={"fqn"})} for n in nodes[:_MAX_NODES]]
+        return MCPToolResult.json_result(
+            {
+                "symbol": name,
+                "fqn": fqn,
+                "query_type": "who_inherits",
+                "found": True,
+                "count": len(serialized),
+                "results": serialized,
+            }
+        )
 
-    def _result_who_implements(
-        self, name: str, fqn: str, code_graph: Any
-    ) -> MCPToolResult:
+    def _result_who_implements(self, name: str, fqn: str, code_graph: Any) -> MCPToolResult:
         """Return nodes that implement fqn."""
         nodes = code_graph.who_implements(fqn)
-        serialized = [
-            {"fqn": n.fqn, **n.model_dump(by_alias=False, exclude={"fqn"})}
-            for n in nodes[:_MAX_NODES]
-        ]
-        return MCPToolResult.json_result({
-            "symbol": name,
-            "fqn": fqn,
-            "query_type": "who_implements",
-            "found": True,
-            "count": len(serialized),
-            "results": serialized,
-        })
+        serialized = [{"fqn": n.fqn, **n.model_dump(by_alias=False, exclude={"fqn"})} for n in nodes[:_MAX_NODES]]
+        return MCPToolResult.json_result(
+            {
+                "symbol": name,
+                "fqn": fqn,
+                "query_type": "who_implements",
+                "found": True,
+                "count": len(serialized),
+                "results": serialized,
+            }
+        )
 
-    def _result_dependency_chain(
-        self, name: str, fqn: str, code_graph: Any, max_depth: int
-    ) -> MCPToolResult:
+    def _result_dependency_chain(self, name: str, fqn: str, code_graph: Any, max_depth: int) -> MCPToolResult:
         """Return dependency chains from fqn."""
         chains = code_graph.get_dependency_chain(fqn, max_depth=max_depth)
-        serialized = [
-            [e.model_dump(by_alias=False) for e in chain]
-            for chain in chains[:_MAX_CHAINS]
-        ]
-        return MCPToolResult.json_result({
-            "symbol": name,
-            "fqn": fqn,
-            "query_type": "dependency_chain",
-            "found": True,
-            "count": len(serialized),
-            "max_depth": max_depth,
-            "results": serialized,
-        })
+        serialized = [[e.model_dump(by_alias=False) for e in chain] for chain in chains[:_MAX_CHAINS]]
+        return MCPToolResult.json_result(
+            {
+                "symbol": name,
+                "fqn": fqn,
+                "query_type": "dependency_chain",
+                "found": True,
+                "count": len(serialized),
+                "max_depth": max_depth,
+                "results": serialized,
+            }
+        )
 
-    def _result_callers(
-        self, name: str, fqn: str, code_graph: Any, include_tests: bool
-    ) -> MCPToolResult:
+    def _result_callers(self, name: str, fqn: str, code_graph: Any, include_tests: bool) -> MCPToolResult:
         """Return who_uses edges filtered to CALLS relation only."""
         from warden.analysis.domain.code_graph import EdgeRelation
 
         edges = code_graph.who_uses(fqn, include_tests=include_tests)
         call_edges = [e for e in edges if e.relation == EdgeRelation.CALLS]
         serialized = [e.model_dump(by_alias=False) for e in call_edges[:_MAX_EDGES]]
-        return MCPToolResult.json_result({
-            "symbol": name,
-            "fqn": fqn,
-            "query_type": "callers",
-            "found": True,
-            "count": len(serialized),
-            "results": serialized,
-        })
+        return MCPToolResult.json_result(
+            {
+                "symbol": name,
+                "fqn": fqn,
+                "query_type": "callers",
+                "found": True,
+                "count": len(serialized),
+                "results": serialized,
+            }
+        )
 
-    def _result_callees(
-        self, name: str, fqn: str, code_graph: Any
-    ) -> MCPToolResult:
+    def _result_callees(self, name: str, fqn: str, code_graph: Any) -> MCPToolResult:
         """Return outgoing CALLS edges from fqn."""
         from warden.analysis.domain.code_graph import EdgeRelation
 
-        callees = [
-            e for e in code_graph.edges
-            if e.source == fqn and e.relation == EdgeRelation.CALLS
-        ]
+        callees = [e for e in code_graph.edges if e.source == fqn and e.relation == EdgeRelation.CALLS]
         serialized = [e.model_dump(by_alias=False) for e in callees[:_MAX_EDGES]]
-        return MCPToolResult.json_result({
-            "symbol": name,
-            "fqn": fqn,
-            "query_type": "callees",
-            "found": True,
-            "count": len(serialized),
-            "results": serialized,
-        })
+        return MCPToolResult.json_result(
+            {
+                "symbol": name,
+                "fqn": fqn,
+                "query_type": "callees",
+                "found": True,
+                "count": len(serialized),
+                "results": serialized,
+            }
+        )
 
     # ------------------------------------------------------------------
     # warden_graph_search
@@ -525,14 +517,15 @@ class AuditAdapter(BaseWardenAdapter):
 
         scored.sort(key=lambda x: (x[0], x[1]))
         results = [
-            {"fqn": item[2].fqn, **item[2].model_dump(by_alias=False, exclude={"fqn"})}
-            for item in scored[:limit]
+            {"fqn": item[2].fqn, **item[2].model_dump(by_alias=False, exclude={"fqn"})} for item in scored[:limit]
         ]
 
-        return MCPToolResult.json_result({
-            "query": query,
-            "kind": kind_filter,
-            "found": len(results) > 0,
-            "count": len(results),
-            "results": results,
-        })
+        return MCPToolResult.json_result(
+            {
+                "query": query,
+                "kind": kind_filter,
+                "found": len(results) > 0,
+                "count": len(results),
+                "results": results,
+            }
+        )

@@ -80,7 +80,9 @@ class PreAnalysisExecutor(BasePhaseExecutor):
             logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), tb=traceback.format_exc())
             raise e
         except Exception as e:
-            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__, tb=traceback.format_exc())
+            logger.error(
+                "phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__, tb=traceback.format_exc()
+            )
             context.errors.append(f"PRE_ANALYSIS failed: {e!s}")
 
         if self.progress_callback:

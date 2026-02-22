@@ -13,31 +13,87 @@ if TYPE_CHECKING:
     from warden.validation.domain.frame import CodeFile
 
 # Extensions that never contain security-relevant logic.
-_SAFE_EXTENSIONS: frozenset[str] = frozenset({
-    ".md", ".txt", ".rst", ".json", ".yaml", ".yml", ".css", ".scss",
-    ".html", ".xml", ".csv", ".lock", ".svg", ".png", ".jpg", ".jpeg",
-    ".gif", ".ico", ".woff", ".woff2", ".eot", ".ttf", ".map",
-    # Python type-stubs / packaging metadata
-    ".pyi", ".typed", ".toml", ".ini", ".cfg",
-})
+_SAFE_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".md",
+        ".txt",
+        ".rst",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".css",
+        ".scss",
+        ".html",
+        ".xml",
+        ".csv",
+        ".lock",
+        ".svg",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".eot",
+        ".ttf",
+        ".map",
+        # Python type-stubs / packaging metadata
+        ".pyi",
+        ".typed",
+        ".toml",
+        ".ini",
+        ".cfg",
+    }
+)
 
 # Directory segments that indicate non-production code.
 _SAFE_DIR_SEGMENTS: tuple[str, ...] = (
-    "/tests/", "/test/", "/docs/", "/migrations/", "/node_modules/",
-    "/dist/", "/build/", "/__pycache__/", "/site-packages/",
-    "/.git/", "/.tox/", "/.mypy_cache/", "/.pytest_cache/",
-    "/.venv/", "/venv/", "/.eggs/",
+    "/tests/",
+    "/test/",
+    "/docs/",
+    "/migrations/",
+    "/node_modules/",
+    "/dist/",
+    "/build/",
+    "/__pycache__/",
+    "/site-packages/",
+    "/.git/",
+    "/.tox/",
+    "/.mypy_cache/",
+    "/.pytest_cache/",
+    "/.venv/",
+    "/venv/",
+    "/.eggs/",
 )
 
 # Filenames that are structurally safe regardless of extension.
-_SAFE_FILENAMES: frozenset[str] = frozenset({
-    "__init__.py", "__main__.py", "conftest.py", "_version.py",
-    "setup.py", "setup.cfg", "pyproject.toml", "poetry.lock",
-    "Makefile", "Dockerfile", ".dockerignore", ".gitignore",
-    ".editorconfig", ".flake8", ".pylintrc", "tox.ini",
-    "requirements.txt", "requirements-dev.txt",
-    "MANIFEST.in", "LICENSE", "CHANGELOG.md", "CONTRIBUTING.md",
-})
+_SAFE_FILENAMES: frozenset[str] = frozenset(
+    {
+        "__init__.py",
+        "__main__.py",
+        "conftest.py",
+        "_version.py",
+        "setup.py",
+        "setup.cfg",
+        "pyproject.toml",
+        "poetry.lock",
+        "Makefile",
+        "Dockerfile",
+        ".dockerignore",
+        ".gitignore",
+        ".editorconfig",
+        ".flake8",
+        ".pylintrc",
+        "tox.ini",
+        "requirements.txt",
+        "requirements-dev.txt",
+        "MANIFEST.in",
+        "LICENSE",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+    }
+)
 
 # Minimum content size for a file to warrant LLM triage.
 _MIN_CONTENT_LENGTH = 300

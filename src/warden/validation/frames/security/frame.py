@@ -395,11 +395,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         semantic_context += "\n\n[Taint Analysis - Source-to-Sink Paths (HIGH RISK)]:\n"
                         for tp in unsanitized[:5]:
                             transforms = getattr(tp, "transformations", [])
-                            transform_str = (
-                                f" via [{' -> '.join(transforms[:3])}]"
-                                if transforms
-                                else ""
-                            )
+                            transform_str = f" via [{' -> '.join(transforms[:3])}]" if transforms else ""
                             semantic_context += (
                                 f"  - SOURCE: {tp.source.name} (line {tp.source.line})"
                                 f"{transform_str}"
@@ -410,12 +406,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                     if sanitized:
                         semantic_context += "\n[Taint Analysis - Sanitized Paths (lower risk)]:\n"
                         for tp in sanitized[:3]:
-                            sanitizer_list = (
-                                list(tp.sanitizers) if tp.sanitizers else ["unknown"]
-                            )
+                            sanitizer_list = list(tp.sanitizers) if tp.sanitizers else ["unknown"]
                             semantic_context += (
-                                f"  - {tp.source.name} -> {tp.sink.name}"
-                                f" (sanitized by: {', '.join(sanitizer_list)})\n"
+                                f"  - {tp.source.name} -> {tp.sink.name} (sanitized by: {', '.join(sanitizer_list)})\n"
                             )
                     logger.debug(
                         "taint_context_added_to_llm",
@@ -430,9 +423,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                             format_file_symbols_for_prompt,
                         )
 
-                        symbol_ctx = format_file_symbols_for_prompt(
-                            context.code_graph, code_file.path
-                        )
+                        symbol_ctx = format_file_symbols_for_prompt(context.code_graph, code_file.path)
                         if symbol_ctx:
                             semantic_context += f"\n{symbol_ctx}"
                     except Exception as e:
@@ -798,10 +789,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
             findings=taint_findings,
         )
 
-    def _aggregate_findings(
-        self,
-        check_results: list[CheckResult]
-    ) -> list[Finding]:
+    def _aggregate_findings(self, check_results: list[CheckResult]) -> list[Finding]:
         """
         Aggregate findings from all check results.
 

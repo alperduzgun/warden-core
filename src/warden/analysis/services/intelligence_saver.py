@@ -231,9 +231,7 @@ class IntelligenceSaver:
     def _atomic_write(self, path: Path, content: str) -> None:
         """Write content atomically: write to temp file then replace."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(path.parent), suffix=".tmp", prefix=".warden_"
-        )
+        fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp", prefix=".warden_")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)

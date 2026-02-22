@@ -99,8 +99,7 @@ QUOTES: list[tuple[str, str]] = [
     ("Security is a process, not a product.", "Bruce Schneier"),
     ("The only system which is truly secure is one which is switched off.", "Gene Spafford"),
     (
-        "There are only two types of companies:\n"
-        "those that have been hacked, and those that don't know yet.",
+        "There are only two types of companies:\nthose that have been hacked, and those that don't know yet.",
         "John Chambers",
     ),
     ("Make it work, make it right, make it fast — in that order.", "Kent Beck"),
@@ -116,11 +115,11 @@ QUOTES: list[tuple[str, str]] = [
 
 # Shown while a phase is loading (no frame rows yet).
 PHASE_HINTS: dict[str, str] = {
-    "Pre-Analysis":  "Building code graph, running tree-sitter parsing & context extraction",
-    "Triage":        "Classifying files with AI to select optimal frames per file",
-    "Validation":    "Running security, property and quality frames with LLM verification",
-    "Verification":  "Cross-checking findings against baseline and filtering false positives",
-    "Reporting":     "Generating SARIF, badge and structured reports",
+    "Pre-Analysis": "Building code graph, running tree-sitter parsing & context extraction",
+    "Triage": "Classifying files with AI to select optimal frames per file",
+    "Validation": "Running security, property and quality frames with LLM verification",
+    "Verification": "Cross-checking findings against baseline and filtering false positives",
+    "Reporting": "Generating SARIF, badge and structured reports",
     "Fortification": "Applying auto-fix patches and updating baseline",
-    "Audit":         "Running audit context analysis: imports, dependencies, dead code",
+    "Audit": "Running audit context analysis: imports, dependencies, dead code",
 }

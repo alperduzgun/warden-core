@@ -23,9 +23,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_TAINT_SUPPORTED_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "go", "java"}
-)
+_TAINT_SUPPORTED_LANGUAGES: frozenset[str] = frozenset({"python", "javascript", "typescript", "go", "java"})
 
 
 class TaintAnalysisService:

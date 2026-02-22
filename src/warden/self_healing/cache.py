@@ -83,9 +83,7 @@ class HealingCache:
             data = json.dumps(self._store, indent=2, default=str)
 
             # Atomic write: write to temp file in same dir, then rename
-            fd, tmp_path = tempfile.mkstemp(
-                dir=str(self._cache_dir), suffix=".tmp"
-            )
+            fd, tmp_path = tempfile.mkstemp(dir=str(self._cache_dir), suffix=".tmp")
             closed = False
             try:
                 os.write(fd, data.encode("utf-8"))
@@ -145,9 +143,7 @@ class HealingCache:
     def _purge_stale(self) -> None:
         """Remove entries older than TTL."""
         now = time.time()
-        stale_keys = [
-            k for k, v in self._store.items() if now - v.get("timestamp", 0) > TTL_SECONDS
-        ]
+        stale_keys = [k for k, v in self._store.items() if now - v.get("timestamp", 0) > TTL_SECONDS]
         for key in stale_keys:
             del self._store[key]
         if stale_keys:

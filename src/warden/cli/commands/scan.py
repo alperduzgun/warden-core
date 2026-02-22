@@ -336,6 +336,7 @@ def scan_command(
     # Named sentinel class so the idempotency check is reliable.
     class _CliLevelFilter:
         """Structlog processor: drops events with level < cli threshold."""
+
         _LEVELS: dict[str, int] = {"debug": 10, "info": 20, "warning": 30, "warn": 30, "error": 40, "critical": 50}
 
         def __call__(self, logger: Any, method: str, event_dict: dict) -> dict:
@@ -544,25 +545,25 @@ async def _process_stream_events(
     frame_stats: dict[str, int] = {"passed": 0, "failed": 0, "skipped": 0, "total": 0}
     final_result_data: dict | None = None
     processed_units = 0
-    total_units     = 0
-    current_phase   = ""
-    current_frame   = ""
-    _scan_start     = time.monotonic()   # wall-clock for elapsed display
+    total_units = 0
+    current_phase = ""
+    current_frame = ""
+    _scan_start = time.monotonic()  # wall-clock for elapsed display
 
     # ── Phase-level state ──────────────────────────────────────────────────
     # Completed phases → summary line + optional step subtitle each
-    phase_summary_rows:   list[Text] = []
+    phase_summary_rows: list[Text] = []
     # Active phase → individual frame rows (cleared on each new phase)
     current_phase_frames: list[Text] = []
     # Per-phase counters and step log for the summary
-    _phase_passed  = 0
-    _phase_failed  = 0
-    _phase_issues  = 0
-    _phase_start   = time.monotonic()
-    _last_phase    = ""           # prevent duplicate headers
-    _phase_steps:  list[str] = [] # progress_update status strings for subtitle
+    _phase_passed = 0
+    _phase_failed = 0
+    _phase_issues = 0
+    _phase_start = time.monotonic()
+    _last_phase = ""  # prevent duplicate headers
+    _phase_steps: list[str] = []  # progress_update status strings for subtitle
 
-    MAX_FRAME_ROWS = 6    # max frame detail rows visible for the current phase
+    MAX_FRAME_ROWS = 6  # max frame detail rows visible for the current phase
 
     from warden.cli.commands import _scan_ux as _UX
 
@@ -571,8 +572,8 @@ async def _process_stream_events(
         nonlocal _phase_passed, _phase_failed, _phase_issues, _phase_start, _last_phase, _phase_steps
         if not _last_phase:
             return
-        elapsed    = time.monotonic() - _phase_start
-        total_f    = _phase_passed + _phase_failed
+        elapsed = time.monotonic() - _phase_start
+        total_f = _phase_passed + _phase_failed
         has_issues = _phase_issues > 0
 
         # ── header row: glyph + name + frame count + status + time ─────────
@@ -609,16 +610,16 @@ async def _process_stream_events(
 
         current_phase_frames.clear()
         _phase_passed = _phase_failed = _phase_issues = 0
-        _phase_start  = time.monotonic()
-        _phase_steps  = []
-        _last_phase   = ""
+        _phase_start = time.monotonic()
+        _phase_steps = []
+        _last_phase = ""
 
     def _make_live_renderable() -> Group:
         """Build live panel:
-           [completed phase summaries]
-           [current phase frame rows]
-           [spinner + active status + wall-clock]
-           [rotating security tip]
+        [completed phase summaries]
+        [current phase frame rows]
+        [spinner + active status + wall-clock]
+        [rotating security tip]
         """
         elapsed_total = time.monotonic() - _scan_start
         mm = int(elapsed_total // 60)
@@ -626,16 +627,14 @@ async def _process_stream_events(
         clock_str = f"  [dim]{mm:02d}:{ss:02d}[/dim]" if elapsed_total >= 1 else ""
 
         counter_str = f" ({processed_units}/{total_units})" if total_units > 0 else ""
-        frame_hint  = f"  [dim]{current_frame}[/dim]" if current_frame and current_frame != current_phase else ""
+        frame_hint = f"  [dim]{current_frame}[/dim]" if current_frame and current_frame != current_phase else ""
 
         active_tbl = Table.grid(padding=(0, 1))
         active_tbl.add_column(no_wrap=True)
         active_tbl.add_column(no_wrap=False)
         active_tbl.add_row(
             _spinner_widget,
-            Text.from_markup(
-                f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}"
-            ),
+            Text.from_markup(f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}"),
         )
 
         renderables: list = [*phase_summary_rows]
@@ -653,9 +652,9 @@ async def _process_stream_events(
         renderables.append(active_tbl)
 
         # Rotating security tip — swaps every 14 s
-        tip_idx  = int(elapsed_total / 14) % len(_UX.TIPS)
+        tip_idx = int(elapsed_total / 14) % len(_UX.TIPS)
         _max_tip = max(10, console.width - 8)
-        tip_row  = Text()
+        tip_row = Text()
         tip_row.append("  · ", style="dim bright_black")
         tip_row.append(_UX.TIPS[tip_idx][:_max_tip], style="dim")
         renderables.append(tip_row)
@@ -679,12 +678,12 @@ async def _process_stream_events(
                 event_type = event.get("type")
 
                 if event_type == "progress":
-                    evt  = event["event"]
+                    evt = event["event"]
                     data = event.get("data", {})
 
                     # ── discovery / pipeline start ────────────────────────────
                     if evt == "discovery_complete":
-                        total_units   = data.get("total_files", 0)
+                        total_units = data.get("total_files", 0)
                         current_phase = f"Discovered {total_units} files"
                         current_frame = ""
 
@@ -701,19 +700,19 @@ async def _process_stream_events(
 
                     # ── phase transitions ──────────────────────────────────────
                     elif evt == "phase_started":
-                        raw   = data.get("phase_name", data.get("phase", current_phase))
+                        raw = data.get("phase_name", data.get("phase", current_phase))
                         label = str(raw).title()
 
                         # Only transition when the phase name actually changes
                         if label != _last_phase:
-                            _flush_phase()           # collapse previous phase
+                            _flush_phase()  # collapse previous phase
                             current_phase = label
                             current_frame = ""
-                            _last_phase   = label
+                            _last_phase = label
 
                         phase_total = data.get("total_units", 0)
                         if phase_total > 0:
-                            total_units     = phase_total
+                            total_units = phase_total
                             processed_units = 0
 
                     # ── per-frame activity ───────────────────────────────────
@@ -735,7 +734,7 @@ async def _process_stream_events(
                         nonlocal_frame_name = data.get("frame_name", data.get("frame_id", "?"))
                         frame_status = data.get("status", "unknown")
                         findings_num = data.get("findings", data.get("issues_found", 0))
-                        duration     = data.get("duration", 0)
+                        duration = data.get("duration", 0)
 
                         frame_stats["total"] += 1
                         if frame_status == "passed":
@@ -751,7 +750,7 @@ async def _process_stream_events(
                             icon, color = "–", "dim"
 
                         _phase_issues += findings_num
-                        current_frame  = nonlocal_frame_name
+                        current_frame = nonlocal_frame_name
 
                         # ── Critical finding flash row ─────────────────────────────
                         severity = str(data.get("severity", "")).lower()
@@ -759,8 +758,7 @@ async def _process_stream_events(
                             flash = Text()
                             flash.append("  !! ", style="bold red")
                             flash.append(
-                                f"{findings_num} issue{'s' if findings_num != 1 else ''} in "
-                                f"{nonlocal_frame_name}",
+                                f"{findings_num} issue{'s' if findings_num != 1 else ''} in {nonlocal_frame_name}",
                                 style="bold white",
                             )
                             current_phase_frames.append(flash)
@@ -770,7 +768,9 @@ async def _process_stream_events(
                         row.append(f"    {icon} ", style=f"bold {color}")
                         row.append(f"{nonlocal_frame_name:<26}", style="white" if findings_num > 0 else "dim")
                         if findings_num > 0:
-                            row.append(f"  {findings_num} issue{'s' if findings_num != 1 else ''}", style=f"bold {color}")
+                            row.append(
+                                f"  {findings_num} issue{'s' if findings_num != 1 else ''}", style=f"bold {color}"
+                            )
                         else:
                             row.append("  clean", style="dim green")
                         row.append(f"  {duration:.1f}s", style="dim")
@@ -778,7 +778,7 @@ async def _process_stream_events(
 
                 elif event_type == "result":
                     final_result_data = event["data"]
-                    _flush_phase()            # collapse final phase
+                    _flush_phase()  # collapse final phase
                     current_phase = "Complete"
                     current_frame = ""
 
@@ -803,13 +803,13 @@ async def _process_stream_events(
         return None, frame_stats, total_units
 
     import random
+
     q_text, q_author = random.choice(_UX.QUOTES)
     console.print()
     console.print(f"  [dim italic]{q_text}[/dim italic]")
     console.print(f"                                        [dim]— {q_author}[/dim]")
     console.print()
     return final_result_data, frame_stats, total_units
-
 
 
 def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
@@ -905,7 +905,6 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
             blocker_issues = res.get("blocker_issues_count", res.get("blocker_findings", 0))
             critical_blockers = res.get("critical_blocker_count", res.get("critical_findings", 0))
 
-
     # ─── Findings ────────────────────────────────────────────
     display_findings = [f for f in all_findings if f.get("category", "") != "Orphan Code Analysis"]
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
@@ -915,30 +914,48 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
         console.print()
         for idx, finding in enumerate(display_findings[:10]):
             severity = str(finding.get("severity", "info")).lower()
-            color_map     = {"critical": "red", "high": "dark_orange", "medium": "yellow3", "low": "steel_blue1", "info": "grey62"}
-            label_map     = {"critical": "critical", "high": "high", "medium": "medium", "low": "low", "info": "info"}
-            color         = color_map.get(severity, "grey62")
-            sev_label     = label_map.get(severity, severity)
+            color_map = {
+                "critical": "red",
+                "high": "dark_orange",
+                "medium": "yellow3",
+                "low": "steel_blue1",
+                "info": "grey62",
+            }
+            label_map = {"critical": "critical", "high": "high", "medium": "medium", "low": "low", "info": "info"}
+            color = color_map.get(severity, "grey62")
+            sev_label = label_map.get(severity, severity)
 
             # Parse location
             location = finding.get("location", "")
             file_path = finding.get("file_path", finding.get("path", ""))
-            line_num  = finding.get("line_number", finding.get("line_start", 0))
+            line_num = finding.get("line_number", finding.get("line_start", 0))
             if not file_path and location:
                 parts = location.rsplit(":", 1)
                 file_path = parts[0] if parts else location
-                try:    line_num = int(parts[1]) if len(parts) > 1 else 0
-                except: line_num = 0
+                try:
+                    line_num = int(parts[1]) if len(parts) > 1 else 0
+                except:
+                    line_num = 0
 
-            ext      = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "py"
-            lang_map = {"py": "python", "ts": "typescript", "js": "javascript", "go": "go",
-                        "rs": "rust", "java": "java", "kt": "kotlin", "swift": "swift", "cs": "csharp", "dart": "dart"}
-            lang     = lang_map.get(ext, "python")
+            ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "py"
+            lang_map = {
+                "py": "python",
+                "ts": "typescript",
+                "js": "javascript",
+                "go": "go",
+                "rs": "rust",
+                "java": "java",
+                "kt": "kotlin",
+                "swift": "swift",
+                "cs": "csharp",
+                "dart": "dart",
+            }
+            lang = lang_map.get(ext, "python")
 
             code_snippet = finding.get("code", finding.get("snippet", finding.get("context", "")))
-            message      = finding.get("message", "")
-            detail       = finding.get("detail", "")
-            rule_id      = finding.get("id", finding.get("rule_id", ""))
+            message = finding.get("message", "")
+            detail = finding.get("detail", "")
+            rule_id = finding.get("id", finding.get("rule_id", ""))
 
             # ── Header line: ● SEVERITY  file.py:14  rule-id ──
             header = Text()
@@ -958,9 +975,11 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
             # ── Code snippet ──
             if code_snippet:
                 from rich.padding import Padding
+
                 console.print()
                 syntax = Syntax(
-                    code_snippet, lang,
+                    code_snippet,
+                    lang,
                     theme="github-dark",
                     line_numbers=True,
                     start_line=max(1, line_num - 2),
@@ -972,7 +991,11 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
 
             # ── Remediation tip (first meaningful line) ──
             if detail:
-                tip_lines = [ln.strip() for ln in detail.strip().splitlines() if ln.strip() and not ln.strip().startswith("✅") and not ln.strip().startswith("❌")]
+                tip_lines = [
+                    ln.strip()
+                    for ln in detail.strip().splitlines()
+                    if ln.strip() and not ln.strip().startswith("✅") and not ln.strip().startswith("❌")
+                ]
                 if tip_lines:
                     console.print(f"    [green]↳[/green] [dim]{tip_lines[0][:120]}[/dim]")
 
@@ -980,7 +1003,9 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
 
         if len(display_findings) > 10:
             remaining = len(display_findings) - 10
-            console.print(f"  [dim]… {remaining} more finding{'s' if remaining > 1 else ''} not shown  ·  warden scan --format sarif -o report.sarif[/dim]\n")
+            console.print(
+                f"  [dim]… {remaining} more finding{'s' if remaining > 1 else ''} not shown  ·  warden scan --format sarif -o report.sarif[/dim]\n"
+            )
 
     # ─── Summary ─────────────────────────────────────────────
     console.print(Rule(style="bright_black"))
@@ -988,8 +1013,8 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
 
     frames_passed = res.get("frames_passed", 0)
     frames_failed = res.get("frames_failed", 0)
-    total_frames  = res.get("total_frames", 0)
-    crit_col      = "red" if critical_blockers > 0 else "green"
+    total_frames = res.get("total_frames", 0)
+    crit_col = "red" if critical_blockers > 0 else "green"
 
     # Two-column aligned stat table — like Claude Code's usage summary
     stat_table = Table(box=None, show_header=False, padding=(0, 3), show_edge=False)
@@ -998,35 +1023,44 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
     stat_table.add_column("", style="dim", no_wrap=True, min_width=20)
     stat_table.add_column("", no_wrap=True, min_width=8)
 
-    pass_col  = "green"
-    fail_col  = "red" if frames_failed > 0 else "green"
+    pass_col = "green"
+    fail_col = "red" if frames_failed > 0 else "green"
 
     stat_table.add_row(
-        "Files scanned",        f"[bold white]{total_files_scanned}[/]",
-        "Frames",               f"[bold white]{total_frames}[/]",
+        "Files scanned",
+        f"[bold white]{total_files_scanned}[/]",
+        "Frames",
+        f"[bold white]{total_frames}[/]",
     )
     stat_table.add_row(
-        "Frames passed",        f"[bold {pass_col}]{frames_passed}[/]",
-        "Frames failed",        f"[bold {fail_col}]{frames_failed}[/]",
+        "Frames passed",
+        f"[bold {pass_col}]{frames_passed}[/]",
+        "Frames failed",
+        f"[bold {fail_col}]{frames_failed}[/]",
     )
     stat_table.add_row(
-        "Total findings",       f"[bold white]{total_findings}[/]",
-        "Security issues",      f"[bold {'orange3' if security_issues > 0 else 'white'}]{security_issues}[/]",
+        "Total findings",
+        f"[bold white]{total_findings}[/]",
+        "Security issues",
+        f"[bold {'orange3' if security_issues > 0 else 'white'}]{security_issues}[/]",
     )
     stat_table.add_row(
-        "Critical",             f"[bold {crit_col}]{critical_blockers}[/]",
-        "Quality issues",       f"[bold white]{quality_issues}[/]",
+        "Critical",
+        f"[bold {crit_col}]{critical_blockers}[/]",
+        "Quality issues",
+        f"[bold white]{quality_issues}[/]",
     )
     if technical_debt > 0 or new_debt_added > 0:
         new_debt_col = "red" if new_debt_added > 0 else "green"
         stat_table.add_row(
-            "Technical debt",   f"[bold white]{technical_debt}[/]",
-            "New debt",         f"[bold {new_debt_col}]{'+' if new_debt_added > 0 else ''}{new_debt_added}[/]",
+            "Technical debt",
+            f"[bold white]{technical_debt}[/]",
+            "New debt",
+            f"[bold {new_debt_col}]{'+' if new_debt_added > 0 else ''}{new_debt_added}[/]",
         )
 
     console.print(stat_table)
     console.print()
-
 
     # Missing tool hints
     frame_results = res.get("results", [])
@@ -1257,16 +1291,18 @@ async def _run_scan_async(
     # ── Startup header ──────────────────────────────────────────────────
     try:
         from importlib.metadata import version as _pkg_ver
+
         _warden_ver = _pkg_ver("warden-core")
     except Exception:
         _warden_ver = "dev"
 
     _level_label = level.value if hasattr(level, "value") else str(level)
-    _proj_label  = Path.cwd().name
-    _file_label  = f"{len(paths)} path{'s' if len(paths) != 1 else ''}"
+    _proj_label = Path.cwd().name
+    _file_label = f"{len(paths)} path{'s' if len(paths) != 1 else ''}"
 
     # \u2500\u2500 ASCII art logo \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     from warden.cli.commands import _scan_ux as _UX_h
+
     console.print()
     _max_w = max(10, console.width - 4)
     for _line in _UX_h.LOGO_LINES:

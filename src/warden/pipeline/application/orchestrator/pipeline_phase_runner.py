@@ -339,9 +339,7 @@ class PipelinePhaseRunner:
             primary_language=intel.primary_language,
         )
 
-    async def _populate_taint_paths_async(
-        self, context: PipelineContext, code_files: list[CodeFile]
-    ) -> None:
+    async def _populate_taint_paths_async(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
         """Populate taint analysis results into context (zero LLM cost).
 
         Runs the shared ``TaintAnalysisService`` once per pipeline and stores
@@ -358,9 +356,7 @@ class PipelinePhaseRunner:
             # Read taint config from frames_config.security.taint
             taint_config: dict = {}
             if hasattr(self.config, "frames_config") and self.config.frames_config:
-                taint_config = (
-                    self.config.frames_config.get("security", {}).get("taint", {})
-                )
+                taint_config = self.config.frames_config.get("security", {}).get("taint", {})
 
             from pathlib import Path as _Path
 

@@ -323,10 +323,7 @@ def _render_markdown(
             lines.append("")
             lines.append("| Symbol | Kind | File | Line |")
             lines.append("|--------|------|------|------|")
-            class_nodes = [
-                n for n in nodes.values()
-                if isinstance(n, dict) and n.get("kind") == "class"
-            ]
+            class_nodes = [n for n in nodes.values() if isinstance(n, dict) and n.get("kind") == "class"]
             for node in class_nodes[:30]:
                 name = node.get("name", "?")
                 kind = node.get("kind", "?")
@@ -338,8 +335,7 @@ def _render_markdown(
         # Class hierarchy
         if edges and full:
             inherit_edges = [
-                e for e in edges
-                if isinstance(e, dict) and e.get("relation") in ("inherits", "implements")
+                e for e in edges if isinstance(e, dict) and e.get("relation") in ("inherits", "implements")
             ]
             if inherit_edges:
                 lines.append("### Class Hierarchy")
@@ -519,7 +515,9 @@ def audit_context_command(
     if fmt == "json":
         output = _render_json(code_graph, gap_report, dep_graph, full=full, chain_validation=chain_val)
     elif fmt in ("md", "markdown"):
-        output = _render_markdown(code_graph, gap_report, dep_graph, full=full, chain_validation=chain_val, project_root=root)
+        output = _render_markdown(
+            code_graph, gap_report, dep_graph, full=full, chain_validation=chain_val, project_root=root
+        )
     else:
         output = _render_yaml(code_graph, gap_report, dep_graph, full=full, chain_validation=chain_val)
 

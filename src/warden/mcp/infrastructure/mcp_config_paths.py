@@ -48,7 +48,7 @@ SAFE_CONFIG_DIR_PATTERNS = frozenset(
         ".cursor",  # Cursor IDE
         ".windsurf",  # Windsurf IDE
         ".gemini",  # Google Gemini
-        ".codex",   # OpenAI Codex CLI
+        ".codex",  # OpenAI Codex CLI
     }
 )
 

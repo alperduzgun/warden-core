@@ -55,6 +55,7 @@ def require_package(pip_name: str, import_name: str | None = None) -> bool:
 
     try:
         from rich.console import Console
+
         console = Console()
         console.print(f"[dim]Installing missing dependency: {pip_name}...[/dim]")
     except ImportError:
@@ -68,6 +69,7 @@ def require_package(pip_name: str, import_name: str | None = None) -> bool:
         # Synchronous check+install using subprocess directly
         # (require_package is called from sync contexts often)
         import subprocess
+
         cmd = [sys.executable, "-m", "pip", "install", pip_name, "--quiet"]
         if not mgr.is_venv:
             cmd.append("--break-system-packages")

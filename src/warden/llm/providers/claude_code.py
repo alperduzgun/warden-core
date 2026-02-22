@@ -228,7 +228,7 @@ class ClaudeCodeClient(ILlmClient):
                 logger.error(
                     "claude_code_empty_content_json",
                     raw_output=output[:1000],
-                    parsed_keys=list(result.keys()) if isinstance(result, dict) else type(result)
+                    parsed_keys=list(result.keys()) if isinstance(result, dict) else type(result),
                 )
                 return self._error_response("Empty content in response", model, duration_ms)
 

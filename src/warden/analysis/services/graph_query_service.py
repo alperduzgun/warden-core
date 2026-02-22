@@ -20,11 +20,13 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 # Gap types that benefit from LLM verification (FP-prone)
-VERIFIABLE_GAP_TYPES = frozenset({
-    "orphan_file",
-    "unreachable",
-    "missing_mixin_impl",
-})
+VERIFIABLE_GAP_TYPES = frozenset(
+    {
+        "orphan_file",
+        "unreachable",
+        "missing_mixin_impl",
+    }
+)
 
 
 class GraphQueryService:
@@ -80,10 +82,7 @@ class GraphQueryService:
     def _evidence_orphan(self, file_path: str) -> dict[str, Any]:
         """Evidence for an orphan file finding."""
         # Count direct references (who_uses for any symbol in this file)
-        file_symbols = [
-            n for n in self._graph.nodes.values()
-            if n.file_path == file_path
-        ]
+        file_symbols = [n for n in self._graph.nodes.values() if n.file_path == file_path]
         direct_refs = 0
         for sym in file_symbols:
             direct_refs += len(self._graph.who_uses(sym.fqn, include_tests=True))
@@ -109,10 +108,7 @@ class GraphQueryService:
     def _evidence_unreachable(self, file_path: str) -> dict[str, Any]:
         """Evidence for an unreachable file finding."""
         # Find symbols defined in this file
-        file_symbols = [
-            n for n in self._graph.nodes.values()
-            if n.file_path == file_path
-        ]
+        file_symbols = [n for n in self._graph.nodes.values() if n.file_path == file_path]
 
         # Check if any symbol is used (even by tests)
         used_by_anyone = False
@@ -149,9 +145,9 @@ class GraphQueryService:
         from warden.analysis.domain.code_graph import SymbolKind
 
         mixin_symbols = [
-            n for n in self._graph.nodes.values()
-            if n.file_path == file_path
-            and n.kind in (SymbolKind.MIXIN, SymbolKind.INTERFACE)
+            n
+            for n in self._graph.nodes.values()
+            if n.file_path == file_path and n.kind in (SymbolKind.MIXIN, SymbolKind.INTERFACE)
         ]
 
         evidence: dict[str, Any] = {

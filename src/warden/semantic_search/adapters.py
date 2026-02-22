@@ -118,7 +118,9 @@ class QdrantAdapter(VectorStoreAdapter):
             from warden.services.dependencies.auto_resolver import require_package
 
             if not require_package("qdrant-client"):
-                raise ImportError("qdrant-client not installed and auto-install failed. Run 'pip install warden-core[cloud]'")
+                raise ImportError(
+                    "qdrant-client not installed and auto-install failed. Run 'pip install warden-core[cloud]'"
+                )
             from qdrant_client import QdrantClient
             from qdrant_client.http import models
 

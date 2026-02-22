@@ -123,16 +123,12 @@ class CodeGraph(BaseDomainModel):
 
     def who_inherits(self, class_fqn: str) -> list[SymbolNode]:
         """Find all classes that inherit from the given class."""
-        child_fqns = {
-            e.source for e in self.edges if e.target == class_fqn and e.relation == EdgeRelation.INHERITS
-        }
+        child_fqns = {e.source for e in self.edges if e.target == class_fqn and e.relation == EdgeRelation.INHERITS}
         return [self.nodes[fqn] for fqn in child_fqns if fqn in self.nodes]
 
     def who_implements(self, mixin_fqn: str) -> list[SymbolNode]:
         """Find all classes that implement the given mixin/interface."""
-        impl_fqns = {
-            e.source for e in self.edges if e.target == mixin_fqn and e.relation == EdgeRelation.IMPLEMENTS
-        }
+        impl_fqns = {e.source for e in self.edges if e.target == mixin_fqn and e.relation == EdgeRelation.IMPLEMENTS}
         return [self.nodes[fqn] for fqn in impl_fqns if fqn in self.nodes]
 
     def get_dependency_chain(self, symbol_fqn: str, max_depth: int = 5) -> list[list[SymbolEdge]]:

@@ -163,7 +163,7 @@ Return JSON array with verification results:
     try:
         request = LlmRequest(
             user_message=full_prompt,
-            system_prompt="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives."
+            system_prompt="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives.",
         )
         response = await llm_service.send_async(request)
 
@@ -171,9 +171,7 @@ Return JSON array with verification results:
         # LlmResponse is a Pydantic model — use attribute access, not .get()
         if not response.success:
             logger.warning(
-                "security_batch_llm_not_successful",
-                error=response.error_message,
-                fallback="keeping_all_findings"
+                "security_batch_llm_not_successful", error=response.error_message, fallback="keeping_all_findings"
             )
             return batch
 
@@ -182,6 +180,7 @@ Return JSON array with verification results:
             # Extract JSON from markdown fences if LLM wrapped the response
             if "```" in content:
                 import re
+
                 match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", content)
                 if match:
                     content = match.group(1).strip()

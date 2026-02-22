@@ -106,9 +106,8 @@ def calculate_base_score(linter_metrics: dict[str, Any] | None = None) -> float:
     penalty = 0.0
     for _tool, metrics in linter_metrics.items():
         # Guard: handle both LinterResult objects and plain dicts
-        is_available = (
-            getattr(metrics, "is_available", False)
-            or (isinstance(metrics, dict) and metrics.get("is_available"))
+        is_available = getattr(metrics, "is_available", False) or (
+            isinstance(metrics, dict) and metrics.get("is_available")
         )
         if not is_available:
             continue

@@ -126,6 +126,7 @@ class PipelineResultBuilder:
                 violations = getattr(frame_res, attr, None)
                 if violations:
                     from warden.pipeline.application.orchestrator.rule_executor import RuleExecutor
+
                     findings.extend([RuleExecutor.convert_to_finding(v) for v in violations])
 
         return findings

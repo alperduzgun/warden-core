@@ -42,10 +42,7 @@ class ConfigHealer(IHealerStrategy):
 
     async def can_heal(self, error: Exception, category: ErrorCategory) -> bool:
         error_msg = str(error).lower()
-        return any(
-            p in error_msg
-            for p in ("yaml", "config", "invalid value", "missing key", "keyerror")
-        )
+        return any(p in error_msg for p in ("yaml", "config", "invalid value", "missing key", "keyerror"))
 
     async def heal(self, error: Exception, context: str = "") -> DiagnosticResult:
         root = self._project_root or Path.cwd()

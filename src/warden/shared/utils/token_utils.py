@@ -11,6 +11,7 @@ import threading
 
 try:
     import tiktoken
+
     _TIKTOKEN_AVAILABLE = True
 except ImportError:
     tiktoken = None  # type: ignore[assignment]

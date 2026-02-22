@@ -62,6 +62,7 @@ class RuleExecutor:
                 )
                 if matched:
                     from warden.rules.domain.enums import RuleCategory
+
                     violations.append(
                         CustomRuleViolation(
                             rule_id=rule.id,

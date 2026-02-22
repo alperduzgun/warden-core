@@ -28,13 +28,13 @@ logger = get_logger(__name__)
 
 # ── Single source of truth for taint configuration defaults ────────────────
 TAINT_DEFAULTS: dict[str, float] = {
-    "confidence_threshold": 0.8,   # >= this → HIGH severity + is_blocker
-    "sanitizer_penalty": 0.3,      # multiplied when sanitized (0.0-1.0)
-    "propagation_confidence": 0.75, # confidence assigned to propagated taint
-    "signal_base_source": 0.65,    # heuristic source detection base
-    "signal_base_sink": 0.60,      # heuristic sink detection base
-    "signal_boost": 0.10,          # per param/module hint match
-    "signal_max": 0.90,            # heuristic confidence cap
+    "confidence_threshold": 0.8,  # >= this → HIGH severity + is_blocker
+    "sanitizer_penalty": 0.3,  # multiplied when sanitized (0.0-1.0)
+    "propagation_confidence": 0.75,  # confidence assigned to propagated taint
+    "signal_base_source": 0.65,  # heuristic source detection base
+    "signal_base_sink": 0.60,  # heuristic sink detection base
+    "signal_boost": 0.10,  # per param/module hint match
+    "signal_max": 0.90,  # heuristic confidence cap
 }
 
 
@@ -300,9 +300,7 @@ class TaintAnalyzer:
         self._sanitizer_penalty: float = self._taint_config["sanitizer_penalty"]
 
         # Observability: log when non-default config is active
-        overrides = {
-            k: v for k, v in self._taint_config.items() if v != TAINT_DEFAULTS[k]
-        }
+        overrides = {k: v for k, v in self._taint_config.items() if v != TAINT_DEFAULTS[k]}
         if overrides:
             logger.info("taint_config_custom_overrides", overrides=overrides)
 
@@ -410,9 +408,7 @@ class TaintAnalyzer:
             for src in self._catalog.sources.get("javascript", set()):
                 if src in value_expr:
                     if var_name not in tainted_vars:
-                        tainted_vars[var_name] = TaintSource(
-                            name=value_expr, node_type="assignment", line=line_num
-                        )
+                        tainted_vars[var_name] = TaintSource(name=value_expr, node_type="assignment", line=line_num)
                     break
 
         # Destructuring: const { id, name } = req.body
@@ -863,9 +859,7 @@ class TaintAnalyzer:
         logger.debug("go_taint_analysis_complete", paths_found=len(paths))
         return paths
 
-    def _go_find_sinks(
-        self, line: str, line_num: int, tainted_vars: dict[str, TaintSource]
-    ) -> list[TaintPath]:
+    def _go_find_sinks(self, line: str, line_num: int, tainted_vars: dict[str, TaintSource]) -> list[TaintPath]:
         """Detect tainted variables flowing into Go sinks."""
         if not tainted_vars:
             return []
@@ -966,9 +960,7 @@ class TaintAnalyzer:
         logger.debug("java_taint_analysis_complete", paths_found=len(paths))
         return paths
 
-    def _java_find_sinks(
-        self, line: str, line_num: int, tainted_vars: dict[str, TaintSource]
-    ) -> list[TaintPath]:
+    def _java_find_sinks(self, line: str, line_num: int, tainted_vars: dict[str, TaintSource]) -> list[TaintPath]:
         """Detect tainted variables flowing into Java sinks."""
         if not tainted_vars:
             return []

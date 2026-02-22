@@ -196,4 +196,3 @@ def status() -> None:
         console.print("[yellow].warden/context.yaml not found[/yellow]")
         raise typer.Exit(1)
     console.print(_safe_yaml_dump(ctx))
-

@@ -245,11 +245,13 @@ class CodeGraphBuilder:
         self._graph.add_node(symbol)
 
         # DEFINES edge: file -> class
-        self._graph.add_edge(SymbolEdge(
-            source=file_path,
-            target=fqn,
-            relation=EdgeRelation.DEFINES,
-        ))
+        self._graph.add_edge(
+            SymbolEdge(
+                source=file_path,
+                target=fqn,
+                relation=EdgeRelation.DEFINES,
+            )
+        )
 
         # Process bases for INHERITS / IMPLEMENTS edges (Gemini fix)
         for base_name in bases:
@@ -264,12 +266,14 @@ class CodeGraphBuilder:
 
             # Target FQN is unresolved (just the base name for now)
             # The builder will try to resolve within the graph later
-            self._graph.add_edge(SymbolEdge(
-                source=fqn,
-                target=base_name,  # Will be resolved if target exists
-                relation=relation,
-                runtime=not in_type_checking,
-            ))
+            self._graph.add_edge(
+                SymbolEdge(
+                    source=fqn,
+                    target=base_name,  # Will be resolved if target exists
+                    relation=relation,
+                    runtime=not in_type_checking,
+                )
+            )
 
         # Process methods inside class
         for child in node.children:
@@ -315,11 +319,13 @@ class CodeGraphBuilder:
         # DEFINES edge
         if parent_class:
             parent_fqn = self._make_fqn(file_path, parent_class)
-            self._graph.add_edge(SymbolEdge(
-                source=parent_fqn,
-                target=fqn,
-                relation=EdgeRelation.DEFINES,
-            ))
+            self._graph.add_edge(
+                SymbolEdge(
+                    source=parent_fqn,
+                    target=fqn,
+                    relation=EdgeRelation.DEFINES,
+                )
+            )
 
         # Extract CALLS edges from CALL_EXPRESSION children
         self._extract_calls(fqn, node)
@@ -329,12 +335,31 @@ class CodeGraphBuilder:
         for child in node.children:
             if child.node_type == ASTNodeType.CALL_EXPRESSION:
                 callee_name = child.name or child.value or ""
-                if callee_name and callee_name not in ("print", "len", "range", "str", "int", "float", "bool", "list", "dict", "set", "tuple", "type", "isinstance", "hasattr", "getattr", "super"):
-                    self._graph.add_edge(SymbolEdge(
-                        source=caller_fqn,
-                        target=callee_name,
-                        relation=EdgeRelation.CALLS,
-                    ))
+                if callee_name and callee_name not in (
+                    "print",
+                    "len",
+                    "range",
+                    "str",
+                    "int",
+                    "float",
+                    "bool",
+                    "list",
+                    "dict",
+                    "set",
+                    "tuple",
+                    "type",
+                    "isinstance",
+                    "hasattr",
+                    "getattr",
+                    "super",
+                ):
+                    self._graph.add_edge(
+                        SymbolEdge(
+                            source=caller_fqn,
+                            target=callee_name,
+                            relation=EdgeRelation.CALLS,
+                        )
+                    )
             # Recurse into child nodes
             self._extract_calls(caller_fqn, child)
 
@@ -358,12 +383,14 @@ class CodeGraphBuilder:
             if name == "*":
                 continue  # Star imports can't create precise edges
             target = f"{module}.{name}" if module else name
-            self._graph.add_edge(SymbolEdge(
-                source=file_path,
-                target=target,
-                relation=EdgeRelation.IMPORTS,
-                runtime=runtime,
-            ))
+            self._graph.add_edge(
+                SymbolEdge(
+                    source=file_path,
+                    target=target,
+                    relation=EdgeRelation.IMPORTS,
+                    runtime=runtime,
+                )
+            )
 
     def _process_type_checking_imports(
         self,
@@ -420,11 +447,13 @@ class CodeGraphBuilder:
                     if name == "*":
                         continue
                     # This __init__.py re-exports 'name' from 'module'
-                    self._graph.add_edge(SymbolEdge(
-                        source=rel_path,
-                        target=f"{module}.{name}" if module else name,
-                        relation=EdgeRelation.RE_EXPORTS,
-                    ))
+                    self._graph.add_edge(
+                        SymbolEdge(
+                            source=rel_path,
+                            target=f"{module}.{name}" if module else name,
+                            relation=EdgeRelation.RE_EXPORTS,
+                        )
+                    )
 
     def _add_dependency_edges(self, dependency_graph: Any) -> None:
         """Add file-level edges from DependencyGraph."""
@@ -432,11 +461,13 @@ class CodeGraphBuilder:
             src_rel = self._relative_path(str(src))
             for dep in deps:
                 dep_rel = self._relative_path(str(dep))
-                self._graph.add_edge(SymbolEdge(
-                    source=src_rel,
-                    target=dep_rel,
-                    relation=EdgeRelation.IMPORTS,
-                ))
+                self._graph.add_edge(
+                    SymbolEdge(
+                        source=src_rel,
+                        target=dep_rel,
+                        relation=EdgeRelation.IMPORTS,
+                    )
+                )
 
     def _path_to_module(self, file_path: str) -> str:
         """Convert file path to Python module notation."""

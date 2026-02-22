@@ -42,9 +42,7 @@ def codex_init() -> None:
             "report_json": str(Path(".warden/reports/warden-report.json")),
             "report_sarif": str(Path(".warden/reports/warden-report.sarif")),
         },
-        "protocol": {
-            "verify_loop": ["PLAN", "EXECUTE", "VERIFY (warden scan)"]
-        },
+        "protocol": {"verify_loop": ["PLAN", "EXECUTE", "VERIFY (warden scan)"]},
         "notes": "Codex: Read resources->context first; keep context updated via 'warden context detect'",
     }
 
@@ -84,4 +82,3 @@ def codex_mcp_setup() -> None:
     else:
         console.print(f"[red]✗ Registration failed:[/red] {result.message}")
         raise SystemExit(1)
-

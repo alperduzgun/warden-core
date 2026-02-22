@@ -473,6 +473,7 @@ def _env_present(name: str) -> bool:
 def llm_status() -> None:
     """Show active LLM provider and configuration health."""
     import os
+
     config, _ = _load_config()
     llm = config.get("llm", {})
     provider = llm.get("provider") or os.environ.get("WARDEN_LLM_PROVIDER") or "unknown"
@@ -501,6 +502,7 @@ def llm_status() -> None:
         console.print(f"claude CLI: {'[green]found[/green]' if present else '[red]missing[/red]'}")
     elif provider == "codex":
         import shutil
+
         present = bool(shutil.which("codex"))
         console.print(f"codex CLI: {'[green]found[/green]' if present else '[red]missing[/red]'}")
     elif key_var:
@@ -508,7 +510,11 @@ def llm_status() -> None:
 
 
 @llm_app.command("use")
-def llm_use(provider: str = typer.Argument(..., help="Provider name (e.g., ollama, anthropic, openai, azure, groq, deepseek, gemini, claude_code)")) -> None:
+def llm_use(
+    provider: str = typer.Argument(
+        ..., help="Provider name (e.g., ollama, anthropic, openai, azure, groq, deepseek, gemini, claude_code)"
+    ),
+) -> None:
     """Set active LLM provider and update default models."""
     provider = provider.strip().lower()
     if provider not in [p.value for p in LlmProvider] and provider not in ("claude_code",):
@@ -545,9 +551,11 @@ def llm_test() -> None:
             results["ollama"] = f"error: {e.reason}"
     elif provider == "claude_code":
         import shutil
+
         results["claude_code"] = "found" if shutil.which("claude") else "missing"
     elif provider == "codex":
         import shutil
+
         results["codex"] = "found" if shutil.which("codex") else "missing"
     else:
         key_var = _provider_key_var(provider)

@@ -90,6 +90,7 @@ class EmbeddingGenerator:
 
                 if require_package("sentence-transformers"):
                     from sentence_transformers import SentenceTransformer as _ST
+
                     globals()["SentenceTransformer"] = _ST
                 else:
                     raise ValueError(

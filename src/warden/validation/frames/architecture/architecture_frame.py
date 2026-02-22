@@ -164,9 +164,7 @@ class ArchitectureFrame(ValidationFrame):
         self._file_gap_map: dict[str, FileGaps] | None = None
         self._build_attempted: bool = False
         self._graph_query_service: GraphQueryService | None = None
-        self._use_llm_verification: bool = (config or {}).get(
-            "use_llm_verification", False
-        )
+        self._use_llm_verification: bool = (config or {}).get("use_llm_verification", False)
 
     async def execute_async(
         self,
@@ -194,13 +192,9 @@ class ArchitectureFrame(ValidationFrame):
                                 GraphQueryService,
                             )
 
-                            self._graph_query_service = GraphQueryService(
-                                code_graph, gap_report
-                            )
+                            self._graph_query_service = GraphQueryService(code_graph, gap_report)
                         except Exception as e:
-                            logger.warning(
-                                "graph_query_service_init_failed", error=str(e)
-                            )
+                            logger.warning("graph_query_service_init_failed", error=str(e))
 
         # No gap data available — graceful no-op
         if self._file_gap_map is None:
@@ -239,15 +233,8 @@ class ArchitectureFrame(ValidationFrame):
         findings = _gaps_to_findings(gaps, code_file, self.frame_id)
 
         # Opt-in: LLM verification for FP-prone findings
-        if (
-            self._use_llm_verification
-            and self._graph_query_service is not None
-            and context is not None
-            and findings
-        ):
-            findings = await self._verify_findings_with_llm(
-                findings, code_file, context
-            )
+        if self._use_llm_verification and self._graph_query_service is not None and context is not None and findings:
+            findings = await self._verify_findings_with_llm(findings, code_file, context)
 
         status = "passed"
         if any(f.severity in ("critical", "high") for f in findings) or findings:
@@ -302,19 +289,14 @@ class ArchitectureFrame(ValidationFrame):
                 continue
 
             try:
-                evidence = self._graph_query_service.collect_evidence(
-                    gap_type, code_file.path
-                )
+                evidence = self._graph_query_service.collect_evidence(gap_type, code_file.path)
                 evidence_str = self._graph_query_service.format_as_prompt(evidence)
 
                 # Read first few lines for context
                 file_header = ""
                 if code_file.content:
                     header_lines = code_file.content.split("\n")[:10]
-                    file_header = (
-                        "File starts with:\n"
-                        + "\n".join(header_lines)
-                    )
+                    file_header = "File starts with:\n" + "\n".join(header_lines)
 
                 prompt = _LLM_VERIFICATION_PROMPT.format(
                     message=finding.message,

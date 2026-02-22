@@ -175,10 +175,12 @@ DEFAULT_MODELS = {
 
 # CLI-tool providers that manage their own model selection.
 # Duplicated from factory.py to avoid circular imports (config ← types, factory ← config).
-_SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset({
-    LlmProvider.CLAUDE_CODE,
-    LlmProvider.CODEX,
-})
+_SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset(
+    {
+        LlmProvider.CLAUDE_CODE,
+        LlmProvider.CODEX,
+    }
+)
 
 
 def create_default_config() -> LlmConfiguration:

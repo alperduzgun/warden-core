@@ -69,14 +69,16 @@ def _strip_codex_banner(text: str) -> str:
     matches = list(_ASSISTANT_RESPONSE_RE.finditer(text))
     if matches:
         last_match = matches[-1]
-        return text[last_match.end():].strip()
+        return text[last_match.end() :].strip()
 
     # Strategy 2: If no assistant marker, text might be clean already
     # or have just the stdout banner (no transcript blocks).
     # Strip: [ts] OpenAI Codex ...\n--------\nkey: val\n...
     cleaned = re.sub(
         r"^\[[\d\-T:]+\]\s+OpenAI Codex[^\n]*\n(?:-{4,}[^\n]*\n)?(?:\w+:[^\n]*\n)*\n*",
-        "", text, count=1,
+        "",
+        text,
+        count=1,
     ).strip()
     return cleaned if cleaned else text
 
@@ -114,9 +116,7 @@ class CodexClient(ILlmClient):
             return self._error_response("Empty prompt", model, 0)
 
         if len(full_prompt) > MAX_PROMPT_LENGTH:
-            return self._error_response(
-                f"Prompt too large: {len(full_prompt)} > {MAX_PROMPT_LENGTH}", model, 0
-            )
+            return self._error_response(f"Prompt too large: {len(full_prompt)} > {MAX_PROMPT_LENGTH}", model, 0)
 
         # Write response to a temp file to capture cleanly
         fd, output_file = tempfile.mkstemp(suffix=".txt", prefix="warden_codex_")
@@ -126,10 +126,13 @@ class CodexClient(ILlmClient):
             cmd = [
                 self._cli_path,
                 "exec",
-                "--sandbox", "read-only",
-                "--color", "never",
+                "--sandbox",
+                "read-only",
+                "--color",
+                "never",
                 "--skip-git-repo-check",
-                "--output-last-message", output_file,
+                "--output-last-message",
+                output_file,
             ]
             # Only pass -m when user explicitly configured a Codex-compatible model.
             # Ignore models injected by OrchestratedLlmClient (e.g. "claude-sonnet-4-*",

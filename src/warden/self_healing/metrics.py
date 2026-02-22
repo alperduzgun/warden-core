@@ -60,9 +60,7 @@ class HealingMetricsCollector:
             self._metrics.total_failed += 1
 
         if result.strategy_used:
-            self._metrics.by_strategy[result.strategy_used] = (
-                self._metrics.by_strategy.get(result.strategy_used, 0) + 1
-            )
+            self._metrics.by_strategy[result.strategy_used] = self._metrics.by_strategy.get(result.strategy_used, 0) + 1
 
         self._metrics.total_duration_ms += result.duration_ms
 

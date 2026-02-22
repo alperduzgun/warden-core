@@ -145,14 +145,10 @@ class FindingsPostProcessor:
             # Re-sync validated_issues — remove findings dropped by verification
             if context.validated_issues:
                 surviving_ids = {
-                    getattr(f, "id", None) or (f.get("id") if isinstance(f, dict) else None)
-                    for f in context.findings
+                    getattr(f, "id", None) or (f.get("id") if isinstance(f, dict) else None) for f in context.findings
                 }
                 before_count = len(context.validated_issues)
-                context.validated_issues = [
-                    vi for vi in context.validated_issues
-                    if vi.get("id") in surviving_ids
-                ]
+                context.validated_issues = [vi for vi in context.validated_issues if vi.get("id") in surviving_ids]
                 if len(context.validated_issues) < before_count:
                     logger.info(
                         "validated_issues_synced",
@@ -305,7 +301,10 @@ class FindingsPostProcessor:
                     failed_frames=len(failed_frames),
                 )
                 pipeline.status = PipelineStatus.FAILED
-            elif not failed_frames and pipeline.status in (PipelineStatus.FAILED, PipelineStatus.COMPLETED_WITH_FAILURES):
+            elif not failed_frames and pipeline.status in (
+                PipelineStatus.FAILED,
+                PipelineStatus.COMPLETED_WITH_FAILURES,
+            ):
                 # All frames passed after post-filtering — correct pipeline status
                 if not context.errors:
                     logger.info(

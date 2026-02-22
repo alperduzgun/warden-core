@@ -19,10 +19,12 @@ from .types import LlmProvider
 # CLI-tool providers that manage their own model selection.
 # For these, the fast/smart tier distinction is meaningless — all requests
 # route through the same tool (single-provider mode).
-SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset({
-    LlmProvider.CLAUDE_CODE,
-    LlmProvider.CODEX,
-})
+SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset(
+    {
+        LlmProvider.CLAUDE_CODE,
+        LlmProvider.CODEX,
+    }
+)
 
 _providers_lock = threading.Lock()
 _providers_imported = False

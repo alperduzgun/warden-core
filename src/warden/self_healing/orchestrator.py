@@ -253,9 +253,7 @@ class SelfHealingOrchestrator:
         return _parse_llm_fix(diagnosis)
 
     @staticmethod
-    async def _ask_llm_diagnosis(
-        error: Exception, traceback_str: str, context: str
-    ) -> str | None:
+    async def _ask_llm_diagnosis(error: Exception, traceback_str: str, context: str) -> str | None:
         from warden.self_healing.strategies.llm_healer import _ask_llm_diagnosis
 
         return await _ask_llm_diagnosis(error, traceback_str, context)

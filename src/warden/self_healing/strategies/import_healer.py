@@ -138,12 +138,7 @@ async def _ask_llm_pip_name(module_name: str) -> str | None:
                 logger.debug("llm_pip_name_multi_word_rejected", raw=raw[:50])
                 return None
             # Validate: must look like a valid pip package name (2+ chars, starts with letter)
-            if (
-                raw
-                and raw != "UNKNOWN"
-                and len(raw) >= 2
-                and re.match(r"^[a-zA-Z][a-zA-Z0-9_\-\[\].]*$", raw)
-            ):
+            if raw and raw != "UNKNOWN" and len(raw) >= 2 and re.match(r"^[a-zA-Z][a-zA-Z0-9_\-\[\].]*$", raw):
                 return raw
 
     except Exception as e:

@@ -116,8 +116,7 @@ class GapAnalyzer:
             raw_orphans = self._find_orphan_files(dep_graph)
             if framework_entry_patterns:
                 report.orphan_files = [
-                    f for f in raw_orphans
-                    if not _matches_framework_pattern(f, framework_entry_patterns)
+                    f for f in raw_orphans if not _matches_framework_pattern(f, framework_entry_patterns)
                 ]
                 fw_excluded += len(raw_orphans) - len(report.orphan_files)
             else:
@@ -135,9 +134,7 @@ class GapAnalyzer:
 
         # 5. Unreachable from entry points (Gemini fix: exclude test files)
         if entry_points:
-            report.unreachable_from_entry = self._find_unreachable(
-                dep_graph, entry_points, framework_entry_patterns
-            )
+            report.unreachable_from_entry = self._find_unreachable(dep_graph, entry_points, framework_entry_patterns)
 
         # 6. Missing mixin implementations
         report.missing_mixin_impl = self._find_missing_mixin_impl(code_graph)
@@ -280,9 +277,7 @@ class GapAnalyzer:
             if _TEST_PATH_RE.search(f):
                 continue
             # Skip framework-managed files
-            if framework_entry_patterns and _matches_framework_pattern(
-                f, framework_entry_patterns
-            ):
+            if framework_entry_patterns and _matches_framework_pattern(f, framework_entry_patterns):
                 continue
             unreachable.append(f)
 

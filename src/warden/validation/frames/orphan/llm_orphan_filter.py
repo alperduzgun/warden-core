@@ -316,7 +316,8 @@ class LLMOrphanFilter:
                 for remaining_batch in batches[i:]:
                     for f_path, finding in remaining_batch:
                         self._cache_pattern_decision(
-                            finding, f_path,
+                            finding,
+                            f_path,
                             is_true_orphan=False,
                             reasoning="Circuit breaker: LLM unavailable",
                         )
@@ -362,7 +363,8 @@ class LLMOrphanFilter:
                 # Fallback: cache all as false positives (conservative)
                 for f_path, finding in batch:
                     self._cache_pattern_decision(
-                        finding, f_path,
+                        finding,
+                        f_path,
                         is_true_orphan=False,
                         reasoning=f"LLM batch error: {e!s}",
                     )

@@ -169,9 +169,7 @@ class LSPAuditService:
             validation.entries.append(entry)
 
         # Detect dead symbols
-        validation.dead_symbols = await self._detect_dead_symbols_async(
-            analyzer, code_graph
-        )
+        validation.dead_symbols = await self._detect_dead_symbols_async(analyzer, code_graph)
 
         logger.info(
             "lsp_audit_complete",
@@ -261,9 +259,7 @@ class LSPAuditService:
                 continue
 
             try:
-                is_used = await analyzer.is_symbol_used_async(
-                    node.file_path, node.line, 0
-                )
+                is_used = await analyzer.is_symbol_used_async(node.file_path, node.line, 0)
                 checked += 1
                 if is_used is False:
                     dead.append(fqn)
