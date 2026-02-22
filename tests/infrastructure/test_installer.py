@@ -4,17 +4,36 @@ Tests for auto-installer functionality.
 
 from pathlib import Path
 
+import pytest
+
 from warden.infrastructure.installer import (
     AutoInstaller,
     InstallConfig,
     InstallResult,
 )
 
+# All CI env vars that detect_ci_platform checks
+_ALL_CI_VARS = [
+    "GITHUB_ACTIONS",
+    "GITLAB_CI",
+    "AZURE_HTTP_USER_AGENT",
+    "JENKINS_HOME",
+    "CIRCLECI",
+    "TRAVIS",
+]
+
+
+@pytest.fixture()
+def _clean_ci_env(monkeypatch):
+    """Remove all CI env vars so each test controls its own environment."""
+    for var in _ALL_CI_VARS:
+        monkeypatch.delenv(var, raising=False)
+
 
 class TestAutoInstaller:
     """Test AutoInstaller functionality."""
 
-    def test_detect_ci_platform_github(self, monkeypatch):
+    def test_detect_ci_platform_github(self, monkeypatch, _clean_ci_env):
         """Test detecting GitHub Actions."""
         monkeypatch.setenv("GITHUB_ACTIONS", "true")
 
@@ -22,7 +41,7 @@ class TestAutoInstaller:
 
         assert platform == "github"
 
-    def test_detect_ci_platform_gitlab(self, monkeypatch):
+    def test_detect_ci_platform_gitlab(self, monkeypatch, _clean_ci_env):
         """Test detecting GitLab CI."""
         monkeypatch.setenv("GITLAB_CI", "true")
 
@@ -30,7 +49,7 @@ class TestAutoInstaller:
 
         assert platform == "gitlab"
 
-    def test_detect_ci_platform_azure(self, monkeypatch):
+    def test_detect_ci_platform_azure(self, monkeypatch, _clean_ci_env):
         """Test detecting Azure Pipelines."""
         monkeypatch.setenv("AZURE_HTTP_USER_AGENT", "Azure-Pipelines")
 
@@ -38,7 +57,7 @@ class TestAutoInstaller:
 
         assert platform == "azure"
 
-    def test_detect_ci_platform_jenkins(self, monkeypatch):
+    def test_detect_ci_platform_jenkins(self, monkeypatch, _clean_ci_env):
         """Test detecting Jenkins."""
         monkeypatch.setenv("JENKINS_HOME", "/var/jenkins")
 
@@ -46,7 +65,7 @@ class TestAutoInstaller:
 
         assert platform == "jenkins"
 
-    def test_detect_ci_platform_circleci(self, monkeypatch):
+    def test_detect_ci_platform_circleci(self, monkeypatch, _clean_ci_env):
         """Test detecting CircleCI."""
         monkeypatch.setenv("CIRCLECI", "true")
 
