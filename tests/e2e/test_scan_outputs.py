@@ -368,7 +368,11 @@ class TestScanFlags:
         ])
 
         # Both should succeed with same exit code
-        assert result_basic.exit_code == result_noai.exit_code
+        assert result_basic.exit_code == result_noai.exit_code, (
+            f"basic={result_basic.exit_code} noai={result_noai.exit_code}\n"
+            f"--- basic output ---\n{result_basic.output[-500:]}\n"
+            f"--- noai output ---\n{result_noai.output[-500:]}"
+        )
 
         # Both should produce output files only if scan completed
         if result_basic.exit_code in (0, 2):

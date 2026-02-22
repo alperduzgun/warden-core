@@ -12,14 +12,20 @@ from warden.infrastructure.installer import (
     InstallResult,
 )
 
-# All CI env vars that detect_ci_platform checks
+# All CI env vars that detect_ci_platform and get_ci_env_info check
 _ALL_CI_VARS = [
+    "CI",
     "GITHUB_ACTIONS",
+    "GITHUB_SHA",
     "GITLAB_CI",
+    "CI_COMMIT_SHA",
     "AZURE_HTTP_USER_AGENT",
     "JENKINS_HOME",
     "CIRCLECI",
     "TRAVIS",
+    "BUILD_ID",
+    "BUILD_NUMBER",
+    "BRANCH_NAME",
 ]
 
 
@@ -139,19 +145,8 @@ class TestAutoInstaller:
         assert "frames:" in content
         assert "infrastructure:" in content
 
-    def test_get_ci_env_info_empty(self, monkeypatch):
+    def test_get_ci_env_info_empty(self, monkeypatch, _clean_ci_env):
         """Test getting CI env info when not in CI."""
-        # Clear all CI env vars
-        ci_vars = [
-            "CI",
-            "GITHUB_ACTIONS",
-            "GITLAB_CI",
-            "CIRCLECI",
-            "TRAVIS",
-            "JENKINS_HOME",
-        ]
-        for var in ci_vars:
-            monkeypatch.delenv(var, raising=False)
 
         env_info = AutoInstaller.get_ci_env_info()
 

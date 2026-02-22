@@ -47,7 +47,11 @@ class GroqClient(ILlmClient):
             # Use requested model only if it looks like a Groq-compatible model.
             # When orchestrated client forwards a smart_model from config (e.g. "claude-sonnet-4-*"),
             # we must ignore it and use Groq's own default.
-            model = request.model if request.model and not request.model.startswith(("claude", "gpt-")) else self._default_model
+            model = (
+                request.model
+                if request.model and not request.model.startswith(("claude", "gpt-"))
+                else self._default_model
+            )
 
             payload = {
                 "model": model,
