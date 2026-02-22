@@ -188,6 +188,7 @@ jobs:
           key: warden-baseline-${{ github.ref_name }}-${{ hashFiles('.warden/config.yaml') }}
           restore-keys: |
             warden-baseline-${{ github.ref_name }}-
+            warden-baseline-main-
 
       - name: Verify Code Intelligence (Audit Context)
         run: |
@@ -199,7 +200,6 @@ jobs:
 
 
       - name: Run Warden Scan
-        # continue-on-error removed to enforce quality gate
         env:
           # Configuration for Hybrid LLM Architecture
           # Smart Tier: Groq (fast cloud API, no token cost issues)
@@ -221,9 +221,7 @@ jobs:
         run: |
           # --- OLLAMA SETUP ---
           # We run this here to ensure the background process persists for the scan duration.
-          
-          # We run this here to ensure the background process persists for the scan duration.
-          
+
           echo "Installing Ollama (Official Script)..."
           # Download and verify before executing
           curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
@@ -352,7 +350,7 @@ jobs:
 
       - name: Archive SARIF Artifact
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && hashFiles('warden.sarif') != ''
         with:
           name: warden-scan-results
           path: warden.sarif
