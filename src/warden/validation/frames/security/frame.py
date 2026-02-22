@@ -228,10 +228,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
             else:
                 # Fallback: standalone mode (no pipeline) or file not in shared results
                 try:
-                    from pathlib import Path  # noqa: PLC0415
+                    from pathlib import Path
 
-                    from ._internal.taint_analyzer import TaintAnalyzer  # noqa: PLC0415
-                    from ._internal.taint_catalog import TaintCatalog  # noqa: PLC0415
+                    from ._internal.taint_analyzer import TaintAnalyzer
+                    from ._internal.taint_catalog import TaintCatalog
 
                     project_root = context.project_root if context and context.project_root else Path.cwd()
                     taint_config = self.config.get("taint", {})
@@ -291,7 +291,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                 if context and hasattr(context, "dependency_graph_forward"):
                     rel_path = code_file.path
                     try:
-                        from pathlib import Path as _P  # noqa: PLC0415
+                        from pathlib import Path as _P
 
                         if context.project_root:
                             rel_path = str(_P(code_file.path).resolve().relative_to(context.project_root))
@@ -426,7 +426,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                 # Code graph symbol context (class/function signatures)
                 if context and hasattr(context, "code_graph") and context.code_graph:
                     try:
-                        from warden.analysis.services.symbol_context_formatter import (  # noqa: PLC0415
+                        from warden.analysis.services.symbol_context_formatter import (
                             format_file_symbols_for_prompt,
                         )
 
@@ -553,7 +553,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
             for finding in all_findings:
                 if finding.location:
                     self._enrich_finding_with_taint(finding, taint_paths)
-            
+
             enriched = sum(1 for f in all_findings if f.machine_context is not None)
             if enriched:
                 logger.info("machine_context_populated", count=enriched, total=len(all_findings))
@@ -665,10 +665,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         file_taint_paths = self._taint_paths[code_file.path]
                     else:
                         try:
-                            from pathlib import Path as _Path  # noqa: PLC0415
+                            from pathlib import Path as _Path
 
-                            from ._internal.taint_analyzer import TaintAnalyzer  # noqa: PLC0415
-                            from ._internal.taint_catalog import TaintCatalog  # noqa: PLC0415
+                            from ._internal.taint_analyzer import TaintAnalyzer
+                            from ._internal.taint_catalog import TaintCatalog
 
                             taint_config = self.config.get("taint", {})
                             project_root = _Path.cwd()
@@ -761,9 +761,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
         defaults from ``TAINT_DEFAULTS``.  Findings whose confidence >= threshold
         get HIGH severity **and** ``is_blocker=True``.
         """
-        from warden.validation.domain.check import CheckFinding, CheckSeverity  # noqa: PLC0415
+        from warden.validation.domain.check import CheckFinding, CheckSeverity
 
-        from ._internal.taint_analyzer import validate_taint_config  # noqa: PLC0415
+        from ._internal.taint_analyzer import validate_taint_config
 
         taint_config = validate_taint_config(self.config.get("taint"))
         threshold = taint_config["confidence_threshold"]
@@ -828,7 +828,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
 
                 # Populate explicitly tagged LLM context instances on creation
                 if getattr(check_finding, "machine_context_raw", None):
-                    mc_data = getattr(check_finding, "machine_context_raw")
+                    mc_data = check_finding.machine_context_raw
                     finding.machine_context = MachineContext(
                         vulnerability_class=finding.id.split("-")[1] if "-" in finding.id else "unknown",
                         source=mc_data.get("source"),
