@@ -31,6 +31,7 @@ class LanguageServerClient:
         self._notification_handlers: dict[str, list[Callable]] = {}
         self._reader_task: asyncio.Task | None = None
         self._shutdown_event = asyncio.Event()
+        self._unsupported_methods: set[str] = set()
 
     async def start_async(self):
         """Start the language server subprocess."""
@@ -117,6 +118,9 @@ class LanguageServerClient:
 
     async def send_request_async(self, method: str, params: Any) -> Any:
         """Send a JSON-RPC request and await result."""
+        if method in self._unsupported_methods:
+            raise RuntimeError(f"LSP method not supported: {method}")
+
         if not self.process or self.process.stdin.is_closing():
             raise RuntimeError("LSP process is not running")
 
@@ -129,13 +133,23 @@ class LanguageServerClient:
         future = asyncio.Future()
         self._pending_requests[req_id] = future
 
+        # Heavier operations (references) get longer timeout
+        timeout = 15.0 if "references" in method else 10.0
+
         try:
             await self._write_message_async(request)
-            # Timeout safety
-            return await asyncio.wait_for(future, timeout=30.0)  # 30s for large projects
+            return await asyncio.wait_for(future, timeout=timeout)
         except asyncio.TimeoutError:
             del self._pending_requests[req_id]
-            logger.error("lsp_request_timeout", method=method, id=req_id)
+            logger.debug("lsp_request_timeout", method=method, id=req_id, timeout=timeout)
+            raise
+        except RuntimeError as e:
+            if req_id in self._pending_requests:
+                del self._pending_requests[req_id]
+            # Cache methods the server doesn't support (-32601)
+            if "-32601" in str(e):
+                self._unsupported_methods.add(method)
+                logger.debug("lsp_method_not_supported", method=method)
             raise
         except Exception:
             if req_id in self._pending_requests:
@@ -201,8 +215,11 @@ class LanguageServerClient:
             refs = result or []
             logger.debug("lsp_references_found", uri=uri, line=line, count=len(refs))
             return refs
+        except asyncio.TimeoutError:
+            logger.debug("lsp_find_references_timeout", uri=uri, line=line)
+            return []
         except Exception as e:
-            logger.warning("lsp_find_references_failed", uri=uri, error=str(e))
+            logger.debug("lsp_find_references_failed", uri=uri, error=str(e))
             return []
 
     async def get_document_symbols_async(self, file_path: str) -> list[dict[str, Any]]:
@@ -328,7 +345,12 @@ class LanguageServerClient:
             logger.debug("lsp_type_hierarchy_prepared", uri=uri, count=len(items))
             return items
         except Exception as e:
-            logger.warning("lsp_prepare_type_hierarchy_failed", uri=uri, error=str(e))
+            error_str = str(e)
+            # -32601 = method not supported, "not supported" = cached by send_request_async
+            if "-32601" in error_str or "not supported" in error_str:
+                logger.debug("lsp_type_hierarchy_not_supported", uri=uri)
+            else:
+                logger.debug("lsp_prepare_type_hierarchy_failed", uri=uri, error=error_str)
             return []
 
     async def get_supertypes_async(self, type_hierarchy_item: dict[str, Any]) -> list[dict[str, Any]]:
@@ -479,8 +501,8 @@ class LanguageServerClient:
         # Notification or Request from Server
         elif "method" in msg:
             if "id" in msg:
-                # Server Request (e.g. workspace/configuration) - Not responding yet
-                logger.debug("lsp_server_request_ignored", method=msg["method"])
+                # Server Request — MUST respond per LSP spec to avoid blocking pyright
+                self._respond_to_server_request(msg)
             else:
                 # Notification
                 handlers = self._notification_handlers.get(msg["method"], [])
@@ -489,3 +511,26 @@ class LanguageServerClient:
                         handler(msg.get("params"))
                     except Exception as e:
                         logger.error("lsp_notification_handler_error", error=str(e))
+
+    def _respond_to_server_request(self, msg: dict[str, Any]) -> None:
+        """Respond to server-initiated requests (LSP spec requires a response for every request with an id)."""
+        req_id = msg["id"]
+        method = msg["method"]
+
+        if method == "workspace/configuration":
+            # Return empty config object for each requested scope
+            items = msg.get("params", {}).get("items", [{}])
+            result: Any = [{} for _ in items]
+        elif method in ("client/registerCapability", "window/workDoneProgress/create"):
+            result = None
+        else:
+            logger.debug("lsp_server_request_unknown", method=method)
+            result = None
+
+        response = {"jsonrpc": "2.0", "id": req_id, "result": result}
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._write_message_async(response))
+        except RuntimeError:
+            # No running loop (shouldn't happen in normal flow)
+            logger.debug("lsp_server_response_no_loop", method=method)

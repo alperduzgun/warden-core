@@ -3,6 +3,7 @@ Cleaning Phase Executor.
 """
 
 import time
+import traceback
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -23,9 +24,11 @@ class CleaningExecutor(BasePhaseExecutor):
         """Execute CLEANING phase."""
         logger.info("executing_phase", phase="CLEANING")
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "CLEANING", "phase_name": "CLEANING"})
+        start_time = time.perf_counter()
+
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
 
         try:
             from warden.cleaning.application.cleaning_phase import CleaningPhase
@@ -72,6 +75,7 @@ class CleaningExecutor(BasePhaseExecutor):
             else:
                 if len(files_to_clean) < len(code_files):
                     logger.info("cleaning_phase_optimizing", total=len(code_files), cleaning=len(files_to_clean))
+                _emit(f"Generating refactoring suggestions for {len(files_to_clean)} files")
                 result = await phase.execute_async(files_to_clean)
 
             # Store results in context
@@ -97,8 +101,12 @@ class CleaningExecutor(BasePhaseExecutor):
                 quality_improvement=result.quality_score_after - context.quality_score_before,
             )
 
+        except RuntimeError as e:
+            logger.error("phase_failed", phase="CLEANING", error=str(e), tb=traceback.format_exc())
+            context.errors.append(f"CLEANING failed: {e!s}")
+            raise e
         except Exception as e:
-            logger.error("phase_failed", phase="CLEANING", error=str(e))
+            logger.error("phase_failed", phase="CLEANING", error=str(e), tb=traceback.format_exc())
             context.errors.append(f"CLEANING failed: {e!s}")
 
         if self.progress_callback:

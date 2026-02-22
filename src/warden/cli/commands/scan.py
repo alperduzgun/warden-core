@@ -1,10 +1,21 @@
 import asyncio
+import itertools
+import logging as _stdlib_logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
+import structlog as _structlog
 import typer
-from rich.console import Console
+from rich import box as rbox
+from rich.console import Console, Group
+from rich.live import Live
+from rich.padding import Padding
+from rich.panel import Panel
+from rich.rule import Rule
+from rich.syntax import Syntax
 from rich.table import Table
+from rich.text import Text
 
 # Internal imports
 from warden.cli_bridge.bridge import WardenBridge
@@ -126,7 +137,8 @@ def _display_llm_summary(metrics: dict):
 
     if metrics.get("fastTier"):
         fast = metrics["fastTier"]
-        console.print("\n  [green]⚡ Fast Tier (Qwen):[/green]")
+        fast_provider = fast.get("provider", "Ollama").title()
+        console.print(f"\n  [green]⚡ Fast Tier ({fast_provider}):[/green]")
         console.print(f"    Requests: {fast['requests']} ({fast['percentage']}%)")
         console.print(f"    Success Rate: {fast['successRate']}%")
         console.print(f"    Avg Response: {fast['avgResponseTime']}")
@@ -136,7 +148,8 @@ def _display_llm_summary(metrics: dict):
 
     if metrics.get("smartTier"):
         smart = metrics["smartTier"]
-        console.print("\n  [blue]🧠 Smart Tier (Azure):[/blue]")
+        smart_provider = smart.get("provider", "LLM").title()
+        console.print(f"\n  [blue]🧠 Smart Tier ({smart_provider}):[/blue]")
         console.print(f"    Requests: {smart['requests']} ({smart['percentage']}%)")
         console.print(f"    Avg Response: {smart['avgResponseTime']}")
         console.print(f"    Total Time: {smart['totalTime']} ({smart['timePercentage']}% of total)")
@@ -219,6 +232,66 @@ def _display_memory_stats(snapshot) -> None:
             console.print(f"  - {stat.traceback.format()[0]}: {stat.size / 1024 / 1024:.2f} MB")
 
 
+def _attempt_self_healing_sync(error: Exception, level: str) -> bool:
+    """
+    Attempt LLM-powered self-healing for a scan error.
+
+    Returns True if the error was fixed and the scan should be retried.
+    """
+    try:
+        from warden.self_healing import SelfHealingOrchestrator
+
+        diagnostic = SelfHealingOrchestrator()
+        context = f"warden scan --level {level}"
+
+        console.print("\n[bold blue]🔧 Self-Healing: Analyzing error...[/bold blue]")
+
+        result = asyncio.run(diagnostic.diagnose_and_fix(error, context=context))
+
+        if result.fixed:
+            console.print(f"[green]✓ Self-healed: {result.diagnosis}[/green]")
+            if result.packages_installed:
+                console.print(f"[dim]  Installed: {', '.join(result.packages_installed)}[/dim]")
+            if getattr(result, "models_pulled", None):
+                console.print(f"[dim]  Pulled models: {', '.join(result.models_pulled)}[/dim]")
+            console.print("[dim]  Retrying scan...[/dim]\n")
+            return True
+
+        # Not fixed — show diagnosis
+        if result.diagnosis:
+            console.print(f"[yellow]Diagnosis:[/yellow] {result.diagnosis}")
+        if result.suggested_action:
+            console.print(f"[yellow]💡 Suggested:[/yellow] {result.suggested_action}")
+
+        return False
+
+    except Exception:
+        # Self-healing itself failed — fall through to original error handling
+        return False
+
+
+def _ensure_scan_dependencies(level: str) -> None:
+    """Auto-install missing packages needed for the given scan level."""
+    try:
+        from warden.services.dependencies.auto_resolver import ensure_dependencies
+
+        needed: list[str] = []
+        if level in ("standard", "deep"):
+            needed.append("tiktoken")
+
+        if not needed:
+            return
+
+        still_missing = ensure_dependencies(needed, context=f"scan --level {level}")
+        if still_missing:
+            console.print(
+                f"[yellow]Optional dependencies unavailable: {', '.join(still_missing)}. "
+                f"Scan will use fallback heuristics.[/yellow]"
+            )
+    except Exception:
+        pass  # Dependency check is best-effort, never block the scan
+
+
 def scan_command(
     paths: list[str] | None = typer.Argument(None, help="Files or directories to scan"),
     frames: list[str] | None = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
@@ -250,7 +323,36 @@ def scan_command(
         tracemalloc.start()
         console.print("[dim]🧠 Memory profiling enabled[/dim]\n")
 
+    # ── Log verbosity gate ────────────────────────────────────────────────────
+    # Fail fast default: suppress DEBUG/INFO unless --verbose is passed.
+    # Applied once per process; idempotent via sentinel check on processor list.
+    _cli_log_level = _stdlib_logging.DEBUG if verbose else _stdlib_logging.WARNING
+    _stdlib_logging.basicConfig(level=_cli_log_level, force=True)
+    _stdlib_logging.getLogger().setLevel(_cli_log_level)
+    for _ns in ("httpx", "httpcore", "urllib3", "asyncio", "anthropic", "warden"):
+        _stdlib_logging.getLogger(_ns).setLevel(_cli_log_level)
+
+    # Structlog processor-level filter — drop events below threshold.
+    # Named sentinel class so the idempotency check is reliable.
+    class _CliLevelFilter:
+        """Structlog processor: drops events with level < cli threshold."""
+
+        _LEVELS: dict[str, int] = {"debug": 10, "info": 20, "warning": 30, "warn": 30, "error": 40, "critical": 50}
+
+        def __call__(self, logger: Any, method: str, event_dict: dict) -> dict:
+            if self._LEVELS.get(method, 0) < _cli_log_level:
+                raise _structlog.DropEvent()
+            return event_dict
+
+    _current_procs = list(_structlog.get_config().get("processors", []))
+    if not any(isinstance(p, _CliLevelFilter) for p in _current_procs):
+        _current_procs.insert(0, _CliLevelFilter())
+        _structlog.configure(processors=_current_procs)
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Run async scan function
+    baseline_fingerprints = None
+    intelligence_context = None
     try:
         # Handle --no-ai shorthand
         if no_ai:
@@ -261,6 +363,10 @@ def scan_command(
             console.print("\n[bold red blink]💀 CRITICAL WARNING: ZOMBIE MODE ACTIVE[/bold red blink]")
             console.print("[bold red]Warden is running without AI. Capability is reduced by 99%.[/bold red]")
             console.print("[red]Heuristic scanning is a fallback, not a feature. Expect poor results.[/red]\n")
+
+        # Auto-install scan dependencies based on analysis level
+        if level != "basic":
+            _ensure_scan_dependencies(level)
 
         # Default to "." if no paths provided AND no diff mode
         if not paths and not diff:
@@ -375,6 +481,36 @@ def scan_command(
     except (SystemExit, typer.Exit):
         raise
     except Exception as e:
+        # Try self-healing before giving up
+        healed = _attempt_self_healing_sync(e, level)
+        if healed:
+            try:
+                exit_code = asyncio.run(
+                    _run_scan_async(
+                        paths if paths else ["."],
+                        frames,
+                        format,
+                        output,
+                        verbose,
+                        level,
+                        memory_profile,
+                        ci,
+                        baseline_fingerprints,
+                        intelligence_context,
+                        update_baseline=not no_update_baseline,
+                        cost_report=cost_report,
+                        auto_fix=auto_fix,
+                        dry_run=dry_run,
+                    )
+                )
+                if exit_code != 0:
+                    raise typer.Exit(exit_code)
+                return
+            except (SystemExit, typer.Exit):
+                raise
+            except Exception as retry_err:
+                console.print(f"\n[bold red]Error after self-healing retry:[/bold red] {retry_err}")
+
         console.print(f"\n[bold red]Error:[/bold red] {e}")
         console.print(
             "[yellow]💡 Tip:[/yellow] Run [bold cyan]warden doctor[/bold cyan] to check your setup, or [bold cyan]warden init --force[/bold cyan] to reconfigure."
@@ -395,103 +531,284 @@ async def _process_stream_events(
     level: str,
     ci_mode: bool,
 ) -> tuple[dict | None, dict, int]:
-    """Process pipeline streaming events with progress tracking.
+    """Process pipeline streaming events with a live-updating display.
 
     Returns ``(final_result_data, frame_stats, total_units)``.
     """
-    frame_stats = {"passed": 0, "failed": 0, "skipped": 0, "total": 0}
-    final_result_data = None
+    import time
+
+    from rich.spinner import Spinner
+
+    _spinner_widget = Spinner("dots", style="bold blue")
+
+    # ── Global scan stats ──────────────────────────────────────────────────
+    frame_stats: dict[str, int] = {"passed": 0, "failed": 0, "skipped": 0, "total": 0}
+    final_result_data: dict | None = None
     processed_units = 0
     total_units = 0
-    current_phase = "Initializing..."
+    current_phase = ""
+    current_frame = ""
+    _scan_start = time.monotonic()  # wall-clock for elapsed display
 
-    with console.status("[bold blue]🛡️  Scanning...[/bold blue]", spinner="dots") as status:
-        async for event in bridge.execute_pipeline_stream_async(
-            file_path=paths,
-            frames=frames,
-            verbose=verbose,
-            analysis_level=level,
-            ci_mode=ci_mode,
-        ):
-            event_type = event.get("type")
+    # ── Phase-level state ──────────────────────────────────────────────────
+    # Completed phases → summary line + optional step subtitle each
+    phase_summary_rows: list[Text] = []
+    # Active phase → individual frame rows (cleared on each new phase)
+    current_phase_frames: list[Text] = []
+    # Per-phase counters and step log for the summary
+    _phase_passed = 0
+    _phase_failed = 0
+    _phase_issues = 0
+    _phase_start = time.monotonic()
+    _last_phase = ""  # prevent duplicate headers
+    _phase_steps: list[str] = []  # progress_update status strings for subtitle
 
-            if event_type == "progress":
-                evt = event["event"]
-                data = event.get("data", {})
+    MAX_FRAME_ROWS = 6  # max frame detail rows visible for the current phase
 
-                if verbose:
-                    console.print(f"[dim]Progress Event: {evt} - {data}[/dim]")
+    from warden.cli.commands import _scan_ux as _UX
 
-                if evt == "discovery_complete":
-                    total_units = data.get("total_files", 0)
-                    status.update(
-                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Discovered {total_units} files[/dim] (0/{total_units})"
-                    )
+    def _flush_phase() -> None:
+        """Collapse the current phase into a summary row (+ dim step subtitle)."""
+        nonlocal _phase_passed, _phase_failed, _phase_issues, _phase_start, _last_phase, _phase_steps
+        if not _last_phase:
+            return
+        elapsed = time.monotonic() - _phase_start
+        total_f = _phase_passed + _phase_failed
+        has_issues = _phase_issues > 0
 
-                elif evt == "pipeline_started":
-                    if total_units <= 0:
-                        total_units = data.get("file_count", 0)
-                    status.update(
-                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]Starting pipeline...[/dim] (0/{total_units})"
-                    )
+        # ── header row: glyph + name + frame count + status + time ─────────
+        row = Text()
+        row.append("  ", style="")
+        if has_issues:
+            row.append("[!]", style="bold dark_orange")
+        else:
+            row.append("[+]", style="bold green")
+        row.append(" ", style="")
+        row.append(f"{_last_phase:<20}", style="bold white")
+        if total_f:
+            row.append(f"  {total_f} frame{'s' if total_f != 1 else ''}", style="dim")
+        if has_issues:
+            row.append(f"  {_phase_issues} issue{'s' if _phase_issues != 1 else ''}", style="bold dark_orange")
+        else:
+            row.append("  clean", style="dim green")
+        row.append(f"  {elapsed:.1f}s", style="dim")
+        phase_summary_rows.append(row)
 
-                elif evt == "progress_init":
-                    new_total = data.get("total_units", 0)
-                    if new_total > 0:
-                        total_units = new_total
-                    status.update(
-                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})"
-                    )
+        # ── step subtitle: show last 2 unique steps, Claude Code style ─────
+        if _phase_steps:
+            seen: set[str] = set()
+            unique_steps: list[str] = []
+            for s in _phase_steps:
+                if s not in seen:
+                    seen.add(s)
+                    unique_steps.append(s)
+            shown = unique_steps[-2:]
+            subtitle = Text()
+            subtitle.append("     └ ", style="dim bright_black")
+            subtitle.append(" · ".join(shown), style="dim")
+            phase_summary_rows.append(subtitle)
 
-                elif evt == "progress_update":
-                    increment = data.get("increment", 0)
-                    if increment > 0:
-                        processed_units += increment
-                    elif "frame_id" in data:
-                        processed_units += 1
+        current_phase_frames.clear()
+        _phase_passed = _phase_failed = _phase_issues = 0
+        _phase_start = time.monotonic()
+        _phase_steps = []
+        _last_phase = ""
 
-                    new_status = data.get("status", data.get("phase"))
-                    if new_status:
-                        current_phase = new_status
+    def _make_live_renderable() -> Group:
+        """Build live panel:
+        [completed phase summaries]
+        [current phase frame rows]
+        [spinner + active status + wall-clock]
+        [rotating security tip]
+        """
+        elapsed_total = time.monotonic() - _scan_start
+        mm = int(elapsed_total // 60)
+        ss = int(elapsed_total % 60)
+        clock_str = f"  [dim]{mm:02d}:{ss:02d}[/dim]" if elapsed_total >= 1 else ""
 
-                    if total_units > 0 and processed_units > total_units:
-                        processed_units = total_units
+        counter_str = f" ({processed_units}/{total_units})" if total_units > 0 else ""
+        frame_hint = f"  [dim]{current_frame}[/dim]" if current_frame and current_frame != current_phase else ""
 
-                    status.update(
-                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})"
-                    )
+        active_tbl = Table.grid(padding=(0, 1))
+        active_tbl.add_column(no_wrap=True)
+        active_tbl.add_column(no_wrap=False)
+        active_tbl.add_row(
+            _spinner_widget,
+            Text.from_markup(f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}"),
+        )
 
-                elif evt == "phase_started":
-                    current_phase = data.get("phase", current_phase)
-                    status.update(
-                        f"[bold blue]🛡️  Scanning...[/bold blue] [dim]{current_phase}[/dim] ({processed_units}/{total_units})"
-                    )
-                    if verbose:
-                        console.print(f"[bold blue]▶ Phase:[/bold blue] {current_phase}")
+        renderables: list = [*phase_summary_rows]
 
-                elif evt == "frame_completed":
-                    frame_stats["total"] += 1
-                    name = data.get("frame_name", data.get("frame_id"))
-                    frame_status = data.get("status", "unknown")
-                    icon = "✅" if frame_status == "passed" else "❌" if frame_status == "failed" else "⚠️"
-                    style = "green" if frame_status == "passed" else "red" if frame_status == "failed" else "yellow"
-                    findings_count = data.get("findings", data.get("issues_found", 0))
+        # Show phase hint when active phase has zero or very few frame rows
+        phase_hint_text = _UX.PHASE_HINTS.get(current_phase, "")
+        if phase_hint_text and len(current_phase_frames) < 2:
+            _max = max(10, console.width - 8)
+            hint_row = Text()
+            hint_row.append("     ", style="")
+            hint_row.append(phase_hint_text[:_max], style="dim")
+            renderables.append(hint_row)
 
-                    if frame_status == "passed":
-                        frame_stats["passed"] += 1
-                    elif frame_status == "failed":
-                        frame_stats["failed"] += 1
-                    else:
-                        frame_stats["skipped"] += 1
+        renderables.extend(current_phase_frames[-MAX_FRAME_ROWS:])
+        renderables.append(active_tbl)
 
-                    if verbose:
-                        console.print(
-                            f"  {icon} [{style}]{name}[/{style}] ({data.get('duration', 0):.2f}s) - {findings_count} issues"
-                        )
+        # Rotating security tip — swaps every 14 s
+        tip_idx = int(elapsed_total / 14) % len(_UX.TIPS)
+        _max_tip = max(10, console.width - 8)
+        tip_row = Text()
+        tip_row.append("  · ", style="dim bright_black")
+        tip_row.append(_UX.TIPS[tip_idx][:_max_tip], style="dim")
+        renderables.append(tip_row)
 
-            elif event_type == "result":
-                final_result_data = event["data"]
+        return Group(*renderables)
 
+    try:
+        with Live(
+            _make_live_renderable(),
+            console=console,
+            refresh_per_second=12,
+            transient=False,
+        ) as live:
+            async for event in bridge.execute_pipeline_stream_async(
+                file_path=paths,
+                frames=frames,
+                verbose=verbose,
+                analysis_level=level,
+                ci_mode=ci_mode,
+            ):
+                event_type = event.get("type")
+
+                if event_type == "progress":
+                    evt = event["event"]
+                    data = event.get("data", {})
+
+                    # ── discovery / pipeline start ────────────────────────────
+                    if evt == "discovery_complete":
+                        total_units = data.get("total_files", 0)
+                        current_phase = f"Discovered {total_units} files"
+                        current_frame = ""
+
+                    elif evt == "pipeline_started":
+                        if total_units <= 0:
+                            total_units = data.get("file_count", 0)
+                        current_phase = "Starting pipeline"
+                        current_frame = ""
+
+                    elif evt == "progress_init":
+                        new_total = data.get("total_units", 0)
+                        if new_total > 0:
+                            total_units = new_total
+
+                    # ── phase transitions ──────────────────────────────────────
+                    elif evt == "phase_started":
+                        raw = data.get("phase_name", data.get("phase", current_phase))
+                        label = str(raw).title()
+
+                        # Only transition when the phase name actually changes
+                        if label != _last_phase:
+                            _flush_phase()  # collapse previous phase
+                            current_phase = label
+                            current_frame = ""
+                            _last_phase = label
+
+                        phase_total = data.get("total_units", 0)
+                        if phase_total > 0:
+                            total_units = phase_total
+                            processed_units = 0
+
+                    # ── per-frame activity ───────────────────────────────────
+                    elif evt == "progress_update":
+                        increment = data.get("increment", 0)
+                        if increment > 0:
+                            processed_units += increment
+                        elif "frame_id" in data:
+                            processed_units += 1
+                        if total_units > 0 and processed_units > total_units:
+                            processed_units = total_units
+                        new_status = data.get("status", data.get("phase", ""))
+                        if new_status:
+                            current_frame = str(new_status)
+                            _phase_steps.append(str(new_status))  # record for subtitle
+
+                    # ── frame completed ─────────────────────────────────────
+                    elif evt == "frame_completed":
+                        nonlocal_frame_name = data.get("frame_name", data.get("frame_id", "?"))
+                        frame_status = data.get("status", "unknown")
+                        findings_num = data.get("findings", data.get("issues_found", 0))
+                        duration = data.get("duration", 0)
+
+                        frame_stats["total"] += 1
+                        if frame_status == "passed":
+                            frame_stats["passed"] += 1
+                            _phase_passed += 1
+                            icon, color = "✔", "green"
+                        elif frame_status == "failed":
+                            frame_stats["failed"] += 1
+                            _phase_failed += 1
+                            icon, color = "✘", "red"
+                        else:
+                            frame_stats["skipped"] += 1
+                            icon, color = "–", "dim"
+
+                        _phase_issues += findings_num
+                        current_frame = nonlocal_frame_name
+
+                        # ── Critical finding flash row ─────────────────────────────
+                        severity = str(data.get("severity", "")).lower()
+                        if frame_status == "failed" and findings_num > 0 and severity in ("critical", "high", ""):
+                            flash = Text()
+                            flash.append("  !! ", style="bold red")
+                            flash.append(
+                                f"{findings_num} issue{'s' if findings_num != 1 else ''} in {nonlocal_frame_name}",
+                                style="bold white",
+                            )
+                            current_phase_frames.append(flash)
+
+                        # ── Regular frame row ──────────────────────────────────
+                        row = Text()
+                        row.append(f"    {icon} ", style=f"bold {color}")
+                        row.append(f"{nonlocal_frame_name:<26}", style="white" if findings_num > 0 else "dim")
+                        if findings_num > 0:
+                            row.append(
+                                f"  {findings_num} issue{'s' if findings_num != 1 else ''}", style=f"bold {color}"
+                            )
+                        else:
+                            row.append("  clean", style="dim green")
+                        row.append(f"  {duration:.1f}s", style="dim")
+                        current_phase_frames.append(row)
+
+                elif event_type == "result":
+                    final_result_data = event["data"]
+                    _flush_phase()  # collapse final phase
+                    current_phase = "Complete"
+                    current_frame = ""
+
+                live.update(_make_live_renderable())
+
+    except KeyboardInterrupt:
+        # ── Ctrl+C: show partial summary ──────────────────────────────────────
+        elapsed_s = time.monotonic() - _scan_start
+        mm, ss = int(elapsed_s // 60), int(elapsed_s % 60)
+        console.print()
+        console.print(f"  [yellow]Scan cancelled after {mm:02d}:{ss:02d}[/yellow]")
+        if phase_summary_rows:
+            console.print()
+            for r in phase_summary_rows:
+                console.print(r)
+        if _last_phase:
+            cancelled = Text()
+            cancelled.append("  [!] ", style="bold yellow")
+            cancelled.append(f"Cancelled during  {_last_phase}", style="yellow")
+            console.print(cancelled)
+        console.print()
+        return None, frame_stats, total_units
+
+    import random
+
+    q_text, q_author = random.choice(_UX.QUOTES)
+    console.print()
+    console.print(f"  [dim italic]{q_text}[/dim italic]")
+    console.print(f"                                        [dim]— {q_author}[/dim]")
+    console.print()
     return final_result_data, frame_stats, total_units
 
 
@@ -588,30 +905,162 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
             blocker_issues = res.get("blocker_issues_count", res.get("blocker_findings", 0))
             critical_blockers = res.get("critical_blocker_count", res.get("critical_findings", 0))
 
-    # Build Rich table
-    table = Table(title="Scan Results")
-    table.add_column("Metric", style="cyan")
-    table.add_column("Value", style="magenta")
+    # ─── Findings ────────────────────────────────────────────
+    display_findings = [f for f in all_findings if f.get("category", "") != "Orphan Code Analysis"]
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    display_findings.sort(key=lambda x: severity_order.get(str(x.get("severity", "info")).lower(), 5))
 
-    table.add_row("Total Files Scanned", str(total_files_scanned))
-    table.add_row("Total Frames", str(res.get("total_frames", 0)))
-    table.add_row("Passed", f"[green]{res.get('frames_passed', 0)}[/green]")
-    table.add_row("Failed", f"[red]{res.get('frames_failed', 0)}[/red]")
+    if display_findings:
+        console.print()
+        for idx, finding in enumerate(display_findings[:10]):
+            severity = str(finding.get("severity", "info")).lower()
+            color_map = {
+                "critical": "red",
+                "high": "dark_orange",
+                "medium": "yellow3",
+                "low": "steel_blue1",
+                "info": "grey62",
+            }
+            label_map = {"critical": "critical", "high": "high", "medium": "medium", "low": "low", "info": "info"}
+            color = color_map.get(severity, "grey62")
+            sev_label = label_map.get(severity, severity)
 
-    table.add_section()
-    table.add_row("Total Findings", str(total_findings))
-    table.add_row("Security Issues", str(security_issues))
-    table.add_row("Quality Issues", str(quality_issues))
+            # Parse location
+            location = finding.get("location", "")
+            file_path = finding.get("file_path", finding.get("path", ""))
+            line_num = finding.get("line_number", finding.get("line_start", 0))
+            if not file_path and location:
+                parts = location.rsplit(":", 1)
+                file_path = parts[0] if parts else location
+                try:
+                    line_num = int(parts[1]) if len(parts) > 1 else 0
+                except:
+                    line_num = 0
 
-    table.add_section()
-    table.add_row("Blocker Issues", str(blocker_issues))
-    table.add_row("Critical Issues", f"[{'red' if critical_blockers > 0 else 'green'}]{critical_blockers}[/]")
+            ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "py"
+            lang_map = {
+                "py": "python",
+                "ts": "typescript",
+                "js": "javascript",
+                "go": "go",
+                "rs": "rust",
+                "java": "java",
+                "kt": "kotlin",
+                "swift": "swift",
+                "cs": "csharp",
+                "dart": "dart",
+            }
+            lang = lang_map.get(ext, "python")
 
-    table.add_section()
-    table.add_row("Technical Debt", str(technical_debt))
-    table.add_row("New Debt Added", str(new_debt_added))
+            code_snippet = finding.get("code", finding.get("snippet", finding.get("context", "")))
+            message = finding.get("message", "")
+            detail = finding.get("detail", "")
+            rule_id = finding.get("id", finding.get("rule_id", ""))
 
-    console.print("\n", table)
+            # ── Header line: ● SEVERITY  file.py:14  rule-id ──
+            header = Text()
+            header.append("  ● ", style=f"bold {color}")
+            header.append(sev_label.upper(), style=f"bold {color}")
+            header.append("  ", style="")
+            header.append(file_path, style="bold white")
+            if line_num:
+                header.append(f":{line_num}", style="dim white")
+            if rule_id:
+                header.append(f"  [{rule_id}]", style="dim")
+            console.print(header)
+
+            # ── Message ──
+            console.print(f"    [dim]{message}[/dim]")
+
+            # ── Code snippet ──
+            if code_snippet:
+                from rich.padding import Padding
+
+                console.print()
+                syntax = Syntax(
+                    code_snippet,
+                    lang,
+                    theme="github-dark",
+                    line_numbers=True,
+                    start_line=max(1, line_num - 2),
+                    word_wrap=True,
+                    background_color="default",
+                    indent_guides=False,
+                )
+                console.print(Padding(syntax, (0, 0, 0, 4)))
+
+            # ── Remediation tip (first meaningful line) ──
+            if detail:
+                tip_lines = [
+                    ln.strip()
+                    for ln in detail.strip().splitlines()
+                    if ln.strip() and not ln.strip().startswith("✅") and not ln.strip().startswith("❌")
+                ]
+                if tip_lines:
+                    console.print(f"    [green]↳[/green] [dim]{tip_lines[0][:120]}[/dim]")
+
+            console.print()  # breathing room between findings
+
+        if len(display_findings) > 10:
+            remaining = len(display_findings) - 10
+            console.print(
+                f"  [dim]… {remaining} more finding{'s' if remaining > 1 else ''} not shown  ·  warden scan --format sarif -o report.sarif[/dim]\n"
+            )
+
+    # ─── Summary ─────────────────────────────────────────────
+    console.print(Rule(style="bright_black"))
+    console.print()
+
+    frames_passed = res.get("frames_passed", 0)
+    frames_failed = res.get("frames_failed", 0)
+    total_frames = res.get("total_frames", 0)
+    crit_col = "red" if critical_blockers > 0 else "green"
+
+    # Two-column aligned stat table — like Claude Code's usage summary
+    stat_table = Table(box=None, show_header=False, padding=(0, 3), show_edge=False)
+    stat_table.add_column("", style="dim", no_wrap=True, min_width=20)
+    stat_table.add_column("", no_wrap=True, min_width=8)
+    stat_table.add_column("", style="dim", no_wrap=True, min_width=20)
+    stat_table.add_column("", no_wrap=True, min_width=8)
+
+    pass_col = "green"
+    fail_col = "red" if frames_failed > 0 else "green"
+
+    stat_table.add_row(
+        "Files scanned",
+        f"[bold white]{total_files_scanned}[/]",
+        "Frames",
+        f"[bold white]{total_frames}[/]",
+    )
+    stat_table.add_row(
+        "Frames passed",
+        f"[bold {pass_col}]{frames_passed}[/]",
+        "Frames failed",
+        f"[bold {fail_col}]{frames_failed}[/]",
+    )
+    stat_table.add_row(
+        "Total findings",
+        f"[bold white]{total_findings}[/]",
+        "Security issues",
+        f"[bold {'orange3' if security_issues > 0 else 'white'}]{security_issues}[/]",
+    )
+    stat_table.add_row(
+        "Critical",
+        f"[bold {crit_col}]{critical_blockers}[/]",
+        "Quality issues",
+        f"[bold white]{quality_issues}[/]",
+    )
+    if technical_debt > 0 or new_debt_added > 0:
+        new_debt_col = "red" if new_debt_added > 0 else "green"
+        stat_table.add_row(
+            "Technical debt",
+            f"[bold white]{technical_debt}[/]",
+            "New debt",
+            f"[bold {new_debt_col}]{'+' if new_debt_added > 0 else ''}{new_debt_added}[/]",
+        )
+
+    console.print(stat_table)
+    console.print()
 
     # Missing tool hints
     frame_results = res.get("results", [])
@@ -635,17 +1084,32 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
     if llm_metrics:
         _display_llm_summary(llm_metrics)
 
-    # Success/fail banner
+    # Status banner
     status_raw = res.get("status")
     is_success = str(status_raw).upper() in ["2", "SUCCESS", "COMPLETED", "PIPELINESTATUS.COMPLETED"]
 
     if verbose:
         console.print(f"[dim]Debug: status={status_raw} ({type(status_raw).__name__}), is_success={is_success}[/dim]")
 
+    quality_score = res.get("quality_score", res.get("qualityScore"))
+    score_str = f"  •  Quality Score: [bold]{quality_score:.1f}/10[/bold]" if quality_score is not None else ""
+
     if is_success:
-        console.print("\n[bold green]✨ Scan Succeeded![/bold green]")
+        console.print(
+            Panel(
+                f"[bold green]✨  Scan Completed Successfully[/bold green]{score_str}",
+                border_style="green",
+                padding=(0, 2),
+            )
+        )
     else:
-        console.print("\n[bold red]💥 Scan Failed![/bold red]")
+        console.print(
+            Panel(
+                f"[bold red]💥  Scan Failed[/bold red]{score_str}",
+                border_style="red",
+                padding=(0, 2),
+            )
+        )
 
 
 def _generate_configured_reports(final_result_data: dict, verbose: bool) -> None:
@@ -824,19 +1288,39 @@ async def _run_scan_async(
 ) -> int:
     """Async implementation of scan command."""
 
-    display_paths = f"{paths[0]} + {len(paths) - 1} others" if len(paths) > 1 else str(paths[0])
-    console.print("[bold cyan]🛡️  Warden Scanner[/bold cyan]")
-    console.print(f"[dim]Scanning: {display_paths}[/dim]")
+    # ── Startup header ──────────────────────────────────────────────────
+    try:
+        from importlib.metadata import version as _pkg_ver
 
-    # Show intelligence status in CI mode
-    if ci_mode and intelligence_context:
-        if intelligence_context.get("available"):
-            quality = intelligence_context.get("quality_score", 0)
-            modules = len(intelligence_context.get("modules", {}))
-            console.print(f"[dim]🧠 Using pre-computed intelligence ({modules} modules, quality: {quality}/100)[/dim]")
-        else:
-            console.print("[yellow]⚠️  No intelligence available - consider running 'warden init'[/yellow]")
+        _warden_ver = _pkg_ver("warden-core")
+    except Exception:
+        _warden_ver = "dev"
 
+    _level_label = level.value if hasattr(level, "value") else str(level)
+    _proj_label = Path.cwd().name
+    _file_label = f"{len(paths)} path{'s' if len(paths) != 1 else ''}"
+
+    # \u2500\u2500 ASCII art logo \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    from warden.cli.commands import _scan_ux as _UX_h
+
+    console.print()
+    _max_w = max(10, console.width - 4)
+    for _line in _UX_h.LOGO_LINES:
+        console.print(f"  [bold steel_blue1]{_line[:_max_w]}[/]")
+
+    # \u2500\u2500 Info line \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    header = Text()
+    header.append(" Warden ", style="bold white on dark_blue")
+    header.append(f" v{_warden_ver} ", style="dim")
+    header.append(" | ", style="dim bright_black")
+    header.append(_proj_label, style="bold")
+    header.append(" | ", style="dim bright_black")
+    header.append(_file_label, style="dim")
+    header.append(" | ", style="dim bright_black")
+    header.append(_level_label, style="dim")
+    console.print()
+    console.print(header)
+    console.print(Text("\u2500" * min(console.width - 2, 72), style="dim bright_black"))
     console.print()
 
     bridge = WardenBridge(project_root=Path.cwd())
@@ -858,6 +1342,21 @@ async def _run_scan_async(
         # 3. Generate configured reports from YAML config
         if final_result_data:
             _generate_configured_reports(final_result_data, verbose)
+
+            # Auto-generate badge in root directory
+            try:
+                from warden.reports.generator import ReportGenerator
+
+                generator = ReportGenerator()
+                badge_path = Path.cwd() / "warden_badge.svg"
+                generator.generate_svg_badge(final_result_data, badge_path)
+                console.print("\n[bold green]🛡️  Warden Badge Generated![/bold green]")
+                console.print(f"  [dim]Badge saved to: {badge_path}[/dim]")
+                console.print("  [dim]Add this to your README.md:[/dim]")
+                console.print("  [cyan]![Warden Quality](./warden_badge.svg)[/cyan]")
+            except Exception as e:
+                if verbose:
+                    console.print(f"[dim]Failed to auto-generate root badge: {e}[/dim]")
 
         # 4. Generate explicit --output report
         if output and final_result_data:

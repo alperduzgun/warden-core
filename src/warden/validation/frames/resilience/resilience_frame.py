@@ -37,6 +37,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
+from warden.validation.domain.mixins import TaintAware
 
 if TYPE_CHECKING:
     from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -238,7 +239,7 @@ Given code and its structural context (imports, function calls, cross-file depen
 # =============================================================================
 
 
-class ResilienceFrame(ValidationFrame):
+class ResilienceFrame(ValidationFrame, TaintAware):
     """
     Chaos Engineering Analysis Frame.
 
@@ -252,6 +253,7 @@ class ResilienceFrame(ValidationFrame):
     """
 
     # Metadata
+    frame_id = "resilience"  # Class-level access: ResilienceFrame.frame_id == "resilience"
     name = "Chaos Engineering Analysis"
     description = "Simulate failures, find missing resilience patterns (timeout, retry, circuit breaker)."
     category = FrameCategory.GLOBAL
@@ -280,6 +282,7 @@ class ResilienceFrame(ValidationFrame):
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize with optional config. Fail-fast on invalid config."""
         super().__init__(config)
+        self._taint_paths: dict[str, list] = {}
 
         # Validate config early (fail-fast)
         self._timeout = float(self.config.get("timeout", self.DEFAULT_TIMEOUT_SECONDS))
@@ -287,6 +290,10 @@ class ResilienceFrame(ValidationFrame):
             raise ValueError(f"timeout must be positive, got {self._timeout}")
 
         logger.debug("resilience_frame_initialized", timeout=self._timeout, version=self.version)
+
+    def set_taint_paths(self, taint_paths: dict[str, list]) -> None:
+        """TaintAware implementation — receive shared taint analysis results."""
+        self._taint_paths = taint_paths
 
     async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
@@ -311,6 +318,7 @@ class ResilienceFrame(ValidationFrame):
         )
 
         findings: list[Finding] = []
+        self._pipeline_context = context  # Preserve for LLM prompt enrichment
         context = ChaosContext()
 
         try:
@@ -766,7 +774,30 @@ class ResilienceFrame(ValidationFrame):
                     sinks_str = ", ".join(pi.critical_sinks[:5])
                     additional_context += f"Critical Operations: {sinks_str}\n"
 
+                # Framework detection (context for resilience patterns)
+                if hasattr(pi, "detected_frameworks") and pi.detected_frameworks:
+                    fw_str = ", ".join(pi.detected_frameworks[:3])
+                    additional_context += f"Framework: {fw_str}\n"
+
                 logger.debug("project_intelligence_added_to_resilience_prompt", file=code_file.path)
+
+            # File dependency context (import graph)
+            pctx = getattr(self, "_pipeline_context", None)
+            if pctx and hasattr(pctx, "dependency_graph_forward"):
+                rel_path = code_file.path
+                try:
+                    from pathlib import Path as _P
+
+                    if pctx.project_root:
+                        rel_path = str(_P(code_file.path).resolve().relative_to(pctx.project_root))
+                except (ValueError, TypeError):
+                    pass
+                deps = pctx.dependency_graph_forward.get(rel_path, [])
+                dependents = pctx.dependency_graph_reverse.get(rel_path, [])
+                if deps:
+                    additional_context += f"Depends on: {', '.join(deps[:5])}\n"
+                if dependents:
+                    additional_context += f"Depended by: {', '.join(dependents[:5])}\n"
 
             # Add prior findings if available - BATCH 2: Sanitized
             if hasattr(self, "prior_findings") and self.prior_findings:
@@ -809,6 +840,22 @@ class ResilienceFrame(ValidationFrame):
                         additional_context += f"- [{severity}] {msg}\n"
 
                     logger.debug("prior_findings_added_to_resilience_prompt", file=code_file.path)
+
+            # Add taint analysis context for severity-aware resilience
+            file_taint_paths = self._taint_paths.get(code_file.path, [])
+            if file_taint_paths:
+                unsanitized = [p for p in file_taint_paths if not p.is_sanitized]
+                if unsanitized:
+                    additional_context += "\n[TAINT ANALYSIS — Unsanitized Data Flows]:\n"
+                    for tp in unsanitized[:5]:
+                        additional_context += (
+                            f"  - {tp.source.name} (line {tp.source.line})"
+                            f" -> {tp.sink.name} [{tp.sink_type}] (line {tp.sink.line})\n"
+                        )
+                    additional_context += (
+                        "External dependencies on these tainted paths are HIGHER RISK — "
+                        "missing resilience patterns here can lead to data corruption or security breaches.\n"
+                    )
 
             # Build prompt with context
             user_prompt = f"""Analyze this code for chaos engineering:
@@ -948,6 +995,22 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
     ) -> FrameResult:
         """Create FrameResult with metadata."""
         duration = time.perf_counter() - start_time
+
+        # Severity boost: if file has unsanitized taint paths, bump medium -> high
+        file_taint_paths = self._taint_paths.get(code_file.path, [])
+        has_unsanitized_taint = any(not tp.is_sanitized for tp in file_taint_paths) if file_taint_paths else False
+        if has_unsanitized_taint:
+            boosted = 0
+            for f in findings:
+                if f.severity == "medium":
+                    f.severity = "high"
+                    boosted += 1
+            if boosted:
+                logger.info(
+                    "taint_severity_boost",
+                    file=code_file.path,
+                    boosted_findings=boosted,
+                )
 
         # Determine status
         critical = sum(1 for f in findings if f.severity == "critical")

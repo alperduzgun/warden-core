@@ -3,6 +3,7 @@ Classification Phase Executor.
 """
 
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -41,9 +42,11 @@ class ClassificationExecutor(BasePhaseExecutor):
         """Execute CLASSIFICATION phase."""
         logger.info("executing_phase", phase="CLASSIFICATION", file_count=len(code_files))
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "CLASSIFICATION", "phase_name": "CLASSIFICATION"})
+        start_time = time.perf_counter()
+
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
 
         try:
             # Respect global use_llm flag and LLM service availability
@@ -88,12 +91,12 @@ class ClassificationExecutor(BasePhaseExecutor):
                 )
 
             # Optimization: Filter out unchanged files to save LLM tokens/Validation time
+            _emit("Filtering unchanged files (incremental optimization)")
             files_to_classify = []
             file_contexts = getattr(context, "file_contexts", {})
 
             for cf in code_files:
                 f_info = file_contexts.get(cf.path)
-                # If no context info or not marked unchanged, we classify it
                 if not f_info or not getattr(f_info, "is_unchanged", False):
                     files_to_classify.append(cf)
 
@@ -120,6 +123,7 @@ class ClassificationExecutor(BasePhaseExecutor):
                     logger.info(
                         "classification_phase_optimizing", total=len(code_files), classifying=len(files_to_classify)
                     )
+                _emit(f"Selecting frames for {len(files_to_classify)} files with AI")
                 result = await phase.execute_async(files_to_classify)
 
             # Validate result exists (should always be set by above branches)
@@ -173,8 +177,12 @@ class ClassificationExecutor(BasePhaseExecutor):
                 selected_frames=result.selected_frames,
             )
 
+        except RuntimeError as e:
+            logger.error("phase_failed", phase="CLASSIFICATION", error=str(e), tb=traceback.format_exc())
+            context.errors.append(f"CLASSIFICATION failed: {e!s}")
+            raise e
         except Exception as e:
-            logger.error("phase_failed", phase="CLASSIFICATION", error=str(e))
+            logger.error("phase_failed", phase="CLASSIFICATION", error=str(e), tb=traceback.format_exc())
             context.errors.append(f"CLASSIFICATION failed: {e!s}")
 
             # FALLBACK: Use all configured frames if classification fails

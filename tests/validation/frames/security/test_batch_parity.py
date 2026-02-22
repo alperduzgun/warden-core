@@ -67,19 +67,18 @@ class TestSecurityFrameBatchParity:
             CodeFile(path="/tmp/bad.py", content="y = 2", language="python"),
         ]
 
-        # Mock execute_async to raise for second file
-        original_execute = security_frame.execute_async
-
+        # Mock checks.get_enabled to raise for second file
+        original_get_enabled = security_frame.checks.get_enabled
         call_count = 0
 
-        async def mock_execute(code_file):
+        def mock_get_enabled(config):
             nonlocal call_count
             call_count += 1
-            if "bad.py" in code_file.path:
+            if call_count == 2:
                 raise ValueError("Simulated execution error")
-            return await original_execute(code_file)
+            return original_get_enabled(config)
 
-        with patch.object(security_frame, "execute_async", side_effect=mock_execute):
+        with patch.object(security_frame.checks, "get_enabled", side_effect=mock_get_enabled):
             batch_results = await security_frame.execute_batch_async(code_files)
 
         # Should return results for both

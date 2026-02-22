@@ -207,6 +207,16 @@ class TestConfig:
         assert result.exit_code == 0
         assert "ollama" in result.stdout
 
+    def test_config_llm_use_codex_and_test(self, runner, isolated_project, monkeypatch):
+        """Using codex as local provider should be accepted and test reports availability status."""
+        monkeypatch.chdir(isolated_project)
+        res = runner.invoke(app, ["config", "llm", "use", "codex"])
+        assert res.exit_code == 0
+        res2 = runner.invoke(app, ["config", "llm", "test"])
+        # Should not crash; report 'codex' status (found/missing)
+        assert res2.exit_code == 0
+        assert "codex" in res2.stdout.lower()
+
     def test_config_get_project_type(self, runner, isolated_project, monkeypatch):
         monkeypatch.chdir(isolated_project)
         result = runner.invoke(app, ["config", "get", "project.type"])

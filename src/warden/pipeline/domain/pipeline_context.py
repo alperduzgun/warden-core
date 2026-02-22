@@ -58,10 +58,22 @@ class PipelineContext:
 
     # Phase 0: PRE-ANALYSIS Results
     project_type: ProjectType | None = None
+    # Dedicated field for the full ProjectContext object from analysis/domain/project_context.py.
+    # pre_analysis_executor sets this; frame_runner uses it for ProjectContextAware injection.
+    # NOTE: project_type above may also hold the full object for legacy reasons (hasattr dance
+    # in summary/to_dict methods), but new code should read/write project_context directly.
+    project_context: Any | None = None
     framework: Framework | None = None
     file_context: FileContext | None = None
     file_contexts: dict[str, dict[str, Any]] = field(default_factory=dict)
     project_metadata: dict[str, Any] = field(default_factory=dict)
+
+    # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
+    taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
+
+    # Phase 0: File-level Dependency Graph (forward/reverse maps for prompt enrichment)
+    dependency_graph_forward: dict[str, list[str]] = field(default_factory=dict)  # file -> [dependencies]
+    dependency_graph_reverse: dict[str, list[str]] = field(default_factory=dict)  # file -> [dependents]
 
     # Phase 0.5: TRIAGE Results (Adaptive Hybrid Triage)
     triage_decisions: dict[str, Any] = field(default_factory=dict)  # Key: file_path, Value: TriageDecision.model_dump()
@@ -126,6 +138,11 @@ class PipelineContext:
 
     # Shared Project Intelligence (populated in PRE-ANALYSIS, consumed by frames)
     project_intelligence: Any | None = None  # ProjectIntelligence instance
+
+    # Phase 0.7: Code Graph & Gap Analysis (K2 fix: explicit fields, not dynamic attrs)
+    code_graph: Any | None = None  # CodeGraph instance
+    gap_report: Any | None = None  # GapReport instance
+    chain_validation: Any | None = None  # ChainValidation instance (Phase 0.8, LSP)
 
     # State Tracking
     completed_phases: set[str] = field(default_factory=set)
@@ -271,6 +288,7 @@ class PipelineContext:
                     "classification_reasoning": self.classification_reasoning,
                     "learned_patterns": self.learned_patterns,
                     "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
+                    "taint_paths_count": sum(len(v) for v in self.taint_paths.values()),
                 }
             )
 
@@ -405,6 +423,9 @@ class PipelineContext:
             "llm_interactions": len(self.llm_history),
             "llm_requests": self.request_count,
             "project_intelligence": self.project_intelligence.to_json() if self.project_intelligence else None,
+            "taint_paths_count": sum(len(v) for v in self.taint_paths.values()),
+            "code_graph_stats": self.code_graph.stats() if self.code_graph else None,
+            "gap_report_summary": self.gap_report.summary() if self.gap_report else None,
             "metadata": self.metadata,
         }
 

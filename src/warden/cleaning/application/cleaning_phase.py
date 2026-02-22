@@ -389,15 +389,15 @@ class CleaningPhase:
         refactorings: list,
     ) -> float:
         """
-        Calculate improved quality score.
+        Calculate improved quality score (Potential Upside).
 
         Args:
-            quality_score_before: Original quality score
+            quality_score_before: Current quality score (can be 9.8 or 4.5 based on Findings/Baseline)
             cleaning_suggestions: List of cleaning suggestions
             refactorings: List of refactoring suggestions
 
         Returns:
-            Estimated quality score after improvements
+            Estimated quality score after improvements, never exceeding 10.0
         """
         # Estimate improvement based on suggestions
         improvement = 0.0
@@ -422,11 +422,12 @@ class CleaningPhase:
             else:
                 improvement += 0.2
 
-        # Cap improvement at realistic level
-        improvement = min(improvement, 3.0)
+        # Realism cap: large batches of suggestions don't instantly jump the score.
+        # Final min(…, 10.0) already prevents exceeding the ceiling.
+        headroom = 10.0 - quality_score_before
+        improvement = min(improvement, 5.0, headroom)
 
-        # Calculate new score
-        quality_score_after = min(quality_score_before + improvement, 10.0)
+        quality_score_after = quality_score_before + improvement
 
         return round(quality_score_after, 1)
 

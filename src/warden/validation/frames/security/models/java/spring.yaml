@@ -1,0 +1,43 @@
+meta:
+  framework: spring
+  language: java
+
+sources:
+  - pattern: "HttpServletRequest.getParameter"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "HttpServletRequest.getHeader"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "HttpServletRequest.getCookies"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "ServerHttpRequest.getQueryParams"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "ServerWebExchange.getRequest"
+    role: HTTP_INPUT
+    confidence: 0.90
+
+sinks:
+  - pattern: "JdbcTemplate.execute"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "JdbcTemplate.query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "JdbcTemplate.update"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "entityManager.createNativeQuery"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "entityManager.createQuery"
+    type: SQL-value
+    confidence: 0.90
+
+sanitizers:
+  - pattern: "HtmlUtils.htmlEscape"
+    clears: HTML-content
+  - pattern: "NamedParameterJdbcTemplate"
+    clears: SQL-value

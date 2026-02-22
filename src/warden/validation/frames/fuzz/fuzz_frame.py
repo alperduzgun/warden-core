@@ -27,11 +27,12 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
+from warden.validation.domain.mixins import TaintAware
 
 logger = get_logger(__name__)
 
 
-class FuzzFrame(ValidationFrame):
+class FuzzFrame(ValidationFrame, TaintAware):
     """
     Fuzz testing validation frame.
 
@@ -121,6 +122,11 @@ Output must be a valid JSON object with the following structure:
             config: Frame configuration
         """
         super().__init__(config)
+        self._taint_paths: dict[str, list] = {}
+
+    def set_taint_paths(self, taint_paths: dict[str, list]) -> None:
+        """TaintAware implementation — receive shared taint analysis results."""
+        self._taint_paths = taint_paths
 
     async def execute_async(self, code_file: CodeFile) -> FrameResult:
         """
@@ -154,9 +160,30 @@ Output must be a valid JSON object with the following structure:
             )
             findings.extend(pattern_findings)
 
+        # Boost taint source functions to HIGH priority fuzz targets
+        file_taint_paths = self._taint_paths.get(code_file.path, [])
+        if file_taint_paths:
+            taint_source_lines: set[int] = set()
+            for tp in file_taint_paths:
+                if not tp.is_sanitized:
+                    taint_source_lines.add(tp.source.line)
+            for tp in file_taint_paths:
+                if not tp.is_sanitized:
+                    findings.append(
+                        Finding(
+                            id=f"{self.frame_id}-taint-fuzz-{tp.source.line}",
+                            severity="high",
+                            message=f"Taint source at line {tp.source.line} flows to {tp.sink.name} — high-priority fuzz target",
+                            location=f"{code_file.path}:{tp.source.line}",
+                            detail=f"Unsanitized data from {tp.source.name} reaches {tp.sink.name} [{tp.sink_type}]. "
+                            f"Fuzz this input path with boundary values, null, and special characters.",
+                            code=None,
+                        )
+                    )
+
         # Run LLM analysis if available
         if hasattr(self, "llm_service") and self.llm_service:
-            llm_findings = await self._analyze_with_llm(code_file)
+            llm_findings = await self._analyze_with_llm(code_file, file_taint_paths)
             findings.extend(llm_findings)
 
         # Determine status
@@ -241,7 +268,7 @@ Output must be a valid JSON object with the following structure:
 
         return findings
 
-    async def _analyze_with_llm(self, code_file: CodeFile) -> list[Finding]:
+    async def _analyze_with_llm(self, code_file: CodeFile, taint_paths: list | None = None) -> list[Finding]:
         """
         Analyze code using LLM for deeper fuzzing insights.
         """
@@ -253,9 +280,22 @@ Output must be a valid JSON object with the following structure:
 
             client = self.llm_service
 
+            # Build taint context for LLM prompt
+            taint_context = ""
+            if taint_paths:
+                unsanitized = [p for p in taint_paths if not p.is_sanitized]
+                if unsanitized:
+                    taint_context = "\n\n[TAINT ANALYSIS — Priority Fuzz Targets]:\n"
+                    for tp in unsanitized[:5]:
+                        taint_context += (
+                            f"  - SOURCE: {tp.source.name} (line {tp.source.line})"
+                            f" -> SINK: {tp.sink.name} [{tp.sink_type}] (line {tp.sink.line})\n"
+                        )
+                    taint_context += "Focus fuzz testing on these input paths.\n"
+
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
-                user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
+                user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}{taint_context}",
                 temperature=0.1,
             )
 

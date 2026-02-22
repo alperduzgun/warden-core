@@ -16,6 +16,16 @@ from .providers.base import ILlmClient
 from .registry import ProviderRegistry
 from .types import LlmProvider
 
+# CLI-tool providers that manage their own model selection.
+# For these, the fast/smart tier distinction is meaningless — all requests
+# route through the same tool (single-provider mode).
+SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset(
+    {
+        LlmProvider.CLAUDE_CODE,
+        LlmProvider.CODEX,
+    }
+)
+
 _providers_lock = threading.Lock()
 _providers_imported = False
 _factory_logger = _structlog.get_logger(__name__)
@@ -46,6 +56,7 @@ def _ensure_providers_registered() -> None:
             "warden.llm.providers.ollama",
             "warden.llm.providers.gemini",
             "warden.llm.providers.claude_code",
+            "warden.llm.providers.codex",
         ]
 
         import importlib
@@ -77,7 +88,7 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
         ValueError: If provider is not configured, enabled, or registered
     """
     # Validate configuration before creating client
-    local_providers = {LlmProvider.OLLAMA, LlmProvider.CLAUDE_CODE}
+    local_providers = {LlmProvider.OLLAMA, LlmProvider.CLAUDE_CODE, LlmProvider.CODEX}
     if provider not in local_providers:
         if not config.enabled or not config.api_key:
             raise ValueError(f"Provider {provider.value} is not configured or enabled")
@@ -121,18 +132,59 @@ def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | Non
     # Create primary (smart) client
     smart_client = create_provider_client(provider, provider_config)
 
-    # Try to create local/fast clients if enabled in priority order
-    fast_clients = []
+    # Build fast-tier clients.
+    # CLI-tool providers (Codex, Claude Code) manage their own model selection,
+    # so the fast/smart distinction doesn't apply — use single-provider mode.
+    fast_clients: list[ILlmClient] = []
 
-    for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
-        try:
-            fast_cfg = config.get_provider_config(fast_provider)
-            if fast_cfg and fast_cfg.enabled:
-                client = create_provider_client(fast_provider, fast_cfg)
-                fast_clients.append(client)
-                _factory_logger.debug("fast_tier_client_added", provider=fast_provider.value)
-        except Exception as e:
-            _factory_logger.warning("fast_tier_client_creation_failed", provider=fast_provider.value, error=str(e))
+    if provider in SINGLE_TIER_PROVIDERS:
+        _factory_logger.info("single_provider_mode", provider=provider.value)
+        # Probe for emergency fallback providers (e.g., Ollama).
+        # Normal flow unchanged: all requests → smart client (Claude Code/Codex).
+        # Fallback only activates when smart tier returns empty/error.
+        for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
+            if fast_provider == provider:
+                continue
+            try:
+                fast_cfg = config.get_provider_config(fast_provider)
+                if fast_cfg and fast_cfg.enabled:
+                    client = create_provider_client(fast_provider, fast_cfg)
+                    fast_clients.append(client)
+                    _factory_logger.info(
+                        "emergency_fallback_added",
+                        primary=provider.value,
+                        fallback=fast_provider.value,
+                    )
+            except Exception as e:
+                _factory_logger.debug(
+                    "emergency_fallback_unavailable",
+                    provider=fast_provider.value,
+                    error=str(e),
+                )
+        if not fast_clients:
+            _factory_logger.info(
+                "no_emergency_fallback",
+                provider=provider.value,
+                message="No fallback providers available",
+            )
+    else:
+        for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
+            if fast_provider == provider:
+                # Primary provider is already the smart_client — skip to avoid
+                # racing against itself in the fast tier.
+                continue
+            try:
+                fast_cfg = config.get_provider_config(fast_provider)
+                if fast_cfg and fast_cfg.enabled:
+                    client = create_provider_client(fast_provider, fast_cfg)
+                    fast_clients.append(client)
+                    _factory_logger.debug("fast_tier_client_added", provider=fast_provider.value)
+            except Exception as e:
+                _factory_logger.warning(
+                    "fast_tier_client_creation_failed",
+                    provider=fast_provider.value,
+                    error=str(e),
+                )
 
     _factory_logger.debug(
         "factory_client_status",
@@ -206,4 +258,5 @@ __all__ = [
     "create_client_with_fallback_async",
     "get_global_metrics_collector",
     "ProviderRegistry",
+    "SINGLE_TIER_PROVIDERS",
 ]

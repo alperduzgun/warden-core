@@ -16,6 +16,7 @@ from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.quality_metrics import QualityMetrics
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.language_utils import get_language_from_path
+from warden.shared.utils.token_utils import truncate_content_for_llm
 
 logger = get_logger(__name__)
 
@@ -79,7 +80,7 @@ IMPACTED_BY_DEPENDENCY: {is_impacted}
 
 CODE:
 ```{language}
-{code[:1500]}  # Truncate for token limit
+{truncate_content_for_llm(code, max_tokens=400)}
 ```
 
 INITIAL METRICS (rule-based):
@@ -282,12 +283,15 @@ Return as JSON."""
                 # Prepare Batch Prompt
                 prompt = self._format_batch_user_prompt(batch_items, initial_metrics)
 
-                # Call LLM
-                response = await self.llm.complete_async(
-                    prompt,
-                    self.get_system_prompt(),
-                    use_fast_tier=True,  # Use Qwen for cost optimization (Phase 1 migration)
+                # Call LLM with retry + fallback
+                response = await self._call_llm_with_retry_async(
+                    system_prompt=self.get_system_prompt(),
+                    user_prompt=prompt,
+                    use_fast_tier=True,
                 )
+
+                if not response or not response.content:
+                    raise RuntimeError("LLM returned no content after retries")
 
                 # Parse Batch Results
                 batch_results = self._parse_batch_llm_response(response.content, len(batch_items))
@@ -339,7 +343,7 @@ Impacted: {impacted}
 Initial Metrics: {json.dumps(metrics)}
 Code Snippet:
 ```{self._detect_language(path)}
-{code[:1000]}
+{truncate_content_for_llm(code, max_tokens=250)}
 ```
 ---
 """

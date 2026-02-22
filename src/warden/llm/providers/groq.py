@@ -25,7 +25,7 @@ class GroqClient(ILlmClient):
             raise ValueError("Groq API key is required")
 
         self._api_key = config.api_key
-        self._default_model = config.default_model or "llama-3.1-70b-versatile"
+        self._default_model = config.default_model or "llama-3.3-70b-versatile"
         self._base_url = config.endpoint or "https://api.groq.com/openai/v1"
 
     @property
@@ -44,8 +44,17 @@ class GroqClient(ILlmClient):
 
             headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
+            # Use requested model only if it looks like a Groq-compatible model.
+            # When orchestrated client forwards a smart_model from config (e.g. "claude-sonnet-4-*"),
+            # we must ignore it and use Groq's own default.
+            model = (
+                request.model
+                if request.model and not request.model.startswith(("claude", "gpt-"))
+                else self._default_model
+            )
+
             payload = {
-                "model": request.model or self._default_model,
+                "model": model,
                 "messages": [
                     {"role": "system", "content": request.system_prompt},
                     {"role": "user", "content": request.user_message},
@@ -83,6 +92,16 @@ class GroqClient(ILlmClient):
                 duration_ms=duration_ms,
             )
 
+        except httpx.HTTPStatusError as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            body = e.response.text[:500] if e.response else ""
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"{e} | body={body}",
+                provider=self.provider,
+                duration_ms=duration_ms,
+            )
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return LlmResponse(

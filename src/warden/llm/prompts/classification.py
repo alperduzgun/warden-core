@@ -64,7 +64,10 @@ def generate_classification_request(code: str, language: str, file_path: str | N
     Returns:
         Formatted user message for LLM
     """
+    from warden.shared.utils.token_utils import truncate_content_for_llm
+
     file_info = f"\nFile: {file_path}" if file_path else ""
+    truncated_code = truncate_content_for_llm(code, max_tokens=2000)
 
     return f"""Analyze this code file and classify its characteristics:{file_info}
 
@@ -72,7 +75,7 @@ Language: {language}
 
 Code:
 ```{language}
-{code}
+{truncated_code}
 ```
 
 Provide your analysis following the format specified in the system prompt. Return JSON only."""

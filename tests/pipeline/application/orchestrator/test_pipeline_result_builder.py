@@ -74,7 +74,7 @@ class TestBuild:
         assert result.low_findings == 0
 
     def test_quality_score_calculated_when_zero(self):
-        """score=0.0 → calculate_quality_score called."""
+        """score=0.0 → falls back to calculate_base_score then calculate_quality_score."""
         ctx = make_context()
         ctx.quality_score_before = 0.0
         ctx.findings = [make_finding("F1")]
@@ -92,7 +92,7 @@ class TestBuild:
             assert result.quality_score == 7.5
 
     def test_quality_score_preserved_when_nonzero(self):
-        """score=8.5 → used directly, calculator not called."""
+        """score=8.5 → used as base, findings applied on top."""
         ctx = make_context()
         ctx.quality_score_before = 8.5
         ctx.findings = []
@@ -102,7 +102,35 @@ class TestBuild:
         builder = _make_builder()
         result = builder.build(ctx, pipeline)
 
+        # No findings → score stays at base
         assert result.quality_score == 8.5
+
+    def test_quality_score_5_is_not_overridden(self):
+        """score=5.0 is a legitimate value and must NOT be replaced."""
+        ctx = make_context()
+        ctx.quality_score_before = 5.0
+        ctx.findings = []
+        ctx.frame_results = {}
+        pipeline = make_pipeline()
+
+        builder = _make_builder()
+        result = builder.build(ctx, pipeline)
+
+        assert result.quality_score == 5.0
+
+    def test_quality_score_none_falls_back_to_base(self):
+        """score=None → calculate_base_score from linter metrics."""
+        ctx = make_context()
+        ctx.quality_score_before = None
+        ctx.findings = []
+        ctx.frame_results = {}
+        pipeline = make_pipeline()
+
+        builder = _make_builder()
+        result = builder.build(ctx, pipeline)
+
+        # No linter_metrics → base is 10.0, no findings → 10.0
+        assert result.quality_score == 10.0
 
     def test_metadata_includes_strategy_and_scan_id(self):
         """Verify metadata fields are populated."""

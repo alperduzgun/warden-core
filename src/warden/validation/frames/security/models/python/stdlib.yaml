@@ -1,0 +1,65 @@
+meta:
+  framework: stdlib
+  language: python
+
+sources:
+  - pattern: "input"
+    role: USER_INPUT
+    confidence: 0.99
+  - pattern: "sys.argv"
+    role: CLI_INPUT
+    confidence: 0.99
+  - pattern: "os.environ"
+    role: ENV_INPUT
+    confidence: 0.95
+  - pattern: "os.getenv"
+    role: ENV_INPUT
+    confidence: 0.95
+  - pattern: "stdin"
+    role: STDIN_INPUT
+    confidence: 0.95
+  - pattern: "sys.stdin"
+    role: STDIN_INPUT
+    confidence: 0.95
+
+sinks:
+  - pattern: "eval"
+    type: CODE-execution
+    confidence: 0.99
+  - pattern: "exec"
+    type: CODE-execution
+    confidence: 0.99
+  - pattern: "compile"
+    type: CODE-execution
+    confidence: 0.95
+  - pattern: "os.system"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "os.popen"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "subprocess.run"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "subprocess.call"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "subprocess.Popen"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "open"
+    type: FILE-path
+    confidence: 0.90
+  - pattern: "pathlib.Path"
+    type: FILE-path
+    confidence: 0.85
+
+sanitizers:
+  - pattern: "shlex.quote"
+    clears: CMD-argument
+  - pattern: "shlex.split"
+    clears: CMD-argument
+  - pattern: "os.path.basename"
+    clears: FILE-path
+  - pattern: "pathlib.PurePath"
+    clears: FILE-path

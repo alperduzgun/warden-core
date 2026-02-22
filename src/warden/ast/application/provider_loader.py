@@ -272,8 +272,8 @@ class ASTProviderLoader:
             # Validate provider is ready
             is_valid = await provider.validate()
             if not is_valid:
-                logger.warning(
-                    "provider_validation_failed",
+                logger.debug(
+                    "provider_validation_skipped",
                     provider_name=provider.metadata.name,
                 )
                 return None

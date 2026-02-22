@@ -88,6 +88,7 @@ class TestFrameScan:
             "--no-update-baseline"
         ])
         # Should run (0=clean, 1=pipeline error, 2=policy failure)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
         # Output should mention scanning
         assert "scan" in result.stdout.lower()
@@ -109,6 +110,7 @@ class TestFrameScan:
             "--no-update-baseline"
         ])
         # Should run successfully (0=clean, 1=pipeline error, 2=policy failure)
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_basic_no_frame_flag(self, runner, isolated_project, monkeypatch):
@@ -125,6 +127,7 @@ class TestFrameScan:
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_scan_with_invalid_frame(self, runner, isolated_project, monkeypatch):
@@ -172,6 +175,7 @@ class TestFrameScan:
             "--level", "basic",
             "--no-update-baseline"
         ])
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
 
@@ -229,6 +233,7 @@ class TestFrameValidation:
             "--no-update-baseline"
         ])
         # Should either skip or warn, but not crash
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_config_list_shows_frames(self, runner, isolated_project, monkeypatch):
@@ -272,4 +277,5 @@ class TestFrameValidation:
             "--no-update-baseline"
         ])
         # Should run with property frame
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)

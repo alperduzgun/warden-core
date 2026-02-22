@@ -10,6 +10,7 @@ from typing import Any
 
 import structlog
 
+from warden.analysis.application.triage_cache import TriageCacheManager
 from warden.analysis.application.triage_service import TriageService
 from warden.analysis.domain.triage_models import RiskScore, TriageDecision, TriageLane
 from warden.llm.factory import create_client
@@ -36,9 +37,12 @@ class TriagePhase:
         self.progress_callback = progress_callback
         self.config = config or {}
 
+        # Hash-based triage cache — survives across scans
+        self._cache = TriageCacheManager(project_root)
+
         # Use provided LLM service or create new one (Local/Fast pref)
         self.llm_service = llm_service or create_client()
-        self.triage_service = TriageService(self.llm_service)
+        self.triage_service = TriageService(self.llm_service, cache=self._cache)
 
     async def execute_async(self, code_files: list[CodeFile], pipeline_context: PipelineContext) -> dict[str, Any]:
         """Execute Triage phase."""

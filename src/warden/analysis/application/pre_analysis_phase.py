@@ -71,6 +71,102 @@ CRITICALITY_MAP = {
 }
 
 
+# Framework-specific entry point file patterns.
+# Files matching these patterns are managed by the framework and should not
+# be flagged as orphan or unreachable in gap analysis.
+FRAMEWORK_ENTRY_PATTERNS: dict[str, list[str]] = {
+    "django": [
+        "manage.py",
+        "wsgi.py",
+        "asgi.py",
+        "urls.py",
+        "admin.py",
+        "views.py",
+        "models.py",
+        "apps.py",
+        "settings.py",
+        "settings/*.py",
+        "*/migrations/*.py",
+    ],
+    "flask": [
+        "app.py",
+        "wsgi.py",
+        "create_app",
+        "__init__.py",
+    ],
+    "fastapi": [
+        "main.py",
+        "app.py",
+    ],
+    "pyramid": [
+        "app.py",
+        "__init__.py",
+        "views.py",
+        "routes.py",
+    ],
+    "react": [
+        "src/App.*",
+        "src/index.*",
+        "pages/**/*",
+        "app/**/*",
+    ],
+    "nextjs": [
+        "pages/**/*",
+        "app/**/*",
+        "src/pages/**/*",
+        "src/app/**/*",
+        "middleware.*",
+    ],
+    "vue": [
+        "src/App.vue",
+        "src/main.*",
+        "pages/**/*",
+        "src/router/*",
+    ],
+    "angular": [
+        "src/main.ts",
+        "src/app/app.module.ts",
+        "src/app/app.component.ts",
+    ],
+    "svelte": [
+        "src/App.svelte",
+        "src/main.*",
+        "src/routes/**/*",
+    ],
+    "express": [
+        "src/main.*",
+        "src/app.*",
+        "src/server.*",
+        "app.*",
+        "server.*",
+        "src/routes/**/*",
+    ],
+    "nest": [
+        "src/main.ts",
+        "src/app.module.ts",
+        "src/app.controller.ts",
+    ],
+    "spring": [
+        "src/main/java/**/*Application.java",
+        "src/main/java/**/*Controller.java",
+    ],
+    "rails": [
+        "config/routes.rb",
+        "app/controllers/**/*",
+        "app/models/**/*",
+    ],
+    "laravel": [
+        "routes/*.php",
+        "app/Http/Controllers/**/*",
+    ],
+}
+
+
+def _get_framework_entry_points(framework_value: str) -> list[str]:
+    """Return known entry-point file patterns for a detected framework."""
+    return FRAMEWORK_ENTRY_PATTERNS.get(framework_value, [])
+
+
 class PreAnalysisPhase:
     """
     PRE-ANALYSIS Phase orchestrator (Phase 0).
@@ -98,7 +194,7 @@ class PreAnalysisPhase:
             rate_limiter: Optional rate limiter for LLM calls
             llm_service: Optional shared LLM service.
         """
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).resolve()
         self.progress_callback = progress_callback
         self.config = config or {}
         self.rate_limiter = rate_limiter
@@ -166,21 +262,29 @@ class PreAnalysisPhase:
             file_count=len(code_files),
         )
 
-        # Notify progress
+        # Notify progress — emit phase_started with total so CLI counter resets
         if self.progress_callback:
             self.progress_callback(
-                "pre_analysis_started",
+                "phase_started",
                 {
-                    "phase": "pre_analysis",
-                    "total_files": len(code_files),
+                    "phase": "Pre-Analysis",
+                    "phase_name": "Pre-Analysis",
+                    "total_units": len(code_files),
                 },
             )
 
+        # Convenience helper — keeps callsites DRY
+        def _emit(status: str) -> None:
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"status": status})
+
         try:
             # Step 1: Initialize LLM analyzer if enabled
+            _emit("Initializing LLM analyzer")
             await self._initialize_llm_analyzer_async()
 
             # Initialize memory
+            _emit("Loading project memory cache")
             await self.memory_manager.initialize_async()
 
             # Step 2: Analyze project structure
@@ -200,11 +304,36 @@ class PreAnalysisPhase:
 
             self.trust_memory_context = is_env_valid
 
+            # Load user-provided context (.warden/context.yaml) if available
+            _emit("Loading user context (.warden/context.yaml)")
+            _user_ctx_style: dict = {}
+            try:
+                ctx_file = self.project_root / ".warden" / "context.yaml"
+                if ctx_file.exists():
+                    import yaml  # local import to avoid import cost if unused
+
+                    with open(ctx_file, encoding="utf-8") as f:
+                        user_ctx = yaml.safe_load(f) or {}
+                    logger.info("user_context_loaded", path=str(ctx_file))
+                    # Persist full context under project_context.spec_analysis['user_context']
+                    project_context.spec_analysis["user_context"] = user_ctx
+                    _user_ctx_style = (user_ctx or {}).get("style") or {}
+            except Exception as e:
+                logger.warning("user_context_load_failed", error=str(e))
+
             # Analyze structure (will only discover purpose if missing after enrichment)
-            all_paths = [Path(cf.path) for cf in code_files]
+            _emit("Analyzing project structure & framework")
+            all_paths = [Path(cf.path).resolve() for cf in code_files]
             project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
 
+            # Re-apply user context conventions after structure analysis (structure analysis may reset them)
+            if _user_ctx_style.get("line_length"):
+                project_context.conventions.max_line_length = int(_user_ctx_style["line_length"])  # type: ignore[arg-type]
+            if _user_ctx_style.get("indent"):
+                project_context.conventions.indent_style = str(_user_ctx_style["indent"])  # type: ignore[assignment]
+
             # Ensure AST providers are loaded for integrity check
+            _emit("Loading AST providers (tree-sitter)")
             await self.ast_loader.load_all()
 
             # Step 2.5: Integrity Check (Fail-Fast)
@@ -215,6 +344,7 @@ class PreAnalysisPhase:
             analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
 
             if analysis_level != AnalysisLevel.BASIC:
+                _emit("Running syntax integrity checks")
                 integrity_issues = await self.integrity_scanner.scan_async(
                     code_files, project_context, pipeline_context
                 )
@@ -236,15 +366,32 @@ class PreAnalysisPhase:
             # Step 3: Dependency Awareness (Impact Analysis)
             # Skip in BASIC level to hit performance targets
             if analysis_level != AnalysisLevel.BASIC:
+                _emit("Building dependency graph")
                 impacted_files = await self._identify_impacted_files_async(code_files, project_context)
             else:
                 logger.info("skipping_dependency_impact_analysis_for_basic_level")
                 impacted_files = set()
 
+            # Populate dependency graph on pipeline context for downstream frame enrichment
+            if pipeline_context and self.dependency_graph:
+                for src_path, deps in self.dependency_graph._forward_graph.items():
+                    try:
+                        rel_src = str(src_path.relative_to(self.project_root))
+                    except ValueError:
+                        rel_src = str(src_path)
+                    pipeline_context.dependency_graph_forward[rel_src] = [self._path_to_relative(d) for d in deps]
+                for dep_path, dependents in self.dependency_graph._reverse_graph.items():
+                    try:
+                        rel_dep = str(dep_path.relative_to(self.project_root))
+                    except ValueError:
+                        rel_dep = str(dep_path)
+                    pipeline_context.dependency_graph_reverse[rel_dep] = [self._path_to_relative(d) for d in dependents]
+
             # Step 4: Initialize file analyzer with project context and LLM
             self.file_analyzer = FileContextAnalyzer(project_context, self.llm_analyzer)
 
             # Step 5: Analyze file contexts in parallel
+            _emit(f"Classifying {len(code_files)} file contexts")
             file_contexts = await self._analyze_file_contexts_async(code_files, impacted_files)
 
             # Step 5: Calculate statistics
@@ -253,6 +400,7 @@ class PreAnalysisPhase:
             # Step 6: Tool Discovery (Pre-Flight Check)
             # Detect available linters (Fail Fast / Degradation)
             if self.linter_service:
+                _emit("Detecting available linters")
                 await self.linter_service.detect_and_setup(project_context)
 
             # Create result
@@ -300,7 +448,118 @@ class PreAnalysisPhase:
                 self.memory_manager.update_environment_hash(self.env_hash)
                 await self.memory_manager.save_async()
 
-            # Step 9: Trigger Semantic Indexing (Smart Incremental)
+            # Step 9: Code Graph & Gap Analysis (Phase 0.7)
+            # Build symbol-level graph from AST cache (zero LLM cost)
+            if pipeline_context and hasattr(pipeline_context, "ast_cache") and pipeline_context.ast_cache:
+                try:
+                    from warden.analysis.services.code_graph_builder import CodeGraphBuilder
+                    from warden.analysis.services.gap_analyzer import GapAnalyzer
+                    from warden.analysis.services.intelligence_saver import IntelligenceSaver
+
+                    code_graph_builder = CodeGraphBuilder(
+                        pipeline_context.ast_cache,
+                        project_root=self.project_root,
+                    )
+
+                    _emit("Building code graph (symbol-level)")
+                    # O4 fix: explicit timeout for graph build
+                    code_graph = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(None, code_graph_builder.build, self.dependency_graph),
+                        timeout=60,
+                    )
+
+                    # Compute project file list for coverage
+                    all_rel_paths = []
+                    for cf in code_files:
+                        try:
+                            all_rel_paths.append(str(Path(cf.path).resolve().relative_to(self.project_root)))
+                        except ValueError:
+                            all_rel_paths.append(cf.path)
+
+                    # Entry points from project intelligence or heuristic detection
+                    entry_points_list: list[str] = []
+                    if hasattr(project_context, "entry_points") and project_context.entry_points:
+                        entry_points_list = [str(e) for e in project_context.entry_points]
+                    elif hasattr(project_context, "main_files") and project_context.main_files:
+                        entry_points_list = [str(e) for e in project_context.main_files]
+                    else:
+                        # Heuristic: common entry point patterns
+                        for rp in all_rel_paths:
+                            if any(
+                                rp.endswith(p)
+                                for p in (
+                                    "main.py",
+                                    "__main__.py",
+                                    "app.py",
+                                    "cli.py",
+                                    "manage.py",
+                                    "wsgi.py",
+                                    "asgi.py",
+                                    "index.ts",
+                                    "index.js",
+                                    "server.py",
+                                    "server.ts",
+                                )
+                            ):
+                                entry_points_list.append(rp)
+
+                    # Collect framework metadata for gap analysis
+                    fw_value = project_context.framework.value if project_context.framework else "none"
+                    fw_entry_patterns = _get_framework_entry_points(fw_value)
+
+                    gap_analyzer = GapAnalyzer(project_files=all_rel_paths)
+                    gap_report = gap_analyzer.analyze(
+                        code_graph,
+                        dep_graph=self.dependency_graph,
+                        entry_points=entry_points_list,
+                        builder_meta={
+                            "star_imports": code_graph_builder.star_import_files,
+                            "dynamic_imports": code_graph_builder.dynamic_import_files,
+                            "type_checking_imports": code_graph_builder.type_checking_imports,
+                            "unparseable_files": code_graph_builder.unparseable_files,
+                            "detected_framework": fw_value,
+                            "framework_entry_points": fw_entry_patterns,
+                        },
+                    )
+
+                    # K2 fix: Set on pipeline context (explicit fields, no AttributeError)
+                    pipeline_context.code_graph = code_graph
+                    pipeline_context.gap_report = gap_report
+
+                    # Persist to disk (O5: atomic write)
+                    saver = IntelligenceSaver(self.project_root)
+                    if self.dependency_graph:
+                        saver.save_dependency_graph(self.dependency_graph)
+                    saver.save_code_graph(code_graph)
+                    saver.save_gap_report(gap_report)
+
+                    # Coverage warning (only alert below 70%)
+                    if gap_report.coverage < 0.7:
+                        logger.warning(
+                            "code_graph_low_coverage",
+                            coverage=f"{gap_report.coverage:.1%}",
+                            message="Code graph covers less than 70% of project files",
+                        )
+                    elif gap_report.coverage < 0.8:
+                        logger.info(
+                            "code_graph_coverage_note",
+                            coverage=f"{gap_report.coverage:.1%}",
+                            message="Code graph coverage below 80%",
+                        )
+
+                    logger.info(
+                        "code_graph_phase_completed",
+                        nodes=code_graph.stats()["total_nodes"],
+                        edges=code_graph.stats()["total_edges"],
+                        coverage=f"{gap_report.coverage:.1%}",
+                    )
+
+                except asyncio.TimeoutError:
+                    logger.warning("code_graph_build_timeout", timeout=60)
+                except Exception as e:
+                    logger.warning("code_graph_build_failed", error=str(e))
+
+            # Step 10: Trigger Semantic Indexing (Smart Incremental)
             try:
                 from warden.pipeline.domain.enums import AnalysisLevel
                 from warden.shared.services.semantic_search_service import SemanticSearchService
@@ -313,6 +572,7 @@ class PreAnalysisPhase:
 
                 if ss_service.is_available() and analysis_level != AnalysisLevel.BASIC:
                     logger.info("triggering_semantic_indexing")
+                    _emit("Indexing codebase for semantic search")
                     if self.progress_callback:
                         self.progress_callback(
                             "semantic_indexing_started", {"phase": "pre_analysis", "action": "indexing_codebase"}
@@ -486,6 +746,8 @@ class PreAnalysisPhase:
             except Exception as e:
                 logger.warning("rule_pass_failed", file=file_path, error=str(e))
                 raw_contexts[file_path] = self._get_default_context(file_path)
+            if self.progress_callback:
+                self.progress_callback("progress_update", {"increment": 1})
 
         # STEP 2: Semantic Spread (Directory-based context propagation)
         # Group by directory to spread context from clear files to ambiguous ones
@@ -564,7 +826,7 @@ class PreAnalysisPhase:
         # CI OPTIMIZATION: Check intelligence risk level first
         if self.intelligence_loader and self.intelligence_loader.is_loaded:
             try:
-                rel_path = str(Path(file_path).relative_to(self.project_root))
+                rel_path = str(Path(file_path).resolve().relative_to(self.project_root))
             except ValueError:
                 rel_path = file_path
 
@@ -626,7 +888,7 @@ class PreAnalysisPhase:
 
         # Normalize path to relative for memory portability (CI vs Local)
         try:
-            rel_path = str(Path(code_file.path).relative_to(self.project_root))
+            rel_path = str(Path(code_file.path).resolve().relative_to(self.project_root))
         except ValueError:
             # Fallback if path is not relative (e.g. symlinks outside root)
             rel_path = code_file.path
@@ -898,7 +1160,7 @@ class PreAnalysisPhase:
             if info.content_hash:
                 # Normalize path for saving
                 try:
-                    rel_path = str(Path(path).relative_to(self.project_root))
+                    rel_path = str(Path(path).resolve().relative_to(self.project_root))
                 except ValueError:
                     rel_path = path
 
@@ -995,7 +1257,7 @@ class PreAnalysisPhase:
         changed_physically = []
         for cf in code_files:
             content_hash = self._calculate_file_hash(cf.content, cf.path)
-            rel_path = str(Path(cf.path).relative_to(self.project_root))
+            rel_path = str(Path(cf.path).resolve().relative_to(self.project_root))
 
             # Check memory for existing state
             if self.memory_manager and self.memory_manager._is_loaded:
@@ -1022,6 +1284,13 @@ class PreAnalysisPhase:
             )
 
         return impacted_paths
+
+    def _path_to_relative(self, path: Path) -> str:
+        """Convert a Path to a project-relative string."""
+        try:
+            return str(path.relative_to(self.project_root))
+        except ValueError:
+            return str(path)
 
     def _guess_language_by_extension(self, file_path: str) -> CodeLanguage:
         """Guess language by file extension using centralized utility."""

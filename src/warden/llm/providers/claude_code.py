@@ -13,6 +13,7 @@ Design Principles:
 
 import asyncio
 import json
+import os
 import shutil
 import time
 
@@ -33,6 +34,7 @@ logger = get_logger(__name__)
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_MODEL = "claude-code-default"  # Placeholder - actual model set in `claude config`
 MAX_PROMPT_LENGTH = 100_000
+_TRUNCATION_RETRY_THRESHOLD = 8_000  # Only retry with truncation for prompts > 8K chars
 
 
 # =============================================================================
@@ -78,7 +80,6 @@ class ClaudeCodeClient(ILlmClient):
 
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """Send a request to Claude Code CLI."""
-        start_time = time.perf_counter()
         model = request.model or self._default_model
 
         # Input validation (fail-fast)
@@ -89,12 +90,55 @@ class ClaudeCodeClient(ILlmClient):
         if prompt_length > MAX_PROMPT_LENGTH:
             return self._error_response(f"Prompt too large: {prompt_length} > {MAX_PROMPT_LENGTH}", model, 0)
 
-        # Build prompt
+        # Build prompt with explicit no-tool instruction
+        # The --disallowedTools flag can be overridden by project config,
+        # so we also instruct the model directly to respond with text only.
+        no_tool_prefix = (
+            "IMPORTANT: Respond with text only. Do NOT use any tools "
+            "(no Bash, Read, Write, Edit, Glob, Grep, or any other tool calls). "
+            "Provide your analysis as plain text.\n\n"
+        )
         full_prompt = request.user_message
         if request.system_prompt:
-            full_prompt = f"{request.system_prompt}\n\n{request.user_message}"
+            full_prompt = f"{request.system_prompt}\n\n{no_tool_prefix}{request.user_message}"
+        else:
+            full_prompt = f"{no_tool_prefix}{request.user_message}"
 
-        # Execute CLI
+        timeout = max(request.timeout_seconds or 0, self._timeout)
+        response = await self._execute_cli(full_prompt, model, timeout)
+
+        # Retry once with truncated prompt on empty content (likely context overflow)
+        if (
+            not response.success
+            and "Empty content" in (response.error_message or "")
+            and len(full_prompt) > _TRUNCATION_RETRY_THRESHOLD
+        ):
+            truncated = self._truncate_prompt(full_prompt)
+            logger.warning(
+                "claude_code_empty_retrying_truncated",
+                original_length=len(full_prompt),
+                truncated_length=len(truncated),
+            )
+            response = await self._execute_cli(truncated, model, timeout)
+
+        return response
+
+    @staticmethod
+    def _is_nested_session() -> bool:
+        """Detect if running inside another Claude Code session."""
+        return bool(os.environ.get("CLAUDE_CODE_ENTRYPOINT") or os.environ.get("CLAUDECODE"))
+
+    async def _execute_cli(self, prompt: str, model: str, timeout: int) -> LlmResponse:
+        """Execute a single CLI call and return the response."""
+        if self._is_nested_session():
+            return self._error_response(
+                "Nested Claude Code session detected — cannot spawn subprocess. "
+                "Use a different provider (ollama/openai) or run outside Claude Code.",
+                model,
+                0,
+            )
+
+        start_time = time.perf_counter()
         try:
             process = await asyncio.create_subprocess_exec(  # warden-ignore
                 self._cli_path,
@@ -102,27 +146,32 @@ class ClaudeCodeClient(ILlmClient):
                 "--output-format",
                 "json",
                 "--max-turns",
-                "1",
+                "2",
+                "--disallowedTools",
+                "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Task",
                 "-p",
-                full_prompt,
+                prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            timeout = request.timeout_seconds or self._timeout
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
             duration_ms = self._calc_duration_ms(start_time)
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="replace").strip()
-                logger.error(
+                # If stderr is empty, check stdout for error hints (CLI may write errors as JSON to stdout)
+                if not error_msg:
+                    stdout_preview = stdout.decode("utf-8", errors="replace").strip()[:200]
+                    error_msg = f"(stderr empty, stdout: {stdout_preview})" if stdout_preview else "(no output)"
+                logger.warning(  # warning — pipeline recovers via fallback lane
                     "claude_code_cli_failed",
                     returncode=process.returncode,
-                    error=error_msg[:200],
+                    error=error_msg[:300],
                 )
                 return self._error_response(
-                    f"CLI error (exit {process.returncode}): {error_msg[:200]}", model, duration_ms
+                    f"CLI error (exit {process.returncode}): {error_msg[:300]}", model, duration_ms
                 )
 
             return self._parse_response(stdout, model, duration_ms)
@@ -146,10 +195,42 @@ class ClaudeCodeClient(ILlmClient):
 
         try:
             result = json.loads(output)
+
+            # Check if Claude returned an explicit error object
+            is_error = result.get("is_error", False) if isinstance(result, dict) else False
+            if is_error or (isinstance(result, dict) and result.get("type") == "error"):
+                error_msg = result.get("error") or result.get("message") or "Unknown Claude Code error"
+                logger.error("claude_code_explicit_error", error=error_msg, raw_output=output[:500])
+                return self._error_response(f"Claude error: {error_msg}", model, duration_ms)
+
+            # Detect max-turns exhaustion (model used tool calls, ran out of turns)
+            subtype = result.get("subtype", "") if isinstance(result, dict) else ""
+            if subtype == "error_max_turns":
+                num_turns = result.get("num_turns", "?")
+                logger.error(
+                    "claude_code_max_turns_exhausted",
+                    num_turns=num_turns,
+                    subtype=subtype,
+                )
+                return self._error_response(
+                    f"Max turns exhausted ({num_turns} turns used) - model used tool calls before responding",
+                    model,
+                    duration_ms,
+                )
+
             content = result.get("result") or result.get("content") or ""
 
             if not isinstance(content, str):
                 content = str(content) if content else ""
+
+            # Empty content after JSON parse = provider returned no useful data
+            if not content.strip():
+                logger.error(
+                    "claude_code_empty_content_json",
+                    raw_output=output[:1000],
+                    parsed_keys=list(result.keys()) if isinstance(result, dict) else type(result),
+                )
+                return self._error_response("Empty content in response", model, duration_ms)
 
             usage = result.get("usage", {})
 
@@ -192,12 +273,24 @@ class ClaudeCodeClient(ILlmClient):
         )
 
     @staticmethod
+    def _truncate_prompt(prompt: str, ratio: float = 0.5) -> str:
+        """Truncate prompt preserving start (system prompt) and end (code)."""
+        target = int(len(prompt) * ratio)
+        head = int(target * 0.7)
+        tail = target - head
+        return f"{prompt[:head]}\n\n[...truncated for retry...]\n\n{prompt[-tail:]}"
+
+    @staticmethod
     def _calc_duration_ms(start_time: float) -> int:
         """Calculate duration in milliseconds."""
         return int((time.perf_counter() - start_time) * 1000)
 
     async def is_available_async(self) -> bool:
-        """Check if Claude Code CLI is installed."""
+        """Check if Claude Code CLI is installed and usable."""
+        if self._is_nested_session():
+            logger.debug("claude_code_unavailable_nested_session")
+            return False
+
         if not shutil.which("claude"):
             return False
 

@@ -63,6 +63,7 @@ class CheckFinding:
     suggestion: str | None = None  # How to fix
     documentation_url: str | None = None  # Link to docs
     is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
+    machine_context_raw: dict | None = None  # To bypass fragile LLM list mappings
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""

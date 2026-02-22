@@ -1,0 +1,76 @@
+meta:
+  framework: stdlib
+  language: go
+
+sources:
+  - pattern: "r.URL.Query"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "r.FormValue"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "r.PostFormValue"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "r.Header.Get"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "r.Cookie"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "r.Body"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "os.Getenv"
+    role: ENV_INPUT
+    confidence: 0.95
+  - pattern: "os.Args"
+    role: CLI_INPUT
+    confidence: 0.95
+  - pattern: "io.ReadAll"
+    role: IO_INPUT
+    confidence: 0.85
+
+sinks:
+  - pattern: "db.Exec"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "db.Query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "db.QueryRow"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "tx.Exec"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "tx.Query"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "exec.Command"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "exec.CommandContext"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "os.StartProcess"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "syscall.Exec"
+    type: CMD-argument
+    confidence: 0.99
+  - pattern: "fmt.Fprintf"
+    type: HTML-content
+    confidence: 0.80
+
+sanitizers:
+  - pattern: "template.HTMLEscapeString"
+    clears: HTML-content
+  - pattern: "html.EscapeString"
+    clears: HTML-content
+  - pattern: "filepath.Base"
+    clears: FILE-path
+  - pattern: "filepath.Clean"
+    clears: FILE-path
+  - pattern: "url.QueryEscape"
+    clears: HTML-content

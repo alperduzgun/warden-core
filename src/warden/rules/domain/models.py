@@ -38,13 +38,13 @@ class CustomRule(BaseDomainModel):
 
     id: str
     name: str
-    category: RuleCategory
+    category: RuleCategory = RuleCategory.CUSTOM
     severity: RuleSeverity
     is_blocker: bool = Field(
-        alias="isBlocker"
+        False, alias="isBlocker"
     )  # Explicit alias if auto-alias fails for some reason, but auto-alias should work.
-    description: str
-    enabled: bool
+    description: str = ""
+    enabled: bool = True
     type: str  # 'security' | 'convention' | 'pattern' | 'script' | 'ai'
     conditions: dict[str, Any] = Field(default_factory=dict)
     examples: dict[str, list[str]] | None = None

@@ -1,0 +1,60 @@
+meta:
+  framework: browser
+  language: javascript
+
+sources:
+  - pattern: "document.cookie"
+    role: COOKIE_INPUT
+    confidence: 0.99
+  - pattern: "document.location"
+    role: URL_INPUT
+    confidence: 0.99
+  - pattern: "window.location"
+    role: URL_INPUT
+    confidence: 0.99
+  - pattern: "location.search"
+    role: URL_INPUT
+    confidence: 0.99
+  - pattern: "location.hash"
+    role: URL_INPUT
+    confidence: 0.99
+  - pattern: "location.href"
+    role: URL_INPUT
+    confidence: 0.99
+  - pattern: "localStorage.getItem"
+    role: STORAGE_INPUT
+    confidence: 0.90
+  - pattern: "sessionStorage.getItem"
+    role: STORAGE_INPUT
+    confidence: 0.90
+
+sinks:
+  - pattern: "innerHTML"
+    type: HTML-content
+    confidence: 0.99
+    assign_sink: true
+  - pattern: "outerHTML"
+    type: HTML-content
+    confidence: 0.99
+    assign_sink: true
+  - pattern: "document.write"
+    type: HTML-content
+    confidence: 0.99
+  - pattern: "document.writeln"
+    type: HTML-content
+    confidence: 0.99
+  - pattern: "insertAdjacentHTML"
+    type: HTML-content
+    confidence: 0.99
+
+sanitizers:
+  - pattern: "DOMPurify.sanitize"
+    clears: HTML-content
+  - pattern: "sanitizeHtml"
+    clears: HTML-content
+  - pattern: "escapeHtml"
+    clears: HTML-content
+  - pattern: "encodeURIComponent"
+    clears: HTML-content
+  - pattern: "xss"
+    clears: HTML-content

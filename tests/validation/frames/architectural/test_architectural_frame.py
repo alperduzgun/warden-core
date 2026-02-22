@@ -1,63 +1,89 @@
 """
-Tests for ArchitecturalFrame.
+Tests for ArchitectureFrame registry integration.
 
-Note: The architectural frame directory currently has no implementation,
-only an empty rules directory. These tests verify the module structure
-and will be expanded when the frame is implemented.
+These tests verify the ArchitectureFrame (in the 'architecture' directory)
+is properly discovered and registered.
 """
 
 import pytest
 
 
-def test_architectural_module_imports():
-    """Test architectural frame module can be imported."""
-    try:
-        # Try importing the module
-        import warden.validation.frames.architectural
-        assert warden.validation.frames.architectural is not None
-    except ImportError as e:
-        pytest.skip(f"Architectural frame module not available: {e}")
+def test_architecture_module_imports():
+    """Test architecture frame module can be imported."""
+    from warden.validation.frames.architecture import ArchitectureFrame
+
+    assert ArchitectureFrame is not None
 
 
-def test_architectural_rules_directory_exists():
-    """Test architectural frame has rules directory."""
-    import os
+def test_architecture_directory_exists():
+    """Test architecture frame directory exists."""
     from pathlib import Path
 
-    # Find the architectural frame directory
-    frame_path = Path(__file__).parent.parent.parent.parent.parent / "src" / "warden" / "validation" / "frames" / "architectural"
+    frame_path = (
+        Path(__file__).parent.parent.parent.parent.parent
+        / "src"
+        / "warden"
+        / "validation"
+        / "frames"
+        / "architecture"
+    )
 
-    assert frame_path.exists(), "Architectural frame directory should exist"
-    assert frame_path.is_dir(), "Architectural frame path should be a directory"
-
-    # Check for rules directory
-    rules_path = frame_path / "rules"
-    assert rules_path.exists(), "Rules directory should exist"
-    assert rules_path.is_dir(), "Rules path should be a directory"
+    assert frame_path.exists(), "Architecture frame directory should exist"
+    assert frame_path.is_dir(), "Architecture frame path should be a directory"
 
 
-def test_architectural_frame_not_in_registry():
-    """Test architectural frame is not yet in registry (no implementation)."""
+def test_architecture_frame_in_registry():
+    """Test architecture frame is discovered by the registry."""
     from warden.validation.infrastructure.frame_registry import FrameRegistry
 
     registry = FrameRegistry()
     registry.discover_all()
 
-    # Should not find architectural frame since it's not implemented
-    frame_class = registry.get_frame_by_id("architectural")
-    assert frame_class is None, "Architectural frame should not be in registry yet (no implementation)"
+    frame_class = registry.get_frame_by_id("architecture")
+    assert frame_class is not None, "ArchitectureFrame should be in registry"
 
 
-@pytest.mark.skip(reason="ArchitecturalFrame not yet implemented")
 @pytest.mark.asyncio
-async def test_architectural_frame_placeholder():
-    """Placeholder test for when ArchitecturalFrame is implemented.
+async def test_architecture_frame_metadata():
+    """Test ArchitectureFrame has correct metadata."""
+    from warden.validation.frames.architecture import ArchitectureFrame
 
-    When implemented, this frame should detect:
-    - Wrong layer imports (e.g., domain importing infrastructure)
-    - Circular dependencies
-    - Architecture violations
-    - Layered architecture compliance
-    """
-    # This test will be expanded when frame is implemented
-    pytest.skip("ArchitecturalFrame not yet implemented")
+    frame = ArchitectureFrame()
+    assert frame.frame_id == "architecture"
+    assert frame.name == "Architecture Analysis"
+    assert frame.is_blocker is False
+    assert frame.version == "1.0.0"
+
+
+class TestFindingIdToGapType:
+    """Tests for _finding_id_to_gap_type helper."""
+
+    def test_missing_mixin_impl(self):
+        from warden.validation.frames.architecture.architecture_frame import (
+            _finding_id_to_gap_type,
+        )
+        assert _finding_id_to_gap_type("architecture-missing-mixin-impl-0") == "missing_mixin_impl"
+
+    def test_orphan_file(self):
+        from warden.validation.frames.architecture.architecture_frame import (
+            _finding_id_to_gap_type,
+        )
+        assert _finding_id_to_gap_type("architecture-orphan-file-3") == "orphan_file"
+
+    def test_broken_import(self):
+        from warden.validation.frames.architecture.architecture_frame import (
+            _finding_id_to_gap_type,
+        )
+        assert _finding_id_to_gap_type("architecture-broken-import-1") == "broken_import"
+
+    def test_unreachable(self):
+        from warden.validation.frames.architecture.architecture_frame import (
+            _finding_id_to_gap_type,
+        )
+        assert _finding_id_to_gap_type("architecture-unreachable-5") == "unreachable"
+
+    def test_circular_dep(self):
+        from warden.validation.frames.architecture.architecture_frame import (
+            _finding_id_to_gap_type,
+        )
+        assert _finding_id_to_gap_type("architecture-circular-dep-2") == "circular_dep"

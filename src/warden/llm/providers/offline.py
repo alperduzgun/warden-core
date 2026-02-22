@@ -24,7 +24,9 @@ class OfflineClient(ILlmClient):
             success=True,
             provider=self.provider,
             model="offline-fallback",
-            token_usage={"prompt": 0, "completion": 0, "total": 0},
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
         )
 
     async def is_available_async(self) -> bool:

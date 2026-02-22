@@ -1,0 +1,48 @@
+meta:
+  framework: django
+  language: python
+
+sources:
+  - pattern: "request.GET"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.POST"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.FILES"
+    role: FILE_UPLOAD
+    confidence: 0.99
+  - pattern: "request.COOKIES"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "request.META"
+    role: HTTP_INPUT
+    confidence: 0.90
+  - pattern: "request.body"
+    role: HTTP_INPUT
+    confidence: 0.99
+
+sinks:
+  - pattern: "connection.execute"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "cursor.execute"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "cursor.executemany"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "RawSQL"
+    type: SQL-value
+    confidence: 0.99
+  - pattern: "extra"
+    type: SQL-value
+    confidence: 0.85
+
+sanitizers:
+  - pattern: "django.utils.html.escape"
+    clears: HTML-content
+  - pattern: "django.utils.html.mark_safe"
+    clears: HTML-content
+  - pattern: "django.db.models.sql.Query"
+    clears: SQL-value

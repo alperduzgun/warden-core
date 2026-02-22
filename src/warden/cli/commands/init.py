@@ -12,6 +12,7 @@ from rich.prompt import Confirm, Prompt
 
 from warden.analysis.application.project_structure_analyzer import ProjectStructureAnalyzer
 from warden.cli.commands.init_helpers import (
+    _is_ci_environment,
     configure_agent_tools,
     configure_ci_workflow,
     configure_llm,
@@ -117,6 +118,84 @@ def _generate_ignore_file(root: Path, meta):
     with open(ignore_path, "w") as f:
         f.write("\n".join(final_content))
     console.print("[green]Created .wardenignore (Smart Deduplication Active)[/green]")
+
+
+def _write_default_taint_catalog(catalog_path: Path) -> None:
+    """Write a commented-out taint_catalog.yaml scaffold for user extension."""
+    from warden.validation.frames.security._internal.taint_analyzer import (
+        JS_SANITIZERS,
+        JS_TAINT_SINKS,
+        JS_TAINT_SOURCES,
+        KNOWN_SANITIZERS,
+        TAINT_SINKS,
+        TAINT_SOURCES,
+    )
+
+    def _comment_list(items: list[str], indent: str = "    ") -> str:
+        return "\n".join(f"{indent}# - {item}" for item in sorted(items))
+
+    def _comment_dict_keys(d: dict[str, str], sink_type: str, indent: str = "    ") -> str:
+        keys = sorted(k for k, v in d.items() if v == sink_type)
+        return "\n".join(f"{indent}# - {k}" for k in keys)
+
+    sink_types = ["SQL-value", "CMD-argument", "HTML-content", "CODE-execution", "FILE-path"]
+
+    sinks_section = ""
+    for st in sink_types:
+        py_keys = _comment_dict_keys(TAINT_SINKS, st)
+        js_keys = _comment_dict_keys(JS_TAINT_SINKS, st)
+        builtin_comments = "\n".join(filter(None, [py_keys, js_keys]))
+        sinks_section += f"  {st}:\n"
+        if builtin_comments:
+            sinks_section += f"    # Built-in (always active — shown for reference):\n"
+            sinks_section += builtin_comments + "\n"
+        sinks_section += "    # Add your custom sinks below:\n\n"
+
+    sanitizers_section = ""
+    for st in sink_types:
+        py_sans = KNOWN_SANITIZERS.get(st, set())
+        js_sans = JS_SANITIZERS.get(st, set())
+        all_sans = sorted(py_sans | js_sans)
+        sanitizers_section += f"  {st}:\n"
+        if all_sans:
+            sanitizers_section += "    # Built-in (always active — shown for reference):\n"
+            sanitizers_section += "\n".join(f"    # - {s}" for s in all_sans) + "\n"
+        sanitizers_section += "    # Add your custom sanitizers below:\n\n"
+
+    content = f"""# Warden Taint Catalog
+# Built-in defaults are always active. Add entries here to EXTEND them.
+# Warden performs a UNION — your custom entries are added, never replacing built-ins.
+#
+# Format:
+#   sources:
+#     python:
+#       - my.custom.source
+#     javascript:
+#       - ctx.request.body
+#   sinks:
+#     SQL-value:
+#       - prisma.raw
+#   sanitizers:
+#     HTML-content:
+#       - myCustomSanitizer
+
+sources:
+  python:
+    # Built-in Python sources (always active — shown for reference):
+{_comment_list(list(TAINT_SOURCES))}
+    # Add your custom Python sources below:
+
+  javascript:
+    # Built-in JavaScript/TypeScript sources (always active — shown for reference):
+{_comment_list(list(JS_TAINT_SOURCES))}
+    # Add your custom JavaScript sources below:
+
+sinks:
+{sinks_section}
+sanitizers:
+{sanitizers_section}
+"""
+    catalog_path.write_text(content, encoding="utf-8")
 
 
 def _setup_semantic_search(config_path: Path):
@@ -403,6 +482,26 @@ def init_command(
     mode: str = typer.Option("normal", "--mode", "-m", help="Initialization mode (vibe, normal, strict)"),
     ci: bool = typer.Option(False, "--ci", help="Generate GitHub Actions CI workflow"),
     skip_mcp: bool = typer.Option(False, "--skip-mcp", help="Skip MCP server registration"),
+    agent: bool = typer.Option(
+        True,
+        "--agent/--no-agent",
+        help="Configure agent files (Claude/Cursor) and register MCP server",
+    ),
+    baseline: bool = typer.Option(
+        True,
+        "--baseline/--no-baseline",
+        help="Create baseline from current issues",
+    ),
+    intel: bool = typer.Option(
+        True,
+        "--intel/--no-intel",
+        help="Generate project intelligence for CI optimization",
+    ),
+    grammars: bool = typer.Option(
+        True,
+        "--grammars/--no-grammars",
+        help="Install missing tree-sitter grammars",
+    ),
     provider: str | None = typer.Option(
         None,
         "--provider",
@@ -592,19 +691,31 @@ def init_command(
                     f.write(f"{k}={v}\n")
         console.print("[green]Updated .env[/green]")
 
-        # Create .env.example
+        # Create or update .env.example with placeholders
         env_example_path = Path(".env.example")
-        if not env_example_path.exists():
-            with open(env_example_path, "w") as f:
-                f.write("# Warden Environment Variables\n")
-                if provider == "azure":
-                    f.write("AZURE_OPENAI_API_KEY=\n")
-                    f.write("AZURE_OPENAI_ENDPOINT=\n")
-                    f.write("AZURE_OPENAI_DEPLOYMENT_NAME=\n")
-                elif provider != "none" and provider != "ollama":
-                    # Generic key
-                    f.write(f"{provider.upper()}_API_KEY=\n")
-            console.print("[green]Created .env.example[/green]")
+        example_lines = []
+        if env_example_path.exists():
+            example_lines = env_example_path.read_text().splitlines()
+        else:
+            example_lines = ["# Warden Environment Variables"]
+
+        def ensure_line(key: str):
+            nonlocal example_lines
+            if not any(l.split("=")[0] == key for l in example_lines if "=" in l):
+                example_lines.append(f"{key}=")
+
+        # Common
+        ensure_line("WARDEN_LLM_PROVIDER")
+        if provider == "azure":
+            ensure_line("AZURE_OPENAI_API_KEY")
+            ensure_line("AZURE_OPENAI_ENDPOINT")
+            ensure_line("AZURE_OPENAI_DEPLOYMENT_NAME")
+        elif provider not in ("none", "ollama", "claude_code"):
+            ensure_line(f"{provider.upper()}_API_KEY")
+
+        with open(env_example_path, "w") as f:
+            f.write("\n".join(example_lines) + "\n")
+        console.print("[green]Updated .env.example[/green]")
 
     # --- Step 4: Vector Database ---
     vector_config = configure_vector_db()
@@ -615,6 +726,21 @@ def init_command(
         frames_config = {}
         for frame in meta.suggested_frames:
             frames_config[frame] = {"enabled": True}
+
+        # Add taint thresholds for security frame (import central defaults)
+        if "security" in frames_config:
+            from warden.validation.frames.security._internal.taint_analyzer import TAINT_DEFAULTS
+
+            taint_init = {
+                "confidence_threshold": TAINT_DEFAULTS["confidence_threshold"],
+                "sanitizer_penalty": TAINT_DEFAULTS["sanitizer_penalty"],
+            }
+            # Mode-based adjustment
+            if mode_choice == "3":  # Strict — catch more taint flows
+                taint_init["confidence_threshold"] = 0.7
+            elif mode_choice == "1":  # Vibe — only high-confidence
+                taint_init["confidence_threshold"] = 0.9
+            frames_config["security"]["taint"] = taint_init
 
         # Apply mode settings
         if mode_choice == "1":  # Vibe
@@ -647,6 +773,16 @@ def init_command(
                 "use_local_llm": llm_config.get("use_local_llm", False),
             },
             "semantic_search": vector_config,
+            "routing": {
+                "fast_tier": "ollama" if llm_config.get("use_local_llm", False) else provider,
+                "smart_tier": provider,
+            },
+            "baseline": {
+                "enabled": True,
+                "path": ".warden/baseline.json",
+                "auto_fetch": False,
+                "fetch_command": "gh run download -n warden-baseline",
+            },
         }
         # Preserve Azure details if selected
         if provider == "azure":
@@ -704,10 +840,37 @@ def init_command(
             # Ensure Semantic Search is present
             existing_config["semantic_search"] = vector_config
 
+            # Ensure routing present/updated
+            existing_config["routing"] = existing_config.get(
+                "routing",
+                {
+                    "fast_tier": "ollama" if llm_config.get("use_local_llm", False) else provider,
+                    "smart_tier": provider,
+                },
+            )
+
+            # Ensure baseline defaults
+            if "baseline" not in existing_config:
+                existing_config["baseline"] = {
+                    "enabled": True,
+                    "path": ".warden/baseline.json",
+                    "auto_fetch": False,
+                    "fetch_command": "gh run download -n warden-baseline",
+                }
+
             # Save
             with open(config_path, "w") as f:
                 yaml.dump(existing_config, f, default_flow_style=False)
             console.print("[green]Merged configuration successfully.[/green]")
+
+    # --- Step 5.5: Taint Catalog Scaffold ---
+    catalog_path = warden_dir / "taint_catalog.yaml"
+    if not catalog_path.exists():
+        try:
+            _write_default_taint_catalog(catalog_path)
+            console.print(f"[green]Created taint catalog: [bold]{catalog_path}[/bold][/green]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not create taint_catalog.yaml: {e}[/yellow]")
 
     # --- Step 6: Ignore Files ---
     _generate_ignore_file(Path.cwd(), meta)
@@ -800,24 +963,27 @@ custom_rules:
     # --- Step 9: Semantic Indexing ---
     _setup_semantic_search(config_path)
 
-    # --- Step 10: Agent & MCP Configuration (Always enabled) ---
+    # --- Step 10: Agent & MCP Configuration ---
     console.print("\n[bold blue]🤖 Configuring AI Agent Integration...[/bold blue]")
     try:
-        # Generate AI tool files from templates (CLAUDE.md, .cursorrules, etc.)
-        generate_ai_tool_files(Path.cwd(), llm_config)
-
-        # Configure MCP server registration (unless explicitly skipped)
-        if not skip_mcp:
-            configure_agent_tools(Path.cwd())
+        is_ci = _is_ci_environment()
+        if not agent:
+            console.print("[dim]Agent configuration disabled (--no-agent).[/dim]")
+        elif is_ci:
+            console.print("[dim]CI environment detected — skipping agent/MCP configuration.[/dim]")
         else:
-            console.print("[dim]MCP registration skipped (--skip-mcp flag used)[/dim]")
+            # Generate AI tool files from templates (CLAUDE.md, .cursorrules, etc.)
+            generate_ai_tool_files(Path.cwd(), llm_config)
+            if not skip_mcp:
+                configure_agent_tools(Path.cwd())
+            else:
+                console.print("[dim]MCP registration skipped (--skip-mcp flag used)[/dim]")
     except Exception as e:
         console.print(f"[red]Failed to configure agent tools: {e}[/red]")
 
     # --- Step 11: Baseline ---
-    should_create_baseline = force  # Logic: if force and non-interactive, assume yes? Or just default false.
-    # Usually we want a baseline. For automation, let's default to True if not specified otherwise.
-    if is_interactive:
+    should_create_baseline = force  # default non-interactive behavior unchanged
+    if is_interactive and baseline:
         should_create_baseline = Confirm.ask(
             "\nCreate Baseline from current issues? (Recommended for existing projects)", default=True
         )
@@ -831,8 +997,8 @@ custom_rules:
             console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
     # --- Step 12: Intelligence Generation (CI Optimization) ---
-    should_gen_intel = force  # Generate if --force
-    if not should_gen_intel and is_interactive:
+    should_gen_intel = force
+    if is_interactive and intel:
         should_gen_intel = Confirm.ask(
             "\nGenerate Project Intelligence for CI? (Recommended for faster CI scans)", default=True
         )
@@ -880,6 +1046,12 @@ custom_rules:
         console.print(f"[yellow]Warning: Could not verify frames: {e}[/yellow]")
 
     # --- Step 15: Install Tree-Sitter Grammars ---
+    if not grammars:
+        console.print("[dim]Skipping tree-sitter grammar installation (--no-grammars).[/dim]")
+        console.print("\n[bold green]✨ Warden Initialization Complete![/bold green]")
+        console.print("Run [bold cyan]warden scan[/bold cyan] to start.")
+        console.print("[dim]Available frames: security, resilience, orphan, fuzz, property[/dim]")
+        return
     console.print("\n[bold blue]🌳 Installing Tree-Sitter Grammars...[/bold blue]")
     console.print("[dim]Auto-installing parsers for detected languages...[/dim]")
 
@@ -957,6 +1129,41 @@ custom_rules:
         except Exception as e:
             console.print(f"[yellow]Warning: Hub install failed: {e}[/yellow]")
             console.print("[dim]Built-in frames are still available.[/dim]")
+
+    # --- Step 16: Generate Context (Structure/Style/Testing/Commands) ---
+    try:
+        from warden.cli.commands.context import (
+            _detect_commands,
+            _detect_commit_convention,
+            _detect_structure,
+            _detect_style,
+            _detect_testing,
+            _load_yaml,
+            _merge,
+            _read_pyproject,
+            _safe_yaml_dump,
+        )
+
+        root = Path.cwd()
+        pyproj = _read_pyproject(root)
+        context_data = {
+            "structure": _detect_structure(root),
+            "style": _detect_style(pyproj),
+            "testing": _detect_testing(pyproj),
+            "commands": _detect_commands(),
+            "repo": {"commit_convention": _detect_commit_convention(root)},
+        }
+        ctx_path = root / ".warden" / "context.yaml"
+        existing_ctx = _load_yaml(ctx_path)
+        merged = _merge(existing_ctx, context_data)
+        if merged != existing_ctx:
+            ctx_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx_path.write_text(_safe_yaml_dump(merged), encoding="utf-8")
+            console.print(f"[green]Created context:[/green] {ctx_path}")
+        else:
+            console.print("[dim]Context unchanged (.warden/context.yaml)[/dim]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Context generation skipped: {e}[/yellow]")
 
     console.print("\n[bold green]✨ Warden Initialization Complete![/bold green]")
     console.print("Run [bold cyan]warden scan[/bold cyan] to start.")

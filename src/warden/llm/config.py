@@ -36,13 +36,12 @@ class ProviderConfig:
             List of validation errors (empty if valid)
         """
         errors = []
+        local_providers = {"ollama", "claude_code", "codex"}
 
         if not self.api_key:
-            # Local providers don't require an API key
-            local_providers = {"ollama", "claude_code"}
             if provider_name.lower() not in local_providers:
                 errors.append(f"{provider_name}: API key is required but not configured")
-        elif len(self.api_key) < 10 and provider_name.lower() not in {"ollama", "claude_code"}:
+        elif len(self.api_key) < 10 and provider_name.lower() not in local_providers:
             errors.append(f"{provider_name}: API key appears invalid (too short)")
 
         if not self.default_model:
@@ -96,6 +95,7 @@ class LlmConfiguration:
     openrouter: ProviderConfig = field(default_factory=ProviderConfig)
     ollama: ProviderConfig = field(default_factory=ProviderConfig)
     claude_code: ProviderConfig = field(default_factory=ProviderConfig)  # Local Claude Code CLI/SDK
+    codex: ProviderConfig = field(default_factory=ProviderConfig)  # Local Codex CLI
 
     # Model Tiering (Optional)
     smart_model: str | None = None  # High-reasoning model (e.g. gpt-4o)
@@ -123,6 +123,7 @@ class LlmConfiguration:
             LlmProvider.OPENROUTER: self.openrouter,
             LlmProvider.OLLAMA: self.ollama,
             LlmProvider.CLAUDE_CODE: self.claude_code,
+            LlmProvider.CODEX: self.codex,
         }
         return mapping.get(provider)
 
@@ -165,11 +166,21 @@ DEFAULT_MODELS = {
     LlmProvider.ANTHROPIC: "claude-3-5-sonnet-20241022",
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
-    LlmProvider.GROQ: "llama-3.1-70b-versatile",
+    LlmProvider.GROQ: "llama-3.3-70b-versatile",
     LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
     LlmProvider.OLLAMA: "qwen2.5-coder:0.5b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
+    LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
 }
+
+# CLI-tool providers that manage their own model selection.
+# Duplicated from factory.py to avoid circular imports (config ← types, factory ← config).
+_SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset(
+    {
+        LlmProvider.CLAUDE_CODE,
+        LlmProvider.CODEX,
+    }
+)
 
 
 def create_default_config() -> LlmConfiguration:
@@ -240,6 +251,30 @@ async def _check_ollama_availability(endpoint: str) -> bool:
             response = await client.get(endpoint)
             return response.status_code == 200
     except Exception:
+        return False
+
+
+async def _check_codex_availability() -> bool:
+    """
+    Fast check if Codex CLI is installed and responsive.
+    Mirrors the Claude Code check: require both PATH presence AND a working binary.
+    """
+    import asyncio
+    import shutil
+
+    if not shutil.which("codex"):
+        return False
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "codex",
+            "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(process.communicate(), timeout=2.0)
+        return process.returncode == 0
+    except (asyncio.TimeoutError, Exception):
         return False
 
 
@@ -432,6 +467,12 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.claude_code.endpoint = "cli"
         configured_providers.append(LlmProvider.CLAUDE_CODE)
 
+    # Configure Codex (Local CLI) - auto-detect only (mirrors Claude Code check)
+    if await _check_codex_availability():
+        config.codex.enabled = True
+        config.codex.endpoint = "cli"
+        configured_providers.append(LlmProvider.CODEX)
+
     # --- AUTO-PILOT LOGIC ---
     # Determine Fast Tier Chain based on available credentials and service health
 
@@ -445,6 +486,14 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     # This fail-fast check prevents adding a dead service to the chain
     if await _check_ollama_availability(ollama_endpoint):
         detected_fast_tier.append(LlmProvider.OLLAMA)
+
+    # Priority 3: Claude Code (Local subscription) - fast for simple queries
+    if LlmProvider.CLAUDE_CODE in configured_providers:
+        detected_fast_tier.append(LlmProvider.CLAUDE_CODE)
+
+    # Priority 4: Codex (Local CLI) - read-only analysis via codex exec
+    if LlmProvider.CODEX in configured_providers:
+        detected_fast_tier.append(LlmProvider.CODEX)
 
     # Apply Auto-Detected chain if still at default.
     # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.
@@ -466,6 +515,19 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
 
         # Add to the front of the list
         configured_providers.insert(0, explicit_provider_override)
+
+    # Sync smart_model with provider override: if provider was explicitly changed
+    # (e.g. WARDEN_LLM_PROVIDER=groq) but smart_model still belongs to a different
+    # provider (e.g. claude-sonnet-*), reset it to the new provider's default.
+    # config.yaml's smart_model is NOT considered "explicitly set" when provider
+    # was env-var-overridden — the config.yaml model name likely belongs to the
+    # old provider (e.g. claude-sonnet-* in config.yaml but WARDEN_LLM_PROVIDER=groq).
+    # Only WARDEN_SMART_MODEL env var counts as an explicit user choice here.
+    smart_model_explicitly_set = smart_model_secret and smart_model_secret.found
+    if explicit_provider_override and not smart_model_explicitly_set:
+        provider_default = DEFAULT_MODELS.get(explicit_provider_override)
+        if provider_default and config.smart_model != provider_default:
+            config.smart_model = provider_default
 
     # Set default provider and fallback chain based on what's configured
     if configured_providers:
@@ -491,10 +553,12 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             if isinstance(providers, list):
                 config.fast_tier_providers = [LlmProvider(p.strip().lower()) for p in providers if isinstance(p, str)]
 
-        if "smart_model" in config_override:
+        # config.yaml model overrides only apply if provider wasn't changed by env var.
+        # If provider was env-var-overridden, config.yaml models belong to the old provider.
+        if "smart_model" in config_override and not env_provider:
             config.smart_model = config_override["smart_model"]
 
-        if "fast_model" in config_override:
+        if "fast_model" in config_override and not env_provider:
             config.fast_model = config_override["fast_model"]
 
     # FINAL: Env var override for fast tier — always wins (analogous to WARDEN_LLM_PROVIDER handling)
@@ -538,5 +602,12 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
                     cfg.enabled = False
 
             logger.debug("providers_blocked", blocked=[p.value for p in blocked])
+
+    # FINAL: CLI-tool providers (Codex, Claude Code) are single-tier by design.
+    # They manage model selection internally — fast_tier is irrelevant when they are primary.
+    # Clearing here keeps config state consistent with factory.py's SINGLE_TIER_PROVIDERS logic.
+    if config.default_provider in _SINGLE_TIER_PROVIDERS:
+        config.fast_tier_providers = []
+        logger.debug("fast_tier_cleared_single_provider_mode", provider=config.default_provider.value)
 
     return config

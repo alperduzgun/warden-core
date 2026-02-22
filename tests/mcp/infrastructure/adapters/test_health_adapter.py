@@ -31,7 +31,7 @@ def test_check_api_key_local_provider(adapter):
 async def test_health_check_returns_valid_result(adapter):
     result = await adapter._health_check_async()
     assert result.is_error is False
-    assert result.content[0].type == "text"
+    assert result.content[0]["type"] == "text"
     import json
-    data = json.loads(result.content[0].text)
+    data = json.loads(result.content[0]["text"])
     assert data["status"] in ["ok", "degraded"]

@@ -37,13 +37,11 @@ from warden.mcp.domain.models import MCPResourceDefinition, MCPSession, MCPToolD
 from warden.mcp.infrastructure.stdio_transport import STDIOTransport
 from warden.mcp.infrastructure.tool_registry import ToolRegistry
 from warden.mcp.protocol import MCPProtocol
-from warden.mcp.resources import MCPResourceManager
 from warden.mcp.server import MCPServer
 
 __all__ = [
     # Backward compatible (original API)
     "MCPServer",
-    "MCPResourceManager",
     "MCPProtocol",
     # New DDD API
     "MCPService",

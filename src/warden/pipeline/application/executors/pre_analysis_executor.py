@@ -3,6 +3,7 @@ Pre-Analysis Phase Executor.
 """
 
 import time
+import traceback
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -23,9 +24,7 @@ class PreAnalysisExecutor(BasePhaseExecutor):
         """Execute PRE-ANALYSIS phase."""
         logger.info("executing_phase", phase="PRE_ANALYSIS")
 
-        if self.progress_callback:
-            start_time = time.perf_counter()
-            self.progress_callback("phase_started", {"phase": "PRE_ANALYSIS", "phase_name": "PRE_ANALYSIS"})
+        start_time = time.perf_counter()
 
         try:
             from warden.analysis.application.pre_analysis_phase import PreAnalysisPhase
@@ -47,12 +46,14 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 config=phase_config,
                 rate_limiter=self.rate_limiter,
                 llm_service=self.llm_service,
+                progress_callback=self.progress_callback,
             )
 
             result = await phase.execute_async(code_files, pipeline_context=context)
 
             # Store results in context
-            context.project_type = result.project_context
+            context.project_type = result.project_context  # legacy field (may hold full object)
+            context.project_context = result.project_context  # dedicated typed field
             context.framework = result.project_context.framework if result.project_context else None
             context.file_contexts = result.file_contexts
             context.project_metadata = {}  # Will be populated later if needed
@@ -76,9 +77,12 @@ class PreAnalysisExecutor(BasePhaseExecutor):
 
         except RuntimeError as e:
             # Re-raise integrity check failures or other critical errors to stop pipeline
+            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), tb=traceback.format_exc())
             raise e
         except Exception as e:
-            logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__)
+            logger.error(
+                "phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__, tb=traceback.format_exc()
+            )
             context.errors.append(f"PRE_ANALYSIS failed: {e!s}")
 
         if self.progress_callback:

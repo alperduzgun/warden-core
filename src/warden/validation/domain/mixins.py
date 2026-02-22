@@ -89,3 +89,54 @@ class Cleanable(ABC):
         Subclasses should override this to nullify large objects, close connections, etc.
         """
         raise NotImplementedError
+
+
+class LSPAware(ABC):
+    """
+    Mixin for frames that consume LSP-based semantic analysis results.
+
+    Frames implementing this mixin receive call chains, type hierarchies,
+    and dead symbol data from the ``LSPAuditService``.  The pipeline's
+    ``FrameRunner`` calls ``set_lsp_context`` before frame execution.
+
+    Example:
+        class MyFrame(ValidationFrame, LSPAware):
+            def set_lsp_context(self, lsp_context):
+                self._lsp_context = lsp_context
+    """
+
+    @abstractmethod
+    def set_lsp_context(self, lsp_context: dict[str, Any]) -> None:
+        """
+        Inject LSP audit context for semantic analysis.
+
+        Args:
+            lsp_context: Dict with keys like 'call_chains', 'type_hierarchy',
+                         'dead_symbols', 'chain_validation'.
+        """
+        raise NotImplementedError
+
+
+class TaintAware(ABC):
+    """
+    Mixin for frames that consume pre-computed taint analysis results.
+
+    Frames implementing this mixin receive taint paths (source-to-sink flows)
+    from the shared ``TaintAnalysisService``.  The pipeline's ``FrameRunner``
+    calls ``set_taint_paths`` before frame execution.
+
+    Example:
+        class MyFrame(ValidationFrame, TaintAware):
+            def set_taint_paths(self, taint_paths):
+                self._taint_paths = taint_paths
+    """
+
+    @abstractmethod
+    def set_taint_paths(self, taint_paths: dict[str, list[Any]]) -> None:
+        """
+        Inject pre-computed taint paths for all files.
+
+        Args:
+            taint_paths: Mapping of file_path to list of TaintPath objects.
+        """
+        raise NotImplementedError

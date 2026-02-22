@@ -550,6 +550,7 @@ class TestGeneralErrorHandling:
 
         # Should complete but may show warning about path
         # Exit code depends on scan behavior
+        assert result.exception is None or isinstance(result.exception, SystemExit), f"Crash: {type(result.exception).__name__}: {result.exception}"
         assert result.exit_code in (0, 1, 2)
 
     def test_config_list_json_output(self, runner, isolated_project, monkeypatch):

@@ -89,7 +89,7 @@ class TestTimeoutEnforcement:
         )
 
         # Mock phase executor to simulate long-running operation
-        async def slow_phase():
+        async def slow_phase(context, code_files):
             await asyncio.sleep(5)  # Longer than timeout
 
         with patch.object(orchestrator.phase_executor, 'execute_pre_analysis_async', side_effect=slow_phase):
@@ -122,7 +122,7 @@ class TestTimeoutEnforcement:
             llm_service=mock_llm_service
         )
 
-        async def slow_phase():
+        async def slow_phase(context, code_files):
             await asyncio.sleep(5)
 
         with patch.object(orchestrator.phase_executor, 'execute_pre_analysis_async', side_effect=slow_phase):
@@ -199,7 +199,7 @@ class TestStatusStateMachine:
             frame_name="Non Blocker Frame",
             status="failed",
             is_blocker=False,
-            passed=False,
+            duration=0.0,
             issues_found=1,
             findings=[]
         )
@@ -246,7 +246,7 @@ class TestStatusStateMachine:
             frame_name="Blocker Frame",
             status="failed",
             is_blocker=True,
-            passed=False,
+            duration=0.0,
             issues_found=1,
             findings=[]
         )
@@ -286,7 +286,7 @@ class TestStatusStateMachine:
             frame_name="Test Frame",
             status="passed",
             is_blocker=False,
-            passed=True,
+            duration=0.0,
             issues_found=0,
             findings=[]
         )
@@ -396,7 +396,7 @@ class TestCleanupBehavior:
         orchestrator.semantic_search_service = mock_ss
 
         # Mock slow phase
-        async def slow_phase():
+        async def slow_phase(context, code_files):
             await asyncio.sleep(5)
 
         with patch.object(orchestrator.phase_executor, 'execute_pre_analysis_async', side_effect=slow_phase):
@@ -470,7 +470,7 @@ class TestCleanupBehavior:
         mock_lsp_manager = AsyncMock()
         mock_lsp_manager.shutdown_all_async = AsyncMock()
 
-        with patch('warden.pipeline.application.orchestrator.orchestrator.LSPManager') as mock_lsp_class:
+        with patch('warden.lsp.manager.LSPManager') as mock_lsp_class:
             mock_lsp_class.get_instance.return_value = mock_lsp_manager
 
             await orchestrator.execute_pipeline_async([sample_code_file])

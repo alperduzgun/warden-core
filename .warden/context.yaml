@@ -1,0 +1,30 @@
+structure:
+  src:
+  - src
+  tests:
+  - tests
+  docs:
+  - docs
+  scripts:
+  - scripts
+style:
+  line_length: 120
+  indent: space
+  quotes: double
+testing:
+  framework: pytest
+  markers:
+  - 'slow: marks tests as slow (deselect with ''-m "not slow"'')'
+  - 'integration: marks tests requiring external services'
+  - 'live: marks tests requiring live API keys'
+  - 'security: marks security-focused tests'
+  - 'acceptance: subprocess-based end-user acceptance tests'
+  naming:
+  - test_*.py
+commands:
+  lint: ruff check .
+  format: ruff format .
+  test: pytest -q
+  scan: warden scan
+repo:
+  commit_convention: conventional

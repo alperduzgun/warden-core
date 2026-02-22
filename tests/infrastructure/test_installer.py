@@ -4,17 +4,42 @@ Tests for auto-installer functionality.
 
 from pathlib import Path
 
+import pytest
+
 from warden.infrastructure.installer import (
     AutoInstaller,
     InstallConfig,
     InstallResult,
 )
 
+# All CI env vars that detect_ci_platform and get_ci_env_info check
+_ALL_CI_VARS = [
+    "CI",
+    "GITHUB_ACTIONS",
+    "GITHUB_SHA",
+    "GITLAB_CI",
+    "CI_COMMIT_SHA",
+    "AZURE_HTTP_USER_AGENT",
+    "JENKINS_HOME",
+    "CIRCLECI",
+    "TRAVIS",
+    "BUILD_ID",
+    "BUILD_NUMBER",
+    "BRANCH_NAME",
+]
+
+
+@pytest.fixture()
+def _clean_ci_env(monkeypatch):
+    """Remove all CI env vars so each test controls its own environment."""
+    for var in _ALL_CI_VARS:
+        monkeypatch.delenv(var, raising=False)
+
 
 class TestAutoInstaller:
     """Test AutoInstaller functionality."""
 
-    def test_detect_ci_platform_github(self, monkeypatch):
+    def test_detect_ci_platform_github(self, monkeypatch, _clean_ci_env):
         """Test detecting GitHub Actions."""
         monkeypatch.setenv("GITHUB_ACTIONS", "true")
 
@@ -22,7 +47,7 @@ class TestAutoInstaller:
 
         assert platform == "github"
 
-    def test_detect_ci_platform_gitlab(self, monkeypatch):
+    def test_detect_ci_platform_gitlab(self, monkeypatch, _clean_ci_env):
         """Test detecting GitLab CI."""
         monkeypatch.setenv("GITLAB_CI", "true")
 
@@ -30,7 +55,7 @@ class TestAutoInstaller:
 
         assert platform == "gitlab"
 
-    def test_detect_ci_platform_azure(self, monkeypatch):
+    def test_detect_ci_platform_azure(self, monkeypatch, _clean_ci_env):
         """Test detecting Azure Pipelines."""
         monkeypatch.setenv("AZURE_HTTP_USER_AGENT", "Azure-Pipelines")
 
@@ -38,7 +63,7 @@ class TestAutoInstaller:
 
         assert platform == "azure"
 
-    def test_detect_ci_platform_jenkins(self, monkeypatch):
+    def test_detect_ci_platform_jenkins(self, monkeypatch, _clean_ci_env):
         """Test detecting Jenkins."""
         monkeypatch.setenv("JENKINS_HOME", "/var/jenkins")
 
@@ -46,7 +71,7 @@ class TestAutoInstaller:
 
         assert platform == "jenkins"
 
-    def test_detect_ci_platform_circleci(self, monkeypatch):
+    def test_detect_ci_platform_circleci(self, monkeypatch, _clean_ci_env):
         """Test detecting CircleCI."""
         monkeypatch.setenv("CIRCLECI", "true")
 
@@ -120,19 +145,8 @@ class TestAutoInstaller:
         assert "frames:" in content
         assert "infrastructure:" in content
 
-    def test_get_ci_env_info_empty(self, monkeypatch):
+    def test_get_ci_env_info_empty(self, monkeypatch, _clean_ci_env):
         """Test getting CI env info when not in CI."""
-        # Clear all CI env vars
-        ci_vars = [
-            "CI",
-            "GITHUB_ACTIONS",
-            "GITLAB_CI",
-            "CIRCLECI",
-            "TRAVIS",
-            "JENKINS_HOME",
-        ]
-        for var in ci_vars:
-            monkeypatch.delenv(var, raising=False)
 
         env_info = AutoInstaller.get_ci_env_info()
 

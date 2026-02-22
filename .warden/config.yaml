@@ -20,6 +20,7 @@ frames:
 - property
 - antipattern
 - spec
+- architectural
 frames_config:
   architectural:
     enabled: true
@@ -47,6 +48,11 @@ frames_config:
     ignore_private: false
     ignore_test_files: true
     use_llm_filter: true
+    ignore_patterns:
+    - "scripts/**"
+    - "**/__main__.py"
+    - "**/cli.py"
+    - "**/main.py"
   security:
     checks:
     - sql-injection
@@ -166,7 +172,7 @@ settings:
     enabled: true
     model: qwen2.5-coder:0.5b
     batch_size: 2
-  timeout: 300
+  timeout: 1800
 custom_rules:
 - .warden/rules/my_custom_rules.yaml
 - .warden/rules/warden_core_rules.yaml

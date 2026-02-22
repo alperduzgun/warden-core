@@ -33,7 +33,7 @@ class DependencyGraph:
             project_context: Metadata for resolution hints
             provider_registry: To get AST providers for dependency extraction
         """
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).resolve()
         self.resolver = SemanticResolver(project_root, project_context)
         self.provider_registry = provider_registry
 

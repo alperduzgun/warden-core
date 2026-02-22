@@ -3,21 +3,47 @@ Triage Service for Adaptive Hybrid Triage.
 Uses Local LLM to assess file risk and complexity.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import psutil
 import structlog
 
+from warden.analysis.domain.triage_heuristics import is_heuristic_safe
 from warden.analysis.domain.triage_models import RiskScore, TriageDecision, TriageLane
 from warden.llm.providers.base import ILlmClient
 from warden.llm.types import LlmRequest
 from warden.validation.domain.frame import CodeFile
 
+if TYPE_CHECKING:
+    from warden.analysis.application.triage_cache import TriageCacheManager
+
 logger = structlog.get_logger(__name__)
+
+# Provider-aware batch sizes.
+# Larger batches reduce the number of LLM round-trips at the cost of more
+# context tokens per request.
+_BATCH_SIZES: dict[str, int] = {
+    "ollama": 5,  # Small local models (e.g. Qwen 0.5b, 2K context)
+    "groq": 15,  # Fast cloud API, 32K+ context
+    "openai": 15,  # Cloud API, 128K context
+    "azure_openai": 15,
+    "anthropic": 15,
+    "openrouter": 15,
+    "deepseek": 15,
+    "qwencode": 15,
+    "gemini": 15,
+    # CLI-tool providers: safety net if bypass fails to activate
+    "claude_code": 25,
+    "codex": 25,
+}
+_DEFAULT_BATCH_SIZE = 5
 
 
 class TriageService:
@@ -49,8 +75,13 @@ class TriageService:
     8-10: Critical (Auth, Crypto, SQL).
     """
 
-    def __init__(self, llm_client: ILlmClient):
+    def __init__(
+        self,
+        llm_client: ILlmClient,
+        cache: TriageCacheManager | None = None,
+    ):
         self.llm = llm_client
+        self._cache = cache
 
         # Detect Local LLM (Ollama / Local HTTP)
         provider = str(getattr(llm_client, "provider", "")).upper()
@@ -63,29 +94,73 @@ class TriageService:
             or "0:0:0:0:0:0:0:1" in endpoint
         )
 
+        # Provider-aware batch size
+        self._requested_batch_size = self._determine_batch_size(llm_client)
+
+    @staticmethod
+    def _determine_batch_size(llm_client: ILlmClient) -> int:
+        """Choose batch size based on the provider that handles triage requests.
+
+        Triage always sends ``use_fast_tier=True``, so the batch size must
+        match the **fast-tier** provider's context window — not the smart
+        tier.  For OrchestratedLlmClient we inspect ``fast_clients`` first;
+        if there are none (single-tier mode) we fall back to the smart
+        client.
+        """
+        # 1. OrchestratedLlmClient with fast tier → use first fast client
+        fast_clients = getattr(llm_client, "fast_clients", None)
+        if fast_clients:
+            first_fast = fast_clients[0]
+            fast_provider = str(getattr(first_fast, "provider", "")).lower()
+            if fast_provider in _BATCH_SIZES:
+                return _BATCH_SIZES[fast_provider]
+
+        # 2. Direct provider attribute (non-orchestrated or single-tier)
+        provider_str = str(getattr(llm_client, "provider", "")).lower()
+        if provider_str in _BATCH_SIZES:
+            return _BATCH_SIZES[provider_str]
+
+        # 3. Orchestrated without fast tier → smart client determines size
+        for attr in ("_smart_client", "smart_client"):
+            inner = getattr(llm_client, attr, None)
+            if inner:
+                inner_provider = str(getattr(inner, "provider", "")).lower()
+                if inner_provider in _BATCH_SIZES:
+                    return _BATCH_SIZES[inner_provider]
+
+        return _DEFAULT_BATCH_SIZE
+
     async def batch_assess_risk_async(self, code_files: list[CodeFile]) -> dict[str, TriageDecision]:
         """
         Assess risk for multiple files in batches.
         """
         start_time = time.time()
-        decisions = {}
-        files_to_process = []
+        decisions: dict[str, TriageDecision] = {}
+        files_to_process: list[CodeFile] = []
 
-        # 1. Fast Path: Process obvious files immediately
+        # 1. Fast Path: Heuristic-safe files skip LLM entirely
         for cf in code_files:
-            if self._is_obviously_safe(cf):
+            if is_heuristic_safe(cf):
                 decisions[cf.path] = self._create_decision(
-                    cf, TriageLane.FAST, 0, "Hard rule: Safe file type/content", start_time
+                    cf, TriageLane.FAST, 0, "Heuristic: Safe file type/content", start_time
                 )
-            else:
-                files_to_process.append(cf)
+                continue
+
+            # 2. Cache hit check (hash-based)
+            if self._cache:
+                cached = self._cache.get(cf.path, cf.content)
+                if cached is not None:
+                    decisions[cf.path] = cached
+                    continue
+
+            files_to_process.append(cf)
 
         if not files_to_process:
+            self._flush_cache()
             return decisions
 
-        # 2. Batch Processing for remaining files
-        # Reduced from 10 to 5 for stability on smaller local models (e.g. Qwen 0.5b)
-        requested_batch_size = 5
+        # 3. Batch Processing for remaining files
+        requested_batch_size = self._requested_batch_size
 
         i = 0
         while i < len(files_to_process):
@@ -115,17 +190,24 @@ class TriageService:
                     if not risk:
                         # Fallback to middle lane
                         logger.warning("triage_batch_missing_file", file=cf.path)
-                        decisions[cf.path] = self._create_decision(
+                        decision = self._create_decision(
                             cf, TriageLane.MIDDLE, 5, "Batch fallback: Missing from LLM response", start_time
                         )
                     else:
                         lane = self._determine_lane(risk)
-                        decisions[cf.path] = TriageDecision(
+                        decision = TriageDecision(
                             file_path=str(cf.path),
                             lane=lane,
                             risk_score=risk,
                             processing_time_ms=(time.time() - start_time) * 1000,
                         )
+
+                    decisions[cf.path] = decision
+
+                    # Store in cache
+                    if self._cache:
+                        self._cache.put(cf.path, cf.content, decision)
+
             except Exception as e:
                 logger.error("triage_batch_failed", error=str(e), chunk_size=len(chunk))
                 # Fallback for entire chunk
@@ -136,7 +218,12 @@ class TriageService:
 
             i += len(chunk)
 
+        self._flush_cache()
         return decisions
+
+    def _flush_cache(self) -> None:
+        if self._cache:
+            self._cache.flush()
 
     async def _get_llm_batch_score_async(self, code_files: list[CodeFile]) -> dict[str, RiskScore]:
         """Calls Local LLM to get risk scores for multiple files."""
@@ -181,10 +268,6 @@ FILES:
             # If "score" is a top-level key, it's a flat object.
             if "score" in data and ("reasoning" in data or "category" in data):
                 logger.warning("triage_batch_flat_object_detected", content=content[:100])
-                # We can't safely map it to a specific file if there were multiple,
-                # but we can return it as a partial result or let the loop handle it
-                # if we have a way to match it. But here we just return it.
-                # The caller will handle missing files via fallback.
                 return {"_flat_fallback_": RiskScore(**data)}
 
             results = {}
@@ -207,28 +290,8 @@ FILES:
             raise e
 
     def _is_obviously_safe(self, code_file: CodeFile) -> bool:
-        """Heuristics to skip LLM entirely for obvious files."""
-        path = str(code_file.path).lower()
-
-        # Safe extensions
-        if path.endswith((".md", ".txt", ".json", ".yaml", ".yml", ".css", ".scss", ".html", ".xml", ".csv", ".lock")):
-            return True
-
-        # Safe directories
-        if any(
-            x in path for x in ["/tests/", "/test/", "/docs/", "/migrations/", "/node_modules/", "/dist/", "/build/"]
-        ):
-            return True
-
-        if "config" in path or "settings" in path:
-            return True
-
-        # Small files
-        if len(code_file.content) < 300:
-            return True
-
-        # Complexity Heuristic (Simple line count proxy)
-        return bool(hasattr(code_file, "line_count") and code_file.line_count < 30)
+        """Legacy heuristic — delegates to shared module."""
+        return is_heuristic_safe(code_file)
 
     async def _get_llm_score_async(self, code_file: CodeFile) -> RiskScore:
         """Calls Local LLM to get risk score."""
@@ -266,14 +329,37 @@ FILES:
             return RiskScore(score=5.0, confidence=0.0, reasoning=f"Parsing Error: {e!s}", category="chaos_fallback")
 
     def _extract_json(self, text: str) -> str:
-        """Regex-based JSON extraction to ignore LLM chatter."""
-        # Simple balanced brace search
-        match = re.search(r"(\{.*\})", text, re.DOTALL)
-        if match:
-            return match.group(1)
+        """Extract JSON object from LLM response, ignoring surrounding chatter."""
+        text = text.strip()
 
-        # Fallback to cleaning markdown
-        return text.replace("```json", "").replace("```", "").strip()
+        # 1. Try markdown code block first
+        if "```json" in text:
+            start = text.find("```json") + 7
+            snippet = text[start:]
+            end = snippet.find("```")
+            if end != -1:
+                return snippet[:end].strip()
+
+        # 2. Find the first top-level JSON object via brace balancing
+        depth = 0
+        obj_start = -1
+        for i, ch in enumerate(text):
+            if ch == "{":
+                if depth == 0:
+                    obj_start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and obj_start != -1:
+                    return text[obj_start : i + 1]
+
+        # 3. Last resort: greedy match from first { to last }
+        first_brace = text.find("{")
+        last_brace = text.rfind("}")
+        if first_brace != -1 and last_brace > first_brace:
+            return text[first_brace : last_brace + 1]
+
+        return text
 
     def _get_safe_batch_size(self, max_allowed: int) -> int:
         """Adaptive batch size based on RAM/CPU."""

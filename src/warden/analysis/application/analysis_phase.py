@@ -5,6 +5,8 @@ Coordinates all static analyzers to produce quality metrics for the ANALYSIS pha
 This is the first phase of the 5-phase pipeline.
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
 from pathlib import Path

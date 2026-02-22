@@ -33,7 +33,7 @@ class SemanticResolver:
             project_root: Root directory of the project
             project_context: Metadata about the project (Phase 0)
         """
-        self.project_root = Path(project_root)
+        self.project_root = Path(project_root).resolve()
         self.project_context = project_context
         self.skip_list = {
             "logging",

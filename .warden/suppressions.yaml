@@ -40,6 +40,17 @@ entries:
     reason: "Weak default for local development only, with env var check and warning. Production uses WARDEN_BADGE_SECRET env var"
     enabled: true
 
+  # E2E Fixture intentionally vulnerable code
+  - id: "e2e-vulnerable-fixture"
+    type: "config"
+    file: "tests/e2e/fixtures/sample_project/src/vulnerable.py"
+    rules:
+      - "py-subprocess-shell"
+      - "py-no-eval"
+      - "js-eval-usage"
+    reason: "This is an E2E test fixture explicitly designed to contain vulnerable code for testing the scanner"
+    enabled: true
+
 # Global rules to suppress (empty for now)
 globalRules: []
 

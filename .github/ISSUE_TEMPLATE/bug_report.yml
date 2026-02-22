@@ -1,0 +1,125 @@
+name: "Bug report"
+description: "Report a problem in Warden Core"
+labels: ["bug", "needs-triage"]
+title: "bug: <short summary>"
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - CLI / Commands
+        - Pipeline / Phases (analysis, classification, validation, fortification, cleaning)
+        - Frames / Rules
+        - LLM Providers / Orchestration
+        - LSP / AST
+        - Reports / Baseline / Diff
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Warden Core (OSS)
+        - label: Warden Cloud (Commercial) — open a ticket in the Cloud repo/support
+  - type: dropdown
+    id: llm_provider
+    attributes:
+      label: LLM Provider (if relevant)
+      options:
+        - ollama
+        - claude_code
+        - openai
+        - anthropic
+        - gemini
+        - groq
+        - deepseek
+        - azure_openai
+        - none / not applicable
+  - type: input
+    id: llm_model
+    attributes:
+      label: Model name (e.g., qwen2.5-coder:7b)
+      placeholder: e.g., qwen2.5-coder:7b or gpt-4o
+  - type: checkboxes
+    id: tier
+    attributes:
+      label: Execution tier
+      options:
+        - label: Fast tier (local)
+        - label: Smart tier (cloud)
+        - label: Offline (zombie mode)
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+      placeholder: Clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Provide a minimal reproduction if possible.
+      placeholder: |
+        1. Command run (e.g., `warden scan --diff`)
+        2. Repo context (public link or minimal sample)
+        3. Observed output / logs
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs/output
+      description: Paste CLI output or stack traces. Use fenced code blocks.
+      render: bash
+  - type: input
+    id: version
+    attributes:
+      label: Warden version
+      placeholder: e.g., 1.8.2
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / Arch
+      placeholder: e.g., macOS 14 (arm64)
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: e.g., 3.11.8
+  - type: textarea
+    id: repo_shape
+    attributes:
+      label: Repo size/shape
+      description: Approx files/lines, mono‑repo?, large binaries?, important for performance/token issues.
+      placeholder: e.g., ~4k files, TS+Py mono‑repo, no vendored binaries.
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround tried
+      placeholder: e.g., lowered max_tokens, used --diff, disabled specific frame, switched provider.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues.
+        - label: This is not a security vulnerability (see SECURITY.md).
+        - label: I tried the latest release.
+        - label: I can reproduce with `warden scan --diff` on a minimal sample.

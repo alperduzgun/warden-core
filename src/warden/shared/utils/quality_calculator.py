@@ -85,3 +85,41 @@ def get_shield_data(findings: list[Any], base_score: float = 10.0) -> dict:
         "namedLogo": "shields.io",  # Optional styling
         "style": "flat",
     }
+
+
+def calculate_base_score(linter_metrics: dict[str, Any] | None = None) -> float:
+    """
+    Calculate an objective baseline score (0.1 - 10.0) from structural/linter metrics.
+
+    Uses the same asymptotic decay formula as ``calculate_quality_score``
+    so scores are on a consistent scale.
+
+    Args:
+        linter_metrics: Dictionary of LinterResult objects or dicts keyed by tool name.
+
+    Returns:
+        Float base score clamped to [0.1, 10.0].  Returns 10.0 when no metrics available.
+    """
+    if not linter_metrics:
+        return 10.0
+
+    penalty = 0.0
+    for _tool, metrics in linter_metrics.items():
+        # Guard: handle both LinterResult objects and plain dicts
+        is_available = getattr(metrics, "is_available", False) or (
+            isinstance(metrics, dict) and metrics.get("is_available")
+        )
+        if not is_available:
+            continue
+
+        if isinstance(metrics, dict):
+            blocker_count = metrics.get("blocker_count", 0)
+            total_errors = metrics.get("total_errors", 0)
+        else:
+            blocker_count = getattr(metrics, "blocker_count", 0)
+            total_errors = getattr(metrics, "total_errors", 0)
+
+        penalty += (blocker_count * 0.5) + (total_errors * 0.05)
+
+    score = 10.0 * (20.0 / (penalty + 20.0))
+    return round(max(0.1, min(10.0, score)), 1)

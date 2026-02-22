@@ -14,6 +14,7 @@ Total: 12 adapters exposing 51 tools
 """
 
 from warden.mcp.infrastructure.adapters.analysis_adapter import AnalysisAdapter
+from warden.mcp.infrastructure.adapters.audit_adapter import AuditAdapter
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
 
 # CI/CD adapter
@@ -62,4 +63,6 @@ __all__ = [
     "FortificationAdapter",
     # CI/CD (4 tools)
     "CIAdapter",
+    # Audit (2 tools)
+    "AuditAdapter",
 ]

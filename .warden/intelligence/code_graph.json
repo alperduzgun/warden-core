@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "1.0.0",
+  "nodes": {
+    "auth_service.py::UserAuthService": {
+      "fqn": "auth_service.py::UserAuthService",
+      "name": "UserAuthService",
+      "kind": "class",
+      "filePath": "auth_service.py",
+      "line": 11,
+      "module": "auth_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "auth_service.py::UserAuthService.__init__": {
+      "fqn": "auth_service.py::UserAuthService.__init__",
+      "name": "__init__",
+      "kind": "method",
+      "filePath": "auth_service.py",
+      "line": 18,
+      "module": "auth_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "auth_service.py::UserAuthService.authenticate": {
+      "fqn": "auth_service.py::UserAuthService.authenticate",
+      "name": "authenticate",
+      "kind": "method",
+      "filePath": "auth_service.py",
+      "line": 24,
+      "module": "auth_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "auth_service.py::UserAuthService.create_session": {
+      "fqn": "auth_service.py::UserAuthService.create_session",
+      "name": "create_session",
+      "kind": "method",
+      "filePath": "auth_service.py",
+      "line": 34,
+      "module": "auth_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    }
+  },
+  "edges": [
+    {
+      "source": "auth_service.py",
+      "target": "os",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py",
+      "target": "sys",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py",
+      "target": "logging",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py",
+      "target": "pathlib.Path",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py",
+      "target": "typing.Optional",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py",
+      "target": "auth_service.py::UserAuthService",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py::UserAuthService",
+      "target": "auth_service.py::UserAuthService.__init__",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py::UserAuthService",
+      "target": "auth_service.py::UserAuthService.authenticate",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "auth_service.py::UserAuthService",
+      "target": "auth_service.py::UserAuthService.create_session",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    }
+  ],
+  "generated_at": "2026-02-21T23:10:34.903487+00:00"
+}

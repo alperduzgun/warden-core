@@ -4,7 +4,7 @@
 
 ![Status](https://img.shields.io/badge/Status-Beta-yellow)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![License](https://img.shields.io/badge/License-Proprietary-red)
+![License](https://img.shields.io/badge/License-Apache_2.0-green)
 ![AI Ready](https://img.shields.io/badge/AI-Native-purple)
 
 <p align="center">
@@ -37,12 +37,12 @@ Warden provides the **"Verify-Loop"** mechanism to ensure every AI-generated cha
 ## 🌍 Universal Language Support
 Warden's **Engine** runs on Python/Rust, but it validates code in **any language**.
 
-| Category | Supported Languages (Native) |
-| :--- | :--- |
-| **Mobile** | **Flutter (Dart)**, Swift, Kotlin, React Native |
-| **Backend** | Python, **Go**, **Rust**, Node.js (TS/JS), Java |
-| **Frontend** | React, Vue, Angular, HTML/CSS |
-| **Scripting** | Shell (Bash), Lua, Perl |
+| Category | Supported Languages (Native) | Taint Analysis |
+| :--- | :--- | :--- |
+| **Mobile** | **Flutter (Dart)**, Swift, Kotlin, React Native | - |
+| **Backend** | Python, **Go**, **Rust**, Node.js (TS/JS), **Java** | Python, Go, Java, JS/TS |
+| **Frontend** | React, Vue, Angular, HTML/CSS | JS/TS (DOM XSS) |
+| **Scripting** | Shell (Bash), Lua, Perl | - |
 
 > **Pro Tip:** Warden can orchestrate *existing* tools. Already using `very_good_analysis` for Flutter? Warden wraps it, giving it a unified interface and fixing capabilities.
 
@@ -56,7 +56,7 @@ Warden is built to integrate directly with your AI Agent:
 
 ### 2. ⚡ Offline-First Intelligence (New!)
 Warden is built for resilience. Unlike SaaS tools that go dark without internet:
-*   **Local Models:** Multiple options - Claude Code CLI (uses desktop app), Ollama (Qwen), or any local LLM server.
+*   **Local Models:** Multiple options - Claude Code CLI (uses desktop app), Codex CLI (OpenAI local agent), Ollama (Qwen), or any local LLM server.
 *   **Network Resilience:** Automatically detects connection timeouts and switches to local cache instantly.
 *   **Zero Latency:** No API round-trips for standard scans.
 *   **Zero API Costs:** Claude Code leverages your existing subscription without consuming API credits.
@@ -65,13 +65,14 @@ Warden is built for resilience. Unlike SaaS tools that go dark without internet:
 Warden balances cost, privacy, and intelligence using a smart routing system:
 *   **Local Tier (Privacy-First):**
     - **Claude Code CLI** (uses your existing subscription, zero API costs)
+    - **Codex CLI** (OpenAI local agent, read-only sandbox mode)
     - **Qwen 2.5-Coder** (via Ollama) for high-frequency tasks
     - **Free & Private** - Code never leaves your machine
 *   **Cloud Tier (Advanced Analysis):** Routes only complex logic (security fixes, architecture audits) to **GPT-4o/Claude API/Gemini**.
 *   **Result:** 90% cost reduction compared to pure cloud agents.
 
 **Supported Providers:**
-- 🏠 **Local:** Claude Code, Ollama (Qwen), Any OpenAI-compatible local server
+- 🏠 **Local:** Claude Code, Codex CLI, Ollama (Qwen), Any OpenAI-compatible local server
 - ☁️ **Cloud:** Anthropic (Claude), OpenAI (GPT-4), Google (Gemini), Groq, DeepSeek
 
 #### ⚡ Performance & Optimization
@@ -92,12 +93,14 @@ Warden implements global performance optimizations that benefit ALL providers:
 - Fast tier (local models) for syntax/lint checks
 - Smart tier (cloud models) for complex security analysis
 - Automatic fallback if fast providers unavailable
+- **Single-provider mode:** CLI tools (Claude Code, Codex) route all requests through themselves — no tier split needed
 
 **Provider Performance Profiles:**
 
 | Provider | Avg Response | Overhead | Best Use Case |
 |----------|-------------|----------|---------------|
 | **Ollama (Qwen)** | ~0.7s | 50ms | Quick checks, lint validation |
+| **Codex CLI** | ~5-15s | 100ms | Deep analysis, read-only sandbox |
 | **Claude Code** | ~10s | 200ms | Deep analysis, security audits |
 | **Azure (GPT-4)** | ~2.2s | 100ms | Complex logic, architecture review |
 | **Anthropic API** | ~1.5s | 80ms | Security fixes, context-aware analysis |
@@ -124,13 +127,97 @@ llm:
 
 ### 4. 🛡️ Core Validation Frames (Built-in)
 Warden ships with 6 powerful core frames:
-1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS).
+1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS) with **multi-language taint analysis**.
 2.  **ResilienceFrame:** Validates error handling, retry, and circuit-breaker patterns.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
 4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
     - **Why SpecFrame?** Unit tests only prove that components work *internally*. SpecFrame is the only mechanism that audits both sides simultaneously to detect "Invisible Drift" (e.g., when the Frontend and Backend start speaking different languages). It automatically identifies what is missing or incorrect in the Consumer/Provider pair.
 5.  **AntiPatternFrame:** Detects code smells, god classes, and bad practices.
 6.  **OrphanFrame:** Detects dead code and unreferenced assets.
+
+#### 🔍 Source-to-Sink Taint Analysis (Shared Service)
+
+Warden includes a multi-language **taint tracking engine** that traces untrusted user input from its source to dangerous sinks (SQL queries, shell commands, HTML rendering, etc.).
+
+Taint analysis runs as a **shared service** during the Pre-Analysis phase — computed once per pipeline run, consumed by multiple frames:
+
+| Frame | How It Uses Taint Data |
+| :--- | :--- |
+| **SecurityFrame** | Direct vulnerability detection — unsanitized source-to-sink paths become findings |
+| **FuzzFrame** | Taint sources become **high-priority fuzz targets** — focused edge-case testing on real input paths |
+| **ResilienceFrame** | Findings on tainted paths get **severity boost** (medium → high) — missing resilience on user-controlled data is riskier |
+
+```
+Pipeline Phase 0 (PRE-ANALYSIS)
+  └── TaintAnalysisService           ← catalog loaded once, all files scanned
+        └── context.taint_paths = {file → [TaintPath, ...]}
+                │
+    ┌───────────┼───────────┐
+    ▼           ▼           ▼
+SecurityFrame  FuzzFrame  ResilienceFrame
+ (shared-first, inline fallback)
+```
+
+**Supported Languages:**
+
+| Language | Analysis Method | Frameworks |
+| :--- | :--- | :--- |
+| **Python** | AST-based (single-function scope) | Flask, FastAPI, Django, stdlib |
+| **JavaScript/TypeScript** | Regex-based (3-pass propagation) | Express.js, Koa.js, Browser DOM, Node.js |
+| **Go** | Regex-based (3-pass propagation) | net/http, database/sql |
+| **Java** | Regex-based (3-pass propagation) | Servlet, Spring (JdbcTemplate) |
+
+**Three-Layer Catalog Architecture:**
+
+```
+Layer 1  Built-in YAML model packs   (models/{lang}/*.yaml)
+Layer 2  Hardcoded constants          (baseline guarantee, always active)
+Layer 3  User overrides               (.warden/taint_catalog.yaml)
+```
+
+All layers are **unioned** — user entries never replace built-in defaults.
+
+**Heuristic Signal Inference:**
+For unknown frameworks, a signal-based inference engine (`signals.yaml`) detects potential sources and sinks by analyzing method names, parameter hints, and module patterns. Confidence scores are lower (0.60-0.70) compared to explicit model packs (0.99).
+
+**Extending the Catalog:**
+
+Add custom sources, sinks, or sanitizers via `.warden/taint_catalog.yaml`:
+
+```yaml
+sources:
+  python:
+    - fastapi.Request.query_params
+  go:
+    - gin.Context.Query
+  javascript:
+    - ctx.request.body
+
+sinks:
+  SQL-value:
+    - prisma.raw
+    - mongoose.exec
+
+sanitizers:
+  HTML-content:
+    - myCustomSanitizer
+```
+
+**Adding Taint Awareness to Custom Frames:**
+
+Any frame can consume taint data by implementing the `TaintAware` mixin:
+
+```python
+from warden.validation.domain.mixins import TaintAware
+
+class MyCustomFrame(ValidationFrame, TaintAware):
+    def set_taint_paths(self, taint_paths):
+        self._taint_paths = taint_paths
+
+    async def execute_async(self, code_file):
+        paths = self._taint_paths.get(code_file.path, [])
+        # Use taint paths in your analysis logic
+```
 
 ### 5. 🧩 Warden Hub (Marketplace)
 Need more power? Install specialized frames from the community:
@@ -225,12 +312,13 @@ Warden doesn't just check *correctness*; it checks *appropriateness*.
     *   *Crypto Wallet:* 🛡️ Paranoid Mode (No http, strict types)
     *   *CLI Tool:* ⚡ Relaxed Mode (Allow print statements, rapid I/O)
 
-### 14. 🧠 Project Intelligence & CI Optimization (New!)
-Warden now features a **"Discovery Canvas"** that creates a semantic map of your project to optimize CI performance.
-*   **Semantic Mapping:** Automatically identifies modules (e.g., "Payment Service", "Auth Module") and assigns them **Risk Levels (P0-P3)**.
-*   **Context-Aware CI:** During a PR scan, Warden uses this intelligence to decide which files need a "Deep LLM Audit" and which ones can be handled by fast, local rules.
-*   **Zero Noise:** Automatically ignores Warden's internal meta-files and project artifacts, focusing purely on your business logic.
-*   **One-Command Refresh:** Keep your project's "Intelligence" up to date with `warden refresh`.
+### 14. 🧠 LLM Audit Context & Code Intelligence (New!)
+Traditional LLM bots run "blind" reading text streams without structure. Warden acts differently: it maps your codebase deterministically to provide **Zero-Hallucination Audit Context** for LLMs.
+*   **Layer 1 (Dependencies):** Automatically builds a file-to-file structural `DependencyGraph`.
+*   **Layer 2 (Symbol Graph):** Uses AST traversal to extract relationships (`CodeGraph`) meaning Class inheritance, Method calls, and Mixin implementations without LLM token cost.
+*   **Layer 3 (Runtime Validation):** Validates the AST connections using the Language Server Protocol (LSP) to ensure the map matches actual runtime execution perfectly.
+*   **Self-Auditing (`--check`):** Warden computes a `GapReport` identifying broken imports, orphaned files, circular dependencies, and unreachable code.
+*   **LLM Integration:** Run `warden audit-context --format markdown` to generate an optimized summary of your project's DNA. Feed this to Grok, ChatGPT, or Claude before starting code audits so they instantly understand your architecture. MCP (Claude Code/Cursor) uses `warden_get_audit_context` and `warden_query_symbol` under the hood.
 
 ---
 
@@ -250,6 +338,10 @@ To setup Warden for your project and **configure your AI Agent**:
 warden init --agent
 ```
 
+Tips:
+– On CI or headless environments, prefer: `warden init --no-agent --skip-mcp --no-grammars`
+– Flags: `--baseline/--no-baseline`, `--intel/--no-intel`, `--grammars/--no-grammars`, `--agent/--no-agent`
+
 This command:
 1.  Analyzes your project structure.
 2.  Creates `.warden/AI_RULES.md`.
@@ -264,13 +356,26 @@ Warden auto-detects available providers and uses the best local option by defaul
 **Option 1: Claude Code (Recommended for Claude Users)**
 ```bash
 # No setup needed! If you have Claude Code CLI installed:
-warden config llm use claude-code
+warden config llm use claude_code
 
 # Verify it's working:
 warden config llm test
 ```
 
-**Option 2: Ollama (Free & Offline)**
+**Option 2: Codex CLI (Recommended for Codex Users)**
+```bash
+# No setup needed! If you have the Codex CLI installed:
+warden init --provider codex
+
+# Register Warden as an MCP tool in Codex (optional):
+warden codex mcp-setup
+
+# Or use it directly:
+warden config llm use codex
+warden config llm test
+```
+
+**Option 3: Ollama (Free & Offline)**
 ```bash
 # Install Ollama and pull Qwen model:
 ollama pull qwen2.5-coder:7b
@@ -279,14 +384,19 @@ ollama pull qwen2.5-coder:7b
 warden scan
 ```
 
-**Option 3: Cloud Providers (API Key Required)**
+**Option 4: Cloud Providers (API Key Required)**
 ```bash
-# Configure via interactive CLI:
-warden config llm add
+# Select a provider:
+warden config llm use anthropic   # or: openai, groq, gemini, deepseek, azure
 
-# Or set via environment:
+# Set environment variables for the chosen provider:
 export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...
+export GROQ_API_KEY=gsk_...
+export GEMINI_API_KEY=...
+export AZURE_OPENAI_API_KEY=...
+export AZURE_OPENAI_ENDPOINT=...
+export AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
 ```
 
 **Check Current Configuration:**
@@ -313,8 +423,7 @@ AI Agents working in a Warden project follow this strict protocol:
 | `warden scan` | Runs the full validation pipeline on the project. |
 | `warden scan --diff` | **(New!)** Incremental scan. Checks only files changed relative to main branch. |
 | `warden scan --diff --baseline` | **(New!)** Smart Autopilot. Uses baseline to hide legacy issues. |
-| `warden validate <file>` | Scans a single file for immediate feedback. |
-| `warden config llm` | **(New!)** Manage LLM providers (add/remove/list/test/use). |
+| `warden config llm` | **(New!)** Manage LLM provider (status/use/test). |
 | `warden config llm status` | Shows current LLM configuration and available providers. |
 | `warden config llm test` | Tests the active LLM provider connection. |
 | `warden serve` | Starts the MCP Server for AI integration. |
@@ -400,7 +509,7 @@ llm:
   auto_detect: true
 
   # Active provider
-  active_provider: claude-code  # or: ollama, anthropic, openai, gemini
+  active_provider: claude_code  # or: ollama, anthropic, openai, gemini
 
   providers:
     claude_code:
@@ -408,6 +517,12 @@ llm:
       model: claude-sonnet-4-20250514
       timeout_seconds: 120
       # No API key needed - uses your Claude Code CLI subscription
+
+    codex:
+      enabled: true
+      timeout_seconds: 120
+      # No API key needed - uses your Codex CLI (OpenAI local agent)
+      # Model is managed via ~/.codex/config.toml
 
     ollama:
       enabled: true
@@ -430,15 +545,18 @@ llm:
   # Intelligent routing (optional)
   routing:
     fast_tier: ollama        # For quick checks (linting, parsing)
-    smart_tier: claude-code  # For complex analysis (security, architecture)
+    smart_tier: claude_code  # For complex analysis (security, architecture)
 ```
 
 **Priority Order (Auto-Detection):**
 1. Claude Code (if CLI installed)
-2. Ollama (if running with Qwen model)
-3. Anthropic (if API key set)
-4. OpenAI (if API key set)
-5. Gemini (if API key set)
+2. Codex CLI (if installed)
+3. Ollama (if running with Qwen model)
+4. Anthropic (if API key set)
+5. OpenAI (if API key set)
+6. Gemini (if API key set)
+
+> **Note:** Claude Code and Codex are **single-provider** tools — they manage their own model selection internally. When either is selected as the primary provider, all Warden requests (triage, analysis, classification) route through that one tool. There is no fast/smart tier split.
 
 ---
 
@@ -522,31 +640,38 @@ We are transforming Warden from a local tool into a global **Standard of Trust**
 
 ---
 
-## 📄 License
+## 🧭 Core vs Cloud (Open‑Core Model)
 
-**Warden Core** is licensed under a **Proprietary License** with the following terms:
+We maintain a clear separation of responsibilities between Warden Core (OSS) and Warden Cloud (Commercial).
 
-### ✅ Personal Use (FREE)
-- Use Warden for **personal projects**
-- Educational purposes and learning
-- Non-commercial evaluation
+Feature Matrix (Summary)
+- Core (OSS, Apache‑2.0): CLI & pipeline engine, Frames SDK, AST/LSP integration, diff scanning, baseline autopilot,
+  local LLM providers (Ollama, Claude Code, Codex), JSON/SARIF reporting, suppression/verification phases.
+- Cloud (Commercial): Multi‑repo/org management, SSO/SAML, RBAC, centralized policy and approval workflows, advanced dashboards,
+  team‑level suppression rules, audit logs, enterprise integrations, hosted LLM routing/telemetry.
 
-### 💼 Commercial Use (LICENSE REQUIRED)
-For commercial usage, including:
-- Use within corporations or enterprises
-- For-profit organizations
-- Production deployments in commercial products
-
-**A commercial license must be purchased.**
-
-### 🚫 Redistribution
-Redistribution of this software (source or binary) is **prohibited** without explicit written permission.
-
-### 📧 Commercial Licensing
-For commercial licensing inquiries, contact: **warden-core@proton.me**
+Note: Core will always remain under an OSI‑approved license. Cloud ships as a separate product/repository.
 
 ---
 
-**Full License:** See [LICENSE](./LICENSE) file for complete terms.
+## 📄 License
 
-**Disclaimer:** This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND.
+**Warden Core** is open source and licensed under **Apache License 2.0**.
+
+- Full text: see [LICENSE](./LICENSE)
+- Summary: Permissive use, modification, and distribution; no warranty.
+
+Note: **Warden Cloud** (enterprise features like SSO/RBAC, centralized policy, multi‑repo management, etc.) is a separate
+commercial product and is licensed independently of this repository. Warden Core will remain open source.
+
+---
+
+## 🤝 Contributing & Policies
+
+- Contribution guide: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md)
+- Code of Conduct: [.github/CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md)
+- Security policy: [.github/SECURITY.md](.github/SECURITY.md)
+- Governance: [docs/governance/GOVERNANCE.md](docs/governance/GOVERNANCE.md)
+- DCO: [docs/contributing/DCO](docs/contributing/DCO)
+- Trademark policy: [docs/legal/TRADEMARKS.md](docs/legal/TRADEMARKS.md)
+- NOTICE: [docs/legal/NOTICE](docs/legal/NOTICE)

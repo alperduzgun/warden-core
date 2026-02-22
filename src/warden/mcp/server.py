@@ -12,7 +12,6 @@ from pathlib import Path
 from warden.mcp.application.mcp_service import MCPService
 from warden.mcp.infrastructure.stdio_transport import STDIOTransport
 from warden.mcp.protocol import MCPProtocol
-from warden.mcp.resources import MCPResourceManager
 
 # Optional logging
 try:
@@ -66,7 +65,6 @@ class MCPServer:
 
         # Expose for backward compatibility
         self.protocol = MCPProtocol()
-        self.resource_manager = MCPResourceManager(self.project_root)
 
     async def start_async(self) -> None:
         """

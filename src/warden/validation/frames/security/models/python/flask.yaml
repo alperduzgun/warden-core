@@ -1,0 +1,48 @@
+meta:
+  framework: flask
+  language: python
+
+sources:
+  - pattern: "request.args"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.form"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.json"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.data"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.values"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.cookies"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.headers"
+    role: HTTP_INPUT
+    confidence: 0.95
+  - pattern: "request.get_json"
+    role: HTTP_INPUT
+    confidence: 0.99
+  - pattern: "request.files"
+    role: FILE_UPLOAD
+    confidence: 0.99
+
+sinks:
+  - pattern: "render_template_string"
+    type: HTML-content
+    confidence: 0.99
+  - pattern: "Markup"
+    type: HTML-content
+    confidence: 0.95
+
+sanitizers:
+  - pattern: "html.escape"
+    clears: HTML-content
+  - pattern: "markupsafe.escape"
+    clears: HTML-content
+  - pattern: "bleach.clean"
+    clears: HTML-content

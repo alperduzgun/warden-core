@@ -6,6 +6,7 @@ Tests the property-based testing frame that validates business logic.
 
 import pytest
 from warden.validation.domain.frame import CodeFile
+from warden.validation.domain.mixins import BatchExecutable
 
 
 @pytest.fixture
@@ -317,3 +318,94 @@ def divide(a, b):
         assert "test.py" in finding.location
         assert finding.severity in ["critical", "high", "medium", "low"]
         assert finding.message is not None
+
+
+# =============================================================================
+# BATCH EXECUTION TESTS
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_property_frame_is_batch_executable(PropertyFrame):
+    """PropertyFrame should implement BatchExecutable mixin."""
+    frame = PropertyFrame()
+    assert isinstance(frame, BatchExecutable)
+    assert hasattr(frame, "execute_batch_async")
+
+
+@pytest.mark.asyncio
+async def test_property_frame_batch_empty_list(PropertyFrame):
+    """Batch with empty file list returns empty results."""
+    frame = PropertyFrame()
+    results = await frame.execute_batch_async([])
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_property_frame_batch_single_file(PropertyFrame):
+    """Batch with single file returns one result."""
+    code_file = CodeFile(
+        path="single.py",
+        content="def divide(a, b):\n    return a / b\n",
+        language="python",
+    )
+
+    frame = PropertyFrame()
+    results = await frame.execute_batch_async([code_file])
+
+    assert len(results) == 1
+    assert results[0].frame_id == "property"
+    assert results[0].metadata.get("batch_mode") is True
+
+
+@pytest.mark.asyncio
+async def test_property_frame_batch_multiple_files(PropertyFrame):
+    """Batch with multiple files returns one result per file."""
+    files = [
+        CodeFile(path="a.py", content="x = 1 / y\n", language="python"),
+        CodeFile(path="b.py", content="if True:\n    pass\n", language="python"),
+        CodeFile(path="c.py", content="arr[x - y]\n", language="python"),
+    ]
+
+    frame = PropertyFrame()
+    results = await frame.execute_batch_async(files)
+
+    assert len(results) == 3
+    for result in results:
+        assert result.frame_id == "property"
+        assert result.frame_name == "Property Testing"
+        assert result.metadata.get("batch_mode") is True
+
+
+@pytest.mark.asyncio
+async def test_property_frame_batch_detects_patterns(PropertyFrame):
+    """Batch mode should still detect pattern-based findings."""
+    files = [
+        CodeFile(
+            path="math.py",
+            content="def calc(a, b):\n    return a / b\n",
+            language="python",
+        ),
+        CodeFile(
+            path="safe.py",
+            content="x = 1 + 2\n",
+            language="python",
+        ),
+    ]
+
+    frame = PropertyFrame()
+    results = await frame.execute_batch_async(files)
+
+    assert len(results) == 2
+    # First file should have division finding
+    assert results[0].issues_found > 0
+    # Second file should be clean
+    assert results[1].issues_found == 0
+
+
+@pytest.mark.asyncio
+async def test_property_frame_batch_has_batch_size(PropertyFrame):
+    """PropertyFrame should define BATCH_SIZE constant."""
+    assert hasattr(PropertyFrame, "BATCH_SIZE")
+    assert PropertyFrame.BATCH_SIZE > 0
+    assert PropertyFrame.BATCH_SIZE <= 10  # Conservative limit

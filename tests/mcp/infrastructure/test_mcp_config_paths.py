@@ -1,33 +1,43 @@
 
-import pytest
 from pathlib import Path
+
 from warden.mcp.infrastructure.mcp_config_paths import is_safe_to_create_dir
 
-def test_is_safe_to_create_dir_standard_paths():
-    assert is_safe_to_create_dir(Path("/Users/user/.config/myapp")) is True
-    assert is_safe_to_create_dir(Path("/home/user/.config/myapp")) is True
-    assert is_safe_to_create_dir(Path("C:/Users/User/AppData/Roaming/MyApp")) is True
+
+def test_is_safe_to_create_dir_known_config_dirs():
+    """Known MCP config directories under home should be safe."""
+    home = Path.home()
+    assert is_safe_to_create_dir(home / ".config" / "Claude") is True
+    assert is_safe_to_create_dir(home / ".cursor") is True
+    assert is_safe_to_create_dir(home / ".windsurf") is True
+
+
+def test_is_safe_to_create_dir_parent_of_config():
+    """Parent directories of known config paths should be safe."""
+    home = Path.home()
+    # .config is parent of .config/Claude/claude_desktop_config.json
+    assert is_safe_to_create_dir(home / ".config") is True
+
+
+def test_is_safe_to_create_dir_unknown_subdir_is_unsafe():
+    """Arbitrary subdirectories under home are NOT safe."""
+    home = Path.home()
+    assert is_safe_to_create_dir(home / ".config" / "myapp") is False
+    assert is_safe_to_create_dir(home / "random_dir") is False
+
 
 def test_is_safe_to_create_dir_traversal_attempts():
-    # Attempting to bypass with ".."
+    """Attempting to bypass with '..' should be rejected."""
     assert is_safe_to_create_dir(Path("/Users/user/.config/../malicious")) is False
     assert is_safe_to_create_dir(Path("../../AppData")) is False
 
-def test_is_safe_to_create_dir_partial_match_attack():
-    # Attempting to matching substring but not directory component
-    # e.g. /tmp/malicious.config/payload
+
+def test_is_safe_to_create_dir_outside_home():
+    """Paths outside user home should always be unsafe."""
+    assert is_safe_to_create_dir(Path("/tmp/fakeAppData")) is False
     assert is_safe_to_create_dir(Path("/tmp/malicious.config/payload")) is False
-    assert is_safe_to_create_dir(Path("/tmp/AppData/payload")) is False 
-    # ^ This fails on strict 'parts' check if 'AppData' is just a folder name but not in expected location relative to others
-    # Actually, our strict check just ensures the SAFE pattern is a distinct part.
-    # /tmp/AppData IS allowed by current logic if we only check "if pattern in parts".
-    # But wait, our logic was:
-    # if pattern in path_resolved.parts: return True
-    # So /tmp/AppData/foo WOULD be true if 'AppData' is in SAFE_CONFIG_DIR_PATTERNS.
-    # We might need even STRICTER logic in future (e.g. must START with user home), 
-    # but for now, checking 'parts' is better than 'substring'.
-    pass
+
 
 def test_is_safe_to_create_dir_substring_bypass():
-    # Previous vulnerability: "/tmp/fakeAppData"
+    """Substring matching should not fool the safety check."""
     assert is_safe_to_create_dir(Path("/tmp/fakeAppData")) is False

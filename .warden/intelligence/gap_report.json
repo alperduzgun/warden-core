@@ -1,0 +1,20 @@
+{
+  "orphanFiles": [],
+  "orphanSymbols": [],
+  "brokenImports": [
+    "pathlib.Path",
+    "typing.Optional"
+  ],
+  "circularDeps": [],
+  "unreachableFromEntry": [],
+  "missingMixinImpl": [],
+  "coverage": 1.0,
+  "detectedFramework": "fastapi",
+  "frameworkExcludedCount": 0,
+  "starImports": [],
+  "dynamicImports": [],
+  "typeCheckingOnly": [],
+  "unparseableFiles": [],
+  "testOnlyConsumers": {},
+  "generated_at": "2026-02-21T23:10:34.903803+00:00"
+}

@@ -51,7 +51,7 @@ def groq_config():
         default_provider=LlmProvider.GROQ,
         groq=ProviderConfig(
             api_key=os.getenv("GROQ_API_KEY"),
-            default_model="llama-3.1-70b-versatile",
+            default_model="llama-3.3-70b-versatile",
             enabled=True
         )
     )
@@ -173,7 +173,7 @@ async def test_fallback_chain(azure_config):
     if os.getenv("GROQ_API_KEY"):
         config.groq = ProviderConfig(
             api_key=os.getenv("GROQ_API_KEY"),
-            default_model="llama-3.1-70b-versatile",
+            default_model="llama-3.3-70b-versatile",
             enabled=True
         )
 

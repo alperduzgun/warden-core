@@ -5,6 +5,8 @@ Coordinates all fortifiers to add safety measures to code.
 Executes fortifiers in priority order and combines results.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 import structlog

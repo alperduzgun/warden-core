@@ -55,48 +55,84 @@ class PipelinePhaseRunner:
         """Execute all pipeline phases in order."""
 
         # Phase 0: PRE-ANALYSIS
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Pre-Analysis", "phase_name": "Pre-Analysis", "total_units": len(code_files)},
+            )
+
         if self.config.enable_pre_analysis:
             await self.phase_executor.execute_pre_analysis_async(context, code_files)
 
             # Populate ProjectIntelligence from AST context (zero LLM cost)
             self._populate_project_intelligence(context, code_files)
 
+            # Populate taint analysis (zero LLM cost, per-file static analysis)
+            await self._populate_taint_paths_async(context, code_files)
+
+            # Phase 0.8: LSP Audit (optional, zero LLM cost)
+            await self._populate_lsp_audit_async(context)
+
         # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
         from warden.pipeline.domain.enums import AnalysisLevel
 
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Triage", "phase_name": "Triage", "total_units": len(code_files)},
+            )
+
         if getattr(self.config, "use_llm", True) and self.config.analysis_level != AnalysisLevel.BASIC:
-            logger.info("phase_enabled", phase="TRIAGE", enabled=True)
-            await self.phase_executor.execute_triage_async(context, code_files)
+            if self._is_single_tier_provider():
+                # CLI-tool providers (Codex, Claude Code) spawn a subprocess per
+                # LLM call (~20s each).  Running 100+ triage calls is prohibitive.
+                # Use heuristic-only triage: safe files → FAST, rest → MIDDLE.
+                logger.info("triage_bypass_single_tier", provider=self._detect_primary_provider())
+                self._apply_heuristic_triage(context, code_files)
+            else:
+                logger.info("phase_enabled", phase="TRIAGE", enabled=True)
+                await self.phase_executor.execute_triage_async(context, code_files)
+
+        # Batch phase done — jump counter to completion
+        if self._progress_callback:
+            self._progress_callback("progress_update", {"increment": len(code_files)})
 
         # Phase 1: ANALYSIS
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Analysis", "phase_name": "Analysis", "total_units": len(code_files)},
+            )
+
         if getattr(self.config, "enable_analysis", True):
             await self.phase_executor.execute_analysis_async(context, code_files)
             context.quality_score_after = context.quality_score_before
 
+        # Batch phase done — jump counter to completion
+        if self._progress_callback:
+            self._progress_callback("progress_update", {"increment": len(code_files)})
+
         # Phase 2: CLASSIFICATION
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Classification", "phase_name": "Classification", "total_units": len(code_files)},
+            )
+
         if frames_to_execute:
             self._apply_manual_frame_override(context, frames_to_execute)
         else:
             logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
             await self.phase_executor.execute_classification_async(context, code_files)
 
+        # Batch phase done — jump counter to completion
+        if self._progress_callback:
+            self._progress_callback("progress_update", {"increment": len(code_files)})
+
         # Phase 3: VALIDATION
         enable_validation = getattr(self.config, "enable_validation", True)
         if enable_validation:
             logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
-            total_work_units = self._calculate_total_work_units(context, code_files)
-            if self._progress_callback:
-                self._progress_callback(
-                    "progress_init",
-                    {
-                        "total_units": total_work_units,
-                        "phase_units": {
-                            "VALIDATION": len(context.selected_frames or []) * len(code_files)
-                            if context.selected_frames
-                            else 0,
-                        },
-                    },
-                )
             await self.frame_executor.execute_validation_with_strategy_async(context, code_files, pipeline)
         else:
             logger.info("phase_skipped", phase="VALIDATION", reason="disabled_in_config")
@@ -116,13 +152,30 @@ class PipelinePhaseRunner:
 
         # Phase 3.5: VERIFICATION (False Positive Reduction)
         if getattr(self.config, "enable_issue_validation", False):
+            findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
+            if self._progress_callback:
+                self._progress_callback(
+                    "phase_started",
+                    {"phase": "Verification", "phase_name": "Verification", "total_units": findings_count},
+                )
             await self.post_processor.verify_findings_async(context)
 
         # Phase 4: FORTIFICATION
+        findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Fortification", "phase_name": "Fortification", "total_units": findings_count},
+            )
+
         enable_fortification = getattr(self.config, "enable_fortification", True)
         if enable_fortification:
             logger.info("phase_enabled", phase="FORTIFICATION", enabled=enable_fortification)
             await self.phase_executor.execute_fortification_async(context, code_files)
+
+            # Batch phase done — jump counter to completion
+            if self._progress_callback and findings_count > 0:
+                self._progress_callback("progress_update", {"increment": findings_count})
         else:
             logger.info("phase_skipped", phase="FORTIFICATION", reason="disabled_in_config")
             if self._progress_callback:
@@ -136,10 +189,20 @@ class PipelinePhaseRunner:
                 )
 
         # Phase 5: CLEANING
+        if self._progress_callback:
+            self._progress_callback(
+                "phase_started",
+                {"phase": "Cleaning", "phase_name": "Cleaning", "total_units": len(code_files)},
+            )
+
         enable_cleaning = getattr(self.config, "enable_cleaning", True)
         if enable_cleaning:
             logger.info("phase_enabled", phase="CLEANING", enabled=enable_cleaning)
             await self.phase_executor.execute_cleaning_async(context, code_files)
+
+            # Batch phase done — jump counter to completion
+            if self._progress_callback:
+                self._progress_callback("progress_update", {"increment": len(code_files)})
         else:
             logger.info("phase_skipped", phase="CLEANING", reason="disabled_in_config")
             if self._progress_callback:
@@ -275,6 +338,188 @@ class PipelinePhaseRunner:
             entry_points=len(intel.entry_points),
             primary_language=intel.primary_language,
         )
+
+    async def _populate_taint_paths_async(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
+        """Populate taint analysis results into context (zero LLM cost).
+
+        Runs the shared ``TaintAnalysisService`` once per pipeline and stores
+        the results in ``context.taint_paths`` for consumption by any
+        ``TaintAware`` frame.
+        """
+        try:
+            from warden.analysis.taint.service import TaintAnalysisService
+
+            project_root = self.project_root or context.project_root
+            if not project_root:
+                return
+
+            # Read taint config from frames_config.security.taint
+            taint_config: dict = {}
+            if hasattr(self.config, "frames_config") and self.config.frames_config:
+                taint_config = self.config.frames_config.get("security", {}).get("taint", {})
+
+            from pathlib import Path as _Path
+
+            service = TaintAnalysisService(
+                project_root=_Path(str(project_root)),
+                taint_config=taint_config,
+            )
+            context.taint_paths = await service.analyze_all_async(code_files)
+        except Exception as e:
+            logger.warning("taint_population_failed", error=str(e))
+
+    async def _populate_lsp_audit_async(self, context: PipelineContext) -> None:
+        """Phase 0.8: Validate CodeGraph edges via LSP (optional, zero LLM cost).
+
+        Only runs if a CodeGraph was built in Phase 0.7 and LSP is available.
+        Stores results in ``context.chain_validation``.
+        Hard-capped at 30 seconds to prevent scan stalls.
+        """
+        if not context.code_graph:
+            return
+
+        # Config-level skip
+        if hasattr(self, "config") and self.config and not getattr(self.config, "enable_lsp_audit", True):
+            logger.debug("lsp_audit_skipped", reason="disabled_by_config")
+            return
+
+        try:
+            import asyncio as _asyncio
+
+            from warden.lsp.audit_service import LSPAuditService
+
+            project_root = self.project_root or context.project_root
+            service = LSPAuditService(project_root=str(project_root) if project_root else None)
+
+            if not await service.health_check_async():
+                logger.debug("lsp_audit_skipped", reason="lsp_unavailable")
+                return
+
+            # Hard cap: entire LSP phase must finish within 30 seconds
+            chain_validation = await _asyncio.wait_for(
+                service.validate_dependency_chain_async(context.code_graph),
+                timeout=30.0,
+            )
+            context.chain_validation = chain_validation
+
+            # Persist to disk (matches pre_analysis_phase.py pattern)
+            try:
+                from warden.analysis.services.intelligence_saver import IntelligenceSaver
+
+                _root = self.project_root or context.project_root
+                if _root:
+                    from pathlib import Path as _Path
+
+                    IntelligenceSaver(_Path(str(_root))).save_chain_validation(chain_validation)
+            except Exception as exc:
+                logger.warning("chain_validation_save_failed", error=str(exc))
+
+            logger.info(
+                "lsp_audit_completed",
+                confirmed=chain_validation.confirmed,
+                unconfirmed=chain_validation.unconfirmed,
+                dead_symbols=len(chain_validation.dead_symbols),
+            )
+        except TimeoutError:
+            logger.warning("lsp_audit_timeout", timeout=30.0)
+        except Exception as e:
+            logger.warning("lsp_audit_failed", error=str(e))
+
+    # ------------------------------------------------------------------
+    # Single-tier provider triage bypass helpers
+    # ------------------------------------------------------------------
+
+    def _detect_primary_provider(self) -> str:
+        """Return the lowercase provider name of the primary LLM client."""
+        client = self.llm_service
+        if client is None:
+            return ""
+
+        # OrchestratedLlmClient wraps a smart_client
+        inner = getattr(client, "_smart_client", None) or getattr(client, "smart_client", None)
+        if inner:
+            return str(getattr(inner, "provider", "")).lower()
+        return str(getattr(client, "provider", "")).lower()
+
+    def _is_single_tier_provider(self) -> bool:
+        """True when the primary provider is a CLI-tool (subprocess-based)."""
+        from warden.llm.factory import SINGLE_TIER_PROVIDERS
+        from warden.llm.types import LlmProvider
+
+        provider_str = self._detect_primary_provider()
+        if not provider_str:
+            return False
+        try:
+            return LlmProvider(provider_str) in SINGLE_TIER_PROVIDERS
+        except ValueError:
+            return False
+
+    def _apply_heuristic_triage(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
+        """Assign triage lanes using heuristics only (zero LLM calls).
+
+        Safe files go to FAST lane; everything else goes to MIDDLE lane so
+        that all validation frames still run — there is no coverage loss.
+        """
+        import time
+
+        from warden.analysis.domain.triage_heuristics import is_heuristic_safe
+        from warden.analysis.domain.triage_models import RiskScore, TriageDecision, TriageLane
+
+        start = time.time()
+        decisions: dict[str, dict] = {}
+        fast_count = 0
+
+        for cf in code_files:
+            if is_heuristic_safe(cf):
+                lane = TriageLane.FAST
+                score = 0.0
+                reason = "Heuristic bypass: safe file"
+                fast_count += 1
+            else:
+                lane = TriageLane.MIDDLE
+                score = 5.0
+                reason = "Heuristic bypass: non-trivial file"
+
+            decision = TriageDecision(
+                file_path=str(cf.path),
+                lane=lane,
+                risk_score=RiskScore(score=score, confidence=1.0, reasoning=reason, category="heuristic"),
+                processing_time_ms=(time.time() - start) * 1000,
+            )
+            decisions[str(cf.path)] = decision.model_dump()
+
+        context.triage_decisions = decisions
+
+        duration_ms = (time.time() - start) * 1000
+        logger.info(
+            "heuristic_triage_completed",
+            total=len(code_files),
+            fast=fast_count,
+            middle=len(code_files) - fast_count,
+            duration_ms=f"{duration_ms:.1f}",
+        )
+
+        context.add_phase_result(
+            "TRIAGE",
+            {
+                "mode": "heuristic_bypass",
+                "total_files": len(code_files),
+                "fast_lane": fast_count,
+                "middle_lane": len(code_files) - fast_count,
+                "deep_lane": 0,
+                "duration_ms": duration_ms,
+            },
+        )
+
+        if self._progress_callback:
+            self._progress_callback(
+                "triage_completed",
+                {
+                    "duration": f"{duration_ms / 1000:.2f}s",
+                    "mode": "heuristic_bypass",
+                    "stats": {"fast": fast_count, "middle": len(code_files) - fast_count, "deep": 0},
+                },
+            )
 
     def _finalize_pipeline_status(self, context: PipelineContext, pipeline: ValidationPipeline) -> None:
         """Update pipeline status based on results and capture LLM usage."""

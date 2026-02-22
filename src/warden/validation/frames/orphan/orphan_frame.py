@@ -15,6 +15,8 @@ NEW: LLM-powered intelligent filtering (optional)
 Priority: MEDIUM (warning)
 """
 
+import fnmatch
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,7 +34,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
-from warden.validation.domain.mixins import BatchExecutable
+from warden.validation.domain.mixins import BatchExecutable, LSPAware, ProjectContextAware
 
 # Add current directory to path to allow importing sibling modules
 current_dir = str(Path(__file__).parent)
@@ -47,7 +49,7 @@ from warden.shared.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 
-class OrphanFrame(ValidationFrame, BatchExecutable):
+class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAware):
     """
     Orphan code validation frame - Detects dead and unused code.
 
@@ -104,9 +106,20 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
         # LLM filter (lazy initialization)
         self.llm_filter: LLMOrphanFilter | None = None
 
+        # LSP context (injected by FrameRunner for LSPAware frames)
+        self._lsp_context: dict[str, Any] | None = None
+
         # Log if enabled but defer creation until execution (when llm_service is injected)
         if self.use_llm_filter:
             logger.info("llm_orphan_filter_enabled", mode="intelligent_filtering")
+
+    # ProjectContextAware implementation: allow FrameRunner to inject context
+    def set_project_context(self, context: Any) -> None:  # type: ignore[override]
+        self.project_context = context
+
+    # LSPAware implementation: receive dead symbols from LSP audit
+    def set_lsp_context(self, lsp_context: dict[str, Any]) -> None:
+        self._lsp_context = lsp_context
 
     async def execute_batch_async(self, code_files: list[CodeFile]) -> list[FrameResult]:
         """
@@ -218,6 +231,18 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
             for path, findings in findings_map.items():
                 code_file = valid_files_map[path]
                 final_findings_map[path] = self._filter_findings(findings, code_file)
+
+        # 2.5. Enrich with LSP dead symbols (if available)
+        # NOTE: Mutation applied to final_findings_map (post-filter) to avoid
+        # modifying objects that may be excluded during filtering.
+        if self._lsp_context:
+            lsp_dead = self._lsp_context.get("dead_symbols", [])
+            if lsp_dead:
+                logger.info("lsp_dead_symbols_available", count=len(lsp_dead))
+                for _path, findings_list in list(final_findings_map.items()):
+                    for finding in findings_list:
+                        if finding.name in lsp_dead:
+                            finding.reason = f"[LSP-confirmed] {finding.reason}"
 
         # 3. Result Construction Phase
         for path, filtered_findings in final_findings_map.items():
@@ -515,6 +540,23 @@ class OrphanFrame(ValidationFrame, BatchExecutable):
 
         _, ext = os.path.splitext(code_file.path)
         ext = ext.lower()
+
+        # Skip test files if configured and user context indicates test locations/patterns
+        try:
+            if self.ignore_test_files and getattr(self, "project_context", None):
+                user_ctx = getattr(self.project_context, "spec_analysis", {}).get("user_context", {})
+                # Directory-based skip
+                test_dirs = set((user_ctx.get("structure") or {}).get("tests", []))
+                path_norm = code_file.path.replace("\\", "/")
+                if any((td.rstrip("/") + "/") in path_norm for td in test_dirs if td):
+                    return False
+                # Naming pattern-based skip
+                patterns = (user_ctx.get("testing") or {}).get("naming", [])
+                base = os.path.basename(code_file.path)
+                if any(fnmatch.fnmatch(base, pat) for pat in patterns):
+                    return False
+        except Exception as e:
+            logger.debug("orphan_applicability_context_parse_failed", error=str(e))
 
         # Supported extensions: Python (native) + Universal AST languages
         supported_extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".cs"}

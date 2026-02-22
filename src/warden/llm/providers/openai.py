@@ -338,11 +338,15 @@ class OpenAIClient(ILlmClient):
                     "severity": "critical|high|medium",
                     "message": "Short description",
                     "line_number": 1,
-                    "detail": "Detailed explanation of the exploit vector"
+                    "detail": "Detailed explanation of the exploit vector",
+                    "source": "Where tainted data enters, e.g. request.args['id'] (line 14)",
+                    "sink": "Where tainted data is consumed unsafely, e.g. cursor.execute() (line 45)",
+                    "data_flow": ["function_or_variable_names", "showing", "the path"]
                 }}
             ]
         }}
 
+        The source, sink, and data_flow fields are optional but highly valuable for triage.
         If no issues found, return {{ "findings": [] }}.
 
         Code:
@@ -359,7 +363,12 @@ class OpenAIClient(ILlmClient):
                 return {"findings": []}
 
             parsed = parse_json_from_llm(response.content)
-            return parsed or {"findings": []}
+            if not parsed:
+                return {"findings": []}
+
+            # Enrich findings with MachineContext from structured LLM output
+            self._enrich_findings_from_llm(parsed)
+            return parsed
         except (RuntimeError, ValueError, json.JSONDecodeError) as e:
             # Fallback to empty findings on failure to prevent crash
             from warden.shared.infrastructure.logging import get_logger

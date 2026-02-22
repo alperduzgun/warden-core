@@ -167,6 +167,56 @@ class TestVerifyFindingsAsync:
         assert args[0][0] == "progress_update"
 
     @pytest.mark.asyncio
+    async def test_frame_status_corrected_after_all_dropped(self):
+        """Frame status corrected to 'passed' when all findings are dropped by verifier."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        f2 = make_finding("F2")
+        fr = make_frame_result("sec", [f1, f2], status="failed")
+        ctx.frame_results = {"sec": {"result": fr}}
+
+        # Verifier rejects all findings
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = []
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        assert len(fr.findings) == 0
+        assert fr.status == "passed"
+
+    @pytest.mark.asyncio
+    async def test_frame_status_stays_failed_with_surviving_findings(self):
+        """Frame status stays 'failed' when some findings survive verification."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        f2 = make_finding("F2")
+        fr = make_frame_result("sec", [f1, f2], status="failed")
+        ctx.frame_results = {"sec": {"result": fr}}
+
+        # Verifier keeps F1 only
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = [
+            {"id": "F1", "severity": "medium", "message": "ok"}
+        ]
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        assert len(fr.findings) == 1
+        assert fr.status == "failed"
+
+    @pytest.mark.asyncio
     async def test_exception_swallowed(self):
         """Verifier exception doesn't propagate — method completes."""
         ctx = make_context()
@@ -182,6 +232,86 @@ class TestVerifyFindingsAsync:
         ):
             # Should not raise
             await proc.verify_findings_async(ctx)
+
+    @pytest.mark.asyncio
+    async def test_validated_issues_synced_after_verification(self):
+        """validated_issues are filtered to match surviving findings after verification."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        f2 = make_finding("F2")
+        fr = make_frame_result("sec", [f1, f2])
+        ctx.frame_results = {"sec": {"result": fr}}
+        # Simulate pre-existing validated_issues (set by result_aggregator)
+        ctx.validated_issues = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+            {"id": "F2", "severity": "medium", "message": "ok"},
+        ]
+
+        # Verifier drops F2
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+        ]
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        # validated_issues should only contain F1
+        assert len(ctx.validated_issues) == 1
+        assert ctx.validated_issues[0]["id"] == "F1"
+
+    @pytest.mark.asyncio
+    async def test_validated_issues_empty_when_all_dropped(self):
+        """validated_issues emptied when all findings dropped by verification."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        fr = make_frame_result("sec", [f1])
+        ctx.frame_results = {"sec": {"result": fr}}
+        ctx.validated_issues = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+        ]
+
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = []
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        assert len(ctx.validated_issues) == 0
+
+    @pytest.mark.asyncio
+    async def test_validated_issues_untouched_when_empty(self):
+        """Empty validated_issues are not modified."""
+        ctx = make_context()
+        f1 = make_finding("F1")
+        fr = make_frame_result("sec", [f1])
+        ctx.frame_results = {"sec": {"result": fr}}
+        ctx.validated_issues = []
+
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = [
+            {"id": "F1", "severity": "medium", "message": "ok"},
+        ]
+
+        proc = _make_processor(llm_service=MagicMock())
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        assert ctx.validated_issues == []
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +536,89 @@ class TestEnsureStateConsistency:
 
         assert pipeline.frames_passed == 2
         assert pipeline.frames_failed == 1
+
+    def test_stale_failed_frame_corrected_to_passed(self):
+        """Frame status='failed' but 0 remaining findings → corrected to 'passed'."""
+        ctx = make_context()
+        # Frame was originally "failed" but all findings were removed by FP filtering
+        fr = make_frame_result("sec", [], status="failed")
+        ctx.frame_results = {"sec": {"result": fr}}
+
+        pipeline = make_pipeline(status=PipelineStatus.FAILED)
+        proc = _make_processor()
+        proc.ensure_state_consistency(ctx, pipeline)
+
+        assert fr.status == "passed"
+        assert pipeline.frames_passed == 1
+        assert pipeline.frames_failed == 0
+
+    def test_stale_failed_pipeline_corrected_to_completed(self):
+        """Pipeline FAILED but all frames have 0 findings → corrected to COMPLETED."""
+        ctx = make_context()
+        fr1 = make_frame_result("sec", [], status="failed")
+        fr2 = make_frame_result("res", [], status="failed")
+        ctx.frame_results = {
+            "sec": {"result": fr1},
+            "res": {"result": fr2},
+        }
+
+        pipeline = make_pipeline(status=PipelineStatus.FAILED)
+        proc = _make_processor()
+        proc.ensure_state_consistency(ctx, pipeline)
+
+        assert fr1.status == "passed"
+        assert fr2.status == "passed"
+        assert pipeline.status == PipelineStatus.COMPLETED
+        assert pipeline.frames_passed == 2
+        assert pipeline.frames_failed == 0
+
+    def test_mixed_frames_after_filtering(self):
+        """One frame filtered to 0, another still has findings → correct mixed state."""
+        ctx = make_context()
+        fr_clean = make_frame_result("sec", [], status="failed")  # stale
+        fr_dirty = make_frame_result("res", [make_finding("R1")], status="failed")
+        ctx.frame_results = {
+            "sec": {"result": fr_clean},
+            "res": {"result": fr_dirty},
+        }
+
+        pipeline = make_pipeline(status=PipelineStatus.FAILED)
+        proc = _make_processor()
+        proc.ensure_state_consistency(ctx, pipeline)
+
+        assert fr_clean.status == "passed"
+        assert fr_dirty.status == "failed"
+        assert pipeline.frames_passed == 1
+        assert pipeline.frames_failed == 1
+        assert pipeline.status == PipelineStatus.FAILED
+
+    def test_pipeline_not_corrected_when_errors_exist(self):
+        """Pipeline FAILED with errors stays FAILED even if no frame findings."""
+        ctx = make_context()
+        ctx.errors = ["Something went wrong"]
+        fr = make_frame_result("sec", [], status="failed")
+        ctx.frame_results = {"sec": {"result": fr}}
+
+        pipeline = make_pipeline(status=PipelineStatus.FAILED)
+        proc = _make_processor()
+        proc.ensure_state_consistency(ctx, pipeline)
+
+        # Frame status corrected but pipeline stays FAILED due to errors
+        assert fr.status == "passed"
+        assert pipeline.status == PipelineStatus.FAILED
+
+    def test_completed_with_failures_corrected(self):
+        """COMPLETED_WITH_FAILURES + 0 findings → corrected to COMPLETED."""
+        ctx = make_context()
+        fr = make_frame_result("sec", [], status="failed")
+        ctx.frame_results = {"sec": {"result": fr}}
+
+        pipeline = make_pipeline(status=PipelineStatus.COMPLETED_WITH_FAILURES)
+        proc = _make_processor()
+        proc.ensure_state_consistency(ctx, pipeline)
+
+        assert fr.status == "passed"
+        assert pipeline.status == PipelineStatus.COMPLETED
 
 
 # ---------------------------------------------------------------------------

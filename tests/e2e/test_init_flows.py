@@ -165,6 +165,21 @@ class TestInitFileCreation:
             # Should have comments or placeholders
             assert "Warden" in content or "#" in content or "API" in content
 
+    def test_init_creates_context_yaml(self, runner, tmp_path, monkeypatch):
+        """Init generates .warden/context.yaml with basic keys."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("WARDEN_NON_INTERACTIVE", "true")
+        (tmp_path / "requirements.txt").write_text("flask>=2.0\n")
+
+        result = runner.invoke(app, ["init", "--force", "--skip-mcp"])
+        assert result.exit_code == 0
+
+        ctx_path = tmp_path / ".warden" / "context.yaml"
+        assert ctx_path.exists(), "context.yaml should be created by init"
+        content = ctx_path.read_text()
+        for key in ("structure:", "style:", "testing:", "commands:"):
+            assert key in content
+
 
 # ============================================================================
 # warden init - Project Detection

@@ -1,10 +1,77 @@
+# Warden Ignore - Single source of truth for file exclusions
+# Uses gitignore syntax. Applied at discovery level by FileDiscoverer.
+
+# === Project-specific ===
 .git/
 .warden/
-__pycache__/
-tests/
 Formula/
 clients/
 src/warden_rust/
-**/*.rs
 warden_rust/
-# examples/
+**/*.rs
+
+# === Tests & fixtures ===
+tests/
+**/test_fixtures/
+**/testdata/
+**/__mocks__/
+**/fixtures/
+
+# === Build outputs ===
+build/
+dist/
+out/
+target/
+bin/
+obj/
+examples/
+
+# === Dependencies ===
+node_modules/
+vendor/
+packages/
+Pods/
+
+# === Python environments ===
+venv/
+.venv/
+env/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+
+# === IDE and tools ===
+.idea/
+.vscode/
+
+# === Documentation & generated ===
+docs/
+generated/
+.gen/
+baseline/
+
+# === Auto-generated code ===
+*.generated.*
+*_pb2.py
+*_pb2_grpc.py
+*.pb.go
+*.g.dart
+*.freezed.dart
+_version.py
+
+# === Minified/bundled ===
+*.min.js
+*.min.css
+*.bundle.js
+*.chunk.js
+
+# === Lock files ===
+package-lock.json
+yarn.lock
+poetry.lock
+Cargo.lock
+Gemfile.lock
+
+# === Migrations ===
+**/migrations/
+**/alembic/versions/

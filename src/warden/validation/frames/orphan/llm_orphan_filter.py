@@ -298,15 +298,42 @@ class LLMOrphanFilter:
             items_to_process=sum(len(b) for b in batches),
         )
 
-        # 3. Process batches
+        # 3. Process batches with circuit breaker
         results_map: dict[str, list[OrphanFinding]] = cached_results
+        consecutive_empty = 0
+        max_consecutive_empty = 3
 
         for i, batch in enumerate(batches):
+            # Circuit breaker: skip remaining batches after repeated LLM failures
+            if consecutive_empty >= max_consecutive_empty:
+                remaining = len(batches) - i
+                skipped = sum(len(b) for b in batches[i:])
+                logger.warning(
+                    "circuit_breaker_triggered",
+                    remaining_batches=remaining,
+                    skipped_findings=skipped,
+                )
+                for remaining_batch in batches[i:]:
+                    for f_path, finding in remaining_batch:
+                        self._cache_pattern_decision(
+                            finding,
+                            f_path,
+                            is_true_orphan=False,
+                            reasoning="Circuit breaker: LLM unavailable",
+                        )
+                break
+
             logger.info("processing_smart_batch", index=i + 1, total=len(batches), items=len(batch))
 
             try:
                 # Process via LLM
                 batch_results = await self._filter_multi_file_batch(batch, code_files, project_context)
+
+                # Track consecutive empty results for circuit breaker
+                if batch_results:
+                    consecutive_empty = 0
+                else:
+                    consecutive_empty += 1
 
                 # Redistribute results & update cache
                 # Note: filter_multi_file_batch returns only TRUE orphans
@@ -331,10 +358,16 @@ class LLMOrphanFilter:
                         )
 
             except Exception as e:
+                consecutive_empty += 1
                 logger.error("smart_batch_failed", batch=i, error=str(e))
-                # Fallback: keep all as potential orphans (conservative)
+                # Fallback: cache all as false positives (conservative)
                 for f_path, finding in batch:
-                    results_map[f_path].append(finding)
+                    self._cache_pattern_decision(
+                        finding,
+                        f_path,
+                        is_true_orphan=False,
+                        reasoning=f"LLM batch error: {e!s}",
+                    )
 
         return results_map
 
@@ -632,11 +665,16 @@ class LLMOrphanFilter:
                     )
                     await self._backoff(attempt)
                 else:
-                    # Max retries exceeded, re-raise
-                    raise
+                    # Max retries exceeded — return empty (conservative: no orphans)
+                    logger.warning(
+                        "llm_filter_max_retries_exceeded",
+                        batch_size=len(batch),
+                        error=str(e),
+                    )
+                    return []
 
         # Should never reach here, but satisfy type checker
-        return batch
+        return []
 
     async def _call_llm(
         self,
@@ -857,10 +895,11 @@ Now analyze the findings and return the JSON.
         Raises:
             ValueError: If parsing fails or count mismatch
         """
-        try:
-            if not llm_response or not llm_response.strip():
-                raise ValueError("Empty response from LLM")
+        # Empty response = provider error, should trigger retry logic
+        if not llm_response or not llm_response.strip():
+            raise ValueError("Empty response from LLM")
 
+        try:
             # Extract JSON from response (LLM may wrap in markdown code blocks)
             json_str = self._extract_json(llm_response)
             if not json_str:

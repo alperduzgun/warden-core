@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0.0",
+  "totalChainsChecked": 9,
+  "confirmed": 0,
+  "unconfirmed": 0,
+  "errors": 9,
+  "entries": [
+    {
+      "sourceFqn": "auth_service.py",
+      "targetFqn": "os",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "auth_service.py",
+      "targetFqn": "sys",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "auth_service.py",
+      "targetFqn": "logging",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "auth_service.py",
+      "targetFqn": "pathlib.Path",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "auth_service.py",
+      "targetFqn": "typing.Optional",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "auth_service.py",
+      "targetFqn": "auth_service.py::UserAuthService",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "auth_service.py::UserAuthService",
+      "targetFqn": "auth_service.py::UserAuthService.__init__",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "auth_service.py::UserAuthService",
+      "targetFqn": "auth_service.py::UserAuthService.authenticate",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "auth_service.py::UserAuthService",
+      "targetFqn": "auth_service.py::UserAuthService.create_session",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    }
+  ],
+  "deadSymbols": [],
+  "lspAvailable": true,
+  "generated_at": "2026-02-21T23:10:35.107718+00:00"
+}

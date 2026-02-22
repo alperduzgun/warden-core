@@ -277,6 +277,10 @@ class PythonASTProvider(IASTProvider):
                     # Handle cases like enum.Enum
                     base_names.append(getattr(base, "attr", ""))
             attributes["bases"] = base_names
+            attributes["decorators"] = [
+                d.id if isinstance(d, ast.Name) else ast.unparse(d) if hasattr(ast, "unparse") else str(d)
+                for d in py_node.decorator_list
+            ]
         elif isinstance(py_node, ast.AnnAssign):
             # Store type annotation for field type extraction
             if py_node.annotation:
