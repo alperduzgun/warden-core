@@ -51,7 +51,7 @@ class TestLLMProviderSwitch:
         assert config["llm"]["provider"] == "groq"
 
         # Verify model was auto-updated to groq default
-        assert config["llm"]["model"] == "llama-3.1-70b-versatile"
+        assert config["llm"]["model"] == "llama-3.3-70b-versatile"
 
     def test_config_set_llm_provider_openai(self, runner, isolated_project, monkeypatch):
         """Switch provider to openai."""
@@ -300,7 +300,7 @@ class TestLLMProviderSwitch:
             "qwencode": "qwen2.5-coder-32b-instruct",
             "anthropic": "claude-3-5-sonnet-20241022",
             "openai": "gpt-4o",
-            "groq": "llama-3.1-70b-versatile",
+            "groq": "llama-3.3-70b-versatile",
             "ollama": "qwen2.5-coder:0.5b",
         }
 

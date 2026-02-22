@@ -25,7 +25,7 @@ class GroqClient(ILlmClient):
             raise ValueError("Groq API key is required")
 
         self._api_key = config.api_key
-        self._default_model = config.default_model or "llama-3.1-70b-versatile"
+        self._default_model = config.default_model or "llama-3.3-70b-versatile"
         self._base_url = config.endpoint or "https://api.groq.com/openai/v1"
 
     @property

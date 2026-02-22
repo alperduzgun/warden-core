@@ -18,7 +18,7 @@ llm:
       enabled: true
       api_key: ${GROQ_API_KEY}
       endpoint: https://api.groq.com/openai/v1
-      default_model: llama-3.1-70b-versatile
+      default_model: llama-3.3-70b-versatile
 
 # Minimal Stages for Fast Feedback
 stages:

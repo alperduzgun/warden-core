@@ -166,7 +166,7 @@ DEFAULT_MODELS = {
     LlmProvider.ANTHROPIC: "claude-3-5-sonnet-20241022",
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
-    LlmProvider.GROQ: "llama-3.1-70b-versatile",
+    LlmProvider.GROQ: "llama-3.3-70b-versatile",
     LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
     LlmProvider.OLLAMA: "qwen2.5-coder:0.5b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
