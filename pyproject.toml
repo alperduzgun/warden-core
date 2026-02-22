@@ -59,7 +59,7 @@ semantic = [
 ]
 grpc = [
     "grpcio>=1.64.0,<1.65.0",
-    "grpcio-tools>=1.64.0,<1.65.0",
+    "grpcio-tools>=1.64.0,<1.79.0",
 ]
 dev = [
     "pytest==8.2.2",
