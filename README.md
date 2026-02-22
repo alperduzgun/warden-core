@@ -312,7 +312,16 @@ Warden doesn't just check *correctness*; it checks *appropriateness*.
     *   *Crypto Wallet:* 🛡️ Paranoid Mode (No http, strict types)
     *   *CLI Tool:* ⚡ Relaxed Mode (Allow print statements, rapid I/O)
 
-### 14. 🧠 LLM Audit Context & Code Intelligence (New!)
+### 14. 🔒 Native GitHub Code Scanning Integration
+Warden appears as a **first-class security tool** in GitHub's Security tab — right next to CodeQL. Every finding surfaces as a native Code Scanning alert with inline annotations on Pull Requests.
+*   **Zero Config:** Add the workflow, push — Warden alerts appear automatically.
+*   **SARIF 2.1.0:** Industry-standard output that GitHub, GitLab, and Azure DevOps understand natively.
+*   **PR Annotations:** Findings appear as inline comments on the exact lines that need attention.
+*   **Alert Tracking:** GitHub tracks finding lifecycle (open/fixed/dismissed) across commits — Warden benefits from all of this for free.
+
+> **Result:** Your team sees Warden findings in the same Security tab they already use for CodeQL, Dependabot, and secret scanning. No context-switching, no extra dashboards.
+
+### 15. 🧠 LLM Audit Context & Code Intelligence (New!)
 Traditional LLM bots run "blind" reading text streams without structure. Warden acts differently: it maps your codebase deterministically to provide **Zero-Hallucination Audit Context** for LLMs.
 *   **Layer 1 (Dependencies):** Automatically builds a file-to-file structural `DependencyGraph`.
 *   **Layer 2 (Symbol Graph):** Uses AST traversal to extract relationships (`CodeGraph`) meaning Class inheritance, Method calls, and Mixin implementations without LLM token cost.
@@ -496,6 +505,58 @@ Add the following Markdown to your `README.md`. Replace `USER/REPO` with your Gi
 
 ---
 
+## 🔒 GitHub Code Scanning Integration
+
+Warden outputs **SARIF 2.1.0** — the same format used by CodeQL, Semgrep, and other industry tools. When you upload Warden's SARIF report via GitHub Actions, it appears as a **native security tool** in your repository's Security tab.
+
+### What You Get
+
+| Capability | Description |
+| :--- | :--- |
+| **Security Tab Presence** | Warden shows up alongside CodeQL and Dependabot — no extra tooling |
+| **PR Annotations** | Findings appear as inline comments on the exact lines in Pull Requests |
+| **Alert Lifecycle** | GitHub tracks open/fixed/dismissed state across commits automatically |
+| **SARIF Compliance** | Works with any CI that supports SARIF (GitHub, GitLab, Azure DevOps) |
+| **Severity Mapping** | Warden severity levels map directly to GitHub alert priorities |
+
+### CI/CD Setup (GitHub Actions)
+
+Add this to your existing workflow:
+
+```yaml
+    - name: Run Warden Scan
+      env:
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}  # or any supported provider
+        WARDEN_LLM_PROVIDER: "groq"
+      run: |
+        pip install warden-core
+        warden scan . --level standard --format sarif --output warden.sarif
+
+    - name: Upload to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: warden.sarif
+        category: warden-security
+```
+
+That's it. After the first run, navigate to **Security > Code Scanning** in your repository — Warden will appear as a tool with all findings listed.
+
+### How It Looks
+
+```
+Repository > Security > Code Scanning Alerts
+
+Tool: Warden v2.3.0                          ← Native tool entry
+  ├── security-sql_injection-1    (High)      ← Inline PR annotation
+  ├── security-hardcoded_secret-2 (Critical)  ← Tracked across commits
+  ├── orphan-unused_import-3      (Warning)   ← Auto-dismissed when fixed
+  └── resilience-missing_retry-4  (Medium)    ← Severity from Warden mapping
+```
+
+> **Pro Tip:** Combine with `--diff` mode for incremental scanning — only new findings from your PR appear as annotations, keeping noise to zero.
+
+---
 
 ## ⚙️ Configuration
 
