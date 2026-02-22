@@ -106,6 +106,15 @@ class ReportGenerator:
         self.templates_dir = Path(__file__).parent / "templates"
         self.html_generator = HtmlReportGenerator()
 
+    @staticmethod
+    def _get_version() -> str:
+        try:
+            from warden._version import __version__
+
+            return __version__
+        except Exception:
+            return "0.0.0"
+
     def _get_val(self, obj: Any, key: str, default: Any = None) -> Any:
         """
         Safely get a value from either a dictionary or an object.
@@ -229,7 +238,7 @@ class ReportGenerator:
                     "tool": {
                         "driver": {
                             "name": "Warden",
-                            "semanticVersion": "0.1.0",
+                            "semanticVersion": self._get_version(),
                             "informationUri": "https://github.com/alperduzgun/warden-core",
                             "rules": [],
                         }
