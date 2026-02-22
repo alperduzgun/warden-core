@@ -516,6 +516,17 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         # Add to the front of the list
         configured_providers.insert(0, explicit_provider_override)
 
+    # Sync smart_model with provider override: if provider was explicitly changed
+    # (e.g. WARDEN_LLM_PROVIDER=groq) but smart_model still belongs to a different
+    # provider (e.g. claude-sonnet-*), reset it to the new provider's default.
+    smart_model_explicitly_set = (smart_model_secret and smart_model_secret.found) or (
+        config_override and "smart_model" in config_override
+    )
+    if explicit_provider_override and not smart_model_explicitly_set:
+        provider_default = DEFAULT_MODELS.get(explicit_provider_override)
+        if provider_default and config.smart_model != provider_default:
+            config.smart_model = provider_default
+
     # Set default provider and fallback chain based on what's configured
     if configured_providers:
         config.default_provider = configured_providers[0]
