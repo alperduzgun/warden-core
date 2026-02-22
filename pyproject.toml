@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "warden-core"
-version = "2.2.3"
+version = "2.3.0"
 description = "Warden - AI Code Guardian for comprehensive code validation"
 requires-python = ">=3.10"
 authors = [{name = "Warden Team", email = "warden-core@proton.me"}]
@@ -87,7 +87,7 @@ warden = "warden.main:main"
 
 [tool.setuptools_scm]
 write_to = "src/warden/_version.py"
-fallback_version = "2.2.3"
+fallback_version = "2.3.0"
 
 # ============================================================
 # Ruff - Fast Python linter and formatter
