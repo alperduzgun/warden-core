@@ -1,0 +1,24 @@
+name: Check Runner Hardware
+
+on:
+  push:
+    branches: [ feature/ci-hardware-check ]
+  workflow_dispatch:
+
+jobs:
+  check-hardware:
+    runs-on: ubuntu-latest
+    steps:
+      - name: CPU Specs
+        run: |
+          echo "=== CPU === "
+          lscpu || echo "lscpu failed"
+          echo "Cores: $(nproc)"
+      - name: RAM Specs
+        run: |
+          echo "=== RAM === "
+          free -h || echo "free failed"
+      - name: Disk Specs
+        run: |
+          echo "=== DISK ==="
+          df -h || echo "df failed"
