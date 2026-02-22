@@ -4,19 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# Ensure all strategies are registered on import
+import warden.self_healing.strategies.config_healer
+import warden.self_healing.strategies.import_healer
+import warden.self_healing.strategies.llm_healer
+import warden.self_healing.strategies.model_healer
+import warden.self_healing.strategies.provider_healer
 from warden.self_healing.cache import HealingCache
 from warden.self_healing.classifier import ErrorClassifier
 from warden.self_healing.metrics import HealingMetrics, HealingMetricsCollector
 from warden.self_healing.models import DiagnosticResult, ErrorCategory, HealingRecord
 from warden.self_healing.registry import HealerRegistry
 from warden.shared.infrastructure.logging import get_logger
-
-# Ensure all strategies are registered on import
-import warden.self_healing.strategies.config_healer  # noqa: F401
-import warden.self_healing.strategies.import_healer  # noqa: F401
-import warden.self_healing.strategies.llm_healer  # noqa: F401
-import warden.self_healing.strategies.model_healer  # noqa: F401
-import warden.self_healing.strategies.provider_healer  # noqa: F401
 
 logger = get_logger(__name__)
 

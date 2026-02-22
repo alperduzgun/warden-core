@@ -180,7 +180,7 @@ def _try_pip_install(pip_name: str) -> bool:
         if not mgr.is_venv:
             cmd.append("--break-system-packages")
 
-        result = subprocess.run(cmd, capture_output=True, timeout=120)  # noqa: S603
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
 
         if result.returncode == 0:
             importlib.invalidate_caches()

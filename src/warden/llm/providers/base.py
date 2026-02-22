@@ -182,6 +182,7 @@ class ILlmClient(ABC):
     def _enrich_findings_from_llm(parsed: dict) -> None:
         """Attach machine_context to parsed findings when source/sink/data_flow present."""
         import html
+
         from warden.shared.utils.prompt_sanitizer import PromptSanitizer
 
         for item in parsed.get("findings", []):
@@ -201,7 +202,7 @@ class ILlmClient(ABC):
                 sink = str(sink)
             if sink:
                 sink = html.escape(PromptSanitizer.escape_prompt_injection(sink))
-                
+
             if data_flow and not isinstance(data_flow, list):
                 data_flow = []
             else:

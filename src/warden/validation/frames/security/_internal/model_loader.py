@@ -90,7 +90,7 @@ class ModelPackLoader:
     def _load_yaml_file(cls, path: Path) -> dict[str, Any] | None:
         """Load a single YAML file. Returns None on failure."""
         try:
-            import yaml  # noqa: PLC0415
+            import yaml
 
             with open(path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)

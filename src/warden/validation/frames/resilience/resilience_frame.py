@@ -786,7 +786,7 @@ class ResilienceFrame(ValidationFrame, TaintAware):
             if pctx and hasattr(pctx, "dependency_graph_forward"):
                 rel_path = code_file.path
                 try:
-                    from pathlib import Path as _P  # noqa: PLC0415
+                    from pathlib import Path as _P
 
                     if pctx.project_root:
                         rel_path = str(_P(code_file.path).resolve().relative_to(pctx.project_root))

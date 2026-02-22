@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 # ── Single source of truth for taint configuration defaults ────────────────
 TAINT_DEFAULTS: dict[str, float] = {
     "confidence_threshold": 0.8,   # >= this → HIGH severity + is_blocker
-    "sanitizer_penalty": 0.3,      # multiplied when sanitized (0.0–1.0)
+    "sanitizer_penalty": 0.3,      # multiplied when sanitized (0.0-1.0)
     "propagation_confidence": 0.75, # confidence assigned to propagated taint
     "signal_base_source": 0.65,    # heuristic source detection base
     "signal_base_sink": 0.60,      # heuristic sink detection base
@@ -287,7 +287,7 @@ class TaintAnalyzer:
 
     def __init__(self, catalog: TaintCatalog | None = None, taint_config: dict[str, Any] | None = None) -> None:
         if catalog is None:
-            from warden.validation.frames.security._internal.taint_catalog import (  # noqa: PLC0415
+            from warden.validation.frames.security._internal.taint_catalog import (
                 TaintCatalog as _TaintCatalog,
             )
 
@@ -308,10 +308,10 @@ class TaintAnalyzer:
 
         # Load signal inference engine (graceful — unavailable if signals.yaml missing)
         try:
-            from warden.validation.frames.security._internal.model_loader import (  # noqa: PLC0415
+            from warden.validation.frames.security._internal.model_loader import (
                 ModelPackLoader,
             )
-            from warden.validation.frames.security._internal.signal_inference import (  # noqa: PLC0415
+            from warden.validation.frames.security._internal.signal_inference import (
                 SignalInferenceEngine,
             )
 
@@ -378,11 +378,11 @@ class TaintAnalyzer:
         lines = source_code.splitlines()
         tainted_vars: dict[str, TaintSource] = {}
 
-        # Pass 1 – direct source assignments
+        # Pass 1 - direct source assignments
         for line_num, line in enumerate(lines, 1):
             self._js_collect_sources(line, line_num, tainted_vars)
 
-        # Pass 2 – propagation (handles `const id = query.id` after `const query = req.query`)
+        # Pass 2 - propagation (handles `const id = query.id` after `const query = req.query`)
         for _ in range(5):
             changed = False
             for line_num, line in enumerate(lines, 1):
@@ -391,7 +391,7 @@ class TaintAnalyzer:
             if not changed:
                 break
 
-        # Pass 3 – sink detection
+        # Pass 3 - sink detection
         paths: list[TaintPath] = []
         for line_num, line in enumerate(lines, 1):
             paths.extend(self._js_find_sinks(line, line_num, tainted_vars))
@@ -816,7 +816,7 @@ class TaintAnalyzer:
         tainted_vars: dict[str, TaintSource] = {}
         go_sources = self._catalog.sources.get("go", set())
 
-        # Pass 1 – direct source assignments
+        # Pass 1 - direct source assignments
         for line_num, line in enumerate(lines, 1):
             stripped = line.strip()
             for m in self._RE_GO_ASSIGN.finditer(stripped):
@@ -832,7 +832,7 @@ class TaintAnalyzer:
                             )
                         break
 
-        # Pass 2 – propagation
+        # Pass 2 - propagation
         for _ in range(5):
             changed = False
             for line_num, line in enumerate(lines, 1):
@@ -855,7 +855,7 @@ class TaintAnalyzer:
             if not changed:
                 break
 
-        # Pass 3 – sink detection
+        # Pass 3 - sink detection
         paths: list[TaintPath] = []
         for line_num, line in enumerate(lines, 1):
             paths.extend(self._go_find_sinks(line, line_num, tainted_vars))
@@ -919,7 +919,7 @@ class TaintAnalyzer:
         tainted_vars: dict[str, TaintSource] = {}
         java_sources = self._catalog.sources.get("java", set())
 
-        # Pass 1 – direct source assignments
+        # Pass 1 - direct source assignments
         for line_num, line in enumerate(lines, 1):
             stripped = line.strip()
             for m in self._RE_JAVA_ASSIGN.finditer(stripped):
@@ -935,7 +935,7 @@ class TaintAnalyzer:
                             )
                         break
 
-        # Pass 2 – propagation
+        # Pass 2 - propagation
         for _ in range(5):
             changed = False
             for line_num, line in enumerate(lines, 1):
@@ -958,7 +958,7 @@ class TaintAnalyzer:
             if not changed:
                 break
 
-        # Pass 3 – sink detection
+        # Pass 3 - sink detection
         paths: list[TaintPath] = []
         for line_num, line in enumerate(lines, 1):
             paths.extend(self._java_find_sinks(line, line_num, tainted_vars))

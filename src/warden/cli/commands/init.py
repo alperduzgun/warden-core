@@ -122,7 +122,7 @@ def _generate_ignore_file(root: Path, meta):
 
 def _write_default_taint_catalog(catalog_path: Path) -> None:
     """Write a commented-out taint_catalog.yaml scaffold for user extension."""
-    from warden.validation.frames.security._internal.taint_analyzer import (  # noqa: PLC0415
+    from warden.validation.frames.security._internal.taint_analyzer import (
         JS_SANITIZERS,
         JS_TAINT_SINKS,
         JS_TAINT_SOURCES,
@@ -729,7 +729,7 @@ def init_command(
 
         # Add taint thresholds for security frame (import central defaults)
         if "security" in frames_config:
-            from warden.validation.frames.security._internal.taint_analyzer import TAINT_DEFAULTS  # noqa: PLC0415
+            from warden.validation.frames.security._internal.taint_analyzer import TAINT_DEFAULTS
 
             taint_init = {
                 "confidence_threshold": TAINT_DEFAULTS["confidence_threshold"],

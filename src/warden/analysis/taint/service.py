@@ -80,7 +80,7 @@ class TaintAnalysisService:
         individual files are caught — other files still proceed.
         """
         self._ensure_initialized()
-        assert self._analyzer is not None  # noqa: S101
+        assert self._analyzer is not None
 
         results: dict[str, list[TaintPath]] = {}
         analyzed = 0

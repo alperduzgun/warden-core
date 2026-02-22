@@ -70,14 +70,14 @@ class TaintCatalog:
         hardcoded constants are used (unchanged backward-compatible behaviour).
         """
         # Late import to avoid circular dependency at module level
-        from warden.validation.frames.security._internal.taint_analyzer import (  # noqa: PLC0415
+        from warden.validation.frames.security._internal.taint_analyzer import (
+            _JS_ASSIGN_SINKS,
             JS_SANITIZERS,
             JS_TAINT_SINKS,
             JS_TAINT_SOURCES,
             KNOWN_SANITIZERS,
             TAINT_SINKS,
             TAINT_SOURCES,
-            _JS_ASSIGN_SINKS,
         )
 
         # ── Baseline from hardcoded constants ─────────────────────────────────
@@ -99,7 +99,7 @@ class TaintCatalog:
 
         # ── Union with YAML model packs ───────────────────────────────────────
         try:
-            from warden.validation.frames.security._internal.model_loader import (  # noqa: PLC0415
+            from warden.validation.frames.security._internal.model_loader import (
                 ModelPackLoader,
             )
 
@@ -148,7 +148,7 @@ class TaintCatalog:
             return catalog
 
         try:
-            import yaml  # noqa: PLC0415
+            import yaml
 
             with open(catalog_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)

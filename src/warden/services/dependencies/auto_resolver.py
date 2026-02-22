@@ -72,7 +72,7 @@ def require_package(pip_name: str, import_name: str | None = None) -> bool:
         if not mgr.is_venv:
             cmd.append("--break-system-packages")
 
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             cmd,
             capture_output=True,
             timeout=120,
@@ -97,7 +97,7 @@ def require_package(pip_name: str, import_name: str | None = None) -> bool:
         return False
 
 
-async def resolve_with_llm(error: Exception, context: str = "") -> "DiagnosticResult":
+async def resolve_with_llm(error: Exception, context: str = "") -> DiagnosticResult:  # noqa: F821
     """
     Delegate to SelfHealingDiagnostic for LLM-powered resolution.
 

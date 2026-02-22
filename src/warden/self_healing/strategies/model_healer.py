@@ -109,7 +109,7 @@ def _try_ollama_pull(model_name: str) -> bool:
         console = None
 
     try:
-        result = subprocess.run(  # noqa: S603, S607
+        result = subprocess.run(
             ["ollama", "pull", model_name],
             capture_output=True,
             timeout=60,

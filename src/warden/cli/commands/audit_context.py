@@ -383,8 +383,7 @@ def _render_markdown(
         if issues:
             lines.append("### Known Issues")
             lines.append("")
-            for issue in issues[:50]:
-                lines.append(issue)
+            lines.extend(issues[:50])
             lines.append("")
 
     # --- Dependency graph ---

@@ -13,9 +13,9 @@ from warden.cli.commands.baseline import baseline_app
 from warden.cli.commands.chat import chat_command
 from warden.cli.commands.ci import ci_app
 from warden.cli.commands.ci_config import ci_config_command
+from warden.cli.commands.codex import codex_app
 from warden.cli.commands.config import config_app
 from warden.cli.commands.context import context_app
-from warden.cli.commands.codex import codex_app
 from warden.cli.commands.doctor import doctor as doctor_command
 from warden.cli.commands.init import init_command
 from warden.cli.commands.install import install as install_command

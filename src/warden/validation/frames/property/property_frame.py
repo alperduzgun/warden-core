@@ -232,7 +232,7 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
         findings_map: dict[str, list[Finding]] = {f.path: [] for f in code_files}
 
         try:
-            from warden.llm.types import LlmRequest  # noqa: PLC0415
+            from warden.llm.types import LlmRequest
 
             # Build combined prompt
             parts = []
@@ -295,7 +295,7 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
         if not isinstance(data, list):
             data = [data]
 
-        from warden.llm.types import AnalysisResult  # noqa: PLC0415
+        from warden.llm.types import AnalysisResult
 
         for item in data:
             if not isinstance(item, dict):
