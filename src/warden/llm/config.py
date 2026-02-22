@@ -519,9 +519,11 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     # Sync smart_model with provider override: if provider was explicitly changed
     # (e.g. WARDEN_LLM_PROVIDER=groq) but smart_model still belongs to a different
     # provider (e.g. claude-sonnet-*), reset it to the new provider's default.
-    smart_model_explicitly_set = (smart_model_secret and smart_model_secret.found) or (
-        config_override and "smart_model" in config_override
-    )
+    # config.yaml's smart_model is NOT considered "explicitly set" when provider
+    # was env-var-overridden — the config.yaml model name likely belongs to the
+    # old provider (e.g. claude-sonnet-* in config.yaml but WARDEN_LLM_PROVIDER=groq).
+    # Only WARDEN_SMART_MODEL env var counts as an explicit user choice here.
+    smart_model_explicitly_set = smart_model_secret and smart_model_secret.found
     if explicit_provider_override and not smart_model_explicitly_set:
         provider_default = DEFAULT_MODELS.get(explicit_provider_override)
         if provider_default and config.smart_model != provider_default:
@@ -551,10 +553,12 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             if isinstance(providers, list):
                 config.fast_tier_providers = [LlmProvider(p.strip().lower()) for p in providers if isinstance(p, str)]
 
-        if "smart_model" in config_override:
+        # config.yaml model overrides only apply if provider wasn't changed by env var.
+        # If provider was env-var-overridden, config.yaml models belong to the old provider.
+        if "smart_model" in config_override and not env_provider:
             config.smart_model = config_override["smart_model"]
 
-        if "fast_model" in config_override:
+        if "fast_model" in config_override and not env_provider:
             config.fast_model = config_override["fast_model"]
 
     # FINAL: Env var override for fast tier — always wins (analogous to WARDEN_LLM_PROVIDER handling)
