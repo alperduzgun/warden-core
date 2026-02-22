@@ -5,5 +5,6 @@ include docs/legal/NOTICE
 recursive-include src/warden_rust *
 include src/warden_rust/Cargo.toml
 recursive-include src/warden/templates *
+recursive-include src/warden/llm/prompts/templates *
 recursive-include src/warden/validation/frames/security/models *
 global-exclude *.py[cod] __pycache__ *.so *.dylib
