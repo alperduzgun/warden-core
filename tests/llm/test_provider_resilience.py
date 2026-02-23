@@ -204,9 +204,12 @@ class TestClaudeCodeAvailability:
         mock_process.returncode = 0
         mock_process.communicate = AsyncMock(return_value=(b"claude 1.0.0", b""))
 
-        with mock.patch("shutil.which", return_value="/usr/local/bin/claude"):
-            with mock.patch("asyncio.create_subprocess_exec", return_value=mock_process):
-                result = await client.is_available_async()
+        # Clear nested session env vars (set when running inside Claude Code)
+        clean_env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_ENTRYPOINT", "CLAUDECODE")}
+        with mock.patch.dict(os.environ, clean_env, clear=True):
+            with mock.patch("shutil.which", return_value="/usr/local/bin/claude"):
+                with mock.patch("asyncio.create_subprocess_exec", return_value=mock_process):
+                    result = await client.is_available_async()
         assert result is True
 
 

@@ -1,0 +1,17 @@
+{
+  "orphanFiles": [],
+  "orphanSymbols": [],
+  "brokenImports": [],
+  "circularDeps": [],
+  "unreachableFromEntry": [],
+  "missingMixinImpl": [],
+  "coverage": 0.0,
+  "detectedFramework": "none",
+  "frameworkExcludedCount": 0,
+  "starImports": [],
+  "dynamicImports": [],
+  "typeCheckingOnly": [],
+  "unparseableFiles": [],
+  "testOnlyConsumers": {},
+  "generated_at": "2026-02-23T11:49:52.592514+00:00"
+}

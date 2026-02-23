@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-02-23T12:26:30.199526+00:00",
+  "forward": {},
+  "reverse": {},
+  "orphan_files": [],
+  "stats": {
+    "total_files": 0,
+    "total_edges": 0,
+    "orphan_count": 0
+  },
+  "integrity": {
+    "forward_reverse_match": true,
+    "missing_targets": []
+  }
+}

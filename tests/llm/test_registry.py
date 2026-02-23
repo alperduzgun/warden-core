@@ -65,13 +65,10 @@ def test_registry_available_count():
 
 def test_registry_create_anthropic():
     """Registry should create Anthropic client"""
-    config = ProviderConfig(
-        enabled=True,
-        api_key="test-key",
-        default_model="claude-3-5-sonnet-20241022"
-    )
+    config = ProviderConfig(enabled=True, api_key="test-key", default_model="claude-3-5-sonnet-20241022")
 
     from warden.llm.providers.anthropic import AnthropicClient
+
     client = ProviderRegistry.create(LlmProvider.ANTHROPIC, config)
 
     assert isinstance(client, AnthropicClient)
@@ -80,13 +77,10 @@ def test_registry_create_anthropic():
 
 def test_registry_create_ollama():
     """Registry should create Ollama client"""
-    config = ProviderConfig(
-        enabled=True,
-        endpoint="http://localhost:11434",
-        default_model="qwen2.5-coder:0.5b"
-    )
+    config = ProviderConfig(enabled=True, endpoint="http://localhost:11434", default_model="qwen2.5-coder:3b")
 
     from warden.llm.providers.ollama import OllamaClient
+
     client = ProviderRegistry.create(LlmProvider.OLLAMA, config)
 
     assert isinstance(client, OllamaClient)
@@ -95,13 +89,10 @@ def test_registry_create_ollama():
 
 def test_registry_create_openai():
     """Registry should create OpenAI client (not Azure)"""
-    config = ProviderConfig(
-        enabled=True,
-        api_key="test-key",
-        default_model="gpt-4o"
-    )
+    config = ProviderConfig(enabled=True, api_key="test-key", default_model="gpt-4o")
 
     from warden.llm.providers.openai import OpenAIClient
+
     client = ProviderRegistry.create(LlmProvider.OPENAI, config)
 
     assert isinstance(client, OpenAIClient)
@@ -111,13 +102,11 @@ def test_registry_create_openai():
 def test_registry_create_azure_openai():
     """Registry should create Azure OpenAI client with correct provider"""
     config = ProviderConfig(
-        enabled=True,
-        api_key="test-key",
-        endpoint="https://test.openai.azure.com",
-        default_model="gpt-4o"
+        enabled=True, api_key="test-key", endpoint="https://test.openai.azure.com", default_model="gpt-4o"
     )
 
     from warden.llm.providers.openai import OpenAIClient
+
     client = ProviderRegistry.create(LlmProvider.AZURE_OPENAI, config)
 
     assert isinstance(client, OpenAIClient)
@@ -132,9 +121,7 @@ def test_registry_create_all_providers():
         LlmProvider.QWENCODE: ProviderConfig(enabled=True, api_key="test"),
         LlmProvider.OPENAI: ProviderConfig(enabled=True, api_key="test"),
         LlmProvider.AZURE_OPENAI: ProviderConfig(
-            enabled=True,
-            api_key="test",
-            endpoint="https://test.openai.azure.com"
+            enabled=True, api_key="test", endpoint="https://test.openai.azure.com"
         ),
         LlmProvider.GROQ: ProviderConfig(enabled=True, api_key="test"),
         LlmProvider.OLLAMA: ProviderConfig(enabled=True),

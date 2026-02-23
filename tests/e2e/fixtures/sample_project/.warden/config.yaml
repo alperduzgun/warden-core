@@ -6,8 +6,8 @@ project:
 
 llm:
   provider: "ollama"
-  model: "qwen2.5-coder:0.5b"
-  fast_model: "qwen2.5-coder:0.5b"
+  model: "qwen2.5-coder:3b"
+  fast_model: "qwen2.5-coder:3b"
 
 analysis:
   level: "basic"

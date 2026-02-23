@@ -1,10 +1,15 @@
 {
   "orphanFiles": [],
-  "orphanSymbols": [],
-  "brokenImports": [
-    "pathlib.Path",
-    "typing.Optional"
+  "orphanSymbols": [
+    "examples/messy_code.py::very_long_function_name_that_is_hard_to_read_and_understand",
+    "examples/messy_code.py::another_function",
+    "examples/messy_code.py::function_with_magic_numbers",
+    "examples/messy_code.py::old_style_formatting",
+    "examples/messy_code.py::format_method_example",
+    "examples/messy_code.py::manual_list_building",
+    "examples/messy_code.py::redundant_else_example"
   ],
+  "brokenImports": [],
   "circularDeps": [],
   "unreachableFromEntry": [],
   "missingMixinImpl": [],
@@ -16,5 +21,5 @@
   "typeCheckingOnly": [],
   "unparseableFiles": [],
   "testOnlyConsumers": {},
-  "generated_at": "2026-02-21T23:10:34.903803+00:00"
+  "generated_at": "2026-02-23T13:40:57.783734+00:00"
 }

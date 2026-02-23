@@ -32,7 +32,7 @@ frames:
   - orphan
   - fuzz
   - stress
-  - architecturalconsistency
+  - architecture
   - property
   - antipattern
 
@@ -118,9 +118,9 @@ frames_config:
       - concurrent_access
 
   # ============================================
-  # ARCHITECTURAL CONSISTENCY FRAME
+  # ARCHITECTURE FRAME
   # ============================================
-  architecturalconsistency:
+  architecture:
     enabled: false  # Optional
     priority: "low"
     is_blocker: false

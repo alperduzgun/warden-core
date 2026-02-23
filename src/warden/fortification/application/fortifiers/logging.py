@@ -214,6 +214,11 @@ class LoggingFortifier(BaseFortifier):
     @staticmethod
     def _build_logging_prompt(code_file: CodeFile, suggestions: list[LoggingSuggestion]) -> str:
         """Build LLM prompt for logging."""
+        from warden.shared.utils.llm_context import BUDGET_FORTIFICATION, prepare_code_for_llm, resolve_token_budget
+
+        budget = resolve_token_budget(BUDGET_FORTIFICATION)
+        truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
+
         issues_list = "\n".join(f"- Line {s.line_number}: {s.description} ({s.type})" for s in suggestions)
 
         return f"""Add structured logging to this Python code:
@@ -223,7 +228,7 @@ Issues found:
 
 Code:
 ```python
-{code_file.content}
+{truncated}
 ```
 
 Use structlog for logging. Add logger = structlog.get_logger() at the top.

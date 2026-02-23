@@ -1,0 +1,9 @@
+{
+  "version": "2.0",
+  "created_at": null,
+  "updated_at": "2026-02-23T11:50:48.701784+00:00",
+  "modules": [],
+  "total_findings": 0,
+  "total_debt": 0,
+  "migrated_from_legacy": false
+}

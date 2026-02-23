@@ -1,0 +1,88 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": 1771847392.577624,
+  "facts": [
+    {
+      "category": "project_purpose",
+      "subject": "spec_test_dummy",
+      "predicate": "has_purpose",
+      "object": "Discovery failed",
+      "id": "project_purpose:global",
+      "source": "ProjectPurposeDetector",
+      "confidence": 1.0,
+      "createdAt": 1771847392.5752819,
+      "updatedAt": 1771847392.575287,
+      "metadata": {
+        "purpose": "Discovery failed",
+        "architecture_description": "Manual architectural analysis required",
+        "updated_at": "2026-02-23T14:49:52.575268"
+      }
+    },
+    {
+      "category": "file_state",
+      "subject": "dummy.py",
+      "predicate": "has_state",
+      "object": "64e26de3444217f0fb53b926f3fec1992f3cce22369000b889e0c553f426b1ce",
+      "id": "filestate:dummy.py",
+      "source": "MemoryManager",
+      "confidence": 1.0,
+      "createdAt": 1771847392.577077,
+      "updatedAt": 1771847392.577089,
+      "metadata": {
+        "file_path": "dummy.py",
+        "content_hash": "64e26de3444217f0fb53b926f3fec1992f3cce22369000b889e0c553f426b1ce",
+        "findings_count": 0,
+        "last_scan": "2026-02-23T14:49:52.577069",
+        "context_data": {
+          "filePath": "/Users/alper/Documents/Development/Personal/warden-core/examples/spec_test_dummy/dummy.py",
+          "context": "test",
+          "confidence": 0.98,
+          "detectionMethod": "path",
+          "weights": {
+            "context": "test",
+            "weights": {
+              "complexity": 0.1,
+              "duplication": 0.05,
+              "maintainability": 0.15,
+              "naming": 0.1,
+              "documentation": 0.05,
+              "testability": 0.55
+            }
+          },
+          "suppressedIssues": [
+            "sql_injection",
+            "hardcoded_password",
+            "hardcoded_secret",
+            "weak_password",
+            "insecure_random",
+            "command_injection"
+          ],
+          "suppressionReason": "Test files often contain intentional vulnerabilities",
+          "isEntryPoint": false,
+          "isGenerated": false,
+          "isVendor": false,
+          "hasIgnoreMarker": false,
+          "contentHash": "64e26de3444217f0fb53b926f3fec1992f3cce22369000b889e0c553f426b1ce",
+          "lastScanTimestamp": "2026-02-23T14:49:52.575101",
+          "isUnchanged": false,
+          "isImpacted": false
+        }
+      }
+    },
+    {
+      "category": "environment_state",
+      "subject": "warden_environment",
+      "predicate": "has_hash",
+      "object": "b528a1204fa4d2c30d3f7a0c363777d50b06226baeeaa1bba10b282f91c63028",
+      "id": "environment:global",
+      "source": "PreAnalysisPhase",
+      "confidence": 1.0,
+      "createdAt": 1771847392.577618,
+      "updatedAt": 1771847392.577622,
+      "metadata": {
+        "hash": "b528a1204fa4d2c30d3f7a0c363777d50b06226baeeaa1bba10b282f91c63028",
+        "updated_at": "2026-02-23T14:49:52.577610"
+      }
+    }
+  ]
+}

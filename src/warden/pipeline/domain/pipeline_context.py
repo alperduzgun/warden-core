@@ -145,6 +145,7 @@ class PipelineContext:
     chain_validation: Any | None = None  # ChainValidation instance (Phase 0.8, LSP)
 
     # State Tracking
+    current_phase: str = "starting"  # Tracks active phase for timeout diagnostics
     completed_phases: set[str] = field(default_factory=set)
 
     def add_phase_result(self, phase: str, result: dict[str, Any]) -> None:

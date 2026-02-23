@@ -1,0 +1,84 @@
+advanced:
+  debug: true
+  frame_timeout: 300
+  max_workers: 4
+  enabled: true
+  fail_on_blocker: false
+  output:
+  - format: json
+    path: .warden/reports/warden-report.json
+frames:
+- security
+- resilience
+- fuzz
+- orphan
+- architecture
+- property
+- antipattern
+frames_config:
+  architecture:
+    enabled: true
+    priority: low
+  security:
+    enabled: true
+    priority: critical
+  resilience:
+    enabled: true
+    priority: high
+  orphan:
+    enabled: true
+    ignore_private: false
+    ignore_test_files: false
+  antipattern:
+    enabled: true
+    priority: high
+    check_bare_except: true
+    check_god_class: true
+    check_debug_print: true
+    check_todo_fixme: true
+    check_builtin_shadow: true
+    max_class_lines: 500
+    max_function_lines: 100
+    ignore_test_files: false
+  property:
+    enabled: true
+    priority: medium
+  fuzz:
+    enabled: true
+    priority: medium
+llm:
+  provider: claude_code
+  model: claude-sonnet-4-20250514
+  smart_model: claude-sonnet-4-20250514
+  fast_model: qwen2.5-coder:3b
+  max_retries: 2
+  tpm_limit: 10000
+  rpm_limit: 60
+  timeout: 300
+  fast_tier_providers:
+  - claude_code
+  - ollama
+  - groq
+project:
+  language: python
+  name: warden-examples
+  type: application
+settings:
+  enable_analysis: true
+  enable_classification: false
+  enable_cleaning: false
+  enable_fortification: false
+  enable_verification: false
+  enable_pre_analysis: true
+  enable_validation: true
+  enable_issue_validation: false
+  enable_suppression: false
+  fail_fast: false
+  frame_timeout: 300
+  min_severity: low
+  mode: normal
+  timeout: 600
+  pre_analysis_config:
+    batch_size: 10
+    cache_enabled: true
+    use_llm: false

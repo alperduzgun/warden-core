@@ -3,7 +3,7 @@ Integration tests for UniversalContractExtractor with real LLM (Ollama).
 
 These tests require:
 - Ollama running at http://localhost:11434
-- qwen2.5-coder:0.5b model installed
+- qwen2.5-coder:3b model installed
 
 Run: pytest tests/validation/frames/spec/test_universal_llm_integration.py -m integration
 Skip: pytest -m "not integration" (default in CI)
@@ -29,13 +29,14 @@ from warden.shared.utils.json_parser import parse_json_from_llm
 
 # ─── Fixtures ───────────────────────────────────────────────────────
 
+
 def _create_ollama_client():
     """Create Ollama client for testing."""
     from warden.llm.providers.ollama import OllamaClient
 
     config = ProviderConfig(
         endpoint="http://localhost:11434",
-        default_model="qwen2.5-coder:0.5b",
+        default_model="qwen2.5-coder:3b",
         enabled=True,
     )
     return OllamaClient(config)
@@ -234,7 +235,7 @@ class TestExtractSingleOperation:
                 file_path="api.ts",
                 line=8,
                 column=0,
-                context='async function removeUser(id: string) { await axios.delete(`/api/users/${id}`); }',
+                context="async function removeUser(id: string) { await axios.delete(`/api/users/${id}`); }",
                 ast_node=_dummy_ast_node("axios.delete"),
             )
 
@@ -288,9 +289,7 @@ module.exports = router;
 
             contract = await extractor.extract()
 
-            assert len(contract.operations) >= 1, (
-                f"Expected at least 1 operation, got {len(contract.operations)}"
-            )
+            assert len(contract.operations) >= 1, f"Expected at least 1 operation, got {len(contract.operations)}"
             assert extractor.stats["files_scanned"] >= 1
             assert extractor.stats["api_candidates_found"] >= 1
 

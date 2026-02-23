@@ -291,7 +291,6 @@ def configure_ollama() -> tuple[dict, dict]:
     smart_candidates = [
         "qwen2.5-coder:7b",
         "qwen2.5-coder:3b",
-        "qwen2.5-coder:1.5b",
         "codellama:7b",
         "deepseek-coder:6.7b",
         "starcoder2:7b",
@@ -303,8 +302,8 @@ def configure_ollama() -> tuple[dict, dict]:
             break
 
     # Fast model default
-    fast_candidates = ["qwen2.5-coder:0.5b", "qwen2.5-coder:1.5b"]
-    default_fast = "qwen2.5-coder:0.5b"
+    fast_candidates = ["qwen2.5-coder:3b"]
+    default_fast = "qwen2.5-coder:3b"
     for candidate in fast_candidates:
         if candidate in installed_models:
             default_fast = candidate
@@ -544,7 +543,7 @@ def configure_cloud_provider(provider: dict) -> tuple[dict, dict]:
     )
     if enable_hybrid:
         llm_config["use_local_llm"] = True
-        llm_config["fast_model"] = "qwen2.5-coder:0.5b"
+        llm_config["fast_model"] = "qwen2.5-coder:3b"
         if is_interactive:
             console.print("[green]✓ Hybrid mode enabled (Cloud for smart, Local for fast)[/green]")
 
@@ -689,7 +688,7 @@ def configure_ci_workflow(ci_provider: dict, llm_config: dict, project_root: Pat
             echo "Attempt $i/30: Ollama not ready yet..."
             sleep 1
           done
-          ollama pull qwen2.5-coder:0.5b
+          ollama pull qwen2.5-coder:3b
 
 """
     else:

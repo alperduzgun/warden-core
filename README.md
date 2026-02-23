@@ -59,7 +59,12 @@ Warden is built for resilience. Unlike SaaS tools that go dark without internet:
 *   **Local Models:** Multiple options - Claude Code CLI (uses desktop app), Codex CLI (OpenAI local agent), Ollama (Qwen), or any local LLM server.
 *   **Network Resilience:** Automatically detects connection timeouts and switches to local cache instantly.
 *   **Zero Latency:** No API round-trips for standard scans.
-*   **Zero API Costs:** Claude Code leverages your existing subscription without consuming API credits.
+
+**Why Use Claude Code CLI? (The "BYOS" Advantage)**
+Warden integrates with the Claude Code CLI intentionally as a **Local-Only Provider**, not for CI/CD. 
+- **Deep Code Analysis vs. LLM "Groping":** If you ask a standard AI agent to "find vulnerabilities," it uses basic tools (grep, read) and often loses context in large codebases. Warden, instead, performs deterministic **Taint Analysis** and **Context Slicing** via ASTs. It traces untrusted input from Source to Sink perfectly, then hands *only that 30-line vulnerable slice* to the AI. Warden is the "Head Engineer" that guides the "Mechanic" exactly to where the broken code is.
+- **Zero API Costs:** It leverages your existing, authenticated desktop session instead of consuming expensive API credits per scan.
+- **Focused Intelligence:** Warden deliberately disables Claude Code's internal tools (like Bash and Edit). It uses Claude purely as a brilliant reasoning engine, while Warden retains full control over the Context Slicing and Taint Analysis.
 
 ### 3. 🧠 Hybrid AI Engine (Dual-Tier)
 Warden balances cost, privacy, and intelligence using a smart routing system:

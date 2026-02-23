@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "totalChainsChecked": 0,
+  "confirmed": 0,
+  "unconfirmed": 0,
+  "errors": 0,
+  "entries": [],
+  "deadSymbols": [],
+  "lspAvailable": true,
+  "generated_at": "2026-02-23T11:49:52.658816+00:00"
+}

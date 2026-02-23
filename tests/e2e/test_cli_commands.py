@@ -45,7 +45,6 @@ def _extract_json(stdout: str) -> dict | None:
 # ============================================================================
 @pytest.mark.e2e
 class TestGlobalCLI:
-
     def test_help(self, runner):
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
@@ -55,8 +54,19 @@ class TestGlobalCLI:
         """Root help lists all registered commands."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        for cmd in ("scan", "init", "doctor", "config", "status", "version",
-                     "search", "refresh", "baseline", "ci", "serve"):
+        for cmd in (
+            "scan",
+            "init",
+            "doctor",
+            "config",
+            "status",
+            "version",
+            "search",
+            "refresh",
+            "baseline",
+            "ci",
+            "serve",
+        ):
             assert cmd in result.stdout.lower(), f"Missing command in help: {cmd}"
 
     def test_no_args_shows_help(self, runner):
@@ -80,8 +90,8 @@ class TestGlobalCLI:
         assert result.exit_code == 0
         # Version string contains "v" followed by digits
         import re
-        assert re.search(r"v?\d+\.\d+", result.stdout), \
-            f"No version number found in: {result.stdout[:200]}"
+
+        assert re.search(r"v?\d+\.\d+", result.stdout), f"No version number found in: {result.stdout[:200]}"
 
     def test_invalid_command(self, runner):
         """Unknown command returns non-zero exit code."""
@@ -94,16 +104,26 @@ class TestGlobalCLI:
 # ============================================================================
 @pytest.mark.e2e
 class TestScan:
-
     def test_scan_help(self, runner):
         result = runner.invoke(app, ["scan", "--help"])
         assert result.exit_code == 0
         # Strip ANSI codes for reliable assertion
         import re
-        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
-        for flag in ("--level", "--format", "--frame", "--ci", "--diff",
-                      "--output", "--verbose", "--base", "--disable-ai",
-                      "--memory-profile", "--no-update-baseline"):
+
+        clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+        for flag in (
+            "--level",
+            "--format",
+            "--frame",
+            "--ci",
+            "--diff",
+            "--output",
+            "--verbose",
+            "--base",
+            "--disable-ai",
+            "--memory-profile",
+            "--no-update-baseline",
+        ):
             assert flag in clean_output, f"Missing flag in scan help: {flag}"
 
     def test_scan_help_formats(self, runner):
@@ -126,7 +146,6 @@ class TestScan:
 # ============================================================================
 @pytest.mark.e2e
 class TestDoctor:
-
     def test_help(self, runner):
         result = runner.invoke(app, ["doctor", "--help"])
         assert result.exit_code == 0
@@ -159,7 +178,6 @@ class TestDoctor:
 # ============================================================================
 @pytest.mark.e2e
 class TestConfig:
-
     def test_config_help(self, runner):
         result = runner.invoke(app, ["config", "--help"])
         assert result.exit_code == 0
@@ -191,7 +209,7 @@ class TestConfig:
         assert parsed["project"]["language"] == "python"
         assert parsed["project"]["type"] == "backend"
         assert parsed["llm"]["provider"] == "ollama"
-        assert parsed["llm"]["model"] == "qwen2.5-coder:0.5b"
+        assert parsed["llm"]["model"] == "qwen2.5-coder:3b"
         assert "frames" in parsed
 
     def test_config_get_project_name(self, runner, isolated_project, monkeypatch):
@@ -286,8 +304,9 @@ class TestConfig:
             config = yaml.safe_load(f)
         assert config["llm"]["provider"] == "groq"
         # Provider change should auto-update model to a groq-compatible model
-        assert config["llm"]["model"] != "qwen2.5-coder:0.5b", \
+        assert config["llm"]["model"] != "qwen2.5-coder:3b", (
             "Model should change when provider changes from ollama to groq"
+        )
 
     def test_config_fixture_integrity(self, isolated_project):
         """Fixture config.yaml has all required sections."""
@@ -314,7 +333,6 @@ class TestConfig:
 # ============================================================================
 @pytest.mark.e2e
 class TestBaseline:
-
     def test_baseline_help(self, runner):
         result = runner.invoke(app, ["baseline", "--help"])
         assert result.exit_code == 0
@@ -344,9 +362,7 @@ class TestBaseline:
         stdout = result.stdout.lower()
         assert "baseline" in stdout
         # Should mention either module-based, legacy, or "no baseline"
-        assert ("module" in stdout or "legacy" in stdout
-                or "v2" in stdout or "v1" in stdout
-                or "no baseline" in stdout)
+        assert "module" in stdout or "legacy" in stdout or "v2" in stdout or "v1" in stdout or "no baseline" in stdout
 
     def test_baseline_debt_help(self, runner):
         result = runner.invoke(app, ["baseline", "debt", "--help"])
@@ -377,8 +393,7 @@ class TestBaseline:
         assert result.exit_code in (0, 1)
         stdout = result.stdout.lower()
         # Should say already migrated, or no legacy baseline
-        assert ("already" in stdout or "legacy" in stdout
-                or "module-based" in stdout or "no legacy" in stdout)
+        assert "already" in stdout or "legacy" in stdout or "module-based" in stdout or "no legacy" in stdout
 
     def test_baseline_migrate_creates_module_structure(self, runner, tmp_path, monkeypatch):
         """Migrate from legacy baseline.json creates _meta.json and per-module files."""
@@ -399,9 +414,9 @@ class TestBaseline:
                     "line": 7,
                     "severity": "critical",
                     "fingerprint": "abc123",
-                    "message": "Hardcoded secret"
+                    "message": "Hardcoded secret",
                 }
-            ]
+            ],
         }
         (warden_dir / "baseline.json").write_text(json.dumps(legacy))
         result = runner.invoke(app, ["baseline", "migrate"])
@@ -453,9 +468,14 @@ class TestBaseline:
         # Status should mention module count or modules
         assert "module" in stdout or "baseline" in stdout
         # Should show some metadata (created, updated, findings, debt)
-        assert ("created" in stdout or "updated" in stdout
-                or "findings" in stdout or "debt" in stdout
-                or "v2.0" in stdout or "module-based" in stdout)
+        assert (
+            "created" in stdout
+            or "updated" in stdout
+            or "findings" in stdout
+            or "debt" in stdout
+            or "v2.0" in stdout
+            or "module-based" in stdout
+        )
 
     def test_baseline_meta_json_integrity(self, isolated_project):
         """Fixture _meta.json has correct structure and required fields."""
@@ -490,7 +510,6 @@ class TestBaseline:
 # ============================================================================
 @pytest.mark.e2e
 class TestCI:
-
     def test_ci_help(self, runner):
         result = runner.invoke(app, ["ci", "--help"])
         assert result.exit_code == 0
@@ -502,7 +521,8 @@ class TestCI:
         assert result.exit_code == 0
         # Strip ANSI codes for reliable assertion
         import re
-        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
+
+        clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
         assert "--provider" in clean_output
         assert "--branch" in clean_output
         assert "--force" in clean_output
@@ -553,8 +573,8 @@ class TestCI:
             workflows_dir = isolated_project / ".github" / "workflows"
             # CI init creates 4 workflow files from templates
             expected_files = [
-                "warden.yml",          # main (from github.yml template)
-                "warden-pr.yml",       # PR checks
+                "warden.yml",  # main (from github.yml template)
+                "warden-pr.yml",  # PR checks
                 "warden-nightly.yml",  # nightly baseline updates
                 "warden-release.yml",  # release security audits
             ]
@@ -564,8 +584,7 @@ class TestCI:
                 content = path.read_text()
                 assert len(content) > 0, f"Workflow is empty: {wf}"
                 # All generated workflows should have warden reference
-                assert "warden" in content.lower(), \
-                    f"Workflow {wf} missing warden reference"
+                assert "warden" in content.lower(), f"Workflow {wf} missing warden reference"
 
     def test_ci_init_workflow_has_version_header(self, runner, isolated_project, monkeypatch):
         """CI init generated workflows contain a version header."""
@@ -609,7 +628,6 @@ class TestCI:
 # ============================================================================
 @pytest.mark.e2e
 class TestStatus:
-
     def test_status_help(self, runner):
         result = runner.invoke(app, ["status", "--help"])
         assert result.exit_code == 0
@@ -622,9 +640,16 @@ class TestStatus:
         assert result.exit_code in (0, 1)
         stdout = result.stdout.lower()
         # Fixture has warden-report.sarif with SEC-001 error-level finding
-        assert "status" in stdout or "security" in stdout or "sarif" in stdout \
-            or "sec-001" in stdout or "issue" in stdout or "finding" in stdout \
-            or "fail" in stdout or "pass" in stdout
+        assert (
+            "status" in stdout
+            or "security" in stdout
+            or "sarif" in stdout
+            or "sec-001" in stdout
+            or "issue" in stdout
+            or "finding" in stdout
+            or "fail" in stdout
+            or "pass" in stdout
+        )
 
     def test_status_sarif_file_exists(self, isolated_project):
         """Fixture SARIF report file is properly structured."""
@@ -650,7 +675,6 @@ class TestStatus:
 # ============================================================================
 @pytest.mark.e2e
 class TestServe:
-
     def test_serve_help(self, runner):
         result = runner.invoke(app, ["serve", "--help"])
         assert result.exit_code == 0
@@ -693,9 +717,13 @@ class TestServe:
         # Should show a table with tool registration info
         assert "status" in stdout or "register" in stdout
         # Should mention at least one AI tool
-        assert ("claude" in stdout or "cursor" in stdout
-                or "windsurf" in stdout or "not installed" in stdout
-                or "registered" in stdout)
+        assert (
+            "claude" in stdout
+            or "cursor" in stdout
+            or "windsurf" in stdout
+            or "not installed" in stdout
+            or "registered" in stdout
+        )
 
     def test_mcp_register_detects_tools(self, runner):
         """MCP register should detect AI tools or show not found."""
@@ -705,9 +733,14 @@ class TestServe:
         # Should attempt registration
         assert "register" in stdout or "mcp" in stdout
         # Should mention at least one tool detection result
-        assert ("claude" in stdout or "cursor" in stdout
-                or "windsurf" in stdout or "not installed" in stdout
-                or "registered" in stdout or "skipped" in stdout)
+        assert (
+            "claude" in stdout
+            or "cursor" in stdout
+            or "windsurf" in stdout
+            or "not installed" in stdout
+            or "registered" in stdout
+            or "skipped" in stdout
+        )
 
     def test_mcp_status_shows_all_tools(self, runner):
         """MCP status should list all known AI tools in table."""
@@ -765,13 +798,11 @@ class TestServe:
         assert "listen" in stdout or "50051" in stdout
 
 
-
 # ============================================================================
 # warden search (Hub + semantic)
 # ============================================================================
 @pytest.mark.e2e
 class TestSearch:
-
     def test_search_help(self, runner):
         result = runner.invoke(app, ["search", "--help"])
         assert result.exit_code == 0
@@ -792,8 +823,13 @@ class TestSearch:
         assert result.exit_code in (0, 1)
         # Should attempt search, may fail if no network or show results
         stdout = result.stdout.lower()
-        assert "search" in stdout or "security" in stdout or "frame" in stdout \
-            or "not found" in stdout or "error" in stdout
+        assert (
+            "search" in stdout
+            or "security" in stdout
+            or "frame" in stdout
+            or "not found" in stdout
+            or "error" in stdout
+        )
 
     def test_search_local_flag(self, runner, isolated_project, monkeypatch):
         """Search --local attempts local semantic search."""
@@ -802,8 +838,14 @@ class TestSearch:
         assert result.exit_code in (0, 1)
         # May require embeddings or fail gracefully
         stdout = result.stdout.lower()
-        assert "search" in stdout or "security" in stdout or "local" in stdout \
-            or "index" in stdout or "error" in stdout or "not found" in stdout
+        assert (
+            "search" in stdout
+            or "security" in stdout
+            or "local" in stdout
+            or "index" in stdout
+            or "error" in stdout
+            or "not found" in stdout
+        )
 
 
 # ============================================================================
@@ -811,7 +853,6 @@ class TestSearch:
 # ============================================================================
 @pytest.mark.e2e
 class TestIndex:
-
     def test_index_help(self, runner):
         result = runner.invoke(app, ["index", "--help"])
         assert result.exit_code == 0
@@ -833,8 +874,13 @@ class TestIndex:
         assert result.exit_code in (0, 1)
         # May require LLM/embeddings or complete successfully
         stdout = result.stdout.lower()
-        assert "index" in stdout or "semantic" in stdout or "complete" in stdout \
-            or "error" in stdout or "embedding" in stdout
+        assert (
+            "index" in stdout
+            or "semantic" in stdout
+            or "complete" in stdout
+            or "error" in stdout
+            or "embedding" in stdout
+        )
 
 
 # ============================================================================
@@ -842,12 +888,10 @@ class TestIndex:
 # ============================================================================
 @pytest.mark.e2e
 class TestRefresh:
-
     def test_refresh_help(self, runner):
         result = runner.invoke(app, ["refresh", "--help"])
         assert result.exit_code == 0
-        for flag in ("--force", "--no-intelligence", "--baseline",
-                      "--module", "--quick"):
+        for flag in ("--force", "--no-intelligence", "--baseline", "--module", "--quick"):
             assert flag in result.stdout, f"Missing flag in refresh help: {flag}"
 
     def test_refresh_no_intelligence_completes(self, runner, isolated_project, monkeypatch):
@@ -882,7 +926,6 @@ class TestRefresh:
 # ============================================================================
 @pytest.mark.e2e
 class TestInit:
-
     def test_init_help(self, runner):
         result = runner.invoke(app, ["init", "--help"])
         assert result.exit_code == 0
@@ -895,7 +938,6 @@ class TestInit:
 # ============================================================================
 @pytest.mark.e2e
 class TestChat:
-
     def test_chat_help(self, runner):
         result = runner.invoke(app, ["chat", "--help"])
         assert result.exit_code == 0
@@ -915,7 +957,6 @@ class TestChat:
 # ============================================================================
 @pytest.mark.e2e
 class TestInstall:
-
     def test_install_help(self, runner):
         result = runner.invoke(app, ["install", "--help"])
         assert result.exit_code == 0
@@ -939,8 +980,7 @@ class TestInstall:
         assert result.exit_code in (0, 1)
         stdout = result.stdout.lower()
         # May show error or attempt install (network dependent)
-        assert "install" in stdout or "not found" in stdout or "error" in stdout \
-            or "hub" in stdout or "frame" in stdout
+        assert "install" in stdout or "not found" in stdout or "error" in stdout or "hub" in stdout or "frame" in stdout
 
     def test_install_force_update_flag(self, runner, tmp_path, monkeypatch):
         """Install --force-update without package in non-warden directory shows error."""
@@ -957,12 +997,10 @@ class TestInstall:
 # ============================================================================
 @pytest.mark.e2e
 class TestUpdate:
-
     def test_update_help(self, runner):
         result = runner.invoke(app, ["update", "--help"])
         assert result.exit_code == 0
-        assert "hub" in result.stdout.lower() or "catalog" in result.stdout.lower() \
-            or "update" in result.stdout.lower()
+        assert "hub" in result.stdout.lower() or "catalog" in result.stdout.lower() or "update" in result.stdout.lower()
 
     def test_update_no_warden_dir(self, runner, tmp_path, monkeypatch):
         """Update in non-warden directory fails gracefully."""
@@ -971,8 +1009,9 @@ class TestUpdate:
         assert result.exit_code in (0, 1)
         # Should fail or warn about missing .warden
         stdout = result.stdout.lower()
-        assert "update" in stdout or "not found" in stdout or "init" in stdout \
-            or "warden" in stdout or "error" in stdout
+        assert (
+            "update" in stdout or "not found" in stdout or "init" in stdout or "warden" in stdout or "error" in stdout
+        )
 
     def test_update_runs_in_project(self, runner, isolated_project, monkeypatch):
         """Update in warden project attempts to update catalog."""
@@ -981,8 +1020,14 @@ class TestUpdate:
         assert result.exit_code in (0, 1)
         # May succeed or fail depending on network
         stdout = result.stdout.lower()
-        assert "update" in stdout or "hub" in stdout or "catalog" in stdout \
-            or "complete" in stdout or "error" in stdout or "frame" in stdout
+        assert (
+            "update" in stdout
+            or "hub" in stdout
+            or "catalog" in stdout
+            or "complete" in stdout
+            or "error" in stdout
+            or "frame" in stdout
+        )
 
 
 # ============================================================================
@@ -990,7 +1035,6 @@ class TestUpdate:
 # ============================================================================
 @pytest.mark.e2e
 class TestExitCodeConsistency:
-
     def test_all_help_commands_return_zero(self, runner):
         """Every command's --help should return exit code 0."""
         help_commands = [

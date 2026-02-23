@@ -140,7 +140,7 @@ class ClassificationPhase:
 
         # Add architectural for large projects
         if project_type in ["application", "monorepo"]:
-            frames.append("architectural")
+            frames.append("architecture")
 
         # Add stress for performance-critical projects
         if framework in ["fastapi", "django", "flask"]:
@@ -182,7 +182,7 @@ class ClassificationPhase:
             "security": 1,
             "chaos": 2,
             "orphan": 3,
-            "architectural": 4,
+            "architecture": 4,
             "stress": 5,
             "property": 6,
             "fuzz": 7,
@@ -194,8 +194,8 @@ class ClassificationPhase:
         # Adjust based on hotspots
         if len(hotspots) > 5:
             # Many hotspots, prioritize architectural
-            if "architectural" in priorities:
-                priorities["architectural"] = 1
+            if "architecture" in priorities:
+                priorities["architecture"] = 1
 
         return priorities
 

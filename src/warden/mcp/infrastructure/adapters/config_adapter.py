@@ -146,7 +146,7 @@ class ConfigAdapter(BaseWardenAdapter):
                     },
                     "fast_model": {
                         "type": "string",
-                        "description": "Fast tier model (default: qwen2.5-coder:0.5b via Ollama).",
+                        "description": "Fast tier model (default: qwen2.5-coder:3b via Ollama).",
                     },
                     "branch": {
                         "type": "string",
@@ -401,7 +401,7 @@ class ConfigAdapter(BaseWardenAdapter):
         """
         ci_provider_id = arguments.get("ci_provider", "")
         llm_provider_id = arguments.get("llm_provider", "")
-        fast_model = arguments.get("fast_model", "qwen2.5-coder:0.5b")
+        fast_model = arguments.get("fast_model", "qwen2.5-coder:3b")
         branch = arguments.get("branch", "main")
 
         if not ci_provider_id or not llm_provider_id:

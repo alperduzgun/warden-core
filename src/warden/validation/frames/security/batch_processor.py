@@ -165,7 +165,7 @@ Return JSON array with verification results:
             user_message=full_prompt,
             system_prompt="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives.",
         )
-        response = await llm_service.send_async(request)
+        response = await llm_service.send_with_tools_async(request)
 
         # Parse LLM response and filter false positives
         # LlmResponse is a Pydantic model — use attribute access, not .get()

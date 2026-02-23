@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 # Larger batches reduce the number of LLM round-trips at the cost of more
 # context tokens per request.
 _BATCH_SIZES: dict[str, int] = {
-    "ollama": 5,  # Small local models (e.g. Qwen 0.5b, 2K context)
+    "ollama": 5,  # Small local models (e.g. Qwen 3b, 2K context)
     "groq": 15,  # Fast cloud API, 32K+ context
     "openai": 15,  # Cloud API, 128K context
     "azure_openai": 15,
@@ -227,11 +227,15 @@ class TriageService:
 
     async def _get_llm_batch_score_async(self, code_files: list[CodeFile]) -> dict[str, RiskScore]:
         """Calls Local LLM to get risk scores for multiple files."""
+        from warden.shared.utils.llm_context import BUDGET_TRIAGE, prepare_code_for_llm, resolve_token_budget
+
+        budget = resolve_token_budget(BUDGET_TRIAGE, is_fast_tier=True)
+
         # Prepare batch prompt
         files_context = []
         for cf in code_files:
             # Shortened snippet for triage to save context tokens
-            content_snippet = cf.content[:1000].replace("```", "'''")
+            content_snippet = prepare_code_for_llm(cf.content, token_budget=budget).replace("```", "'''")
             files_context.append(f"FILE: {cf.path}\nCODE:\n{content_snippet}\n---")
 
         context_str = "\n".join(files_context)
@@ -295,7 +299,11 @@ FILES:
 
     async def _get_llm_score_async(self, code_file: CodeFile) -> RiskScore:
         """Calls Local LLM to get risk score."""
-        prompt = f"File Path: {code_file.path}\n\nCode:\n```{code_file.language}\n{code_file.content[:3000]}```"
+        from warden.shared.utils.llm_context import BUDGET_TRIAGE, prepare_code_for_llm, resolve_token_budget
+
+        budget = resolve_token_budget(BUDGET_TRIAGE, is_fast_tier=True)
+        truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
+        prompt = f"File Path: {code_file.path}\n\nCode:\n```{code_file.language}\n{truncated}```"
 
         request = LlmRequest(
             system_prompt=self.SYSTEM_PROMPT, user_message=prompt, use_fast_tier=True, temperature=0.1, max_tokens=250

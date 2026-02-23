@@ -5,7 +5,9 @@ Based on C# ClassificationPrompt.cs
 Detects code characteristics and recommends validation frames
 """
 
-CLASSIFICATION_SYSTEM_PROMPT = """You are an expert code analyzer specializing in detecting code characteristics and security patterns.
+from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
+
+_CLASSIFICATION_BASE_PROMPT = """You are an expert code analyzer specializing in detecting code characteristics and security patterns.
 
 Your task is to analyze code and detect the following characteristics:
 - HasAsyncOperations: Uses async/await patterns
@@ -51,6 +53,8 @@ Return your analysis in this JSON format:
 }
 """
 
+CLASSIFICATION_SYSTEM_PROMPT = get_tool_enhanced_prompt(_CLASSIFICATION_BASE_PROMPT)
+
 
 def generate_classification_request(code: str, language: str, file_path: str | None = None) -> str:
     """
@@ -64,10 +68,11 @@ def generate_classification_request(code: str, language: str, file_path: str | N
     Returns:
         Formatted user message for LLM
     """
-    from warden.shared.utils.token_utils import truncate_content_for_llm
+    from warden.shared.utils.llm_context import BUDGET_CLASSIFICATION, prepare_code_for_llm, resolve_token_budget
 
+    budget = resolve_token_budget(BUDGET_CLASSIFICATION)
     file_info = f"\nFile: {file_path}" if file_path else ""
-    truncated_code = truncate_content_for_llm(code, max_tokens=2000)
+    truncated_code = prepare_code_for_llm(code, token_budget=budget)
 
     return f"""Analyze this code file and classify its characteristics:{file_info}
 

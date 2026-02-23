@@ -24,7 +24,7 @@ import structlog
 
 from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
-from .base import ILlmClient
+from .base import ILlmClient, detect_provider_error
 
 logger = structlog.get_logger(__name__)
 
@@ -183,6 +183,12 @@ class CodexClient(ILlmClient):
 
             # Strip Codex CLI banner / transcript wrapper from response
             content = _strip_codex_banner(content)
+
+            # Detect rate limit / provider errors hidden in successful output
+            rate_limit_msg = detect_provider_error(content)
+            if rate_limit_msg:
+                logger.error("codex_rate_limit_detected", message=rate_limit_msg)
+                return self._error_response(f"Provider rate limit: {rate_limit_msg}", model, duration_ms)
 
             if not content:
                 return self._error_response("Empty response from codex", model, duration_ms)

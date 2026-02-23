@@ -134,8 +134,8 @@ class LLMPhaseBase(ABC):
         if llm_service:
             self.config.enabled = True
 
-            # Auto-Scale Rate Limits for Local LLM (Ollama / Local HTTP)
-            # Local models are compute-bound, not quota-bound.
+            # Auto-Scale Rate Limits for Local/CLI LLM providers
+            # These are compute-bound or CLI-managed, not API-quota-bound.
             # Default 1000 TPM is too low and causes unnecessary waits.
             provider_raw = getattr(llm_service, "provider", "")
             provider = str(provider_raw).upper()
@@ -145,6 +145,7 @@ class LLMPhaseBase(ABC):
             str_endpoint = str(endpoint)
             is_local = (
                 "OLLAMA" in provider
+                or "CLAUDE_CODE" in provider  # CLI subprocess, manages own rate limits
                 or "localhost" in str_endpoint
                 or "127.0.0.1" in str_endpoint
                 or "::1" in str_endpoint
@@ -489,9 +490,9 @@ class LLMPhaseBase(ABC):
             estimated_tokens = (len(input_text) // 4) + self.config.max_tokens + 50
 
         # 3. Complexity-Based Smart Routing (Auto-Upgrade)
-        # If using Fast Tier (usually small 0.5b/7b model) and request is big,
+        # If using Fast Tier (usually small 3b/7b model) and request is big,
         # PROACTIVELY upgrade to Smart Tier (Cloud) to prevent context failure/timeout.
-        complexity_threshold = 2000  # Conservative limit for 0.5b model context + output
+        complexity_threshold = 2000  # Conservative limit for 3b model context + output
 
         if use_fast_tier and estimated_tokens > complexity_threshold:
             logger.info(
@@ -515,6 +516,9 @@ class LLMPhaseBase(ABC):
                     ),
                     timeout=self.config.timeout,
                 )
+
+                # Agentic loop now runs inside complete_async → send_with_tools_async
+                # automatically. No need for explicit loop handling here.
 
                 return response
 

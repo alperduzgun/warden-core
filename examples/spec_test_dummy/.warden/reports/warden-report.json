@@ -1,0 +1,165 @@
+{
+    "pipelineId": "ec7a5248-0953-482d-b222-bda7fad72458",
+    "pipelineName": "Validation Pipeline",
+    "status": 2,
+    "duration": 56.430878,
+    "totalFrames": 5,
+    "framesPassed": 5,
+    "framesFailed": 0,
+    "framesSkipped": 0,
+    "totalFindings": 0,
+    "criticalFindings": 0,
+    "highFindings": 0,
+    "mediumFindings": 0,
+    "lowFindings": 0,
+    "manualReviewFindings": 0,
+    "findings": [],
+    "frameResults": [
+        {
+            "frameId": "security",
+            "frameName": "Security Analysis",
+            "status": "passed",
+            "duration": 0.0005369590362533927,
+            "issuesFound": 0,
+            "isBlocker": false,
+            "findings": [],
+            "metadata": {
+                "files_scanned": 0,
+                "execution_errors": 0,
+                "coverage": 0.0,
+                "findings_found": 0,
+                "findings_fixed": 0,
+                "trend": 0
+            },
+            "is_degraded": false
+        },
+        {
+            "frameId": "orphan",
+            "frameName": "Orphan Code Analysis",
+            "status": "passed",
+            "duration": 0.0002872080076485872,
+            "issuesFound": 0,
+            "isBlocker": false,
+            "findings": [],
+            "metadata": {
+                "files_scanned": 1,
+                "execution_errors": 0,
+                "coverage": 100.0,
+                "findings_found": 0,
+                "findings_fixed": 0,
+                "trend": 0,
+                "llm_filter_summary": {
+                    "total_files_analyzed": 0,
+                    "ast_candidates_found": 0,
+                    "llm_filtered_out": 0,
+                    "final_findings": 0,
+                    "used_llm_filter": true,
+                    "reasoning": "No orphan candidates detected in codebase."
+                }
+            },
+            "is_degraded": false
+        },
+        {
+            "frameId": "resilience",
+            "frameName": "Chaos Engineering Analysis",
+            "status": "passed",
+            "duration": 0.00020583299919962883,
+            "issuesFound": 0,
+            "isBlocker": false,
+            "findings": [],
+            "metadata": {
+                "files_scanned": 1,
+                "execution_errors": 0,
+                "coverage": 100.0,
+                "findings_found": 0,
+                "findings_fixed": 0,
+                "trend": 0
+            },
+            "is_degraded": false
+        },
+        {
+            "frameId": "antipattern",
+            "frameName": "Anti-Pattern Detection",
+            "status": "passed",
+            "duration": 0.0004240839625708759,
+            "issuesFound": 0,
+            "isBlocker": false,
+            "findings": [],
+            "metadata": {
+                "files_scanned": 1,
+                "execution_errors": 0,
+                "coverage": 100.0,
+                "findings_found": 0,
+                "findings_fixed": 0,
+                "trend": 0
+            },
+            "is_degraded": false
+        },
+        {
+            "frameId": "architecture",
+            "frameName": "Architecture Analysis",
+            "status": "passed",
+            "duration": 6.641697837039828e-05,
+            "issuesFound": 0,
+            "isBlocker": false,
+            "findings": [],
+            "metadata": {
+                "files_scanned": 0,
+                "execution_errors": 0,
+                "coverage": 0.0,
+                "findings_found": 0,
+                "findings_fixed": 0,
+                "trend": 0
+            },
+            "is_degraded": false
+        }
+    ],
+    "executedAt": "2026-02-23T11:50:48.671518Z",
+    "metadata": {
+        "strategy": "sequential",
+        "fail_fast": false,
+        "scan_id": "092b7a06",
+        "advisories": [],
+        "frame_executions": []
+    },
+    "artifacts": [],
+    "qualityScore": 5.0,
+    "totalTokens": 0,
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "llmUsage": {
+        "totalTokens": 0,
+        "promptTokens": 0,
+        "completionTokens": 0
+    },
+    "llmMetrics": {
+        "totalRequests": 3,
+        "totalTime": "19.6s",
+        "smartTier": {
+            "providers": [
+                "codex"
+            ],
+            "provider": "codex",
+            "model": "codex-local",
+            "requests": 3,
+            "percentage": 100.0,
+            "successRate": 100.0,
+            "timeouts": 0,
+            "avgResponseTime": "6.5s",
+            "totalTime": "19.6s",
+            "timePercentage": 100.0
+        }
+    },
+    "total_frames": 5,
+    "frames_passed": 5,
+    "frames_failed": 0,
+    "frames_skipped": 0,
+    "total_findings": 0,
+    "critical_findings": 0,
+    "high_findings": 0,
+    "medium_findings": 0,
+    "low_findings": 0,
+    "manual_review_findings": 0,
+    "quality_score": 5.0,
+    "context_summary": "Pipeline ec7a5248-0953-482d-b222-bda7fad72458 Summary:\nFile: ./dummy.py\nAI Requests: 0\nProject: application / none\nQuality: 5.0 \u2192 5.0\nImprovements Suggested: 1"
+}

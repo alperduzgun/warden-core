@@ -47,6 +47,7 @@ pytestmark = [
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def run_warden(
     *args: str,
     cwd: str | Path | None = None,
@@ -126,6 +127,7 @@ def _assert_no_crash(
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def empty_dir(tmp_path):
     """An empty temporary directory."""
@@ -136,7 +138,11 @@ def empty_dir(tmp_path):
 def initialized_project(tmp_path):
     """A temp directory with ``warden init --force --skip-mcp`` already run."""
     result = run_warden(
-        "init", "--force", "--skip-mcp", cwd=str(tmp_path), timeout=30,
+        "init",
+        "--force",
+        "--skip-mcp",
+        cwd=str(tmp_path),
+        timeout=30,
     )
     assert result.returncode == 0, f"init failed: {result.stderr}"
     return tmp_path
@@ -153,6 +159,7 @@ def isolated_sample(tmp_path):
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. Startup & Discovery
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestStartupDiscovery:
     """Verify the binary resolves, prints help, and rejects unknowns."""
@@ -189,6 +196,7 @@ class TestStartupDiscovery:
 # 2. Doctor & Init
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDoctorInit:
     """Verify project initialization and doctor diagnostics."""
 
@@ -209,7 +217,9 @@ class TestDoctorInit:
           - No prompts for baseline/intelligence generation
         """
         r = run_warden(
-            "init", "--force", "--skip-mcp",
+            "init",
+            "--force",
+            "--skip-mcp",
             cwd=str(empty_dir),
             timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
@@ -224,8 +234,7 @@ class TestDoctorInit:
         with open(config) as f:
             cfg = yaml.safe_load(f)
         assert "llm" in cfg, "LLM config missing"
-        assert cfg["llm"]["provider"] in ["ollama", "claude_code"], \
-            f"Unexpected provider: {cfg['llm'].get('provider')}"
+        assert cfg["llm"]["provider"] in ["ollama", "claude_code"], f"Unexpected provider: {cfg['llm'].get('provider')}"
 
     def test_init_directory_structure(self, initialized_project):
         warden_dir = initialized_project / ".warden"
@@ -240,7 +249,9 @@ class TestDoctorInit:
     def test_init_idempotent(self, initialized_project):
         """Second init should not error out (non-interactive mode)."""
         r = run_warden(
-            "init", "--force", "--skip-mcp",
+            "init",
+            "--force",
+            "--skip-mcp",
             cwd=str(initialized_project),
             timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
@@ -249,8 +260,11 @@ class TestDoctorInit:
 
     def test_init_non_interactive_env(self, empty_dir):
         r = run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         assert r.returncode == 0
@@ -260,56 +274,69 @@ class TestDoctorInit:
 # 3. Scan Exit Codes
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestScanExitCodes:
     """Verify scan returns correct exit codes."""
 
     def test_scan_basic_clean_project(self, initialized_project):
         # Create a trivially clean Python file
-        (initialized_project / "clean.py").write_text(
-            "def hello():\n    return 'world'\n"
-        )
+        (initialized_project / "clean.py").write_text("def hello():\n    return 'world'\n")
         r = run_warden(
-            "scan", "--level", "basic", str(initialized_project / "clean.py"),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(initialized_project / "clean.py"),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2), f"Unexpected exit: {r.returncode}"
 
     @pytest.mark.requires_ollama
     def test_scan_vulnerable_project(self, isolated_sample):
         r = run_warden(
-            "scan", cwd=str(isolated_sample), timeout=120,
+            "scan",
+            cwd=str(isolated_sample),
+            timeout=120,
         )
         # 0=clean, 1=pipeline error, 2=policy failure
         assert r.returncode in (0, 1, 2), f"Unexpected exit: {r.returncode}"
 
     def test_scan_basic_level_no_llm(self, isolated_sample):
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
     def test_scan_nonexistent_path(self, initialized_project):
         r = run_warden(
-            "scan", "/nonexistent/path/that/does/not/exist",
-            cwd=str(initialized_project), timeout=30,
+            "scan",
+            "/nonexistent/path/that/does/not/exist",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         assert r.returncode != 0
 
     def test_scan_exit_code_range(self, initialized_project):
         (initialized_project / "app.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--level", "basic", str(initialized_project / "app.py"),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(initialized_project / "app.py"),
+            cwd=str(initialized_project),
+            timeout=60,
         )
-        assert r.returncode in (0, 1, 2), (
-            f"Exit code {r.returncode} outside expected {{0,1,2}}"
-        )
+        assert r.returncode in (0, 1, 2), f"Exit code {r.returncode} outside expected {{0,1,2}}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 3b. Exit Code Semantics (Specific Assertions)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestExitCodeSemantics:
     """Verify scan returns exact exit codes per the contract.
@@ -328,40 +355,36 @@ class TestExitCodeSemantics:
         that clean files are not flagged with critical issues (exit 2).
         """
         clean_file = initialized_project / "clean.py"
-        clean_file.write_text(
-            "def add(a, b):\n"
-            "    return a + b\n"
-            "\n"
-            "def multiply(x, y):\n"
-            "    return x * y\n"
-        )
+        clean_file.write_text("def add(a, b):\n    return a + b\n\ndef multiply(x, y):\n    return x * y\n")
         r = run_warden(
-            "scan", "--level", "basic", str(clean_file),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(clean_file),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         # Accept 0 or 1 (pipeline error), but NOT 2 (policy failure)
         assert r.returncode in (0, 1), (
-            f"Clean file should exit 0 or 1 (not 2), got {r.returncode}\n"
-            f"stdout: {r.stdout}\nstderr: {r.stderr}"
+            f"Clean file should exit 0 or 1 (not 2), got {r.returncode}\nstdout: {r.stdout}\nstderr: {r.stderr}"
         )
         # Verify no critical/blocker findings
         assert "Critical Issues" in r.stdout, "Missing metrics output"
         critical_match = re.search(r"Critical Issues\s+│\s+(\d+)", r.stdout)
         if critical_match:
             critical_count = int(critical_match.group(1))
-            assert critical_count == 0, (
-                f"Clean file should have 0 critical issues, got {critical_count}"
-            )
+            assert critical_count == 0, f"Clean file should have 0 critical issues, got {critical_count}"
 
     def test_nonexistent_path_exit_one(self, initialized_project):
         """Nonexistent path should exit 1 (pipeline error)."""
         r = run_warden(
-            "scan", "/nonexistent/path/xyz/abc.py",
-            cwd=str(initialized_project), timeout=30,
+            "scan",
+            "/nonexistent/path/xyz/abc.py",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         assert r.returncode == 1, (
-            f"Nonexistent path should exit 1, got {r.returncode}\n"
-            f"stdout: {r.stdout}\nstderr: {r.stderr}"
+            f"Nonexistent path should exit 1, got {r.returncode}\nstdout: {r.stdout}\nstderr: {r.stderr}"
         )
 
     def test_scan_empty_dir_exit_one(self, initialized_project):
@@ -369,13 +392,14 @@ class TestExitCodeSemantics:
         empty_src = initialized_project / "src"
         empty_src.mkdir()
         r = run_warden(
-            "scan", str(empty_src),
-            cwd=str(initialized_project), timeout=30,
+            "scan",
+            str(empty_src),
+            cwd=str(initialized_project),
+            timeout=30,
         )
         # Either 0 (no files to scan = clean) or 1 (error: no files found)
         assert r.returncode in (0, 1), (
-            f"Empty dir should exit 0 or 1, got {r.returncode}\n"
-            f"stdout: {r.stdout}\nstderr: {r.stderr}"
+            f"Empty dir should exit 0 or 1, got {r.returncode}\nstdout: {r.stdout}\nstderr: {r.stderr}"
         )
 
     def test_vulnerable_file_nonzero_exit(self, initialized_project):
@@ -418,13 +442,16 @@ class TestExitCodeSemantics:
             "    conn.execute(query)\n"
         )
         r = run_warden(
-            "scan", "--level", "basic", str(vuln_file),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln_file),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         # Should NOT exit 0 (must indicate failure)
         assert r.returncode != 0, (
-            f"Vulnerable file should exit non-zero, got {r.returncode}\n"
-            f"stdout: {r.stdout}\nstderr: {r.stderr}"
+            f"Vulnerable file should exit non-zero, got {r.returncode}\nstdout: {r.stdout}\nstderr: {r.stderr}"
         )
         # Verify critical or blocker findings were detected
         critical_match = re.search(r"Critical Issues\s+│\s+(\d+)", r.stdout)
@@ -433,7 +460,7 @@ class TestExitCodeSemantics:
         critical_count = int(critical_match.group(1)) if critical_match else 0
         blocker_count = int(blocker_match.group(1)) if blocker_match else 0
 
-        assert (critical_count > 0 or blocker_count > 0), (
+        assert critical_count > 0 or blocker_count > 0, (
             f"Vulnerable file should have critical/blocker findings, "
             f"got critical={critical_count}, blocker={blocker_count}\n"
             f"stdout: {r.stdout}"
@@ -444,13 +471,19 @@ class TestExitCodeSemantics:
 # 4. Output Formats
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestOutputFormats:
     """Verify different output formats produce valid data."""
 
     def test_json_format(self, isolated_sample):
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             data = _extract_json(r.stdout)
@@ -458,23 +491,32 @@ class TestOutputFormats:
 
     def test_sarif_format(self, isolated_sample):
         r = run_warden(
-            "scan", "--level", "basic", "--format", "sarif",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "sarif",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             data = _extract_json(r.stdout)
             assert isinstance(data, dict)
             # SARIF requires $schema or version
-            assert (
-                "$schema" in data or "version" in data
-            ), "SARIF output missing schema/version"
+            assert "$schema" in data or "version" in data, "SARIF output missing schema/version"
 
     def test_output_file(self, isolated_sample, tmp_path):
         report = tmp_path / "report.json"
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
-            "--output", str(report),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            "--output",
+            str(report),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             assert report.exists(), "Output file was not created"
@@ -483,8 +525,13 @@ class TestOutputFormats:
 
     def test_text_format(self, isolated_sample):
         r = run_warden(
-            "scan", "--level", "basic", "--format", "text",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "text",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         # Text format should produce some output when scan completes
@@ -494,15 +541,21 @@ class TestOutputFormats:
 # 5. Output Schema Validation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestOutputSchemaValidation:
     """Verify structural integrity of JSON and SARIF output schemas."""
 
     def test_json_output_has_required_fields(self, isolated_sample):
         """JSON output must contain status, total_findings, and pipeline_id."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
             "src/vulnerable.py",
-            cwd=str(isolated_sample), timeout=60,
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         _assert_no_crash(r, context="JSON schema validation")
         if r.returncode == 1:
@@ -523,9 +576,14 @@ class TestOutputSchemaValidation:
     def test_json_findings_have_required_fields(self, isolated_sample):
         """Each finding in JSON must have id, severity, and message."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
             "src/vulnerable.py",
-            cwd=str(isolated_sample), timeout=60,
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         _assert_no_crash(r, context="JSON findings schema")
         if r.returncode == 1:
@@ -546,16 +604,20 @@ class TestOutputSchemaValidation:
                     # Severity must be valid
                     valid_severities = {"critical", "high", "medium", "low"}
                     assert finding["severity"] in valid_severities, (
-                        f"Invalid severity '{finding['severity']}'. "
-                        f"Must be one of {valid_severities}"
+                        f"Invalid severity '{finding['severity']}'. Must be one of {valid_severities}"
                     )
 
     def test_sarif_structural_validity(self, isolated_sample):
         """SARIF output must conform to SARIF 2.1.0 structure."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "sarif",
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "sarif",
             "src/vulnerable.py",
-            cwd=str(isolated_sample), timeout=60,
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         _assert_no_crash(r, context="SARIF schema")
         if r.returncode == 1:
@@ -566,9 +628,7 @@ class TestOutputSchemaValidation:
                 pytest.fail(f"Failed to extract SARIF JSON from stdout:\n{r.stdout[:500]}")
 
             # SARIF 2.1.0 required top-level fields
-            assert sarif.get("version") == "2.1.0", (
-                f"Invalid SARIF version: {sarif.get('version')}"
-            )
+            assert sarif.get("version") == "2.1.0", f"Invalid SARIF version: {sarif.get('version')}"
             assert "$schema" in sarif, "Missing $schema in SARIF output"
 
             # Runs array must exist and be non-empty
@@ -580,22 +640,23 @@ class TestOutputSchemaValidation:
             run = sarif["runs"][0]
             assert "tool" in run, "Missing 'tool' in SARIF run"
             assert "driver" in run["tool"], "Missing 'driver' in SARIF tool"
-            assert "name" in run["tool"]["driver"], (
-                "Missing 'name' in SARIF tool.driver"
-            )
+            assert "name" in run["tool"]["driver"], "Missing 'name' in SARIF tool.driver"
 
             # Results array must exist (can be empty)
             assert "results" in run, "Missing 'results' in SARIF run"
-            assert isinstance(run["results"], list), (
-                "'results' must be an array"
-            )
+            assert isinstance(run["results"], list), "'results' must be an array"
 
     def test_json_frame_results_structure(self, isolated_sample):
         """Frame results in JSON must have frame_id, status, and findings."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
             "src/vulnerable.py",
-            cwd=str(isolated_sample), timeout=60,
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         _assert_no_crash(r, context="JSON frame_results schema")
         if r.returncode == 1:
@@ -611,64 +672,66 @@ class TestOutputSchemaValidation:
             if frame_results:
                 for frame_result in frame_results:
                     # Check for frame_id or frameId
-                    has_frame_id = (
-                        "frame_id" in frame_result or "frameId" in frame_result
-                    )
-                    assert has_frame_id, (
-                        f"Frame result missing 'frame_id' or 'frameId': {frame_result}"
-                    )
+                    has_frame_id = "frame_id" in frame_result or "frameId" in frame_result
+                    assert has_frame_id, f"Frame result missing 'frame_id' or 'frameId': {frame_result}"
 
                     # Check for status
-                    assert "status" in frame_result, (
-                        f"Frame result missing 'status': {frame_result}"
-                    )
+                    assert "status" in frame_result, f"Frame result missing 'status': {frame_result}"
 
                     # Check for findings array
-                    assert "findings" in frame_result, (
-                        f"Frame result missing 'findings': {frame_result}"
-                    )
-                    assert isinstance(frame_result["findings"], list), (
-                        f"'findings' must be an array in frame result"
-                    )
+                    assert "findings" in frame_result, f"Frame result missing 'findings': {frame_result}"
+                    assert isinstance(frame_result["findings"], list), f"'findings' must be an array in frame result"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. CI Mode
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCIMode:
     """Verify CI mode runs non-interactively without TUI artifacts."""
 
     def test_ci_mode_runs(self, isolated_sample):
         r = run_warden(
-            "scan", "--ci", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--ci",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
     def test_ci_basic_succeeds(self, initialized_project):
         (initialized_project / "main.py").write_text("print('ok')\n")
         r = run_warden(
-            "scan", "--ci", "--level", "basic",
+            "scan",
+            "--ci",
+            "--level",
+            "basic",
             str(initialized_project / "main.py"),
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
     def test_ci_no_spinner_artifacts(self, isolated_sample):
         r = run_warden(
-            "scan", "--ci", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--ci",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         # Carriage returns indicate spinner/TUI progress bars
-        assert "\r" not in r.stdout, (
-            "Spinner artifacts (\\r) found in CI mode stdout"
-        )
+        assert "\r" not in r.stdout, "Spinner artifacts (\\r) found in CI mode stdout"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 7. Config & Baseline & Status
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestConfigBaselineStatus:
     """Verify read-only config / baseline / status commands."""
@@ -679,7 +742,10 @@ class TestConfigBaselineStatus:
 
     def test_baseline_status(self, isolated_sample):
         r = run_warden(
-            "baseline", "status", cwd=str(isolated_sample), timeout=15,
+            "baseline",
+            "status",
+            cwd=str(isolated_sample),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
 
@@ -692,14 +758,18 @@ class TestConfigBaselineStatus:
 # 8. LLM Configuration (Init)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestInitLLMConfig:
     """Verify that ``warden init`` writes valid LLM configuration."""
 
     def test_init_writes_llm_section(self, empty_dir):
         """Config must contain an ``llm`` key after init."""
         r = run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         assert r.returncode == 0
@@ -709,8 +779,11 @@ class TestInitLLMConfig:
     def test_llm_has_provider(self, empty_dir):
         """LLM section must declare a provider."""
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
@@ -721,8 +794,11 @@ class TestInitLLMConfig:
     def test_llm_has_model(self, empty_dir):
         """LLM section must specify a model."""
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
@@ -733,24 +809,35 @@ class TestInitLLMConfig:
     def test_llm_provider_is_known(self, empty_dir):
         """Auto-detected provider must be one of the supported providers."""
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
         known = {
-            "ollama", "anthropic", "openai", "groq",
-            "azure", "deepseek", "gemini", "claude_code", "none",
+            "ollama",
+            "anthropic",
+            "openai",
+            "groq",
+            "azure",
+            "deepseek",
+            "gemini",
+            "claude_code",
+            "none",
         }
-        assert cfg["llm"]["provider"] in known, (
-            f"Unknown provider: {cfg['llm']['provider']}"
-        )
+        assert cfg["llm"]["provider"] in known, f"Unknown provider: {cfg['llm']['provider']}"
 
     def test_llm_has_timeout(self, empty_dir):
         """LLM section should include a timeout value."""
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
@@ -762,8 +849,11 @@ class TestInitLLMConfig:
     def test_settings_use_llm_flag(self, empty_dir):
         """Settings should reflect whether LLM is active."""
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
@@ -778,8 +868,11 @@ class TestInitLLMConfig:
     def test_llm_has_fast_model(self, empty_dir):
         """LLM section should define a fast_model for the two-tier system."""
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
@@ -801,15 +894,18 @@ class TestInitLLMConfig:
         # Provider should remain valid (may change if detection differs, but must exist)
         assert provider2, "LLM provider lost after re-init"
         # On a stable environment, auto-detection should pick the same provider
-        assert provider1 == provider2, (
-            f"Provider changed from {provider1!r} to {provider2!r} on re-init"
-        )
+        assert provider1 == provider2, f"Provider changed from {provider1!r} to {provider2!r} on re-init"
 
     def test_init_mode_vibe_minimal_frames(self, empty_dir):
         """Vibe mode should produce a valid config with minimal frames."""
         run_warden(
-            "init", "--force", "--skip-mcp", "--mode", "vibe",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            "--mode",
+            "vibe",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
@@ -822,8 +918,13 @@ class TestInitLLMConfig:
     def test_init_mode_strict_all_issues(self, empty_dir):
         """Strict mode should set fail_fast and low severity."""
         run_warden(
-            "init", "--force", "--skip-mcp", "--mode", "strict",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            "--mode",
+            "strict",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         cfg = _load_config(empty_dir)
@@ -837,6 +938,7 @@ class TestInitLLMConfig:
 # 9. LLM Runtime Verification
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLLMRuntime:
     """Verify that the selected LLM provider actually works at runtime.
 
@@ -847,16 +949,25 @@ class TestLLMRuntime:
     def test_init_stdout_confirms_provider(self, empty_dir):
         """Init output must mention which provider was configured."""
         r = run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         assert r.returncode == 0
         out = r.stdout.lower()
         # Init should mention at least one of these in its output
         provider_hints = [
-            "ollama", "claude code", "anthropic", "openai",
-            "groq", "azure", "deepseek", "gemini",
+            "ollama",
+            "claude code",
+            "anthropic",
+            "openai",
+            "groq",
+            "azure",
+            "deepseek",
+            "gemini",
         ]
         assert any(h in out for h in provider_hints), (
             f"Init output does not mention any known provider:\n{r.stdout[:500]}"
@@ -886,16 +997,15 @@ class TestLLMRuntime:
         expected_model = cfg["llm"]["model"]
 
         r = run_warden("config", "list", cwd=str(empty_dir), timeout=15)
-        assert expected_model in r.stdout, (
-            f"config list doesn't show model {expected_model!r}:\n{r.stdout[:500]}"
-        )
+        assert expected_model in r.stdout, f"config list doesn't show model {expected_model!r}:\n{r.stdout[:500]}"
 
     @pytest.mark.requires_ollama
     def test_scan_reaches_ollama(self, tmp_path):
         """When Ollama is the provider, scan stderr must show HTTP requests to it."""
         # Build PATH that keeps warden + ollama but hides claude for clean detection
         path_dirs = [
-            d for d in os.environ.get("PATH", "").split(":")
+            d
+            for d in os.environ.get("PATH", "").split(":")
             if "/.local/bin" not in d  # hide claude CLI
         ]
         env = {
@@ -910,28 +1020,24 @@ class TestLLMRuntime:
             pytest.skip("Auto-detection did not select ollama on this env")
 
         # Create a file to scan
-        (tmp_path / "app.py").write_text(
-            "import os\npassword = os.environ['DB_PASS']\n"
-        )
+        (tmp_path / "app.py").write_text("import os\npassword = os.environ['DB_PASS']\n")
         r = run_warden(
-            "scan", "--level", "standard",
+            "scan",
+            "--level",
+            "standard",
             str(tmp_path / "app.py"),
-            cwd=str(tmp_path), timeout=120,
+            cwd=str(tmp_path),
+            timeout=120,
             env=env,
         )
         combined = r.stdout + r.stderr
         # httpx logs HTTP requests to Ollama in stderr
-        assert "localhost:11434" in combined, (
-            "Scan did not contact Ollama — LLM integration may be broken"
-        )
+        assert "localhost:11434" in combined, "Scan did not contact Ollama — LLM integration may be broken"
 
     @pytest.mark.requires_ollama
     def test_scan_no_zombie_mode_with_ollama(self, tmp_path):
         """When Ollama is running and configured, scan should NOT be in zombie mode."""
-        path_dirs = [
-            d for d in os.environ.get("PATH", "").split(":")
-            if "/.local/bin" not in d
-        ]
+        path_dirs = [d for d in os.environ.get("PATH", "").split(":") if "/.local/bin" not in d]
         env = {
             "WARDEN_NON_INTERACTIVE": "true",
             "PATH": ":".join(path_dirs),
@@ -943,30 +1049,37 @@ class TestLLMRuntime:
 
         (tmp_path / "main.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--level", "standard",
+            "scan",
+            "--level",
+            "standard",
             str(tmp_path / "main.py"),
-            cwd=str(tmp_path), timeout=120,
+            cwd=str(tmp_path),
+            timeout=120,
             env=env,
         )
         # ZOMBIE MODE means LLM was NOT used despite being configured
-        assert "ZOMBIE MODE" not in r.stdout, (
-            "Scan entered ZOMBIE MODE despite Ollama being available"
-        )
+        assert "ZOMBIE MODE" not in r.stdout, "Scan entered ZOMBIE MODE despite Ollama being available"
 
     def test_scan_basic_works_without_llm(self, empty_dir):
         """Basic level scan must work even if no LLM provider is reachable."""
         # Init normally first so config exists
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         (empty_dir / "hello.py").write_text("print('hello')\n")
         # Scan with basic level — should work without reaching any LLM
         r = run_warden(
-            "scan", "--level", "basic",
+            "scan",
+            "--level",
+            "basic",
             str(empty_dir / "hello.py"),
-            cwd=str(empty_dir), timeout=60,
+            cwd=str(empty_dir),
+            timeout=60,
         )
         # basic level should still run (heuristic-only), even without LLM
         assert r.returncode in (0, 1, 2), f"basic scan failed: exit {r.returncode}"
@@ -987,12 +1100,10 @@ class TestLLMRuntime:
 # 10. Ollama Model Management
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _ollama_env() -> dict[str, str]:
     """Build env dict that forces Ollama selection (hides claude from PATH)."""
-    path_dirs = [
-        d for d in os.environ.get("PATH", "").split(":")
-        if "/.local/bin" not in d
-    ]
+    path_dirs = [d for d in os.environ.get("PATH", "").split(":") if "/.local/bin" not in d]
     return {
         "WARDEN_NON_INTERACTIVE": "true",
         "PATH": ":".join(path_dirs),
@@ -1002,6 +1113,7 @@ def _ollama_env() -> dict[str, str]:
 def _get_ollama_models() -> list[str]:
     """Query Ollama API for installed model names."""
     import httpx
+
     try:
         resp = httpx.get("http://localhost:11434/api/tags", timeout=5)
         resp.raise_for_status()
@@ -1015,16 +1127,14 @@ class TestOllamaModelManagement:
     """Verify that Ollama model configuration, availability and error handling work."""
 
     def test_init_configures_fast_model(self, tmp_path):
-        """Init must set fast_model to a lightweight model (qwen2.5-coder:0.5b)."""
+        """Init must set fast_model to a lightweight model (qwen2.5-coder:3b)."""
         env = _ollama_env()
         run_warden("init", "--force", "--skip-mcp", cwd=str(tmp_path), timeout=30, env=env)
         cfg = _load_config(tmp_path)
         if cfg["llm"]["provider"] != "ollama":
             pytest.skip("Auto-detection did not select ollama")
         fast = cfg["llm"].get("fast_model", "")
-        assert "0.5b" in fast or "small" in fast.lower(), (
-            f"fast_model should be a lightweight model, got: {fast!r}"
-        )
+        assert "3b" in fast or "small" in fast.lower(), f"fast_model should be a lightweight model, got: {fast!r}"
 
     def test_init_configures_smart_model(self, tmp_path):
         """Init must set model (smart tier) to a larger model than fast_model."""
@@ -1081,21 +1191,25 @@ class TestOllamaModelManagement:
 
         (tmp_path / "test.py").write_text("x = eval(input())\n")
         r = run_warden(
-            "scan", "--level", "standard",
+            "scan",
+            "--level",
+            "standard",
             str(tmp_path / "test.py"),
-            cwd=str(tmp_path), timeout=120,
+            cwd=str(tmp_path),
+            timeout=120,
             env=env,
         )
         if smart_model not in installed:
             # Model not installed → scan should still finish (graceful degradation)
-            assert r.returncode in (0, 1, 2), (
-                f"Scan crashed (exit {r.returncode}) with missing model {smart_model!r}"
-            )
+            assert r.returncode in (0, 1, 2), f"Scan crashed (exit {r.returncode}) with missing model {smart_model!r}"
             combined = r.stdout + r.stderr
             # Should mention the missing model somewhere
-            assert "not found" in combined.lower() or "pull" in combined.lower() or "zombie" in combined.upper() or r.returncode in (0, 1, 2), (
-                "Scan with missing model gave no useful feedback"
-            )
+            assert (
+                "not found" in combined.lower()
+                or "pull" in combined.lower()
+                or "zombie" in combined.upper()
+                or r.returncode in (0, 1, 2)
+            ), "Scan with missing model gave no useful feedback"
         else:
             # Model installed → scan should succeed
             assert r.returncode in (0, 1, 2)
@@ -1115,16 +1229,17 @@ class TestOllamaModelManagement:
 
         (tmp_path / "code.py").write_text("import subprocess\nsubprocess.call(input())\n")
         r = run_warden(
-            "scan", "--level", "standard",
+            "scan",
+            "--level",
+            "standard",
             str(tmp_path / "code.py"),
-            cwd=str(tmp_path), timeout=120,
+            cwd=str(tmp_path),
+            timeout=120,
             env=env,
         )
         combined = r.stdout + r.stderr
         # Should have contacted ollama (httpx log lines)
-        assert "11434" in combined, (
-            "Scan did not contact Ollama at all"
-        )
+        assert "11434" in combined, "Scan did not contact Ollama at all"
 
     def test_scan_graceful_with_nonexistent_model(self, tmp_path):
         """Scan must not crash when config points to a model that doesn't exist."""
@@ -1150,21 +1265,21 @@ class TestOllamaModelManagement:
         (tmp_path / "vuln.py").write_text("eval(input())\n")
         try:
             r = run_warden(
-                "scan", "--level", "standard",
+                "scan",
+                "--level",
+                "standard",
                 str(tmp_path / "vuln.py"),
-                cwd=str(tmp_path), timeout=120,
+                cwd=str(tmp_path),
+                timeout=120,
                 env=env,
             )
             # Must not crash — graceful degradation
-            assert r.returncode in (0, 1, 2), (
-                f"Scan crashed (exit {r.returncode}) with non-existent model"
-            )
+            assert r.returncode in (0, 1, 2), f"Scan crashed (exit {r.returncode}) with non-existent model"
         except subprocess.TimeoutExpired:
             # Retry mechanism may cause long waits — timeout is acceptable
             # but signals a problem: missing model should fail fast
             pytest.fail(
-                "Scan timed out with non-existent model — "
-                "retry/resilience layer does not fail fast on model 404"
+                "Scan timed out with non-existent model — retry/resilience layer does not fail fast on model 404"
             )
 
     def test_model_404_error_message(self, tmp_path):
@@ -1185,9 +1300,12 @@ class TestOllamaModelManagement:
 
         (tmp_path / "app.py").write_text("exec(open('hack.py').read())\n")
         r = run_warden(
-            "scan", "--level", "standard",
+            "scan",
+            "--level",
+            "standard",
             str(tmp_path / "app.py"),
-            cwd=str(tmp_path), timeout=60,
+            cwd=str(tmp_path),
+            timeout=60,
             env=env,
         )
         combined = (r.stdout + r.stderr).lower()
@@ -1199,14 +1317,13 @@ class TestOllamaModelManagement:
             or "zombie" in combined
             or "model" in combined
         )
-        assert has_feedback, (
-            f"No useful error about missing model in output:\n{combined[:500]}"
-        )
+        assert has_feedback, f"No useful error about missing model in output:\n{combined[:500]}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 11. Error Quality & Robustness
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestErrorQuality:
     """Verify user-facing output never leaks Python internals."""
@@ -1221,8 +1338,10 @@ class TestErrorQuality:
     def test_scan_nonexistent_no_traceback(self, initialized_project):
         """Scanning a missing path must not show a Python traceback."""
         r = run_warden(
-            "scan", "/no/such/file.py",
-            cwd=str(initialized_project), timeout=30,
+            "scan",
+            "/no/such/file.py",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         self._assert_no_traceback(r)
 
@@ -1268,6 +1387,7 @@ class TestErrorQuality:
 # 12. Scan Without Init
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestScanWithoutInit:
     """Verify behavior when user runs commands on a non-initialized project."""
 
@@ -1275,8 +1395,12 @@ class TestScanWithoutInit:
         """Scan in a directory with no .warden/ should fail, not crash."""
         (empty_dir / "app.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--level", "basic", str(empty_dir / "app.py"),
-            cwd=str(empty_dir), timeout=30,
+            "scan",
+            "--level",
+            "basic",
+            str(empty_dir / "app.py"),
+            cwd=str(empty_dir),
+            timeout=30,
         )
         # Should exit with error (1), not crash with a weird code
         assert r.returncode in (0, 1, 2)
@@ -1285,8 +1409,12 @@ class TestScanWithoutInit:
         """Scan without init should tell the user to run 'warden init'."""
         (empty_dir / "main.py").write_text("print(1)\n")
         r = run_warden(
-            "scan", "--level", "basic", str(empty_dir / "main.py"),
-            cwd=str(empty_dir), timeout=30,
+            "scan",
+            "--level",
+            "basic",
+            str(empty_dir / "main.py"),
+            cwd=str(empty_dir),
+            timeout=30,
         )
         # Should not crash with traceback (may or may not mention init)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1305,14 +1433,20 @@ class TestScanWithoutInit:
 # 13. Stderr / Stdout Separation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestOutputSeparation:
     """Verify structured output goes to stdout and diagnostics to stderr."""
 
     def test_json_output_is_valid_on_stdout(self, isolated_sample):
         """--format json must produce parseable JSON on stdout (not mixed with logs)."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             # stdout should be parseable JSON (possibly after stripping log lines)
@@ -1338,6 +1472,7 @@ class TestOutputSeparation:
 # ═══════════════════════════════════════════════════════════════════════════
 # 14. Signal Handling
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSignalHandling:
     """Verify that warden handles interrupts gracefully."""
@@ -1370,9 +1505,7 @@ class TestSignalHandling:
         # Should NOT produce a full traceback (KeyboardInterrupt handled)
         assert "Traceback (most recent call last)" not in stdout
         # Exit code: 0, 1, 2, or 130 (128+SIGINT) are all acceptable
-        assert proc.returncode in (0, 1, 2, -2, 130), (
-            f"Unexpected exit code after SIGINT: {proc.returncode}"
-        )
+        assert proc.returncode in (0, 1, 2, -2, 130), f"Unexpected exit code after SIGINT: {proc.returncode}"
 
     def test_sigterm_terminates(self, isolated_sample):
         """SIGTERM should terminate the process cleanly."""
@@ -1403,6 +1536,7 @@ class TestSignalHandling:
 # 15. Environment & Color Control
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestEnvironmentControl:
     """Verify NO_COLOR, piped output, and environment isolation."""
 
@@ -1411,9 +1545,7 @@ class TestEnvironmentControl:
         r = run_warden("--help", timeout=10, env={"NO_COLOR": "1"})
         assert r.returncode == 0
         # ANSI escape code starts with ESC (\\x1b or \\033)
-        assert "\x1b[" not in r.stdout, (
-            "ANSI escape codes found in output despite NO_COLOR=1"
-        )
+        assert "\x1b[" not in r.stdout, "ANSI escape codes found in output despite NO_COLOR=1"
 
     def test_force_color_false_strips_ansi(self):
         """FORCE_COLOR=0 should also prevent ANSI escape codes."""
@@ -1426,20 +1558,23 @@ class TestEnvironmentControl:
 # 16. UTF-8 & Special Characters
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestUTF8Handling:
     """Verify warden handles non-ASCII content and paths."""
 
     def test_scan_utf8_file_content(self, initialized_project):
         """Scan a file with UTF-8 content (comments, strings) must not crash."""
         (initialized_project / "intl.py").write_text(
-            '# Türkçe yorum: güvenlik kontrolü\n'
-            'mesaj = "Merhaba Dünya 🌍"\n'
-            'print(mesaj)\n',
+            '# Türkçe yorum: güvenlik kontrolü\nmesaj = "Merhaba Dünya 🌍"\nprint(mesaj)\n',
             encoding="utf-8",
         )
         r = run_warden(
-            "scan", "--level", "basic", str(initialized_project / "intl.py"),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(initialized_project / "intl.py"),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1449,8 +1584,12 @@ class TestUTF8Handling:
         utf8_file = initialized_project / "módulo.py"
         utf8_file.write_text("x = 1\n", encoding="utf-8")
         r = run_warden(
-            "scan", "--level", "basic", str(utf8_file),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(utf8_file),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1460,6 +1599,7 @@ class TestUTF8Handling:
 # 17. Empty & Edge Case Projects
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestEdgeCaseProjects:
     """Verify behavior with unusual project structures."""
 
@@ -1467,8 +1607,11 @@ class TestEdgeCaseProjects:
         """Scan an initialized project with no code files."""
         # initialized_project has .warden/ but no source files
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(initialized_project), timeout=30,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         # Should complete (possibly with 0 findings), not crash
         assert r.returncode in (0, 1, 2)
@@ -1478,8 +1621,11 @@ class TestEdgeCaseProjects:
         """Project with only dotfiles should not crash."""
         (initialized_project / ".hidden.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(initialized_project), timeout=30,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         assert r.returncode in (0, 1, 2)
 
@@ -1488,8 +1634,11 @@ class TestEdgeCaseProjects:
         (initialized_project / "data.bin").write_bytes(b"\x00\x01\x02\xff" * 100)
         (initialized_project / "app.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1501,8 +1650,11 @@ class TestEdgeCaseProjects:
         link = initialized_project / "link.py"
         link.symlink_to(real_file)
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
@@ -1512,8 +1664,11 @@ class TestEdgeCaseProjects:
         deep.mkdir(parents=True)
         (deep / "deep.py").write_text("z = 3\n")
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
@@ -1521,6 +1676,7 @@ class TestEdgeCaseProjects:
 # ═══════════════════════════════════════════════════════════════════════════
 # 18. Performance
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestPerformance:
     """Verify critical paths stay within latency budgets."""
@@ -1542,30 +1698,37 @@ class TestPerformance:
 # 19. Scan Advanced Flags
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestScanAdvancedFlags:
     """Verify --verbose, --diff, --frame, and related scan flags."""
 
     def test_verbose_produces_extra_output(self, isolated_sample):
         """--verbose should produce diagnostic detail not present in normal mode."""
         r_verbose = run_warden(
-            "scan", "--level", "basic", "--verbose",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--verbose",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r_verbose.returncode in (0, 1, 2)
         combined = r_verbose.stdout + r_verbose.stderr
         # Verbose mode should contain diagnostic markers like phase/progress/debug lines
         verbose_markers = ["progress", "phase", "debug", "event", "duration"]
         has_verbose_content = any(m in combined.lower() for m in verbose_markers)
-        assert has_verbose_content, (
-            f"Verbose mode output lacks diagnostic markers:\n{combined[:500]}"
-        )
+        assert has_verbose_content, f"Verbose mode output lacks diagnostic markers:\n{combined[:500]}"
 
     def test_diff_mode_no_git(self, initialized_project):
         """--diff in a non-git directory should warn and either skip or full-scan."""
         (initialized_project / "app.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--diff", "--level", "basic",
-            cwd=str(initialized_project), timeout=30,
+            "scan",
+            "--diff",
+            "--level",
+            "basic",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         # Should not crash — either skips or falls back to full scan
         assert r.returncode in (0, 1, 2)
@@ -1574,8 +1737,13 @@ class TestScanAdvancedFlags:
     def test_frame_selection(self, isolated_sample):
         """--frame should select specific frames for the scan."""
         r = run_warden(
-            "scan", "--level", "basic", "--frame", "security",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "security",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1583,8 +1751,13 @@ class TestScanAdvancedFlags:
     def test_frame_nonexistent_graceful(self, isolated_sample):
         """Selecting a non-existent frame should not crash."""
         r = run_warden(
-            "scan", "--level", "basic", "--frame", "nonexistent_frame_xyz",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "nonexistent_frame_xyz",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         # Should still complete (possibly with 0 frames run)
         assert r.returncode in (0, 1, 2)
@@ -1593,8 +1766,10 @@ class TestScanAdvancedFlags:
     def test_disable_ai_flag(self, isolated_sample):
         """--disable-ai should behave like --level basic."""
         r = run_warden(
-            "scan", "--disable-ai",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--disable-ai",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         combined = r.stdout + r.stderr
@@ -1604,8 +1779,14 @@ class TestScanAdvancedFlags:
     def test_ci_mode_with_format(self, isolated_sample):
         """--ci combined with --format json should produce valid JSON."""
         r = run_warden(
-            "scan", "--ci", "--level", "basic", "--format", "json",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--ci",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             data = _extract_json(r.stdout)
@@ -1615,6 +1796,7 @@ class TestScanAdvancedFlags:
 # ═══════════════════════════════════════════════════════════════════════════
 # 20. Graceful Degradation
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestGracefulDegradation:
     """Verify warden degrades gracefully under adverse conditions."""
@@ -1629,9 +1811,12 @@ class TestGracefulDegradation:
         warden_dir.chmod(0o555)
         try:
             r = run_warden(
-                "scan", "--level", "basic",
+                "scan",
+                "--level",
+                "basic",
                 str(initialized_project / "app.py"),
-                cwd=str(initialized_project), timeout=60,
+                cwd=str(initialized_project),
+                timeout=60,
             )
             # Should still complete (may warn about write permissions)
             assert r.returncode in (0, 1, 2)
@@ -1647,8 +1832,12 @@ class TestGracefulDegradation:
         lines = [f"x_{i} = {i}" for i in range(5000)]
         big.write_text("\n".join(lines) + "\n")
         r = run_warden(
-            "scan", "--level", "basic", str(big),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(big),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1658,10 +1847,13 @@ class TestGracefulDegradation:
         (initialized_project / "a.py").write_text("a = 1\n")
         (initialized_project / "b.py").write_text("b = 2\n")
         r = run_warden(
-            "scan", "--level", "basic",
+            "scan",
+            "--level",
+            "basic",
             str(initialized_project / "a.py"),
             str(initialized_project / "b.py"),
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
@@ -1678,9 +1870,12 @@ class TestGracefulDegradation:
             config_path.write_text(raw)
 
         r = run_warden(
-            "scan", "--level", "basic",
+            "scan",
+            "--level",
+            "basic",
             str(initialized_project / "code.py"),
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
         )
         # Basic level shouldn't need network at all
         assert r.returncode in (0, 1, 2)
@@ -1690,6 +1885,7 @@ class TestGracefulDegradation:
 # ═══════════════════════════════════════════════════════════════════════════
 # 21. Doctor Enhanced Checks
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDoctorEnhanced:
     """Verify doctor reports LLM provider status accurately."""
@@ -1706,9 +1902,7 @@ class TestDoctorEnhanced:
         r = run_warden("doctor", cwd=str(tmp_path), timeout=30, env=env)
         combined = (r.stdout + r.stderr).lower()
         # Doctor should mention Ollama in its output
-        assert "ollama" in combined, (
-            f"Doctor does not mention Ollama:\n{combined[:500]}"
-        )
+        assert "ollama" in combined, f"Doctor does not mention Ollama:\n{combined[:500]}"
 
     def test_doctor_corrupted_config_no_crash(self, tmp_path):
         """Doctor should handle corrupted config gracefully."""
@@ -1724,14 +1918,19 @@ class TestDoctorEnhanced:
 # 22. LLM Provider Runtime Switching
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestProviderSwitching:
     """Verify ``warden config set llm.provider X`` updates config correctly."""
 
     def test_config_set_provider_updates_yaml(self, initialized_project):
         """Changing provider must update the YAML file."""
         r = run_warden(
-            "config", "set", "llm.provider", "ollama",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "ollama",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode == 0
         cfg = _load_config(initialized_project)
@@ -1740,8 +1939,12 @@ class TestProviderSwitching:
     def test_config_set_provider_updates_model(self, initialized_project):
         """Changing provider must also update model and smart_model fields."""
         r = run_warden(
-            "config", "set", "llm.provider", "openai",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "openai",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode == 0
         cfg = _load_config(initialized_project)
@@ -1750,19 +1953,27 @@ class TestProviderSwitching:
         assert cfg["llm"]["smart_model"] == "gpt-4o"
 
     def test_config_set_provider_ollama_fast_model(self, initialized_project):
-        """Switching to Ollama must set fast_model to qwen2.5-coder:0.5b."""
+        """Switching to Ollama must set fast_model to qwen2.5-coder:3b."""
         run_warden(
-            "config", "set", "llm.provider", "ollama",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "ollama",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         cfg = _load_config(initialized_project)
-        assert cfg["llm"]["fast_model"] == "qwen2.5-coder:0.5b"
+        assert cfg["llm"]["fast_model"] == "qwen2.5-coder:3b"
 
     def test_config_set_provider_anthropic(self, initialized_project):
         """Switching to Anthropic must set correct default model."""
         run_warden(
-            "config", "set", "llm.provider", "anthropic",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "anthropic",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         cfg = _load_config(initialized_project)
         assert cfg["llm"]["provider"] == "anthropic"
@@ -1771,8 +1982,12 @@ class TestProviderSwitching:
     def test_config_set_provider_groq(self, initialized_project):
         """Switching to Groq must set correct default model."""
         run_warden(
-            "config", "set", "llm.provider", "groq",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "groq",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         cfg = _load_config(initialized_project)
         assert cfg["llm"]["provider"] == "groq"
@@ -1781,8 +1996,12 @@ class TestProviderSwitching:
     def test_config_set_provider_claude_code(self, initialized_project):
         """Switching to claude_code must set placeholder model."""
         run_warden(
-            "config", "set", "llm.provider", "claude_code",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "claude_code",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         cfg = _load_config(initialized_project)
         assert cfg["llm"]["provider"] == "claude_code"
@@ -1791,8 +2010,12 @@ class TestProviderSwitching:
     def test_config_set_invalid_provider_rejected(self, initialized_project):
         """Setting an invalid provider must fail with nonzero exit."""
         r = run_warden(
-            "config", "set", "llm.provider", "invalid_provider_xyz",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "invalid_provider_xyz",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode != 0
         combined = (r.stdout + r.stderr).lower()
@@ -1807,13 +2030,15 @@ class TestProviderSwitching:
             ("anthropic", "claude"),
         ]:
             run_warden(
-                "config", "set", "llm.provider", provider,
-                cwd=str(initialized_project), timeout=15,
+                "config",
+                "set",
+                "llm.provider",
+                provider,
+                cwd=str(initialized_project),
+                timeout=15,
             )
             cfg = _load_config(initialized_project)
-            assert cfg["llm"]["provider"] == provider, (
-                f"Provider not updated to {provider}"
-            )
+            assert cfg["llm"]["provider"] == provider, f"Provider not updated to {provider}"
             assert expected_model_hint in cfg["llm"]["model"].lower(), (
                 f"Model not updated for {provider}: {cfg['llm']['model']}"
             )
@@ -1821,8 +2046,12 @@ class TestProviderSwitching:
     def test_config_set_provider_shows_hint(self, initialized_project):
         """Changing provider must show a helpful hint in output."""
         r = run_warden(
-            "config", "set", "llm.provider", "ollama",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "ollama",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode == 0
         out = r.stdout.lower()
@@ -1833,15 +2062,23 @@ class TestProviderSwitching:
         """Setting a non-LLM key should work without affecting LLM config."""
         # First set a known provider
         run_warden(
-            "config", "set", "llm.provider", "ollama",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "ollama",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         cfg_before = _load_config(initialized_project)
 
         # Now set a settings key
         run_warden(
-            "config", "set", "settings.fail_fast", "true",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "settings.fail_fast",
+            "true",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         cfg_after = _load_config(initialized_project)
 
@@ -1856,14 +2093,20 @@ class TestProviderSwitching:
 # 23. Frame Enable/Disable Management
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestFrameManagement:
     """Verify frame selection and enable/disable behavior."""
 
     def test_frame_security_only(self, isolated_sample):
         """--frame security should run only the security frame."""
         r = run_warden(
-            "scan", "--level", "basic", "--frame", "security",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "security",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1871,8 +2114,13 @@ class TestFrameManagement:
     def test_frame_antipattern_only(self, isolated_sample):
         """--frame antipattern should run only the antipattern frame."""
         r = run_warden(
-            "scan", "--level", "basic", "--frame", "antipattern",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "antipattern",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1880,9 +2128,15 @@ class TestFrameManagement:
     def test_multiple_frames(self, isolated_sample):
         """Multiple --frame flags should run exactly those frames."""
         r = run_warden(
-            "scan", "--level", "basic",
-            "--frame", "security", "--frame", "antipattern",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "security",
+            "--frame",
+            "antipattern",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1890,8 +2144,13 @@ class TestFrameManagement:
     def test_nonexistent_frame_graceful(self, isolated_sample):
         """Selecting a non-existent frame should not crash."""
         r = run_warden(
-            "scan", "--level", "basic", "--frame", "does_not_exist_xyz",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "does_not_exist_xyz",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1899,22 +2158,32 @@ class TestFrameManagement:
     def test_frame_verbose_shows_frame_names(self, isolated_sample):
         """Verbose mode with --frame should mention the selected frame name."""
         r = run_warden(
-            "scan", "--level", "basic", "--frame", "security", "--verbose",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "security",
+            "--verbose",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         combined = (r.stdout + r.stderr).lower()
         # Verbose output should mention the frame being executed
-        assert "security" in combined, (
-            "Verbose output does not mention 'security' frame"
-        )
+        assert "security" in combined, "Verbose output does not mention 'security' frame"
 
     def test_frame_json_output(self, isolated_sample):
         """--frame with --format json should produce valid JSON output."""
         r = run_warden(
-            "scan", "--level", "basic", "--frame", "security",
-            "--format", "json",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--frame",
+            "security",
+            "--format",
+            "json",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             data = _extract_json(r.stdout)
@@ -1935,8 +2204,11 @@ class TestFrameManagement:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1944,8 +2216,11 @@ class TestFrameManagement:
     def test_all_frames_flag(self, isolated_sample):
         """Running scan without --frame should use config-defined frames."""
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1955,6 +2230,7 @@ class TestFrameManagement:
 # 24. Custom Rules Execution
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCustomRules:
     """Verify custom rules from .warden/rules/*.yaml are loaded and executed."""
 
@@ -1962,8 +2238,12 @@ class TestCustomRules:
         """Scan should process custom rules YAML files."""
         # The fixture project has .warden/rules/custom_rules.yaml
         r = run_warden(
-            "scan", "--level", "basic", "--verbose",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--verbose",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -1973,8 +2253,12 @@ class TestCustomRules:
         # The messy.py fixture doesn't have print(), but we can verify the
         # rules are loaded by checking verbose output
         r = run_warden(
-            "scan", "--level", "basic", "--verbose",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--verbose",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         # Verbose should show rules being loaded or applied
@@ -1989,8 +2273,11 @@ class TestCustomRules:
         (rules_dir / "broken_rules.yaml").write_text(":::invalid yaml{{{")
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         # Should not crash — graceful degradation
         assert r.returncode in (0, 1, 2)
@@ -2003,8 +2290,11 @@ class TestCustomRules:
         (rules_dir / "empty_rules.yaml").write_text("")
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2014,24 +2304,27 @@ class TestCustomRules:
         rules_dir = isolated_sample / ".warden" / "rules"
         rules_dir.mkdir(parents=True, exist_ok=True)
         (rules_dir / "disabled_rule.yaml").write_text(
-            'rules:\n'
+            "rules:\n"
             '  - id: "disabled-test"\n'
             '    name: "Disabled test rule"\n'
             '    description: "This rule is disabled"\n'
-            '    category: convention\n'
-            '    severity: info\n'
-            '    isBlocker: false\n'
-            '    enabled: false\n'
-            '    type: pattern\n'
+            "    category: convention\n"
+            "    severity: info\n"
+            "    isBlocker: false\n"
+            "    enabled: false\n"
+            "    type: pattern\n"
             '    pattern: ".*"\n'
-            '    language:\n'
-            '      - python\n'
-            '    conditions: {}\n'
+            "    language:\n"
+            "      - python\n"
+            "    conditions: {}\n"
         )
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2047,8 +2340,11 @@ class TestCustomRules:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2057,6 +2353,7 @@ class TestCustomRules:
 # ═══════════════════════════════════════════════════════════════════════════
 # 25. Suppression CLI Integration
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSuppressionIntegration:
     """Verify the suppression system works end-to-end in CLI scans."""
@@ -2071,8 +2368,11 @@ class TestSuppressionIntegration:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2087,8 +2387,11 @@ class TestSuppressionIntegration:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2107,8 +2410,11 @@ class TestSuppressionIntegration:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2119,8 +2425,11 @@ class TestSuppressionIntegration:
         supp_path.write_text(":::broken yaml{{{")
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2131,8 +2440,11 @@ class TestSuppressionIntegration:
         supp_path.write_text("")
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2151,8 +2463,11 @@ class TestSuppressionIntegration:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2164,9 +2479,12 @@ class TestSuppressionIntegration:
         assert supp_file.exists(), "Fixture missing with_suppression.py"
 
         r = run_warden(
-            "scan", "--level", "basic",
+            "scan",
+            "--level",
+            "basic",
             str(supp_file),
-            cwd=str(isolated_sample), timeout=60,
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2174,12 +2492,7 @@ class TestSuppressionIntegration:
     def test_suppression_with_global_rules(self, isolated_sample):
         """Global rules in suppression.yaml should be respected."""
         supp_path = isolated_sample / ".warden" / "suppression.yaml"
-        supp_path.write_text(
-            "enabled: true\n"
-            "globalRules:\n"
-            "  - hardcoded-secret\n"
-            "  - magic-number\n"
-        )
+        supp_path.write_text("enabled: true\nglobalRules:\n  - hardcoded-secret\n  - magic-number\n")
 
         config_path = isolated_sample / ".warden" / "config.yaml"
         cfg = yaml.safe_load(config_path.read_text()) or {}
@@ -2189,8 +2502,11 @@ class TestSuppressionIntegration:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2198,12 +2514,7 @@ class TestSuppressionIntegration:
     def test_suppression_with_ignored_files(self, isolated_sample):
         """File patterns in ignoredFiles should be respected."""
         supp_path = isolated_sample / ".warden" / "suppression.yaml"
-        supp_path.write_text(
-            "enabled: true\n"
-            "ignoredFiles:\n"
-            "  - src/vulnerable.py\n"
-            "  - src/messy.py\n"
-        )
+        supp_path.write_text("enabled: true\nignoredFiles:\n  - src/vulnerable.py\n  - src/messy.py\n")
 
         config_path = isolated_sample / ".warden" / "config.yaml"
         cfg = yaml.safe_load(config_path.read_text()) or {}
@@ -2213,8 +2524,11 @@ class TestSuppressionIntegration:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2224,14 +2538,18 @@ class TestSuppressionIntegration:
 # 26. Config Get Command
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestConfigGet:
     """Verify ``warden config get`` reads specific keys."""
 
     def test_config_get_llm_provider(self, initialized_project):
         """``config get llm.provider`` should return the configured provider."""
         r = run_warden(
-            "config", "get", "llm.provider",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "get",
+            "llm.provider",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode == 0
         cfg = _load_config(initialized_project)
@@ -2240,24 +2558,34 @@ class TestConfigGet:
     def test_config_get_settings_mode(self, initialized_project):
         """``config get settings.mode`` should return the mode value."""
         r = run_warden(
-            "config", "get", "settings.mode",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "get",
+            "settings.mode",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode == 0
 
     def test_config_get_nonexistent_key(self, initialized_project):
         """``config get nonexistent.key`` should exit with nonzero."""
         r = run_warden(
-            "config", "get", "nonexistent.key.xyz",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "get",
+            "nonexistent.key.xyz",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode != 0
 
     def test_config_get_json_output(self, initialized_project):
         """``config get llm.provider --json`` should return valid JSON."""
         r = run_warden(
-            "config", "get", "llm.provider", "--json",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "get",
+            "llm.provider",
+            "--json",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode == 0
         # Should be parseable JSON (possibly with Rich markup stripped)
@@ -2272,20 +2600,29 @@ class TestConfigGet:
     def test_config_get_no_argument(self, initialized_project):
         """``config get`` without argument should exit nonzero."""
         r = run_warden(
-            "config", "get",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "get",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode != 0
 
     def test_config_set_then_get_consistency(self, initialized_project):
         """``config set`` followed by ``config get`` must return the set value."""
         run_warden(
-            "config", "set", "llm.provider", "groq",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "set",
+            "llm.provider",
+            "groq",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         r = run_warden(
-            "config", "get", "llm.provider",
-            cwd=str(initialized_project), timeout=15,
+            "config",
+            "get",
+            "llm.provider",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode == 0
         assert "groq" in r.stdout.lower()
@@ -2295,14 +2632,17 @@ class TestConfigGet:
 # 27. Baseline Management
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBaselineManagement:
     """Verify baseline subcommands work without crashing."""
 
     def test_baseline_status_detailed(self, isolated_sample):
         """``baseline status`` should output baseline info."""
         r = run_warden(
-            "baseline", "status",
-            cwd=str(isolated_sample), timeout=15,
+            "baseline",
+            "status",
+            cwd=str(isolated_sample),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2310,8 +2650,10 @@ class TestBaselineManagement:
     def test_baseline_debt(self, isolated_sample):
         """``baseline debt`` should run without traceback."""
         r = run_warden(
-            "baseline", "debt",
-            cwd=str(isolated_sample), timeout=15,
+            "baseline",
+            "debt",
+            cwd=str(isolated_sample),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2319,8 +2661,11 @@ class TestBaselineManagement:
     def test_baseline_debt_verbose(self, isolated_sample):
         """``baseline debt --verbose`` should produce detailed output."""
         r = run_warden(
-            "baseline", "debt", "--verbose",
-            cwd=str(isolated_sample), timeout=15,
+            "baseline",
+            "debt",
+            "--verbose",
+            cwd=str(isolated_sample),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2328,8 +2673,10 @@ class TestBaselineManagement:
     def test_baseline_migrate(self, initialized_project):
         """``baseline migrate`` on a fresh project should not crash."""
         r = run_warden(
-            "baseline", "migrate",
-            cwd=str(initialized_project), timeout=15,
+            "baseline",
+            "migrate",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2342,35 +2689,30 @@ class TestBaselineManagement:
         # Snapshot baseline state before scan
         baseline_before = set()
         if baseline_dir.exists():
-            baseline_before = {
-                (f.name, f.stat().st_mtime)
-                for f in baseline_dir.iterdir()
-                if f.is_file()
-            }
+            baseline_before = {(f.name, f.stat().st_mtime) for f in baseline_dir.iterdir() if f.is_file()}
 
         r = run_warden(
-            "scan", "--level", "basic", "--no-update-baseline",
+            "scan",
+            "--level",
+            "basic",
+            "--no-update-baseline",
             str(initialized_project / "app.py"),
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
         # Baseline state should be unchanged
         baseline_after = set()
         if baseline_dir.exists():
-            baseline_after = {
-                (f.name, f.stat().st_mtime)
-                for f in baseline_dir.iterdir()
-                if f.is_file()
-            }
-        assert baseline_before == baseline_after, (
-            "Baseline files were modified despite --no-update-baseline"
-        )
+            baseline_after = {(f.name, f.stat().st_mtime) for f in baseline_dir.iterdir() if f.is_file()}
+        assert baseline_before == baseline_after, "Baseline files were modified despite --no-update-baseline"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 28. Extended Output Formats
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestOutputFormatsExtended:
     """Verify JUnit, HTML, PDF, and badge output formats."""
@@ -2378,8 +2720,13 @@ class TestOutputFormatsExtended:
     def test_junit_format(self, isolated_sample):
         """``scan --format junit`` should run without traceback."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "junit",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "junit",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2388,9 +2735,15 @@ class TestOutputFormatsExtended:
         """``scan --format junit --output f.xml`` should create valid XML."""
         report = tmp_path / "report.xml"
         r = run_warden(
-            "scan", "--level", "basic", "--format", "junit",
-            "--output", str(report),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "junit",
+            "--output",
+            str(report),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             assert report.exists(), "JUnit output file was not created"
@@ -2400,8 +2753,13 @@ class TestOutputFormatsExtended:
     def test_html_format(self, isolated_sample):
         """``scan --format html`` should run without traceback."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "html",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "html",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2410,9 +2768,15 @@ class TestOutputFormatsExtended:
         """``scan --format html --output f.html`` should create an HTML file."""
         report = tmp_path / "report.html"
         r = run_warden(
-            "scan", "--level", "basic", "--format", "html",
-            "--output", str(report),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "html",
+            "--output",
+            str(report),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             assert report.exists(), "HTML output file was not created"
@@ -2420,8 +2784,13 @@ class TestOutputFormatsExtended:
     def test_pdf_format(self, isolated_sample):
         """``scan --format pdf`` should run without traceback (may warn about weasyprint)."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "pdf",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "pdf",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2430,9 +2799,15 @@ class TestOutputFormatsExtended:
         """``scan --format badge --output badge.svg`` should create SVG file."""
         report = tmp_path / "badge.svg"
         r = run_warden(
-            "scan", "--level", "basic", "--format", "badge",
-            "--output", str(report),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "badge",
+            "--output",
+            str(report),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             assert report.exists(), "Badge SVG file was not created"
@@ -2444,14 +2819,18 @@ class TestOutputFormatsExtended:
 # 29. Extended Scan Flags
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestScanFlagsExtended:
     """Verify additional scan flags work without crashing."""
 
     def test_scan_level_deep(self, isolated_sample):
         """``scan --level deep`` should complete with valid exit code."""
         r = run_warden(
-            "scan", "--level", "deep",
-            cwd=str(isolated_sample), timeout=120,
+            "scan",
+            "--level",
+            "deep",
+            cwd=str(isolated_sample),
+            timeout=120,
         )
         assert r.returncode in (0, 1, 2)
 
@@ -2459,23 +2838,34 @@ class TestScanFlagsExtended:
         """``scan --diff`` inside a git repo should not crash."""
         # Create a minimal git repo with init
         subprocess.run(
-            ["git", "init"], cwd=str(tmp_path),
-            capture_output=True, timeout=10,
+            ["git", "init"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            timeout=10,
         )
         subprocess.run(
             ["git", "commit", "--allow-empty", "-m", "init"],
-            cwd=str(tmp_path), capture_output=True, timeout=10,
+            cwd=str(tmp_path),
+            capture_output=True,
+            timeout=10,
         )
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(tmp_path), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(tmp_path),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         (tmp_path / "new.py").write_text("x = 1\n")
 
         r = run_warden(
-            "scan", "--diff", "--level", "basic",
-            cwd=str(tmp_path), timeout=60,
+            "scan",
+            "--diff",
+            "--level",
+            "basic",
+            cwd=str(tmp_path),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2483,23 +2873,36 @@ class TestScanFlagsExtended:
     def test_scan_diff_with_base(self, tmp_path):
         """``scan --diff --base main`` should not crash."""
         subprocess.run(
-            ["git", "init"], cwd=str(tmp_path),
-            capture_output=True, timeout=10,
+            ["git", "init"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            timeout=10,
         )
         subprocess.run(
             ["git", "commit", "--allow-empty", "-m", "init"],
-            cwd=str(tmp_path), capture_output=True, timeout=10,
+            cwd=str(tmp_path),
+            capture_output=True,
+            timeout=10,
         )
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(tmp_path), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(tmp_path),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         (tmp_path / "code.py").write_text("y = 2\n")
 
         r = run_warden(
-            "scan", "--diff", "--base", "main", "--level", "basic",
-            cwd=str(tmp_path), timeout=60,
+            "scan",
+            "--diff",
+            "--base",
+            "main",
+            "--level",
+            "basic",
+            cwd=str(tmp_path),
+            timeout=60,
         )
         # May fail if no 'main' branch exists, but should not traceback
         assert r.returncode in (0, 1, 2)
@@ -2508,8 +2911,12 @@ class TestScanFlagsExtended:
     def test_scan_memory_profile(self, isolated_sample):
         """``scan --memory-profile`` should include memory info in output."""
         r = run_warden(
-            "scan", "--level", "basic", "--memory-profile",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--memory-profile",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2517,8 +2924,13 @@ class TestScanFlagsExtended:
     def test_scan_invalid_format(self, isolated_sample):
         """``scan --format invalid_xyz`` should exit nonzero or gracefully fallback."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "invalid_xyz",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "invalid_xyz",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         # Either rejected upfront or falls back; should not crash
         assert "Traceback" not in r.stdout + r.stderr
@@ -2527,6 +2939,7 @@ class TestScanFlagsExtended:
 # ═══════════════════════════════════════════════════════════════════════════
 # 30. Refresh Command
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRefreshCommand:
     """Verify ``warden refresh`` and its flags."""
@@ -2541,7 +2954,8 @@ class TestRefreshCommand:
         """``refresh`` on an initialized project should not crash."""
         r = run_warden(
             "refresh",
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2549,8 +2963,10 @@ class TestRefreshCommand:
     def test_refresh_quick(self, initialized_project):
         """``refresh --quick`` should complete without traceback."""
         r = run_warden(
-            "refresh", "--quick",
-            cwd=str(initialized_project), timeout=60,
+            "refresh",
+            "--quick",
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2559,6 +2975,7 @@ class TestRefreshCommand:
 # ═══════════════════════════════════════════════════════════════════════════
 # 31. Search Command
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSearchCommand:
     """Verify ``warden search`` and its flags."""
@@ -2572,8 +2989,11 @@ class TestSearchCommand:
     def test_search_local(self, initialized_project):
         """``search "query" --local`` should not crash."""
         r = run_warden(
-            "search", "test query", "--local",
-            cwd=str(initialized_project), timeout=30,
+            "search",
+            "test query",
+            "--local",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2582,6 +3002,7 @@ class TestSearchCommand:
 # ═══════════════════════════════════════════════════════════════════════════
 # 32. Install & Update Commands
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestInstallUpdateCommands:
     """Verify ``warden install`` and ``warden update`` basics."""
@@ -2600,7 +3021,8 @@ class TestInstallUpdateCommands:
         """``update`` should complete without hanging."""
         r = run_warden(
             "update",
-            cwd=str(initialized_project), timeout=30,
+            cwd=str(initialized_project),
+            timeout=30,
         )
         # update may fail if no network / no sync target — just verify it completes
         assert r.returncode is not None
@@ -2610,14 +3032,18 @@ class TestInstallUpdateCommands:
 # 33. Serve Commands
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestServeCommands:
     """Verify ``warden serve`` subcommands."""
 
     def test_serve_mcp_status(self, initialized_project):
         """``serve mcp status`` should run without traceback."""
         r = run_warden(
-            "serve", "mcp", "status",
-            cwd=str(initialized_project), timeout=15,
+            "serve",
+            "mcp",
+            "status",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2637,6 +3063,7 @@ class TestServeCommands:
 # 34. Chat Command
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestChatCommand:
     """Verify ``warden chat`` basics."""
 
@@ -2650,29 +3077,42 @@ class TestChatCommand:
 # 35. CI Mode Extended
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCIModeExtended:
     """Extended CI mode tests combining multiple flags."""
 
     def test_ci_with_diff(self, tmp_path):
         """``scan --ci --diff`` should not crash."""
         subprocess.run(
-            ["git", "init"], cwd=str(tmp_path),
-            capture_output=True, timeout=10,
+            ["git", "init"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            timeout=10,
         )
         subprocess.run(
             ["git", "commit", "--allow-empty", "-m", "init"],
-            cwd=str(tmp_path), capture_output=True, timeout=10,
+            cwd=str(tmp_path),
+            capture_output=True,
+            timeout=10,
         )
         run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(tmp_path), timeout=30,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(tmp_path),
+            timeout=30,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         (tmp_path / "app.py").write_text("x = 1\n")
 
         r = run_warden(
-            "scan", "--ci", "--diff", "--level", "basic",
-            cwd=str(tmp_path), timeout=60,
+            "scan",
+            "--ci",
+            "--diff",
+            "--level",
+            "basic",
+            cwd=str(tmp_path),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2681,9 +3121,14 @@ class TestCIModeExtended:
         """``scan --ci --no-update-baseline`` should work."""
         (initialized_project / "app.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--ci", "--no-update-baseline", "--level", "basic",
+            "scan",
+            "--ci",
+            "--no-update-baseline",
+            "--level",
+            "basic",
             str(initialized_project / "app.py"),
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2693,10 +3138,17 @@ class TestCIModeExtended:
         (initialized_project / "main.py").write_text("print('ok')\n")
         report = tmp_path / "ci_report.json"
         r = run_warden(
-            "scan", "--ci", "--level", "basic",
-            "--format", "json", "--output", str(report),
+            "scan",
+            "--ci",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            "--output",
+            str(report),
             str(initialized_project / "main.py"),
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
         )
         if r.returncode in (0, 2):
             assert report.exists(), "CI JSON report was not created"
@@ -2707,9 +3159,13 @@ class TestCIModeExtended:
         """``scan --ci`` with CI=true env should work."""
         (initialized_project / "app.py").write_text("x = 1\n")
         r = run_warden(
-            "scan", "--ci", "--level", "basic",
+            "scan",
+            "--ci",
+            "--level",
+            "basic",
             str(initialized_project / "app.py"),
-            cwd=str(initialized_project), timeout=60,
+            cwd=str(initialized_project),
+            timeout=60,
             env={"CI": "true"},
         )
         assert r.returncode in (0, 1, 2)
@@ -2720,14 +3176,17 @@ class TestCIModeExtended:
 # 36. CI Subcommands
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCISubcommands:
     """Verify ``warden ci`` subcommands."""
 
     def test_ci_status(self, initialized_project):
         """``ci status`` should run without traceback."""
         r = run_warden(
-            "ci", "status",
-            cwd=str(initialized_project), timeout=15,
+            "ci",
+            "status",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2735,8 +3194,10 @@ class TestCISubcommands:
     def test_ci_init(self, initialized_project):
         """``ci init`` on an initialized project should complete."""
         r = run_warden(
-            "ci", "init",
-            cwd=str(initialized_project), timeout=30,
+            "ci",
+            "init",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         # ci init may fail if no CI provider detected — just verify it completes
         assert r.returncode is not None
@@ -2751,8 +3212,10 @@ class TestCISubcommands:
     def test_ci_sync(self, initialized_project):
         """``ci sync`` should not crash."""
         r = run_warden(
-            "ci", "sync",
-            cwd=str(initialized_project), timeout=15,
+            "ci",
+            "sync",
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2761,6 +3224,7 @@ class TestCISubcommands:
 # ═══════════════════════════════════════════════════════════════════════════
 # 37. Suppression Accuracy
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSuppressionAccuracy:
     """Verify suppression actually reduces findings in JSON output."""
@@ -2801,19 +3265,13 @@ class TestSuppressionAccuracy:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         supp_path = isolated_sample / ".warden" / "suppression.yaml"
-        supp_path.write_text(
-            "enabled: true\n"
-            "globalRules:\n"
-            "  - \"*\"\n"
-        )
+        supp_path.write_text('enabled: true\nglobalRules:\n  - "*"\n')
 
         data_on = self._scan_json(isolated_sample)
         count_on = self._count_findings(data_on)
 
         # With wildcard suppression, findings should not increase
-        assert count_on <= count_off, (
-            f"Suppression did not reduce findings: {count_off} -> {count_on}"
-        )
+        assert count_on <= count_off, f"Suppression did not reduce findings: {count_off} -> {count_on}"
 
     def test_global_rule_suppression(self, isolated_sample):
         """Global rule suppression for a specific rule should reduce findings."""
@@ -2825,16 +3283,14 @@ class TestSuppressionAccuracy:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         supp_path = isolated_sample / ".warden" / "suppression.yaml"
-        supp_path.write_text(
-            "enabled: true\n"
-            "globalRules:\n"
-            "  - hardcoded-secret\n"
-            "  - magic-number\n"
-        )
+        supp_path.write_text("enabled: true\nglobalRules:\n  - hardcoded-secret\n  - magic-number\n")
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2849,15 +3305,14 @@ class TestSuppressionAccuracy:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         supp_path = isolated_sample / ".warden" / "suppression.yaml"
-        supp_path.write_text(
-            "enabled: true\n"
-            "ignoredFiles:\n"
-            "  - \"**/*.py\"\n"
-        )
+        supp_path.write_text('enabled: true\nignoredFiles:\n  - "**/*.py"\n')
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2875,9 +3330,12 @@ class TestSuppressionAccuracy:
         config_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
         r = run_warden(
-            "scan", "--level", "basic",
+            "scan",
+            "--level",
+            "basic",
             str(supp_file),
-            cwd=str(isolated_sample), timeout=60,
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2887,14 +3345,20 @@ class TestSuppressionAccuracy:
 # 38. Multi-File Scanning
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestMultiFileScan:
     """Verify scanning directories with multiple files works correctly."""
 
     def test_scan_directory_discovers_all_files(self, isolated_sample):
         """Run warden scan on directory and verify multiple files are processed."""
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -2918,8 +3382,7 @@ class TestMultiFileScan:
 
                 # Fixture has 10+ files; at least 2 should appear in findings
                 assert len(files_processed) >= 2, (
-                    f"Expected findings from at least 2 files, got {len(files_processed)}. "
-                    f"Files: {files_processed}"
+                    f"Expected findings from at least 2 files, got {len(files_processed)}. Files: {files_processed}"
                 )
 
     def test_scan_counts_exceed_single_file(self, isolated_sample):
@@ -2927,15 +3390,25 @@ class TestMultiFileScan:
         # Scan single file
         single_file = isolated_sample / "src" / "vulnerable.py"
         r_single = run_warden(
-            "scan", "--level", "basic", "--format", "json",
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
             str(single_file),
-            cwd=str(isolated_sample), timeout=60,
+            cwd=str(isolated_sample),
+            timeout=60,
         )
 
         # Scan entire directory
         r_dir = run_warden(
-            "scan", "--level", "basic", "--format", "json",
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            cwd=str(isolated_sample),
+            timeout=60,
         )
 
         # Both should complete successfully
@@ -2955,9 +3428,7 @@ class TestMultiFileScan:
             dir_count = count_findings(data_dir)
 
             # Directory scan should find at least one finding from fixture's vulnerable files
-            assert dir_count > 0, (
-                f"Directory scan should find findings from fixture files, got {dir_count}"
-            )
+            assert dir_count > 0, f"Directory scan should find findings from fixture files, got {dir_count}"
 
     def test_fixture_has_minimum_file_count(self, isolated_sample):
         """Verify the fixture has at least 10 Python files."""
@@ -2969,14 +3440,14 @@ class TestMultiFileScan:
         file_count = len(python_files)
 
         assert file_count >= 10, (
-            f"Expected at least 10 Python files in fixture, found {file_count}. "
-            f"Files: {[f.name for f in python_files]}"
+            f"Expected at least 10 Python files in fixture, found {file_count}. Files: {[f.name for f in python_files]}"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 39. Config Edge Cases
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestConfigEdgeCases:
     """Test configuration priority, error handling, and edge cases."""
@@ -2992,7 +3463,7 @@ class TestConfigEdgeCases:
             "frames": ["security", "resilience"],
             "settings": {
                 "mode": "strict",
-            }
+            },
         }
         root_config.write_text(yaml.dump(root_cfg, default_flow_style=False))
 
@@ -3004,8 +3475,10 @@ class TestConfigEdgeCases:
 
         # Run config list to verify which config is active
         r = run_warden(
-            "config", "list",
-            cwd=str(initialized_project), timeout=30,
+            "config",
+            "list",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         _assert_no_crash(r, allowed=(0, 1), context="config list")
 
@@ -3019,7 +3492,8 @@ class TestConfigEdgeCases:
     def test_init_ollama_unreachable_no_crash(self, initialized_project):
         """Init should not crash when Ollama host is unreachable."""
         r = run_warden(
-            "init", "--force",
+            "init",
+            "--force",
             cwd=str(initialized_project),
             timeout=30,
             env={
@@ -3028,31 +3502,25 @@ class TestConfigEdgeCases:
             },
         )
         # Should complete without traceback (returncode 0 or 1)
-        assert r.returncode in (0, 1), (
-            f"Unexpected crash, returncode={r.returncode}"
-        )
+        assert r.returncode in (0, 1), f"Unexpected crash, returncode={r.returncode}"
         combined = r.stdout + r.stderr
-        assert "Traceback" not in combined, (
-            f"Found traceback in output:\n{combined}"
-        )
+        assert "Traceback" not in combined, f"Found traceback in output:\n{combined}"
 
     def test_scan_with_nonexistent_frame_no_crash(self, initialized_project):
         """Scan should handle unknown frame gracefully without crashing."""
         r = run_warden(
             "scan",
-            "--level", "basic",
-            "--frame", "nonexistent_xyz_frame",
+            "--level",
+            "basic",
+            "--frame",
+            "nonexistent_xyz_frame",
             cwd=str(initialized_project),
             timeout=30,
         )
         # Should not crash with signal (returncode should be 0, 1, or 2)
-        assert r.returncode in (0, 1, 2), (
-            f"Unexpected crash, returncode={r.returncode}"
-        )
+        assert r.returncode in (0, 1, 2), f"Unexpected crash, returncode={r.returncode}"
         combined = r.stdout + r.stderr
-        assert "Traceback" not in combined, (
-            f"Found traceback in output:\n{combined}"
-        )
+        assert "Traceback" not in combined, f"Found traceback in output:\n{combined}"
         # Should contain error or warning about unknown frame
         lower_output = combined.lower()
         assert (
@@ -3068,6 +3536,7 @@ class TestConfigEdgeCases:
 # 40. Baseline Workflow E2E (#41)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestBaselineWorkflow:
     """Verify baseline create → modify → rescan lifecycle.
 
@@ -3078,42 +3547,38 @@ class TestBaselineWorkflow:
     def test_scan_creates_baseline(self, initialized_project):
         """First scan should create a baseline directory under .warden/baseline/."""
         vuln = initialized_project / "vuln.py"
-        vuln.write_text(
-            "import os\n"
-            "def run(cmd):\n"
-            "    os.system(cmd)  # command injection\n"
-        )
+        vuln.write_text("import os\ndef run(cmd):\n    os.system(cmd)  # command injection\n")
 
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2), f"Scan failed: {r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
         baseline_dir = initialized_project / ".warden" / "baseline"
-        assert baseline_dir.exists(), (
-            "Baseline directory should be created after first scan"
-        )
+        assert baseline_dir.exists(), "Baseline directory should be created after first scan"
         # Should have at least _meta.json or a frame json file
         baseline_files = list(baseline_dir.glob("*.json"))
-        assert len(baseline_files) >= 1, (
-            f"Expected at least 1 baseline file, found: {[f.name for f in baseline_files]}"
-        )
+        assert len(baseline_files) >= 1, f"Expected at least 1 baseline file, found: {[f.name for f in baseline_files]}"
 
     def test_no_update_baseline_flag_preserves_baseline(self, initialized_project):
         """--no-update-baseline should keep existing baseline unchanged."""
         vuln = initialized_project / "vuln.py"
-        vuln.write_text(
-            "import os\n"
-            "def run(cmd):\n"
-            "    os.system(cmd)  # command injection\n"
-        )
+        vuln.write_text("import os\ndef run(cmd):\n    os.system(cmd)  # command injection\n")
 
         # First scan to create baseline
         run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
         )
 
         baseline_dir = initialized_project / ".warden" / "baseline"
@@ -3127,16 +3592,18 @@ class TestBaselineWorkflow:
 
         # Add a new vulnerability
         vuln.write_text(
-            "import os\n"
-            "def run(cmd):\n"
-            "    os.system(cmd)  # command injection\n"
-            "    eval(cmd)  # code injection\n"
+            "import os\ndef run(cmd):\n    os.system(cmd)  # command injection\n    eval(cmd)  # code injection\n"
         )
 
         # Rescan with --no-update-baseline
         r = run_warden(
-            "scan", "--level", "basic", "--no-update-baseline", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--no-update-baseline",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
 
@@ -3147,9 +3614,7 @@ class TestBaselineWorkflow:
             f"Before: {sorted(baseline_before.keys())}, After: {sorted(baseline_after.keys())}"
         )
         for name, content in baseline_before.items():
-            assert baseline_after[name] == content, (
-                f"Baseline file {name} was modified despite --no-update-baseline"
-            )
+            assert baseline_after[name] == content, f"Baseline file {name} was modified despite --no-update-baseline"
 
     def test_baseline_status_runs(self, initialized_project):
         """baseline status should report health without crashing."""
@@ -3157,17 +3622,21 @@ class TestBaselineWorkflow:
 
         # Create baseline via scan
         run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
         )
 
         r = run_warden(
-            "baseline", "status",
-            cwd=str(initialized_project), timeout=30,
+            "baseline",
+            "status",
+            cwd=str(initialized_project),
+            timeout=30,
         )
-        assert r.returncode in (0, 1), (
-            f"baseline status crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1), f"baseline status crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_baseline_debt_runs(self, initialized_project):
@@ -3175,23 +3644,28 @@ class TestBaselineWorkflow:
         vuln = _make_vuln_file(initialized_project)
 
         run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
         )
 
         r = run_warden(
-            "baseline", "debt",
-            cwd=str(initialized_project), timeout=30,
+            "baseline",
+            "debt",
+            cwd=str(initialized_project),
+            timeout=30,
         )
-        assert r.returncode in (0, 1), (
-            f"baseline debt crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1), f"baseline debt crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 41. Environment Variable Overrides (#42)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEnvVarOverrides:
     """Verify WARDEN_LLM_PROVIDER and WARDEN_FAST_MODEL env var overrides."""
@@ -3202,14 +3676,16 @@ class TestEnvVarOverrides:
 
         # Run scan with WARDEN_LLM_PROVIDER override to a known provider
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
             env={"WARDEN_LLM_PROVIDER": "ollama"},
         )
         # Should not crash — the override is accepted
-        assert r.returncode in (0, 1, 2), (
-            f"Env override scan crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Env override scan crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_warden_model_env_override(self, initialized_project):
@@ -3217,13 +3693,15 @@ class TestEnvVarOverrides:
         vuln = _make_vuln_file(initialized_project)
 
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
-            env={"WARDEN_FAST_MODEL": "qwen2.5-coder:0.5b"},
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
+            env={"WARDEN_FAST_MODEL": "qwen2.5-coder:3b"},
         )
-        assert r.returncode in (0, 1, 2), (
-            f"Model env override crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Model env override crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_env_override_does_not_modify_config_file(self, initialized_project):
@@ -3235,19 +3713,22 @@ class TestEnvVarOverrides:
 
         # Run scan with env var overrides
         run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
             env={
                 "WARDEN_LLM_PROVIDER": "ollama",
-                "WARDEN_FAST_MODEL": "qwen2.5-coder:0.5b",
+                "WARDEN_FAST_MODEL": "qwen2.5-coder:3b",
             },
         )
 
         # Config file should be unchanged
         config_after = config_path.read_text()
         assert config_before == config_after, (
-            "config.yaml was modified by env var override scan!\n"
-            f"Before:\n{config_before}\n\nAfter:\n{config_after}"
+            f"config.yaml was modified by env var override scan!\nBefore:\n{config_before}\n\nAfter:\n{config_after}"
         )
 
     def test_invalid_provider_env_no_crash(self, initialized_project):
@@ -3255,14 +3736,16 @@ class TestEnvVarOverrides:
         vuln = _make_vuln_file(initialized_project)
 
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
             env={"WARDEN_LLM_PROVIDER": "nonexistent_provider_xyz"},
         )
         # May fail (exit 1), but should not crash with traceback
-        assert r.returncode in (0, 1, 2), (
-            f"Invalid provider crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Invalid provider crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_fast_tier_priority_env_overrides_config_yaml(self, initialized_project):
@@ -3272,22 +3755,25 @@ class TestEnvVarOverrides:
         # Config.yaml may have claude_code in fast_tier_providers.
         # Env var sets only ollama → scan should not try claude_code or groq.
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
             env={
                 "WARDEN_LLM_PROVIDER": "ollama",
                 "WARDEN_FAST_TIER_PRIORITY": "ollama",
             },
         )
-        assert r.returncode in (0, 1, 2), (
-            f"Fast tier priority env override crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Fast tier priority env override crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 42. Edge Cases — Symlinks, Large Files, Negative Config (#45)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestEdgeCases:
     """Tier 2 edge cases: symlinks, large files, negative config values."""
@@ -3307,13 +3793,15 @@ class TestEdgeCases:
         (dir_b / "link_a").symlink_to(dir_a)
 
         r = run_warden(
-            "scan", "--level", "basic", str(dir_a),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(dir_a),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         # Must not hang or crash with signal
-        assert r.returncode in (0, 1, 2), (
-            f"Symlink cycle crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Symlink cycle crashed: rc={r.returncode}\n{r.stderr}"
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
@@ -3330,12 +3818,14 @@ class TestEdgeCases:
         assert file_size > 1_000_000, f"File too small: {file_size} bytes"
 
         r = run_warden(
-            "scan", "--level", "basic", str(large_file),
-            cwd=str(initialized_project), timeout=120,
+            "scan",
+            "--level",
+            "basic",
+            str(large_file),
+            cwd=str(initialized_project),
+            timeout=120,
         )
-        assert r.returncode in (0, 1, 2), (
-            f"Large file scan crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Large file scan crashed: rc={r.returncode}\n{r.stderr}"
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
@@ -3350,26 +3840,29 @@ class TestEdgeCases:
         vuln.write_text("x = 1\n")
 
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         # Should not crash -- may use default timeout or fail gracefully
-        assert r.returncode in (0, 1, 2), (
-            f"Negative timeout crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Negative timeout crashed: rc={r.returncode}\n{r.stderr}"
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
     def test_binary_file_in_scan_path(self, initialized_project):
         """Binary file mixed with Python should not crash scanner."""
-        (initialized_project / "image.png").write_bytes(
-            b"\x89PNG\r\n\x1a\n" + b"\x00" * 1024
-        )
+        (initialized_project / "image.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 1024)
         (initialized_project / "code.py").write_text("x = 1\n")
 
         r = run_warden(
-            "scan", "--level", "basic",
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         combined = r.stdout + r.stderr
@@ -3384,8 +3877,12 @@ class TestEdgeCases:
         (deep / "deep.py").write_text("x = eval(input())\n")
 
         r = run_warden(
-            "scan", "--level", "basic", str(initialized_project),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(initialized_project),
+            cwd=str(initialized_project),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         combined = r.stdout + r.stderr
@@ -3395,6 +3892,7 @@ class TestEdgeCases:
 # ═══════════════════════════════════════════════════════════════════════════
 # 43. Untested Commands — serve, chat, index, status (#45)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestUntestedCommands:
     """Functional smoke tests for commands that only had --help coverage."""
@@ -3420,18 +3918,15 @@ class TestUntestedCommands:
 
     def test_index_on_initialized_project(self, initialized_project):
         """index should run without crash on an initialized project."""
-        (initialized_project / "app.py").write_text(
-            "def main():\n    print('hello')\n"
-        )
+        (initialized_project / "app.py").write_text("def main():\n    print('hello')\n")
 
         r = run_warden(
             "index",
-            cwd=str(initialized_project), timeout=30,
+            cwd=str(initialized_project),
+            timeout=30,
         )
         # May succeed or fail (missing dependencies), but no crash
-        assert r.returncode in (0, 1), (
-            f"index crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1), f"index crashed: rc={r.returncode}\n{r.stderr}"
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
@@ -3439,11 +3934,10 @@ class TestUntestedCommands:
         """status without prior scan should not crash."""
         r = run_warden(
             "status",
-            cwd=str(initialized_project), timeout=15,
+            cwd=str(initialized_project),
+            timeout=15,
         )
-        assert r.returncode in (0, 1), (
-            f"status crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1), f"status crashed: rc={r.returncode}\n{r.stderr}"
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
@@ -3452,13 +3946,18 @@ class TestUntestedCommands:
         vuln = _make_vuln_file(initialized_project)
 
         run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(initialized_project), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(initialized_project),
+            timeout=60,
         )
 
         r = run_warden(
             "status",
-            cwd=str(initialized_project), timeout=15,
+            cwd=str(initialized_project),
+            timeout=15,
         )
         assert r.returncode in (0, 1)
         combined = r.stdout + r.stderr
@@ -3467,13 +3966,13 @@ class TestUntestedCommands:
     def test_status_fetch_no_crash(self, initialized_project):
         """status --fetch should not crash (may fail without CI)."""
         r = run_warden(
-            "status", "--fetch",
-            cwd=str(initialized_project), timeout=30,
+            "status",
+            "--fetch",
+            cwd=str(initialized_project),
+            timeout=30,
         )
         # Will likely fail (no CI configured) but should not crash
-        assert r.returncode in (0, 1), (
-            f"status --fetch crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1), f"status --fetch crashed: rc={r.returncode}\n{r.stderr}"
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
@@ -3481,6 +3980,7 @@ class TestUntestedCommands:
 # ═══════════════════════════════════════════════════════════════════════════
 # 44. Provider Blocking — WARDEN_BLOCKED_PROVIDERS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBlockedProviders:
     """Verify WARDEN_BLOCKED_PROVIDERS env var filters providers correctly."""
@@ -3490,14 +3990,16 @@ class TestBlockedProviders:
         vuln = _make_vuln_file(isolated_sample)
 
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
             env={"WARDEN_BLOCKED_PROVIDERS": "claude_code"},
         )
         # Must not crash — blocking a provider is graceful degradation
-        assert r.returncode in (0, 1, 2), (
-            f"Blocked-provider scan crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Blocked-provider scan crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_blocked_providers_invalid_name_no_crash(self, isolated_sample):
@@ -3505,13 +4007,15 @@ class TestBlockedProviders:
         vuln = _make_vuln_file(isolated_sample)
 
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
             env={"WARDEN_BLOCKED_PROVIDERS": "totally_nonexistent_provider_xyz"},
         )
-        assert r.returncode in (0, 1, 2), (
-            f"Invalid blocked provider crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Invalid blocked provider crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_blocked_providers_multiple_comma_separated(self, isolated_sample):
@@ -3519,19 +4023,22 @@ class TestBlockedProviders:
         vuln = _make_vuln_file(isolated_sample)
 
         r = run_warden(
-            "scan", "--level", "basic", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
             env={"WARDEN_BLOCKED_PROVIDERS": "claude_code,openrouter"},
         )
-        assert r.returncode in (0, 1, 2), (
-            f"Multi-block scan crashed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode in (0, 1, 2), f"Multi-block scan crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 45. Init --provider flag
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestInitProviderFlag:
     """Verify ``warden init --provider`` writes the correct provider to config."""
@@ -3543,8 +4050,13 @@ class TestInitProviderFlag:
         password prompt (cloud providers check for existing key first).
         """
         r = run_warden(
-            "init", "--force", "--skip-mcp", "--provider", "groq",
-            cwd=str(empty_dir), timeout=90,
+            "init",
+            "--force",
+            "--skip-mcp",
+            "--provider",
+            "groq",
+            cwd=str(empty_dir),
+            timeout=90,
             env={
                 "WARDEN_NON_INTERACTIVE": "true",
                 "GROQ_API_KEY": "gsk_test_fake_key_for_acceptance_tests",
@@ -3552,54 +4064,60 @@ class TestInitProviderFlag:
         )
         assert r.returncode == 0, f"init --provider groq failed:\n{r.stderr}"
         cfg = _load_config(empty_dir)
-        assert cfg["llm"]["provider"] == "groq", (
-            f"Expected provider=groq, got: {cfg['llm']['provider']}"
-        )
+        assert cfg["llm"]["provider"] == "groq", f"Expected provider=groq, got: {cfg['llm']['provider']}"
 
     def test_init_provider_flag_ollama(self, empty_dir):
         """``warden init --provider ollama`` should write ollama to config."""
         r = run_warden(
-            "init", "--force", "--skip-mcp", "--provider", "ollama",
-            cwd=str(empty_dir), timeout=90,
+            "init",
+            "--force",
+            "--skip-mcp",
+            "--provider",
+            "ollama",
+            cwd=str(empty_dir),
+            timeout=90,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         assert r.returncode == 0, f"init --provider ollama failed:\n{r.stderr}"
         cfg = _load_config(empty_dir)
-        assert cfg["llm"]["provider"] == "ollama", (
-            f"Expected provider=ollama, got: {cfg['llm']['provider']}"
-        )
+        assert cfg["llm"]["provider"] == "ollama", f"Expected provider=ollama, got: {cfg['llm']['provider']}"
 
     def test_init_ci_env_excludes_claude_code(self, empty_dir):
         """CI=true environment should not produce claude_code as the provider."""
         r = run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=90,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=90,
             env={"WARDEN_NON_INTERACTIVE": "true", "CI": "true"},
         )
         assert r.returncode == 0, f"CI-mode init failed:\n{r.stderr}"
         cfg = _load_config(empty_dir)
-        assert cfg["llm"]["provider"] != "claude_code", (
-            "claude_code was written to config.yaml in a CI environment"
-        )
+        assert cfg["llm"]["provider"] != "claude_code", "claude_code was written to config.yaml in a CI environment"
 
     def test_init_non_interactive_uses_ollama_default(self, empty_dir):
         """Non-interactive init without a provider flag defaults to ollama."""
         r = run_warden(
-            "init", "--force", "--skip-mcp",
-            cwd=str(empty_dir), timeout=90,
+            "init",
+            "--force",
+            "--skip-mcp",
+            cwd=str(empty_dir),
+            timeout=90,
             env={"WARDEN_NON_INTERACTIVE": "true"},
         )
         assert r.returncode == 0
         cfg = _load_config(empty_dir)
         # In non-interactive mode without explicit claude_code CLI, should default to ollama
-        assert cfg["llm"]["provider"] in (
-            "ollama", "claude_code"
-        ), f"Unexpected non-interactive default: {cfg['llm']['provider']}"
+        assert cfg["llm"]["provider"] in ("ollama", "claude_code"), (
+            f"Unexpected non-interactive default: {cfg['llm']['provider']}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 46. warden ci-config command
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCiConfigCommand:
     """Verify the ``warden ci-config`` CLI command."""
@@ -3618,27 +4136,29 @@ class TestCiConfigCommand:
 
         r = run_warden(
             "ci-config",
-            "--ci-provider", "github",
-            "--llm-provider", "groq",
-            cwd=str(tmp_path), timeout=30,
+            "--ci-provider",
+            "github",
+            "--llm-provider",
+            "groq",
+            cwd=str(tmp_path),
+            timeout=30,
         )
-        assert r.returncode == 0, (
-            f"ci-config github+groq failed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode == 0, f"ci-config github+groq failed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
         # Check at least one workflow file was created
         workflows = list((tmp_path / ".github" / "workflows").glob("warden-*.yml"))
-        assert workflows, (
-            f"No warden-*.yml files created in .github/workflows/\n{r.stdout}"
-        )
+        assert workflows, f"No warden-*.yml files created in .github/workflows/\n{r.stdout}"
 
     def test_ci_config_no_crash_invalid_provider(self, tmp_path):
         """Invalid --llm-provider should exit non-zero without traceback."""
         r = run_warden(
             "ci-config",
-            "--ci-provider", "github",
-            "--llm-provider", "nonexistent_provider_xyz",
-            cwd=str(tmp_path), timeout=10,
+            "--ci-provider",
+            "github",
+            "--llm-provider",
+            "nonexistent_provider_xyz",
+            cwd=str(tmp_path),
+            timeout=10,
         )
         # Must fail gracefully (exit 1), not crash
         assert r.returncode != 0
@@ -3650,22 +4170,38 @@ class TestCiConfigCommand:
 
         # First run
         r1 = run_warden(
-            "ci-config", "--ci-provider", "github", "--llm-provider", "groq",
-            cwd=str(tmp_path), timeout=30,
+            "ci-config",
+            "--ci-provider",
+            "github",
+            "--llm-provider",
+            "groq",
+            cwd=str(tmp_path),
+            timeout=30,
         )
         assert r1.returncode == 0, f"First ci-config run failed:\n{r1.stderr}"
 
         # Second run without --force should fail (files exist)
         r2 = run_warden(
-            "ci-config", "--ci-provider", "github", "--llm-provider", "groq",
-            cwd=str(tmp_path), timeout=10,
+            "ci-config",
+            "--ci-provider",
+            "github",
+            "--llm-provider",
+            "groq",
+            cwd=str(tmp_path),
+            timeout=10,
         )
         assert r2.returncode != 0, "Expected failure without --force on existing files"
 
         # Third run with --force should succeed
         r3 = run_warden(
-            "ci-config", "--ci-provider", "github", "--llm-provider", "groq", "--force",
-            cwd=str(tmp_path), timeout=30,
+            "ci-config",
+            "--ci-provider",
+            "github",
+            "--llm-provider",
+            "groq",
+            "--force",
+            cwd=str(tmp_path),
+            timeout=30,
         )
         assert r3.returncode == 0, f"ci-config --force failed:\n{r3.stderr}"
         assert "Traceback" not in r3.stdout + r3.stderr
@@ -3676,22 +4212,22 @@ class TestCiConfigCommand:
 
         r = run_warden(
             "ci-config",
-            "--ci-provider", "gitlab",
-            "--llm-provider", "ollama",
-            cwd=str(tmp_path), timeout=30,
+            "--ci-provider",
+            "gitlab",
+            "--llm-provider",
+            "ollama",
+            cwd=str(tmp_path),
+            timeout=30,
         )
-        assert r.returncode == 0, (
-            f"ci-config gitlab failed: rc={r.returncode}\n{r.stderr}"
-        )
+        assert r.returncode == 0, f"ci-config gitlab failed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr
-        assert (tmp_path / ".gitlab-ci.yml").exists(), (
-            ".gitlab-ci.yml was not created"
-        )
+        assert (tmp_path / ".gitlab-ci.yml").exists(), ".gitlab-ci.yml was not created"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 47. Status Command — Local Report Reading
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestStatusCommand:
     """Verify ``warden status`` reads reports and shows useful output."""
@@ -3733,6 +4269,7 @@ class TestStatusCommand:
 # 48. Index Command — Semantic Search Indexing
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIndexCommand:
     """Verify ``warden index`` command basics."""
 
@@ -3766,6 +4303,7 @@ class TestIndexCommand:
 # ═══════════════════════════════════════════════════════════════════════════
 # 49. Refresh Command — Extended Flag Coverage
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRefreshCommandExtended:
     """Extended flag coverage for ``warden refresh``."""
@@ -3801,6 +4339,7 @@ class TestRefreshCommandExtended:
 # 50. Serve MCP — Registration & Protocol Smoke Tests
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestServeMCPExtended:
     """Extended MCP command coverage: register, status, start."""
 
@@ -3818,9 +4357,7 @@ class TestServeMCPExtended:
         # Output should mention at least one AI tool
         out = r.stdout + r.stderr
         tools = ["claude", "cursor", "windsurf", "gemini", "mcp"]
-        assert any(t in out.lower() for t in tools), (
-            f"MCP status output doesn't mention any known tool:\n{out[:400]}"
-        )
+        assert any(t in out.lower() for t in tools), f"MCP status output doesn't mention any known tool:\n{out[:400]}"
 
     def test_serve_mcp_start_exits_quickly_with_sigterm(self, isolated_sample):
         """``serve mcp start`` as a subprocess should be killable."""
@@ -3831,6 +4368,7 @@ class TestServeMCPExtended:
             stderr=subprocess.PIPE,
         )
         import time
+
         time.sleep(1)  # Let it start
         proc.terminate()
         try:
@@ -3852,16 +4390,18 @@ class TestServeMCPExtended:
         import threading
 
         msg = (
-            json.dumps({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "test", "version": "1.0"},
-                },
-            })
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1.0"},
+                    },
+                }
+            )
             + "\n"
         )
 
@@ -3902,9 +4442,7 @@ class TestServeMCPExtended:
             response = response_q.get()
             try:
                 data = json.loads(response)
-                assert "result" in data or "error" in data, (
-                    f"Unexpected MCP response: {response[:200]}"
-                )
+                assert "result" in data or "error" in data, f"Unexpected MCP response: {response[:200]}"
             except json.JSONDecodeError:
                 pass  # Non-JSON response tolerated
         # If no response yet: server may still be initialising — not a failure
@@ -3915,25 +4453,29 @@ class TestServeMCPExtended:
         import threading
 
         initialize_msg = (
-            json.dumps({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "test", "version": "1.0"},
-                },
-            })
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1.0"},
+                    },
+                }
+            )
             + "\n"
         )
         tools_msg = (
-            json.dumps({
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/list",
-                "params": {},
-            })
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/list",
+                    "params": {},
+                }
+            )
             + "\n"
         )
 
@@ -3965,6 +4507,7 @@ class TestServeMCPExtended:
         proc.stdin.write(initialize_msg)  # type: ignore[union-attr]
         proc.stdin.flush()  # type: ignore[union-attr]
         import time
+
         time.sleep(0.5)
         proc.stdin.write(tools_msg)  # type: ignore[union-attr]
         proc.stdin.flush()  # type: ignore[union-attr]
@@ -3981,9 +4524,7 @@ class TestServeMCPExtended:
         for resp in responses:
             try:
                 data = json.loads(resp)
-                assert "result" in data or "error" in data, (
-                    f"Unexpected MCP response: {resp[:200]}"
-                )
+                assert "result" in data or "error" in data, f"Unexpected MCP response: {resp[:200]}"
             except json.JSONDecodeError:
                 pass  # Non-JSON output tolerated
 
@@ -3992,6 +4533,7 @@ class TestServeMCPExtended:
 # 51. Scan Output Format Validation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestScanOutputFormatValidation:
     """Verify scan --format output is actually parseable."""
 
@@ -3999,8 +4541,14 @@ class TestScanOutputFormatValidation:
         """``scan --format json`` must produce parseable JSON."""
         vuln = _make_vuln_file(isolated_sample)
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -4019,9 +4567,16 @@ class TestScanOutputFormatValidation:
         vuln = _make_vuln_file(isolated_sample)
         out_file = tmp_path / "report.json"
         r = run_warden(
-            "scan", "--level", "basic", "--format", "json",
-            "--output", str(out_file), str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "json",
+            "--output",
+            str(out_file),
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -4037,9 +4592,16 @@ class TestScanOutputFormatValidation:
         vuln = _make_vuln_file(isolated_sample)
         out_file = tmp_path / "report.sarif"
         r = run_warden(
-            "scan", "--level", "basic", "--format", "sarif",
-            "--output", str(out_file), str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "sarif",
+            "--output",
+            str(out_file),
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -4048,9 +4610,7 @@ class TestScanOutputFormatValidation:
             try:
                 data = json.loads(content)
                 # SARIF schema check
-                assert "$schema" in data or "runs" in data, (
-                    "SARIF file missing expected top-level keys"
-                )
+                assert "$schema" in data or "runs" in data, "SARIF file missing expected top-level keys"
             except json.JSONDecodeError:
                 pass
 
@@ -4058,8 +4618,14 @@ class TestScanOutputFormatValidation:
         """``scan --format markdown`` should not traceback."""
         vuln = _make_vuln_file(isolated_sample)
         r = run_warden(
-            "scan", "--level", "basic", "--format", "markdown", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--format",
+            "markdown",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -4068,6 +4634,7 @@ class TestScanOutputFormatValidation:
 # ═══════════════════════════════════════════════════════════════════════════
 # 52. Doctor Command — Diagnostic Specifics
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDoctorDiagnostics:
     """Verify ``warden doctor`` provides actionable diagnostic info."""
@@ -4093,9 +4660,7 @@ class TestDoctorDiagnostics:
         out = r.stdout + r.stderr
         # Should mention a known provider name
         providers = ["ollama", "groq", "openai", "anthropic", "claude", "gemini", "provider"]
-        assert any(p in out.lower() for p in providers), (
-            f"Doctor output doesn't mention any provider:\n{out[:500]}"
-        )
+        assert any(p in out.lower() for p in providers), f"Doctor output doesn't mention any provider:\n{out[:500]}"
 
     def test_doctor_corrupt_config_no_traceback(self, tmp_path):
         """Doctor on a project with a corrupted config should not traceback."""
@@ -4111,14 +4676,13 @@ class TestDoctorDiagnostics:
         r = run_warden("doctor", cwd=str(isolated_sample), timeout=30)
         out = r.stdout + r.stderr
         frames = ["security", "resilience", "frame", "validation"]
-        assert any(f in out.lower() for f in frames), (
-            f"Doctor output doesn't mention frames:\n{out[:500]}"
-        )
+        assert any(f in out.lower() for f in frames), f"Doctor output doesn't mention frames:\n{out[:500]}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 53. Scan Flags — Auto-Fix & Cost Report
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestScanAutoFixAndCost:
     """Verify ``scan --auto-fix``, ``--dry-run``, ``--cost-report`` flags."""
@@ -4127,8 +4691,13 @@ class TestScanAutoFixAndCost:
         """``scan --dry-run`` should not apply changes or traceback."""
         vuln = _make_vuln_file(isolated_sample)
         r = run_warden(
-            "scan", "--level", "basic", "--dry-run", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--dry-run",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -4137,8 +4706,14 @@ class TestScanAutoFixAndCost:
         """``scan --auto-fix --dry-run`` should preview fixes without applying."""
         vuln = _make_vuln_file(isolated_sample)
         r = run_warden(
-            "scan", "--level", "basic", "--auto-fix", "--dry-run", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--auto-fix",
+            "--dry-run",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -4147,8 +4722,13 @@ class TestScanAutoFixAndCost:
         """``scan --cost-report`` should include cost breakdown without crash."""
         vuln = _make_vuln_file(isolated_sample)
         r = run_warden(
-            "scan", "--level", "basic", "--cost-report", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--cost-report",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr
@@ -4158,8 +4738,13 @@ class TestScanAutoFixAndCost:
         subprocess.run(["git", "init", str(isolated_sample)], capture_output=True)
         vuln = _make_vuln_file(isolated_sample)
         r = run_warden(
-            "scan", "--level", "basic", "--diff", str(vuln),
-            cwd=str(isolated_sample), timeout=60,
+            "scan",
+            "--level",
+            "basic",
+            "--diff",
+            str(vuln),
+            cwd=str(isolated_sample),
+            timeout=60,
         )
         assert r.returncode in (0, 1, 2)
         assert "Traceback" not in r.stdout + r.stderr

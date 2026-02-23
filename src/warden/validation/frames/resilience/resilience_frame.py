@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
 from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
@@ -176,7 +177,7 @@ class ChaosContext:
 # CHAOS SYSTEM PROMPT (Single Source of Truth)
 # =============================================================================
 
-CHAOS_SYSTEM_PROMPT = """You are a Chaos Engineer. Your mindset: "Everything will fail. The question is HOW and WHEN."
+_CHAOS_SYSTEM_PROMPT_BASE = """You are a Chaos Engineer. Your mindset: "Everything will fail. The question is HOW and WHEN."
 
 ## YOUR TASK
 
@@ -232,6 +233,8 @@ Given code and its structural context (imports, function calls, cross-file depen
 - medium: Poor UX, slow recovery, partial failure
 - low: Suboptimal but functional
 """
+
+CHAOS_SYSTEM_PROMPT = get_tool_enhanced_prompt(_CHAOS_SYSTEM_PROMPT_BASE)
 
 
 # =============================================================================
@@ -748,14 +751,24 @@ class ResilienceFrame(ValidationFrame, TaintAware):
             if related_patterns:
                 related_context = self._format_related_patterns(related_patterns)
 
-            # Truncate code using token-aware truncation
-            from warden.shared.utils.token_utils import truncate_content_for_llm
+            from warden.shared.utils.llm_context import BUDGET_RESILIENCE, prepare_code_for_llm, resolve_token_budget
 
-            truncated_code = truncate_content_for_llm(
+            pctx = getattr(self, "_pipeline_context", None)
+            budget = resolve_token_budget(
+                BUDGET_RESILIENCE,
+                context=pctx,
+                code_file_metadata=code_file.metadata,
+            )
+
+            # Build target lines from extracted calls (external dependency calls)
+            target_lines: list[int] = sorted({call.line for call in context.function_calls[:20] if call.line > 0})
+
+            truncated_code = prepare_code_for_llm(
                 code_file.content,
-                max_tokens=3000,  # Reserve tokens for prompt and response
-                preserve_start_lines=40,
-                preserve_end_lines=20,
+                token_budget=budget,
+                target_lines=target_lines or None,
+                file_path=code_file.path,
+                context=pctx,
             )
 
             # Build context-aware prompt (Tier 1: Context-Awareness)
@@ -779,7 +792,15 @@ class ResilienceFrame(ValidationFrame, TaintAware):
                     fw_str = ", ".join(pi.detected_frameworks[:3])
                     additional_context += f"Framework: {fw_str}\n"
 
+                # Architecture description (LLM-generated project overview)
+                if hasattr(pi, "architecture") and pi.architecture:
+                    additional_context += f"\n[ARCHITECTURE]:\n{pi.architecture[:300]}\n"
+
                 logger.debug("project_intelligence_added_to_resilience_prompt", file=code_file.path)
+
+            # Architectural Directives (human-authored rules from .warden/architecture.md)
+            if hasattr(self, "architectural_directives") and self.architectural_directives:
+                additional_context += f"\n[ARCHITECTURAL DIRECTIVES]:\n{self.architectural_directives[:500]}\n"
 
             # File dependency context (import graph)
             pctx = getattr(self, "_pipeline_context", None)
@@ -884,7 +905,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
             )
 
             # Call LLM with timeout
-            response = await asyncio.wait_for(self.llm_service.send_async(request), timeout=self._timeout)
+            response = await asyncio.wait_for(self.llm_service.send_with_tools_async(request), timeout=self._timeout)
 
             if response.success and response.content:
                 findings = self._parse_llm_response(response.content, code_file.path)
