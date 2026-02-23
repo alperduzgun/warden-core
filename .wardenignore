@@ -24,7 +24,7 @@ out/
 target/
 bin/
 obj/
-examples/
+# examples/
 
 # === Dependencies ===
 node_modules/

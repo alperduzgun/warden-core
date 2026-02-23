@@ -912,13 +912,17 @@ class PreAnalysisPhase:
 
                         # Verify we have valid data (basic check)
                         if context_info.context:
-                            context_info.is_unchanged = True
+                            trust_cache = self.config.get("trust_memory_context", True)
+                            # --force sets trust_memory_context=False, forcing re-analysis
+                            context_info.is_unchanged = trust_cache
                             context_info.last_scan_timestamp = datetime.now()
                             # Ensure hash is set on the object
                             context_info.content_hash = content_hash
 
                             logger.debug("file_context_restored_from_memory", file=rel_path)
-                            return context_info
+                            if trust_cache:
+                                return context_info
+                            # trust_cache=False: fall through to re-analyze
                     except Exception as e:
                         logger.warning("context_restoration_failed", file=rel_path, error=str(e))
                         # Fallback to analysis on error matches
@@ -935,8 +939,13 @@ class PreAnalysisPhase:
         if self.memory_manager and self.memory_manager._is_loaded:
             stored_state = self.memory_manager.get_file_state(rel_path)
             if stored_state and stored_state.get("content_hash") == content_hash and not is_impacted:
-                context_info.is_unchanged = True
-                logger.debug("file_unchanged", file=rel_path)
+                trust_cache = self.config.get("trust_memory_context", True)
+                # --force sets trust_memory_context=False → file treated as changed
+                context_info.is_unchanged = trust_cache
+                if trust_cache:
+                    logger.debug("file_unchanged", file=rel_path)
+                else:
+                    logger.debug("file_forced_reanalysis", file=rel_path)
             elif is_impacted:
                 context_info.is_unchanged = False
                 logger.info("dependency_impact_detected", file=rel_path)

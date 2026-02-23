@@ -62,7 +62,7 @@ stages:
         is_blocker: false
         timeout_seconds: 120
 
-      - name: "architectural"
+      - name: "architecture"
         priority: "medium"
         is_blocker: false
         timeout_seconds: 180

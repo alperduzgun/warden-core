@@ -1,0 +1,48 @@
+{
+    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+    "version": "2.1.0",
+    "runs": [
+        {
+            "tool": {
+                "driver": {
+                    "name": "Warden",
+                    "semanticVersion": "2.2.3.dev4+g1ef493119.d20260219",
+                    "informationUri": "https://github.com/alperduzgun/warden-core",
+                    "rules": []
+                }
+            },
+            "invocations": [
+                {
+                    "executionSuccessful": true,
+                    "toolExecutionNotifications": []
+                }
+            ],
+            "results": [],
+            "properties": {
+                "llmUsage": {
+                    "totalTokens": 0,
+                    "promptTokens": 0,
+                    "completionTokens": 0
+                },
+                "llmMetrics": {
+                    "totalRequests": 3,
+                    "totalTime": "19.6s",
+                    "smartTier": {
+                        "providers": [
+                            "codex"
+                        ],
+                        "provider": "codex",
+                        "model": "codex-local",
+                        "requests": 3,
+                        "percentage": 100.0,
+                        "successRate": 100.0,
+                        "timeouts": 0,
+                        "avgResponseTime": "6.5s",
+                        "totalTime": "19.6s",
+                        "timePercentage": 100.0
+                    }
+                }
+            }
+        }
+    ]
+}

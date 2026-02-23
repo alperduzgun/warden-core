@@ -16,7 +16,6 @@ from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.quality_metrics import QualityMetrics
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.utils.language_utils import get_language_from_path
-from warden.shared.utils.token_utils import truncate_content_for_llm
 
 logger = get_logger(__name__)
 
@@ -64,12 +63,16 @@ Return a JSON object with scores for each metric."""
 
     def format_user_prompt(self, context: dict[str, Any]) -> str:
         """Format user prompt for quality analysis."""
+        from warden.shared.utils.llm_context import BUDGET_ANALYSIS, prepare_code_for_llm, resolve_token_budget
+
         code = context.get("code", "")
         file_path = context.get("file_path", "unknown")
         file_context = context.get("file_context", FileContext.PRODUCTION.value)
         language = context.get("language", "python")
         metrics = context.get("initial_metrics", {})
         is_impacted = context.get("is_impacted", False)
+
+        budget = resolve_token_budget(BUDGET_ANALYSIS)
 
         prompt = f"""Analyze the following {language} code for quality:
 
@@ -80,7 +83,7 @@ IMPACTED_BY_DEPENDENCY: {is_impacted}
 
 CODE:
 ```{language}
-{truncate_content_for_llm(code, max_tokens=400)}
+{prepare_code_for_llm(code, token_budget=budget)}
 ```
 
 INITIAL METRICS (rule-based):
@@ -332,6 +335,9 @@ Return as JSON."""
     def _format_batch_user_prompt(
         self, batch_items: list[tuple[str, Path, FileContext, bool]], initial_metrics: Any
     ) -> str:
+        from warden.shared.utils.llm_context import BUDGET_ANALYSIS, prepare_code_for_llm, resolve_token_budget
+
+        budget = resolve_token_budget(BUDGET_ANALYSIS, is_fast_tier=True)
         batch_summary = ""
         for i, (code, path, ctx, impacted) in enumerate(batch_items):
             metrics = initial_metrics.get(path, {}) if initial_metrics else {}
@@ -343,7 +349,7 @@ Impacted: {impacted}
 Initial Metrics: {json.dumps(metrics)}
 Code Snippet:
 ```{self._detect_language(path)}
-{truncate_content_for_llm(code, max_tokens=250)}
+{prepare_code_for_llm(code, token_budget=budget)}
 ```
 ---
 """

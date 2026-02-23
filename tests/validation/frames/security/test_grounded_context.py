@@ -54,6 +54,7 @@ def _make_security_frame() -> SecurityFrame:
     frame._taint_paths = {}
     # Provide a minimal checks registry so execute_async doesn't crash
     from warden.validation.domain.check import CheckRegistry
+
     frame.checks = CheckRegistry()
     return frame
 
@@ -101,6 +102,7 @@ def _make_project_intelligence(
 # Taint mock helpers
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _MockTaintSource:
     name: str
@@ -143,6 +145,7 @@ class _MockTaintPath:
 # ---------------------------------------------------------------------------
 # T1.1 – Framework Detection in LLM Prompts
 # ---------------------------------------------------------------------------
+
 
 class TestT1_1_FrameworkDetection:
     """Framework names must reach the LLM prompt when ProjectIntelligence is set."""
@@ -231,6 +234,7 @@ class TestT1_1_FrameworkDetection:
 # ---------------------------------------------------------------------------
 # T1.2 – Dependency Graph Context in LLM Prompts
 # ---------------------------------------------------------------------------
+
 
 class TestT1_2_DependencyGraphContext:
     """Dependency graph forward/reverse edges must appear in the prompt."""
@@ -347,6 +351,7 @@ class TestT1_2_DependencyGraphContext:
 # T1.3 – Batch Processor Context Preservation
 # ---------------------------------------------------------------------------
 
+
 class TestT1_3_BatchProcessorContext:
     """batch_verify_security_findings must accept and forward semantic_context."""
 
@@ -384,7 +389,7 @@ class TestT1_3_BatchProcessorContext:
             return MagicMock(success=False, error_message="no LLM")
 
         llm_svc = MagicMock()
-        llm_svc.send_async = _fake_send
+        llm_svc.send_with_tools_async = _fake_send
 
         await batch_verify_security_findings(
             findings_map=findings_map,
@@ -429,9 +434,7 @@ class TestT1_3_BatchProcessorContext:
         frame = _make_security_frame()
         frame.project_intelligence = _make_project_intelligence(frameworks=["django"])
         frame.llm_service = MagicMock()
-        frame.llm_service.send_async = AsyncMock(
-            return_value=MagicMock(success=False, error_message="stub")
-        )
+        frame.llm_service.send_async = AsyncMock(return_value=MagicMock(success=False, error_message="stub"))
 
         code_files = [_make_code_file()]
 
@@ -452,6 +455,7 @@ class TestT1_3_BatchProcessorContext:
 # ---------------------------------------------------------------------------
 # T2.1 – Symbol Context in LLM Prompts
 # ---------------------------------------------------------------------------
+
 
 class TestT2_1_SymbolContextInPrompts:
     """Symbols from the code graph for the analysed file must appear in the prompt."""
@@ -514,13 +518,15 @@ class TestT2_1_SymbolContextInPrompts:
         """Symbol kind (e.g. 'class') appears alongside the symbol name."""
         file_path = "src/utils.py"
         graph = CodeGraph()
-        graph.add_node(SymbolNode(
-            fqn=f"{file_path}::validate_input",
-            name="validate_input",
-            kind=SymbolKind.FUNCTION,
-            file_path=file_path,
-            line=3,
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn=f"{file_path}::validate_input",
+                name="validate_input",
+                kind=SymbolKind.FUNCTION,
+                file_path=file_path,
+                line=3,
+            )
+        )
 
         frame = _make_security_frame()
         frame.llm_service = _make_llm_service()
@@ -559,13 +565,15 @@ class TestT2_1_SymbolContextInPrompts:
         """Symbols belonging to a different file must NOT appear in the prompt."""
         graph = CodeGraph()
         # Symbol belongs to a different file
-        graph.add_node(SymbolNode(
-            fqn="src/other.py::OtherClass",
-            name="OtherClass",
-            kind=SymbolKind.CLASS,
-            file_path="src/other.py",
-            line=1,
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn="src/other.py::OtherClass",
+                name="OtherClass",
+                kind=SymbolKind.CLASS,
+                file_path="src/other.py",
+                line=1,
+            )
+        )
 
         frame = _make_security_frame()
         frame.llm_service = _make_llm_service()
@@ -586,14 +594,16 @@ class TestT2_1_SymbolContextInPrompts:
         """Decorator metadata stored in SymbolNode.metadata appears in the prompt."""
         file_path = "src/views.py"
         graph = CodeGraph()
-        graph.add_node(SymbolNode(
-            fqn=f"{file_path}::login_view",
-            name="login_view",
-            kind=SymbolKind.FUNCTION,
-            file_path=file_path,
-            line=15,
-            metadata={"decorators": ["app.route", "login_required"]},
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn=f"{file_path}::login_view",
+                name="login_view",
+                kind=SymbolKind.FUNCTION,
+                file_path=file_path,
+                line=15,
+                metadata={"decorators": ["app.route", "login_required"]},
+            )
+        )
 
         frame = _make_security_frame()
         frame.llm_service = _make_llm_service()
@@ -614,6 +624,7 @@ class TestT2_1_SymbolContextInPrompts:
 # ---------------------------------------------------------------------------
 # T2.2 – Enhanced Taint Detail in LLM Prompts
 # ---------------------------------------------------------------------------
+
 
 class TestT2_2_EnhancedTaintDetail:
     """Taint paths with transformations and sanitizers get full formatting."""
@@ -810,6 +821,7 @@ class TestT2_2_EnhancedTaintDetail:
 # format_file_symbols_for_prompt – unit tests (no IO, no LLM)
 # ---------------------------------------------------------------------------
 
+
 class TestFormatFileSymbolsForPrompt:
     """Direct unit tests for the symbol formatter helper."""
 
@@ -818,13 +830,15 @@ class TestFormatFileSymbolsForPrompt:
 
         graph = CodeGraph()
         # Add a node for a *different* file
-        graph.add_node(SymbolNode(
-            fqn="other.py::Foo",
-            name="Foo",
-            kind=SymbolKind.CLASS,
-            file_path="other.py",
-            line=1,
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn="other.py::Foo",
+                name="Foo",
+                kind=SymbolKind.CLASS,
+                file_path="other.py",
+                line=1,
+            )
+        )
         result = format_file_symbols_for_prompt(graph, "target.py")
         assert result == ""
 
@@ -832,13 +846,15 @@ class TestFormatFileSymbolsForPrompt:
         from warden.analysis.services.symbol_context_formatter import format_file_symbols_for_prompt
 
         graph = CodeGraph()
-        graph.add_node(SymbolNode(
-            fqn="api.py::PaymentHandler",
-            name="PaymentHandler",
-            kind=SymbolKind.CLASS,
-            file_path="api.py",
-            line=5,
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn="api.py::PaymentHandler",
+                name="PaymentHandler",
+                kind=SymbolKind.CLASS,
+                file_path="api.py",
+                line=5,
+            )
+        )
         result = format_file_symbols_for_prompt(graph, "api.py")
         assert "PaymentHandler" in result
         assert "[Code Graph Symbols]:" in result
@@ -847,14 +863,16 @@ class TestFormatFileSymbolsForPrompt:
         from warden.analysis.services.symbol_context_formatter import format_file_symbols_for_prompt
 
         graph = CodeGraph()
-        graph.add_node(SymbolNode(
-            fqn="app.py::AdminView",
-            name="AdminView",
-            kind=SymbolKind.CLASS,
-            file_path="app.py",
-            line=8,
-            bases=["BaseView", "LoginRequired"],
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn="app.py::AdminView",
+                name="AdminView",
+                kind=SymbolKind.CLASS,
+                file_path="app.py",
+                line=8,
+                bases=["BaseView", "LoginRequired"],
+            )
+        )
         result = format_file_symbols_for_prompt(graph, "app.py")
         assert "BaseView" in result
         assert "LoginRequired" in result
@@ -864,13 +882,15 @@ class TestFormatFileSymbolsForPrompt:
         from warden.analysis.services.symbol_context_formatter import format_file_symbols_for_prompt
 
         graph = CodeGraph()
-        graph.add_node(SymbolNode(
-            fqn="src/auth.py::AuthMiddleware",
-            name="AuthMiddleware",
-            kind=SymbolKind.CLASS,
-            file_path="src/auth.py",
-            line=1,
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn="src/auth.py::AuthMiddleware",
+                name="AuthMiddleware",
+                kind=SymbolKind.CLASS,
+                file_path="src/auth.py",
+                line=1,
+            )
+        )
         # Query with a longer path that ends with the node's file_path
         result = format_file_symbols_for_prompt(graph, "/home/user/project/src/auth.py")
         assert "AuthMiddleware" in result

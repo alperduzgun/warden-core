@@ -213,6 +213,7 @@ class WardenBridge:
         verbose: bool = False,
         analysis_level: str = "standard",
         ci_mode: bool = False,
+        force: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         # Validate inputs
@@ -228,7 +229,9 @@ class WardenBridge:
         if ci_mode:
             self.orchestrator.config.ci_mode = True
 
-        async for event in self.pipeline_handler.execute_pipeline_stream_async(file_path, frames, analysis_level):
+        async for event in self.pipeline_handler.execute_pipeline_stream_async(
+            file_path, frames, analysis_level, force=force
+        ):
             if event.get("type") == "result":
                 result = event["result"]
                 context = event["context"]

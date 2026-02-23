@@ -10,7 +10,7 @@ frames:
 - security          # ✓ Valid
 - resilience        # ✓ Valid
 - orphan            # ✓ Valid
-- architectural     # ✓ Valid
+- architecture      # ✓ Valid
 - stress            # ❌ INVALID - frame does not exist
 - demosecurity      # ❌ INVALID - frame does not exist
 - env-security      # ❌ INVALID - frame does not exist

@@ -55,6 +55,7 @@ class WardenDoctor:
             ("Environment & API Keys", self.check_env),
             ("Tooling (LSP/Git)", self.check_tools),
             ("Semantic Index", self.check_vector_db),
+            ("Rate Limit Config", self.check_rate_limits),
         ]
 
         for name, check_fn in checks:
@@ -359,3 +360,60 @@ class WardenDoctor:
         if not index_path.exists():
             return CheckStatus.WARNING, "Semantic index not found. Run 'warden index' for context-aware analysis."
         return CheckStatus.SUCCESS, "Semantic index found."
+
+    def check_rate_limits(self) -> tuple[CheckStatus, str]:
+        """
+        Sanity-check LLM rate limit configuration.
+
+        Catches the 'burst=1' class of bugs where a technically valid but
+        pathological config silently throttles the Analysis phase.
+        """
+        if not self.config_path.exists():
+            return CheckStatus.SUCCESS, "No config to check rate limits against."
+
+        try:
+            with open(self.config_path) as f:
+                data = yaml.safe_load(f) or {}
+        except Exception:
+            return CheckStatus.SUCCESS, "Skipping rate limit check (config unreadable)."
+
+        llm_cfg = data.get("llm", {})
+        if not isinstance(llm_cfg, dict):
+            return CheckStatus.SUCCESS, "No LLM config section found."
+
+        provider = llm_cfg.get("provider", "")
+        tpm_limit = llm_cfg.get("tpm_limit", 1000)
+        local_providers = {"ollama", "claude_code", "codex"}
+
+        # Guard: tpm must be an integer
+        if not isinstance(tpm_limit, (int, float)):
+            return CheckStatus.WARNING, f"tpm_limit is not a number: {tpm_limit!r}"
+
+        tpm_limit = int(tpm_limit)
+
+        # Check 1: Absurdly low TPM for any provider
+        if tpm_limit < 100:
+            return (
+                CheckStatus.WARNING,
+                f"tpm_limit={tpm_limit} is extremely low. "
+                f"Analysis phase will be severely throttled. "
+                f"Recommended minimum: 1000 for cloud, 100000 for local.",
+            )
+
+        # Check 2: Low TPM that will cause noticeable delays
+        if tpm_limit < 1000:
+            return (
+                CheckStatus.WARNING,
+                f"tpm_limit={tpm_limit} is low. Analysis phase may be slow on multi-file scans.",
+            )
+
+        # Check 3: Local provider with unnecessarily restrictive limits
+        if provider in local_providers and tpm_limit < 100_000:
+            return (
+                CheckStatus.WARNING,
+                f"Local provider '{provider}' with tpm_limit={tpm_limit}. "
+                f"Local providers are compute-bound, not API-quota-bound. "
+                f"Consider removing tpm_limit or setting it to 1000000.",
+            )
+
+        return CheckStatus.SUCCESS, f"Rate limit config OK (tpm={tpm_limit}, provider={provider or 'default'})."

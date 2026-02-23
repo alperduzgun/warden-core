@@ -36,7 +36,7 @@ PYTHON_TEMPLATE = LanguageTemplate(
         "security",  # SQL injection, secrets detection
         "chaos",  # Error handling, resilience
         "orphan",  # Unused code detection (LLM-powered)
-        "architectural",  # Design pattern consistency
+        "architecture",  # Design pattern consistency
     ],
     required_ast_providers=["python-native"],  # Built-in Python AST
     default_rules={
@@ -69,7 +69,7 @@ PYTHON_TEMPLATE = LanguageTemplate(
                 "error_recovery",
             ],
         },
-        "architectural": {
+        "architecture": {
             "enabled": False,  # Optional, needs configuration
             "priority": "low",
         },
@@ -257,7 +257,7 @@ CSHARP_TEMPLATE = LanguageTemplate(
     recommended_frames=[
         "security",
         "chaos",
-        "architectural",
+        "architecture",
     ],
     required_ast_providers=["warden-ast-csharp"],
     default_rules={
@@ -282,7 +282,7 @@ CSHARP_TEMPLATE = LanguageTemplate(
                 "disposal_pattern",
             ],
         },
-        "architectural": {
+        "architecture": {
             "enabled": True,
             "priority": "medium",
             "checks": [

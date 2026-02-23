@@ -58,6 +58,7 @@ class PipelineHandler(BaseHandler):
         frames: list[str] | None = None,
         analysis_level: str = "standard",
         baseline_fingerprints: set | None = None,
+        force: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         if not self.orchestrator:
@@ -103,7 +104,9 @@ class PipelineHandler(BaseHandler):
         try:
             # Run in background
             pipeline_task = asyncio.create_task(
-                self.orchestrator.execute_async(code_files, frames_to_execute=frames, analysis_level=analysis_level)
+                self.orchestrator.execute_async(
+                    code_files, frames_to_execute=frames, analysis_level=analysis_level, force=force
+                )
             )
 
             while not pipeline_task.done() or not progress_queue.empty():

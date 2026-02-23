@@ -504,6 +504,12 @@ class TreeSitterProvider(IASTProvider):
         except Exception:
             ast_node.attributes["original_type"] = "unknown"
 
+        # Extract decorator/annotation names for function/method/class nodes
+        if node_type in (ASTNodeType.FUNCTION, ASTNodeType.METHOD, ASTNodeType.CLASS):
+            decorators = self._extract_decorators(ts_node, source, language)
+            if decorators:
+                ast_node.attributes["decorators"] = decorators
+
         # Recursively convert children (skip anonymous nodes unless they are literals)
         for child in ts_node.children:
             if child.is_named:
@@ -569,6 +575,12 @@ class TreeSitterProvider(IASTProvider):
             "member_expression": ASTNodeType.MEMBER_ACCESS,
             "binary_expression": ASTNodeType.BINARY_EXPRESSION,
             "identifier": ASTNodeType.IDENTIFIER,
+            # Decorators & Annotations
+            "decorator": ASTNodeType.DECORATOR,  # Python @decorator
+            "decorated_definition": ASTNodeType.UNKNOWN,  # Python wrapper — children hold the actual def
+            "annotation": ASTNodeType.ANNOTATION,  # Java/Kotlin @Annotation
+            "marker_annotation": ASTNodeType.ANNOTATION,  # Java @Override
+            "normal_annotation": ASTNodeType.ANNOTATION,  # Java @SuppressWarnings(...)
             # C# Specifics
             "using_directive": ASTNodeType.IMPORT,
             "namespace_declaration": ASTNodeType.MODULE,
@@ -595,3 +607,79 @@ class TreeSitterProvider(IASTProvider):
                 return ASTNodeType.METHOD, True
 
         return ASTNodeType.UNKNOWN, True
+
+    def _extract_decorators(self, ts_node: "tree_sitter.Node", source: str, language: CodeLanguage) -> list[str]:
+        """Extract decorator/annotation names from a function/method/class node.
+
+        Handles:
+        - Python: decorated_definition wraps the node, decorators are siblings
+        - Python: decorator children directly on function_definition
+        - Java/Kotlin: annotation/marker_annotation children
+        - TypeScript: decorator children
+
+        Returns:
+            List of decorator name strings (e.g. ["app.route", "require_auth"]).
+        """
+        decorator_names: list[str] = []
+        decorator_types = {"decorator", "annotation", "marker_annotation", "normal_annotation"}
+
+        # Strategy 1: Check parent — Python wraps decorated functions in "decorated_definition"
+        parent = ts_node.parent
+        if parent and parent.type == "decorated_definition":
+            for sibling in parent.children:
+                if sibling.type in decorator_types:
+                    name = self._decorator_text(sibling, source)
+                    if name:
+                        decorator_names.append(name)
+
+        # Strategy 2: Direct children or inside 'modifiers' wrapper (Java/Kotlin)
+        for child in ts_node.children:
+            if child.type in decorator_types:
+                name = self._decorator_text(child, source)
+                if name:
+                    decorator_names.append(name)
+            elif child.type == "modifiers":
+                for mod_child in child.children:
+                    if mod_child.type in decorator_types:
+                        name = self._decorator_text(mod_child, source)
+                        if name:
+                            decorator_names.append(name)
+
+        return decorator_names
+
+    @staticmethod
+    def _decorator_text(dec_node: "tree_sitter.Node", source: str) -> str:
+        """Extract a readable decorator name from a tree-sitter decorator node.
+
+        For `@app.route("/login")` returns "app.route".
+        For `@require_auth` returns "require_auth".
+        For Java `@Override` returns "Override".
+        """
+        # Try named children: identifier, dotted_name, attribute, scoped_identifier
+        for child in dec_node.children:
+            if child.type in (
+                "identifier",
+                "dotted_name",
+                "attribute",
+                "scoped_identifier",
+            ):
+                return source[child.start_byte : child.end_byte]
+            # Call expression decorator: @app.route(...)
+            if child.type == "call":
+                func_child = child.child_by_field_name("function")
+                if func_child:
+                    return source[func_child.start_byte : func_child.end_byte]
+                # Fallback: first named child of call
+                for sub in child.children:
+                    if sub.type in ("identifier", "dotted_name", "attribute"):
+                        return source[sub.start_byte : sub.end_byte]
+
+        # Fallback: full text without @ prefix
+        text = source[dec_node.start_byte : dec_node.end_byte].strip()
+        if text.startswith("@"):
+            text = text[1:]
+        # Strip arguments: "route('/login')" → "route"
+        paren_idx = text.find("(")
+        if paren_idx > 0:
+            text = text[:paren_idx]
+        return text.strip()

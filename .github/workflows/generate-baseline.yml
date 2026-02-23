@@ -90,13 +90,13 @@ jobs:
       run: |
         # Use a tiny model for CI fallback to handle Rate Limits without cost
         # With caching, this will be instant on subsequent runs
-        ollama pull qwen2.5-coder:0.5b
+        ollama pull qwen2.5-coder:3b
         
     - name: Run Warden Scan
       env:
         # STRATEGY:
         # Smart Tier: Groq (fast cloud API)
-        # Fast/Local Tier: Ollama qwen2.5-coder:0.5b (free, local fallback)
+        # Fast/Local Tier: Ollama qwen2.5-coder:3b (free, local fallback)
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
         # Enforce Optimized Chain

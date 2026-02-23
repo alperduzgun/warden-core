@@ -88,7 +88,11 @@ class FrameExecutor:
 
         try:
             file_contexts = context.file_contexts or {}
-            include_test_files = getattr(self.config, "include_test_files", False)
+            # When --force is active, also include TEST/EXAMPLE context files so
+            # intentionally vulnerable examples (like examples/) are not silently skipped.
+            include_test_files = getattr(self.config, "include_test_files", False) or getattr(
+                self.config, "force_scan", False
+            )
             filtered_files = FileFilter.filter_by_context(code_files, file_contexts, include_test_files)
 
             logger.info(

@@ -35,7 +35,6 @@ directories:
   - .vscode
   
   # Documentation and Examples
-  - examples
   - docs
   - tests
   - generated
@@ -74,8 +73,6 @@ file_patterns:
 # ═══════════════════════════════════════════════════════════════════
 path_patterns:
   # Intentional vulnerable examples (for training/demo)
-  - "**/examples/vulnerable_*"
-  - "**/examples/**/vulnerable_*"
   
   # Test fixtures and mock data
   - "**/test_fixtures/**"
@@ -95,9 +92,7 @@ frames:
   security:
     # Intentional security examples for demo/training
     # - "examples/**"
-    - "test_fixtures/**"
     - "docs/**"
-    - "tests/**"
   
   orphan:
     # Entry points that look orphan but are intentional
@@ -106,7 +101,6 @@ frames:
     - "**/cli.py"
     - "**/main.py"
 
-  architectural:
+  architecture:
     # Test files have different structure expectations
-    - "tests/**"
     - "test_*.py"

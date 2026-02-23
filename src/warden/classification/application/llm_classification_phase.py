@@ -383,7 +383,7 @@ Return patterns as JSON."""
 
         # Add architectural for larger projects
         if len(file_contexts) > 10:
-            selected.append("architectural")
+            selected.append("architecture")
 
         # Add stress for APIs
         if framework in [Framework.FASTAPI, Framework.FLASK, Framework.DJANGO]:

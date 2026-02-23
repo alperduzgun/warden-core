@@ -22,7 +22,7 @@ from warden.shared.infrastructure.logging import get_logger
 from ..config import ProviderConfig
 from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
-from .base import ILlmClient
+from .base import ILlmClient, detect_provider_error
 
 logger = get_logger(__name__)
 
@@ -223,6 +223,12 @@ class ClaudeCodeClient(ILlmClient):
             if not isinstance(content, str):
                 content = str(content) if content else ""
 
+            # Detect rate limit / provider errors in extracted content
+            rate_limit_msg = detect_provider_error(content)
+            if rate_limit_msg:
+                logger.error("claude_code_rate_limit_detected", message=rate_limit_msg)
+                return self._error_response(f"Provider rate limit: {rate_limit_msg}", model, duration_ms)
+
             # Empty content after JSON parse = provider returned no useful data
             if not content.strip():
                 logger.error(
@@ -252,7 +258,13 @@ class ClaudeCodeClient(ILlmClient):
             )
 
         except json.JSONDecodeError:
-            # Non-JSON response (plain text) - still valid
+            # Non-JSON response — check for rate limit before treating as valid
+            rate_limit_msg = detect_provider_error(output)
+            if rate_limit_msg:
+                logger.error("claude_code_rate_limit_detected", message=rate_limit_msg)
+                return self._error_response(f"Provider rate limit: {rate_limit_msg}", model, duration_ms)
+
+            # Plain text response - still valid
             return LlmResponse(
                 content=output,
                 success=True,

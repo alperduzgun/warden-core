@@ -197,6 +197,7 @@ class PhaseOrchestrator:
         code_files: list[CodeFile],
         frames_to_execute: list[str] | None = None,
         analysis_level: str | None = None,
+        force: bool = False,
     ) -> tuple[PipelineResult, PipelineContext]:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -209,7 +210,7 @@ class PhaseOrchestrator:
         Returns:
             Tuple of (PipelineResult, PipelineContext)
         """
-        context = await self.execute_pipeline_async(code_files, frames_to_execute, analysis_level)
+        context = await self.execute_pipeline_async(code_files, frames_to_execute, analysis_level, force)
 
         # Build PipelineResult from context for compatibility
         result = self.result_builder.build(context, self.pipeline, scan_id=getattr(self, "current_scan_id", None))
@@ -221,6 +222,7 @@ class PhaseOrchestrator:
         code_files: list[CodeFile],
         frames_to_execute: list[str] | None = None,
         analysis_level: str | None = None,
+        force: bool = False,
     ) -> PipelineContext:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -243,6 +245,11 @@ class PhaseOrchestrator:
                 lang_enum = LanguageRegistry.get_language_from_path(code_files[0].path)
                 if lang_enum != CodeLanguage.UNKNOWN:
                     language = lang_enum.value
+
+        # Handle force flag by disabling memory cache
+        if force:
+            logger.info("force_scan_enabled", reason="bypassing memory cache")
+            self.config.force_scan = True
 
         # Apply analysis level if provided
         if analysis_level:
@@ -319,11 +326,12 @@ class PhaseOrchestrator:
             )
 
         except asyncio.TimeoutError:
-            # ID 29 - Timeout handler
+            # ID 29 - Timeout handler (include stuck phase for diagnostics)
             self.pipeline.status = PipelineStatus.FAILED
-            error_msg = f"Pipeline execution timeout after {timeout}s"
+            current = getattr(context, "current_phase", "unknown")
+            error_msg = f"Pipeline execution timeout after {timeout}s (stuck in: {current})"
             context.errors.append(error_msg)
-            logger.error("pipeline_timeout", timeout=timeout, pipeline_id=context.pipeline_id)
+            logger.error("pipeline_timeout", timeout=timeout, phase=current, pipeline_id=context.pipeline_id)
             raise RuntimeError(error_msg)
 
         except RuntimeError as e:

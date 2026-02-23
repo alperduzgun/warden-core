@@ -36,7 +36,7 @@ class TestModelHealer:
 
     @pytest.mark.asyncio
     async def test_can_heal_with_model_name(self):
-        err = ModelNotFoundError("model 'qwen2.5-coder:0.5b' not found")
+        err = ModelNotFoundError("model 'qwen2.5-coder:3b' not found")
         assert await self.healer.can_heal(err, ErrorCategory.MODEL_NOT_FOUND) is True
 
     @pytest.mark.asyncio
@@ -46,14 +46,14 @@ class TestModelHealer:
 
     @pytest.mark.asyncio
     async def test_heal_success(self):
-        err = ModelNotFoundError("model 'qwen2.5-coder:0.5b' not found")
+        err = ModelNotFoundError("model 'qwen2.5-coder:3b' not found")
         with patch(
             "warden.self_healing.strategies.model_healer._try_ollama_pull",
             return_value=True,
         ):
             result = await self.healer.heal(err)
         assert result.fixed is True
-        assert "qwen2.5-coder:0.5b" in result.models_pulled
+        assert "qwen2.5-coder:3b" in result.models_pulled
         assert result.strategy_used == "model_healer"
 
     @pytest.mark.asyncio
@@ -82,8 +82,8 @@ class TestModelHealer:
 
 class TestExtractModelName:
     def test_model_not_found_pattern(self):
-        err = Exception("model 'qwen:0.5b' not found")
-        assert _extract_model_name(err) == "qwen:0.5b"
+        err = Exception("model 'qwen:3b' not found")
+        assert _extract_model_name(err) == "qwen:3b"
 
     def test_unknown_model_pattern(self):
         err = Exception("unknown model: llama3:8b")
@@ -107,7 +107,7 @@ class TestTryOllamaPull:
     @patch("subprocess.run")
     def test_pull_success(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
-        assert _try_ollama_pull("qwen:0.5b") is True
+        assert _try_ollama_pull("qwen:3b") is True
 
     @patch("subprocess.run")
     def test_pull_failure(self, mock_run):
@@ -116,7 +116,7 @@ class TestTryOllamaPull:
 
     @patch("subprocess.run", side_effect=FileNotFoundError)
     def test_ollama_not_installed(self, mock_run):
-        assert _try_ollama_pull("qwen:0.5b") is False
+        assert _try_ollama_pull("qwen:3b") is False
 
     @patch("subprocess.run", side_effect=Exception("unexpected"))
     def test_pull_exception(self, mock_run):

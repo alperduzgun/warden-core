@@ -39,6 +39,8 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 "use_llm": getattr(self.config, "use_llm", True) if hasattr(self.config, "use_llm") else True,
                 "llm_config": getattr(self.config, "llm_config", None),
                 "ci_mode": getattr(self.config, "ci_mode", False),
+                # When force_scan is True, disable memory cache to re-analyze all files
+                "trust_memory_context": not getattr(self.config, "force_scan", False),
             }
 
             phase = PreAnalysisPhase(

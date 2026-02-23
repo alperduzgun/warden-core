@@ -146,7 +146,7 @@ def prepare_template_variables(branch: str, llm_config: dict[str, Any]) -> dict[
             echo "Attempt $i/30: Ollama not ready yet..."
             sleep 1
           done
-          ollama pull qwen2.5-coder:0.5b
+          ollama pull qwen2.5-coder:3b
 
 """
     else:

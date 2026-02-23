@@ -11,7 +11,7 @@ class RateLimitConfig:
 
     tpm: int = 5000  # Tokens per minute
     rpm: int = 10  # Requests per minute
-    burst: int = 1  # Burst capacity
+    burst: int = 0  # Burst capacity (0 = auto, set to tpm for tokens / rpm for requests)
 
 
 class RateLimiter:
@@ -24,8 +24,12 @@ class RateLimiter:
     def __init__(self, config: RateLimitConfig):
         """Initialize rate limiter with configuration."""
         self.config = config
-        self.token_limiter = TokenBucketLimiter(tpm=config.tpm, burst=config.burst)
-        self.request_limiter = TokenBucketLimiter(tpm=config.rpm, burst=config.burst)
+        # burst=0 means auto: allow one full minute's budget as initial burst
+        # so the first request(s) go through immediately without artificial wait.
+        token_burst = config.burst if config.burst > 0 else config.tpm
+        request_burst = config.burst if config.burst > 0 else config.rpm
+        self.token_limiter = TokenBucketLimiter(tpm=config.tpm, burst=token_burst)
+        self.request_limiter = TokenBucketLimiter(tpm=config.rpm, burst=request_burst)
 
     async def acquire(self, tokens: int = 1):
         """

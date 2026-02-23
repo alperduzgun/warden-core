@@ -55,6 +55,7 @@ class PipelinePhaseRunner:
         """Execute all pipeline phases in order."""
 
         # Phase 0: PRE-ANALYSIS
+        context.current_phase = "Pre-Analysis"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -76,6 +77,7 @@ class PipelinePhaseRunner:
         # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
         from warden.pipeline.domain.enums import AnalysisLevel
 
+        context.current_phase = "Triage"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -98,6 +100,7 @@ class PipelinePhaseRunner:
             self._progress_callback("progress_update", {"increment": len(code_files)})
 
         # Phase 1: ANALYSIS
+        context.current_phase = "Analysis"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -113,6 +116,7 @@ class PipelinePhaseRunner:
             self._progress_callback("progress_update", {"increment": len(code_files)})
 
         # Phase 2: CLASSIFICATION
+        context.current_phase = "Classification"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -130,6 +134,7 @@ class PipelinePhaseRunner:
             self._progress_callback("progress_update", {"increment": len(code_files)})
 
         # Phase 3: VALIDATION
+        context.current_phase = "Validation"
         enable_validation = getattr(self.config, "enable_validation", True)
         if enable_validation:
             logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
@@ -151,6 +156,7 @@ class PipelinePhaseRunner:
             await self._execute_lsp_diagnostics_async(context, code_files)
 
         # Phase 3.5: VERIFICATION (False Positive Reduction)
+        context.current_phase = "Verification"
         if getattr(self.config, "enable_issue_validation", False):
             findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
             if self._progress_callback:
@@ -161,6 +167,7 @@ class PipelinePhaseRunner:
             await self.post_processor.verify_findings_async(context)
 
         # Phase 4: FORTIFICATION
+        context.current_phase = "Fortification"
         findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
         if self._progress_callback:
             self._progress_callback(
@@ -189,6 +196,7 @@ class PipelinePhaseRunner:
                 )
 
         # Phase 5: CLEANING
+        context.current_phase = "Cleaning"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",

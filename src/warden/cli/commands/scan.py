@@ -163,7 +163,10 @@ def _display_llm_summary(metrics: dict):
     if metrics.get("issues"):
         console.print("\n  [yellow]⚠️  Performance Issues:[/yellow]")
         for issue in metrics["issues"]:
-            console.print(f"    - {issue['message']}")
+            if issue.get("type") == "rate_limit":
+                console.print(f"    [bold red]- {issue['message']}[/bold red]")
+            else:
+                console.print(f"    - {issue['message']}")
             if issue.get("recommendations"):
                 for rec in issue["recommendations"]:
                     console.print(f"      → {rec}")
@@ -310,6 +313,7 @@ def scan_command(
     cost_report: bool = typer.Option(False, "--cost-report", help="Display per-frame LLM cost breakdown"),
     auto_fix: bool = typer.Option(False, "--auto-fix", help="Apply auto-fixable fortification fixes"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview fixes without applying (use with --auto-fix)"),
+    force: bool = typer.Option(False, "--force", help="Bypass memory cache and force a full analysis of all files"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -462,6 +466,7 @@ def scan_command(
                 cost_report=cost_report,
                 auto_fix=auto_fix,
                 dry_run=dry_run,
+                force=force,
             )
         )
 
@@ -501,6 +506,7 @@ def scan_command(
                         cost_report=cost_report,
                         auto_fix=auto_fix,
                         dry_run=dry_run,
+                        force=force,
                     )
                 )
                 if exit_code != 0:
@@ -530,6 +536,7 @@ async def _process_stream_events(
     verbose: bool,
     level: str,
     ci_mode: bool,
+    force: bool,
 ) -> tuple[dict | None, dict, int]:
     """Process pipeline streaming events with a live-updating display.
 
@@ -674,6 +681,7 @@ async def _process_stream_events(
                 verbose=verbose,
                 analysis_level=level,
                 ci_mode=ci_mode,
+                force=force,
             ):
                 event_type = event.get("type")
 
@@ -1285,6 +1293,7 @@ async def _run_scan_async(
     cost_report: bool = False,
     auto_fix: bool = False,
     dry_run: bool = False,
+    force: bool = False,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1328,7 +1337,7 @@ async def _run_scan_async(
     try:
         # 1. Stream pipeline events and collect results
         final_result_data, frame_stats, total_units = await _process_stream_events(
-            bridge, paths, frames, verbose, level, ci_mode
+            bridge, paths, frames, verbose, level, ci_mode, force
         )
 
         # 2. Render text report to console

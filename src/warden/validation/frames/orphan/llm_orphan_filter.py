@@ -704,11 +704,16 @@ You have deep understanding of:
 - Public API exports and re-exports
 - Abstract classes, interfaces, and protocols"""
 
+        from warden.shared.utils.llm_context import BUDGET_ORPHAN, prepare_code_for_llm, resolve_token_budget
+
+        budget = resolve_token_budget(BUDGET_ORPHAN)
+        truncated_code = prepare_code_for_llm(code, token_budget=budget)
+
         # Build user message with code context and analysis request
         user_message = f"""# CODE TO ANALYZE
 
 ```{language}
-{code}
+{truncated_code}
 ```
 
 {prompt}"""
@@ -721,7 +726,7 @@ You have deep understanding of:
             use_fast_tier=True,
         )
 
-        response = await self.llm.send_async(request)
+        response = await self.llm.send_with_tools_async(request)
 
         return response
 

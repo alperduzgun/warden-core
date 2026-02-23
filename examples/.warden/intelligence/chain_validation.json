@@ -1,0 +1,388 @@
+{
+  "schemaVersion": "1.0.0",
+  "totalChainsChecked": 50,
+  "confirmed": 0,
+  "unconfirmed": 0,
+  "errors": 50,
+  "entries": [
+    {
+      "sourceFqn": "custom-frames/redis-security/test_examples/secure_redis.py",
+      "targetFqn": "os",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/test_examples/secure_redis.py",
+      "targetFqn": "redis",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/test_examples/insecure_redis.py",
+      "targetFqn": "redis",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/tests/test_frame.py",
+      "targetFqn": "pytest",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/tests/test_frame.py",
+      "targetFqn": "warden.validation.domain.frame.CodeFile",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/tests/test_frame.py",
+      "targetFqn": "frame.RedisSecurityFrame",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "re",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "time",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "typing.List",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "typing.Dict",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "typing.Any",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.frame.ValidationFrame",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.frame.FrameResult",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.frame.Finding",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.frame.CodeFile",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.enums.FrameCategory",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.enums.FramePriority",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.enums.FrameScope",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.validation.domain.enums.FrameApplicability",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "warden.shared.infrastructure.logging.get_logger",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "ValidationFrame",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame.__init__",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame.execute",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame._detect_redis_usage",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_ssl_tls",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_authentication",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_hardcoded_credentials",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_dangerous_commands",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+      "targetFqn": "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_connection_timeouts",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/test_manual.py",
+      "targetFqn": "asyncio",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/test_manual.py",
+      "targetFqn": "sys",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/test_manual.py",
+      "targetFqn": "pathlib.Path",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/test_manual.py",
+      "targetFqn": "frame.RedisSecurityFrame",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "custom-frames/redis-security/test_manual.py",
+      "targetFqn": "warden.validation.domain.frame.CodeFile",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "messy_code.py",
+      "targetFqn": "os",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "messy_code.py",
+      "targetFqn": "sys",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "messy_code.py",
+      "targetFqn": "messy_code.py::MyClass",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "messy_code.py::MyClass",
+      "targetFqn": "messy_code.py::MyClass.__init__",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "messy_code.py::MyClass",
+      "targetFqn": "messy_code.py::MyClass.my_method",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "dogfooding/python/orphan_test.py",
+      "targetFqn": "typing.List",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "dogfooding/python/orphan_test.py",
+      "targetFqn": "dogfooding/python/orphan_test.py::OrphanService",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "dogfooding/python/orphan_test.py::OrphanService",
+      "targetFqn": "dogfooding/python/orphan_test.py::OrphanService.__init__",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "dogfooding/python/orphan_test.py::OrphanService",
+      "targetFqn": "dogfooding/python/orphan_test.py::OrphanService.do_nothing",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "dogfooding/python/orphan_test.py",
+      "targetFqn": "dogfooding/python/orphan_test.py::ActiveService",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "dogfooding/python/orphan_test.py::ActiveService",
+      "targetFqn": "dogfooding/python/orphan_test.py::ActiveService.process",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "dogfooding/python/chaos_test.py",
+      "targetFqn": "requests",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "dogfooding/python/chaos_test.py",
+      "targetFqn": "time",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "dogfooding/python/security_vulnerabilities.py",
+      "targetFqn": "os",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "dogfooding/python/security_vulnerabilities.py",
+      "targetFqn": "subprocess",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    }
+  ],
+  "deadSymbols": [
+    "custom-frames/redis-security/test_examples/secure_redis.py::get_keys_safe",
+    "custom-frames/redis-security/test_examples/insecure_redis.py::flush_all_data",
+    "custom-frames/redis-security/test_examples/insecure_redis.py::get_all_keys",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame.__init__",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame.execute",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame._detect_redis_usage",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_ssl_tls",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_authentication",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_hardcoded_credentials",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_dangerous_commands",
+    "custom-frames/redis-security/frame.py::RedisSecurityFrame._check_connection_timeouts",
+    "messy_code.py::very_long_function_name_that_is_hard_to_read_and_understand",
+    "messy_code.py::another_function",
+    "messy_code.py::MyClass",
+    "messy_code.py::MyClass.__init__",
+    "messy_code.py::MyClass.my_method",
+    "messy_code.py::function_with_magic_numbers",
+    "messy_code.py::old_style_formatting",
+    "messy_code.py::format_method_example",
+    "messy_code.py::manual_list_building",
+    "messy_code.py::redundant_else_example",
+    "dogfooding/python/security_vulnerabilities.py::get_user_by_id",
+    "dogfooding/python/security_vulnerabilities.py::run_command",
+    "dogfooding/python/security_vulnerabilities.py::read_file"
+  ],
+  "lspAvailable": true,
+  "generated_at": "2026-02-23T12:26:31.044936+00:00"
+}

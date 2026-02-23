@@ -91,7 +91,7 @@ HISTORY:
 
 Requirements:
 - Run 'security' on production code.
-- Skip 'architectural' for small scripts.
+- Skip 'architecture' for small scripts.
 - Prioritize frames with historical issues.
 
 Return JSON only.

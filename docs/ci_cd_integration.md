@@ -75,7 +75,7 @@ jobs:
           sudo systemctl stop ollama # Stop system service to run as runner user
           ollama serve &
           sleep 5 # Wait for server
-          ollama pull qwen2.5-coder:0.5b # Pull or load from cache
+          ollama pull qwen2.5-coder:3b # Pull or load from cache
 
       - name: Cache Baseline Report
         uses: actions/cache@v4

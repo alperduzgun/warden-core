@@ -137,6 +137,10 @@ class FrameRunner:
 
         if self.llm_service:
             frame.llm_service = self.llm_service
+            # Enable agentic loop with project context
+            project_root = getattr(context, "project_root", None) or Path.cwd()
+            if hasattr(self.llm_service, "_project_root"):
+                self.llm_service._project_root = project_root
 
         if self.semantic_search_service:
             frame.semantic_search_service = self.semantic_search_service
@@ -208,6 +212,29 @@ class FrameRunner:
                     action="frame_continues_without_context",
                 )
 
+        # Inject architectural directives from .warden/architecture.md (Gap 4: global directives)
+        # Read once per pipeline run, not per-file. Provides human-authored architectural rules.
+        project_root = getattr(context, "project_root", None) or Path.cwd()
+        arch_file_candidates = [
+            project_root / ".warden" / "rules" / "architecture.md",
+            project_root / ".warden" / "architecture.md",
+        ]
+        for arch_path in arch_file_candidates:
+            if arch_path.is_file():
+                try:
+                    arch_content = arch_path.read_text(encoding="utf-8")[:500]
+                    if arch_content.strip():
+                        frame.architectural_directives = arch_content.strip()
+                        logger.debug(
+                            "architectural_directives_injected",
+                            frame_id=frame.frame_id,
+                            source=str(arch_path),
+                            chars=len(arch_content),
+                        )
+                except Exception as e:
+                    logger.debug("architectural_directives_read_failed", error=str(e))
+                break
+
         # Inject prior findings for cross-frame awareness (Tier 1: Context-Awareness)
         # BATCH 3: Add metrics tracking
         if hasattr(context, "findings") and context.findings:
@@ -241,6 +268,20 @@ class FrameRunner:
             project_context = getattr(context, "project_context", None) or getattr(context, "project_type", None)
             if project_context and hasattr(project_context, "service_abstractions"):
                 frame.set_project_context(project_context)
+
+        # Inject spec_analysis into SecurityFrame (Gap 1: cross-frame context)
+        # SpecFrame populates project_context.spec_analysis with API contracts;
+        # SecurityFrame uses it to understand business logic constraints.
+        project_context = getattr(context, "project_context", None)
+        if project_context and getattr(project_context, "spec_analysis", None):
+            spec = project_context.spec_analysis
+            if spec and isinstance(spec, dict) and spec.get("contracts"):
+                frame.spec_analysis = spec
+                logger.debug(
+                    "spec_analysis_injected",
+                    frame_id=frame.frame_id,
+                    contract_count=len(spec.get("contracts", {})),
+                )
 
         # Inject taint paths into TaintAware frames
         if isinstance(frame, TaintAware):

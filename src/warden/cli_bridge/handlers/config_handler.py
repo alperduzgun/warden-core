@@ -232,8 +232,8 @@ class ConfigHandler(BaseHandler):
                         selected.append(f)
                         break
                 else:
-                    if norm == "architectural" and "architecturalconsistency" in frame_map:
-                        selected.append(frame_map["architecturalconsistency"])
+                    if norm == "architectural" and "architecture" in frame_map:
+                        selected.append(frame_map["architecture"])
                     else:
                         logger.warning("configured_frame_not_found", name=name)
         return selected

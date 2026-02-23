@@ -272,4 +272,22 @@ class LLMMetricsCollector:
                     }
                 )
 
+        # Rate limit detection (across all tiers)
+        rate_limited = [r for r in requests_snapshot if not r.success and "rate limit" in (r.error or "").lower()]
+        if rate_limited:
+            providers = sorted({r.provider for r in rate_limited})
+            issues.append(
+                {
+                    "type": "rate_limit",
+                    "severity": "error",
+                    "count": len(rate_limited),
+                    "message": f"Provider rate limit hit ({', '.join(providers)}): {len(rate_limited)} requests blocked",
+                    "recommendations": [
+                        "Check provider quota/subscription status",
+                        "Switch to a different provider: WARDEN_LLM_PROVIDER=groq",
+                        "Use local model: WARDEN_LLM_PROVIDER=ollama",
+                    ],
+                }
+            )
+
         return issues
