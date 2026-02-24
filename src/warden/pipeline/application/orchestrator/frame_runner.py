@@ -498,6 +498,7 @@ class FrameRunner:
                     # WARDEN_FILE_TIMEOUT_MIN env var allows manual override.
                     _provider = str(
                         getattr(getattr(context, "llm_config", None), "provider", "")
+                        or getattr(context, "llm_provider", "")
                         or os.environ.get("WARDEN_LLM_PROVIDER", "")
                     ).lower()
                     _env_min = os.environ.get("WARDEN_FILE_TIMEOUT_MIN")

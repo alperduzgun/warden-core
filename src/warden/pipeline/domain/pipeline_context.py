@@ -47,6 +47,7 @@ class PipelineContext:
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns
     language: str = "python"
     llm_config: Any | None = None  # NEW: Global LLM configuration for tiering
+    llm_provider: str = ""  # Provider name string (e.g. "ollama", "groq") for timeout decisions
 
     # Memory limits (class variables)
     MAX_LLM_HISTORY: int = field(default=100, init=False)

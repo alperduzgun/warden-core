@@ -183,10 +183,24 @@ class ConfigManager:
 
         try:
             config = self.read_config()
-            rules = self.read_rules()
         except FileNotFoundError as e:
             logger.error(f"Frame consistency validation failed: {e}")
             return {"valid": False, "error": str(e), "warnings": [str(e)]}
+
+        try:
+            rules = self.read_rules()
+        except FileNotFoundError:
+            # rules.yaml is optional — no file means no custom frame rules defined.
+            # This is not an error; skip consistency check silently.
+            logger.debug("frame_consistency_skipped_no_rules_file")
+            return {
+                "valid": True,
+                "config_frames": list(config.get("frames", [])),
+                "rules_frames": [],
+                "missing_in_rules": [],
+                "missing_in_config": [],
+                "warnings": [],
+            }
 
         # Get frame lists
         config_frames = set(config.get("frames", []))
