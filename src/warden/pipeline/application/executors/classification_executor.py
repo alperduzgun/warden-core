@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from warden.pipeline.application.executors.base_phase_executor import BasePhaseExecutor
+from warden.pipeline.application.executors.classification_cache import ClassificationCache
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile, ValidationFrame
@@ -33,6 +34,8 @@ class ClassificationExecutor(BasePhaseExecutor):
         self.frames = frames or []
         self.available_frames = available_frames or self.frames
         self.semantic_search_service = semantic_search_service
+        _root = project_root or Path.cwd()
+        self._classification_cache = ClassificationCache(_root)
 
     async def execute_async(
         self,
@@ -123,8 +126,66 @@ class ClassificationExecutor(BasePhaseExecutor):
                     logger.info(
                         "classification_phase_optimizing", total=len(code_files), classifying=len(files_to_classify)
                     )
-                _emit(f"Selecting frames for {len(files_to_classify)} files with AI")
-                result = await phase.execute_async(files_to_classify)
+
+                available_ids = [f.frame_id for f in self.available_frames]
+
+                # ── Layer 1: classification cache ───────────────────────────
+                cache_key = ClassificationCache.make_key(files_to_classify, available_ids, self.project_root)
+                cached_frames = self._classification_cache.get(cache_key)
+                if cached_frames is not None:
+                    logger.info(
+                        "classification_cache_hit",
+                        frames=cached_frames,
+                        skipped_llm=True,
+                    )
+                    result = ClassificationResult(
+                        selected_frames=cached_frames,
+                        suppression_rules=[],
+                        reasoning="Classification from cache (unchanged inputs)",
+                    )
+                else:
+                    # ── Layer 2: heuristic pre-classifier ───────────────────
+                    from warden.classification.application.heuristic_classifier import (
+                        HeuristicClassifier,
+                    )
+
+                    heuristic = HeuristicClassifier.classify(files_to_classify, available_ids)
+
+                    if heuristic.skip_llm:
+                        logger.info(
+                            "classification_heuristic_shortcut",
+                            frames=heuristic.frames,
+                            confidence=round(heuristic.confidence, 2),
+                            skipped_llm=True,
+                        )
+                        result = ClassificationResult(
+                            selected_frames=heuristic.frames,
+                            suppression_rules=[],
+                            reasoning=f"Heuristic classification (confidence={heuristic.confidence:.2f}): "
+                            + "; ".join(heuristic.reasons),
+                        )
+                    else:
+                        # ── Layer 3: LLM classification ──────────────────────
+                        _emit(f"Selecting frames for {len(files_to_classify)} files with AI")
+                        result = await phase.execute_async(files_to_classify)
+
+                        # Ensure heuristic minimum is always satisfied
+                        # (LLM can add frames but cannot drop below the heuristic floor)
+                        if result and result.selected_frames:
+                            merged = list(set(result.selected_frames) | set(heuristic.frames))
+                            if len(merged) != len(result.selected_frames):
+                                logger.info(
+                                    "classification_heuristic_floor_applied",
+                                    llm_frames=result.selected_frames,
+                                    heuristic_frames=heuristic.frames,
+                                    merged_frames=merged,
+                                )
+                                result.selected_frames = merged
+
+                    # Store in cache regardless of whether LLM was used
+                    if result and result.selected_frames:
+                        self._classification_cache.put(cache_key, result.selected_frames)
+                        logger.debug("classification_cached", frames=result.selected_frames)
 
             # Validate result exists (should always be set by above branches)
             if result is None:

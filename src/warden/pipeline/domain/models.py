@@ -51,8 +51,9 @@ class PipelineConfig(BaseDomainModel):
     """
 
     strategy: ExecutionStrategy = (
-        ExecutionStrategy.SEQUENTIAL
-    )  # SEQUENTIAL, PARALLEL, FAIL_FAST, or PIPELINE execution modes
+        ExecutionStrategy.PARALLEL
+    )  # PARALLEL by default: independent frames run concurrently (semaphore = parallel_limit).
+    # asyncio cooperative scheduling means no race conditions on context.frame_results dict writes.
     fail_fast: bool = True
     timeout: int = 300  # Total pipeline timeout in seconds
     frame_timeout: int = 120  # Per-frame timeout in seconds
