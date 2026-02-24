@@ -16,13 +16,20 @@ from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.error_handler import async_error_handler
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 from warden.shared.infrastructure.logging import get_logger
-from warden.validation.domain.frame import CodeFile, ValidationFrame
+from warden.validation.domain.frame import CodeFile, Finding, ValidationFrame
+from warden.validation.domain.frame import FrameResult as CodeFrameResult
 from warden.validation.domain.mixins import BatchExecutable, Cleanable, LSPAware, ProjectContextAware, TaintAware
 
 from .dependency_checker import DependencyChecker
 from .file_filter import FileFilter
+from .findings_cache import FindingsCache
 from .rule_executor import RuleExecutor
 from .suppression_filter import SuppressionFilter
+
+# Per-file timeout constants (proportional to file size, Bearer-inspired).
+_FILE_TIMEOUT_MIN_S: float = 10.0  # floor: every file gets at least this
+_FILE_TIMEOUT_MAX_S: float = 90.0  # ceiling: no file blocks more than this
+_FILE_BYTES_PER_SECOND: int = 15_000  # conservative parse + LLM throughput rate
 
 logger = get_logger(__name__)
 
@@ -58,6 +65,7 @@ class FrameRunner:
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
         self.ignore_matcher: IgnoreMatcher | None = None
+        self._findings_cache: FindingsCache | None = None
 
     @async_error_handler(fallback_value=None, log_level="error", context_keys=["frame_id"], reraise=False)
     async def execute_frame_with_rules_async(
@@ -382,7 +390,18 @@ class FrameRunner:
                 files_scanned = 0
                 execution_errors = 0
 
-                async def execute_single_file_async(c_file: CodeFile) -> FrameResult | None:
+                # Lazy-initialise cross-scan findings cache
+                if self._findings_cache is None:
+                    _project_root = getattr(context, "project_root", None) or Path.cwd()
+                    force_scan = getattr(self.config, "force_scan", False)
+                    if not force_scan:
+                        self._findings_cache = FindingsCache(_project_root)
+
+                # Hoist signature check outside closure — inspect.signature is
+                # expensive and the result is stable for the lifetime of the frame.
+                _frame_accepts_context = "context" in inspect.signature(frame.execute_async).parameters
+
+                async def execute_single_file_async(c_file: CodeFile) -> CodeFrameResult | None:
                     file_context = context.file_contexts.get(c_file.path)
                     if file_context and getattr(file_context, "is_unchanged", False):
                         # Only trust cache if frame was already executed in this pipeline run
@@ -390,20 +409,85 @@ class FrameRunner:
                             logger.debug("skipping_unchanged_file", file=c_file.path, frame=frame.frame_id)
                             return None
 
+                    # Cross-scan findings cache: skip LLM if content unchanged since last scan
+                    if self._findings_cache is not None and c_file.content:
+                        cached_findings: list[Finding] | None = self._findings_cache.get_findings(
+                            frame.frame_id, str(c_file.path), c_file.content
+                        )
+                        if cached_findings is not None:
+                            logger.debug(
+                                "findings_cache_hit",
+                                frame=frame.frame_id,
+                                file=c_file.path,
+                                cached_findings=len(cached_findings),
+                            )
+                            if self.progress_callback:
+                                self.progress_callback(
+                                    "progress_update",
+                                    {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path, "cached": True},
+                                )
+                            if not cached_findings:
+                                return None  # clean file — no FrameResult needed
+
+                            # Derive status and is_blocker from the actual finding severities —
+                            # never hardcode: blocker findings must remain blockers on replay.
+                            has_critical = any(f.severity == "critical" for f in cached_findings)
+                            has_high = any(f.severity == "high" for f in cached_findings)
+                            cached_status = "failed" if has_critical else "warning"
+                            cached_is_blocker = any(f.is_blocker for f in cached_findings)
+
+                            return CodeFrameResult(
+                                frame_id=frame.frame_id,
+                                frame_name=frame.name,
+                                status=cached_status,
+                                duration=0.0,
+                                issues_found=len(cached_findings),
+                                is_blocker=cached_is_blocker,
+                                findings=cached_findings,
+                                metadata={"from_cache": True},
+                            )
+
+                    # Per-file dynamic timeout: proportional to file size with min/max bounds.
+                    # Prevents a single large file from monopolising the scan budget.
                     try:
-                        # Pass context only to frames whose signature accepts it
-                        # (Tier 2: Context-Awareness opt-in, backwards compatible)
-                        sig = inspect.signature(frame.execute_async)
-                        if "context" in sig.parameters:
-                            result = await frame.execute_async(c_file, context=context)
-                        else:
-                            result = await frame.execute_async(c_file)
+                        file_size = len(c_file.content.encode("utf-8", errors="replace")) if c_file.content else 0
+                    except Exception:
+                        file_size = 0
+                    per_file_timeout = max(
+                        _FILE_TIMEOUT_MIN_S,
+                        min(file_size / _FILE_BYTES_PER_SECOND, _FILE_TIMEOUT_MAX_S),
+                    )
+
+                    try:
+                        coro = (
+                            frame.execute_async(c_file, context=context)
+                            if _frame_accepts_context
+                            else frame.execute_async(c_file)
+                        )
+                        result = await asyncio.wait_for(coro, timeout=per_file_timeout)
+
+                        # Persist findings to cross-scan cache on success
+                        if self._findings_cache is not None and result is not None and c_file.content:
+                            self._findings_cache.put_findings(
+                                frame.frame_id, str(c_file.path), c_file.content, result.findings or []
+                            )
 
                         if self.progress_callback:
                             self.progress_callback(
                                 "progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path}
                             )
                         return result
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "frame_file_timeout",
+                            frame=frame.frame_id,
+                            file=c_file.path,
+                            timeout_s=per_file_timeout,
+                            file_size_kb=round(file_size / 1024, 1),
+                        )
+                        if self.progress_callback:
+                            self.progress_callback("progress_update", {"increment": 1, "error": True})
+                        return None
                     except Exception as ex:
                         logger.error(
                             "frame_file_execution_error", frame=frame.frame_id, file=c_file.path, error=str(ex)

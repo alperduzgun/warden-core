@@ -508,6 +508,21 @@ class PhaseOrchestrator:
                 except Exception as e:
                     logger.warning("frame_executor_cleanup_failed", error=str(e))
 
+            # Flush cross-scan findings cache to disk
+            try:
+                runner = getattr(self.frame_executor, "frame_runner", None)
+                if runner is not None:
+                    cache = getattr(runner, "_findings_cache", None)
+                    if cache is not None:
+                        cache.flush()
+                        logger.debug(
+                            "findings_cache_persisted",
+                            entries=cache.size,
+                            hit_rate=round(cache.hit_rate, 2),
+                        )
+            except Exception as e:
+                logger.warning("findings_cache_flush_failed", error=str(e))
+
             logger.info("pipeline_cleanup_completed", pipeline_id=context.pipeline_id)
 
         except Exception as e:

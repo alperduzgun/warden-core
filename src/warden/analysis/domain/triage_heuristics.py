@@ -65,6 +65,35 @@ _SAFE_DIR_SEGMENTS: tuple[str, ...] = (
     "/.venv/",
     "/venv/",
     "/.eggs/",
+    # Codegen output directories (committed but auto-generated)
+    "/__generated__/",
+    "/generated/",
+    "/gen/",
+    "/grpc_generated/",
+)
+
+# Filename suffixes indicating auto-generated files that are committed to the
+# repo (so .gitignore doesn't help). These are safe to skip regardless of
+# the file's directory.
+_GENERATED_SUFFIXES: tuple[str, ...] = (
+    # Minified web assets
+    ".min.js",
+    ".min.css",
+    # Dart codegen (json_serializable, freezed)
+    ".g.dart",
+    ".freezed.dart",
+    # Protocol Buffers (non-Python languages; Python _pb2.py already in path check)
+    "_pb.js",
+    "_pb.ts",
+    ".pb.go",
+    ".pb.swift",
+    ".pb.cc",
+    ".pb.h",
+    # gRPC generated
+    "_grpc_pb.js",
+    "_grpc_pb.d.ts",
+    # GraphQL Apollo codegen
+    ".graphql.ts",
 )
 
 # Filenames that are structurally safe regardless of extension.
@@ -120,6 +149,10 @@ def is_heuristic_safe(code_file: CodeFile) -> bool:
     # 2. Safe by filename
     basename = os.path.basename(path_lower)
     if basename in _SAFE_FILENAMES:
+        return True
+
+    # 2b. Safe by generated filename suffix (e.g. foo.g.dart, bundle.min.js)
+    if any(basename.endswith(suffix) for suffix in _GENERATED_SUFFIXES):
         return True
 
     # 3. Safe by directory
