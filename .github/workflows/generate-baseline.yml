@@ -112,8 +112,8 @@ jobs:
         echo "Strategy: Groq (Primary) -> Ollama (Backup) -> Azure (Complex)"
 
         # Run scan and ensure baseline.sarif is generated/updated
-        # --update-baseline updates module-based debt tracking in .warden/baseline/
-        warden scan --level ${SCAN_LEVEL} --format sarif --output .warden/baseline.sarif --update-baseline
+        # Baseline update is enabled by default (use --no-update-baseline to skip)
+        warden scan --level ${SCAN_LEVEL} --format sarif --output .warden/baseline.sarif
 
         # Verify baseline exists
         if [ ! -f .warden/baseline.sarif ]; then
