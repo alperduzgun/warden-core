@@ -71,6 +71,19 @@ class FindingsPostProcessor:
             for frame_id, frame_res in context.frame_results.items():
                 result_obj = frame_res.get("result")
                 if result_obj and result_obj.findings:
+                    # Skip LLM verification for frames that declared supports_verification=False.
+                    # These frames produce factual/structural findings (dead code, property violations,
+                    # architectural gaps) that the security-focused verifier incorrectly rejects.
+                    frame_supports_verification = (result_obj.metadata or {}).get("supports_verification", True)
+                    if not frame_supports_verification:
+                        logger.info(
+                            "verification_skipped_frame_opt_out",
+                            frame_id=frame_id,
+                            findings_count=len(result_obj.findings),
+                        )
+                        verified_count += len(result_obj.findings)
+                        continue
+
                     findings_to_verify = [f.to_dict() if hasattr(f, "to_dict") else f for f in result_obj.findings]
                     total_findings = len(findings_to_verify)
 

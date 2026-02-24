@@ -6,6 +6,7 @@ Handles the execution of individual frames with rules and dependencies.
 
 import asyncio
 import inspect
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,9 +28,11 @@ from .rule_executor import RuleExecutor
 from .suppression_filter import SuppressionFilter
 
 # Per-file timeout constants (proportional to file size, Bearer-inspired).
-_FILE_TIMEOUT_MIN_S: float = 10.0  # floor: every file gets at least this
-_FILE_TIMEOUT_MAX_S: float = 90.0  # ceiling: no file blocks more than this
+_FILE_TIMEOUT_MIN_S: float = 10.0  # floor for cloud providers (Groq, OpenAI, etc.)
+_FILE_TIMEOUT_LOCAL_S: float = 120.0  # floor for local/slow providers (Ollama, Claude Code, Codex)
+_FILE_TIMEOUT_MAX_S: float = 300.0  # ceiling: raised from 90s for local LLM inference
 _FILE_BYTES_PER_SECOND: int = 15_000  # conservative parse + LLM throughput rate
+_LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
 logger = get_logger(__name__)
 
@@ -142,6 +145,42 @@ class FrameRunner:
         else:
             files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
             code_files = files_for_frame
+
+        # Skip frame entirely when triage routed away every file.
+        # Avoids the overhead of LLM service setup, PI injection, and a
+        # frame execution that would process 0 files.
+        if not code_files:
+            skip_result = FrameResult(
+                frame_id=frame.frame_id,
+                frame_name=frame.name,
+                status="skipped",
+                duration=time.perf_counter() - frame_start_time,
+                issues_found=0,
+                is_blocker=False,
+                findings=[],
+            )
+            context.frame_results[frame.frame_id] = {
+                "result": skip_result,
+                "pre_violations": [],
+                "post_violations": [],
+            }
+            if self.progress_callback:
+                self.progress_callback(
+                    "frame_completed",
+                    {
+                        "frame_id": frame.frame_id,
+                        "frame_name": frame.name,
+                        "status": "skipped",
+                        "findings": 0,
+                        "duration": skip_result.duration,
+                    },
+                )
+            logger.info(
+                "frame_skipped_triage_no_files",
+                frame_id=frame.frame_id,
+                frame_name=frame.name,
+            )
+            return skip_result
 
         if self.llm_service:
             frame.llm_service = self.llm_service
@@ -453,8 +492,24 @@ class FrameRunner:
                         file_size = len(c_file.content.encode("utf-8", errors="replace")) if c_file.content else 0
                     except Exception:
                         file_size = 0
+
+                    # Use a higher floor for local/slow providers (Ollama, Claude Code, Codex)
+                    # since inference latency is 19-60s even for tiny files.
+                    # WARDEN_FILE_TIMEOUT_MIN env var allows manual override.
+                    _provider = str(
+                        getattr(getattr(context, "llm_config", None), "provider", "")
+                        or os.environ.get("WARDEN_LLM_PROVIDER", "")
+                    ).lower()
+                    _env_min = os.environ.get("WARDEN_FILE_TIMEOUT_MIN")
+                    if _env_min:
+                        _timeout_min = float(_env_min)
+                    elif _provider in _LOCAL_PROVIDERS:
+                        _timeout_min = _FILE_TIMEOUT_LOCAL_S
+                    else:
+                        _timeout_min = _FILE_TIMEOUT_MIN_S
+
                     per_file_timeout = max(
-                        _FILE_TIMEOUT_MIN_S,
+                        _timeout_min,
                         min(file_size / _FILE_BYTES_PER_SECOND, _FILE_TIMEOUT_MAX_S),
                     )
 
@@ -623,6 +678,7 @@ class FrameRunner:
                     "findings_found": len(frame_findings),
                     "findings_fixed": 0,
                     "trend": 0,
+                    "supports_verification": getattr(frame, "supports_verification", True),
                 }
 
                 if hasattr(frame, "batch_summary") and frame.batch_summary:

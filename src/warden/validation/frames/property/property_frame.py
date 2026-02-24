@@ -56,6 +56,7 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
     priority = FramePriority.HIGH
     scope = FrameScope.FILE_LEVEL
     is_blocker = False
+    supports_verification = False  # Code-quality findings, not security risks — security verifier gives wrong verdicts
     version = "1.0.0"
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]

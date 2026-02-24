@@ -452,6 +452,7 @@ class LanguageServerClient:
 
     async def _read_loop_async(self):
         """Continuous loop reading messages from stdout."""
+        _cancelled = False
         try:
             while True:
                 # 1. Read Headers
@@ -475,13 +476,16 @@ class LanguageServerClient:
                     self._handle_message(msg)
 
         except asyncio.CancelledError:
-            pass
+            _cancelled = True
         except EOFError:
             logger.warning("lsp_process_eof")
         except Exception as e:
             logger.error("lsp_read_loop_error", error=str(e))
         finally:
-            if self.process and self.process.returncode is None:
+            # Only log as unexpected when the loop exits for a reason OTHER than
+            # a deliberate shutdown (which cancels the reader task via
+            # shutdown_async → self._reader_task.cancel()).
+            if not _cancelled and self.process and self.process.returncode is None:
                 logger.info("lsp_process_unexpectedly_terminated")
 
     def _handle_message(self, msg: dict[str, Any]):

@@ -144,9 +144,13 @@ class FrameRegistry:
         Args:
             frame_class: ValidationFrame class to register
         """
-        # Instantiate to get frame_id
-        instance = frame_class()
-        frame_id = instance.frame_id
+        # Read frame_id from the class attribute directly — avoids a full
+        # __init__ call (which triggers expensive side-effects like check
+        # discovery) just to read an identifier.
+        frame_id = getattr(frame_class, "frame_id", None)
+        if not frame_id:
+            # Fallback: instantiate only when the class attribute is absent.
+            frame_id = frame_class().frame_id
 
         if frame_id in self.registered_frames:
             logger.warning(
@@ -710,12 +714,14 @@ class FrameRegistry:
         Returns:
             List of unique frames
         """
-        seen_ids = set()
+        seen_ids: set[str] = set()
         unique_frames = []
 
         for frame_class in frames:
-            instance = frame_class()
-            frame_id = instance.frame_id
+            # Use the class attribute directly — same rationale as register().
+            frame_id = getattr(frame_class, "frame_id", None)
+            if not frame_id:
+                frame_id = frame_class().frame_id
 
             if frame_id not in seen_ids:
                 seen_ids.add(frame_id)
