@@ -318,8 +318,11 @@ Output must be a valid JSON object with the following structure:
                     content = content.split("```")[0].strip()
 
                 try:
-                    # Parse result with Pydantic
-                    result = AnalysisResult.from_json(content)
+                    # from_json expects a dict; parse JSON string first if needed
+                    import json as _json
+
+                    parsed = _json.loads(content) if isinstance(content, str) else content
+                    result = AnalysisResult.from_json(parsed)
 
                     for issue in result.issues:
                         findings.append(

@@ -206,6 +206,19 @@ class ConfigManager:
         config_frames = set(config.get("frames", []))
         rules_frames = set(rules.get("frame_rules", {}).keys())
 
+        # If no frame_rules are defined in rules files, skip the consistency check.
+        # Having only custom `rules:` (AST/pattern rules) without frame_rules is valid.
+        if not rules_frames:
+            logger.debug("frame_consistency_skipped_no_frame_rules")
+            return {
+                "valid": True,
+                "config_frames": sorted(config_frames),
+                "rules_frames": [],
+                "missing_in_rules": [],
+                "missing_in_config": [],
+                "warnings": [],
+            }
+
         # Find mismatches
         missing_in_rules = config_frames - rules_frames
         missing_in_config = rules_frames - config_frames

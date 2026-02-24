@@ -64,7 +64,7 @@ class OrchestratedLlmClient(ILlmClient):
                     message="CLI tool manages its own model — all requests route through one provider",
                 )
             else:
-                logger.warning(
+                logger.info(
                     "orchestrated_client_no_fast_tier",
                     message="Running in Smart-Only mode (no fast tier configured)",
                 )
