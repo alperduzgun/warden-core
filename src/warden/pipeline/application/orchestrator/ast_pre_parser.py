@@ -17,6 +17,10 @@ logger = get_logger(__name__)
 # Default per-file parse timeout
 _DEFAULT_TIMEOUT = 10.0
 
+# Maximum AST cache entries to prevent OOM on large repos.
+# 500 parsed trees ≈ 300 MB upper bound; oldest entries (FIFO) are evicted first.
+_MAX_AST_CACHE_ENTRIES = 500
+
 
 class ASTPreParser:
     """Pre-parses all code files and populates context.ast_cache."""
@@ -92,6 +96,18 @@ class ASTPreParser:
                 )
                 context.ast_cache[code_file.path] = result
                 parsed += 1
+
+                # Evict oldest entries if cache exceeds memory limit (FIFO — dict preserves insertion order)
+                if len(context.ast_cache) > _MAX_AST_CACHE_ENTRIES:
+                    evict_count = len(context.ast_cache) // 5  # drop oldest 20%
+                    oldest_keys = list(context.ast_cache.keys())[:evict_count]
+                    for k in oldest_keys:
+                        del context.ast_cache[k]
+                    logger.debug(
+                        "ast_cache_evicted",
+                        evicted=evict_count,
+                        remaining=len(context.ast_cache),
+                    )
             except asyncio.TimeoutError:
                 logger.debug(
                     "ast_pre_parse_timeout",

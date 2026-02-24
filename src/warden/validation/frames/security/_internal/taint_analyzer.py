@@ -172,6 +172,26 @@ TAINT_SINKS: dict[str, str] = {
     # File sinks
     "open": "FILE-path",
     "pathlib.Path": "FILE-path",
+    # HTTP / SSRF sinks (CWE-918) — user-controlled URLs sent to external services
+    "requests.get": "HTTP-request",
+    "requests.post": "HTTP-request",
+    "requests.put": "HTTP-request",
+    "requests.delete": "HTTP-request",
+    "requests.patch": "HTTP-request",
+    "requests.request": "HTTP-request",
+    "requests.head": "HTTP-request",
+    "urllib.request.urlopen": "HTTP-request",
+    "urllib.request.Request": "HTTP-request",
+    "httpx.get": "HTTP-request",
+    "httpx.post": "HTTP-request",
+    "httpx.put": "HTTP-request",
+    "httpx.delete": "HTTP-request",
+    "httpx.request": "HTTP-request",
+    "httpx.AsyncClient.get": "HTTP-request",
+    "httpx.AsyncClient.post": "HTTP-request",
+    "aiohttp.ClientSession.get": "HTTP-request",
+    "aiohttp.ClientSession.post": "HTTP-request",
+    "aiohttp.ClientSession.request": "HTTP-request",
 }
 
 # Known sanitizers
@@ -181,6 +201,8 @@ KNOWN_SANITIZERS: dict[str, set[str]] = {
     "HTML-content": {"html.escape", "markupsafe.escape", "bleach.clean"},
     "CODE-execution": set(),  # No sanitizer is safe for eval
     "FILE-path": {"os.path.basename", "pathlib.PurePath"},
+    # SSRF mitigation: allowlist / URL validation functions
+    "HTTP-request": {"urllib.parse.urlparse", "ipaddress.ip_address", "validators.url"},
 }
 
 
@@ -702,10 +724,18 @@ class TaintAnalyzer:
         """Check if a call is a known sink. Returns (name, sink_type) or None."""
         func_name = self._get_dotted_name(node.func)
         if func_name:
-            # Step 1: explicit catalog lookup
+            # Step 1: explicit catalog lookup — segment-aware matching to prevent
+            # false positives like "open" matching "urllib.request.urlopen".
+            # Prefer longer (more specific) patterns by checking all, collecting best.
+            best: tuple[str, str] | None = None
             for sink_pattern, sink_type in self._catalog.sinks.items():
-                if func_name.endswith(sink_pattern) or sink_pattern in func_name:
-                    return (func_name, sink_type)
+                # Exact match or dot-boundary suffix (e.g. "cursor.execute" matches
+                # "db.cursor.execute" but "open" does NOT match "urlopen").
+                if func_name == sink_pattern or func_name.endswith("." + sink_pattern):
+                    if best is None or len(sink_pattern) > len(best[0]):
+                        best = (sink_pattern, sink_type)
+            if best:
+                return (func_name, best[1])
 
             # Step 2: signal inference fallback
             if self._signal_engine and self._signal_engine.is_available():
