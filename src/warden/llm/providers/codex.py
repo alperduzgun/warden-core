@@ -62,9 +62,23 @@ def _strip_codex_banner(text: str) -> str:
         [ts] Assistant response:
         <actual content>       <-- we want this
 
+    Newer versions prepend a reasoning config block before the transcript:
+        reasoning effort: medium
+        reasoning summaries: auto
+        --------
+        [ts] User instructions: ...
+
     The --output-last-message file may contain clean content or
     the same transcript format. This function handles both.
     """
+    # Pre-step: Strip "reasoning effort/summaries:" preamble from newer Codex versions.
+    # These lines appear before the main transcript and confuse the banner detector.
+    text = re.sub(
+        r"^(?:reasoning\s+\w+(?:\s+\w+)?:[^\n]*\n)+-{4,}[^\n]*\n",
+        "",
+        text,
+    ).strip()
+
     # Strategy 1: Find the last "Assistant response:" marker
     matches = list(_ASSISTANT_RESPONSE_RE.finditer(text))
     if matches:

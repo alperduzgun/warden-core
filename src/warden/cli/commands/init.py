@@ -321,6 +321,7 @@ async def _create_baseline_async(root: Path, config_path: Path):
         last_summary = {}
         processed_count = 0
         total_files = 0
+        files_found = 0
 
         with console.status("[bold blue]🚀 Starting Analysis...[/bold blue]", spinner="dots") as status:
             async for event in bridge.execute_pipeline_stream_async(str(root)):
@@ -398,7 +399,7 @@ async def _create_baseline_async(root: Path, config_path: Path):
         console.print(f"[red]Failed to create baseline: {e}[/red]")
 
 
-async def _generate_intelligence_async(root: Path, config_files: dict = None):
+async def _generate_intelligence_async(root: Path, config_files: dict | None = None):
     """
     Generate project intelligence for CI optimization.
 
@@ -532,7 +533,13 @@ def init_command(
     # Map ProjectContext to metadata expected by init
     # We create a simple object to hold the data compatible with previous logic
     class MetaAdapter:
-        pass
+        def __init__(self) -> None:
+            self.language: str = ""
+            self.frameworks: list[str] = []
+            self.project_type: str = ""
+            self.ci_providers: list[str] = []
+            self.build_tools: list[str] = []
+            self.suggested_frames: list[str] = []
 
     meta = MetaAdapter()
     meta.language = context.primary_language
@@ -710,7 +717,7 @@ def init_command(
             ensure_line("AZURE_OPENAI_API_KEY")
             ensure_line("AZURE_OPENAI_ENDPOINT")
             ensure_line("AZURE_OPENAI_DEPLOYMENT_NAME")
-        elif provider not in ("none", "ollama", "claude_code"):
+        elif provider and provider not in ("none", "ollama", "claude_code"):
             ensure_line(f"{provider.upper()}_API_KEY")
 
         with open(env_example_path, "w") as f:
@@ -755,12 +762,15 @@ def init_command(
                 "type": meta.project_type,
                 "frameworks": meta.frameworks,
             },
-            "dependencies": {"architecture": "latest", "security": "latest"},
+            "dependencies": {"project_architecture": "latest"},
             "llm": {
                 "provider": provider,
                 "model": model,
                 "smart_model": model,
-                "fast_model": llm_config.get("fast_model", "qwen2.5-coder:3b"),
+                # fast_model is only written when the provider explicitly sets one.
+                # When Ollama is the primary, fast-tier providers (Groq, Claude Code, etc.)
+                # use their own defaults — no shared fast_model should be written.
+                **({} if not llm_config.get("fast_model") else {"fast_model": llm_config["fast_model"]}),
                 "timeout": 300,
             },
             "frames": meta.suggested_frames,
@@ -774,7 +784,9 @@ def init_command(
             },
             "semantic_search": vector_config,
             "routing": {
-                "fast_tier": "ollama" if llm_config.get("use_local_llm", False) else provider,
+                # When Ollama is the primary (smart) provider, fast-tier is the
+                # other available providers (Groq, Claude Code, etc.), not Ollama again.
+                "fast_tier": "auto" if provider == "ollama" else "ollama",
                 "smart_tier": provider,
             },
             "baseline": {
@@ -1059,7 +1071,7 @@ custom_rules:
         from warden.ast.domain.enums import CodeLanguage
         from warden.ast.providers.tree_sitter_provider import TreeSitterProvider
 
-        provider = TreeSitterProvider()
+        ts_provider = TreeSitterProvider()
 
         # Convert detected languages to CodeLanguage enums
         detected_code_langs = []
@@ -1075,7 +1087,7 @@ custom_rules:
             # Filter to only missing grammars
             missing_grammars = []
             for lang in detected_code_langs:
-                if lang in provider._missing_modules:
+                if lang in ts_provider._missing_modules:
                     missing_grammars.append(lang)
 
             if not missing_grammars:
@@ -1089,10 +1101,10 @@ custom_rules:
                 failed_langs = []
 
                 for lang in missing_grammars:
-                    package_name = provider._missing_modules[lang].replace("_", "-")
+                    package_name = ts_provider._missing_modules[lang].replace("_", "-")
 
                     with console.status(f"[bold cyan]Installing {package_name}...[/bold cyan]", spinner="dots"):
-                        success = asyncio.run(provider.auto_install_grammar(lang))
+                        success = asyncio.run(ts_provider.auto_install_grammar(lang))
 
                     if success:
                         installed_count += 1

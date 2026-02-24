@@ -30,10 +30,7 @@ def test_provider_config_validation():
 
 def test_provider_config_valid():
     """Test valid ProviderConfig"""
-    config = ProviderConfig(
-        api_key="sk-1234567890abcdef",
-        default_model="test-model"
-    )
+    config = ProviderConfig(api_key="sk-1234567890abcdef", default_model="test-model")
 
     errors = config.validate("TestProvider")
 
@@ -55,8 +52,7 @@ def test_llm_configuration_get_provider_config():
 def test_llm_configuration_providers_chain():
     """Test provider chain (default + fallbacks)"""
     config = LlmConfiguration(
-        default_provider=LlmProvider.DEEPSEEK,
-        fallback_providers=[LlmProvider.QWENCODE, LlmProvider.ANTHROPIC]
+        default_provider=LlmProvider.DEEPSEEK, fallback_providers=[LlmProvider.QWENCODE, LlmProvider.ANTHROPIC]
     )
 
     chain = config.get_all_providers_chain()
@@ -78,10 +74,7 @@ def test_create_default_config():
 
 def test_provider_config_str_masks_api_key():
     """Test API key masking in string representation"""
-    config = ProviderConfig(
-        api_key="sk-1234567890abcdef",
-        default_model="test-model"
-    )
+    config = ProviderConfig(api_key="sk-1234567890abcdef", default_model="test-model")
 
     str_repr = str(config)
 
@@ -92,6 +85,7 @@ def test_provider_config_str_masks_api_key():
 # ---------------------------------------------------------------------------
 # Regression tests for bugs #1, #2, #4
 # ---------------------------------------------------------------------------
+
 
 class TestDefaultModelsCodex:
     """Bug #1 – DEFAULT_MODELS was missing CODEX, causing validate() false errors."""
@@ -127,8 +121,10 @@ class TestCheckCodexAvailability:
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(b"1.0.0", b""))
-        with patch("shutil.which", return_value="/usr/bin/codex"), \
-             patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+        with (
+            patch("shutil.which", return_value="/usr/bin/codex"),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+        ):
             result = asyncio.run(_check_codex_availability())
         assert result is True
 
@@ -137,19 +133,25 @@ class TestCheckCodexAvailability:
         mock_proc = AsyncMock()
         mock_proc.returncode = 1
         mock_proc.communicate = AsyncMock(return_value=(b"", b"error"))
-        with patch("shutil.which", return_value="/usr/bin/codex"), \
-             patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+        with (
+            patch("shutil.which", return_value="/usr/bin/codex"),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+        ):
             result = asyncio.run(_check_codex_availability())
         assert result is False
 
     def test_returns_false_on_timeout(self):
         """Slow binary should time out and return False, not block."""
+
         async def _slow_communicate():
             await asyncio.sleep(10)
+
         mock_proc = AsyncMock()
         mock_proc.communicate = _slow_communicate
-        with patch("shutil.which", return_value="/usr/bin/codex"), \
-             patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+        with (
+            patch("shutil.which", return_value="/usr/bin/codex"),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+        ):
             result = asyncio.run(_check_codex_availability())
         assert result is False
 
@@ -171,9 +173,11 @@ class TestSingleTierFastTierCleared:
         """load_llm_config_async must clear fast_tier when primary is Codex."""
         monkeypatch.setenv("WARDEN_LLM_PROVIDER", "codex")
         # Codex available, Claude Code not, Ollama not
-        with patch("warden.llm.config._check_codex_availability", return_value=True), \
-             patch("warden.llm.config._check_claude_code_availability", return_value=False), \
-             patch("warden.llm.config._check_ollama_availability", return_value=False):
+        with (
+            patch("warden.llm.config._check_codex_availability", return_value=True),
+            patch("warden.llm.config._check_claude_code_availability", return_value=False),
+            patch("warden.llm.config._check_ollama_availability", return_value=False),
+        ):
             config = await load_llm_config_async()
         assert config.default_provider == LlmProvider.CODEX
         assert config.fast_tier_providers == [], (
@@ -184,21 +188,30 @@ class TestSingleTierFastTierCleared:
     async def test_claude_code_primary_clears_fast_tier(self, monkeypatch):
         """load_llm_config_async must clear fast_tier when primary is Claude Code."""
         monkeypatch.setenv("WARDEN_LLM_PROVIDER", "claude_code")
-        with patch("warden.llm.config._check_codex_availability", return_value=False), \
-             patch("warden.llm.config._check_claude_code_availability", return_value=True), \
-             patch("warden.llm.config._check_ollama_availability", return_value=False):
+        with (
+            patch("warden.llm.config._check_codex_availability", return_value=False),
+            patch("warden.llm.config._check_claude_code_availability", return_value=True),
+            patch("warden.llm.config._check_ollama_availability", return_value=False),
+        ):
             config = await load_llm_config_async()
         assert config.default_provider == LlmProvider.CLAUDE_CODE
         assert config.fast_tier_providers == []
 
     @pytest.mark.asyncio
-    async def test_non_single_tier_primary_keeps_fast_tier(self, monkeypatch):
-        """Non-CLI providers keep their fast_tier_providers."""
+    async def test_explicit_provider_restricts_fast_tier(self, monkeypatch):
+        """When a provider is explicitly set, fast tier is restricted to that provider only.
+        Auto-pilot must NOT silently add Ollama, Claude Code, or Codex to the fast tier.
+        """
         monkeypatch.setenv("WARDEN_LLM_PROVIDER", "groq")
         monkeypatch.setenv("GROQ_API_KEY", "gsk_test_1234567890abcdef")
-        with patch("warden.llm.config._check_codex_availability", return_value=False), \
-             patch("warden.llm.config._check_claude_code_availability", return_value=False), \
-             patch("warden.llm.config._check_ollama_availability", return_value=True):
+        with (
+            patch("warden.llm.config._check_codex_availability", return_value=False),
+            patch("warden.llm.config._check_claude_code_availability", return_value=False),
+            patch("warden.llm.config._check_ollama_availability", return_value=True),
+        ):
             config = await load_llm_config_async()
         assert config.default_provider == LlmProvider.GROQ
-        assert LlmProvider.OLLAMA in config.fast_tier_providers
+        # fast_tier_providers contains only the primary (factory will skip it → no fast clients)
+        assert config.fast_tier_providers == [LlmProvider.GROQ]
+        assert LlmProvider.OLLAMA not in config.fast_tier_providers
+        assert LlmProvider.CLAUDE_CODE not in config.fast_tier_providers

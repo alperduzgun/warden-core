@@ -486,33 +486,44 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         configured_providers.append(LlmProvider.CODEX)
 
     # --- AUTO-PILOT LOGIC ---
-    # Determine Fast Tier Chain based on available credentials and service health
+    # Only runs when NO explicit provider was configured (no config.yaml provider: / no env var).
+    # When the user explicitly set a provider, they chose their LLM — the system must not
+    # silently route requests to Claude Code, Codex, or any other detected tool.
+    if not explicit_provider_override:
+        detected_fast_tier: list[LlmProvider] = []
 
-    detected_fast_tier = []
+        # Priority 1: Groq (Cloud Speed)
+        if LlmProvider.GROQ in configured_providers:
+            detected_fast_tier.append(LlmProvider.GROQ)
 
-    # Priority 1: Groq (Cloud Speed)
-    if LlmProvider.GROQ in configured_providers:
-        detected_fast_tier.append(LlmProvider.GROQ)
+        # Priority 2: Ollama (Local/Free) - Only if service is actually running
+        # This fail-fast check prevents adding a dead service to the chain
+        if await _check_ollama_availability(ollama_endpoint):
+            detected_fast_tier.append(LlmProvider.OLLAMA)
 
-    # Priority 2: Ollama (Local/Free) - Only if service is actually running
-    # This fail-fast check prevents adding a dead service to the chain
-    if await _check_ollama_availability(ollama_endpoint):
-        detected_fast_tier.append(LlmProvider.OLLAMA)
+        # Priority 3: Claude Code (Local subscription) - fast for simple queries
+        if LlmProvider.CLAUDE_CODE in configured_providers:
+            detected_fast_tier.append(LlmProvider.CLAUDE_CODE)
 
-    # Priority 3: Claude Code (Local subscription) - fast for simple queries
-    if LlmProvider.CLAUDE_CODE in configured_providers:
-        detected_fast_tier.append(LlmProvider.CLAUDE_CODE)
+        # Priority 4: Codex (Local CLI) - read-only analysis via codex exec
+        if LlmProvider.CODEX in configured_providers:
+            detected_fast_tier.append(LlmProvider.CODEX)
 
-    # Priority 4: Codex (Local CLI) - read-only analysis via codex exec
-    if LlmProvider.CODEX in configured_providers:
-        detected_fast_tier.append(LlmProvider.CODEX)
-
-    # Apply Auto-Detected chain if still at default.
-    # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.
-    if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
-        # If default, replace with auto-detected if we found anything good
-        if detected_fast_tier:
-            config.fast_tier_providers = detected_fast_tier
+        # Apply Auto-Detected chain if still at default.
+        # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.
+        if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
+            if detected_fast_tier:
+                config.fast_tier_providers = detected_fast_tier
+    else:
+        # Explicit provider set: fast tier = primary provider only.
+        # The factory skips the primary from fast clients → effectively single-tier.
+        # Users can still add fast_tier_providers in config.yaml or WARDEN_FAST_TIER_PRIORITY
+        # to opt into hybrid mode explicitly.
+        config.fast_tier_providers = [explicit_provider_override]
+        logger.debug(
+            "fast_tier_restricted_explicit_provider",
+            provider=explicit_provider_override.value,
+        )
 
     # Prioritize explicit provider override from config.yaml
     if explicit_provider_override:

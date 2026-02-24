@@ -31,7 +31,7 @@ class LLMPhaseConfig:
     """Configuration for LLM-enhanced phase."""
 
     enabled: bool = False
-    model: str = "gpt-4o"
+    model: str = ""
     confidence_threshold: float = 0.7
     batch_size: int = 10
     cache_enabled: bool = True
@@ -167,10 +167,20 @@ class LLMPhaseBase(ABC):
             else:
                 self.is_local = False
 
+            # Resolve actual model name from the LLM service if config.model is empty
+            display_model = self.config.model
+            if not display_model:
+                display_model = (
+                    getattr(getattr(llm_service, "smart_client", None), "default_model", None)
+                    or getattr(llm_service, "smart_model", None)
+                    or getattr(llm_service, "model", None)
+                    or "(provider-default)"
+                )
+
             logger.info(
                 "llm_phase_initialized",
                 phase=self.phase_name,
-                model=self.config.model,
+                model=display_model,
                 cache=self.config.cache_enabled,
                 has_llm=True,
             )
