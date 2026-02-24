@@ -295,37 +295,43 @@ def configure_ollama() -> tuple[dict, dict]:
         "deepseek-coder:6.7b",
         "starcoder2:7b",
     ]
-    default_model = "qwen2.5-coder:7b"  # fallback if nothing installed
+    # Fresh install: default to 3b (faster download, lower footprint).
+    # If user already has a larger model installed, use that instead.
+    default_model = "qwen2.5-coder:3b"
     for candidate in smart_candidates:
         if candidate in installed_models:
             default_model = candidate
-            break
-
-    # Fast model default
-    fast_candidates = ["qwen2.5-coder:3b"]
-    default_fast = "qwen2.5-coder:3b"
-    for candidate in fast_candidates:
-        if candidate in installed_models:
-            default_fast = candidate
             break
 
     model = default_model
     if is_interactive:
         model = Prompt.ask("Select model", default=default_model)
 
-    # Check if selected models are actually installed and warn prominently
+    # Check if selected model is actually installed — offer to pull if not
     missing_models = []
     if model not in installed_models:
         missing_models.append(model)
-    if default_fast not in installed_models:
-        missing_models.append(default_fast)
 
-    if missing_models and installed_models:
+    if missing_models:
+        from warden.services.local_model_manager import LocalModelManager
+
+        manager = LocalModelManager()
         console.print(f"\n[bold yellow]⚠️  Missing models: {', '.join(missing_models)}[/bold yellow]")
+
         for m in missing_models:
-            console.print(f"[yellow]   Run: ollama pull {m}[/yellow]")
-    elif missing_models:
-        console.print(f"\n[yellow]⚠️  Tip: Run 'ollama pull {model}' to download the model.[/yellow]")
+            should_pull = True
+            if is_interactive:
+                should_pull = Confirm.ask(f"Pull model '{m}' now?", default=True)
+
+            if should_pull:
+                console.print(f"[dim]⬇️  Pulling {m}...[/dim]")
+                success = manager.pull_model(m, show_progress=is_interactive)
+                if success:
+                    console.print(f"[green]✓ {m} downloaded[/green]")
+                else:
+                    console.print(f"[yellow]⚠️  Pull failed. Run manually: ollama pull {m}[/yellow]")
+            else:
+                console.print(f"[yellow]   Run manually: ollama pull {m}[/yellow]")
     else:
         console.print(f"[green]✓ Model '{model}' is installed[/green]")
 
@@ -334,7 +340,8 @@ def configure_ollama() -> tuple[dict, dict]:
         "model": model,
         "timeout": 300,
         "use_local_llm": True,
-        "fast_model": default_fast,
+        # fast_model is intentionally omitted: Ollama IS the primary (smart) provider.
+        # Other fast-tier providers (Groq, Claude Code, etc.) use their own default models.
     }
 
     env_vars = {"OLLAMA_HOST": ollama_host}
@@ -590,7 +597,7 @@ def configure_azure() -> tuple[dict, dict]:
     return llm_config, env_vars
 
 
-def configure_llm(existing_config: dict = None) -> tuple[dict, dict]:
+def configure_llm(existing_config: dict | None = None) -> tuple[dict, dict]:
     """
     Main LLM configuration flow.
     Step 1: Provider selection

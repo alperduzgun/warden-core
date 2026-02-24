@@ -212,13 +212,24 @@ class WardenDoctor:
         """Check Ollama availability and model status."""
         import os
 
+        from warden.services.local_model_manager import LocalModelManager
+
+        manager = LocalModelManager()
+
+        # Distinguish "not installed" from "not running"
+        if not manager.is_installed():
+            return CheckStatus.WARNING, (
+                "Ollama is not installed. "
+                "Install: brew install ollama  |  curl -fsSL https://ollama.com/install.sh | sh  "
+                "|  https://ollama.com/download  —  then run: warden doctor --fix"
+            )
+
         ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
         try:
+            import json
             import urllib.request
 
             resp = urllib.request.urlopen(f"{ollama_host}/api/tags", timeout=3)
-            import json
-
             models = [m["name"] for m in json.loads(resp.read()).get("models", [])]
 
             # Check configured model is installed
@@ -233,12 +244,86 @@ class WardenDoctor:
             if configured_model and configured_model not in models:
                 return CheckStatus.WARNING, (
                     f"Ollama running ({len(models)} models) but configured model "
-                    f"'{configured_model}' not installed. Run: ollama pull {configured_model}"
+                    f"'{configured_model}' not installed. Run: ollama pull {configured_model}  "
+                    f"—  or: warden doctor --fix"
                 )
 
             return CheckStatus.SUCCESS, f"Ollama running at {ollama_host} ({len(models)} models available)."
         except Exception:
-            return CheckStatus.WARNING, f"Ollama not reachable at {ollama_host}. Start with: ollama serve"
+            return CheckStatus.WARNING, (
+                f"Ollama not reachable at {ollama_host}. Start with: ollama serve  —  or: warden doctor --fix"
+            )
+
+    def fix_env(self) -> bool:
+        """
+        Attempt to fix environment issues automatically.
+
+        Currently handles:
+        - Missing Ollama models: pulls them via ``ollama pull``
+        - Ollama not running: starts via ``ollama serve``
+
+        Returns True if at least one issue was resolved.
+        """
+        configured_provider = self._get_configured_provider()
+        if configured_provider != "ollama":
+            console.print("[dim]  No auto-fix available for non-Ollama providers.[/dim]")
+            return False
+
+        from warden.services.local_model_manager import LocalModelManager
+
+        manager = LocalModelManager()
+        fixed = False
+
+        # Fix 0: Install Ollama if binary is missing
+        if not manager.is_installed():
+            import sys
+
+            from rich.prompt import Confirm
+
+            console.print("[yellow]  ⚠️  Ollama is not installed.[/yellow]")
+
+            is_interactive = sys.stdin.isatty()
+            should_install = Confirm.ask("  Install Ollama now?", default=True) if is_interactive else False
+
+            if not should_install:
+                console.print("[dim]  Install manually:[/dim]")
+                console.print("[dim]     macOS : brew install ollama[/dim]")
+                console.print("[dim]     Linux : curl -fsSL https://ollama.com/install.sh | sh[/dim]")
+                console.print("[dim]     or    : https://ollama.com/download[/dim]")
+                return False
+
+            console.print("[dim]  Installing Ollama...[/dim]")
+            if manager.install_ollama():
+                console.print("[green]  ✓ Ollama installed successfully[/green]")
+                fixed = True
+            else:
+                console.print("[red]  ✘ Installation failed. Install manually:[/red]")
+                console.print("[dim]     macOS : brew install ollama[/dim]")
+                console.print("[dim]     Linux : curl -fsSL https://ollama.com/install.sh | sh[/dim]")
+                console.print("[dim]     or    : https://ollama.com/download[/dim]")
+                return False
+
+        # Fix 1: Ensure Ollama is running
+        if not manager.ensure_ollama_running():
+            console.print("[red]  ✘ Could not start Ollama. Run 'ollama serve' manually.[/red]")
+            return fixed
+
+        console.print("[green]  ✓ Ollama server is running[/green]")
+        fixed = True
+
+        # Fix 2: Pull missing configured models
+        missing = [m for m in manager.get_configured_models(self.config_path) if not manager.is_model_available(m)]
+
+        for model in missing:
+            console.print(f"[dim]  ⬇️  Pulling {model}...[/dim]")
+            success = manager.pull_model(model, show_progress=True)
+            if success:
+                console.print(f"[green]  ✓ {model} downloaded[/green]")
+                fixed = True
+            else:
+                console.print(f"[yellow]  ⚠️  Pull failed for {model}. Run: ollama pull {model}[/yellow]")
+
+        return fixed
 
     def _check_claude_code_env(self) -> tuple[CheckStatus, str]:
         """Check Claude Code CLI availability."""
