@@ -83,7 +83,7 @@ class ConfigManager:
         Updates frames_config.<frame_id>.enabled field.
 
         Args:
-            frame_id: Frame identifier (e.g., 'security', 'chaos')
+            frame_id: Frame identifier (e.g., 'security', 'resilience')
             enabled: Whether frame should be enabled
 
         Returns:

@@ -73,16 +73,6 @@ _RESILIENCE_PATTERNS = (
     "starlette",
 )
 
-# Any of these → add "chaos"
-_CHAOS_PATTERNS = (
-    "async def",
-    "await ",
-    "asyncio",
-    "concurrent.futures",
-    "threading.Thread",
-    "multiprocessing",
-)
-
 # Any of these → add "fuzz"
 _FUZZ_PATTERNS = (
     "argparse",
@@ -202,13 +192,6 @@ class HeuristicClassifier:
                 frames.add("resilience")
                 reasons.append("resilience: network/db/service import detected")
             confidence += 0.05
-
-        # ── Chaos ───────────────────────────────────────────────────────────
-        if any(pat in combined for pat in _CHAOS_PATTERNS):
-            if "chaos" in available:
-                frames.add("chaos")
-                reasons.append("chaos: async/concurrent patterns detected")
-            confidence += 0.03
 
         # ── Fuzz ────────────────────────────────────────────────────────────
         if any(pat in combined for pat in _FUZZ_PATTERNS):

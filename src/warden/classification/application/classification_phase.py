@@ -115,7 +115,7 @@ class ClassificationPhase:
         except Exception as e:
             logger.error("classification_phase_failed", error=str(e))
             # Return default result on error
-            result.selected_frames = ["security", "orphan", "chaos"]
+            result.selected_frames = ["security", "orphan", "resilience"]
             result.reasoning = f"Failed to classify, using defaults: {e!s}"
 
         return result
@@ -134,9 +134,9 @@ class ClassificationPhase:
         if quality_score < 7.0:
             frames.append("orphan")
 
-        # Add chaos for backend/API projects
+        # Add resilience for backend/API projects
         if project_type in ["api", "backend", "service"]:
-            frames.append("chaos")
+            frames.append("resilience")
 
         # Add architectural for large projects
         if project_type in ["application", "monorepo"]:
@@ -180,7 +180,7 @@ class ClassificationPhase:
         # Default priorities
         default_priorities = {
             "security": 1,
-            "chaos": 2,
+            "resilience": 2,
             "orphan": 3,
             "architecture": 4,
             "stress": 5,

@@ -345,7 +345,7 @@ class RulesYAMLLoader:
                     pre_rules: ["rule-id-1", "rule-id-2"]
                     post_rules: ["rule-id-3"]
                     on_fail: "stop"
-                chaos:
+                resilience:
                     pre_rules: ["rule-id-4"]
                     on_fail: "continue"
         """

@@ -89,7 +89,7 @@ class ConfigAdapter(BaseWardenAdapter):
                 properties={
                     "frame_id": {
                         "type": "string",
-                        "description": "Frame identifier (e.g., 'security', 'chaos')",
+                        "description": "Frame identifier (e.g., 'security', 'resilience')",
                     },
                     "enabled": {
                         "type": "boolean",

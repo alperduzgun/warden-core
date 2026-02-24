@@ -131,11 +131,11 @@ class TestDeduplicateFrames:
             _make_attr_frame("resilience"),
             _make_property_frame("orphan"),
             _make_property_frame("fuzz"),
-            _make_property_frame("chaos"),
+            _make_property_frame("spec"),
         ]
         result = registry._deduplicate_frames(frames)
         ids = sorted(FrameRegistry._resolve_frame_id(f) for f in result)  # type: ignore[arg-type]
-        assert ids == ["chaos", "fuzz", "orphan", "resilience", "security"]
+        assert ids == ["fuzz", "orphan", "resilience", "security", "spec"]
 
     def test_true_duplicate_dropped(self):
         registry = FrameRegistry()

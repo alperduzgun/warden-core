@@ -39,11 +39,11 @@ class TestProtoMessages:
             file_path="src/db.py",
             line_number=42,
             column_number=10,
-            code_snippet="query = f\"SELECT * FROM users WHERE id={user_id}\"",
+            code_snippet='query = f"SELECT * FROM users WHERE id={user_id}"',
             suggestion="Use parameterized queries",
             frame_id="security",
             cwe_id="CWE-89",
-            owasp_category="A03:2021"
+            owasp_category="A03:2021",
         )
 
         assert finding.id == "test-001"
@@ -56,11 +56,7 @@ class TestProtoMessages:
     def test_finding_serialization(self):
         """Test Finding message serialization/deserialization."""
         original = warden_pb2.Finding(
-            id="test-002",
-            title="XSS Vulnerability",
-            severity=warden_pb2.HIGH,
-            file_path="src/web.py",
-            line_number=100
+            id="test-002", title="XSS Vulnerability", severity=warden_pb2.HIGH, file_path="src/web.py", line_number=100
         )
 
         # Serialize
@@ -79,17 +75,13 @@ class TestProtoMessages:
 
     def test_pipeline_request(self):
         """Test PipelineRequest message."""
-        request = warden_pb2.PipelineRequest(
-            path="./src",
-            parallel=True,
-            timeout_seconds=300
-        )
-        request.frames.extend(["security", "chaos", "fuzz"])
+        request = warden_pb2.PipelineRequest(path="./src", parallel=True, timeout_seconds=300)
+        request.frames.extend(["security", "resilience", "fuzz"])
 
         assert request.path == "./src"
         assert request.parallel is True
         assert request.timeout_seconds == 300
-        assert list(request.frames) == ["security", "chaos", "fuzz"]
+        assert list(request.frames) == ["security", "resilience", "fuzz"]
 
     def test_pipeline_result(self):
         """Test PipelineResult message."""
@@ -101,9 +93,9 @@ class TestProtoMessages:
             high_count=2,
             medium_count=2,
             low_count=0,
-            duration_ms=1500
+            duration_ms=1500,
         )
-        result.frames_executed.extend(["security", "chaos"])
+        result.frames_executed.extend(["security", "resilience"])
 
         # Add a finding
         finding = result.findings.add()
@@ -120,11 +112,7 @@ class TestProtoMessages:
     def test_pipeline_event(self):
         """Test PipelineEvent message."""
         event = warden_pb2.PipelineEvent(
-            event_type="progress",
-            stage="security",
-            progress=0.5,
-            message="Analyzing files...",
-            timestamp_ms=1234567890
+            event_type="progress", stage="security", progress=0.5, message="Analyzing files...", timestamp_ms=1234567890
         )
 
         assert event.event_type == "progress"
@@ -134,15 +122,8 @@ class TestProtoMessages:
 
     def test_pipeline_event_with_finding(self):
         """Test PipelineEvent with embedded Finding."""
-        event = warden_pb2.PipelineEvent(
-            event_type="finding",
-            stage="security"
-        )
-        event.finding.CopyFrom(warden_pb2.Finding(
-            id="f-002",
-            title="Hardcoded Secret",
-            severity=warden_pb2.CRITICAL
-        ))
+        event = warden_pb2.PipelineEvent(event_type="finding", stage="security")
+        event.finding.CopyFrom(warden_pb2.Finding(id="f-002", title="Hardcoded Secret", severity=warden_pb2.CRITICAL))
 
         assert event.event_type == "finding"
         assert event.finding.id == "f-002"
@@ -151,11 +132,7 @@ class TestProtoMessages:
     def test_llm_analyze_request(self):
         """Test LlmAnalyzeRequest message."""
         request = warden_pb2.LlmAnalyzeRequest(
-            code="def foo(): pass",
-            prompt="Review this code",
-            provider="anthropic",
-            temperature=0.7,
-            max_tokens=1000
+            code="def foo(): pass", prompt="Review this code", provider="anthropic", temperature=0.7, max_tokens=1000
         )
 
         assert request.code == "def foo(): pass"
@@ -171,7 +148,7 @@ class TestProtoMessages:
             provider_used="anthropic",
             model_used="claude-3-sonnet",
             tokens_used=150,
-            duration_ms=2000
+            duration_ms=2000,
         )
 
         assert result.success is True
@@ -180,14 +157,8 @@ class TestProtoMessages:
 
     def test_llm_analyze_result_with_error(self):
         """Test LlmAnalyzeResult with error."""
-        result = warden_pb2.LlmAnalyzeResult(
-            success=False
-        )
-        result.error.CopyFrom(warden_pb2.LlmError(
-            code="RATE_LIMIT",
-            message="Rate limit exceeded",
-            provider="openai"
-        ))
+        result = warden_pb2.LlmAnalyzeResult(success=False)
+        result.error.CopyFrom(warden_pb2.LlmError(code="RATE_LIMIT", message="Rate limit exceeded", provider="openai"))
 
         assert result.success is False
         assert result.error.code == "RATE_LIMIT"
@@ -196,8 +167,7 @@ class TestProtoMessages:
     def test_classify_request(self):
         """Test ClassifyRequest message."""
         request = warden_pb2.ClassifyRequest(
-            code="import asyncio\nasync def main_async(): pass",
-            file_path="src/main.py"
+            code="import asyncio\nasync def main_async(): pass", file_path="src/main.py"
         )
 
         assert "asyncio" in request.code
@@ -213,7 +183,7 @@ class TestProtoMessages:
             has_file_operations=False,
             has_authentication=True,
             has_cryptography=False,
-            confidence=0.95
+            confidence=0.95,
         )
         result.detected_frameworks.extend(["fastapi", "sqlalchemy"])
         result.recommended_frames.extend(["security", "async", "sql"])
@@ -232,7 +202,7 @@ class TestProtoMessages:
             description="Detects security vulnerabilities",
             priority=1,
             is_blocker=True,
-            enabled=True
+            enabled=True,
         )
         frame.tags.extend(["owasp", "cwe", "security"])
 
@@ -250,22 +220,18 @@ class TestProtoMessages:
         frame1.priority = 1
 
         frame2 = frame_list.frames.add()
-        frame2.id = "chaos"
+        frame2.id = "resilience"
         frame2.name = "Chaos"
         frame2.priority = 2
 
         assert len(frame_list.frames) == 2
         assert frame_list.frames[0].id == "security"
-        assert frame_list.frames[1].id == "chaos"
+        assert frame_list.frames[1].id == "resilience"
 
     def test_provider_message(self):
         """Test Provider message."""
         provider = warden_pb2.Provider(
-            id="anthropic",
-            name="Anthropic Claude",
-            available=True,
-            is_default=True,
-            status="ready"
+            id="anthropic", name="Anthropic Claude", available=True, is_default=True, status="ready"
         )
 
         assert provider.id == "anthropic"
@@ -274,11 +240,7 @@ class TestProtoMessages:
 
     def test_health_response(self):
         """Test HealthResponse message."""
-        health = warden_pb2.HealthResponse(
-            healthy=True,
-            version="1.0.0",
-            uptime_seconds=3600
-        )
+        health = warden_pb2.HealthResponse(healthy=True, version="1.0.0", uptime_seconds=3600)
         health.components["llm"] = True
         health.components["qdrant"] = False
 
@@ -291,12 +253,7 @@ class TestProtoMessages:
     def test_status_response(self):
         """Test StatusResponse message."""
         status = warden_pb2.StatusResponse(
-            running=True,
-            active_pipelines=2,
-            total_scans=100,
-            total_findings=500,
-            memory_mb=256,
-            cpu_percent=15.5
+            running=True, active_pipelines=2, total_scans=100, total_findings=500, memory_mb=256, cpu_percent=15.5
         )
 
         assert status.running is True
@@ -307,9 +264,7 @@ class TestProtoMessages:
     def test_configuration_response(self):
         """Test ConfigurationResponse message."""
         config = warden_pb2.ConfigurationResponse(
-            project_root="/path/to/project",
-            config_file=".warden/config.yaml",
-            active_profile="default"
+            project_root="/path/to/project", config_file=".warden/config.yaml", active_profile="default"
         )
         config.settings["timeout"] = "300"
         config.settings["parallel"] = "true"
@@ -337,7 +292,7 @@ class TestProtoMessages:
             original_code="user_input = request.get('data')",
             suggested_code="user_input = validate(request.get('data'))",
             rationale="Prevents injection attacks",
-            priority=warden_pb2.HIGH
+            priority=warden_pb2.HIGH,
         )
 
         assert fort.id == "fort-001"
@@ -352,7 +307,7 @@ class TestProtoMessages:
             description="Import 'os' is not used",
             file_path="src/utils.py",
             line_number=3,
-            detail="<code>import os</code>"
+            detail="<code>import os</code>",
         )
 
         assert cleaning.id == "clean-001"

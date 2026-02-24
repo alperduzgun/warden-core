@@ -12,7 +12,7 @@ files:
   - "src/**/*.py"
 frames:
   - security
-  - chaos
+  - resilience
 settings:
   fail_fast: true
 ```
@@ -117,7 +117,7 @@ def parse_simple_format(data: dict[str, Any]) -> PipelineConfig:
       - "src/**/*.py"
     frames:
       - security
-      - chaos
+      - resilience
     settings:
       fail_fast: true
       parallel: true

@@ -353,7 +353,7 @@ async def test_orchestrator_sequential_execution():
         language="python",
     )
 
-    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "resilience"])
 
     # Both frames should execute
     assert result.total_frames == 2
@@ -379,7 +379,7 @@ async def test_orchestrator_parallel_execution():
         language="python",
     )
 
-    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "resilience"])
 
     # Both frames should execute in parallel
     assert result.total_frames == 2
@@ -400,7 +400,7 @@ async def test_orchestrator_fail_fast():
         language="python",
     )
 
-    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "resilience"])
 
     # Should stop after SecurityFrame fails (it's a blocker)
     assert result.status == PipelineStatus.FAILED
@@ -423,7 +423,7 @@ async def test_orchestrator_passes_clean_code():
         language="python",
     )
 
-    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "resilience"])
 
     # Should pass all frames (low-severity findings from resilience are acceptable)
     assert result.status == PipelineStatus.COMPLETED
@@ -514,7 +514,7 @@ async def test_orchestrator_severity_counts():
         language="python",
     )
 
-    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "chaos"])
+    result, _ = await orchestrator.execute_async([code_file], frames_to_execute=["security", "resilience"])
 
     # Should have findings across multiple severity levels
     assert result.total_findings > 0

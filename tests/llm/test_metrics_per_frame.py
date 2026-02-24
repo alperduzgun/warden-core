@@ -1,4 +1,5 @@
 """Tests for per-frame metrics tracking."""
+
 import asyncio
 import pytest
 from warden.llm.metrics import LLMMetricsCollector, FrameMetrics, _current_frame_scope
@@ -9,9 +10,13 @@ class TestFrameScope:
         collector = LLMMetricsCollector()
         with collector.frame_scope("security"):
             collector.record_request(
-                tier="fast", provider="ollama", model="qwen",
-                success=True, duration_ms=100,
-                input_tokens=50, output_tokens=30
+                tier="fast",
+                provider="ollama",
+                model="qwen",
+                success=True,
+                duration_ms=100,
+                input_tokens=50,
+                output_tokens=30,
             )
 
         metrics = collector.get_frame_metrics()
@@ -23,9 +28,13 @@ class TestFrameScope:
     def test_unattributed(self):
         collector = LLMMetricsCollector()
         collector.record_request(
-            tier="smart", provider="azure", model="gpt-4",
-            success=True, duration_ms=200,
-            input_tokens=100, output_tokens=50
+            tier="smart",
+            provider="azure",
+            model="gpt-4",
+            success=True,
+            duration_ms=200,
+            input_tokens=100,
+            output_tokens=50,
         )
 
         metrics = collector.get_frame_metrics()
@@ -34,9 +43,13 @@ class TestFrameScope:
     def test_cost_estimation(self):
         collector = LLMMetricsCollector()
         collector.record_request(
-            tier="smart", provider="azure", model="gpt-4",
-            success=True, duration_ms=200,
-            input_tokens=1000, output_tokens=500
+            tier="smart",
+            provider="azure",
+            model="gpt-4",
+            success=True,
+            duration_ms=200,
+            input_tokens=1000,
+            output_tokens=500,
         )
 
         metrics = collector.get_frame_metrics()
@@ -45,29 +58,44 @@ class TestFrameScope:
     def test_backward_compat_summary(self):
         """Existing get_summary() should still work."""
         collector = LLMMetricsCollector()
-        collector.record_request(
-            tier="fast", provider="ollama", model="qwen",
-            success=True, duration_ms=100
-        )
+        collector.record_request(tier="fast", provider="ollama", model="qwen", success=True, duration_ms=100)
         summary = collector.get_summary()
         assert summary["totalRequests"] == 1
 
     def test_multiple_frames(self):
         collector = LLMMetricsCollector()
         with collector.frame_scope("security"):
-            collector.record_request(tier="fast", provider="ollama", model="q", success=True, duration_ms=100, input_tokens=50, output_tokens=30)
-        with collector.frame_scope("chaos"):
-            collector.record_request(tier="fast", provider="ollama", model="q", success=True, duration_ms=200, input_tokens=100, output_tokens=60)
+            collector.record_request(
+                tier="fast",
+                provider="ollama",
+                model="q",
+                success=True,
+                duration_ms=100,
+                input_tokens=50,
+                output_tokens=30,
+            )
+        with collector.frame_scope("resilience"):
+            collector.record_request(
+                tier="fast",
+                provider="ollama",
+                model="q",
+                success=True,
+                duration_ms=200,
+                input_tokens=100,
+                output_tokens=60,
+            )
 
         metrics = collector.get_frame_metrics()
         assert len(metrics) == 2
         names = {m.frame_name for m in metrics}
-        assert names == {"security", "chaos"}
+        assert names == {"security", "resilience"}
 
     def test_error_tracking(self):
         collector = LLMMetricsCollector()
         with collector.frame_scope("security"):
-            collector.record_request(tier="fast", provider="ollama", model="q", success=False, duration_ms=100, error="timeout")
+            collector.record_request(
+                tier="fast", provider="ollama", model="q", success=False, duration_ms=100, error="timeout"
+            )
 
         metrics = collector.get_frame_metrics()
         assert metrics[0].errors == 1
@@ -77,9 +105,7 @@ class TestFrameScope:
         collector = LLMMetricsCollector()
         with collector.frame_scope("security"):
             collector.record_request(
-                tier="fast", provider="ollama", model="q",
-                success=True, duration_ms=100,
-                frame_name="explicit_frame"
+                tier="fast", provider="ollama", model="q", success=True, duration_ms=100, frame_name="explicit_frame"
             )
 
         metrics = collector.get_frame_metrics()
@@ -105,15 +131,23 @@ class TestFrameScope:
         collector = LLMMetricsCollector()
         with collector.frame_scope("cheap_frame"):
             collector.record_request(
-                tier="fast", provider="ollama", model="q",
-                success=True, duration_ms=100,
-                input_tokens=10, output_tokens=5
+                tier="fast",
+                provider="ollama",
+                model="q",
+                success=True,
+                duration_ms=100,
+                input_tokens=10,
+                output_tokens=5,
             )
         with collector.frame_scope("expensive_frame"):
             collector.record_request(
-                tier="smart", provider="azure", model="gpt-4",
-                success=True, duration_ms=500,
-                input_tokens=5000, output_tokens=2000
+                tier="smart",
+                provider="azure",
+                model="gpt-4",
+                success=True,
+                duration_ms=500,
+                input_tokens=5000,
+                output_tokens=2000,
             )
 
         metrics = collector.get_frame_metrics()
@@ -126,14 +160,22 @@ class TestFrameScope:
         collector = LLMMetricsCollector()
         with collector.frame_scope("security"):
             collector.record_request(
-                tier="fast", provider="ollama", model="q",
-                success=True, duration_ms=100,
-                input_tokens=50, output_tokens=30
+                tier="fast",
+                provider="ollama",
+                model="q",
+                success=True,
+                duration_ms=100,
+                input_tokens=50,
+                output_tokens=30,
             )
             collector.record_request(
-                tier="fast", provider="ollama", model="q",
-                success=True, duration_ms=200,
-                input_tokens=100, output_tokens=60
+                tier="fast",
+                provider="ollama",
+                model="q",
+                success=True,
+                duration_ms=200,
+                input_tokens=100,
+                output_tokens=60,
             )
 
         metrics = collector.get_frame_metrics()
@@ -155,10 +197,7 @@ class TestFrameScope:
         with collector.frame_scope("security"):
             pass
         # After exiting scope, recording should be unattributed
-        collector.record_request(
-            tier="fast", provider="ollama", model="q",
-            success=True, duration_ms=100
-        )
+        collector.record_request(tier="fast", provider="ollama", model="q", success=True, duration_ms=100)
         metrics = collector.get_frame_metrics()
         assert len(metrics) == 1
         assert metrics[0].frame_name == "_unattributed"

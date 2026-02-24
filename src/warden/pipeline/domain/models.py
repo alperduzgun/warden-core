@@ -351,7 +351,7 @@ class SubStep(BaseDomainModel):
 
     id: str
     name: str
-    type: str  # SubStepType value: 'security' | 'chaos' | 'fuzz' | 'property' | 'stress' | 'architectural'
+    type: str  # SubStepType value: 'security' | 'resilience' | 'fuzz' | 'property' | 'stress' | 'architectural'
     status: str  # StepStatus value: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
     duration: str | None = None  # Format: "0.8s", "1m 43s"
 
@@ -395,7 +395,7 @@ class SubStep(BaseDomainModel):
         return cls(
             id=frame_exec.frame_id,
             name=frame_exec.frame_name,
-            type=frame_exec.frame_id,  # Use frame_id as type (e.g., 'security', 'chaos')
+            type=frame_exec.frame_id,  # Use frame_id as type (e.g., 'security', 'resilience')
             status=panel_status,
             duration=duration_str,
         )
