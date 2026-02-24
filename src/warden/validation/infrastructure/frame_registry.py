@@ -680,6 +680,7 @@ class FrameRegistry:
         spec.loader.exec_module(module)
 
         # Find ValidationFrame subclass
+        found_abstract = False
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
 
@@ -688,6 +689,7 @@ class FrameRegistry:
                 # the built-in frame base without implementing execute_async).  Skip
                 # them silently — the built-in equivalent is already registered.
                 if inspect.isabstract(attr):
+                    found_abstract = True
                     logger.debug(
                         "local_frame_skipped_abstract",
                         frame=attr.__name__,
@@ -710,7 +712,12 @@ class FrameRegistry:
 
                 return attr
 
-        logger.warning("no_frame_class_found", path=str(frame_dir))
+        # All classes found were abstract stubs → expected for hub packages.
+        # Only warn when the frame.py exists but has no ValidationFrame subclass at all.
+        if found_abstract:
+            logger.debug("local_frame_all_stubs", path=str(frame_dir))
+        else:
+            logger.warning("no_frame_class_found", path=str(frame_dir))
         return None
 
     def _validate_frame_class(self, frame_class: type[ValidationFrame]) -> None:

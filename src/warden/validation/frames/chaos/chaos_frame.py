@@ -59,7 +59,7 @@ class ChaosFrame(ValidationFrame):
         if self.chaos_seed:
             random.seed(self.chaos_seed)  # Deterministic chaos for testing
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> FrameResult:
         """
         Execute chaos injection with configurable failure rate.
 
@@ -72,11 +72,13 @@ class ChaosFrame(ValidationFrame):
             # No chaos - return clean result
             logger.debug("chaos_skipped", file=code_file.path, reason="random_selection")
             return FrameResult(
-                frame_id=self.id,
+                frame_id=self.frame_id,
                 frame_name=self.name,
-                findings=[],
                 status="passed",
-                message="No chaos injected (lucky!)",
+                duration=0.0,
+                issues_found=0,
+                is_blocker=self.is_blocker,
+                findings=[],
             )
 
         # Select chaos type
@@ -96,11 +98,13 @@ class ChaosFrame(ValidationFrame):
 
         # Should never reach here
         return FrameResult(
-            frame_id=self.id,
+            frame_id=self.frame_id,
             frame_name=self.name,
-            findings=[],
             status="failed",
-            message="Chaos injection failed to trigger",
+            duration=0.0,
+            issues_found=0,
+            is_blocker=self.is_blocker,
+            findings=[],
         )
 
     async def _inject_timeout(self):
@@ -131,12 +135,14 @@ class ChaosFrame(ValidationFrame):
         """Return partial result with error flag"""
         logger.warning("chaos_partial_failure_injected", file=code_file.path)
         return FrameResult(
-            frame_id=self.id,
+            frame_id=self.frame_id,
             frame_name=self.name,
-            findings=[],
             status="failed",
-            message="Chaos: Partial failure - some checks could not complete",
-            error="Simulated partial failure for resilience testing",
+            duration=0.0,
+            issues_found=1,
+            is_blocker=self.is_blocker,
+            findings=[],
+            metadata={"chaos_message": "Partial failure - some checks could not complete"},
         )
 
     def _inject_resource_exhaustion(self):
