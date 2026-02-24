@@ -149,13 +149,12 @@ def prepare_code_for_llm(
     Returns:
         Truncated/focused code string ready for LLM.
     """
+    from warden.shared.utils.prompt_sanitizer import PromptSanitizer
     from warden.shared.utils.token_utils import (
         estimate_tokens,
         truncate_content_for_llm,
         truncate_with_ast_hints,
     )
-
-    from warden.shared.utils.prompt_sanitizer import PromptSanitizer
 
     def _sanitize(code: str) -> str:
         """Wrap code in XML boundary tags for prompt injection defense."""

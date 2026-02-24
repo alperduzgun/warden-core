@@ -117,7 +117,7 @@ def _center_around_targets(
 
     # Start with a generous context window, shrink until it fits.
     # Also progressively reduce signature anchor if budget is very tight.
-    sig_candidates = sorted(set((signature_lines, 3, 2, 1)), reverse=True)
+    sig_candidates = sorted({signature_lines, 3, 2, 1}, reverse=True)
     for sig_count in sig_candidates:
         for window in (20, 15, 10, 7, 5, 3, 2, 1, 0):
             selected: set[int] = set()
