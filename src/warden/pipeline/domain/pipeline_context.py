@@ -208,7 +208,7 @@ class PipelineContext:
                 }
             )
 
-    def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int = None) -> None:
+    def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int | None = None) -> None:
         """
         Add item to list with memory bounds (internal helper).
 
