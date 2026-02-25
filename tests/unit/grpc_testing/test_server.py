@@ -39,9 +39,7 @@ class TestWardenServicer:
     @pytest.mark.asyncio
     async def test_health_check(self, servicer, mock_bridge):
         """Test HealthCheck RPC."""
-        mock_bridge.get_available_providers = AsyncMock(return_value={
-            "providers": [{"available": True}]
-        })
+        mock_bridge.get_available_providers = AsyncMock(return_value={"providers": [{"available": True}]})
 
         context = MagicMock()
         response = await servicer.HealthCheck(warden_pb2.Empty(), context)
@@ -76,12 +74,28 @@ class TestWardenServicer:
     @pytest.mark.asyncio
     async def test_get_available_frames(self, servicer, mock_bridge):
         """Test GetAvailableFrames RPC."""
-        mock_bridge.get_available_frames = AsyncMock(return_value={
-            "frames": [
-                {"id": "security", "name": "Security", "priority": 1, "is_blocker": True, "enabled": True, "tags": []},
-                {"id": "chaos", "name": "Chaos", "priority": 2, "is_blocker": False, "enabled": True, "tags": []}
-            ]
-        })
+        mock_bridge.get_available_frames = AsyncMock(
+            return_value={
+                "frames": [
+                    {
+                        "id": "security",
+                        "name": "Security",
+                        "priority": 1,
+                        "is_blocker": True,
+                        "enabled": True,
+                        "tags": [],
+                    },
+                    {
+                        "id": "resilience",
+                        "name": "Resilience",
+                        "priority": 2,
+                        "is_blocker": False,
+                        "enabled": True,
+                        "tags": [],
+                    },
+                ]
+            }
+        )
 
         context = MagicMock()
         response = await servicer.GetAvailableFrames(warden_pb2.Empty(), context)
@@ -89,18 +103,26 @@ class TestWardenServicer:
         assert len(response.frames) == 2
         assert response.frames[0].id == "security"
         assert response.frames[0].is_blocker is True
-        assert response.frames[1].id == "chaos"
+        assert response.frames[1].id == "resilience"
 
     @pytest.mark.asyncio
     async def test_get_available_providers(self, servicer, mock_bridge):
         """Test GetAvailableProviders RPC."""
-        mock_bridge.get_available_providers = AsyncMock(return_value={
-            "default": "anthropic",
-            "providers": [
-                {"id": "anthropic", "name": "Anthropic", "available": True, "is_default": True, "status": "ready"},
-                {"id": "openai", "name": "OpenAI", "available": False, "is_default": False, "status": "not_configured"}
-            ]
-        })
+        mock_bridge.get_available_providers = AsyncMock(
+            return_value={
+                "default": "anthropic",
+                "providers": [
+                    {"id": "anthropic", "name": "Anthropic", "available": True, "is_default": True, "status": "ready"},
+                    {
+                        "id": "openai",
+                        "name": "OpenAI",
+                        "available": False,
+                        "is_default": False,
+                        "status": "not_configured",
+                    },
+                ],
+            }
+        )
 
         context = MagicMock()
         response = await servicer.GetAvailableProviders(warden_pb2.Empty(), context)
@@ -113,27 +135,29 @@ class TestWardenServicer:
     @pytest.mark.asyncio
     async def test_execute_pipeline_success(self, servicer, mock_bridge):
         """Test ExecutePipeline RPC success."""
-        mock_bridge.execute_pipeline = AsyncMock(return_value={
-            "success": True,
-            "run_id": "test-run-123",
-            "total_findings": 3,
-            "critical_count": 1,
-            "high_count": 1,
-            "medium_count": 1,
-            "low_count": 0,
-            "frames_executed": ["security", "chaos"],
-            "findings": [
-                {
-                    "id": "f-001",
-                    "title": "SQL Injection",
-                    "severity": "critical",
-                    "file_path": "src/db.py",
-                    "line_number": 42
-                }
-            ],
-            "fortifications": [],
-            "cleanings": []
-        })
+        mock_bridge.execute_pipeline = AsyncMock(
+            return_value={
+                "success": True,
+                "run_id": "test-run-123",
+                "total_findings": 3,
+                "critical_count": 1,
+                "high_count": 1,
+                "medium_count": 1,
+                "low_count": 0,
+                "frames_executed": ["security", "resilience"],
+                "findings": [
+                    {
+                        "id": "f-001",
+                        "title": "SQL Injection",
+                        "severity": "critical",
+                        "file_path": "src/db.py",
+                        "line_number": 42,
+                    }
+                ],
+                "fortifications": [],
+                "cleanings": [],
+            }
+        )
 
         request = warden_pb2.PipelineRequest(path="./src")
         context = MagicMock()
@@ -151,19 +175,21 @@ class TestWardenServicer:
     @pytest.mark.asyncio
     async def test_execute_pipeline_with_frames(self, servicer, mock_bridge):
         """Test ExecutePipeline with specific frames."""
-        mock_bridge.execute_pipeline = AsyncMock(return_value={
-            "success": True,
-            "run_id": "test-run-456",
-            "total_findings": 0,
-            "critical_count": 0,
-            "high_count": 0,
-            "medium_count": 0,
-            "low_count": 0,
-            "frames_executed": ["security"],
-            "findings": [],
-            "fortifications": [],
-            "cleanings": []
-        })
+        mock_bridge.execute_pipeline = AsyncMock(
+            return_value={
+                "success": True,
+                "run_id": "test-run-456",
+                "total_findings": 0,
+                "critical_count": 0,
+                "high_count": 0,
+                "medium_count": 0,
+                "low_count": 0,
+                "frames_executed": ["security"],
+                "findings": [],
+                "fortifications": [],
+                "cleanings": [],
+            }
+        )
 
         request = warden_pb2.PipelineRequest(path="./src")
         request.frames.extend(["security"])
@@ -171,10 +197,7 @@ class TestWardenServicer:
 
         response = await servicer.ExecutePipeline(request, context)
 
-        mock_bridge.execute_pipeline.assert_called_once_with(
-            path="./src",
-            frames=["security"]
-        )
+        mock_bridge.execute_pipeline.assert_called_once_with(path="./src", frames=["security"])
         assert response.success is True
 
     @pytest.mark.asyncio
@@ -193,6 +216,7 @@ class TestWardenServicer:
     @pytest.mark.asyncio
     async def test_execute_pipeline_stream(self, servicer, mock_bridge):
         """Test ExecutePipelineStream RPC."""
+
         async def mock_stream(*args, **kwargs):
             yield {"type": "stage_start", "stage": "security", "progress": 0.0, "message": "Starting security"}
             yield {"type": "progress", "stage": "security", "progress": 0.5, "message": "Analyzing..."}
@@ -216,23 +240,22 @@ class TestWardenServicer:
     @pytest.mark.asyncio
     async def test_classify_code(self, servicer, mock_bridge):
         """Test ClassifyCode RPC."""
-        mock_bridge.classify_code = AsyncMock(return_value={
-            "has_async_operations": True,
-            "has_user_input": False,
-            "has_database_operations": True,
-            "has_network_calls": True,
-            "has_file_operations": False,
-            "has_authentication": False,
-            "has_cryptography": False,
-            "detected_frameworks": ["fastapi", "sqlalchemy"],
-            "recommended_frames": ["security", "async"],
-            "confidence": 0.9
-        })
-
-        request = warden_pb2.ClassifyRequest(
-            code="import asyncio\nfrom fastapi import FastAPI",
-            file_path="main.py"
+        mock_bridge.classify_code = AsyncMock(
+            return_value={
+                "has_async_operations": True,
+                "has_user_input": False,
+                "has_database_operations": True,
+                "has_network_calls": True,
+                "has_file_operations": False,
+                "has_authentication": False,
+                "has_cryptography": False,
+                "detected_frameworks": ["fastapi", "sqlalchemy"],
+                "recommended_frames": ["security", "async"],
+                "confidence": 0.9,
+            }
         )
+
+        request = warden_pb2.ClassifyRequest(code="import asyncio\nfrom fastapi import FastAPI", file_path="main.py")
         context = MagicMock()
 
         response = await servicer.ClassifyCode(request, context)
@@ -245,16 +268,15 @@ class TestWardenServicer:
     @pytest.mark.asyncio
     async def test_get_configuration(self, servicer, mock_bridge):
         """Test GetConfiguration RPC."""
-        mock_bridge.get_config = AsyncMock(return_value={
-            "config_file": ".warden/config.yaml",
-            "active_profile": "default"
-        })
-        mock_bridge.get_available_frames = AsyncMock(return_value={
-            "frames": [{"id": "security", "name": "Security", "priority": 1}]
-        })
-        mock_bridge.get_available_providers = AsyncMock(return_value={
-            "providers": [{"id": "anthropic", "name": "Anthropic"}]
-        })
+        mock_bridge.get_config = AsyncMock(
+            return_value={"config_file": ".warden/config.yaml", "active_profile": "default"}
+        )
+        mock_bridge.get_available_frames = AsyncMock(
+            return_value={"frames": [{"id": "security", "name": "Security", "priority": 1}]}
+        )
+        mock_bridge.get_available_providers = AsyncMock(
+            return_value={"providers": [{"id": "anthropic", "name": "Anthropic"}]}
+        )
 
         context = MagicMock()
         response = await servicer.GetConfiguration(warden_pb2.Empty(), context)
@@ -277,7 +299,7 @@ class TestWardenServicer:
             "suggestion": "fix it",
             "frame_id": "security",
             "cwe_id": "CWE-89",
-            "owasp_category": "A03"
+            "owasp_category": "A03",
         }
 
         finding = servicer._convert_finding(finding_dict)
@@ -288,11 +310,7 @@ class TestWardenServicer:
 
     def test_convert_finding_unknown_severity(self, servicer):
         """Test finding conversion with unknown severity."""
-        finding_dict = {
-            "id": "f-002",
-            "title": "Test",
-            "severity": "unknown"
-        }
+        finding_dict = {"id": "f-002", "title": "Test", "severity": "unknown"}
 
         finding = servicer._convert_finding(finding_dict)
         assert finding.severity == warden_pb2.SEVERITY_UNSPECIFIED

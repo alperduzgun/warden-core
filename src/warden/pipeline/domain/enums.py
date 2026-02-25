@@ -95,11 +95,11 @@ class SubStepType(str, Enum):
     Pipeline substep type.
 
     Maps to Panel's validation frame types.
-    Panel expects string values: 'security' | 'chaos' | 'fuzz' | 'property' | 'stress' | 'architectural'
+    Panel expects string values: 'security' | 'resilience' | 'fuzz' | 'property' | 'stress' | 'architectural'
     """
 
     SECURITY = "security"
-    CHAOS = "chaos"
+    RESILIENCE = "resilience"
     FUZZ = "fuzz"
     PROPERTY = "property"
     STRESS = "stress"

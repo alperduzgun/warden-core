@@ -20,10 +20,12 @@ logger = get_logger(__name__)
 class GitHelper:
     def __init__(self, working_dir: Path):
         self.working_dir = working_dir
-        self.git_cmd = shutil.which("git")
+        git_cmd = shutil.which("git")
 
-        if not self.git_cmd:
+        if not git_cmd:
             raise RuntimeError("Git executable not found in PATH")
+
+        self.git_cmd: str = git_cmd
 
         if not (self.working_dir / ".git").exists():
             # Check if we are in a subdirectory of a repo

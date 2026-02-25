@@ -150,7 +150,7 @@ class FrameNodeData(BaseDomainModel):
     ```
     """
 
-    frame_id: str  # Reference to frame (e.g., "security", "chaos")
+    frame_id: str  # Reference to frame (e.g., "security", "resilience")
     type: Literal["frame"] = "frame"
     pre_rules: list[CustomRule] = field(default_factory=list)  # Execute before frame
     post_rules: list[CustomRule] = field(default_factory=list)  # Execute after frame
@@ -449,7 +449,7 @@ class PipelineConfig(BaseDomainModel):
 
         Returns:
             List of groups, each containing frame node IDs
-            Example: [[security], [chaos], [fuzz, property], [stress]]
+            Example: [[security], [resilience], [fuzz, property], [stress]]
         """
         from warden.validation.domain.frame import get_execution_groups, get_frame_by_id
 

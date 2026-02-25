@@ -66,7 +66,7 @@ class TestFileContextAnalyzer:
         """Framework files should be detected."""
         framework_paths = [
             Path(".warden/frames/security_frame.py"),
-            Path("src/warden/validation/frames/chaos_frame.py"),
+            Path("src/warden/validation/frames/resilience_frame.py"),
         ]
 
         for path in framework_paths:
@@ -266,7 +266,9 @@ class TestPreAnalysisPhase:
             # Create code files
             code_files = [
                 CodeFile(path=str(project_root / "src" / "api.py"), content="def get_user(): pass", language="python"),
-                CodeFile(path=str(project_root / "tests" / "test_api.py"), content="def test_user(): pass", language="python"),
+                CodeFile(
+                    path=str(project_root / "tests" / "test_api.py"), content="def test_user(): pass", language="python"
+                ),
             ]
 
             phase = PreAnalysisPhase(project_root)
@@ -382,7 +384,6 @@ class TestPreAnalysisPhase:
             # pipeline_phase_runner sends generic "phase_started"; pre_analysis sends "pre_analysis_completed"
             assert "phase_started" in event_names or "pre_analysis_started" in event_names
             assert "pre_analysis_completed" in event_names
-
 
     @pytest.mark.asyncio
     async def test_end_to_end_context_awareness(self):

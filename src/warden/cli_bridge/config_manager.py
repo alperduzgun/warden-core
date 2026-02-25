@@ -83,7 +83,7 @@ class ConfigManager:
         Updates frames_config.<frame_id>.enabled field.
 
         Args:
-            frame_id: Frame identifier (e.g., 'security', 'chaos')
+            frame_id: Frame identifier (e.g., 'security', 'resilience')
             enabled: Whether frame should be enabled
 
         Returns:
@@ -183,14 +183,41 @@ class ConfigManager:
 
         try:
             config = self.read_config()
-            rules = self.read_rules()
         except FileNotFoundError as e:
             logger.error(f"Frame consistency validation failed: {e}")
             return {"valid": False, "error": str(e), "warnings": [str(e)]}
 
+        try:
+            rules = self.read_rules()
+        except FileNotFoundError:
+            # rules.yaml is optional — no file means no custom frame rules defined.
+            # This is not an error; skip consistency check silently.
+            logger.debug("frame_consistency_skipped_no_rules_file")
+            return {
+                "valid": True,
+                "config_frames": list(config.get("frames", [])),
+                "rules_frames": [],
+                "missing_in_rules": [],
+                "missing_in_config": [],
+                "warnings": [],
+            }
+
         # Get frame lists
         config_frames = set(config.get("frames", []))
         rules_frames = set(rules.get("frame_rules", {}).keys())
+
+        # If no frame_rules are defined in rules files, skip the consistency check.
+        # Having only custom `rules:` (AST/pattern rules) without frame_rules is valid.
+        if not rules_frames:
+            logger.debug("frame_consistency_skipped_no_frame_rules")
+            return {
+                "valid": True,
+                "config_frames": sorted(config_frames),
+                "rules_frames": [],
+                "missing_in_rules": [],
+                "missing_in_config": [],
+                "warnings": [],
+            }
 
         # Find mismatches
         missing_in_rules = config_frames - rules_frames

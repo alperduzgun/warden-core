@@ -99,7 +99,7 @@ class LLMClassificationPhase(LLMPhaseBase):
             # Validate and provide defaults
             # Use explicit check for empty list instead of setdefault
             if not result.get("selected_frames"):  # Handles None, [], or missing key
-                result["selected_frames"] = ["security", "chaos", "orphan"]
+                result["selected_frames"] = ["security", "resilience", "orphan"]
                 logger.warning("llm_returned_empty_frames", using_defaults=True)
 
             result.setdefault("suppression_rules", [])
@@ -118,11 +118,11 @@ class LLMClassificationPhase(LLMPhaseBase):
             )
             # Return default classification
             return {
-                "selected_frames": ["security", "chaos", "orphan"],
+                "selected_frames": ["security", "resilience", "orphan"],
                 "suppression_rules": [],
                 "priorities": {
                     "security": "CRITICAL",
-                    "chaos": "HIGH",
+                    "resilience": "HIGH",
                     "orphan": "MEDIUM",
                 },
                 "reasoning": "Default frame selection due to parse error",
@@ -181,7 +181,7 @@ class LLMClassificationPhase(LLMPhaseBase):
                 for idx, file_path in enumerate(batch_files):
                     llm_data = batch_results[idx] if idx < len(batch_results) else None
                     if llm_data:
-                        selected_frames = llm_data.get("selected_frames", ["security", "chaos", "orphan"])
+                        selected_frames = llm_data.get("selected_frames", ["security", "resilience", "orphan"])
                         # Normalize
                         selected_frames = [f.lower().replace("frame", "").strip() for f in selected_frames]
 
@@ -229,7 +229,7 @@ Context: {json.dumps(ctx)}
 Return a JSON array of objects with schema:
 {{
   "idx": int,
-  "selected_frames": ["security", "chaos", ...],
+  "selected_frames": ["security", "resilience", ...],
   "suppression_rules": [...],
   "priorities": {{...}},
   "reasoning": "...",
@@ -473,7 +473,7 @@ Return patterns as JSON."""
         Execute LLM-enhanced classification phase with True Batching.
         """
         if not code_files:
-            return self._create_default_result(["security", "chaos", "orphan"])
+            return self._create_default_result(["security", "resilience", "orphan"])
 
         logger.info("llm_classification_phase_starting_batch", file_count=len(code_files), has_llm=self.llm is not None)
 
@@ -516,7 +516,7 @@ Return patterns as JSON."""
         )
 
         if not batch_results:
-            return self._create_default_result(["security", "chaos", "orphan"])
+            return self._create_default_result(["security", "resilience", "orphan"])
 
         # Aggregate results
         # For frames, we take a UNION of all frames suggested for any file in the project
@@ -537,7 +537,7 @@ Return patterns as JSON."""
 
         # Ensure we always have some base frames
         if not all_frames:
-            all_frames = {"security", "chaos", "orphan"}
+            all_frames = {"security", "resilience", "orphan"}
 
         logger.info("llm_batch_classification_complete", frames=list(all_frames), files_analyzed=len(batch_results))
 
