@@ -438,12 +438,18 @@ class BaselineManager:
         # Normalize path
         normalized = file_path.replace("\\", "/")
 
-        # Try to use module_map if provided
+        # Try to use module_map if provided — use longest-prefix match to avoid
+        # "auth" incorrectly claiming files from "auth_api/" (#152).
         if module_map:
+            candidates = []
             for module_name, module_info in module_map.items():
                 module_path = module_info.get("path", module_name)
-                if normalized.startswith(module_path) or module_path in normalized:
-                    return module_name
+                # Require a path separator after the prefix to prevent partial matches
+                if normalized.startswith(module_path + "/") or normalized == module_path:
+                    candidates.append((module_name, module_path))
+            if candidates:
+                # Pick the most specific (longest) match
+                return max(candidates, key=lambda t: len(t[1]))[0]
 
         # Fall back to top-level directory
         parts = normalized.split("/")
