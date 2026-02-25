@@ -90,7 +90,8 @@ TASK: Fix {issue_type} vulnerabilities.
 ISSUES:
 {"".join(issue_details)}
 
-OUTPUT JSON: [{{ "title": "...", "detail": "...", "code": "...", "auto_fixable": bool }}]
+OUTPUT JSON: [{{"finding_id": "<exact input id>", "title": "...", "detail": "...", "code": "...", "auto_fixable": bool}}]
+CRITICAL: finding_id MUST exactly match one of the input ids. Do not invent, truncate, or modify ids.
 Fix must match project style.
 """
         return prompt
