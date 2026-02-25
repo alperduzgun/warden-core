@@ -7,10 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from warden.ast.domain.enums import CodeLanguage, ParseStatus
+from warden.ast.domain.enums import ASTNodeType, CodeLanguage, ParseStatus
 from warden.ast.domain.models import ASTNode, ParseResult
-from warden.ast.domain.enums import ASTNodeType
-from warden.pipeline.application.orchestrator.ast_pre_parser import ASTPreParser
+from warden.pipeline.application.orchestrator.ast_pre_parser import (
+    _MAX_AST_CACHE_ENTRIES,
+    ASTPreParser,
+)
 from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.validation.domain.frame import CodeFile
 
@@ -59,7 +61,7 @@ class TestASTPreParserPopulatesCache:
         files = [_make_code_file("a.py"), _make_code_file("b.py")]
 
         parser = ASTPreParser()
-        with patch.object(parser, '_get_registry', new_callable=AsyncMock, return_value=mock_registry):
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
         assert "a.py" in context.ast_cache
@@ -75,7 +77,7 @@ class TestASTPreParserPopulatesCache:
         files = [_make_code_file("a.py"), _make_code_file("b.py")]
 
         parser = ASTPreParser()
-        with patch.object(parser, '_get_registry', new_callable=AsyncMock, return_value=mock_registry):
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
         # a.py should NOT be overwritten (still the original)
@@ -103,7 +105,7 @@ class TestASTPreParserHandlesErrors:
         provider.parse = AsyncMock(side_effect=slow_then_fast)
 
         parser = ASTPreParser(timeout=0.01)  # Very short timeout
-        with patch.object(parser, '_get_registry', new_callable=AsyncMock, return_value=mock_registry):
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
         # slow.py should fail (timeout), fast.py should succeed
@@ -126,7 +128,7 @@ class TestASTPreParserHandlesErrors:
         provider.parse = AsyncMock(side_effect=error_then_ok)
 
         parser = ASTPreParser()
-        with patch.object(parser, '_get_registry', new_callable=AsyncMock, return_value=mock_registry):
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
         assert "bad.py" not in context.ast_cache
@@ -142,7 +144,7 @@ class TestASTPreParserLanguageHandling:
         files = [_make_code_file("a.bf", language="brainfuck"), _make_code_file("b.py")]
 
         parser = ASTPreParser()
-        with patch.object(parser, '_get_registry', new_callable=AsyncMock, return_value=mock_registry):
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
         assert "a.bf" not in context.ast_cache
@@ -157,7 +159,7 @@ class TestASTPreParserLanguageHandling:
         mock_registry.get_provider.return_value = None
 
         parser = ASTPreParser()
-        with patch.object(parser, '_get_registry', new_callable=AsyncMock, return_value=mock_registry):
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
         assert "a.py" not in context.ast_cache
@@ -168,7 +170,72 @@ class TestASTPreParserLanguageHandling:
         context = _make_context()
 
         parser = ASTPreParser()
-        with patch.object(parser, '_get_registry', new_callable=AsyncMock, return_value=mock_registry):
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, [])
 
         assert len(context.ast_cache) == 0
+
+
+class TestASTPreParserMemoryLimit:
+    """AST cache never exceeds _MAX_AST_CACHE_ENTRIES entries."""
+
+    @pytest.mark.asyncio
+    async def test_cache_bounded_when_exceeds_max(self, mock_registry):
+        """Parsing more files than the limit keeps cache size bounded."""
+        context = _make_context()
+        # Use a small artificial limit via monkeypatching the module constant
+        import warden.pipeline.application.orchestrator.ast_pre_parser as _mod
+
+        original = _mod._MAX_AST_CACHE_ENTRIES
+        _mod._MAX_AST_CACHE_ENTRIES = 5
+
+        try:
+            files = [_make_code_file(f"src/f{i}.py") for i in range(20)]
+            parser = ASTPreParser()
+            with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+                await parser.pre_parse_all_async(context, files)
+
+            assert len(context.ast_cache) <= 5
+        finally:
+            _mod._MAX_AST_CACHE_ENTRIES = original
+
+    @pytest.mark.asyncio
+    async def test_cache_not_evicted_below_max(self, mock_registry):
+        """When file count is within limit, no eviction occurs."""
+        context = _make_context()
+        files = [_make_code_file(f"src/f{i}.py") for i in range(3)]
+
+        parser = ASTPreParser()
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+            await parser.pre_parse_all_async(context, files)
+
+        # All 3 files should be cached (well within the 500 limit)
+        assert len(context.ast_cache) == 3
+
+    @pytest.mark.asyncio
+    async def test_eviction_removes_oldest_entries(self, mock_registry):
+        """After eviction, the most recently parsed files survive."""
+        context = _make_context()
+        import warden.pipeline.application.orchestrator.ast_pre_parser as _mod
+
+        original = _mod._MAX_AST_CACHE_ENTRIES
+        _mod._MAX_AST_CACHE_ENTRIES = 5
+
+        try:
+            # Parse 10 files: f0..f9 (insertion order matters)
+            files = [_make_code_file(f"src/f{i}.py") for i in range(10)]
+            parser = ASTPreParser()
+            with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+                await parser.pre_parse_all_async(context, files)
+
+            # Cache must be bounded
+            assert len(context.ast_cache) <= 5
+            # Most recently inserted files should still be present
+            assert "src/f9.py" in context.ast_cache
+        finally:
+            _mod._MAX_AST_CACHE_ENTRIES = original
+
+    def test_max_ast_cache_entries_constant_is_reasonable(self):
+        """The constant should be a positive integer within a sane range."""
+        assert isinstance(_MAX_AST_CACHE_ENTRIES, int)
+        assert 100 <= _MAX_AST_CACHE_ENTRIES <= 10_000

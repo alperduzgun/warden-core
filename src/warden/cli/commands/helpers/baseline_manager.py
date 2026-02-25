@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 class ModuleBaseline:
     """Represents a per-module baseline with debt tracking."""
 
-    def __init__(self, module_name: str, data: dict[str, Any] = None):
+    def __init__(self, module_name: str, data: dict[str, Any] | None = None):
         self.module_name = module_name
         self.data = data or {}
         self.findings: list[dict[str, Any]] = self.data.get("findings", [])
@@ -83,7 +83,7 @@ class ModuleBaseline:
 class BaselineMeta:
     """Metadata for the baseline directory."""
 
-    def __init__(self, data: dict[str, Any] = None):
+    def __init__(self, data: dict[str, Any] | None = None):
         self.data = data or {}
         self.version = self.data.get("version", "2.0")
         self.created_at = self.data.get("created_at")
@@ -111,7 +111,7 @@ class BaselineManager:
     Manages the lifecycle of the baseline.json file.
     """
 
-    def __init__(self, project_root: Path, config: dict[str, Any] = None):
+    def __init__(self, project_root: Path, config: dict[str, Any] | None = None):
         self.project_root = project_root
         self.config = config or {}
 
@@ -354,7 +354,7 @@ class BaselineManager:
             result[module_name] = self.get_module_fingerprints(module_name)
         return result
 
-    def migrate_from_legacy(self, module_map: dict[str, Any] = None) -> bool:
+    def migrate_from_legacy(self, module_map: dict[str, Any] | None = None) -> bool:
         """
         Migrate from legacy single-file baseline to module-based structure.
 
@@ -430,7 +430,7 @@ class BaselineManager:
 
         return True
 
-    def _determine_module(self, file_path: str, module_map: dict[str, Any] = None) -> str:
+    def _determine_module(self, file_path: str, module_map: dict[str, Any] | None = None) -> str:
         """Determine which module a file belongs to."""
         if not file_path or file_path == "unknown":
             return "unknown"
@@ -602,7 +602,7 @@ class BaselineManager:
         self,
         scan_results: dict[str, Any],
         modules_to_update: list[str] | None = None,
-        module_map: dict[str, Any] = None,
+        module_map: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Update baseline for specific modules based on scan results.
@@ -661,12 +661,8 @@ class BaselineManager:
         meta = self.load_meta() or BaselineMeta()
         meta.updated_at = datetime.now(timezone.utc).isoformat()
         meta.modules = self.list_modules()
-        meta.total_findings = sum(
-            len(self.load_module_baseline(m).findings) if self.load_module_baseline(m) else 0 for m in meta.modules
-        )
-        meta.total_debt = sum(
-            self.load_module_baseline(m).debt_count if self.load_module_baseline(m) else 0 for m in meta.modules
-        )
+        meta.total_findings = sum(len(mb.findings) if (mb := self.load_module_baseline(m)) else 0 for m in meta.modules)
+        meta.total_debt = sum(mb.debt_count if (mb := self.load_module_baseline(m)) else 0 for m in meta.modules)
         self.save_meta(meta)
 
         logger.info("baseline_update_complete", **stats)

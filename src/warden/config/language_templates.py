@@ -34,9 +34,9 @@ PYTHON_TEMPLATE = LanguageTemplate(
     language="python",
     recommended_frames=[
         "security",  # SQL injection, secrets detection
-        "chaos",  # Error handling, resilience
+        "resilience",  # Error handling, resilience
         "orphan",  # Unused code detection (LLM-powered)
-        "architectural",  # Design pattern consistency
+        "architecture",  # Design pattern consistency
     ],
     required_ast_providers=["python-native"],  # Built-in Python AST
     default_rules={
@@ -59,7 +59,7 @@ PYTHON_TEMPLATE = LanguageTemplate(
                 "path_traversal",
             ],
         },
-        "chaos": {
+        "resilience": {
             "enabled": True,
             "priority": "high",
             "checks": [
@@ -69,7 +69,7 @@ PYTHON_TEMPLATE = LanguageTemplate(
                 "error_recovery",
             ],
         },
-        "architectural": {
+        "architecture": {
             "enabled": False,  # Optional, needs configuration
             "priority": "low",
         },
@@ -84,7 +84,7 @@ JAVASCRIPT_TEMPLATE = LanguageTemplate(
     language="javascript",
     recommended_frames=[
         "security",  # XSS, injection attacks
-        "chaos",  # Async error handling
+        "resilience",  # Async error handling
         "fuzz",  # Edge cases, type coercion
     ],
     required_ast_providers=["tree-sitter"],  # Universal parser
@@ -101,7 +101,7 @@ JAVASCRIPT_TEMPLATE = LanguageTemplate(
                 "regex_dos",
             ],
         },
-        "chaos": {
+        "resilience": {
             "enabled": True,
             "priority": "high",
             "checks": [
@@ -132,7 +132,7 @@ JAVA_TEMPLATE = LanguageTemplate(
     language="java",
     recommended_frames=[
         "security",  # SQL injection, deserialization
-        "chaos",  # Exception handling
+        "resilience",  # Exception handling
         "stress",  # Performance, memory leaks
     ],
     required_ast_providers=["warden-ast-java"],  # External provider from PyPI
@@ -149,7 +149,7 @@ JAVA_TEMPLATE = LanguageTemplate(
                 "log_injection",
             ],
         },
-        "chaos": {
+        "resilience": {
             "enabled": True,
             "priority": "high",
             "checks": [
@@ -256,8 +256,8 @@ CSHARP_TEMPLATE = LanguageTemplate(
     language="csharp",
     recommended_frames=[
         "security",
-        "chaos",
-        "architectural",
+        "resilience",
+        "architecture",
     ],
     required_ast_providers=["warden-ast-csharp"],
     default_rules={
@@ -273,7 +273,7 @@ CSHARP_TEMPLATE = LanguageTemplate(
                 "ldap_injection",
             ],
         },
-        "chaos": {
+        "resilience": {
             "enabled": True,
             "priority": "high",
             "checks": [
@@ -282,7 +282,7 @@ CSHARP_TEMPLATE = LanguageTemplate(
                 "disposal_pattern",
             ],
         },
-        "architectural": {
+        "architecture": {
             "enabled": True,
             "priority": "medium",
             "checks": [
@@ -302,7 +302,7 @@ RUBY_TEMPLATE = LanguageTemplate(
     language="ruby",
     recommended_frames=[
         "security",
-        "chaos",
+        "resilience",
         "orphan",
     ],
     required_ast_providers=["warden-ast-ruby"],
@@ -316,7 +316,7 @@ RUBY_TEMPLATE = LanguageTemplate(
                 "yaml_deserialization",
             ],
         },
-        "chaos": {
+        "resilience": {
             "enabled": True,
             "priority": "high",
             "checks": [
@@ -339,7 +339,7 @@ PHP_TEMPLATE = LanguageTemplate(
     language="php",
     recommended_frames=[
         "security",  # Critical for web apps
-        "chaos",
+        "resilience",
         "fuzz",
     ],
     required_ast_providers=["warden-ast-php"],
@@ -367,7 +367,7 @@ GENERIC_TEMPLATE = LanguageTemplate(
     language="generic",
     recommended_frames=[
         "security",
-        "chaos",
+        "resilience",
     ],
     required_ast_providers=["tree-sitter"],  # Universal fallback
     default_rules={
@@ -376,7 +376,7 @@ GENERIC_TEMPLATE = LanguageTemplate(
             "priority": "high",
             "checks": ["generic_security"],
         },
-        "chaos": {
+        "resilience": {
             "enabled": True,
             "priority": "medium",
             "checks": ["error_handling"],

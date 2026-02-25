@@ -136,10 +136,13 @@ Return ONLY a JSON object:
             return verified_findings
 
         # STEP 3: Batch LLM Verification
+        MAX_CONSECUTIVE_FAILURES = 3
         requested_batch_size = 10
         logger.info("batch_verification_starting", count=len(remaining_after_cache))
 
         i = 0
+        consecutive_failures = 0
+
         while i < len(remaining_after_cache):
             # Dynamic resource-check
             batch_size = self._get_safe_batch_size(requested_batch_size)
@@ -147,6 +150,7 @@ Return ONLY a JSON object:
 
             try:
                 batch_results = await self._verify_batch_with_llm_async(batch, context)
+                consecutive_failures = 0  # Reset on success
 
                 for idx, result in enumerate(batch_results):
                     finding = batch[idx]
@@ -161,8 +165,37 @@ Return ONLY a JSON object:
                         verified_findings.append(finding)
                     # Rejected findings logged in verification_summary below
             except Exception as e:
-                logger.error("batch_verification_failed_manual_review_needed", error=str(e))
-                # Fallback: Mark for manual review instead of failing open blindly
+                consecutive_failures += 1
+                logger.error(
+                    "batch_verification_failed_manual_review_needed",
+                    error=str(e),
+                    consecutive_failures=consecutive_failures,
+                )
+
+                # Circuit break: stop wasting time on a dead provider
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    remaining_count = len(remaining_after_cache) - i - len(batch)
+                    logger.warning(
+                        "verification_circuit_break",
+                        consecutive_failures=consecutive_failures,
+                        remaining_skipped=remaining_count,
+                    )
+                    for finding in remaining_after_cache[i:]:
+                        self._set(
+                            finding,
+                            "verification_metadata",
+                            {
+                                "is_true_positive": True,
+                                "confidence": self.FALLBACK_CONFIDENCE,
+                                "reason": f"Circuit break: {consecutive_failures} consecutive LLM failures. Manual review required.",
+                                "review_required": True,
+                                "fallback": True,
+                            },
+                        )
+                    verified_findings.extend(remaining_after_cache[i:])
+                    break
+
+                # Fallback: Mark current batch for manual review
                 for finding in batch:
                     self._set(
                         finding,

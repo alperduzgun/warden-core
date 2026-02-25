@@ -239,6 +239,11 @@ class ResourceDisposalFortifier(BaseFortifier):
     @staticmethod
     def _build_disposal_prompt(code_file: CodeFile, suggestions: list[DisposalSuggestion]) -> str:
         """Build LLM prompt for resource disposal."""
+        from warden.shared.utils.llm_context import BUDGET_FORTIFICATION, prepare_code_for_llm, resolve_token_budget
+
+        budget = resolve_token_budget(BUDGET_FORTIFICATION)
+        truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
+
         resources_list = "\n".join(f"- Line {s.line_number}: {s.description} ({s.resource_type})" for s in suggestions)
 
         return f"""Add context managers (with statements) to this Python code:
@@ -248,7 +253,7 @@ Resources needing proper disposal:
 
 Code:
 ```python
-{code_file.content}
+{truncated}
 ```
 
 Convert resource allocations to use 'with' statements for automatic cleanup.

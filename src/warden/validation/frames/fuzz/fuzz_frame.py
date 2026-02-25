@@ -14,6 +14,7 @@ import re
 import time
 from typing import Any
 
+from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
     FrameApplicability,
@@ -86,7 +87,7 @@ class FuzzFrame(ValidationFrame, TaintAware):
         },
     }
 
-    SYSTEM_PROMPT = """You are an expert Fuzz Testing analyst. Analyze the provided code for edge cases, input validation vulnerabilities, and robustness issues.
+    _SYSTEM_PROMPT_BASE = """You are an expert Fuzz Testing analyst. Analyze the provided code for edge cases, input validation vulnerabilities, and robustness issues.
 
 Focus exclusively on robustness against malformed/unexpected inputs:
 1. Missing null/None/empty checks.
@@ -113,6 +114,8 @@ Output must be a valid JSON object with the following structure:
         }
     ]
 }"""
+
+    SYSTEM_PROMPT = get_tool_enhanced_prompt(_SYSTEM_PROMPT_BASE)
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
@@ -293,13 +296,18 @@ Output must be a valid JSON object with the following structure:
                         )
                     taint_context += "Focus fuzz testing on these input paths.\n"
 
+            from warden.shared.utils.llm_context import BUDGET_FUZZ, prepare_code_for_llm, resolve_token_budget
+
+            budget = resolve_token_budget(BUDGET_FUZZ)
+            truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
+
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
-                user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}{taint_context}",
+                user_message=f"Analyze this {code_file.language} code:\n\n{truncated}{taint_context}",
                 temperature=0.1,
             )
 
-            response = await client.send_async(request)
+            response = await client.send_with_tools_async(request)
 
             if response.success and response.content:
                 # Handle markdown code blocks if present
@@ -310,8 +318,11 @@ Output must be a valid JSON object with the following structure:
                     content = content.split("```")[0].strip()
 
                 try:
-                    # Parse result with Pydantic
-                    result = AnalysisResult.from_json(content)
+                    # from_json expects a dict; parse JSON string first if needed
+                    import json as _json
+
+                    parsed = _json.loads(content) if isinstance(content, str) else content
+                    result = AnalysisResult.from_json(parsed)
 
                     for issue in result.issues:
                         findings.append(

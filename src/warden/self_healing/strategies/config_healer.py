@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 DEFAULT_CONFIG = """\
 # Warden configuration (auto-repaired)
 provider: ollama
-fast_model: "qwen2.5-coder:0.5b"
+fast_model: "qwen2.5-coder:3b"
 smart_model: "qwen2.5-coder:7b"
 level: standard
 """

@@ -1,5 +1,5 @@
 llm:
-  fast_model: qwen2.5-coder:0.5b
+  fast_model: qwen2.5-coder:3b
   provider: ollama
   smart_model: qwen2.5-coder:32b
 vector_db:

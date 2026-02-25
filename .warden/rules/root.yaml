@@ -29,7 +29,7 @@ frame_rules:
     pre_rules:
       - no-secrets
     on_fail: continue
-  architectural:
+  architecture:
     pre_rules:
       - no-secrets
       - orchestrator-total-frames-check

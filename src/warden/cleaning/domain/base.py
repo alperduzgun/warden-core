@@ -23,6 +23,27 @@ from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
 
+# Shared across all analyzer instances so provider discovery runs once per process.
+_shared_ast_registry: "ASTProviderRegistry | None" = None
+_shared_ast_registry_lock = None  # asyncio.Lock created on first use
+
+
+async def _get_shared_ast_registry() -> "ASTProviderRegistry":
+    """Return the process-wide ASTProviderRegistry, initialising it on first call."""
+    global _shared_ast_registry, _shared_ast_registry_lock
+    import asyncio
+
+    if _shared_ast_registry_lock is None:
+        _shared_ast_registry_lock = asyncio.Lock()
+
+    async with _shared_ast_registry_lock:
+        if _shared_ast_registry is None:
+            registry = ASTProviderRegistry()
+            await registry.discover_providers()
+            _shared_ast_registry = registry
+
+    return _shared_ast_registry
+
 
 class CleaningAnalyzerPriority:
     """
@@ -60,13 +81,13 @@ class BaseCleaningAnalyzer(ABC):
 
     def __init__(self):
         """Initialize analyzer with Universal AST support."""
+        # Registry is shared across all analyzer instances (module-level singleton).
         self._ast_registry: ASTProviderRegistry | None = None
 
     async def _ensure_ast_registry(self) -> None:
-        """Ensure AST provider registry is initialized (lazy init)."""
+        """Ensure the shared AST provider registry is available."""
         if self._ast_registry is None:
-            self._ast_registry = ASTProviderRegistry()
-            await self._ast_registry.discover_providers()
+            self._ast_registry = await _get_shared_ast_registry()
 
     async def _get_ast_root(self, code_file: CodeFile, ast_tree: Any | None = None) -> ASTNode | None:
         """

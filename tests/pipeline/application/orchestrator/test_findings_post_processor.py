@@ -52,9 +52,7 @@ class TestVerifyFindingsAsync:
 
         # Verifier returns only F1 (F2 is a false positive)
         mock_verifier = AsyncMock()
-        mock_verifier.verify_findings_async.return_value = [
-            {"id": "F1", "severity": "medium", "message": "ok"}
-        ]
+        mock_verifier.verify_findings_async.return_value = [{"id": "F1", "severity": "medium", "message": "ok"}]
 
         proc = _make_processor(llm_service=MagicMock())
 
@@ -102,9 +100,7 @@ class TestVerifyFindingsAsync:
 
         proc = _make_processor(llm_service=MagicMock())
 
-        with patch(
-            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService"
-        ):
+        with patch("warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService"):
             await proc.verify_findings_async(ctx)
 
         assert ctx.findings == []
@@ -144,15 +140,11 @@ class TestVerifyFindingsAsync:
         """Progress callback receives 'progress_update' event."""
         ctx = make_context()
         ctx.findings = [make_finding("F1")]
-        ctx.frame_results = {
-            "sec": {"result": make_frame_result("sec", [make_finding("F1")])}
-        }
+        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [make_finding("F1")])}}
 
         callback = MagicMock()
         mock_verifier = AsyncMock()
-        mock_verifier.verify_findings_async.return_value = [
-            {"id": "F1", "severity": "medium", "message": "ok"}
-        ]
+        mock_verifier.verify_findings_async.return_value = [{"id": "F1", "severity": "medium", "message": "ok"}]
 
         proc = _make_processor(llm_service=MagicMock(), progress_callback=callback)
 
@@ -201,9 +193,7 @@ class TestVerifyFindingsAsync:
 
         # Verifier keeps F1 only
         mock_verifier = AsyncMock()
-        mock_verifier.verify_findings_async.return_value = [
-            {"id": "F1", "severity": "medium", "message": "ok"}
-        ]
+        mock_verifier.verify_findings_async.return_value = [{"id": "F1", "severity": "medium", "message": "ok"}]
 
         proc = _make_processor(llm_service=MagicMock())
 
@@ -220,9 +210,7 @@ class TestVerifyFindingsAsync:
     async def test_exception_swallowed(self):
         """Verifier exception doesn't propagate — method completes."""
         ctx = make_context()
-        ctx.frame_results = {
-            "sec": {"result": make_frame_result("sec", [make_finding("F1")])}
-        }
+        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [make_finding("F1")])}}
 
         proc = _make_processor(llm_service=MagicMock())
 
@@ -495,7 +483,7 @@ class TestEnsureStateConsistency:
     """Pipeline context/state reconciliation after execution."""
 
     def test_failed_frames_correct_pipeline_status(self):
-        """COMPLETED + failed frame → status corrected to FAILED."""
+        """COMPLETED + failed frame (non-blocker) → COMPLETED_WITH_FAILURES."""
         ctx = make_context()
         ctx.frame_results = {
             "sec": {"result": make_frame_result("sec", [make_finding("F1")])},
@@ -505,7 +493,7 @@ class TestEnsureStateConsistency:
         proc = _make_processor()
         proc.ensure_state_consistency(ctx, pipeline)
 
-        assert pipeline.status == PipelineStatus.FAILED
+        assert pipeline.status == PipelineStatus.COMPLETED_WITH_FAILURES
 
     def test_completed_at_set_if_missing(self):
         """completed_at=None → gets set to a datetime."""

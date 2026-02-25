@@ -155,16 +155,18 @@ class TestLLMProviderSwitch:
     def test_config_set_fast_model(self, runner, isolated_project, monkeypatch):
         """Set fast model independently."""
         monkeypatch.chdir(isolated_project)
-        result = runner.invoke(app, ["config", "set", "llm.fast_model", "qwen2.5-coder:0.5b"], catch_exceptions=False)
+        result = runner.invoke(app, ["config", "set", "llm.fast_model", "qwen2.5-coder:3b"], catch_exceptions=False)
         assert result.exit_code == 0
 
         config = yaml.safe_load((isolated_project / ".warden/config.yaml").read_text())
-        assert config["llm"]["fast_model"] == "qwen2.5-coder:0.5b"
+        assert config["llm"]["fast_model"] == "qwen2.5-coder:3b"
 
     def test_config_set_smart_model(self, runner, isolated_project, monkeypatch):
         """Set smart model independently."""
         monkeypatch.chdir(isolated_project)
-        result = runner.invoke(app, ["config", "set", "llm.smart_model", "claude-sonnet-4-20250514"], catch_exceptions=False)
+        result = runner.invoke(
+            app, ["config", "set", "llm.smart_model", "claude-sonnet-4-20250514"], catch_exceptions=False
+        )
         assert result.exit_code == 0
 
         config = yaml.safe_load((isolated_project / ".warden/config.yaml").read_text())
@@ -301,7 +303,7 @@ class TestLLMProviderSwitch:
             "anthropic": "claude-3-5-sonnet-20241022",
             "openai": "gpt-4o",
             "groq": "llama-3.3-70b-versatile",
-            "ollama": "qwen2.5-coder:0.5b",
+            "ollama": "qwen2.5-coder:3b",
         }
 
         for provider, expected_model in provider_defaults.items():
@@ -309,6 +311,5 @@ class TestLLMProviderSwitch:
             config = yaml.safe_load((isolated_project / ".warden/config.yaml").read_text())
 
             assert config["llm"]["model"] == expected_model, (
-                f"Provider {provider} should default to {expected_model}, "
-                f"got {config['llm']['model']}"
+                f"Provider {provider} should default to {expected_model}, got {config['llm']['model']}"
             )

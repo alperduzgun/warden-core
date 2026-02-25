@@ -6,6 +6,7 @@ Handles the execution of individual frames with rules and dependencies.
 
 import asyncio
 import inspect
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,13 +17,29 @@ from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.shared.infrastructure.error_handler import async_error_handler
 from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 from warden.shared.infrastructure.logging import get_logger
-from warden.validation.domain.frame import CodeFile, ValidationFrame
-from warden.validation.domain.mixins import BatchExecutable, Cleanable, LSPAware, ProjectContextAware, TaintAware
+from warden.validation.domain.frame import CodeFile, Finding, ValidationFrame
+from warden.validation.domain.frame import FrameResult as CodeFrameResult
+from warden.validation.domain.mixins import (
+    BatchExecutable,
+    Cleanable,
+    DataFlowAware,
+    LSPAware,
+    ProjectContextAware,
+    TaintAware,
+)
 
 from .dependency_checker import DependencyChecker
 from .file_filter import FileFilter
+from .findings_cache import FindingsCache
 from .rule_executor import RuleExecutor
 from .suppression_filter import SuppressionFilter
+
+# Per-file timeout constants (proportional to file size, Bearer-inspired).
+_FILE_TIMEOUT_MIN_S: float = 10.0  # floor for cloud providers (Groq, OpenAI, etc.)
+_FILE_TIMEOUT_LOCAL_S: float = 120.0  # floor for local/slow providers (Ollama, Claude Code, Codex)
+_FILE_TIMEOUT_MAX_S: float = 300.0  # ceiling: raised from 90s for local LLM inference
+_FILE_BYTES_PER_SECOND: int = 15_000  # conservative parse + LLM throughput rate
+_LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
 logger = get_logger(__name__)
 
@@ -58,6 +75,7 @@ class FrameRunner:
         self.llm_service = llm_service
         self.semantic_search_service = semantic_search_service
         self.ignore_matcher: IgnoreMatcher | None = None
+        self._findings_cache: FindingsCache | None = None
 
     @async_error_handler(fallback_value=None, log_level="error", context_keys=["frame_id"], reraise=False)
     async def execute_frame_with_rules_async(
@@ -135,8 +153,48 @@ class FrameRunner:
             files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
             code_files = files_for_frame
 
+        # Skip frame entirely when triage routed away every file.
+        # Avoids the overhead of LLM service setup, PI injection, and a
+        # frame execution that would process 0 files.
+        if not code_files:
+            skip_result = FrameResult(
+                frame_id=frame.frame_id,
+                frame_name=frame.name,
+                status="skipped",
+                duration=time.perf_counter() - frame_start_time,
+                issues_found=0,
+                is_blocker=False,
+                findings=[],
+            )
+            context.frame_results[frame.frame_id] = {
+                "result": skip_result,
+                "pre_violations": [],
+                "post_violations": [],
+            }
+            if self.progress_callback:
+                self.progress_callback(
+                    "frame_completed",
+                    {
+                        "frame_id": frame.frame_id,
+                        "frame_name": frame.name,
+                        "status": "skipped",
+                        "findings": 0,
+                        "duration": skip_result.duration,
+                    },
+                )
+            logger.info(
+                "frame_skipped_triage_no_files",
+                frame_id=frame.frame_id,
+                frame_name=frame.name,
+            )
+            return skip_result
+
         if self.llm_service:
             frame.llm_service = self.llm_service
+            # Enable agentic loop with project context
+            project_root = getattr(context, "project_root", None) or Path.cwd()
+            if hasattr(self.llm_service, "_project_root"):
+                self.llm_service._project_root = project_root
 
         if self.semantic_search_service:
             frame.semantic_search_service = self.semantic_search_service
@@ -208,6 +266,29 @@ class FrameRunner:
                     action="frame_continues_without_context",
                 )
 
+        # Inject architectural directives from .warden/architecture.md (Gap 4: global directives)
+        # Read once per pipeline run, not per-file. Provides human-authored architectural rules.
+        project_root = getattr(context, "project_root", None) or Path.cwd()
+        arch_file_candidates = [
+            project_root / ".warden" / "rules" / "architecture.md",
+            project_root / ".warden" / "architecture.md",
+        ]
+        for arch_path in arch_file_candidates:
+            if arch_path.is_file():
+                try:
+                    arch_content = arch_path.read_text(encoding="utf-8")[:500]
+                    if arch_content.strip():
+                        frame.architectural_directives = arch_content.strip()
+                        logger.debug(
+                            "architectural_directives_injected",
+                            frame_id=frame.frame_id,
+                            source=str(arch_path),
+                            chars=len(arch_content),
+                        )
+                except Exception as e:
+                    logger.debug("architectural_directives_read_failed", error=str(e))
+                break
+
         # Inject prior findings for cross-frame awareness (Tier 1: Context-Awareness)
         # BATCH 3: Add metrics tracking
         if hasattr(context, "findings") and context.findings:
@@ -242,6 +323,20 @@ class FrameRunner:
             if project_context and hasattr(project_context, "service_abstractions"):
                 frame.set_project_context(project_context)
 
+        # Inject spec_analysis into SecurityFrame (Gap 1: cross-frame context)
+        # SpecFrame populates project_context.spec_analysis with API contracts;
+        # SecurityFrame uses it to understand business logic constraints.
+        project_context = getattr(context, "project_context", None)
+        if project_context and getattr(project_context, "spec_analysis", None):
+            spec = project_context.spec_analysis
+            if spec and isinstance(spec, dict) and spec.get("contracts"):
+                frame.spec_analysis = spec
+                logger.debug(
+                    "spec_analysis_injected",
+                    frame_id=frame.frame_id,
+                    contract_count=len(spec.get("contracts", {})),
+                )
+
         # Inject taint paths into TaintAware frames
         if isinstance(frame, TaintAware):
             if hasattr(context, "taint_paths") and context.taint_paths:
@@ -255,6 +350,24 @@ class FrameRunner:
                 except Exception as e:
                     logger.error(
                         "taint_injection_failed",
+                        frame_id=frame.frame_id,
+                        error=str(e),
+                    )
+
+        # Inject Data Dependency Graph into DataFlowAware frames
+        if isinstance(frame, DataFlowAware):
+            if hasattr(context, "data_dependency_graph") and context.data_dependency_graph is not None:
+                try:
+                    frame.set_data_dependency_graph(context.data_dependency_graph)
+                    logger.debug(
+                        "ddg_injected",
+                        frame_id=frame.frame_id,
+                        writes=len(context.data_dependency_graph.writes),
+                        reads=len(context.data_dependency_graph.reads),
+                    )
+                except Exception as e:
+                    logger.error(
+                        "ddg_injection_failed",
                         frame_id=frame.frame_id,
                         error=str(e),
                     )
@@ -341,7 +454,18 @@ class FrameRunner:
                 files_scanned = 0
                 execution_errors = 0
 
-                async def execute_single_file_async(c_file: CodeFile) -> FrameResult | None:
+                # Lazy-initialise cross-scan findings cache
+                if self._findings_cache is None:
+                    _project_root = getattr(context, "project_root", None) or Path.cwd()
+                    force_scan = getattr(self.config, "force_scan", False)
+                    if not force_scan:
+                        self._findings_cache = FindingsCache(_project_root)
+
+                # Hoist signature check outside closure — inspect.signature is
+                # expensive and the result is stable for the lifetime of the frame.
+                _frame_accepts_context = "context" in inspect.signature(frame.execute_async).parameters
+
+                async def execute_single_file_async(c_file: CodeFile) -> CodeFrameResult | None:
                     file_context = context.file_contexts.get(c_file.path)
                     if file_context and getattr(file_context, "is_unchanged", False):
                         # Only trust cache if frame was already executed in this pipeline run
@@ -349,20 +473,102 @@ class FrameRunner:
                             logger.debug("skipping_unchanged_file", file=c_file.path, frame=frame.frame_id)
                             return None
 
+                    # Cross-scan findings cache: skip LLM if content unchanged since last scan
+                    if self._findings_cache is not None and c_file.content:
+                        cached_findings: list[Finding] | None = self._findings_cache.get_findings(
+                            frame.frame_id, str(c_file.path), c_file.content
+                        )
+                        if cached_findings is not None:
+                            logger.debug(
+                                "findings_cache_hit",
+                                frame=frame.frame_id,
+                                file=c_file.path,
+                                cached_findings=len(cached_findings),
+                            )
+                            if self.progress_callback:
+                                self.progress_callback(
+                                    "progress_update",
+                                    {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path, "cached": True},
+                                )
+                            if not cached_findings:
+                                return None  # clean file — no FrameResult needed
+
+                            # Derive status and is_blocker from the actual finding severities —
+                            # never hardcode: blocker findings must remain blockers on replay.
+                            has_critical = any(f.severity == "critical" for f in cached_findings)
+                            has_high = any(f.severity == "high" for f in cached_findings)
+                            cached_status = "failed" if has_critical else "warning"
+                            cached_is_blocker = any(f.is_blocker for f in cached_findings)
+
+                            return CodeFrameResult(
+                                frame_id=frame.frame_id,
+                                frame_name=frame.name,
+                                status=cached_status,
+                                duration=0.0,
+                                issues_found=len(cached_findings),
+                                is_blocker=cached_is_blocker,
+                                findings=cached_findings,
+                                metadata={"from_cache": True},
+                            )
+
+                    # Per-file dynamic timeout: proportional to file size with min/max bounds.
+                    # Prevents a single large file from monopolising the scan budget.
                     try:
-                        # Pass context only to frames whose signature accepts it
-                        # (Tier 2: Context-Awareness opt-in, backwards compatible)
-                        sig = inspect.signature(frame.execute_async)
-                        if "context" in sig.parameters:
-                            result = await frame.execute_async(c_file, context=context)
-                        else:
-                            result = await frame.execute_async(c_file)
+                        file_size = len(c_file.content.encode("utf-8", errors="replace")) if c_file.content else 0
+                    except Exception:
+                        file_size = 0
+
+                    # Use a higher floor for local/slow providers (Ollama, Claude Code, Codex)
+                    # since inference latency is 19-60s even for tiny files.
+                    # WARDEN_FILE_TIMEOUT_MIN env var allows manual override.
+                    _provider = str(
+                        getattr(getattr(context, "llm_config", None), "provider", "")
+                        or getattr(context, "llm_provider", "")
+                        or os.environ.get("WARDEN_LLM_PROVIDER", "")
+                    ).lower()
+                    _env_min = os.environ.get("WARDEN_FILE_TIMEOUT_MIN")
+                    if _env_min:
+                        _timeout_min = float(_env_min)
+                    elif _provider in _LOCAL_PROVIDERS:
+                        _timeout_min = _FILE_TIMEOUT_LOCAL_S
+                    else:
+                        _timeout_min = _FILE_TIMEOUT_MIN_S
+
+                    per_file_timeout = max(
+                        _timeout_min,
+                        min(file_size / _FILE_BYTES_PER_SECOND, _FILE_TIMEOUT_MAX_S),
+                    )
+
+                    try:
+                        coro = (
+                            frame.execute_async(c_file, context=context)
+                            if _frame_accepts_context
+                            else frame.execute_async(c_file)
+                        )
+                        result = await asyncio.wait_for(coro, timeout=per_file_timeout)
+
+                        # Persist findings to cross-scan cache on success
+                        if self._findings_cache is not None and result is not None and c_file.content:
+                            self._findings_cache.put_findings(
+                                frame.frame_id, str(c_file.path), c_file.content, result.findings or []
+                            )
 
                         if self.progress_callback:
                             self.progress_callback(
                                 "progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path}
                             )
                         return result
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "frame_file_timeout",
+                            frame=frame.frame_id,
+                            file=c_file.path,
+                            timeout_s=per_file_timeout,
+                            file_size_kb=round(file_size / 1024, 1),
+                        )
+                        if self.progress_callback:
+                            self.progress_callback("progress_update", {"increment": 1, "error": True})
+                        return None
                     except Exception as ex:
                         logger.error(
                             "frame_file_execution_error", frame=frame.frame_id, file=c_file.path, error=str(ex)
@@ -498,6 +704,7 @@ class FrameRunner:
                     "findings_found": len(frame_findings),
                     "findings_fixed": 0,
                     "trend": 0,
+                    "supports_verification": getattr(frame, "supports_verification", True),
                 }
 
                 if hasattr(frame, "batch_summary") and frame.batch_summary:

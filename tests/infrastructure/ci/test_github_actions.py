@@ -68,10 +68,10 @@ class TestGitHubActionsTemplate:
 
     def test_generate_with_frames(self):
         """Test template with specific validation frames."""
-        config = GitHubActionsConfig(frames=["security", "chaos"])
+        config = GitHubActionsConfig(frames=["security", "resilience"])
         template = GitHubActionsTemplate.generate(config)
 
-        assert "--frame security --frame chaos" in template
+        assert "--frame security --frame resilience" in template
 
     def test_generate_with_fail_on_issues(self):
         """Test template with fail_on_issues flag."""

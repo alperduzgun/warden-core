@@ -17,12 +17,12 @@ frames:
 - resilience
 - fuzz
 - orphan
-- architectural
+- architecture
 - property
 - antipattern
 - spec
 frames_config:
-  architectural:
+  architecture:
     enabled: true
     priority: low
     suppressions:
@@ -124,7 +124,7 @@ llm:
   model: claude-sonnet-4-20250514
   timeout: 300
   smart_model: claude-sonnet-4-20250514
-  fast_model: qwen2.5-coder:0.5b
+  fast_model: qwen2.5-coder:3b
 project:
   description: Warden configuration for warden-core
   detected_at: '2025-12-24T16:35:53.922859'
@@ -163,7 +163,7 @@ settings:
     use_llm: false
   classification_config:
     enabled: true
-    model: qwen2.5-coder:0.5b
+    model: qwen2.5-coder:3b
     batch_size: 2
   timeout: 300
 custom_rules:

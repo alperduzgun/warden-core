@@ -57,7 +57,7 @@ Return a JSON object:
 {{
   "selected_frames": ["frame_id_1", "frame_id_2"],
   "suppression_rules": [{{"pattern": "tests/*", "reason": "Redundant checks", "suppress": ["security"]}}],
-  "priorities": {{ "security": "CRITICAL", "chaos": "HIGH" }},
+  "priorities": {{ "security": "CRITICAL", "resilience": "HIGH" }},
   "advisories": ["Note: Fuzzing disabled due to Python runtime context", "Warn: High complexity in auth module detected"],
   "reasoning": "Selected SecurityFrame due to sensitive dependencies (SQLAlchemy). Rejected FuzzFrame due to high noise risk in Python runtime. Enabled ResilienceFrame for API resilience."
 }}
@@ -91,7 +91,7 @@ HISTORY:
 
 Requirements:
 - Run 'security' on production code.
-- Skip 'architectural' for small scripts.
+- Skip 'architecture' for small scripts.
 - Prioritize frames with historical issues.
 
 Return JSON only.

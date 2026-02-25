@@ -14,6 +14,7 @@ from warden.ast.application.provider_registry import ASTProviderRegistry
 from warden.ast.domain.enums import ASTNodeType, ParseStatus
 from warden.ast.domain.enums import CodeLanguage as ASTCodeLanguage
 from warden.ast.domain.models import ASTNode
+from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
 from warden.llm.types import LlmRequest
 from warden.shared.infrastructure.exceptions import ExternalServiceError
 from warden.shared.infrastructure.logging import get_logger
@@ -52,7 +53,7 @@ logger = get_logger(__name__)
 # CONTRACT_EXTRACTION_PROMPT Methodology (Zero-Hallucination Strategy)
 # =============================================================================
 # This prompt uses an abstract methodology instead of concrete 'invoice' examples.
-# Small models (like Qwen 0.5b) tend to over-fit and hallucinate when provided with
+# Small models (like Qwen 3b) tend to over-fit and hallucinate when provided with
 # specific examples. By explaining the 'how-to' (look for HTTP verbs, string literals,
 # and req.body pattern matching), we force the model to perform actual code analysis
 # rather than template matching.
@@ -515,11 +516,13 @@ Similar Patterns:
 Extract details.
 """
         request = LlmRequest(
-            system_prompt="You are a contract extraction specialist.", user_message=prompt, temperature=0.0
+            system_prompt=get_tool_enhanced_prompt("You are a contract extraction specialist."),
+            user_message=prompt,
+            temperature=0.0,
         )
 
         try:
-            response = await asyncio.wait_for(self.llm_service.send_async(request), timeout=60.0)
+            response = await asyncio.wait_for(self.llm_service.send_with_tools_async(request), timeout=60.0)
 
             # OrchestratedClient now raises ExternalServiceError on failure
             # So response.success is True here

@@ -10,6 +10,98 @@ from typing import Any
 
 from .html_generator import HtmlReportGenerator
 
+# ---------------------------------------------------------------------------
+# Contract Mode SARIF Rule Metadata
+# ---------------------------------------------------------------------------
+# These five rules are injected into tool.driver.rules whenever SARIF output
+# is generated, allowing GitHub Code Scanning to surface contract violations
+# with rich descriptions.
+
+CONTRACT_RULE_META: dict[str, dict[str, Any]] = {
+    "CONTRACT-DEAD-WRITE": {
+        "id": "CONTRACT-DEAD-WRITE",
+        "name": "DeadWrite",
+        "shortDescription": {"text": "Dead data write: field written but never read"},
+        "fullDescription": {
+            "text": (
+                "A pipeline context field is written but never consumed by any subsequent phase. "
+                "This indicates dead code or a missing data consumer."
+            )
+        },
+        "help": {"text": "Remove the write or add a consumer frame that reads this field."},
+        "properties": {
+            "tags": ["contract", "data-flow", "dead-code"],
+            "precision": "high",
+        },
+    },
+    "CONTRACT-MISSING-WRITE": {
+        "id": "CONTRACT-MISSING-WRITE",
+        "name": "MissingWrite",
+        "shortDescription": {"text": "Missing data write: field read but never written"},
+        "fullDescription": {
+            "text": (
+                "A pipeline context field is consumed by a frame but never populated by any previous phase. "
+                "This means the frame is operating on uninitialized/None data."
+            )
+        },
+        "help": {"text": "Add a phase that writes this field before it is consumed."},
+        "properties": {
+            "tags": ["contract", "data-flow", "uninitialized"],
+            "precision": "high",
+        },
+    },
+    "CONTRACT-NEVER-POPULATED": {
+        "id": "CONTRACT-NEVER-POPULATED",
+        "name": "NeverPopulated",
+        "shortDescription": {"text": "Optional field never populated"},
+        "fullDescription": {
+            "text": (
+                "A field declared as Optional in PipelineContext is never assigned a value. "
+                "Downstream consumers always receive None."
+            )
+        },
+        "help": {
+            "text": ("Implement the phase responsible for populating this field, or remove it from PipelineContext.")
+        },
+        "properties": {
+            "tags": ["contract", "data-flow", "never-populated"],
+            "precision": "very-high",
+        },
+    },
+    "CONTRACT-STALE-SYNC": {
+        "id": "CONTRACT-STALE-SYNC",
+        "name": "StaleSync",
+        "shortDescription": {"text": "Stale synchronization: co-written fields diverge"},
+        "fullDescription": {
+            "text": (
+                "Two or more fields that are always written together have diverged. "
+                "One is updated but the other is not, causing stale/inconsistent state."
+            )
+        },
+        "help": {"text": "Ensure all co-written fields are updated atomically."},
+        "properties": {
+            "tags": ["contract", "data-flow", "stale-sync"],
+            "precision": "medium",
+        },
+    },
+    "CONTRACT-ASYNC-RACE": {
+        "id": "CONTRACT-ASYNC-RACE",
+        "name": "AsyncRace",
+        "shortDescription": {"text": "Potential async race condition on shared mutable state"},
+        "fullDescription": {
+            "text": (
+                "An asyncio.gather call operates on shared mutable context without a lock. "
+                "Concurrent modifications may produce non-deterministic results."
+            )
+        },
+        "help": {"text": "Add asyncio.Lock protection around shared mutable state in concurrent code."},
+        "properties": {
+            "tags": ["contract", "async", "race-condition"],
+            "precision": "medium",
+        },
+    },
+}
+
 
 @contextmanager
 def file_lock(lock_path: Path, timeout: float = 10.0):
@@ -105,6 +197,15 @@ class ReportGenerator:
         """
         self.templates_dir = Path(__file__).parent / "templates"
         self.html_generator = HtmlReportGenerator()
+
+    @staticmethod
+    def _get_version() -> str:
+        try:
+            from warden._version import __version__
+
+            return __version__
+        except Exception:
+            return "0.0.0"
 
     def _get_val(self, obj: Any, key: str, default: Any = None) -> Any:
         """
@@ -229,7 +330,7 @@ class ReportGenerator:
                     "tool": {
                         "driver": {
                             "name": "Warden",
-                            "semanticVersion": "0.1.0",
+                            "semanticVersion": self._get_version(),
                             "informationUri": "https://github.com/alperduzgun/warden-core",
                             "rules": [],
                         }
@@ -275,6 +376,21 @@ class ReportGenerator:
 
         run = sarif["runs"][0]
         rules_map = {}
+
+        # Inject contract mode rule definitions into tool.driver.rules so that
+        # GitHub Code Scanning can show full descriptions for CONTRACT-* findings.
+        for rule_id, rule_meta in CONTRACT_RULE_META.items():
+            sarif_rule = {
+                "id": rule_meta["id"],
+                "name": rule_meta["name"],
+                "shortDescription": rule_meta["shortDescription"],
+                "fullDescription": rule_meta["fullDescription"],
+                "help": rule_meta["help"],
+                "properties": rule_meta["properties"],
+                "helpUri": "https://github.com/alperduzgun/warden-core/docs/rules/contract",
+            }
+            run["tool"]["driver"]["rules"].append(sarif_rule)
+            rules_map[rule_id.lower()] = sarif_rule
 
         # Support both snake_case (CLI) and camelCase (Panel)
         frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))

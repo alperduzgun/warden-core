@@ -51,8 +51,9 @@ class PipelineConfig(BaseDomainModel):
     """
 
     strategy: ExecutionStrategy = (
-        ExecutionStrategy.SEQUENTIAL
-    )  # SEQUENTIAL, PARALLEL, FAIL_FAST, or PIPELINE execution modes
+        ExecutionStrategy.PARALLEL
+    )  # PARALLEL by default: independent frames run concurrently (semaphore = parallel_limit).
+    # asyncio cooperative scheduling means no race conditions on context.frame_results dict writes.
     fail_fast: bool = True
     timeout: int = 300  # Total pipeline timeout in seconds
     frame_timeout: int = 120  # Per-frame timeout in seconds
@@ -62,6 +63,8 @@ class PipelineConfig(BaseDomainModel):
     analysis_level: AnalysisLevel = AnalysisLevel.STANDARD  # NEW: Scannig depth level
     use_llm: bool = True  # NEW: Global LLM control flag
     ci_mode: bool = False  # CI mode: use pre-computed intelligence, skip LLM for P3 files
+    force_scan: bool = False  # If True, bypass the memory cache and force a full re-analysis
+    contract_mode: bool = False  # Contract mode: run DDG-based data flow contract analysis
 
     # Optional pre-processing phases
     enable_discovery: bool = True  # Run file discovery before validation
@@ -349,7 +352,7 @@ class SubStep(BaseDomainModel):
 
     id: str
     name: str
-    type: str  # SubStepType value: 'security' | 'chaos' | 'fuzz' | 'property' | 'stress' | 'architectural'
+    type: str  # SubStepType value: 'security' | 'resilience' | 'fuzz' | 'property' | 'stress' | 'architectural'
     status: str  # StepStatus value: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
     duration: str | None = None  # Format: "0.8s", "1m 43s"
 
@@ -393,7 +396,7 @@ class SubStep(BaseDomainModel):
         return cls(
             id=frame_exec.frame_id,
             name=frame_exec.frame_name,
-            type=frame_exec.frame_id,  # Use frame_id as type (e.g., 'security', 'chaos')
+            type=frame_exec.frame_id,  # Use frame_id as type (e.g., 'security', 'resilience')
             status=panel_status,
             duration=duration_str,
         )

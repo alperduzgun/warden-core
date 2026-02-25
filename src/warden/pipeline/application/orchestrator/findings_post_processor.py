@@ -71,6 +71,19 @@ class FindingsPostProcessor:
             for frame_id, frame_res in context.frame_results.items():
                 result_obj = frame_res.get("result")
                 if result_obj and result_obj.findings:
+                    # Skip LLM verification for frames that declared supports_verification=False.
+                    # These frames produce factual/structural findings (dead code, property violations,
+                    # architectural gaps) that the security-focused verifier incorrectly rejects.
+                    frame_supports_verification = (result_obj.metadata or {}).get("supports_verification", True)
+                    if not frame_supports_verification:
+                        logger.info(
+                            "verification_skipped_frame_opt_out",
+                            frame_id=frame_id,
+                            findings_count=len(result_obj.findings),
+                        )
+                        verified_count += len(result_obj.findings)
+                        continue
+
                     findings_to_verify = [f.to_dict() if hasattr(f, "to_dict") else f for f in result_obj.findings]
                     total_findings = len(findings_to_verify)
 
@@ -115,7 +128,12 @@ class FindingsPostProcessor:
                     result_obj.issues_found = len(final_findings)
 
                     # Correct stale frame status after FP filtering
-                    if not final_findings and getattr(result_obj, "status", None) == "failed":
+                    # BUT preserve intentional failures (rule blocker violations)
+                    if (
+                        not final_findings
+                        and getattr(result_obj, "status", None) == "failed"
+                        and not self._has_blocker_violations(result_obj)
+                    ):
                         result_obj.status = "passed"
                         logger.info(
                             "frame_status_corrected",
@@ -236,7 +254,11 @@ class FindingsPostProcessor:
 
                 result_obj.findings = filtered_findings
 
-                if not filtered_findings and result_obj.status == "failed":
+                if (
+                    not filtered_findings
+                    and result_obj.status == "failed"
+                    and not self._has_blocker_violations(result_obj)
+                ):
                     result_obj.status = "passed"
 
             if total_suppressed > 0:
@@ -278,7 +300,12 @@ class FindingsPostProcessor:
                 remaining_findings = getattr(result_obj, "findings", [])
 
                 # Recalculate: frame marked "failed" but all findings were filtered → correct to "passed"
-                if status == "failed" and not remaining_findings:
+                # Only correct if: (a) no blocker violations, AND (b) evidence of filtering
+                # (issues_found was synced to 0 by verify/baseline — if still >0, frame failed
+                # for its own reasons, not because of leftover findings)
+                issues_found = getattr(result_obj, "issues_found", 0)
+                was_filtered = status == "failed" and not remaining_findings and issues_found == 0
+                if was_filtered and not self._has_blocker_violations(result_obj):
                     result_obj.status = "passed"
                     logger.info(
                         "frame_status_corrected",
@@ -293,7 +320,24 @@ class FindingsPostProcessor:
                 elif status == "passed":
                     passed_frames.append(fr_dict)
 
-            if failed_frames and pipeline.status in (PipelineStatus.COMPLETED, PipelineStatus.COMPLETED_WITH_FAILURES):
+            # Determine if any failed frames are blockers
+            has_blocker_failures = any(getattr(fr_dict.get("result"), "is_blocker", False) for fr_dict in failed_frames)
+
+            if failed_frames and pipeline.status == PipelineStatus.COMPLETED:
+                # COMPLETED but has failures → escalate appropriately
+                if has_blocker_failures:
+                    pipeline.status = PipelineStatus.FAILED
+                else:
+                    pipeline.status = PipelineStatus.COMPLETED_WITH_FAILURES
+                logger.warning(
+                    "state_inconsistency_detected",
+                    expected_status=pipeline.status.name,
+                    actual_status="COMPLETED",
+                    failed_frames=len(failed_frames),
+                    has_blocker=has_blocker_failures,
+                )
+            elif has_blocker_failures and pipeline.status == PipelineStatus.COMPLETED_WITH_FAILURES:
+                # Blocker failure in COMPLETED_WITH_FAILURES → must be FAILED
                 logger.warning(
                     "state_inconsistency_detected",
                     expected_status="FAILED",
@@ -331,6 +375,39 @@ class FindingsPostProcessor:
 
         except Exception as e:
             logger.error("state_consistency_check_failed", error=str(e))
+
+    @staticmethod
+    def _has_blocker_violations(result_obj: Any) -> bool:
+        """Check if a FrameResult was intentionally marked as failed.
+
+        Covers three cases:
+        1. Pre-rule blocker: metadata.failure_reason set
+        2. Post-rule blocker: post_rule_violations with is_blocker=True
+        3. Frame-level blocker: is_blocker=True on the FrameResult itself
+
+        These must NOT be auto-corrected to "passed" by FP filtering or
+        state consistency — they represent real enforcement decisions.
+        """
+        # Case 1: metadata failure_reason (set by pre-rule blocker path)
+        metadata = getattr(result_obj, "metadata", {}) or {}
+        if metadata.get("failure_reason") in (
+            "pre_rules_blocker_violation",
+            "post_rules_blocker_violation",
+        ):
+            return True
+
+        # Case 2: actual violation lists (post-rule and combined blocker paths)
+        for attr in ("pre_rule_violations", "post_rule_violations"):
+            violations = getattr(result_obj, attr, None)
+            if violations:
+                if any(getattr(v, "is_blocker", False) for v in violations):
+                    return True
+
+        # Case 3: frame itself marked as blocker AND failed
+        if getattr(result_obj, "is_blocker", False) and getattr(result_obj, "status", None) == "failed":
+            return True
+
+        return False
 
     def _normalize_path(self, fpath: str) -> str:
         """Normalize a file path relative to project root."""

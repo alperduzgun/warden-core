@@ -34,7 +34,7 @@ class CheckLoader:
         Initialize check loader for a specific frame.
 
         Args:
-            frame_id: Frame identifier (e.g., "security", "chaos")
+            frame_id: Frame identifier (e.g., "security", "resilience")
         """
         self.frame_id = frame_id
         self.discovered_checks: list[type[ValidationCheck]] = []

@@ -56,7 +56,7 @@ class TestClassify:
         class ModelNotFoundError(Exception):
             pass
 
-        err = ModelNotFoundError("model 'qwen:0.5b' not found")
+        err = ModelNotFoundError("model 'qwen:3b' not found")
         assert self.classifier.classify(err) == ErrorCategory.MODEL_NOT_FOUND
 
     def test_provider_unavailable(self):

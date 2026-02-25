@@ -234,6 +234,11 @@ class InputValidationFortifier(BaseFortifier):
     @staticmethod
     def _build_validation_prompt(code_file: CodeFile, suggestions: list[ValidationSuggestion]) -> str:
         """Build LLM prompt for validation."""
+        from warden.shared.utils.llm_context import BUDGET_FORTIFICATION, prepare_code_for_llm, resolve_token_budget
+
+        budget = resolve_token_budget(BUDGET_FORTIFICATION)
+        truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
+
         params_list = "\n".join(f"- Line {s.line_number}: {s.description}" for s in suggestions)
 
         return f"""Add input validation to this Python code:
@@ -243,7 +248,7 @@ Parameters needing validation:
 
 Code:
 ```python
-{code_file.content}
+{truncated}
 ```
 
 Add validation checks at function entry (type checking, null checks, range validation).

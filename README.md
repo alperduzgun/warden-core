@@ -59,7 +59,12 @@ Warden is built for resilience. Unlike SaaS tools that go dark without internet:
 *   **Local Models:** Multiple options - Claude Code CLI (uses desktop app), Codex CLI (OpenAI local agent), Ollama (Qwen), or any local LLM server.
 *   **Network Resilience:** Automatically detects connection timeouts and switches to local cache instantly.
 *   **Zero Latency:** No API round-trips for standard scans.
-*   **Zero API Costs:** Claude Code leverages your existing subscription without consuming API credits.
+
+**Why Use Claude Code CLI? (The "BYOS" Advantage)**
+Warden integrates with the Claude Code CLI intentionally as a **Local-Only Provider**, not for CI/CD. 
+- **Deep Code Analysis vs. LLM "Groping":** If you ask a standard AI agent to "find vulnerabilities," it uses basic tools (grep, read) and often loses context in large codebases. Warden, instead, performs deterministic **Taint Analysis** and **Context Slicing** via ASTs. It traces untrusted input from Source to Sink perfectly, then hands *only that 30-line vulnerable slice* to the AI. Warden is the "Head Engineer" that guides the "Mechanic" exactly to where the broken code is.
+- **Zero API Costs:** It leverages your existing, authenticated desktop session instead of consuming expensive API credits per scan.
+- **Focused Intelligence:** Warden deliberately disables Claude Code's internal tools (like Bash and Edit). It uses Claude purely as a brilliant reasoning engine, while Warden retains full control over the Context Slicing and Taint Analysis.
 
 ### 3. 🧠 Hybrid AI Engine (Dual-Tier)
 Warden balances cost, privacy, and intelligence using a smart routing system:
@@ -312,7 +317,16 @@ Warden doesn't just check *correctness*; it checks *appropriateness*.
     *   *Crypto Wallet:* 🛡️ Paranoid Mode (No http, strict types)
     *   *CLI Tool:* ⚡ Relaxed Mode (Allow print statements, rapid I/O)
 
-### 14. 🧠 LLM Audit Context & Code Intelligence (New!)
+### 14. 🔒 Native GitHub Code Scanning Integration
+Warden appears as a **first-class security tool** in GitHub's Security tab — right next to CodeQL. Every finding surfaces as a native Code Scanning alert with inline annotations on Pull Requests.
+*   **Zero Config:** Add the workflow, push — Warden alerts appear automatically.
+*   **SARIF 2.1.0:** Industry-standard output that GitHub, GitLab, and Azure DevOps understand natively.
+*   **PR Annotations:** Findings appear as inline comments on the exact lines that need attention.
+*   **Alert Tracking:** GitHub tracks finding lifecycle (open/fixed/dismissed) across commits — Warden benefits from all of this for free.
+
+> **Result:** Your team sees Warden findings in the same Security tab they already use for CodeQL, Dependabot, and secret scanning. No context-switching, no extra dashboards.
+
+### 15. 🧠 LLM Audit Context & Code Intelligence (New!)
 Traditional LLM bots run "blind" reading text streams without structure. Warden acts differently: it maps your codebase deterministically to provide **Zero-Hallucination Audit Context** for LLMs.
 *   **Layer 1 (Dependencies):** Automatically builds a file-to-file structural `DependencyGraph`.
 *   **Layer 2 (Symbol Graph):** Uses AST traversal to extract relationships (`CodeGraph`) meaning Class inheritance, Method calls, and Mixin implementations without LLM token cost.
@@ -496,6 +510,58 @@ Add the following Markdown to your `README.md`. Replace `USER/REPO` with your Gi
 
 ---
 
+## 🔒 GitHub Code Scanning Integration
+
+Warden outputs **SARIF 2.1.0** — the same format used by CodeQL, Semgrep, and other industry tools. When you upload Warden's SARIF report via GitHub Actions, it appears as a **native security tool** in your repository's Security tab.
+
+### What You Get
+
+| Capability | Description |
+| :--- | :--- |
+| **Security Tab Presence** | Warden shows up alongside CodeQL and Dependabot — no extra tooling |
+| **PR Annotations** | Findings appear as inline comments on the exact lines in Pull Requests |
+| **Alert Lifecycle** | GitHub tracks open/fixed/dismissed state across commits automatically |
+| **SARIF Compliance** | Works with any CI that supports SARIF (GitHub, GitLab, Azure DevOps) |
+| **Severity Mapping** | Warden severity levels map directly to GitHub alert priorities |
+
+### CI/CD Setup (GitHub Actions)
+
+Add this to your existing workflow:
+
+```yaml
+    - name: Run Warden Scan
+      env:
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}  # or any supported provider
+        WARDEN_LLM_PROVIDER: "groq"
+      run: |
+        pip install warden-core
+        warden scan . --level standard --format sarif --output warden.sarif
+
+    - name: Upload to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: warden.sarif
+        category: warden-security
+```
+
+That's it. After the first run, navigate to **Security > Code Scanning** in your repository — Warden will appear as a tool with all findings listed.
+
+### How It Looks
+
+```
+Repository > Security > Code Scanning Alerts
+
+Tool: Warden v2.3.0                          ← Native tool entry
+  ├── security-sql_injection-1    (High)      ← Inline PR annotation
+  ├── security-hardcoded_secret-2 (Critical)  ← Tracked across commits
+  ├── orphan-unused_import-3      (Warning)   ← Auto-dismissed when fixed
+  └── resilience-missing_retry-4  (Medium)    ← Severity from Warden mapping
+```
+
+> **Pro Tip:** Combine with `--diff` mode for incremental scanning — only new findings from your PR appear as annotations, keeping noise to zero.
+
+---
 
 ## ⚙️ Configuration
 

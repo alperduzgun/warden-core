@@ -46,29 +46,36 @@ class TestFrame:
 ''')
 
     # Manifest
-    (pkg / "warden.manifest.yaml").write_text(yaml.dump({
-        "name": "my_test_frame",
-        "version": "1.0.0",
-        "description": "Test frame for E2E install testing",
-        "runtime": {
-            "module": "frame.py",
-            "class": "TestFrame"
-        }
-    }))
+    (pkg / "warden.manifest.yaml").write_text(
+        yaml.dump(
+            {
+                "name": "my_test_frame",
+                "version": "1.0.0",
+                "description": "Test frame for E2E install testing",
+                "runtime": {"module": "frame.py", "class": "TestFrame"},
+            }
+        )
+    )
 
     # Bundled rules
     rules_dir = pkg / "rules"
     rules_dir.mkdir()
-    (rules_dir / "test_rule.yaml").write_text(yaml.dump({
-        "rules": [{
-            "id": "test-no-debug",
-            "name": "No debug statements",
-            "severity": "info",
-            "pattern": "breakpoint\\(\\)",
-            "language": "python",
-            "enabled": True
-        }]
-    }))
+    (rules_dir / "test_rule.yaml").write_text(
+        yaml.dump(
+            {
+                "rules": [
+                    {
+                        "id": "test-no-debug",
+                        "name": "No debug statements",
+                        "severity": "info",
+                        "pattern": "breakpoint\\(\\)",
+                        "language": "python",
+                        "enabled": True,
+                    }
+                ]
+            }
+        )
+    )
 
     return pkg
 
@@ -92,15 +99,16 @@ class AnotherFrame:
         return []
 ''')
 
-    (pkg / "warden.manifest.yaml").write_text(yaml.dump({
-        "name": "another_test_frame",
-        "version": "1.0.0",
-        "description": "Second test frame",
-        "runtime": {
-            "module": "frame.py",
-            "class": "AnotherFrame"
-        }
-    }))
+    (pkg / "warden.manifest.yaml").write_text(
+        yaml.dump(
+            {
+                "name": "another_test_frame",
+                "version": "1.0.0",
+                "description": "Second test frame",
+                "runtime": {"module": "frame.py", "class": "AnotherFrame"},
+            }
+        )
+    )
 
     return pkg
 
@@ -118,11 +126,9 @@ def install_project(tmp_path, frame_package):
     config = {
         "version": "2.0",
         "project": {"name": "install-test", "type": "backend", "language": "python"},
-        "dependencies": {
-            "my_test_frame": {"path": str(frame_package)}
-        },
+        "dependencies": {"my_test_frame": {"path": str(frame_package)}},
         "frames": {"enabled": ["security"]},
-        "llm": {"provider": "ollama", "model": "qwen2.5-coder:0.5b"}
+        "llm": {"provider": "ollama", "model": "qwen2.5-coder:3b"},
     }
     (warden_dir / "config.yaml").write_text(yaml.dump(config, default_flow_style=False))
 
@@ -143,10 +149,10 @@ def multi_dep_project(tmp_path, frame_package, second_frame_package):
         "project": {"name": "multi-dep-test", "type": "backend", "language": "python"},
         "dependencies": {
             "my_test_frame": {"path": str(frame_package)},
-            "another_test_frame": {"path": str(second_frame_package)}
+            "another_test_frame": {"path": str(second_frame_package)},
         },
         "frames": {"enabled": ["security"]},
-        "llm": {"provider": "ollama", "model": "qwen2.5-coder:0.5b"}
+        "llm": {"provider": "ollama", "model": "qwen2.5-coder:3b"},
     }
     (warden_dir / "config.yaml").write_text(yaml.dump(config, default_flow_style=False))
 
@@ -295,7 +301,7 @@ class TestInstallSpecificFrame:
         config = {
             "version": "2.0",
             "project": {"name": "test", "type": "backend", "language": "python"},
-            "llm": {"provider": "ollama", "model": "qwen2.5-coder:0.5b"}
+            "llm": {"provider": "ollama", "model": "qwen2.5-coder:3b"},
         }
         (warden_dir / "config.yaml").write_text(yaml.dump(config))
 
@@ -311,11 +317,11 @@ class TestInstallSpecificFrame:
         # Either shows "installing from hub" or fails with registry error
         # This tests that the specific frame code path works
         assert (
-            "installing" in stdout_lower or
-            "warden hub" in stdout_lower or
-            "registry" in stdout_lower or
-            "failed" in stdout_lower or
-            result.exit_code != 0
+            "installing" in stdout_lower
+            or "warden hub" in stdout_lower
+            or "registry" in stdout_lower
+            or "failed" in stdout_lower
+            or result.exit_code != 0
         ), f"Expected hub-related message or error, got: {result.stdout}"
 
 
@@ -385,8 +391,7 @@ class TestInstallLockfile:
         assert result3.exit_code == 0
 
         # Extra file should be gone (reinstalled from source)
-        assert not (frame_dir / "extra_file.txt").exists(), \
-            "Force update did not reinstall from scratch"
+        assert not (frame_dir / "extra_file.txt").exists(), "Force update did not reinstall from scratch"
 
     def test_install_detects_drift(self, runner, install_project, monkeypatch):
         """Install detects drift and reinstalls to restore steady state."""
@@ -408,8 +413,7 @@ class TestInstallLockfile:
 
         # File should be restored to original
         restored_content = frame_file.read_text()
-        assert "# CORRUPTED" not in restored_content, \
-            "Drift not detected or file not restored"
+        assert "# CORRUPTED" not in restored_content, "Drift not detected or file not restored"
 
 
 # ============================================================================
@@ -445,7 +449,7 @@ class TestInstallEdgeCases:
             "version": "2.0",
             "project": {"name": "no-deps", "type": "backend", "language": "python"},
             "dependencies": {},  # Empty
-            "llm": {"provider": "ollama", "model": "qwen2.5-coder:0.5b"}
+            "llm": {"provider": "ollama", "model": "qwen2.5-coder:3b"},
         }
         (warden_dir / "config.yaml").write_text(yaml.dump(config))
 
@@ -470,10 +474,8 @@ class TestInstallEdgeCases:
         config = {
             "version": "2.0",
             "project": {"name": "bad-path", "type": "backend", "language": "python"},
-            "dependencies": {
-                "fake_frame": {"path": "/nonexistent/path/to/frame"}
-            },
-            "llm": {"provider": "ollama", "model": "qwen2.5-coder:0.5b"}
+            "dependencies": {"fake_frame": {"path": "/nonexistent/path/to/frame"}},
+            "llm": {"provider": "ollama", "model": "qwen2.5-coder:3b"},
         }
         (warden_dir / "config.yaml").write_text(yaml.dump(config))
 
@@ -557,10 +559,8 @@ class TestInstallWithManifest:
         config = {
             "version": "2.0",
             "project": {"name": "test", "type": "backend", "language": "python"},
-            "dependencies": {
-                "no_manifest_frame": {"path": str(pkg)}
-            },
-            "llm": {"provider": "ollama", "model": "qwen2.5-coder:0.5b"}
+            "dependencies": {"no_manifest_frame": {"path": str(pkg)}},
+            "llm": {"provider": "ollama", "model": "qwen2.5-coder:3b"},
         }
         (warden_dir / "config.yaml").write_text(yaml.dump(config))
 

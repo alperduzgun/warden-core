@@ -31,13 +31,13 @@ class ModelNotFoundError(Exception):
 class OllamaClient(ILlmClient):
     """
     Ollama client for local LLM execution.
-    Targeting ultra-light models like qwen2.5-coder:0.5b for CI and fast checks.
+    Targeting ultra-light models like qwen2.5-coder:3b for CI and fast checks.
     """
 
     def __init__(self, config: ProviderConfig):
         # Ollama doesn't require an API key by default
         self._endpoint = config.endpoint or "http://localhost:11434"
-        self._default_model = config.default_model or "qwen2.5-coder:0.5b"
+        self._default_model = config.default_model or "qwen2.5-coder:3b"
         # Cache of models confirmed missing — prevents repeated 404s
         self._missing_models: set[str] = set()
 

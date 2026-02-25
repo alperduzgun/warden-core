@@ -63,7 +63,7 @@ LLM latency is the primary bottleneck for "Smart" phases.
 Warden implements a **Hybrid LLM Architecture** to maximize cost efficiency and privacy while maintaining quality:
 
 
-### Fast Tier (Qwen 2.5-Coder 0.5b via Ollama)
+### Fast Tier (Qwen 2.5-Coder 3b via Ollama)
 **Philosophy**: "Privacy-First, Cost-Optimized" - Use local, free Qwen for high-frequency, low-complexity operations.
 
 **Operations Using Fast Tier** (`use_fast_tier=True`):

@@ -93,7 +93,7 @@ stages:
         is_blocker: false
 
       - priority: "medium"
-        frames: ["property", "architectural"]
+        frames: ["property", "architecture"]
         timeout_seconds: 120
         is_blocker: false
 

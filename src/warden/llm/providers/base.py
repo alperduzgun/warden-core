@@ -9,10 +9,38 @@ All provider implementations must inherit from this interface
 
 import json
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from warden.shared.infrastructure.exceptions import ExternalServiceError
 
 from ..types import LlmProvider, LlmRequest, LlmResponse
+
+# ---------------------------------------------------------------------------
+# Shared provider-error detection (rate limits, quota exhaustion, etc.)
+# ---------------------------------------------------------------------------
+
+_RATE_LIMIT_PATTERNS = [
+    "usage limit",
+    "rate limit",
+    "try again in",
+    "too many requests",
+    "quota exceeded",
+    "request limit reached",
+    "throttled",
+]
+
+
+def detect_provider_error(content: str) -> str | None:
+    """Detect rate-limit or quota-exhaustion messages in provider output.
+
+    Returns a truncated error snippet (max 200 chars) if a pattern matches,
+    otherwise ``None``.
+    """
+    lower = content.lower()
+    for pattern in _RATE_LIMIT_PATTERNS:
+        if pattern in lower:
+            return content.strip()[:200]
+    return None
 
 
 class ILlmClient(ABC):
@@ -22,6 +50,8 @@ class ILlmClient(ABC):
     Matches C# ILlmClient interface
     All providers (Anthropic, DeepSeek, QwenCode, etc.) must implement this
     """
+
+    _project_root: Path | None = None
 
     @property
     @abstractmethod
@@ -63,6 +93,48 @@ class ILlmClient(ABC):
         """
         pass
 
+    async def send_with_tools_async(self, request: LlmRequest) -> LlmResponse:
+        """Send request with agentic tool loop support.
+
+        Calls send_async(), then if response contains tool_use and
+        provider is not Claude Code, enters the agentic loop.
+        Re-calls use send_async() directly (no recursion).
+        """
+        response = await self.send_async(request)
+        if not response.success or not response.content:
+            return response
+
+        from warden.llm.agentic_runner import (
+            detect_tool_use,
+            is_claude_code_provider,
+            run_agentic_loop_async,
+        )
+
+        if is_claude_code_provider(self):
+            return response
+        if detect_tool_use(response.content) is None:
+            return response
+
+        async def llm_call_fn(augmented_prompt: str, sys_prompt: str) -> LlmResponse:
+            new_request = LlmRequest(
+                user_message=augmented_prompt,
+                system_prompt=sys_prompt,
+                model=request.model,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                use_fast_tier=request.use_fast_tier,
+            )
+            return await self.send_async(new_request)
+
+        return await run_agentic_loop_async(
+            initial_response=response,
+            llm_call_fn=llm_call_fn,
+            original_prompt=request.user_message,
+            system_prompt=request.system_prompt,
+            project_root=self._project_root,
+            caller_name="llm_client",
+        )
+
     async def complete_async(
         self,
         prompt: str,
@@ -85,18 +157,17 @@ class ILlmClient(ABC):
         Raises:
             Exception: If request fails
         """
-        # Default implementation using send_async
         request = LlmRequest(
             user_message=prompt,
             system_prompt=system_prompt,
-            model=model,  # Use provider default or override
-            temperature=0.0,  # Idempotency
+            model=model,
+            temperature=0.0,
             max_tokens=2000,
             timeout_seconds=120.0,
             use_fast_tier=use_fast_tier,
         )
 
-        response = await self.send_async(request)
+        response = await self.send_with_tools_async(request)
 
         if not response.success:
             raise ExternalServiceError(f"LLM request failed: {response.error_message}")
@@ -118,15 +189,10 @@ class ILlmClient(ABC):
             Dict containing findings list
         """
         from warden.shared.utils.json_parser import parse_json_from_llm
-        from warden.shared.utils.token_utils import truncate_content_for_llm
+        from warden.shared.utils.llm_context import BUDGET_SECURITY, prepare_code_for_llm, resolve_token_budget
 
-        # Truncate code using token-aware truncation (not character-based)
-        truncated_code = truncate_content_for_llm(
-            code_content,
-            max_tokens=1800,  # Reserve tokens for prompt and response
-            preserve_start_lines=30,
-            preserve_end_lines=15,
-        )
+        budget = resolve_token_budget(BUDGET_SECURITY)
+        truncated_code = prepare_code_for_llm(code_content, token_budget=budget)
 
         prompt = f"""
         You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
@@ -158,10 +224,16 @@ class ILlmClient(ABC):
         ```
         """
 
+        from warden.llm.prompts.tool_instructions import (
+            get_tool_enhanced_prompt,
+        )
+
+        security_system_prompt = get_tool_enhanced_prompt("You are a strict security auditor. Output valid JSON only.")
+
         try:
             response = await self.complete_async(
                 prompt,
-                system_prompt="You are a strict security auditor. Output valid JSON only.",
+                system_prompt=security_system_prompt,
                 use_fast_tier=use_fast_tier,
             )
             if not response.success:
@@ -181,8 +253,6 @@ class ILlmClient(ABC):
     @staticmethod
     def _enrich_findings_from_llm(parsed: dict) -> None:
         """Attach machine_context to parsed findings when source/sink/data_flow present."""
-        import html
-
         from warden.shared.utils.prompt_sanitizer import PromptSanitizer
 
         for item in parsed.get("findings", []):
@@ -196,17 +266,19 @@ class ILlmClient(ABC):
             if source and not isinstance(source, str):
                 source = str(source)
             if source:
-                source = html.escape(PromptSanitizer.escape_prompt_injection(source))
+                # Sanitize prompt injection only — do NOT html.escape stored values;
+                # consumers expect raw strings, not HTML entities (e.g. &#x27;).
+                source = PromptSanitizer.escape_prompt_injection(source)
 
             if sink and not isinstance(sink, str):
                 sink = str(sink)
             if sink:
-                sink = html.escape(PromptSanitizer.escape_prompt_injection(sink))
+                sink = PromptSanitizer.escape_prompt_injection(sink)
 
             if data_flow and not isinstance(data_flow, list):
                 data_flow = []
             else:
-                data_flow = [html.escape(PromptSanitizer.escape_prompt_injection(str(x))) for x in (data_flow or [])]
+                data_flow = [PromptSanitizer.escape_prompt_injection(str(x)) for x in (data_flow or [])]
             item["_machine_context"] = {
                 "source": source,
                 "sink": sink,

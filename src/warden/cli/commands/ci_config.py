@@ -9,7 +9,7 @@ Usage examples::
     warden ci-config                                    # Interactive
     warden ci-config --ci-provider github --llm-provider groq
     warden ci-config --ci-provider gitlab --llm-provider ollama \\
-                     --fast-model qwen2.5-coder:0.5b --force
+                     --fast-model qwen2.5-coder:3b --force
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def _resolve_llm_provider(llm_provider_id: str) -> dict | None:
 
 def _build_llm_config(provider_info: dict, fast_model: str | None) -> dict:
     """Build the llm_config dict expected by configure_ci_workflow."""
-    default_fast = fast_model or "qwen2.5-coder:0.5b"
+    default_fast = fast_model or "qwen2.5-coder:3b"
     return {
         "provider": provider_info["id"],
         "model": provider_info.get("default_model", ""),
@@ -73,7 +73,7 @@ def ci_config_command(
     fast_model: str | None = typer.Option(
         None,
         "--fast-model",
-        help="Fast tier model override (default: qwen2.5-coder:0.5b via Ollama).",
+        help="Fast tier model override (default: qwen2.5-coder:3b via Ollama).",
     ),
     force: bool = typer.Option(
         False,

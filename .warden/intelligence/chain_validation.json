@@ -1,75 +1,58 @@
 {
   "schemaVersion": "1.0.0",
-  "totalChainsChecked": 9,
+  "totalChainsChecked": 5,
   "confirmed": 0,
   "unconfirmed": 0,
-  "errors": 9,
+  "errors": 5,
   "entries": [
     {
-      "sourceFqn": "auth_service.py",
+      "sourceFqn": "examples/messy_code.py",
       "targetFqn": "os",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "auth_service.py",
+      "sourceFqn": "examples/messy_code.py",
       "targetFqn": "sys",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "auth_service.py",
-      "targetFqn": "logging",
+      "sourceFqn": "examples/messy_code.py",
+      "targetFqn": "examples/messy_code.py::MyClass",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "auth_service.py",
-      "targetFqn": "pathlib.Path",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "auth_service.py",
-      "targetFqn": "typing.Optional",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "auth_service.py",
-      "targetFqn": "auth_service.py::UserAuthService",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "auth_service.py::UserAuthService",
-      "targetFqn": "auth_service.py::UserAuthService.__init__",
+      "sourceFqn": "examples/messy_code.py::MyClass",
+      "targetFqn": "examples/messy_code.py::MyClass.__init__",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "auth_service.py::UserAuthService",
-      "targetFqn": "auth_service.py::UserAuthService.authenticate",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "undetermined"
-    },
-    {
-      "sourceFqn": "auth_service.py::UserAuthService",
-      "targetFqn": "auth_service.py::UserAuthService.create_session",
+      "sourceFqn": "examples/messy_code.py::MyClass",
+      "targetFqn": "examples/messy_code.py::MyClass.my_method",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     }
   ],
-  "deadSymbols": [],
+  "deadSymbols": [
+    "examples/messy_code.py::very_long_function_name_that_is_hard_to_read_and_understand",
+    "examples/messy_code.py::another_function",
+    "examples/messy_code.py::MyClass",
+    "examples/messy_code.py::MyClass.__init__",
+    "examples/messy_code.py::MyClass.my_method",
+    "examples/messy_code.py::function_with_magic_numbers",
+    "examples/messy_code.py::old_style_formatting",
+    "examples/messy_code.py::format_method_example",
+    "examples/messy_code.py::manual_list_building",
+    "examples/messy_code.py::redundant_else_example"
+  ],
   "lspAvailable": true,
-  "generated_at": "2026-02-21T23:10:35.107718+00:00"
+  "generated_at": "2026-02-23T13:40:58.433491+00:00"
 }

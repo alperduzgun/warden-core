@@ -107,7 +107,7 @@ app = FastAPI()
 async def get_users():
     return []
 """,
-            file_path="main.py"
+            file_path="main.py",
         )
 
         response = await stub.ClassifyCode(request)
@@ -123,10 +123,7 @@ async def get_users():
         test_file = tmp_path / "test.py"
         test_file.write_text("def foo(): pass\n")
 
-        request = warden_pb2.PipelineRequest(
-            path=str(tmp_path),
-            parallel=True
-        )
+        request = warden_pb2.PipelineRequest(path=str(tmp_path), parallel=True)
 
         response = await stub.ExecutePipeline(request)
 
@@ -141,9 +138,7 @@ async def get_users():
         test_file = tmp_path / "test.py"
         test_file.write_text("def foo(): pass\n")
 
-        request = warden_pb2.PipelineRequest(
-            path=str(tmp_path)
-        )
+        request = warden_pb2.PipelineRequest(path=str(tmp_path))
 
         events = []
         async for event in stub.ExecutePipelineStream(request):
@@ -158,10 +153,7 @@ async def get_users():
     async def test_concurrent_requests(self, stub):
         """Test multiple concurrent requests."""
         # Send multiple health checks concurrently
-        tasks = [
-            stub.HealthCheck(warden_pb2.Empty())
-            for _ in range(10)
-        ]
+        tasks = [stub.HealthCheck(warden_pb2.Empty()) for _ in range(10)]
 
         responses = await asyncio.gather(*tasks)
 
@@ -207,12 +199,8 @@ class TestProtocolBufferSerialization:
 
     def test_pipeline_request_roundtrip(self):
         """Test PipelineRequest serialization roundtrip."""
-        original = warden_pb2.PipelineRequest(
-            path="/test/path",
-            parallel=True,
-            timeout_seconds=600
-        )
-        original.frames.extend(["security", "chaos"])
+        original = warden_pb2.PipelineRequest(path="/test/path", parallel=True, timeout_seconds=600)
+        original.frames.extend(["security", "resilience"])
         original.options["key"] = "value"
 
         # Serialize
@@ -230,11 +218,7 @@ class TestProtocolBufferSerialization:
     def test_pipeline_result_roundtrip(self):
         """Test PipelineResult serialization roundtrip."""
         original = warden_pb2.PipelineResult(
-            success=True,
-            run_id="test-123",
-            total_findings=5,
-            critical_count=1,
-            duration_ms=1500
+            success=True, run_id="test-123", total_findings=5, critical_count=1, duration_ms=1500
         )
 
         finding = original.findings.add()

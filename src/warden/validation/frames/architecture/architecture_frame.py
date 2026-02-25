@@ -155,6 +155,7 @@ class ArchitectureFrame(ValidationFrame):
     priority = FramePriority.HIGH
     scope = FrameScope.PROJECT_LEVEL
     is_blocker = False
+    supports_verification = False  # Structural gap analysis from CodeGraph — not a security finding
     version = "1.0.0"
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]

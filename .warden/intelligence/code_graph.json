@@ -1,46 +1,112 @@
 {
   "schemaVersion": "1.0.0",
   "nodes": {
-    "auth_service.py::UserAuthService": {
-      "fqn": "auth_service.py::UserAuthService",
-      "name": "UserAuthService",
-      "kind": "class",
-      "filePath": "auth_service.py",
-      "line": 11,
-      "module": "auth_service",
+    "examples/messy_code.py::very_long_function_name_that_is_hard_to_read_and_understand": {
+      "fqn": "examples/messy_code.py::very_long_function_name_that_is_hard_to_read_and_understand",
+      "name": "very_long_function_name_that_is_hard_to_read_and_understand",
+      "kind": "function",
+      "filePath": "examples/messy_code.py",
+      "line": 6,
+      "module": "examples.messy_code",
       "isTest": false,
       "bases": [],
       "metadata": {}
     },
-    "auth_service.py::UserAuthService.__init__": {
-      "fqn": "auth_service.py::UserAuthService.__init__",
+    "examples/messy_code.py::another_function": {
+      "fqn": "examples/messy_code.py::another_function",
+      "name": "another_function",
+      "kind": "function",
+      "filePath": "examples/messy_code.py",
+      "line": 15,
+      "module": "examples.messy_code",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "examples/messy_code.py::MyClass": {
+      "fqn": "examples/messy_code.py::MyClass",
+      "name": "MyClass",
+      "kind": "class",
+      "filePath": "examples/messy_code.py",
+      "line": 22,
+      "module": "examples.messy_code",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "examples/messy_code.py::MyClass.__init__": {
+      "fqn": "examples/messy_code.py::MyClass.__init__",
       "name": "__init__",
       "kind": "method",
-      "filePath": "auth_service.py",
-      "line": 18,
-      "module": "auth_service",
+      "filePath": "examples/messy_code.py",
+      "line": 23,
+      "module": "examples.messy_code",
       "isTest": false,
       "bases": [],
       "metadata": {}
     },
-    "auth_service.py::UserAuthService.authenticate": {
-      "fqn": "auth_service.py::UserAuthService.authenticate",
-      "name": "authenticate",
+    "examples/messy_code.py::MyClass.my_method": {
+      "fqn": "examples/messy_code.py::MyClass.my_method",
+      "name": "my_method",
       "kind": "method",
-      "filePath": "auth_service.py",
-      "line": 24,
-      "module": "auth_service",
+      "filePath": "examples/messy_code.py",
+      "line": 27,
+      "module": "examples.messy_code",
       "isTest": false,
       "bases": [],
       "metadata": {}
     },
-    "auth_service.py::UserAuthService.create_session": {
-      "fqn": "auth_service.py::UserAuthService.create_session",
-      "name": "create_session",
-      "kind": "method",
-      "filePath": "auth_service.py",
-      "line": 34,
-      "module": "auth_service",
+    "examples/messy_code.py::function_with_magic_numbers": {
+      "fqn": "examples/messy_code.py::function_with_magic_numbers",
+      "name": "function_with_magic_numbers",
+      "kind": "function",
+      "filePath": "examples/messy_code.py",
+      "line": 37,
+      "module": "examples.messy_code",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "examples/messy_code.py::old_style_formatting": {
+      "fqn": "examples/messy_code.py::old_style_formatting",
+      "name": "old_style_formatting",
+      "kind": "function",
+      "filePath": "examples/messy_code.py",
+      "line": 49,
+      "module": "examples.messy_code",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "examples/messy_code.py::format_method_example": {
+      "fqn": "examples/messy_code.py::format_method_example",
+      "name": "format_method_example",
+      "kind": "function",
+      "filePath": "examples/messy_code.py",
+      "line": 54,
+      "module": "examples.messy_code",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "examples/messy_code.py::manual_list_building": {
+      "fqn": "examples/messy_code.py::manual_list_building",
+      "name": "manual_list_building",
+      "kind": "function",
+      "filePath": "examples/messy_code.py",
+      "line": 58,
+      "module": "examples.messy_code",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "examples/messy_code.py::redundant_else_example": {
+      "fqn": "examples/messy_code.py::redundant_else_example",
+      "name": "redundant_else_example",
+      "kind": "function",
+      "filePath": "examples/messy_code.py",
+      "line": 65,
+      "module": "examples.messy_code",
       "isTest": false,
       "bases": [],
       "metadata": {}
@@ -48,68 +114,40 @@
   },
   "edges": [
     {
-      "source": "auth_service.py",
+      "source": "examples/messy_code.py",
       "target": "os",
       "relation": "imports",
       "runtime": true,
       "metadata": {}
     },
     {
-      "source": "auth_service.py",
+      "source": "examples/messy_code.py",
       "target": "sys",
       "relation": "imports",
       "runtime": true,
       "metadata": {}
     },
     {
-      "source": "auth_service.py",
-      "target": "logging",
-      "relation": "imports",
-      "runtime": true,
-      "metadata": {}
-    },
-    {
-      "source": "auth_service.py",
-      "target": "pathlib.Path",
-      "relation": "imports",
-      "runtime": true,
-      "metadata": {}
-    },
-    {
-      "source": "auth_service.py",
-      "target": "typing.Optional",
-      "relation": "imports",
-      "runtime": true,
-      "metadata": {}
-    },
-    {
-      "source": "auth_service.py",
-      "target": "auth_service.py::UserAuthService",
+      "source": "examples/messy_code.py",
+      "target": "examples/messy_code.py::MyClass",
       "relation": "defines",
       "runtime": true,
       "metadata": {}
     },
     {
-      "source": "auth_service.py::UserAuthService",
-      "target": "auth_service.py::UserAuthService.__init__",
+      "source": "examples/messy_code.py::MyClass",
+      "target": "examples/messy_code.py::MyClass.__init__",
       "relation": "defines",
       "runtime": true,
       "metadata": {}
     },
     {
-      "source": "auth_service.py::UserAuthService",
-      "target": "auth_service.py::UserAuthService.authenticate",
-      "relation": "defines",
-      "runtime": true,
-      "metadata": {}
-    },
-    {
-      "source": "auth_service.py::UserAuthService",
-      "target": "auth_service.py::UserAuthService.create_session",
+      "source": "examples/messy_code.py::MyClass",
+      "target": "examples/messy_code.py::MyClass.my_method",
       "relation": "defines",
       "runtime": true,
       "metadata": {}
     }
   ],
-  "generated_at": "2026-02-21T23:10:34.903487+00:00"
+  "generated_at": "2026-02-23T13:40:57.783067+00:00"
 }

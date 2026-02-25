@@ -103,6 +103,18 @@ class LlmConfiguration:
     fast_tier_providers: list[LlmProvider] = field(default_factory=lambda: [LlmProvider.OLLAMA])
     max_concurrency: int = 4  # Global max concurrent requests
 
+    # Centralized token budgets for all LLM consumers (triage-aware).
+    # Keys: category name → {"deep": int, "fast": int}
+    # Overrides built-in defaults in warden.shared.utils.llm_context.DEFAULT_TOKEN_BUDGETS.
+    # Populated from config.yaml llm.token_budgets section.
+    token_budgets: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    # Legacy per-frame fields (kept for backward-compat config.yaml parsing).
+    security_token_budget: int = 2400
+    security_token_budget_fast: int = 400
+    resilience_token_budget: int = 3000
+    resilience_token_budget_fast: int = 500
+
     def get_provider_config(self, provider: LlmProvider) -> ProviderConfig | None:
         """
         Get configuration for a specific provider
@@ -168,7 +180,7 @@ DEFAULT_MODELS = {
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.3-70b-versatile",
     LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
-    LlmProvider.OLLAMA: "qwen2.5-coder:0.5b",
+    LlmProvider.OLLAMA: "qwen2.5-coder:3b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
     LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
 }
@@ -474,33 +486,44 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         configured_providers.append(LlmProvider.CODEX)
 
     # --- AUTO-PILOT LOGIC ---
-    # Determine Fast Tier Chain based on available credentials and service health
+    # Only runs when NO explicit provider was configured (no config.yaml provider: / no env var).
+    # When the user explicitly set a provider, they chose their LLM — the system must not
+    # silently route requests to Claude Code, Codex, or any other detected tool.
+    if not explicit_provider_override:
+        detected_fast_tier: list[LlmProvider] = []
 
-    detected_fast_tier = []
+        # Priority 1: Groq (Cloud Speed)
+        if LlmProvider.GROQ in configured_providers:
+            detected_fast_tier.append(LlmProvider.GROQ)
 
-    # Priority 1: Groq (Cloud Speed)
-    if LlmProvider.GROQ in configured_providers:
-        detected_fast_tier.append(LlmProvider.GROQ)
+        # Priority 2: Ollama (Local/Free) - Only if service is actually running
+        # This fail-fast check prevents adding a dead service to the chain
+        if await _check_ollama_availability(ollama_endpoint):
+            detected_fast_tier.append(LlmProvider.OLLAMA)
 
-    # Priority 2: Ollama (Local/Free) - Only if service is actually running
-    # This fail-fast check prevents adding a dead service to the chain
-    if await _check_ollama_availability(ollama_endpoint):
-        detected_fast_tier.append(LlmProvider.OLLAMA)
+        # Priority 3: Claude Code (Local subscription) - fast for simple queries
+        if LlmProvider.CLAUDE_CODE in configured_providers:
+            detected_fast_tier.append(LlmProvider.CLAUDE_CODE)
 
-    # Priority 3: Claude Code (Local subscription) - fast for simple queries
-    if LlmProvider.CLAUDE_CODE in configured_providers:
-        detected_fast_tier.append(LlmProvider.CLAUDE_CODE)
+        # Priority 4: Codex (Local CLI) - read-only analysis via codex exec
+        if LlmProvider.CODEX in configured_providers:
+            detected_fast_tier.append(LlmProvider.CODEX)
 
-    # Priority 4: Codex (Local CLI) - read-only analysis via codex exec
-    if LlmProvider.CODEX in configured_providers:
-        detected_fast_tier.append(LlmProvider.CODEX)
-
-    # Apply Auto-Detected chain if still at default.
-    # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.
-    if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
-        # If default, replace with auto-detected if we found anything good
-        if detected_fast_tier:
-            config.fast_tier_providers = detected_fast_tier
+        # Apply Auto-Detected chain if still at default.
+        # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.
+        if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
+            if detected_fast_tier:
+                config.fast_tier_providers = detected_fast_tier
+    else:
+        # Explicit provider set: fast tier = primary provider only.
+        # The factory skips the primary from fast clients → effectively single-tier.
+        # Users can still add fast_tier_providers in config.yaml or WARDEN_FAST_TIER_PRIORITY
+        # to opt into hybrid mode explicitly.
+        config.fast_tier_providers = [explicit_provider_override]
+        logger.debug(
+            "fast_tier_restricted_explicit_provider",
+            provider=explicit_provider_override.value,
+        )
 
     # Prioritize explicit provider override from config.yaml
     if explicit_provider_override:
@@ -560,6 +583,34 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
 
         if "fast_model" in config_override and not env_provider:
             config.fast_model = config_override["fast_model"]
+
+        # Centralized token budgets from config.yaml (new format)
+        if "token_budgets" in config_override:
+            raw_budgets = config_override["token_budgets"]
+            if isinstance(raw_budgets, dict):
+                for cat, entry in raw_budgets.items():
+                    if isinstance(entry, dict):
+                        parsed: dict[str, int] = {}
+                        for tier_key in ("deep", "fast"):
+                            if tier_key in entry:
+                                with contextlib.suppress(ValueError, TypeError):
+                                    parsed[tier_key] = int(entry[tier_key])
+                        if parsed:
+                            config.token_budgets[cat] = parsed
+
+        # Legacy per-frame token budget overrides (backward compat) → migrate to new dict
+        _LEGACY_MAP = {
+            "security_token_budget": ("security", "deep"),
+            "security_token_budget_fast": ("security", "fast"),
+            "resilience_token_budget": ("resilience", "deep"),
+            "resilience_token_budget_fast": ("resilience", "fast"),
+        }
+        for budget_key, (cat, tier) in _LEGACY_MAP.items():
+            if budget_key in config_override:
+                with contextlib.suppress(ValueError, TypeError):
+                    val = int(config_override[budget_key])
+                    setattr(config, budget_key, val)
+                    config.token_budgets.setdefault(cat, {})[tier] = val
 
     # FINAL: Env var override for fast tier — always wins (analogous to WARDEN_LLM_PROVIDER handling)
     env_fast_tier = os.environ.get("WARDEN_FAST_TIER_PRIORITY", "").strip()

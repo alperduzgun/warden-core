@@ -140,3 +140,30 @@ class TaintAware(ABC):
             taint_paths: Mapping of file_path to list of TaintPath objects.
         """
         raise NotImplementedError
+
+
+class DataFlowAware(ABC):
+    """
+    Mixin for frames that consume Data Dependency Graph information.
+
+    Frames implementing this mixin receive the project-wide DDG
+    populated during PRE-ANALYSIS phase (contract_mode=True).
+    The pipeline's ``FrameRunner`` calls ``set_data_dependency_graph``
+    before frame execution.
+
+    Usage:
+        class DeadDataFrame(ValidationFrame, DataFlowAware):
+            def set_data_dependency_graph(self, ddg):
+                self._ddg = ddg
+    """
+
+    @abstractmethod
+    def set_data_dependency_graph(self, ddg: Any) -> None:
+        """
+        Inject the DataDependencyGraph into this frame.
+
+        Args:
+            ddg: DataDependencyGraph instance with writes, reads, and
+                 init_fields populated by DataDependencyService.
+        """
+        raise NotImplementedError

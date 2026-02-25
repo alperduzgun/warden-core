@@ -393,13 +393,13 @@ def _update_provider_models(config: dict, provider: str) -> None:
 
             # Fast model logic
             if provider == "ollama":
-                config["llm"]["fast_model"] = "qwen2.5-coder:0.5b"
+                config["llm"]["fast_model"] = "qwen2.5-coder:3b"
             elif provider == "claude_code":
                 # Claude Code: placeholder model (actual model set in claude config)
                 config["llm"]["fast_model"] = "claude-code-default"
             else:
                 # Other providers: use ollama for fast tier if available
-                config["llm"]["fast_model"] = "qwen2.5-coder:0.5b"
+                config["llm"]["fast_model"] = "qwen2.5-coder:3b"
     except (ValueError, KeyError):
         # Invalid provider or missing config - skip update
         pass

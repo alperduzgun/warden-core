@@ -292,6 +292,11 @@ class ValidationFrame(ABC):
     # Frame state (set at runtime)
     enabled: bool = True  # Can be disabled via config or runtime
 
+    # Whether this frame's findings should be run through LLM-based false-positive verification.
+    # Set to False for frames whose findings are factual/structural (orphan code, property violations,
+    # architectural gaps) where the security-focused verifier prompt produces incorrect rejections.
+    supports_verification: bool = True
+
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize frame with optional configuration.

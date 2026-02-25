@@ -285,7 +285,43 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         fw_str = ", ".join(pi.detected_frameworks[:3])
                         semantic_context += f"Framework: {fw_str}\n"
 
+                    # Architecture description (LLM-generated project overview)
+                    if hasattr(pi, "architecture") and pi.architecture:
+                        semantic_context += f"\n[ARCHITECTURE]:\n{pi.architecture[:300]}\n"
+
                     logger.debug("project_intelligence_added_to_prompt", file=code_file.path)
+
+                # 1x. Architectural Directives (human-authored rules from .warden/architecture.md)
+                if hasattr(self, "architectural_directives") and self.architectural_directives:
+                    semantic_context += f"\n[ARCHITECTURAL DIRECTIVES]:\n{self.architectural_directives[:500]}\n"
+
+                # 1a. Spec Analysis Contracts (cross-frame: SpecFrame → SecurityFrame)
+                if hasattr(self, "spec_analysis") and self.spec_analysis:
+                    spec = self.spec_analysis
+                    contracts = spec.get("contracts", {})
+                    if contracts:
+                        # Find relevant contracts for this file (path match or show top 5)
+                        relevant: list[dict] = []
+                        for _platform, platform_contracts in contracts.items():
+                            if not isinstance(platform_contracts, list):
+                                continue
+                            for c in platform_contracts:
+                                if not isinstance(c, dict):
+                                    continue
+                                # Match by file path or endpoint relevance
+                                c_path = c.get("file", "") or c.get("path", "")
+                                if c_path and code_file.path.endswith(c_path.lstrip("/")):
+                                    relevant.insert(0, c)  # File match = high priority
+                                elif len(relevant) < 5:
+                                    relevant.append(c)
+                        if relevant:
+                            semantic_context += "\n[BUSINESS LOGIC CONTRACTS]:\n"
+                            for c in relevant[:5]:
+                                endpoint = c.get("endpoint", c.get("name", "unknown"))
+                                method = c.get("method", "")
+                                desc = c.get("description", c.get("detail", ""))[:120]
+                                semantic_context += f"- {method} {endpoint}: {desc}\n"
+                            logger.debug("spec_analysis_added_to_prompt", file=code_file.path, contracts=len(relevant))
 
                 # 1b. File dependency context (import graph)
                 if context and hasattr(context, "dependency_graph_forward"):
@@ -429,19 +465,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                     except Exception as e:
                         logger.debug("symbol_context_failed", error=str(e))
 
-                # Determine tier from metadata (Adaptive Hybrid Triage)
-                use_fast_tier = False
-                if code_file.metadata and code_file.metadata.get("triage_lane") == "middle_lane":
-                    use_fast_tier = True
-                    logger.debug("using_fast_tier_for_security_analysis", file=code_file.path)
-
-                # BATCH 2: Token truncation with separate budgets + AST hints
-                from warden.shared.utils.token_utils import (
-                    truncate_content_for_llm,
-                    truncate_with_ast_hints,
-                )
-
-                # Extract dangerous line numbers from AST for smart truncation
+                # Extract dangerous line numbers from AST + taint for targeting
                 dangerous_lines: list[int] = []
                 if ast_context:
                     for call in ast_context.get("dangerous_calls", []):
@@ -454,7 +478,6 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         if isinstance(src, dict) and "line" in src:
                             dangerous_lines.append(src["line"])
 
-                # Add taint source/sink lines
                 if taint_paths:
                     for tp in taint_paths:
                         if hasattr(tp, "source") and hasattr(tp.source, "line"):
@@ -462,14 +485,23 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                         if hasattr(tp, "sink") and hasattr(tp.sink, "line"):
                             dangerous_lines.append(tp.sink.line)
 
-                # Code gets 80% budget — use AST-aware truncation when hints available
-                truncated_code = truncate_with_ast_hints(
-                    code_file.content,
-                    max_tokens=2400,
-                    dangerous_lines=dangerous_lines or None,
-                    preserve_start_lines=50,
-                    preserve_end_lines=20,
+                from warden.shared.utils.llm_context import BUDGET_SECURITY, prepare_code_for_llm, resolve_token_budget
+                from warden.shared.utils.token_utils import truncate_content_for_llm
+
+                budget = resolve_token_budget(
+                    BUDGET_SECURITY,
+                    context=context,
+                    code_file_metadata=code_file.metadata,
                 )
+                use_fast_tier = budget.is_fast_tier
+                truncated_code = prepare_code_for_llm(
+                    code_file.content,
+                    token_budget=budget,
+                    target_lines=sorted(set(dangerous_lines)) if dangerous_lines else None,
+                    file_path=code_file.path,
+                    context=context,
+                )
+
                 truncated_semantic = truncate_content_for_llm(
                     semantic_context,
                     max_tokens=600,
@@ -789,12 +821,21 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
             findings=taint_findings,
         )
 
-    def _aggregate_findings(self, check_results: list[CheckResult]) -> list[Finding]:
+    def _aggregate_findings(
+        self,
+        check_results: list[CheckResult],
+        taint_context: list | None = None,
+    ) -> list[Finding]:
         """
         Aggregate findings from all check results.
 
         Args:
             check_results: Results from all executed checks
+            taint_context: Optional taint paths for MachineContext enrichment.
+                When provided, each finding is enriched via
+                ``_enrich_finding_with_taint``.  Prefer injecting taint data
+                via the ``TaintAware`` mixin; this parameter exists for
+                backward compatibility with direct callers.
 
         Returns:
             List of Finding objects
@@ -825,6 +866,12 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                     )
 
                 findings.append(finding)
+
+        # Enrich with taint data when provided directly (backward compat)
+        if taint_context:
+            for finding in findings:
+                if finding.machine_context is None:
+                    self._enrich_finding_with_taint(finding, taint_context)
 
         return findings
 

@@ -1,5 +1,57 @@
 # Warden Core - Release Notes
 
+## v2.4.0 (2026-02-25) - Contract Mode: Data Flow Analysis
+
+### 🎯 Major Features
+
+**Contract Mode — `warden scan --contract-mode`**
+- Opt-in data flow contract analysis detecting structural gaps in the pipeline
+- `DeadDataFrame`: AST-based detection of DEAD_WRITE, MISSING_WRITE, and NEVER_POPULATED fields
+- `DataDependencyGraph (DDG)`: Full write/read tracking across all Python source files
+- `DataDependencyBuilder + DDGVisitor`: AST-powered DDG construction with FP filters
+- `DataFlowAware` mixin: Standardized DDG injection protocol for frames
+
+**Reporting Enhancements**
+- Contract Mode terminal summary panel (5 gap types: DEAD_WRITE, MISSING_WRITE, STALE_SYNC, PROTOCOL_BREACH, ASYNC_RACE)
+- SARIF enrichment: 5 contract rules with `fullDescription`, `help`, and `tags`
+- `CONTRACT_RULE_META` registry in generator.py
+
+**Security Bug Fixes**
+- Restored `taint_context` parameter in `_aggregate_findings` (broken by TaintAware refactor)
+- Fixed `html.escape()` scope leak: escaped values no longer written to MachineContext/findings storage
+
+**Performance & CI**
+- Generated file skip (reduces scan overhead on projects with build artifacts)
+- Findings cache for unchanged files
+- Per-file timeout to prevent single-file hang
+- Fixed redis key pattern duplicate violation in CI (3 violations → 2)
+
+### 🧪 Test Coverage
+- **1372 tests passing** (Python 3.10, 3.11, 3.12)
+- New: DDG unit tests + E2E contract violation fixtures (`dead_write_project`, `clean_project`)
+- New: DeadDataFrame unit + integration tests
+- New: SecurityFrame machine context tests restored
+
+### 📊 Impact
+- Zero regressions on full test suite
+- Contract analysis is opt-in (`--contract-mode` flag) — no impact on existing scans
+- Graceful degradation: DeadDataFrame skips if DDG not injected
+- FP-safe: `PIPELINE_CTX_NAMES` whitelist prevents false positives on internal pipeline fields
+
+### 🔧 Issues Closed
+`#162` DDG domain model · `#163` DataDependencyBuilder + FP filters · `#164` DDG tests + fixtures ·
+`#165` DataFlowAware mixin + service · `#166` Pipeline wiring + CLI flag · `#167` DeadDataFrame ·
+`#168` DeadDataFrame tests + E2E fixtures · `#174` Contract terminal summary + SARIF enrichment ·
+`#175` taint_context TypeError fix · `#176` html.escape scope fix
+
+### ⬆️ Upgrading to v2.4.0
+No breaking changes. New `--contract-mode` flag is strictly opt-in.
+```bash
+warden scan --contract-mode src/
+```
+
+---
+
 ## v2.1.0 (2026-02-17) - Observability & Production Hardening
 
 ### 🎯 Major Features

@@ -10,6 +10,7 @@ Discovers and loads frames from:
 
 import importlib
 import importlib.util
+import inspect
 import os
 import sys
 from dataclasses import dataclass
@@ -137,6 +138,28 @@ class FrameRegistry:
 
         return unique_frames
 
+    @staticmethod
+    def _resolve_frame_id(frame_class: type[ValidationFrame]) -> str | None:
+        """
+        Resolve the frame_id from a class without a full __init__ call.
+
+        - Classes that override frame_id as a plain string class attribute
+          (e.g. ``frame_id = "security"``) are read directly — O(1), no __init__.
+        - Classes that inherit (or define) frame_id as a ``@property`` return the
+          property *descriptor* object from a class-level getattr, not the string.
+          In that case we fall back to instantiation.
+        - Abstract classes (hub stubs) cannot be instantiated → return None.
+        """
+        val = getattr(frame_class, "frame_id", None)
+        if isinstance(val, str) and val:
+            return val
+        # Property descriptor or None — must instantiate to get the value.
+        try:
+            return frame_class().frame_id
+        except TypeError:
+            # Abstract class (e.g. hub stub that did not implement execute_async).
+            return None
+
     def register(self, frame_class: type[ValidationFrame]) -> None:
         """
         Register a frame class.
@@ -144,9 +167,10 @@ class FrameRegistry:
         Args:
             frame_class: ValidationFrame class to register
         """
-        # Instantiate to get frame_id
-        instance = frame_class()
-        frame_id = instance.frame_id
+        frame_id = self._resolve_frame_id(frame_class)
+        if not frame_id:
+            logger.debug("frame_skipped_no_id", frame=frame_class.__name__)
+            return
 
         if frame_id in self.registered_frames:
             logger.warning(
@@ -656,10 +680,24 @@ class FrameRegistry:
         spec.loader.exec_module(module)
 
         # Find ValidationFrame subclass
+        found_abstract = False
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
 
             if isinstance(attr, type) and issubclass(attr, ValidationFrame) and attr is not ValidationFrame:
+                # Hub frame packages install abstract stub classes (they inherit from
+                # the built-in frame base without implementing execute_async).  Skip
+                # them silently — the built-in equivalent is already registered.
+                if inspect.isabstract(attr):
+                    found_abstract = True
+                    logger.debug(
+                        "local_frame_skipped_abstract",
+                        frame=attr.__name__,
+                        path=str(frame_dir),
+                        reason="hub_stub_or_base_class",
+                    )
+                    continue
+
                 self._validate_frame_class(attr)
 
                 # Store metadata if loaded
@@ -674,7 +712,12 @@ class FrameRegistry:
 
                 return attr
 
-        logger.warning("no_frame_class_found", path=str(frame_dir))
+        # All classes found were abstract stubs → expected for hub packages.
+        # Only warn when the frame.py exists but has no ValidationFrame subclass at all.
+        if found_abstract:
+            logger.debug("local_frame_all_stubs", path=str(frame_dir))
+        else:
+            logger.warning("no_frame_class_found", path=str(frame_dir))
         return None
 
     def _validate_frame_class(self, frame_class: type[ValidationFrame]) -> None:
@@ -710,12 +753,13 @@ class FrameRegistry:
         Returns:
             List of unique frames
         """
-        seen_ids = set()
+        seen_ids: set[str] = set()
         unique_frames = []
 
         for frame_class in frames:
-            instance = frame_class()
-            frame_id = instance.frame_id
+            frame_id = self._resolve_frame_id(frame_class)
+            if not frame_id:
+                continue  # abstract class — skip silently
 
             if frame_id not in seen_ids:
                 seen_ids.add(frame_id)

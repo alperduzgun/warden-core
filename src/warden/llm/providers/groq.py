@@ -45,11 +45,13 @@ class GroqClient(ILlmClient):
             headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
             # Use requested model only if it looks like a Groq-compatible model.
-            # When orchestrated client forwards a smart_model from config (e.g. "claude-sonnet-4-*"),
-            # we must ignore it and use Groq's own default.
+            # Reject models that belong to other providers:
+            #   - "claude-*"         → Anthropic/Claude Code models
+            #   - "gpt-*"            → OpenAI models
+            #   - "name:tag" format  → Ollama local models (e.g. "qwen2.5-coder:3b")
             model = (
                 request.model
-                if request.model and not request.model.startswith(("claude", "gpt-"))
+                if request.model and not request.model.startswith(("claude", "gpt-")) and ":" not in request.model
                 else self._default_model
             )
 

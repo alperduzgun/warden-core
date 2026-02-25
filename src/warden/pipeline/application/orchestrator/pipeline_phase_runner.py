@@ -55,6 +55,7 @@ class PipelinePhaseRunner:
         """Execute all pipeline phases in order."""
 
         # Phase 0: PRE-ANALYSIS
+        context.current_phase = "Pre-Analysis"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -70,12 +71,17 @@ class PipelinePhaseRunner:
             # Populate taint analysis (zero LLM cost, per-file static analysis)
             await self._populate_taint_paths_async(context, code_files)
 
+            # Populate Data Dependency Graph when contract mode is enabled
+            if getattr(context, "contract_mode", False):
+                self._populate_data_dependency_graph(context)
+
             # Phase 0.8: LSP Audit (optional, zero LLM cost)
             await self._populate_lsp_audit_async(context)
 
         # Phase 0.5: TRIAGE (Adaptive Hybrid Triage)
         from warden.pipeline.domain.enums import AnalysisLevel
 
+        context.current_phase = "Triage"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -98,6 +104,7 @@ class PipelinePhaseRunner:
             self._progress_callback("progress_update", {"increment": len(code_files)})
 
         # Phase 1: ANALYSIS
+        context.current_phase = "Analysis"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -113,6 +120,7 @@ class PipelinePhaseRunner:
             self._progress_callback("progress_update", {"increment": len(code_files)})
 
         # Phase 2: CLASSIFICATION
+        context.current_phase = "Classification"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -130,6 +138,7 @@ class PipelinePhaseRunner:
             self._progress_callback("progress_update", {"increment": len(code_files)})
 
         # Phase 3: VALIDATION
+        context.current_phase = "Validation"
         enable_validation = getattr(self.config, "enable_validation", True)
         if enable_validation:
             logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
@@ -151,6 +160,7 @@ class PipelinePhaseRunner:
             await self._execute_lsp_diagnostics_async(context, code_files)
 
         # Phase 3.5: VERIFICATION (False Positive Reduction)
+        context.current_phase = "Verification"
         if getattr(self.config, "enable_issue_validation", False):
             findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
             if self._progress_callback:
@@ -161,6 +171,7 @@ class PipelinePhaseRunner:
             await self.post_processor.verify_findings_async(context)
 
         # Phase 4: FORTIFICATION
+        context.current_phase = "Fortification"
         findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
         if self._progress_callback:
             self._progress_callback(
@@ -189,6 +200,7 @@ class PipelinePhaseRunner:
                 )
 
         # Phase 5: CLEANING
+        context.current_phase = "Cleaning"
         if self._progress_callback:
             self._progress_callback(
                 "phase_started",
@@ -338,6 +350,42 @@ class PipelinePhaseRunner:
             entry_points=len(intel.entry_points),
             primary_language=intel.primary_language,
         )
+
+    def _populate_data_dependency_graph(self, context: PipelineContext) -> None:
+        """Populate the DataDependencyGraph when contract_mode is enabled.
+
+        Runs the shared ``DataDependencyService`` once per pipeline and stores
+        the result in ``context.data_dependency_graph`` for consumption by any
+        ``DataFlowAware`` frame.
+
+        This is a synchronous, CPU-bound operation (AST walk only, no I/O
+        beyond file reads).  It runs unconditionally when
+        ``context.contract_mode`` is ``True``.
+        """
+        try:
+            from pathlib import Path as _Path
+
+            from warden.analysis.services.data_dependency_service import DataDependencyService
+
+            project_root = self.project_root or context.project_root
+            if not project_root:
+                logger.warning("ddg_population_skipped", reason="project_root not set")
+                return
+
+            service = DataDependencyService(_Path(str(project_root)))
+            ddg = service.build()
+            context.data_dependency_graph = ddg
+            logger.info(
+                "ddg.built",
+                writes=len(ddg.writes),
+                reads=len(ddg.reads),
+                init_fields=len(ddg.init_fields),
+                dead_writes=len(ddg.dead_writes()),
+                missing_writes=len(ddg.missing_writes()),
+                never_populated=len(ddg.never_populated()),
+            )
+        except Exception as e:
+            logger.warning("ddg_population_failed", error=str(e))
 
     async def _populate_taint_paths_async(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
         """Populate taint analysis results into context (zero LLM cost).

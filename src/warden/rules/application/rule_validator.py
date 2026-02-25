@@ -412,10 +412,10 @@ class CustomRuleValidator:
             # See: RULES_SYSTEM_EXPLAINED.md, SORUN 5
 
             # Look for Redis set/get operations
+            # Note: \.set matches cache.set, redis.set, etc. — no separate cache.set pattern needed
             redis_operations = [
                 r'\.set\s*\(\s*["\']([^"\']+)["\']',
                 r'\.get\s*\(\s*["\']([^"\']+)["\']',
-                r'cache\.set\s*\(\s*["\']([^"\']+)["\']',
             ]
 
             for operation_pattern in redis_operations:

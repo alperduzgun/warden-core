@@ -1,5 +1,4 @@
 import asyncio
-import itertools
 import logging as _stdlib_logging
 from datetime import datetime
 from pathlib import Path
@@ -163,7 +162,10 @@ def _display_llm_summary(metrics: dict):
     if metrics.get("issues"):
         console.print("\n  [yellow]⚠️  Performance Issues:[/yellow]")
         for issue in metrics["issues"]:
-            console.print(f"    - {issue['message']}")
+            if issue.get("type") == "rate_limit":
+                console.print(f"    [bold red]- {issue['message']}[/bold red]")
+            else:
+                console.print(f"    - {issue['message']}")
             if issue.get("recommendations"):
                 for rec in issue["recommendations"]:
                     console.print(f"      → {rec}")
@@ -292,6 +294,79 @@ def _ensure_scan_dependencies(level: str) -> None:
         pass  # Dependency check is best-effort, never block the scan
 
 
+def _needs_ollama() -> bool:
+    """Return True if the project config requires Ollama."""
+    import os
+
+    import yaml
+
+    # Respect CI env var overrides — if provider is forced to a cloud provider, skip
+    env_provider = os.environ.get("WARDEN_LLM_PROVIDER", "").strip().lower()
+    if env_provider and env_provider != "ollama":
+        return False
+
+    config_candidates = [Path.cwd() / "warden.yaml", Path.cwd() / ".warden" / "config.yaml"]
+    for cfg_path in config_candidates:
+        if cfg_path.exists():
+            try:
+                with open(cfg_path) as f:
+                    data = yaml.safe_load(f) or {}
+                llm = data.get("llm", {})
+                provider = llm.get("provider", "")
+                use_local = llm.get("use_local_llm", False)
+                return provider == "ollama" or bool(use_local)
+            except Exception:
+                return False
+
+    return False
+
+
+def _preflight_ollama_check(rich_console: "Console") -> bool:
+    """
+    Verify Ollama is running and required models are present before scan starts.
+
+    Returns True when ready (or Ollama is not needed).
+    Returns False when a blocking issue could not be resolved.
+    """
+    if not _needs_ollama():
+        return True
+
+    from warden.services.local_model_manager import LocalModelManager
+
+    manager = LocalModelManager()
+
+    # 1. Check binary exists first — distinct message from "server not running"
+    rich_console.print("[dim]🔍 Preflight: checking Ollama...[/dim]")
+    if not manager.is_installed():
+        rich_console.print("[red]❌ Ollama is not installed.[/red]")
+        rich_console.print("[dim]   macOS : brew install ollama[/dim]")
+        rich_console.print("[dim]   Linux : curl -fsSL https://ollama.com/install.sh | sh[/dim]")
+        rich_console.print("[dim]   or    : https://ollama.com/download[/dim]")
+        rich_console.print("[dim]   After installing, run: warden scan (preflight will auto-start the server)[/dim]")
+        return False
+
+    # 2. Ensure server is running
+    if not manager.ensure_ollama_running():
+        rich_console.print("[red]❌ Ollama could not be started.[/red]")
+        rich_console.print("[dim]   Try running: ollama serve[/dim]")
+        return False
+
+    # 2. Check required models
+    missing = [m for m in manager.get_configured_models() if not manager.is_model_available(m)]
+    if not missing:
+        return True
+
+    # 3. Pull missing models (always auto-pull in scan context — user already chose Ollama)
+    for model in missing:
+        rich_console.print(f"[yellow]⚠️  Model missing: {model} — pulling now...[/yellow]")
+        success = manager.pull_model(model, show_progress=True)
+        if not success:
+            rich_console.print(f"[red]❌ Failed to pull model '{model}'. Run: ollama pull {model}[/red]")
+            return False
+
+    return True
+
+
 def scan_command(
     paths: list[str] | None = typer.Argument(None, help="Files or directories to scan"),
     frames: list[str] | None = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
@@ -310,6 +385,14 @@ def scan_command(
     cost_report: bool = typer.Option(False, "--cost-report", help="Display per-frame LLM cost breakdown"),
     auto_fix: bool = typer.Option(False, "--auto-fix", help="Apply auto-fixable fortification fixes"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview fixes without applying (use with --auto-fix)"),
+    force: bool = typer.Option(False, "--force", help="Bypass memory cache and force a full analysis of all files"),
+    no_preflight: bool = typer.Option(False, "--no-preflight", help="Skip Ollama model availability check before scan"),
+    benchmark: bool = typer.Option(False, "--benchmark", "-b", help="Show per-phase timing breakdown after scan"),
+    contract_mode: bool = typer.Option(
+        False,
+        "--contract-mode",
+        help="Run data flow contract analysis (DEAD_WRITE, MISSING_WRITE, NEVER_POPULATED).",
+    ),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -367,6 +450,12 @@ def scan_command(
         # Auto-install scan dependencies based on analysis level
         if level != "basic":
             _ensure_scan_dependencies(level)
+
+        # Ollama preflight: ensure server running + models present before wasting time
+        if level != "basic" and not no_preflight:
+            ok = _preflight_ollama_check(console)
+            if not ok:
+                raise typer.Exit(1)
 
         # Default to "." if no paths provided AND no diff mode
         if not paths and not diff:
@@ -462,6 +551,9 @@ def scan_command(
                 cost_report=cost_report,
                 auto_fix=auto_fix,
                 dry_run=dry_run,
+                force=force,
+                benchmark=benchmark,
+                contract_mode=contract_mode,
             )
         )
 
@@ -501,6 +593,9 @@ def scan_command(
                         cost_report=cost_report,
                         auto_fix=auto_fix,
                         dry_run=dry_run,
+                        force=force,
+                        benchmark=benchmark,
+                        contract_mode=contract_mode,
                     )
                 )
                 if exit_code != 0:
@@ -530,6 +625,9 @@ async def _process_stream_events(
     verbose: bool,
     level: str,
     ci_mode: bool,
+    force: bool,
+    bench_collector: Any | None = None,
+    contract_mode: bool = False,
 ) -> tuple[dict | None, dict, int]:
     """Process pipeline streaming events with a live-updating display.
 
@@ -674,6 +772,8 @@ async def _process_stream_events(
                 verbose=verbose,
                 analysis_level=level,
                 ci_mode=ci_mode,
+                force=force,
+                contract_mode=contract_mode,
             ):
                 event_type = event.get("type")
 
@@ -700,6 +800,8 @@ async def _process_stream_events(
 
                     # ── phase transitions ──────────────────────────────────────
                     elif evt == "phase_started":
+                        if bench_collector is not None:
+                            bench_collector.on_event("phase_started", data)
                         raw = data.get("phase_name", data.get("phase", current_phase))
                         label = str(raw).title()
 
@@ -731,6 +833,8 @@ async def _process_stream_events(
 
                     # ── frame completed ─────────────────────────────────────
                     elif evt == "frame_completed":
+                        if bench_collector is not None:
+                            bench_collector.on_event("frame_completed", data)
                         nonlocal_frame_name = data.get("frame_name", data.get("frame_id", "?"))
                         frame_status = data.get("status", "unknown")
                         findings_num = data.get("findings", data.get("issues_found", 0))
@@ -810,6 +914,65 @@ async def _process_stream_events(
     console.print(f"                                        [dim]— {q_author}[/dim]")
     console.print()
     return final_result_data, frame_stats, total_units
+
+
+def _render_contract_mode_summary(res: dict) -> None:
+    """
+    Render a CONTRACT MODE SUMMARY panel after a contract-mode scan.
+
+    Shows the count and severity of each contract gap type detected.
+    Displayed whenever --contract-mode is active, regardless of output format.
+    """
+    # Collect all findings across all frames
+    all_findings: list[dict] = []
+    for frame in res.get("frame_results", res.get("frameResults", [])):
+        findings = frame.get("findings", [])
+        all_findings.extend(findings if isinstance(findings, list) else [])
+    # Also check top-level findings lists
+    for key in ("validated_issues", "findings", "true_positives"):
+        top_level = res.get(key, [])
+        if isinstance(top_level, list):
+            all_findings.extend(top_level)
+
+    # Gap type metadata: (display_name, default_severity)
+    gap_type_meta: list[tuple[str, str, str]] = [
+        ("DEAD_WRITE", "DEAD_WRITE", "medium"),
+        ("MISSING_WRITE", "MISSING_WRITE", "high"),
+        ("STALE_SYNC", "STALE_SYNC", "medium"),
+        ("PROTOCOL_BREACH", "PROTOCOL_BREACH", "high"),
+        ("ASYNC_RACE", "ASYNC_RACE", "medium"),
+    ]
+
+    # Count findings per gap type
+    gap_counts: dict[str, int] = {gt: 0 for gt, _, _ in gap_type_meta}
+    for f in all_findings:
+        gt = f.get("gap_type", "")
+        if gt in gap_counts:
+            gap_counts[gt] += 1
+
+    # Severity color map
+    sev_colors = {"high": "orange3", "medium": "yellow3", "low": "dim"}
+
+    table = Table(box=rbox.SIMPLE, show_header=False, padding=(0, 1), show_edge=False)
+    table.add_column("Gap Type", style="bold white", min_width=22, no_wrap=True)
+    table.add_column("Count", min_width=14, no_wrap=True)
+    table.add_column("Severity", min_width=8, no_wrap=True)
+
+    for gt, _display, default_sev in gap_type_meta:
+        count = gap_counts[gt]
+        sev_color = sev_colors.get(default_sev, "white")
+        count_str = f"[bold {'red' if count > 0 else 'dim'}]{count} finding{'s' if count != 1 else ''}[/]"
+        sev_str = f"[{sev_color}]{default_sev}[/]" if count > 0 else "[dim]–[/]"
+        table.add_row(gt, count_str, sev_str)
+
+    panel = Panel(
+        table,
+        title="[bold cyan]CONTRACT MODE SUMMARY[/bold cyan]",
+        border_style="cyan",
+        padding=(0, 1),
+    )
+    console.print()
+    console.print(panel)
 
 
 def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
@@ -1285,6 +1448,9 @@ async def _run_scan_async(
     cost_report: bool = False,
     auto_fix: bool = False,
     dry_run: bool = False,
+    force: bool = False,
+    benchmark: bool = False,
+    contract_mode: bool = False,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1325,11 +1491,40 @@ async def _run_scan_async(
 
     bridge = WardenBridge(project_root=Path.cwd())
 
+    # Initialise benchmark collector if requested (lazy import keeps startup fast).
+    bench_collector = None
+    if benchmark:
+        from warden.benchmark.collector import BenchmarkCollector
+
+        bench_collector = BenchmarkCollector()
+
     try:
         # 1. Stream pipeline events and collect results
         final_result_data, frame_stats, total_units = await _process_stream_events(
-            bridge, paths, frames, verbose, level, ci_mode
+            bridge,
+            paths,
+            frames,
+            verbose,
+            level,
+            ci_mode,
+            force,
+            bench_collector=bench_collector,
+            contract_mode=contract_mode,
         )
+
+        # 1.5 Display benchmark report if requested.
+        if bench_collector is not None:
+            from warden.benchmark.reporter import BenchmarkReporter
+
+            prev_report = BenchmarkReporter.load_previous(Path.cwd() / ".warden")
+            bench_report = bench_collector.finalize(bridge, files_scanned=total_units)
+            BenchmarkReporter.display(bench_report, console, prev=prev_report)
+            bench_path = BenchmarkReporter.save(bench_report, Path.cwd() / ".warden")
+            try:
+                rel = bench_path.relative_to(Path.cwd())
+            except ValueError:
+                rel = bench_path
+            console.print(f"  [dim]Saved → {rel}[/dim]\n")
 
         # 2. Render text report to console
         if final_result_data and format == "text":
@@ -1338,6 +1533,10 @@ async def _run_scan_async(
             # Display per-frame cost breakdown if requested
             if cost_report:
                 _display_frame_cost_breakdown()
+
+        # 2.5 Display Contract Mode Summary panel (when --contract-mode is active)
+        if contract_mode and final_result_data:
+            _render_contract_mode_summary(final_result_data)
 
         # 3. Generate configured reports from YAML config
         if final_result_data:

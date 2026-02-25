@@ -10,7 +10,7 @@ frames:
   - security       # BLOCKER: Security vulnerabilities
   - resilience     # Resilience under failure
   - antipattern    # Code quality and design
-  - architectural  # Architecture consistency
+  - architecture   # Architecture consistency
 
 # Global security rules (applied to all frames)
 global_rules:

@@ -11,15 +11,15 @@ frames:
   - resilience     # Priority: HIGH (resilience testing)
   - fuzz           # Priority: MEDIUM (edge cases)
   - property       # Priority: MEDIUM (idempotency)
-  - architectural  # Priority: MEDIUM (design patterns)
+  - architecture   # Priority: MEDIUM (design patterns)
   - antipattern    # Priority: HIGH (code quality)
 
 # Execution order (automatic priority-based):
-# Sequential mode: security → resilience/antipattern → fuzz/property/architectural
+# Sequential mode: security → resilience/antipattern → fuzz/property/architecture
 # Parallel mode:
 #   Group 1: security (critical) - runs alone
 #   Group 2: resilience + antipattern (high) - parallel
-#   Group 3: fuzz + property + architectural (medium) - parallel
+#   Group 3: fuzz + property + architecture (medium) - parallel
 
 settings:
   fail_fast: false  # Run all frames even if one fails

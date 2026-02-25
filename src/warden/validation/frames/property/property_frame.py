@@ -15,6 +15,7 @@ import re
 import time
 from typing import Any
 
+from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
     FrameApplicability,
@@ -55,6 +56,7 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
     priority = FramePriority.HIGH
     scope = FrameScope.FILE_LEVEL
     is_blocker = False
+    supports_verification = False  # Code-quality findings, not security risks — security verifier gives wrong verdicts
     version = "1.0.0"
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
@@ -81,7 +83,7 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
         },
     }
 
-    SYSTEM_PROMPT = """You are an expert Formal Verification and Property Testing analyst. Analyze the provided code for logical errors, invariant violations, and precondition failures.
+    _SYSTEM_PROMPT_BASE = """You are an expert Formal Verification and Property Testing analyst. Analyze the provided code for logical errors, invariant violations, and precondition failures.
 
 Focus on:
 1. Invariant maintenance (class state consistency).
@@ -108,6 +110,8 @@ Output must be a valid JSON object with the following structure:
         }
     ]
 }"""
+
+    SYSTEM_PROMPT = get_tool_enhanced_prompt(_SYSTEM_PROMPT_BASE)
 
     BATCH_SIZE = 3  # Conservative for subprocess-based providers (Claude Code)
 
@@ -233,12 +237,14 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
 
         try:
             from warden.llm.types import LlmRequest
+            from warden.shared.utils.llm_context import BUDGET_PROPERTY, prepare_code_for_llm, resolve_token_budget
 
             # Build combined prompt
+            budget = resolve_token_budget(BUDGET_PROPERTY, is_fast_tier=True)
             parts = []
             for idx, cf in enumerate(code_files):
                 parts.append(f"=== FILE {idx}: {cf.path} ({cf.language}) ===")
-                parts.append(cf.content[:3000])  # Cap per-file content for context limits
+                parts.append(prepare_code_for_llm(cf.content, token_budget=budget))
                 parts.append("")
 
             combined = "\n".join(parts)
@@ -250,7 +256,7 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
                 use_fast_tier=True,
             )
 
-            response = await self.llm_service.send_async(request)
+            response = await self.llm_service.send_with_tools_async(request)
 
             if response.success and response.content:
                 self._parse_batch_llm_response(response.content, code_files, findings_map)
@@ -518,14 +524,19 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
 
             client = self.llm_service
 
+            from warden.shared.utils.llm_context import BUDGET_PROPERTY, prepare_code_for_llm, resolve_token_budget
+
+            budget = resolve_token_budget(BUDGET_PROPERTY, is_fast_tier=True)
+            truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
+
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
-                user_message=f"Analyze this {code_file.language} code:\n\n{code_file.content}",
+                user_message=f"Analyze this {code_file.language} code:\n\n{truncated}",
                 temperature=0.1,
                 use_fast_tier=True,
             )
 
-            response = await client.send_async(request)
+            response = await client.send_with_tools_async(request)
 
             if response.success and response.content:
                 # Handle markdown code blocks if present

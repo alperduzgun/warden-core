@@ -197,6 +197,7 @@ class PhaseOrchestrator:
         code_files: list[CodeFile],
         frames_to_execute: list[str] | None = None,
         analysis_level: str | None = None,
+        force: bool = False,
     ) -> tuple[PipelineResult, PipelineContext]:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -209,7 +210,7 @@ class PhaseOrchestrator:
         Returns:
             Tuple of (PipelineResult, PipelineContext)
         """
-        context = await self.execute_pipeline_async(code_files, frames_to_execute, analysis_level)
+        context = await self.execute_pipeline_async(code_files, frames_to_execute, analysis_level, force)
 
         # Build PipelineResult from context for compatibility
         result = self.result_builder.build(context, self.pipeline, scan_id=getattr(self, "current_scan_id", None))
@@ -221,6 +222,7 @@ class PhaseOrchestrator:
         code_files: list[CodeFile],
         frames_to_execute: list[str] | None = None,
         analysis_level: str | None = None,
+        force: bool = False,
     ) -> PipelineContext:
         """
         Execute the complete 6-phase pipeline with shared context.
@@ -243,6 +245,11 @@ class PhaseOrchestrator:
                 lang_enum = LanguageRegistry.get_language_from_path(code_files[0].path)
                 if lang_enum != CodeLanguage.UNKNOWN:
                     language = lang_enum.value
+
+        # Handle force flag by disabling memory cache
+        if force:
+            logger.info("force_scan_enabled", reason="bypassing memory cache")
+            self.config.force_scan = True
 
         # Apply analysis level if provided
         if analysis_level:
@@ -279,6 +286,8 @@ class PhaseOrchestrator:
             source_code=code_files[0].content if code_files else "",
             language=language,
             llm_config=getattr(self.llm_service, "config", None) if hasattr(self.llm_service, "config") else None,
+            llm_provider=str(getattr(getattr(self.llm_service, "provider", None), "value", "") or "").lower(),
+            contract_mode=getattr(self.config, "contract_mode", False),
         )
 
         # Create pipeline entity
@@ -319,11 +328,12 @@ class PhaseOrchestrator:
             )
 
         except asyncio.TimeoutError:
-            # ID 29 - Timeout handler
+            # ID 29 - Timeout handler (include stuck phase for diagnostics)
             self.pipeline.status = PipelineStatus.FAILED
-            error_msg = f"Pipeline execution timeout after {timeout}s"
+            current = getattr(context, "current_phase", "unknown")
+            error_msg = f"Pipeline execution timeout after {timeout}s (stuck in: {current})"
             context.errors.append(error_msg)
-            logger.error("pipeline_timeout", timeout=timeout, pipeline_id=context.pipeline_id)
+            logger.error("pipeline_timeout", timeout=timeout, phase=current, pipeline_id=context.pipeline_id)
             raise RuntimeError(error_msg)
 
         except RuntimeError as e:
@@ -499,6 +509,21 @@ class PhaseOrchestrator:
                     await self.frame_executor.cleanup()
                 except Exception as e:
                     logger.warning("frame_executor_cleanup_failed", error=str(e))
+
+            # Flush cross-scan findings cache to disk
+            try:
+                runner = getattr(self.frame_executor, "frame_runner", None)
+                if runner is not None:
+                    cache = getattr(runner, "_findings_cache", None)
+                    if cache is not None:
+                        cache.flush()
+                        logger.debug(
+                            "findings_cache_persisted",
+                            entries=cache.size,
+                            hit_rate=round(cache.hit_rate, 2),
+                        )
+            except Exception as e:
+                logger.warning("findings_cache_flush_failed", error=str(e))
 
             logger.info("pipeline_cleanup_completed", pipeline_id=context.pipeline_id)
 

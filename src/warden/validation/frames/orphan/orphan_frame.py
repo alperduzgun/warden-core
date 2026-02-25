@@ -73,6 +73,7 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAwar
     priority = FramePriority.MEDIUM
     scope = FrameScope.FILE_LEVEL
     is_blocker = False  # Dead code is warning, not blocker
+    supports_verification = False  # LSP/AST-confirmed dead code is factual, not probabilistic
     version = "2.0.0"  # Upgraded: LLM filtering support
     author = "Warden Team"
     applicability = [

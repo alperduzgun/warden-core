@@ -282,7 +282,7 @@ frame_rules:
     post_rules: ["rule2"]
     on_fail: "stop"
 
-  chaos:
+  resilience:
     pre_rules: ["rule3"]
     on_fail: "continue"
 
@@ -301,7 +301,7 @@ frame_rules:
             # Check all frames loaded
             assert len(config.frame_rules) == 3
             assert "security" in config.frame_rules
-            assert "chaos" in config.frame_rules
+            assert "resilience" in config.frame_rules
             assert "fuzz" in config.frame_rules
 
             # Check security frame
@@ -309,10 +309,10 @@ frame_rules:
             assert len(config.frame_rules["security"].post_rules) == 1
             assert config.frame_rules["security"].on_fail == "stop"
 
-            # Check chaos frame
-            assert len(config.frame_rules["chaos"].pre_rules) == 1
-            assert len(config.frame_rules["chaos"].post_rules) == 0
-            assert config.frame_rules["chaos"].on_fail == "continue"
+            # Check resilience frame
+            assert len(config.frame_rules["resilience"].pre_rules) == 1
+            assert len(config.frame_rules["resilience"].post_rules) == 0
+            assert config.frame_rules["resilience"].on_fail == "continue"
 
             # Check fuzz frame
             assert len(config.frame_rules["fuzz"].pre_rules) == 0

@@ -73,3 +73,12 @@ rules:
     pattern: |
       verify\s*=\s*False
     message: "SSL verification should not be disabled in production"
+
+  - id: py-ssrf-user-controlled-url
+    name: "SSRF: User-Controlled URL in HTTP Request"
+    description: "Passing user-controlled data as a URL to an HTTP client may enable Server-Side Request Forgery (CWE-918). An attacker can make the server fetch arbitrary internal or external resources."
+    severity: high
+    tags: [security, ssrf, cwe-918, owasp-a10]
+    pattern: |
+      (requests\.(get|post|put|delete|patch|head|request)|httpx\.(get|post|put|delete|patch|request)|urllib\.request\.(urlopen|Request)|aiohttp\.ClientSession\.(get|post|request))\s*\(\s*(request\.|req\.|args\.|form\.|data\.|params\.|query\.)
+    message: "Validate and allowlist URLs before making outbound HTTP requests to prevent SSRF (CWE-918)"
