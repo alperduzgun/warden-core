@@ -52,6 +52,9 @@ Her **step** şunları içerir:
 | `classification-phase` | Cache → Heuristic → LLM ile frame seçimi | `llm-provider-chain` |
 | `frame-execution` | Tek dosya için tek frame execution: cache, inject, execute, rules | `llm-provider-chain` |
 | `contract-mode` | `--contract-mode` flag → DDG build → DeadDataFrame → contract summary | `scan-pipeline`, `audit-context` |
+| `protocol-breach` | AST scan frames dir + frame_runner.py → PROTOCOL_BREACH if injection block missing | `contract-mode` |
+| `stale-sync` | DDG co_write_candidates() → LLM verdict → STALE_SYNC if confidence ≥ 0.5 | `contract-mode` |
+| `async-race` | Per-file AST: asyncio.gather + shared mutable + no Lock → LLM verify → ASYNC_RACE | `contract-mode` |
 
 ---
 

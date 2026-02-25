@@ -1,5 +1,52 @@
 # Warden Core - Release Notes
 
+## v2.5.0 (2026-02-25) - Contract Mode: Complete (6 Gap Types)
+
+### 🎯 Major Features
+
+**Blok 4 — LLM-Assisted Contract Frames**
+
+**ProtocolBreachFrame** (AST-only, `--contract-mode`)
+- Detects frames that implement a capability mixin (`TaintAware`, `DataFlowAware`, `LSPAware`)
+  but are missing the corresponding injection block in `frame_runner.py`
+- Self-referential: warden validates its own injection protocol
+
+**StaleSyncFrame** (DDG + LLM, `--contract-mode`)
+- `DataDependencyGraph.co_write_candidates()`: finds field pairs frequently written together
+  but with diverging writes
+- LLM verdict: stale_sync vs intentional (confidence ≥ 0.5 → report)
+- New LLM prompt template: `data_flow_contract.txt`
+- Detects known candidate: `context.validated_issues ↔ context.findings`
+
+**AsyncRaceFrame** (AST + LLM, `--contract-mode`)
+- Scans per-file for `asyncio.gather()` / `asyncio.create_task()` with shared mutable
+  object access (`context`, `results`, `findings`) and no `asyncio.Lock`
+- LLM verifies if detected pattern is a real race condition
+- Detects known candidate: `frame_executor.py:256` parallel gather
+
+### 🧪 Test Coverage
+- **82 new tests** across 3 new frames
+  - ProtocolBreachFrame: 28 tests (AST parsing, injection check, self-test on warden)
+  - StaleSyncFrame: 25 tests (_parse_verdict, LLM flows, co_write_candidates)
+  - AsyncRaceFrame: 29 tests (AST scanning, LLM flows, frame_executor.py candidate)
+- All 6 contract gap types now have dedicated frames
+
+### 📊 Gap Type Coverage (v2.5.0)
+
+| Gap Type | Frame | Method | LLM? |
+|----------|-------|--------|------|
+| DEAD_WRITE | DeadDataFrame | DDG | No |
+| MISSING_WRITE | DeadDataFrame | DDG | No |
+| NEVER_POPULATED | DeadDataFrame | DDG | No |
+| PROTOCOL_BREACH | ProtocolBreachFrame | AST | No |
+| STALE_SYNC | StaleSyncFrame | DDG + LLM | Yes |
+| ASYNC_RACE | AsyncRaceFrame | AST + LLM | Yes |
+
+### ⬆️ Upgrading to v2.5.0
+No breaking changes. All new frames are opt-in via `--contract-mode`.
+
+---
+
 ## v2.4.0 (2026-02-25) - Contract Mode: Data Flow Analysis
 
 ### 🎯 Major Features
