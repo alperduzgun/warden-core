@@ -677,17 +677,47 @@ def configure_ci_workflow(ci_provider: dict, llm_config: dict, project_root: Pat
 
     # Prepare template variables
     provider_id = llm_config.get("provider", "ollama")
+    fast_provider_id = llm_config.get("fast_provider", "ollama")
+    fast_model = llm_config.get("fast_model", "qwen2.5-coder:3b")
+
+    # Determine if Ollama is needed (smart tier OR fast tier)
+    needs_ollama = provider_id == "ollama" or fast_provider_id == "ollama"
 
     # Build environment variables section for CI
-    ci_env_vars = ""
-    if provider_id == "ollama":
-        ci_env_vars = "      OLLAMA_HOST: http://localhost:11434"
-        ollama_setup = """      - name: Setup Ollama
+    ci_env_vars_parts: list[str] = []
+
+    # Smart tier API key
+    if provider_id != "ollama":
+        for p in LLM_PROVIDERS.values():
+            if p["id"] == provider_id:
+                key_var = p.get("key_var")
+                if key_var:
+                    ci_env_vars_parts.append(f"      {key_var}: ${{{{ secrets.{key_var} }}}}")
+                break
+
+    # Fast tier API key (only if different provider and not ollama)
+    if fast_provider_id not in ("ollama", "none", provider_id):
+        for p in LLM_PROVIDERS.values():
+            if p["id"] == fast_provider_id:
+                key_var = p.get("key_var")
+                if key_var:
+                    ci_env_vars_parts.append(f"      {key_var}: ${{{{ secrets.{key_var} }}}}")
+                break
+
+    # Ollama host env var
+    if needs_ollama:
+        ci_env_vars_parts.append("      OLLAMA_HOST: http://localhost:11434")
+
+    ci_env_vars = "\n".join(ci_env_vars_parts)
+
+    # Ollama setup step — install + serve + pull the fast model
+    if needs_ollama:
+        ollama_setup = f"""      - name: Setup Ollama
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
           ollama serve &
           echo "Waiting for Ollama to be ready..."
-          for i in {1..30}; do
+          for i in {{1..30}}; do
             if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
               echo "Ollama is ready!"
               break
@@ -695,19 +725,10 @@ def configure_ci_workflow(ci_provider: dict, llm_config: dict, project_root: Pat
             echo "Attempt $i/30: Ollama not ready yet..."
             sleep 1
           done
-          ollama pull qwen2.5-coder:3b
+          ollama pull {fast_model}
 
 """
     else:
-        key_var = None
-        for p in LLM_PROVIDERS.values():
-            if p["id"] == provider_id:
-                key_var = p.get("key_var")
-                break
-
-        if key_var:
-            ci_env_vars = f"      {key_var}: ${{{{ secrets.{key_var} }}}}"
-
         ollama_setup = ""
 
     # Define workflows to generate based on CI provider

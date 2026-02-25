@@ -1,7 +1,3 @@
-# Warden CI v1.0.0
-# Generated: 2026-02-03 09:10:05
-# Do not edit sections marked WARDEN-MANAGED
-
 name: Warden Nightly Scan
 
 on:
@@ -10,28 +6,19 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger
 
-permissions:
-  contents: write
-  security-events: write
-
-concurrency:
-  group: warden-nightly
-  cancel-in-progress: false
-
 jobs:
   warden:
     name: Nightly Full Scan
     runs-on: ubuntu-latest
 
     env:
+      WARDEN_LLM_PROVIDER: groq
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      # Smart Tier: Groq | Fast/Local Tier: Ollama qwen2.5-coder:3b
-      WARDEN_LLM_PROVIDER: "groq"
-      WARDEN_FAST_TIER_PRIORITY: "ollama"
+      OLLAMA_HOST: http://localhost:11434
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -40,7 +27,23 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install .
+        run: pip install warden-core
+
+      - name: Setup Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          echo "Waiting for Ollama to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Ollama not ready yet..."
+            sleep 1
+          done
+          ollama pull qwen2.5-coder:3b
+
 
       - name: Refresh Intelligence
         run: warden refresh --force
@@ -71,7 +74,7 @@ jobs:
 
       - name: Upload Reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: warden-nightly-reports
           path: .warden/reports/
