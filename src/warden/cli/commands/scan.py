@@ -1,5 +1,4 @@
 import asyncio
-import itertools
 import logging as _stdlib_logging
 from datetime import datetime
 from pathlib import Path
