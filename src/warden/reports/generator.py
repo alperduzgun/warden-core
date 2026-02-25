@@ -474,7 +474,8 @@ class ReportGenerator:
 
                 run["results"].append(result)
 
-        # Log suppressed findings
+        # Include suppressed findings in SARIF with suppressions array (SARIF 2.1.0 §3.35) (#125).
+        # GitHub Security tab and audit tools can then distinguish suppressed from active findings.
         suppressed_findings = scan_results.get("suppressed_findings", [])
         if suppressed_findings:
             logger.info(
@@ -482,8 +483,39 @@ class ReportGenerator:
                 count=len(suppressed_findings),
                 findings=[f.get("id", "unknown") for f in suppressed_findings],
             )
-            # Optionally, add suppressed findings to SARIF as notifications or with suppression property
-            # For now, just logging as per instruction.
+            for sf in suppressed_findings:
+                rule_id = str(self._get_val(sf, "id", "unknown")).lower().replace(" ", "-")
+                location_str = self._get_val(sf, "location", "unknown")
+                file_path = location_str.split(":")[0] if ":" in location_str else location_str
+                if not rule_id or not file_path or file_path == "unknown":
+                    continue
+                line_num = 1
+                if ":" in location_str:
+                    try:
+                        line_num = int(location_str.split(":")[-1])
+                    except (ValueError, IndexError):
+                        pass
+                suppressed_result = {
+                    "ruleId": rule_id,
+                    "kind": "open",
+                    "level": "none",
+                    "message": {"text": self._get_val(sf, "message", "Suppressed finding")},
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": self._to_relative_uri(file_path), "uriBaseId": "%SRCROOT%"},
+                                "region": {"startLine": line_num},
+                            }
+                        }
+                    ],
+                    "suppressions": [
+                        {
+                            "kind": "inSource",
+                            "justification": self._get_val(sf, "suppression_reason", "Suppressed by warden rule"),
+                        }
+                    ],
+                }
+                run["results"].append(suppressed_result)
 
         # Sanitize final SARIF output (in-place is fine since sarif is local to this method)
         self._sanitize_paths(sarif, base_path, inplace=True)
