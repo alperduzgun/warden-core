@@ -14,8 +14,6 @@ Covers:
 
 from __future__ import annotations
 
-from collections import defaultdict
-
 import pytest
 
 from warden.analysis.domain.data_dependency_graph import (

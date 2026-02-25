@@ -21,10 +21,7 @@ All of the above are filtered out before creating WriteNode / ReadNode entries.
 from __future__ import annotations
 
 import ast
-import re
-from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 from warden.analysis.domain.data_dependency_graph import (
     DataDependencyGraph,
@@ -59,7 +56,7 @@ FP_FIELD_PATTERNS: tuple[str, ...] = (
 )
 
 # Glob pattern for PipelineContext source files (used for init_fields extraction)
-_PIPELINE_CONTEXT_GLOB = "**/pipeline_context.py"
+_PIPELINE_CONTEXT_GLOB: str = "pipeline_context.py"
 
 
 def _is_fp_field(field_name: str) -> bool:
@@ -323,7 +320,7 @@ class DataDependencyBuilder:
         """
         init_fields: set[str] = set()
         # Locate pipeline_context.py relative to project root
-        candidates = list(self.project_root.rglob("pipeline_context.py"))
+        candidates = list(self.project_root.rglob(_PIPELINE_CONTEXT_GLOB))
         if not candidates:
             return init_fields
 

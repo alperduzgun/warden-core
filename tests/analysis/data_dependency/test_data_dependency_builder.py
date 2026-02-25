@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import ast
 import textwrap
-from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -29,7 +28,7 @@ from warden.analysis.application.data_dependency_builder import (
     DDGVisitor,
     FP_FIELD_PATTERNS,
 )
-from warden.analysis.domain.data_dependency_graph import DataDependencyGraph, WriteNode
+from warden.analysis.domain.data_dependency_graph import DataDependencyGraph
 
 
 # ---------------------------------------------------------------------------
