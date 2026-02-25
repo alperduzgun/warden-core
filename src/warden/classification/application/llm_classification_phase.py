@@ -283,11 +283,6 @@ FILES TO ANALYZE:
         if not findings:
             return []
 
-        {
-            "findings": findings[:50],  # Limit for token count
-            "file_contexts": file_contexts,
-        }
-
         prompt = f"""Analyze these findings and identify false positives to suppress:
 
 FINDINGS:
