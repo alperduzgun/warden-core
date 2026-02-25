@@ -38,7 +38,8 @@ class OfflineClient(ILlmClient):
     async def complete_async(
         self, prompt: str, system_prompt: str = "", model: str | None = None, use_fast_tier: bool = False
     ) -> LlmResponse:
-        return await self.send_async(None)
+        # Satisfy the LlmRequest type contract instead of passing None (#210)
+        return await self.send_async(LlmRequest(system_prompt=system_prompt, user_message=prompt))
 
     async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:
         """
