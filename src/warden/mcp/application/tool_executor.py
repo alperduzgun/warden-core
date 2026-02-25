@@ -41,14 +41,17 @@ class ToolExecutorService:
     Routes tool calls to appropriate adapters based on tool support.
     """
 
-    def __init__(self, project_root: Path) -> None:
+    def __init__(self, project_root: Path, llm_service: Any = None) -> None:
         """
         Initialize tool executor.
 
         Args:
             project_root: Project root directory
+            llm_service: Optional LLM service. When omitted, MCP scans run in
+                BASIC mode (rules-only, no LLM verification or fortification). (#159)
         """
         self.project_root = project_root
+        self.llm_service = llm_service
         self._registry = ToolRegistry()
         self._resource_repo = FileResourceRepository(project_root)
 
@@ -57,6 +60,13 @@ class ToolExecutorService:
 
         # Legacy bridge adapter (for backward compatibility)
         self._bridge_adapter = WardenBridgeAdapter(project_root)
+
+        if llm_service is None:
+            logger.warning(
+                "mcp_scan_basic_mode",
+                reason="no_llm_service_provided",
+                note="LLM-powered phases (verification, fortification) will be skipped",
+            )
 
         # Initialize all available adapters
         self._initialize_adapters()
