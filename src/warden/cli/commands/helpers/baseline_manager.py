@@ -20,6 +20,25 @@ from warden.shared.utils.finding_utils import get_finding_attribute
 logger = get_logger(__name__)
 
 
+def _compute_finding_fingerprint(finding: dict[str, Any]) -> str:
+    """Canonical fingerprint for a finding: sha256(rule_id:file_path:message).
+
+    Deliberately excludes code_snippet so the fingerprint is stable across
+    minor refactors that change the snippet but not the finding itself (#151).
+    Both call-sites in BaselineManager must use this function to ensure a
+    finding always maps to the same hash regardless of which code path ran.
+    """
+    rule = finding.get("id") or finding.get("rule_id") or finding.get("ruleId", "unknown")
+    # Prefer explicit path fields; fall back to "file" part of "file:line" location
+    path = finding.get("file_path") or finding.get("path") or finding.get("file")
+    if not path:
+        location = finding.get("location", "")
+        path = location.split(":")[0] if location else ""
+    path = path or "unknown"
+    msg = finding.get("message", "")
+    return hashlib.sha256(f"{rule}:{path}:{msg}".encode()).hexdigest()
+
+
 class ModuleBaseline:
     """Represents a per-module baseline with debt tracking."""
 
@@ -228,24 +247,7 @@ class BaselineManager:
                 fingerprints.add(fp)
             else:
                 # Dynamic fingerprint generation if missing in baseline
-                rule = f.get("id") or f.get("rule_id") or f.get("ruleId", "unknown")
-
-                # Extract path from location "file:line" or similar
-                location = f.get("location", "")
-                path = f.get("file_path") or f.get("path") or f.get("file")
-                if not path and location:
-                    path = location.split(":")[0]
-
-                path = path or "unknown"
-                msg = f.get("message", "")
-
-                # Include code snippet to distinguish findings in same file
-                snippet = f.get("code_snippet") or f.get("codeSnippet") or f.get("code", "")
-
-                # We can't easily reproduce context hash without code, so rely on these
-                composite = f"{rule}:{path}:{msg}:{snippet}"
-                if composite:
-                    fingerprints.add(hashlib.sha256(composite.encode()).hexdigest())
+                fingerprints.add(_compute_finding_fingerprint(f))
 
         return fingerprints
 
@@ -488,12 +490,8 @@ class BaselineManager:
             if fp:
                 current_fps.add(fp)
             else:
-                # Generate fingerprint
-                rule = f.get("id") or f.get("rule_id") or f.get("ruleId", "unknown")
-                path = f.get("file_path") or f.get("path") or f.get("file", "unknown")
-                msg = f.get("message", "")
-                composite = f"{rule}:{path}:{msg}"
-                fp = hashlib.sha256(composite.encode()).hexdigest()
+                # Generate canonical fingerprint using the shared algorithm (#151)
+                fp = _compute_finding_fingerprint(f)
                 f["fingerprint"] = fp
                 current_fps.add(fp)
 
