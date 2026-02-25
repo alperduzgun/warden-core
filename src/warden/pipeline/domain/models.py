@@ -270,6 +270,9 @@ class PipelineResult(BaseDomainModel):
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
     quality_score: float = 0.0
 
+    # Blocker violations from custom rules (is_blocker: true)
+    blocker_violations: int = 0
+
     # LLM Usage
     total_tokens: int = 0
     prompt_tokens: int = 0
@@ -294,6 +297,9 @@ class PipelineResult(BaseDomainModel):
 
         # Include findings list
         data["findings"] = self.findings
+
+        # Blocker violations count (custom rules with is_blocker: true)
+        data["blocker_violations"] = self.blocker_violations
 
         # Add token usage
         data["llmUsage"] = {

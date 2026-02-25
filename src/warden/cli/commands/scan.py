@@ -1640,10 +1640,17 @@ async def _run_scan_async(
 
         critical_count = final_result_data.get("critical_findings", 0) if final_result_data else 0
         frames_failed = final_result_data.get("frames_failed", 0) if final_result_data else 0
+        blocker_violations = final_result_data.get("blocker_violations", 0) if final_result_data else 0
 
         if not pipeline_ok:
             console.print("[bold red]❌ Pipeline did not complete successfully.[/bold red]")
             return 1
+
+        if blocker_violations > 0:
+            console.print(
+                f"[bold red]❌ Scan failed: {blocker_violations} custom rule blocker violation(s).[/bold red]"
+            )
+            return 2  # Exit code 2: Policy Failure (Blocker rule violated)
 
         if critical_count > 0:
             console.print(f"[bold red]❌ Scan failed: {critical_count} critical issues found.[/bold red]")
