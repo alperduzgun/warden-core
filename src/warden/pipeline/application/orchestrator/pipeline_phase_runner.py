@@ -71,6 +71,10 @@ class PipelinePhaseRunner:
             # Populate taint analysis (zero LLM cost, per-file static analysis)
             await self._populate_taint_paths_async(context, code_files)
 
+            # Populate Data Dependency Graph when contract mode is enabled
+            if getattr(context, "contract_mode", False):
+                self._populate_data_dependency_graph(context)
+
             # Phase 0.8: LSP Audit (optional, zero LLM cost)
             await self._populate_lsp_audit_async(context)
 
@@ -346,6 +350,42 @@ class PipelinePhaseRunner:
             entry_points=len(intel.entry_points),
             primary_language=intel.primary_language,
         )
+
+    def _populate_data_dependency_graph(self, context: PipelineContext) -> None:
+        """Populate the DataDependencyGraph when contract_mode is enabled.
+
+        Runs the shared ``DataDependencyService`` once per pipeline and stores
+        the result in ``context.data_dependency_graph`` for consumption by any
+        ``DataFlowAware`` frame.
+
+        This is a synchronous, CPU-bound operation (AST walk only, no I/O
+        beyond file reads).  It runs unconditionally when
+        ``context.contract_mode`` is ``True``.
+        """
+        try:
+            from pathlib import Path as _Path
+
+            from warden.analysis.services.data_dependency_service import DataDependencyService
+
+            project_root = self.project_root or context.project_root
+            if not project_root:
+                logger.warning("ddg_population_skipped", reason="project_root not set")
+                return
+
+            service = DataDependencyService(_Path(str(project_root)))
+            ddg = service.build()
+            context.data_dependency_graph = ddg
+            logger.info(
+                "ddg.built",
+                writes=len(ddg.writes),
+                reads=len(ddg.reads),
+                init_fields=len(ddg.init_fields),
+                dead_writes=len(ddg.dead_writes()),
+                missing_writes=len(ddg.missing_writes()),
+                never_populated=len(ddg.never_populated()),
+            )
+        except Exception as e:
+            logger.warning("ddg_population_failed", error=str(e))
 
     async def _populate_taint_paths_async(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
         """Populate taint analysis results into context (zero LLM cost).

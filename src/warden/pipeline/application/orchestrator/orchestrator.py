@@ -287,6 +287,7 @@ class PhaseOrchestrator:
             language=language,
             llm_config=getattr(self.llm_service, "config", None) if hasattr(self.llm_service, "config") else None,
             llm_provider=str(getattr(getattr(self.llm_service, "provider", None), "value", "") or "").lower(),
+            contract_mode=getattr(self.config, "contract_mode", False),
         )
 
         # Create pipeline entity
