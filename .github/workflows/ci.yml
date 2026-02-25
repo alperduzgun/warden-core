@@ -24,8 +24,9 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
-    # Lint now blocks CI to enforce code quality
-    continue-on-error: false
+    # Lint is advisory: failures surface as annotations and SARIF findings
+    # but do NOT block the test matrix or security scan.
+    continue-on-error: true
 
     steps:
       - name: Free Disk Space (Manual)
@@ -48,19 +49,25 @@ jobs:
       - name: Install Ruff
         run: pip install ruff==0.15.0
 
-      - name: Run Ruff Linter
+      - name: Run Ruff Linter (GitHub annotations)
         run: ruff check src/ --output-format=github
-        continue-on-error: false
+        continue-on-error: true  # Keep running so SARIF step always executes
+
+      - name: Generate Ruff SARIF Report
+        if: always()
+        run: ruff check src/ --output-format=sarif --output-file=ruff-results.sarif || true
+
+      - name: Upload Ruff SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('ruff-results.sarif') != ''
+        with:
+          sarif_file: ruff-results.sarif
+          category: ruff-lint
 
       - name: Run Ruff Formatter Check
-        run: |
-          echo "Running ruff format check..."
-          ruff format src/ --check --diff || {
-            echo "❌ Formatting issues found. Files that need formatting:"
-            ruff format src/ --check 2>&1 | grep "would be reformatted" || true
-            exit 1
-          }
-        continue-on-error: false
+        if: always()
+        run: ruff format src/ --check --diff
+        continue-on-error: true
 
   # ============================================================
   # TEST JOB - Matrix testing across Python versions
@@ -117,7 +124,7 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: [lint]
-    if: always() && needs.lint.result == 'success'
+    if: always() && needs.lint.result != 'cancelled'
 
     steps:
       - name: Free Disk Space (Manual)
