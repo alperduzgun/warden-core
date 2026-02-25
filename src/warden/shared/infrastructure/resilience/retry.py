@@ -67,7 +67,7 @@ async def with_retry_async(
             if config.jitter:
                 delay = delay * (0.5 + random.random())
 
-            logger.warning(
+            logger.debug(
                 "retry_attempt",
                 operation=operation_name,
                 attempt=attempt,

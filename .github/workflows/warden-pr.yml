@@ -1,16 +1,8 @@
-# Warden CI v1.0.0
-# Generated: 2026-02-03 09:10:05
-# Do not edit sections marked WARDEN-MANAGED
-
 name: Warden PR Security Scan
 
 on:
   pull_request:
-    branches: [main]
-
-permissions:
-  contents: read
-  security-events: write
+    branches: [dev]
 
 jobs:
   warden:
@@ -18,12 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      CI_LLM_PROVIDER: azure_openai
-      BASE_REF: ${{ github.base_ref }}
+      WARDEN_LLM_PROVIDER: groq
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OLLAMA_HOST: http://localhost:11434
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Need full history for diff
 
@@ -34,21 +27,30 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install .
+        run: pip install warden-core
+
+      - name: Setup Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          echo "Waiting for Ollama to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Ollama not ready yet..."
+            sleep 1
+          done
+          ollama pull qwen2.5-coder:3b
+
 
       - name: Run Warden PR Scan
         run: |
           # CI mode with diff - only scan changed files
           # Output SARIF for GitHub Code Scanning integration
           mkdir -p .warden/reports
-          EXIT_CODE=0
-          warden scan --ci --diff --base "$BASE_REF" --format sarif --output .warden/reports/warden-report.sarif || EXIT_CODE=$?
-          if [ $EXIT_CODE -eq 2 ]; then
-            echo "::error::Warden found blocker issues. See SARIF report for details."
-            exit 1
-          elif [ $EXIT_CODE -ne 0 ]; then
-            echo "::warning::Warden scan exited with code $EXIT_CODE"
-          fi
+          warden scan --ci --diff --base ${ github.base_ref } --format sarif --output .warden/reports/warden-report.sarif
 
       - name: Upload SARIF Report
         if: always()
@@ -59,7 +61,7 @@ jobs:
 
       - name: Upload Reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: warden-pr-reports
           path: .warden/reports/

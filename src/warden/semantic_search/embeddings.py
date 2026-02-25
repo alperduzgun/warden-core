@@ -6,7 +6,10 @@ Supports OpenAI and Azure OpenAI embedding models.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import os
+import sys
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +25,54 @@ except ImportError:
 from warden.semantic_search.models import CodeChunk, EmbeddingMetadata
 
 logger = structlog.get_logger()
+
+
+@contextlib.contextmanager
+def _quiet_model_load():
+    """Suppress all stdout/stderr during model loading.
+
+    sentence-transformers prints a tqdm progress bar and a BertModel LOAD REPORT
+    (from the MLX C-extension on Apple Silicon) directly to the file descriptors,
+    bypassing Python's sys.stdout/stderr.  We need an fd-level redirect to
+    devnull so none of this bleeds into the Rich live display.
+    """
+    import logging
+
+    # Python-level: silence transformers + sentence_transformers loggers
+    for _name in ("transformers", "sentence_transformers", "tokenizers"):
+        logging.getLogger(_name).setLevel(logging.ERROR)
+
+    # Env-level: disable tqdm bars and reduce HF verbosity
+    _env_patch = {"TQDM_DISABLE": "1", "TRANSFORMERS_VERBOSITY": "error"}
+    _prev_env = {k: os.environ.get(k) for k in _env_patch}
+    os.environ.update(_env_patch)
+
+    # FD-level: redirect the raw file descriptors to /dev/null so C-extensions
+    # (MLX, tokenizers Rust backend) can't write to the terminal either.
+    # Flush Python's buffers first so any pending output goes out before we
+    # redirect — otherwise buffered data arrives after the fd is restored.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    _devnull = os.open(os.devnull, os.O_WRONLY)
+    _saved_out = os.dup(sys.stdout.fileno())
+    _saved_err = os.dup(sys.stderr.fileno())
+    os.dup2(_devnull, sys.stdout.fileno())
+    os.dup2(_devnull, sys.stderr.fileno())
+    try:
+        yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(_saved_out, sys.stdout.fileno())
+        os.dup2(_saved_err, sys.stderr.fileno())
+        os.close(_devnull)
+        os.close(_saved_out)
+        os.close(_saved_err)
+        for k, v in _prev_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 class EmbeddingGenerator:
@@ -103,21 +154,25 @@ class EmbeddingGenerator:
             # Force CPU by default to avoid UI freezes on Mac (MPS issues)
 
             # Offline-First Strategy: Try loading from local cache to avoid network latency/timeouts
+            # Wrap with _quiet_model_load() to suppress the tqdm progress bar and the
+            # BertModel LOAD REPORT that sentence-transformers/MLX prints to stdout/stderr.
             try:
                 logger.debug("attempting_local_cache_load", model=model_name)
-                self.client = SentenceTransformer(
-                    model_name, trust_remote_code=trust_remote_code, device=device, local_files_only=True
-                )
+                with _quiet_model_load():
+                    self.client = SentenceTransformer(
+                        model_name, trust_remote_code=trust_remote_code, device=device, local_files_only=True
+                    )
                 logger.info("local_embedding_model_loaded_from_cache", model=model_name, device=device)
             except Exception as e:
                 # Fallback to online loading if not found locally or other error
                 logger.info("model_not_in_cache_downloading", model=model_name, reason=str(e))
-                self.client = SentenceTransformer(
-                    model_name,
-                    trust_remote_code=trust_remote_code,
-                    device=device,
-                    # local_files_only=False (default)
-                )
+                with _quiet_model_load():
+                    self.client = SentenceTransformer(
+                        model_name,
+                        trust_remote_code=trust_remote_code,
+                        device=device,
+                        # local_files_only=False (default)
+                    )
                 logger.info("local_embedding_model_loaded_online", model=model_name, device=device)
 
         else:

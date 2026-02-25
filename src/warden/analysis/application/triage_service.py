@@ -75,6 +75,27 @@ class TriageService:
     8-10: Critical (Auth, Crypto, SQL).
     """
 
+    BATCH_SYSTEM_PROMPT = """
+    You are a Senior Security Architect acting as a Triage Gatekeeper.
+    You will receive MULTIPLE files. For EACH file, assess its security risk and complexity.
+
+    Output a single JSON object where each key is the file path and each value has this structure:
+    {
+        "src/example.py": {"score": 4.0, "confidence": 0.9, "category": "Logic", "reasoning": "One sentence."},
+        "src/auth.py": {"score": 8.0, "confidence": 1.0, "category": "Auth", "reasoning": "Handles JWT tokens."}
+    }
+
+    Scoring Guide:
+    0-3: Safe (DTO, Config, UI, Test).
+    4-7: Suspicious (Logic, Controllers, Services).
+    8-10: Critical (Auth, Crypto, SQL, Permissions).
+
+    Rules:
+    - Output ONLY the JSON object. No markdown. No explanation outside JSON.
+    - Every file in the input MUST have an entry in the output.
+    - Reasoning MUST be 1 short sentence.
+    """
+
     def __init__(
         self,
         llm_client: ILlmClient,
@@ -248,7 +269,7 @@ FILES:
 {context_str}
 """
         request = LlmRequest(
-            system_prompt=self.SYSTEM_PROMPT + "\nIMPORTANT: Output ONLY a compact JSON map. No markdown blocks.",
+            system_prompt=self.BATCH_SYSTEM_PROMPT,
             user_message=prompt,
             use_fast_tier=True,
             temperature=0.01,

@@ -407,14 +407,15 @@ class ReportGenerator:
                 location_str = self._get_val(finding, "location", "unknown")
                 file_path = location_str.split(":")[0] if ":" in location_str else location_str
 
-                # Log if critical attributes are missing
-                if not rule_id or not location_str:
+                # Skip malformed findings that would produce invalid SARIF entries
+                if not rule_id or not location_str or location_str == "unknown":
                     logger.warning(
-                        "sarif_finding_missing_critical_attributes",
+                        "sarif_skipping_malformed_finding",
                         finding_id=rule_id,
                         location=location_str,
                         frame_id=frame_id,
                     )
+                    continue
 
                 # Register rule if not seen
                 if rule_id not in rules_map:

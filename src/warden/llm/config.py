@@ -330,6 +330,13 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     # Determine explicit provider override — env var takes precedence over config.yaml.
     # This allows CI to override local defaults (e.g. WARDEN_LLM_PROVIDER=groq in CI
     # while config.yaml has provider: claude_code for local development).
+    # If running in CI and config.yaml has a llm.ci subsection, merge it so that
+    # `warden config llm edit` CI tab settings take effect.
+    is_ci = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
+    if is_ci and config_override and "ci" in config_override:
+        ci_overrides = config_override.pop("ci")
+        config_override = {**config_override, **ci_overrides}
+
     explicit_provider_override = None
     env_provider = os.environ.get("WARDEN_LLM_PROVIDER", "").strip().lower()
     if env_provider:

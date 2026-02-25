@@ -36,7 +36,8 @@ async def with_timeout_async(
     try:
         return await asyncio.wait_for(coro, timeout=timeout_seconds)
     except asyncio.TimeoutError:
-        logger.warning(
+        # Debug only — the retry layer logs a warning/error if retries are exhausted
+        logger.debug(
             "operation_timeout",
             operation=operation_name,
             timeout=timeout_seconds,

@@ -9,6 +9,7 @@ from pathlib import Path
 import structlog
 
 from warden.analysis.domain.project_context import ProjectConventions
+from warden.shared.utils.language_utils import get_code_extensions
 
 logger = structlog.get_logger()
 
@@ -86,8 +87,9 @@ class ConventionDetector:
 
     def _detect_file_naming(self) -> str:
         """Detect file naming convention."""
-        # Sample Python files for naming convention
-        py_files = list(self.project_root.rglob("*.py"))[:100]
+        # Sample all supported code files for naming convention
+        _code_exts = get_code_extensions()
+        py_files = [f for ext in _code_exts for f in self.project_root.rglob(f"*{ext}")][:100]
 
         if not py_files:
             return ""
@@ -114,7 +116,7 @@ class ConventionDetector:
 
     def _detect_type_hints(self) -> bool:
         """Detect if Python type hints are used."""
-        # Sample a few Python files
+        # Sample a few Python files (type hints are Python-specific)
         py_files = list(self.project_root.rglob("*.py"))[:10]
 
         if not py_files:

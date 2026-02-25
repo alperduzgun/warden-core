@@ -45,13 +45,17 @@ def _resolve_llm_provider(llm_provider_id: str) -> dict | None:
     return next((v for v in LLM_PROVIDERS.values() if v["id"] == llm_provider_id.lower()), None)
 
 
-def _build_llm_config(provider_info: dict, fast_model: str | None) -> dict:
+def _build_llm_config(
+    provider_info: dict,
+    fast_model: str | None,
+    fast_provider: str = "ollama",
+) -> dict:
     """Build the llm_config dict expected by configure_ci_workflow."""
-    default_fast = fast_model or "qwen2.5-coder:3b"
     return {
         "provider": provider_info["id"],
         "model": provider_info.get("default_model", ""),
-        "fast_model": default_fast,
+        "fast_provider": fast_provider,
+        "fast_model": fast_model or "qwen2.5-coder:3b",
     }
 
 
@@ -70,10 +74,15 @@ def ci_config_command(
             "Note: claude_code is NOT supported in CI."
         ),
     ),
+    fast_provider: str = typer.Option(
+        "ollama",
+        "--fast-provider",
+        help="Fast tier LLM provider for CI (default: ollama). Also supports groq, anthropic, etc.",
+    ),
     fast_model: str | None = typer.Option(
         None,
         "--fast-model",
-        help="Fast tier model override (default: qwen2.5-coder:3b via Ollama).",
+        help="Fast tier model override (default: qwen2.5-coder:3b for ollama).",
     ),
     force: bool = typer.Option(
         False,
@@ -150,14 +159,14 @@ def ci_config_command(
             raise typer.Exit(code=1)
 
     # --- Generate workflows ---
-    llm_config = _build_llm_config(llm_provider_info, fast_model)
+    llm_config = _build_llm_config(llm_provider_info, fast_model, fast_provider)
     success = configure_ci_workflow(ci_provider_info, llm_config, project_root, branch)
 
     if success:
         console.print(f"\n[bold green]CI workflow configured:[/bold green] {ci_provider_info['name']}")
         console.print(
             f"  Provider: [cyan]{llm_provider_info['id']}[/cyan] (smart) + "
-            f"[cyan]ollama[/cyan] (fast, {llm_config['fast_model']})"
+            f"[cyan]{llm_config['fast_provider']}[/cyan] (fast, {llm_config['fast_model']})"
         )
         if ci_provider_info["id"] == "github":
             console.print("  Run [bold]git add .github/workflows/[/bold] to stage the files.")

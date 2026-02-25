@@ -138,6 +138,4 @@ class DependencyChecker:
             else:
                 return False
 
-        if current is None:
-            return False
-        return not (isinstance(current, (list, dict)) and len(current) == 0)
+        return current is not None

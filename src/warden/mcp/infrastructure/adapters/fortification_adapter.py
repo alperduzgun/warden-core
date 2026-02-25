@@ -8,6 +8,8 @@ Maps to gRPC FortificationMixin functionality.
 from pathlib import Path
 from typing import Any
 
+from warden.shared.utils.language_utils import get_code_extensions
+
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
@@ -206,8 +208,9 @@ class FortificationAdapter(BaseWardenAdapter):
         if not path.exists():
             return suggestions
 
-        # Analyze Python files for common security issues
-        python_files = list(path.rglob("*.py")) if path.is_dir() else [path]
+        # Analyze code files for common security issues
+        _exts = get_code_extensions()
+        python_files = [f for ext in _exts for f in path.rglob(f"*{ext}")] if path.is_dir() else [path]
 
         security_patterns = [
             ("eval(", "Avoid eval() - potential code injection", "critical"),

@@ -735,19 +735,20 @@ async def _process_stream_events(
             Text.from_markup(f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}"),
         )
 
-        renderables: list = [*phase_summary_rows]
+        # ── Build content block ──────────────────────────────────────────────
+        content: list = [*phase_summary_rows]
 
-        # Show phase hint when active phase has zero or very few frame rows
+        # Phase hint: only when no live status is already shown in spinner row
         phase_hint_text = _UX.PHASE_HINTS.get(current_phase, "")
-        if phase_hint_text and len(current_phase_frames) < 2:
+        if phase_hint_text and len(current_phase_frames) < 2 and not current_frame:
             _max = max(10, console.width - 8)
             hint_row = Text()
             hint_row.append("     ", style="")
             hint_row.append(phase_hint_text[:_max], style="dim")
-            renderables.append(hint_row)
+            content.append(hint_row)
 
-        renderables.extend(current_phase_frames[-MAX_FRAME_ROWS:])
-        renderables.append(active_tbl)
+        content.extend(current_phase_frames[-MAX_FRAME_ROWS:])
+        content.append(active_tbl)
 
         # Rotating security tip — swaps every 14 s
         tip_idx = int(elapsed_total / 14) % len(_UX.TIPS)
@@ -755,7 +756,15 @@ async def _process_stream_events(
         tip_row = Text()
         tip_row.append("  · ", style="dim bright_black")
         tip_row.append(_UX.TIPS[tip_idx][:_max_tip], style="dim")
-        renderables.append(tip_row)
+        content.append(tip_row)
+
+        # ── Vertical centering ───────────────────────────────────────────────
+        # Push content toward the vertical center of the terminal so it doesn't
+        # stick to the very bottom of the visible area.  We cap at 60 to avoid
+        # excessive padding on very tall windows.
+        term_h = min(console.height or 24, 60)
+        top_pad = max(0, (term_h - len(content)) // 2)
+        renderables: list = [Text("") for _ in range(top_pad)] + content
 
         return Group(*renderables)
 
