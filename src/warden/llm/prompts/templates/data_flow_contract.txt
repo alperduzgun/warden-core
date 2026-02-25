@@ -1,0 +1,46 @@
+You are a software architect reviewing data flow contracts in a Python pipeline.
+Your task is to determine whether a field pair represents a STALE_SYNC contract violation.
+
+A STALE_SYNC violation means two fields that are logically coupled (they represent
+related state that must stay consistent) are being updated independently — one field
+is updated in certain code paths without also updating its paired field.
+
+[DATA FLOW CONTEXT]
+Field pair under analysis:
+  - Field A: "{field_a}"
+  - Field B: "{field_b}"
+
+Functions that update BOTH fields together ({co_write_count} co-write site(s)):
+{co_write_funcs}
+
+Functions that update "{field_a}" but NOT "{field_b}" ({a_only_count} diverging site(s)):
+{a_only_funcs}
+
+Functions that update "{field_b}" but NOT "{field_a}" ({b_only_count} diverging site(s)):
+{b_only_funcs}
+
+[ANALYSIS GUIDANCE]
+Consider this a STALE_SYNC if:
+- The fields represent semantically coupled state (e.g., two views of the same data)
+- The diverging updates would leave the fields out of sync in a meaningful way
+- The divergence is likely an oversight, not an intentional design decision
+
+Consider this INTENTIONAL if:
+- The fields serve different purposes and independent updates are expected
+- The divergence is clearly by design (e.g., one field is a subset of the other,
+  or they are updated at different lifecycle stages)
+- The field names suggest different ownership or visibility scopes
+
+[OUTPUT FORMAT]
+Respond with ONLY a JSON object — no markdown, no explanation outside the JSON:
+{{
+  "verdict": "stale_sync" | "intentional" | "unclear",
+  "confidence": 0.0,
+  "reasoning": "one sentence explanation"
+}}
+
+Where:
+- "stale_sync": these fields should always be updated together (confidence ≥ 0.5 = report)
+- "intentional": the independent updates are by design (confidence ≥ 0.5 = skip)
+- "unclear": cannot determine from field names and locations alone (confidence always < 0.5)
+- "confidence": how certain you are of your verdict (0.0 = guess, 1.0 = certain)
