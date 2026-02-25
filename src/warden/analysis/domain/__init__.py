@@ -4,6 +4,11 @@ Analysis Domain Models.
 Core domain models for project analysis and intelligence.
 """
 
+from warden.analysis.domain.data_dependency_graph import (
+    DataDependencyGraph,
+    ReadNode,
+    WriteNode,
+)
 from warden.analysis.domain.file_context import (
     FileContext,
     PreAnalysisResult,
@@ -27,6 +32,10 @@ from warden.analysis.domain.project_context import (
 )
 
 __all__ = [
+    # Data Dependency Graph
+    "DataDependencyGraph",
+    "WriteNode",
+    "ReadNode",
     # Project Context
     "ProjectContext",
     "ProjectType",
