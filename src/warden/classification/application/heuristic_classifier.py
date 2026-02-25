@@ -154,7 +154,7 @@ class HeuristicClassifier:
 
     @staticmethod
     def classify(
-        code_files: list["CodeFile"],
+        code_files: list[CodeFile],
         available_frame_ids: list[str],
     ) -> HeuristicResult:
         """

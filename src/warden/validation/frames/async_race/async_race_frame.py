@@ -106,7 +106,7 @@ class AsyncRaceFrame(ValidationFrame):
     def frame_id(self) -> str:
         return "async_race"
 
-    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:  # noqa: ARG002
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Scan a single file for async race condition candidates.
 

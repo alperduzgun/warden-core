@@ -68,10 +68,7 @@ def _is_fp_field(field_name: str) -> bool:
     Returns:
         ``True`` when the field should be ignored.
     """
-    for pattern in FP_FIELD_PATTERNS:
-        if field_name.startswith(pattern) or pattern in field_name:
-            return True
-    return False
+    return any(field_name.startswith(pattern) or pattern in field_name for pattern in FP_FIELD_PATTERNS)
 
 
 # ---------------------------------------------------------------------------
