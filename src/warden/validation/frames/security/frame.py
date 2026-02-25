@@ -821,12 +821,21 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
             findings=taint_findings,
         )
 
-    def _aggregate_findings(self, check_results: list[CheckResult]) -> list[Finding]:
+    def _aggregate_findings(
+        self,
+        check_results: list[CheckResult],
+        taint_context: list | None = None,
+    ) -> list[Finding]:
         """
         Aggregate findings from all check results.
 
         Args:
             check_results: Results from all executed checks
+            taint_context: Optional taint paths for MachineContext enrichment.
+                When provided, each finding is enriched via
+                ``_enrich_finding_with_taint``.  Prefer injecting taint data
+                via the ``TaintAware`` mixin; this parameter exists for
+                backward compatibility with direct callers.
 
         Returns:
             List of Finding objects
@@ -857,6 +866,12 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
                     )
 
                 findings.append(finding)
+
+        # Enrich with taint data when provided directly (backward compat)
+        if taint_context:
+            for finding in findings:
+                if finding.machine_context is None:
+                    self._enrich_finding_with_taint(finding, taint_context)
 
         return findings
 

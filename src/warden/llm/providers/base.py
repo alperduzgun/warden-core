@@ -253,8 +253,6 @@ class ILlmClient(ABC):
     @staticmethod
     def _enrich_findings_from_llm(parsed: dict) -> None:
         """Attach machine_context to parsed findings when source/sink/data_flow present."""
-        import html
-
         from warden.shared.utils.prompt_sanitizer import PromptSanitizer
 
         for item in parsed.get("findings", []):
@@ -268,17 +266,19 @@ class ILlmClient(ABC):
             if source and not isinstance(source, str):
                 source = str(source)
             if source:
-                source = html.escape(PromptSanitizer.escape_prompt_injection(source))
+                # Sanitize prompt injection only — do NOT html.escape stored values;
+                # consumers expect raw strings, not HTML entities (e.g. &#x27;).
+                source = PromptSanitizer.escape_prompt_injection(source)
 
             if sink and not isinstance(sink, str):
                 sink = str(sink)
             if sink:
-                sink = html.escape(PromptSanitizer.escape_prompt_injection(sink))
+                sink = PromptSanitizer.escape_prompt_injection(sink)
 
             if data_flow and not isinstance(data_flow, list):
                 data_flow = []
             else:
-                data_flow = [html.escape(PromptSanitizer.escape_prompt_injection(str(x))) for x in (data_flow or [])]
+                data_flow = [PromptSanitizer.escape_prompt_injection(str(x)) for x in (data_flow or [])]
             item["_machine_context"] = {
                 "source": source,
                 "sink": sink,
