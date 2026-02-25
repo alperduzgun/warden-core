@@ -4,7 +4,7 @@ Suppression filtering for validation frames.
 Handles configuration-based suppression of findings.
 """
 
-import fnmatch
+from pathlib import Path
 from typing import Any
 
 from warden.shared.infrastructure.logging import get_logger
@@ -58,7 +58,7 @@ class SuppressionFilter:
 
                 if f_path:
                     for pattern in file_patterns:
-                        if fnmatch.fnmatch(f_path, pattern):
+                        if Path(f_path).match(pattern):
                             matched_file = True
                             break
 
