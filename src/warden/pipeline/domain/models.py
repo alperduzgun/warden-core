@@ -64,6 +64,7 @@ class PipelineConfig(BaseDomainModel):
     use_llm: bool = True  # NEW: Global LLM control flag
     ci_mode: bool = False  # CI mode: use pre-computed intelligence, skip LLM for P3 files
     force_scan: bool = False  # If True, bypass the memory cache and force a full re-analysis
+    contract_mode: bool = False  # Contract mode: run DDG-based data flow contract analysis
 
     # Optional pre-processing phases
     enable_discovery: bool = True  # Run file discovery before validation

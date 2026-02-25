@@ -19,7 +19,14 @@ from warden.shared.infrastructure.ignore_matcher import IgnoreMatcher
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.frame import CodeFile, Finding, ValidationFrame
 from warden.validation.domain.frame import FrameResult as CodeFrameResult
-from warden.validation.domain.mixins import BatchExecutable, Cleanable, LSPAware, ProjectContextAware, TaintAware
+from warden.validation.domain.mixins import (
+    BatchExecutable,
+    Cleanable,
+    DataFlowAware,
+    LSPAware,
+    ProjectContextAware,
+    TaintAware,
+)
 
 from .dependency_checker import DependencyChecker
 from .file_filter import FileFilter
@@ -343,6 +350,24 @@ class FrameRunner:
                 except Exception as e:
                     logger.error(
                         "taint_injection_failed",
+                        frame_id=frame.frame_id,
+                        error=str(e),
+                    )
+
+        # Inject Data Dependency Graph into DataFlowAware frames
+        if isinstance(frame, DataFlowAware):
+            if hasattr(context, "data_dependency_graph") and context.data_dependency_graph is not None:
+                try:
+                    frame.set_data_dependency_graph(context.data_dependency_graph)
+                    logger.debug(
+                        "ddg_injected",
+                        frame_id=frame.frame_id,
+                        writes=len(context.data_dependency_graph.writes),
+                        reads=len(context.data_dependency_graph.reads),
+                    )
+                except Exception as e:
+                    logger.error(
+                        "ddg_injection_failed",
                         frame_id=frame.frame_id,
                         error=str(e),
                     )

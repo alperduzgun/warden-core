@@ -72,6 +72,11 @@ class PipelineContext:
     # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
     taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
 
+    # Phase 0: Contract Mode — Data Dependency Graph
+    # Populated when contract_mode=True; consumed by DataFlowAware frames.
+    data_dependency_graph: Any | None = None  # DataDependencyGraph instance
+    contract_mode: bool = False  # Whether contract analysis is enabled
+
     # Phase 0: File-level Dependency Graph (forward/reverse maps for prompt enrichment)
     dependency_graph_forward: dict[str, list[str]] = field(default_factory=dict)  # file -> [dependencies]
     dependency_graph_reverse: dict[str, list[str]] = field(default_factory=dict)  # file -> [dependents]
@@ -203,7 +208,7 @@ class PipelineContext:
                 }
             )
 
-    def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int = None) -> None:
+    def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int | None = None) -> None:
         """
         Add item to list with memory bounds (internal helper).
 
@@ -428,6 +433,8 @@ class PipelineContext:
             "taint_paths_count": sum(len(v) for v in self.taint_paths.values()),
             "code_graph_stats": self.code_graph.stats() if self.code_graph else None,
             "gap_report_summary": self.gap_report.summary() if self.gap_report else None,
+            "data_dependency_graph_stats": self.data_dependency_graph.stats() if self.data_dependency_graph else None,
+            "contract_mode": self.contract_mode,
             "metadata": self.metadata,
         }
 

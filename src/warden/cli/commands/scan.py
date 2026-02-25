@@ -389,6 +389,11 @@ def scan_command(
     force: bool = typer.Option(False, "--force", help="Bypass memory cache and force a full analysis of all files"),
     no_preflight: bool = typer.Option(False, "--no-preflight", help="Skip Ollama model availability check before scan"),
     benchmark: bool = typer.Option(False, "--benchmark", "-b", help="Show per-phase timing breakdown after scan"),
+    contract_mode: bool = typer.Option(
+        False,
+        "--contract-mode",
+        help="Run data flow contract analysis (DEAD_WRITE, MISSING_WRITE, NEVER_POPULATED).",
+    ),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -549,6 +554,7 @@ def scan_command(
                 dry_run=dry_run,
                 force=force,
                 benchmark=benchmark,
+                contract_mode=contract_mode,
             )
         )
 
@@ -590,6 +596,7 @@ def scan_command(
                         dry_run=dry_run,
                         force=force,
                         benchmark=benchmark,
+                        contract_mode=contract_mode,
                     )
                 )
                 if exit_code != 0:
@@ -621,6 +628,7 @@ async def _process_stream_events(
     ci_mode: bool,
     force: bool,
     bench_collector: Any | None = None,
+    contract_mode: bool = False,
 ) -> tuple[dict | None, dict, int]:
     """Process pipeline streaming events with a live-updating display.
 
@@ -766,6 +774,7 @@ async def _process_stream_events(
                 analysis_level=level,
                 ci_mode=ci_mode,
                 force=force,
+                contract_mode=contract_mode,
             ):
                 event_type = event.get("type")
 
@@ -1383,6 +1392,7 @@ async def _run_scan_async(
     dry_run: bool = False,
     force: bool = False,
     benchmark: bool = False,
+    contract_mode: bool = False,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1433,7 +1443,15 @@ async def _run_scan_async(
     try:
         # 1. Stream pipeline events and collect results
         final_result_data, frame_stats, total_units = await _process_stream_events(
-            bridge, paths, frames, verbose, level, ci_mode, force, bench_collector=bench_collector
+            bridge,
+            paths,
+            frames,
+            verbose,
+            level,
+            ci_mode,
+            force,
+            bench_collector=bench_collector,
+            contract_mode=contract_mode,
         )
 
         # 1.5 Display benchmark report if requested.
