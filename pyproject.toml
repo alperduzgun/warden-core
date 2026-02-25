@@ -58,7 +58,7 @@ semantic = [
     "tiktoken>=0.7.0,<0.13.0",
 ]
 grpc = [
-    "grpcio>=1.64.0,<1.65.0",
+    "grpcio>=1.64.0,<1.79.0",
     "grpcio-tools>=1.64.0,<1.79.0",
 ]
 dev = [
