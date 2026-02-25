@@ -334,7 +334,8 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     # `warden config llm edit` CI tab settings take effect.
     is_ci = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
     if is_ci and config_override and "ci" in config_override:
-        ci_overrides = config_override.pop("ci")
+        ci_overrides = config_override.get("ci", {})
+        config_override = {k: v for k, v in config_override.items() if k != "ci"}
         config_override = {**config_override, **ci_overrides}
 
     explicit_provider_override = None
