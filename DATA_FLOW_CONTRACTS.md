@@ -51,6 +51,7 @@ Her **step** şunları içerir:
 | `audit-context` | Pre-analysis: CodeGraph, DependencyGraph, Taint, ProjectIntelligence | `llm-provider-chain` |
 | `classification-phase` | Cache → Heuristic → LLM ile frame seçimi | `llm-provider-chain` |
 | `frame-execution` | Tek dosya için tek frame execution: cache, inject, execute, rules | `llm-provider-chain` |
+| `contract-mode` | `--contract-mode` flag → DDG build → DeadDataFrame → contract summary | `scan-pipeline`, `audit-context` |
 
 ---
 
@@ -1648,4 +1649,131 @@ Gerçek:   Tüm frame'ler çalışır, sonra blocker kontrol edilir
 
 Runtime:  10 frame × 30s = 300s harcandıktan sonra "ilk frame blocker'dı"
           bilgisi gelir. Erken çıkış yapılabilirdi.
+```
+
+---
+
+## Flow: contract-mode
+
+```yaml
+flow-id: contract-mode
+purpose: >
+  `warden scan --contract-mode <path>` komutu çalıştırıldığında aktif olur.
+  Kaynak kodu AST ile analiz ederek DataDependencyGraph (DDG) oluşturur.
+  DDG, DeadDataFrame tarafından tüketilir: yazılan ama hiç okunmayan
+  field'lar (DEAD_WRITE), okunan ama hiç yazılmayan field'lar (MISSING_WRITE)
+  ve hiç populate edilmeyen field'lar (NEVER_POPULATED) raporlanır.
+  Bulgular terminal özet panelinde ve SARIF'ta enriched olarak sunulur.
+actors:
+  - user: `--contract-mode` flag ile scan tetikleyen geliştirici
+  - system: DataDependencyBuilder, DeadDataFrame, PhaseOrchestrator
+```
+
+### CM-S1: DDG Construction (Pre-Analysis Phase)
+
+```yaml
+id: CM-S1
+state: Pre-analysis aşamasında DDG build ediliyor
+actor: system
+action: DataDependencyBuilder.build_from_project()
+file:
+  - src/warden/analysis/application/data_dependency_builder.py
+  - src/warden/pipeline/application/orchestrator/pre_analysis_phase.py
+precondition:
+  - contract_mode=True flag pipeline context'te set edilmiş
+  - Tüm Python dosyaları AST parse edilebilir
+data-in:
+  - context.target_files: list[str] — taranacak Python dosyaları
+  - context.contract_mode: bool — True olmalı
+data-out:
+  - context.data_dependency_graph: DataDependencyGraph
+    - ddg.writes: defaultdict[str, list[WriteNode]] — field → yazma noktaları
+    - ddg.reads: defaultdict[str, list[ReadNode]] — field → okuma noktaları
+    - ddg.init_fields: set[str] — __init__'te bildirilen field'lar
+postcondition:
+  - DDG populated: len(ddg.writes) > 0 (gerçek kod üzerinde)
+  - PIPELINE_CTX_NAMES whitelist uygulandı → FP yazma noktaları filtrelendi
+  - context.data_dependency_graph is not None
+on-success: → CM-S2 (DeadDataFrame execution)
+on-error: → CM-S2 (graceful: DDG None → DeadDataFrame skips)
+```
+
+### CM-S2: DeadDataFrame Execution
+
+```yaml
+id: CM-S2
+state: DeadDataFrame DDG'yi analiz ederek gap'leri tespit ediyor
+actor: system
+action: DeadDataFrame.validate_async()
+file:
+  - src/warden/validation/frames/dead_data/dead_data_frame.py
+precondition:
+  - DataFlowAware mixin inject protokolü tamamlandı (set_data_dependency_graph çağrıldı)
+data-in:
+  - self._ddg: DataDependencyGraph — CM-S1'den inject edildi
+data-out:
+  - findings: list[Finding]
+    - DEAD_WRITE: write var, read yok, init_field değil → severity: medium
+    - MISSING_WRITE: read var, write yok → severity: high
+    - NEVER_POPULATED: init_field var, write da read da yok → severity: low
+postcondition:
+  - DDG inject edilmediyse → result.status="passed", issues_found=0 (graceful skip)
+  - Bulgular Finding nesneleri olarak frame_runner'a döner
+  - finding.gap_type metadata alanında gap türü belirtilmiş
+on-success: → CM-S3 (reporting)
+on-error: → CM-S3 (hata log'lanır, scan devam eder)
+```
+
+### CM-S3: Contract Summary & SARIF Enrichment
+
+```yaml
+id: CM-S3
+state: Bulgular terminal'e ve rapora yazılıyor
+actor: system
+action: _display_contract_summary() + SARIFGenerator (CONTRACT_RULE_META)
+file:
+  - src/warden/cli/commands/scan.py (_display_contract_summary)
+  - src/warden/reports/generator.py (CONTRACT_RULE_META)
+precondition:
+  - contract_mode=True flag aktif
+  - Pipeline tamamlandı, findings toplanmış
+data-in:
+  - all_findings: list[Finding] — pipeline'dan gelen tüm bulgular
+  - contract_mode: bool — summary panel tetikleyici
+data-out:
+  - Terminal: "CONTRACT MODE SUMMARY" Rich panel (5 gap tipi satırı)
+  - SARIF (opsiyonel): 5 contract rule enriched
+    - DEAD_WRITE, MISSING_WRITE, NEVER_POPULATED, STALE_SYNC, PROTOCOL_BREACH
+    - Her kural: fullDescription, help, tags: [contract, data-flow]
+postcondition:
+  - Kullanıcı contract bulgularını terminal'de görebilir
+  - SARIF varsa: contract rule'ları standardized metadata ile
+on-success: → (scan tamamlanır, exit code bulgu sayısına göre)
+on-error: → (summary hatası scan sonucunu etkilemez — fail-open)
+```
+
+### CM-GAP-1 — DeadDataFrame FP: PIPELINE_CTX_NAMES
+
+```yaml
+gap-id: CM-GAP-1
+gap-type: FALSE_POSITIVE_RISK
+severity: LOW
+status: MITIGATED (v2.4.0)
+```
+
+```
+Kök neden:
+  pre_analysis_phase.py: context.code_graph = ... gibi atamalar
+  DDGVisitor tarafından "context" yazan kod olarak kaydedilebilir.
+  Eğer bu atamalar okuma listesinde yoksa DEAD_WRITE üretebilir.
+
+Mitigation:
+  PIPELINE_CTX_NAMES whitelist (data_dependency_builder.py):
+  ["code_graph", "dependency_graph_forward", "dependency_graph_reverse",
+   "validated_issues", "findings", "taint_paths", "data_dependency_graph"]
+  → Bu isimler DDG'ye yazılmaz, FP oluşmaz.
+
+Kalan risk:
+  Yeni pipeline field'ları eklenirse PIPELINE_CTX_NAMES güncellenmeli.
+  Aksi takdirde false positive DEAD_WRITE üretilir.
 ```
