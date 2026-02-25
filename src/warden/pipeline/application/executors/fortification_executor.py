@@ -209,11 +209,21 @@ class FortificationExecutor(BasePhaseExecutor):
                     # BATCH 3: Track unlinked fortifications
                     unlinked_count += 1
                     unlinked_ids.append(fid)
-                    logger.warning(
+                    logger.error(
                         "fortification_unlinked",
                         fortification_id=fid,
                         reason="finding_not_in_map",
+                        hint="LLM may have modified the finding_id — patch silently dropped (#135)",
                     )
+
+            # Post-LLM validation: alert when fixes were silently dropped (#135)
+            if unlinked_count > 0:
+                logger.error(
+                    "fortification_linking_incomplete",
+                    linked=linked_count,
+                    unlinked=unlinked_count,
+                    unlinked_ids=unlinked_ids[:10],
+                )
 
             # Add phase result (BATCH 3: Include linking metrics)
             total_forts = len(result.fortifications)
