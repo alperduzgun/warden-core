@@ -75,26 +75,29 @@ class TriageService:
     8-10: Critical (Auth, Crypto, SQL).
     """
 
-    BATCH_SYSTEM_PROMPT = """
-    You are a Senior Security Architect acting as a Triage Gatekeeper.
-    You will receive MULTIPLE files. For EACH file, assess its security risk and complexity.
+    BATCH_SYSTEM_PROMPT = """You are a Senior Security Architect acting as a Triage Gatekeeper.
+You will receive MULTIPLE files. For EACH file, assess its security risk and complexity.
 
-    Output a single JSON object where each key is the file path and each value has this structure:
-    {
-        "src/example.py": {"score": 4.0, "confidence": 0.9, "category": "Logic", "reasoning": "One sentence."},
-        "src/auth.py": {"score": 8.0, "confidence": 1.0, "category": "Auth", "reasoning": "Handles JWT tokens."}
-    }
+Output a single JSON object where EVERY key is a file path from the input.
 
-    Scoring Guide:
-    0-3: Safe (DTO, Config, UI, Test).
-    4-7: Suspicious (Logic, Controllers, Services).
-    8-10: Critical (Auth, Crypto, SQL, Permissions).
+EXAMPLE OUTPUT (for 2 files):
+=== BEGIN EXAMPLE ===
+{
+    "src/auth/login.py": {"score": 8.5, "confidence": 0.95, "category": "Auth", "reasoning": "Handles password verification and session creation."},
+    "src/models/dto.py": {"score": 1.0, "confidence": 1.0, "category": "DTO", "reasoning": "Simple data container with no logic."}
+}
+=== END EXAMPLE ===
 
-    Rules:
-    - Output ONLY the JSON object. No markdown. No explanation outside JSON.
-    - Every file in the input MUST have an entry in the output.
-    - Reasoning MUST be 1 short sentence.
-    """
+Scoring Guide:
+0-3: Safe (DTO, Config, UI, Test).
+4-7: Suspicious (Logic, Controllers, Services).
+8-10: Critical (Auth, Crypto, SQL, Permissions).
+
+Rules:
+- Output ONLY the JSON object. No markdown. No explanation outside JSON.
+- Every file path from the input MUST appear as a key in the output.
+- Reasoning MUST be 1 short sentence.
+"""
 
     def __init__(
         self,
@@ -257,13 +260,12 @@ class TriageService:
         for cf in code_files:
             # Shortened snippet for triage to save context tokens
             content_snippet = prepare_code_for_llm(cf.content, token_budget=budget).replace("```", "'''")
-            files_context.append(f"FILE: {cf.path}\nCODE:\n{content_snippet}\n---")
+            files_context.append(f"=== FILE: {cf.path} ===\n{content_snippet}")
 
-        context_str = "\n".join(files_context)
+        context_str = "\n\n".join(files_context)
 
-        prompt = f"""Analyze {len(code_files)} files.
-Output a COMPACT JSON map (no extra whitespace) where keys are file paths.
-Reasoning MUST be 1 short sentence max.
+        prompt = f"""Analyze the {len(code_files)} file(s) below.
+Output a JSON object where EVERY key is one of the file paths listed.
 
 FILES:
 {context_str}
@@ -273,7 +275,7 @@ FILES:
             user_message=prompt,
             use_fast_tier=True,
             temperature=0.01,
-            max_tokens=1500,
+            max_tokens=min(2000, 300 * len(code_files)),
         )
 
         response = await self.llm.send_async(request)
