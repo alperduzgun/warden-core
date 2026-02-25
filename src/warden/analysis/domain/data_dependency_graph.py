@@ -120,6 +120,76 @@ class DataDependencyGraph:
         """
         return {field_name for field_name in self.init_fields if not self.writes[field_name]}
 
+    def co_write_candidates(self, min_co_writes: int = 2) -> dict[tuple[str, str], dict[str, Any]]:
+        """Return candidate field pairs for STALE_SYNC analysis.
+
+        A pair (A, B) is a candidate when:
+
+        * Both A and B appear as writes in **at least** ``min_co_writes``
+          of the *same* ``(func_name, file_path)`` call-sites.
+        * At least one call-site writes A but **not** B, or vice versa.
+
+        This captures the "usually together, sometimes diverge" pattern that
+        indicates a potential STALE_SYNC contract violation.
+
+        Args:
+            min_co_writes: Minimum number of functions that must write both
+                fields for the pair to be a candidate (default: 2).
+
+        Returns:
+            Mapping of ``(field_a, field_b)`` → analysis dict with keys:
+
+            * ``"co_write_funcs"``: list of ``"func@file"`` strings where
+              both fields are written together.
+            * ``"a_only_writes"``: list of :class:`WriteNode` where only
+              *field_a* is written.
+            * ``"b_only_writes"``: list of :class:`WriteNode` where only
+              *field_b* is written.
+        """
+        # Build func_site → set[field_names] written there
+        func_fields: dict[tuple[str, str], set[str]] = {}
+        func_write_nodes: dict[tuple[str, str], list[WriteNode]] = {}
+
+        for field_name, write_nodes in self.writes.items():
+            for wn in write_nodes:
+                key = (wn.func_name, wn.file_path)
+                func_fields.setdefault(key, set()).add(field_name)
+                func_write_nodes.setdefault(key, []).append(wn)
+
+        field_names = list(self.writes.keys())
+        candidates: dict[tuple[str, str], dict[str, Any]] = {}
+
+        for i, field_a in enumerate(field_names):
+            for field_b in field_names[i + 1 :]:
+                co_write_funcs: list[str] = []
+                a_only_writes: list[WriteNode] = []
+                b_only_writes: list[WriteNode] = []
+
+                for (func_name, file_path), fields in func_fields.items():
+                    has_a = field_a in fields
+                    has_b = field_b in fields
+                    site_label = f"{func_name}@{file_path}"
+
+                    if has_a and has_b:
+                        co_write_funcs.append(site_label)
+                    elif has_a:
+                        a_only_writes.extend(
+                            wn for wn in func_write_nodes[(func_name, file_path)] if wn.field_name == field_a
+                        )
+                    elif has_b:
+                        b_only_writes.extend(
+                            wn for wn in func_write_nodes[(func_name, file_path)] if wn.field_name == field_b
+                        )
+
+                if len(co_write_funcs) >= min_co_writes and (a_only_writes or b_only_writes):
+                    candidates[(field_a, field_b)] = {
+                        "co_write_funcs": co_write_funcs,
+                        "a_only_writes": a_only_writes,
+                        "b_only_writes": b_only_writes,
+                    }
+
+        return candidates
+
     def all_fields(self) -> set[str]:
         """Return the union of all field names seen in writes or reads.
 
