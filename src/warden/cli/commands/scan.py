@@ -1,5 +1,4 @@
 import asyncio
-import itertools
 import logging as _stdlib_logging
 from datetime import datetime
 from pathlib import Path
@@ -917,6 +916,65 @@ async def _process_stream_events(
     return final_result_data, frame_stats, total_units
 
 
+def _render_contract_mode_summary(res: dict) -> None:
+    """
+    Render a CONTRACT MODE SUMMARY panel after a contract-mode scan.
+
+    Shows the count and severity of each contract gap type detected.
+    Displayed whenever --contract-mode is active, regardless of output format.
+    """
+    # Collect all findings across all frames
+    all_findings: list[dict] = []
+    for frame in res.get("frame_results", res.get("frameResults", [])):
+        findings = frame.get("findings", [])
+        all_findings.extend(findings if isinstance(findings, list) else [])
+    # Also check top-level findings lists
+    for key in ("validated_issues", "findings", "true_positives"):
+        top_level = res.get(key, [])
+        if isinstance(top_level, list):
+            all_findings.extend(top_level)
+
+    # Gap type metadata: (display_name, default_severity)
+    gap_type_meta: list[tuple[str, str, str]] = [
+        ("DEAD_WRITE", "DEAD_WRITE", "medium"),
+        ("MISSING_WRITE", "MISSING_WRITE", "high"),
+        ("STALE_SYNC", "STALE_SYNC", "medium"),
+        ("PROTOCOL_BREACH", "PROTOCOL_BREACH", "high"),
+        ("ASYNC_RACE", "ASYNC_RACE", "medium"),
+    ]
+
+    # Count findings per gap type
+    gap_counts: dict[str, int] = {gt: 0 for gt, _, _ in gap_type_meta}
+    for f in all_findings:
+        gt = f.get("gap_type", "")
+        if gt in gap_counts:
+            gap_counts[gt] += 1
+
+    # Severity color map
+    sev_colors = {"high": "orange3", "medium": "yellow3", "low": "dim"}
+
+    table = Table(box=rbox.SIMPLE, show_header=False, padding=(0, 1), show_edge=False)
+    table.add_column("Gap Type", style="bold white", min_width=22, no_wrap=True)
+    table.add_column("Count", min_width=14, no_wrap=True)
+    table.add_column("Severity", min_width=8, no_wrap=True)
+
+    for gt, _display, default_sev in gap_type_meta:
+        count = gap_counts[gt]
+        sev_color = sev_colors.get(default_sev, "white")
+        count_str = f"[bold {'red' if count > 0 else 'dim'}]{count} finding{'s' if count != 1 else ''}[/]"
+        sev_str = f"[{sev_color}]{default_sev}[/]" if count > 0 else "[dim]–[/]"
+        table.add_row(gt, count_str, sev_str)
+
+    panel = Panel(
+        table,
+        title="[bold cyan]CONTRACT MODE SUMMARY[/bold cyan]",
+        border_style="cyan",
+        padding=(0, 1),
+    )
+    console.print()
+    console.print(panel)
+
+
 def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
     """Render scan results as a Rich text report to the console."""
     # Classify findings into core vs linter
@@ -1475,6 +1533,10 @@ async def _run_scan_async(
             # Display per-frame cost breakdown if requested
             if cost_report:
                 _display_frame_cost_breakdown()
+
+        # 2.5 Display Contract Mode Summary panel (when --contract-mode is active)
+        if contract_mode and final_result_data:
+            _render_contract_mode_summary(final_result_data)
 
         # 3. Generate configured reports from YAML config
         if final_result_data:
