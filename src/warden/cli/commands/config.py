@@ -469,44 +469,248 @@ def _env_present(name: str) -> bool:
     return bool(os.environ.get(name))
 
 
+def _provider_health(provider: str) -> str:
+    """Return a health indicator string for a provider."""
+    import shutil
+
+    if provider == "ollama":
+        import urllib.request as req
+        from urllib.error import URLError
+
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        try:
+            with req.urlopen(f"{host}/api/tags", timeout=2) as r:
+                return "[green]running[/green]" if r.status == 200 else f"[yellow]http {r.status}[/yellow]"
+        except URLError:
+            return "[red]unreachable[/red]"
+    elif provider == "claude_code":
+        return "[green]found[/green]" if shutil.which("claude") else "[red]missing[/red]"
+    elif provider == "codex":
+        return "[green]found[/green]" if shutil.which("codex") else "[red]missing[/red]"
+    else:
+        key_var = _provider_key_var(provider)
+        if key_var:
+            return "[green]key present[/green]" if _env_present(key_var) else "[red]key missing[/red]"
+    return "[dim]unknown[/dim]"
+
+
 @llm_app.command("status")
 def llm_status() -> None:
-    """Show active LLM provider and configuration health."""
-    import os
-
-    config, _ = _load_config()
+    """Show smart and fast tier LLM configuration."""
+    config, config_path = _load_config()
     llm = config.get("llm", {})
-    provider = llm.get("provider") or os.environ.get("WARDEN_LLM_PROVIDER") or "unknown"
-    model = llm.get("model")
-    smart_model = llm.get("smart_model")
-    fast_model = llm.get("fast_model")
 
-    console.print(f"[bold blue]🤖 LLM Status[/bold blue]")
-    console.print(f"Provider: [green]{provider}[/green]")
-    if model:
-        console.print(f"Model: [cyan]{model}[/cyan]")
-    if smart_model:
-        console.print(f"Smart: [cyan]{smart_model}[/cyan]")
-    if fast_model:
-        console.print(f"Fast: [cyan]{fast_model}[/cyan]")
+    smart_provider = llm.get("provider") or os.environ.get("WARDEN_LLM_PROVIDER") or "unknown"
+    smart_model = llm.get("smart_model") or llm.get("model") or "—"
+    fast_providers = llm.get("fast_tier_providers") or []
+    fast_model = llm.get("fast_model") or "—"
 
-    # Basic secret/endpoint presence check
-    key_var = _provider_key_var(provider)
-    if provider == "ollama":
-        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-        console.print(f"OLLAMA_HOST: [cyan]{host}[/cyan]")
-    elif provider == "claude_code":
-        import shutil
+    from rich.table import Table
 
-        present = bool(shutil.which("claude"))
-        console.print(f"claude CLI: {'[green]found[/green]' if present else '[red]missing[/red]'}")
-    elif provider == "codex":
-        import shutil
+    table = Table(show_header=True, header_style="bold blue", box=None, padding=(0, 2))
+    table.add_column("Tier", style="bold")
+    table.add_column("Provider")
+    table.add_column("Model", style="cyan")
+    table.add_column("Health")
 
-        present = bool(shutil.which("codex"))
-        console.print(f"codex CLI: {'[green]found[/green]' if present else '[red]missing[/red]'}")
-    elif key_var:
-        console.print(f"Key {key_var}: {'[green]present[/green]' if _env_present(key_var) else '[red]missing[/red]'}")
+    table.add_row(
+        "smart",
+        f"[green]{smart_provider}[/green]",
+        smart_model,
+        _provider_health(smart_provider),
+    )
+    if fast_providers:
+        for i, fp in enumerate(fast_providers):
+            table.add_row(
+                "fast" if i == 0 else "",
+                f"[yellow]{fp}[/yellow]",
+                fast_model if i == 0 else "—",
+                _provider_health(fp),
+            )
+    else:
+        table.add_row("fast", "[dim]none[/dim]", "—", "[dim]—[/dim]")
+
+    console.print()
+    console.print(f"[bold]LLM Configuration[/bold]  [dim]{config_path}[/dim]")
+    console.print(table)
+    console.print()
+    console.print("[dim]Change:  warden config llm smart <provider> [--model <model>][/dim]")
+    console.print("[dim]         warden config llm fast <provider>  [--model <model>][/dim]")
+
+
+@llm_app.command("smart")
+def llm_smart(
+    provider: str = typer.Argument(..., help="Smart tier provider (e.g., ollama, anthropic, claude_code, groq)"),
+    model: str | None = typer.Option(None, "--model", "-m", help="Override model name"),
+) -> None:
+    """Set the smart tier (primary) LLM provider and model.
+
+    Examples:
+        warden config llm smart ollama
+        warden config llm smart ollama --model qwen2.5-coder:7b
+        warden config llm smart anthropic --model claude-opus-4-5-20251001
+        warden config llm smart groq
+    """
+    from warden.llm.config import DEFAULT_MODELS
+    from warden.llm.types import LlmProvider
+
+    provider = provider.strip().lower()
+    valid = [p.value for p in LlmProvider]
+    if provider not in valid:
+        console.print(f"[red]Invalid provider:[/red] {provider}")
+        console.print(f"[dim]Valid: {', '.join(valid)}[/dim]")
+        raise typer.Exit(1)
+
+    config, config_path = _load_config()
+    llm = config.setdefault("llm", {})
+
+    old_provider = llm.get("provider", "—")
+    old_model = llm.get("smart_model") or llm.get("model") or "—"
+
+    try:
+        provider_enum = LlmProvider(provider)
+        resolved_model = model or DEFAULT_MODELS.get(provider_enum, "")
+    except ValueError:
+        resolved_model = model or ""
+
+    llm["provider"] = provider
+    if resolved_model:
+        llm["smart_model"] = resolved_model
+        llm["model"] = resolved_model
+
+    _save_config(config, config_path)
+
+    console.print(f"[green]✓[/green] Smart tier updated:")
+    console.print(f"  Provider  [dim]{old_provider}[/dim] → [green]{provider}[/green]")
+    console.print(f"  Model     [dim]{old_model}[/dim] → [cyan]{resolved_model or '—'}[/cyan]")
+    _print_provider_hint(provider)
+
+
+@llm_app.command("fast")
+def llm_fast(
+    provider: str = typer.Argument(..., help="Fast tier provider (e.g., ollama, groq, none)"),
+    model: str | None = typer.Option(None, "--model", "-m", help="Override model name"),
+) -> None:
+    """Set the fast tier LLM provider and model.
+
+    Pass 'none' to disable the fast tier entirely.
+
+    Examples:
+        warden config llm fast ollama
+        warden config llm fast ollama --model qwen2.5-coder:7b
+        warden config llm fast groq
+        warden config llm fast none
+    """
+    from warden.llm.config import DEFAULT_MODELS
+    from warden.llm.types import LlmProvider
+
+    provider = provider.strip().lower()
+
+    config, config_path = _load_config()
+    llm = config.setdefault("llm", {})
+    old_fast = llm.get("fast_tier_providers") or []
+    old_model = llm.get("fast_model") or "—"
+
+    if provider == "none":
+        llm["fast_tier_providers"] = []
+        llm["fast_model"] = ""
+        _save_config(config, config_path)
+        console.print("[green]✓[/green] Fast tier disabled.")
+        return
+
+    valid = [p.value for p in LlmProvider]
+    if provider not in valid:
+        console.print(f"[red]Invalid provider:[/red] {provider}")
+        console.print(f"[dim]Valid: {', '.join(valid)} or 'none'[/dim]")
+        raise typer.Exit(1)
+
+    try:
+        provider_enum = LlmProvider(provider)
+        resolved_model = model or DEFAULT_MODELS.get(provider_enum, "")
+    except ValueError:
+        resolved_model = model or ""
+
+    llm["fast_tier_providers"] = [provider]
+    if resolved_model:
+        llm["fast_model"] = resolved_model
+
+    _save_config(config, config_path)
+
+    console.print(f"[green]✓[/green] Fast tier updated:")
+    console.print(f"  Provider  [dim]{old_fast}[/dim] → [yellow]{provider}[/yellow]")
+    console.print(f"  Model     [dim]{old_model}[/dim] → [cyan]{resolved_model or '—'}[/cyan]")
+    _print_provider_hint(provider)
+
+
+@llm_app.command("edit")
+def llm_edit() -> None:
+    """Open interactive TUI to configure Local and CI/CD LLM providers.
+
+    Local tab  — all providers (Ollama, Claude Code, Codex, APIs…)
+    CI/CD tab  — API-only providers (no CLI tools, no local servers)
+
+    Examples:
+        warden config llm edit
+    """
+    from ._llm_ui import run_llm_config_ui
+
+    config, config_path = _load_config()
+    llm = config.get("llm", {})
+    ci_llm = llm.get("ci", {})
+
+    current = {
+        # local
+        "local_smart_provider": llm.get("provider", "ollama"),
+        "local_smart_model": llm.get("smart_model") or llm.get("model") or "",
+        "local_fast_provider": (llm.get("fast_tier_providers") or ["none"])[0],
+        "local_fast_model": llm.get("fast_model") or "",
+        # ci
+        "ci_smart_provider": ci_llm.get("provider", "groq"),
+        "ci_smart_model": ci_llm.get("smart_model") or ci_llm.get("model") or "",
+        "ci_fast_provider": (ci_llm.get("fast_tier_providers") or ["groq"])[0],
+        "ci_fast_model": ci_llm.get("fast_model") or "",
+    }
+
+    result = run_llm_config_ui(current)
+
+    if result is None or not result.saved:
+        console.print("[yellow]Cancelled — no changes saved.[/yellow]")
+        return
+
+    # ── persist local ──────────────────────────────────────────────────────
+    llm["provider"] = result.local_smart_provider
+    llm["smart_model"] = result.local_smart_model
+    llm["model"] = result.local_smart_model
+    llm["fast_tier_providers"] = [] if result.local_fast_provider == "none" else [result.local_fast_provider]
+    llm["fast_model"] = result.local_fast_model
+
+    # ── persist ci ────────────────────────────────────────────────────────
+    ci_section: dict = {}
+    ci_section["provider"] = result.ci_smart_provider
+    ci_section["smart_model"] = result.ci_smart_model
+    ci_section["model"] = result.ci_smart_model
+    ci_section["fast_tier_providers"] = [] if result.ci_fast_provider == "none" else [result.ci_fast_provider]
+    ci_section["fast_model"] = result.ci_fast_model
+    llm["ci"] = ci_section
+
+    _save_config(config, config_path)
+
+    console.print(f"[green]✓[/green] Saved to [dim]{config_path}[/dim]")
+    console.print()
+    console.print("[bold]Local[/bold]")
+    console.print(f"  Smart  [green]{result.local_smart_provider}[/green]  [cyan]{result.local_smart_model}[/cyan]")
+    _fast_line(result.local_fast_provider, result.local_fast_model)
+    console.print()
+    console.print("[bold]CI / CD[/bold]")
+    console.print(f"  Smart  [green]{result.ci_smart_provider}[/green]  [cyan]{result.ci_smart_model}[/cyan]")
+    _fast_line(result.ci_fast_provider, result.ci_fast_model)
+
+
+def _fast_line(provider: str, model: str) -> None:
+    if provider == "none":
+        console.print("  Fast   [dim]disabled[/dim]")
+    else:
+        console.print(f"  Fast   [yellow]{provider}[/yellow]  [cyan]{model}[/cyan]")
 
 
 @llm_app.command("use")

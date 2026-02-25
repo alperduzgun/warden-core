@@ -27,7 +27,7 @@ from warden.validation.frames.spec.models import (
 
 # ===== Realistic Flutter Code Fixtures =====
 
-FLUTTER_RETROFIT_API = '''
+FLUTTER_RETROFIT_API = """
 import 'package:dio/dio.dart';
 import 'package:retrofit/retrofit.dart';
 import '../models/user.dart';
@@ -66,9 +66,9 @@ abstract class UserApi {
     @Body() StatusUpdateRequest request,
   );
 }
-'''
+"""
 
-FLUTTER_FREEZED_MODELS = '''
+FLUTTER_FREEZED_MODELS = r"""
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'user.freezed.dart';
@@ -114,9 +114,9 @@ class CreateUserRequest with _\$CreateUserRequest {
   factory CreateUserRequest.fromJson(Map<String, dynamic> json) =>
       _\$CreateUserRequestFromJson(json);
 }
-'''
+"""
 
-FLUTTER_DIO_CALLS = '''
+FLUTTER_DIO_CALLS = r"""
 import 'package:dio/dio.dart';
 
 class InvoiceService {
@@ -151,9 +151,9 @@ class InvoiceService {
     return Invoice.fromJson(response.data);
   }
 }
-'''
+"""
 
-FLUTTER_HTTP_PACKAGE = '''
+FLUTTER_HTTP_PACKAGE = r"""
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -187,9 +187,9 @@ class PaymentClient {
     return [];
   }
 }
-'''
+"""
 
-FLUTTER_ENUMS = '''
+FLUTTER_ENUMS = """
 enum InvoiceStatus {
   draft,
   pending,
@@ -215,9 +215,9 @@ enum UserRole {
   const UserRole(this.level);
   final int level;
 }
-'''
+"""
 
-MALFORMED_DART_CODE = '''
+MALFORMED_DART_CODE = """
 @GET("/users")
 Future<List<User>> getUsers(
   // Missing closing parenthesis
@@ -229,16 +229,21 @@ class User {
 
 enum Status { active, inactive
 // Missing closing brace
-'''
+"""
 
-VERY_LARGE_DART_FILE = '''
+VERY_LARGE_DART_FILE = (
+    """
 class HugeModel {
-''' + '\n'.join([f'  final String field{i};' for i in range(10000)]) + '''
+"""
+    + "\n".join([f"  final String field{i};" for i in range(10000)])
+    + """
 }
-'''
+"""
+)
 
 
 # ===== Test Class =====
+
 
 class TestFlutterExtractor:
     """Test suite for Flutter contract extractor."""
@@ -435,8 +440,7 @@ class TestFlutterExtractor:
 
         # Check operation types
         create_op = next(
-            op for op in contract.operations
-            if "create" in op.name.lower() and "invoice" in op.name.lower()
+            op for op in contract.operations if "create" in op.name.lower() and "invoice" in op.name.lower()
         )
         assert create_op.operation_type == OperationType.COMMAND
 
@@ -592,7 +596,7 @@ class TestFlutterExtractor:
         """
         # Create pubspec.yaml with version constraints
         pubspec = flutter_project / "pubspec.yaml"
-        pubspec.write_text('''
+        pubspec.write_text("""
 name: test_app
 description: Test Flutter app
 
@@ -606,11 +610,11 @@ dependencies:
   freezed_annotation: ^2.4.1
   dio: ^5.3.2
   retrofit: ^4.0.1
-        ''')
+        """)
 
         # Create simple API with modern null-safety syntax
         api_file = flutter_project / "lib" / "api" / "modern_api.dart"
-        api_file.write_text('''
+        api_file.write_text("""
 import 'package:retrofit/retrofit.dart';
 
 @RestApi()
@@ -618,7 +622,7 @@ abstract class ModernApi {
   @GET("/test")
   Future<String?> testEndpoint();  // Nullable return
 }
-        ''')
+        """)
 
         contract = await extractor.extract()
 
@@ -710,7 +714,7 @@ abstract class ModernApi {
         """
         widget_file = flutter_project / "lib" / "widgets" / "user_widget.dart"
         widget_file.parent.mkdir(parents=True, exist_ok=True)
-        widget_file.write_text('''
+        widget_file.write_text("""
 class UserWidget extends StatelessWidget {
   final User user;
 
@@ -731,7 +735,7 @@ class UserPage extends StatefulWidget {
   @override
   State<UserPage> createState() => _UserPageState();
 }
-        ''')
+        """)
 
         contract = await extractor.extract()
 
@@ -755,7 +759,7 @@ class UserPage extends StatefulWidget {
         - Nested generics handled
         """
         api_file = flutter_project / "lib" / "api" / "complex_api.dart"
-        api_file.write_text('''
+        api_file.write_text("""
 import 'package:retrofit/retrofit.dart';
 
 @RestApi()
@@ -766,7 +770,7 @@ abstract class ComplexApi {
   @GET("/paginated")
   Future<PaginatedResult<User>> getPaginatedUsers();
 }
-        ''')
+        """)
 
         contract = await extractor.extract()
 

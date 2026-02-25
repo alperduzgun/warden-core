@@ -49,10 +49,10 @@ frames_config:
     ignore_test_files: true
     use_llm_filter: true
     ignore_patterns:
-    - "scripts/**"
-    - "**/__main__.py"
-    - "**/cli.py"
-    - "**/main.py"
+    - scripts/**
+    - '**/__main__.py'
+    - '**/cli.py'
+    - '**/main.py'
   security:
     checks:
     - sql-injection
@@ -94,16 +94,6 @@ frames_config:
     max_function_lines: 100
     ignore_test_files: true
   spec:
-    # Example platform configs (uncomment and set paths for your project):
-    # platforms:
-    #   - name: mobile
-    #     path: ../OhMyLove
-    #     type: flutter
-    #     role: consumer
-    #   - name: backend
-    #     path: ../OhMyLove/functions
-    #     type: express
-    #     role: provider
     platforms: []
     gap_analysis:
       enable_fuzzy: true
@@ -121,17 +111,22 @@ llm:
     enabled: true
     base_url: http://localhost:11434
   fast_tier_providers:
-  - claude_code
   - ollama
-  - groq
   max_retries: 2
   tpm_limit: 10000
   rpm_limit: 60
-  provider: claude_code
-  model: claude-sonnet-4-20250514
+  provider: ollama
+  model: qwen2.5-coder:3b
   timeout: 300
-  smart_model: claude-sonnet-4-20250514
+  smart_model: qwen2.5-coder:3b
   fast_model: qwen2.5-coder:3b
+  ci:
+    provider: groq
+    smart_model: ''
+    model: ''
+    fast_tier_providers:
+    - groq
+    fast_model: ''
 project:
   description: Warden configuration for warden-core
   detected_at: '2025-12-24T16:35:53.922859'

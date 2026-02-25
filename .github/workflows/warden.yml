@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      CI_LLM_PROVIDER: azure_openai
+      WARDEN_LLM_PROVIDER: azure_openai
 
 
     steps:

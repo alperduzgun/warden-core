@@ -27,7 +27,7 @@ from warden.validation.frames.spec.models import (
 # ===== Realistic Mobile + Backend Scenario =====
 
 # Mobile App (Flutter Consumer)
-FLUTTER_INVOICE_API = '''
+FLUTTER_INVOICE_API = """
 import 'package:retrofit/retrofit.dart';
 import 'package:dio/dio.dart';
 
@@ -63,9 +63,9 @@ abstract class InvoiceApi {
     @Body() CreateVoiceInvoiceRequest request,
   );
 }
-'''
+"""
 
-FLUTTER_INVOICE_MODELS = '''
+FLUTTER_INVOICE_MODELS = r"""
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 @freezed
@@ -118,10 +118,10 @@ class VoiceInvoiceResult with _\$VoiceInvoiceResult {
   factory VoiceInvoiceResult.fromJson(Map<String, dynamic> json) =>
       _\$VoiceInvoiceResultFromJson(json);
 }
-'''
+"""
 
 # Backend (Spring Boot Provider)
-SPRING_INVOICE_CONTROLLER = '''
+SPRING_INVOICE_CONTROLLER = """
 package com.example.api.controller;
 
 import org.springframework.web.bind.annotation.*;
@@ -171,9 +171,9 @@ public class InvoiceController {
 
     // PDF download is missing (consumer expects it)
 }
-'''
+"""
 
-SPRING_INVOICE_DTOS = '''
+SPRING_INVOICE_DTOS = """
 package com.example.api.dto;
 
 import lombok.Data;
@@ -209,18 +209,18 @@ public class InvoiceHistoryDto {
     private LocalDateTime timestamp;
     private String user;
 }
-'''
+"""
 
 # Type mismatch scenario
-FLUTTER_USER_API_TYPE_MISMATCH = '''
+FLUTTER_USER_API_TYPE_MISMATCH = """
 @RestApi()
 abstract class UserApi {
   @POST("/users")
   Future<User> createUser(@Body() CreateUserRequest request);
 }
-'''
+"""
 
-FLUTTER_USER_MODEL_TYPE_MISMATCH = '''
+FLUTTER_USER_MODEL_TYPE_MISMATCH = r"""
 @freezed
 class CreateUserRequest with _\$CreateUserRequest {
   const factory CreateUserRequest({
@@ -229,9 +229,9 @@ class CreateUserRequest with _\$CreateUserRequest {
     required int age,  // Consumer sends int
   }) = _CreateUserRequest;
 }
-'''
+"""
 
-SPRING_USER_CONTROLLER_TYPE_MISMATCH = '''
+SPRING_USER_CONTROLLER_TYPE_MISMATCH = """
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -240,19 +240,20 @@ public class UserController {
         return ResponseEntity.ok(userService.create(request));
     }
 }
-'''
+"""
 
-SPRING_USER_DTO_TYPE_MISMATCH = '''
+SPRING_USER_DTO_TYPE_MISMATCH = """
 @Data
 public class CreateUserRequest {
     private String name;
     private String email;
     private String age;  // Provider expects String (type mismatch)
 }
-'''
+"""
 
 
 # ===== Test Class =====
+
 
 class TestPlatformIntegration:
     """Integration tests for cross-platform contract validation."""
@@ -326,15 +327,19 @@ class TestPlatformIntegration:
 
         # Setup Spring provider
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "InvoiceController.java"
+            spring_project
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "api"
+            / "controller"
+            / "InvoiceController.java"
         )
         spring_controller.write_text(SPRING_INVOICE_CONTROLLER)
 
-        spring_dtos = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "dto" / "InvoiceDtos.java"
-        )
+        spring_dtos = spring_project / "src" / "main" / "java" / "com" / "example" / "api" / "dto" / "InvoiceDtos.java"
         spring_dtos.write_text(SPRING_INVOICE_DTOS)
 
         # Extract contracts
@@ -381,15 +386,19 @@ class TestPlatformIntegration:
         flutter_models.write_text(FLUTTER_INVOICE_MODELS)
 
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "InvoiceController.java"
+            spring_project
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "api"
+            / "controller"
+            / "InvoiceController.java"
         )
         spring_controller.write_text(SPRING_INVOICE_CONTROLLER)
 
-        spring_dtos = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "dto" / "InvoiceDtos.java"
-        )
+        spring_dtos = spring_project / "src" / "main" / "java" / "com" / "example" / "api" / "dto" / "InvoiceDtos.java"
         spring_dtos.write_text(SPRING_INVOICE_DTOS)
 
         # Extract
@@ -435,15 +444,19 @@ class TestPlatformIntegration:
         flutter_models.write_text(FLUTTER_INVOICE_MODELS)
 
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "InvoiceController.java"
+            spring_project
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "api"
+            / "controller"
+            / "InvoiceController.java"
         )
         spring_controller.write_text(SPRING_INVOICE_CONTROLLER)
 
-        spring_dtos = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "dto" / "InvoiceDtos.java"
-        )
+        spring_dtos = spring_project / "src" / "main" / "java" / "com" / "example" / "api" / "dto" / "InvoiceDtos.java"
         spring_dtos.write_text(SPRING_INVOICE_DTOS)
 
         # Extract
@@ -482,8 +495,15 @@ class TestPlatformIntegration:
         flutter_api.write_text(FLUTTER_INVOICE_API)
 
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "InvoiceController.java"
+            spring_project
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "api"
+            / "controller"
+            / "InvoiceController.java"
         )
         spring_controller.write_text(SPRING_INVOICE_CONTROLLER)
 
@@ -524,15 +544,11 @@ class TestPlatformIntegration:
         flutter_model.write_text(FLUTTER_USER_MODEL_TYPE_MISMATCH)
 
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "UserController.java"
+            spring_project / "src" / "main" / "java" / "com" / "example" / "api" / "controller" / "UserController.java"
         )
         spring_controller.write_text(SPRING_USER_CONTROLLER_TYPE_MISMATCH)
 
-        spring_dto = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "dto" / "UserDto.java"
-        )
+        spring_dto = spring_project / "src" / "main" / "java" / "com" / "example" / "api" / "dto" / "UserDto.java"
         spring_dto.write_text(SPRING_USER_DTO_TYPE_MISMATCH)
 
         # Extract
@@ -550,14 +566,8 @@ class TestPlatformIntegration:
 
         # Compare contracts
         # Both should have CreateUserRequest model
-        consumer_model = next(
-            m for m in consumer_contract.models
-            if m.name == "CreateUserRequest"
-        )
-        provider_model = next(
-            m for m in provider_contract.models
-            if m.name == "CreateUserRequest"
-        )
+        consumer_model = next(m for m in consumer_contract.models if m.name == "CreateUserRequest")
+        provider_model = next(m for m in provider_contract.models if m.name == "CreateUserRequest")
 
         # Find age field in both
         consumer_age = next(f for f in consumer_model.fields if f.name == "age")
@@ -585,19 +595,26 @@ class TestPlatformIntegration:
         - Should match with fuzzy logic
         """
         flutter_api = flutter_project / "lib" / "api" / "invoice_api.dart"
-        flutter_api.write_text('''
+        flutter_api.write_text("""
 @RestApi()
 abstract class InvoiceApi {
   @GET("/invoices")
   Future<List<Invoice>> fetchInvoices();
 }
-        ''')
+        """)
 
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "InvoiceController.java"
+            spring_project
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "api"
+            / "controller"
+            / "InvoiceController.java"
         )
-        spring_controller.write_text('''
+        spring_controller.write_text("""
 @RestController
 @RequestMapping("/api/invoices")
 public class InvoiceController {
@@ -606,7 +623,7 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.findAll());
     }
 }
-        ''')
+        """)
 
         # Extract
         flutter_extractor = FlutterExtractor(
@@ -666,15 +683,19 @@ public class InvoiceController {
 
         # Setup Spring provider
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "InvoiceController.java"
+            spring_project
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "api"
+            / "controller"
+            / "InvoiceController.java"
         )
         spring_controller.write_text(SPRING_INVOICE_CONTROLLER)
 
-        spring_dtos = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "dto" / "InvoiceDtos.java"
-        )
+        spring_dtos = spring_project / "src" / "main" / "java" / "com" / "example" / "api" / "dto" / "InvoiceDtos.java"
         spring_dtos.write_text(SPRING_INVOICE_DTOS)
 
         # Extract contracts
@@ -724,10 +745,7 @@ public class InvoiceController {
         flutter_models = flutter_project / "lib" / "models" / "invoice.dart"
         flutter_models.write_text(FLUTTER_INVOICE_MODELS)
 
-        spring_dtos = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "dto" / "InvoiceDtos.java"
-        )
+        spring_dtos = spring_project / "src" / "main" / "java" / "com" / "example" / "api" / "dto" / "InvoiceDtos.java"
         spring_dtos.write_text(SPRING_INVOICE_DTOS)
 
         # Extract
@@ -735,14 +753,8 @@ public class InvoiceController {
         provider_contract = await spring_extractor.extract()
 
         # Find CreateInvoiceRequest in both
-        consumer_model = next(
-            (m for m in consumer_contract.models if m.name == "CreateInvoiceRequest"),
-            None
-        )
-        provider_model = next(
-            (m for m in provider_contract.models if m.name == "CreateInvoiceRequest"),
-            None
-        )
+        consumer_model = next((m for m in consumer_contract.models if m.name == "CreateInvoiceRequest"), None)
+        provider_model = next((m for m in provider_contract.models if m.name == "CreateInvoiceRequest"), None)
 
         assert consumer_model is not None
         assert provider_model is not None
@@ -816,8 +828,15 @@ public class InvoiceController {
         flutter_api.write_text(FLUTTER_INVOICE_API)
 
         spring_controller = (
-            spring_project / "src" / "main" / "java" / "com" / "example" / "api"
-            / "controller" / "InvoiceController.java"
+            spring_project
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "api"
+            / "controller"
+            / "InvoiceController.java"
         )
         spring_controller.write_text(SPRING_INVOICE_CONTROLLER)
 

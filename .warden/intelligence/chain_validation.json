@@ -1,58 +1,388 @@
 {
   "schemaVersion": "1.0.0",
-  "totalChainsChecked": 5,
+  "totalChainsChecked": 50,
   "confirmed": 0,
   "unconfirmed": 0,
-  "errors": 5,
+  "errors": 50,
   "entries": [
     {
-      "sourceFqn": "examples/messy_code.py",
-      "targetFqn": "os",
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "json",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "examples/messy_code.py",
-      "targetFqn": "sys",
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "datetime.datetime",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "examples/messy_code.py",
-      "targetFqn": "examples/messy_code.py::MyClass",
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "pathlib.Path",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "examples/messy_code.py::MyClass",
-      "targetFqn": "examples/messy_code.py::MyClass.__init__",
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "rich.box.SIMPLE_HEAVY",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "rich.console.Console",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "rich.table.Table",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "rich.text.Text",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "collector.BenchmarkReport",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "collector.FrameEntry",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "collector.PhaseEntry",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
+      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter.display",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "examples/messy_code.py::MyClass",
-      "targetFqn": "examples/messy_code.py::MyClass.my_method",
+      "sourceFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
+      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter.save",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
+      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter.load_previous",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "time",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "dataclasses.dataclass",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "datetime.datetime",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "uuid.uuid4",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "src/warden/benchmark/collector.py::PhaseEntry",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "src/warden/benchmark/collector.py::FrameEntry",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkReport",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkReport",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkReport.llm_overhead_pct",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkReport",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkReport.to_dict",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector.__init__",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector.on_event",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector._close_current_phase",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector.finalize",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
+      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector._resolve_provider_model",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/__init__.py",
+      "targetFqn": "collector.BenchmarkCollector",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/__init__.py",
+      "targetFqn": "collector.BenchmarkReport",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/__init__.py",
+      "targetFqn": "collector.FrameEntry",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/__init__.py",
+      "targetFqn": "collector.PhaseEntry",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/benchmark/__init__.py",
+      "targetFqn": "reporter.BenchmarkReporter",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/__init__.py",
+      "targetFqn": "warden.classification.application.classification_phase.ClassificationPhase",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
+      "targetFqn": "json",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
+      "targetFqn": "typing.Any",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
+      "targetFqn": "warden.analysis.domain.project_context.Framework",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
+      "targetFqn": "warden.analysis.domain.project_context.ProjectType",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "json",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "enum.Enum",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "typing.Any",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "warden.analysis.application.llm_phase_base.LLMPhaseBase",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "warden.analysis.application.llm_phase_base.LLMPhaseConfig",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "warden.analysis.domain.project_context.Framework",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "warden.analysis.domain.project_context.ProjectType",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "warden.classification.application.classification_prompts.format_classification_user_prompt",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "warden.classification.application.classification_prompts.get_classification_system_prompt",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "warden.shared.infrastructure.logging.get_logger",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
+      "targetFqn": "src/warden/classification/application/llm_classification_phase.py::SuppressionReason",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
     }
   ],
   "deadSymbols": [
-    "examples/messy_code.py::very_long_function_name_that_is_hard_to_read_and_understand",
-    "examples/messy_code.py::another_function",
-    "examples/messy_code.py::MyClass",
-    "examples/messy_code.py::MyClass.__init__",
-    "examples/messy_code.py::MyClass.my_method",
-    "examples/messy_code.py::function_with_magic_numbers",
-    "examples/messy_code.py::old_style_formatting",
-    "examples/messy_code.py::format_method_example",
-    "examples/messy_code.py::manual_list_building",
-    "examples/messy_code.py::redundant_else_example"
+    "src/warden/benchmark/reporter.py::BenchmarkReporter",
+    "src/warden/benchmark/reporter.py::BenchmarkReporter.display",
+    "src/warden/benchmark/reporter.py::BenchmarkReporter.save",
+    "src/warden/benchmark/reporter.py::BenchmarkReporter.load_previous",
+    "src/warden/benchmark/collector.py::PhaseEntry",
+    "src/warden/benchmark/collector.py::FrameEntry",
+    "src/warden/benchmark/collector.py::BenchmarkReport",
+    "src/warden/benchmark/collector.py::BenchmarkReport.llm_overhead_pct",
+    "src/warden/benchmark/collector.py::BenchmarkReport.to_dict",
+    "src/warden/benchmark/collector.py::BenchmarkCollector",
+    "src/warden/benchmark/collector.py::BenchmarkCollector.__init__",
+    "src/warden/benchmark/collector.py::BenchmarkCollector.on_event",
+    "src/warden/benchmark/collector.py::BenchmarkCollector._close_current_phase",
+    "src/warden/benchmark/collector.py::BenchmarkCollector.finalize",
+    "src/warden/benchmark/collector.py::BenchmarkCollector._resolve_provider_model",
+    "src/warden/classification/application/classification_prompts.py::get_classification_system_prompt",
+    "src/warden/classification/application/classification_prompts.py::format_classification_user_prompt",
+    "src/warden/classification/application/llm_classification_phase.py::SuppressionReason",
+    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase",
+    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.__init__",
+    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.phase_name",
+    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.get_system_prompt",
+    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.format_user_prompt",
+    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.parse_llm_response",
+    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.classify_batch_async"
   ],
   "lspAvailable": true,
-  "generated_at": "2026-02-23T13:40:58.433491+00:00"
+  "generated_at": "2026-02-25T20:00:32.708576+00:00"
 }
