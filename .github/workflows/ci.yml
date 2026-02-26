@@ -222,6 +222,8 @@ jobs:
 
           # Warden Configuration
           WARDEN_LLM_PROVIDER: "ollama"
+          WARDEN_FAST_TIER_PRIORITY: "ollama"   # Fast tier: 0.5b (triage/classification)
+          WARDEN_FAST_MODEL: "qwen2.5-coder:0.5b"
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
           WARDEN_LLM_CONCURRENCY: "2"          # Conservative for local Ollama
 
@@ -269,22 +271,30 @@ jobs:
           fi
           
           echo "Checking for existing models..."
-          ollama list # Verify models visible to the server
-          if ollama list | grep -q "qwen2.5-coder:3b"; then
-            echo "✅ Model qwen2.5-coder:3b already cached."
+          ollama list
+
+          # Fast tier: 0.5b for triage/classification (speed critical)
+          if ollama list | grep -q "qwen2.5-coder:0.5b"; then
+            echo "✅ Fast model qwen2.5-coder:0.5b already cached."
           else
-            echo "⬇️ Model not found in cache. Pulling..."
+            echo "⬇️ Pulling fast model qwen2.5-coder:0.5b..."
+            ollama pull qwen2.5-coder:0.5b
+          fi
+
+          # Smart tier: 3b for deep frame analysis (quality critical)
+          if ollama list | grep -q "qwen2.5-coder:3b"; then
+            echo "✅ Smart model qwen2.5-coder:3b already cached."
+          else
+            echo "⬇️ Pulling smart model qwen2.5-coder:3b..."
             ollama pull qwen2.5-coder:3b
           fi
 
-          # Warm-up: load model into RAM and pin it for the entire job.
-          # keep_alive=-1 prevents Ollama from unloading the model between requests.
-          # This eliminates the 15-30s cold-start on the first triage batch.
-          echo "Warming up model (pinning to RAM)..."
+          # Warm-up fast model (used for triage — first request in scan)
+          echo "Warming up fast model (pinning to RAM)..."
           curl -s http://localhost:11434/api/generate \
-            -d '{"model":"qwen2.5-coder:3b","prompt":"","keep_alive":-1}' \
+            -d '{"model":"qwen2.5-coder:0.5b","prompt":"","keep_alive":-1}' \
             -o /dev/null
-          echo "✅ Model warm and ready."
+          echo "✅ Models ready."
 
           # --- SCAN EXECUTION ---
           
