@@ -124,6 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint]
     if: always() && needs.lint.result != 'cancelled'
+    timeout-minutes: 45
 
     steps:
       - name: Free Disk Space (Manual)
