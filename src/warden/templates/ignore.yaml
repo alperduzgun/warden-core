@@ -67,3 +67,23 @@ ignore:
   - "**/__snapshots__/"
   - "**/fixtures/"
   - "**/testdata/"
+
+# Per-frame ignore patterns
+# These patterns are applied only to the specified frame's analysis.
+frames:
+  orphan:
+    - "**/__main__.py"
+    - "**/cli.py"
+    - "**/main.py"
+    - "**/conftest.py"
+    - "**/manage.py"
+    - "**/wsgi.py"
+    - "**/asgi.py"
+  architecture:
+    - "test_*.py"
+    - "*_test.py"
+    - "**/tests/**"
+    - "**/conftest.py"
+  security:
+    - "**/test_*.py"
+    - "**/tests/**"
