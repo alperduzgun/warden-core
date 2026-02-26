@@ -192,6 +192,20 @@ TAINT_SINKS: dict[str, str] = {
     "aiohttp.ClientSession.get": "HTTP-request",
     "aiohttp.ClientSession.post": "HTTP-request",
     "aiohttp.ClientSession.request": "HTTP-request",
+    # LOG-output / PII leak sinks — logging functions that may expose sensitive data
+    "logging.info": "LOG-output",
+    "logging.debug": "LOG-output",
+    "logging.warning": "LOG-output",
+    "logging.error": "LOG-output",
+    "logging.critical": "LOG-output",
+    "logging.exception": "LOG-output",
+    "logger.info": "LOG-output",
+    "logger.debug": "LOG-output",
+    "logger.warning": "LOG-output",
+    "logger.error": "LOG-output",
+    "logger.critical": "LOG-output",
+    "logger.exception": "LOG-output",
+    "print": "LOG-output",
 }
 
 # Known sanitizers
@@ -203,6 +217,8 @@ KNOWN_SANITIZERS: dict[str, set[str]] = {
     "FILE-path": {"os.path.basename", "pathlib.PurePath"},
     # SSRF mitigation: allowlist / URL validation functions
     "HTTP-request": {"urllib.parse.urlparse", "ipaddress.ip_address", "validators.url"},
+    # PII masking / log sanitization
+    "LOG-output": {"mask_pii", "redact", "sanitize_log", "PIIMaskingFilter", "mask_sensitive", "scrub", "anonymize", "re.sub"},
 }
 
 
@@ -269,6 +285,35 @@ JS_TAINT_SINKS: dict[str, str] = {
     "fs.readFileSync": "FILE-path",
     "fs.writeFile": "FILE-path",
     "fs.writeFileSync": "FILE-path",
+    # URL-fetch / SSRF sinks (CWE-918) — user-controlled URLs in JS HTTP clients
+    "fetch": "URL-fetch",
+    "axios": "URL-fetch",
+    "axios.get": "URL-fetch",
+    "axios.post": "URL-fetch",
+    "axios.put": "URL-fetch",
+    "axios.delete": "URL-fetch",
+    "axios.request": "URL-fetch",
+    "http.request": "URL-fetch",
+    "http.get": "URL-fetch",
+    "https.request": "URL-fetch",
+    "https.get": "URL-fetch",
+    "got": "URL-fetch",
+    "got.get": "URL-fetch",
+    "got.post": "URL-fetch",
+    "node-fetch": "URL-fetch",
+    "undici.fetch": "URL-fetch",
+    "undici.request": "URL-fetch",
+    # LOG-output / PII leak sinks — JS logging that may expose sensitive data
+    "console.log": "LOG-output",
+    "console.error": "LOG-output",
+    "console.warn": "LOG-output",
+    "console.debug": "LOG-output",
+    "console.info": "LOG-output",
+    "console.trace": "LOG-output",
+    "logger.info": "LOG-output",
+    "logger.error": "LOG-output",
+    "logger.warn": "LOG-output",
+    "logger.debug": "LOG-output",
 }
 
 # Property-assignment sinks (element.innerHTML = ...)
@@ -280,6 +325,10 @@ JS_SANITIZERS: dict[str, set[str]] = {
     "HTML-content": {"DOMPurify.sanitize", "sanitizeHtml", "escapeHtml", "encodeURIComponent", "xss"},
     "CODE-execution": set(),
     "FILE-path": {"path.basename", "path.resolve", "encodeURIComponent"},
+    # SSRF mitigation for JS: URL validation / allowlist checking
+    "URL-fetch": {"url.parse", "new URL", "validator.isURL", "isValidUrl", "allowedHosts.includes", "URL.canParse"},
+    # PII masking / log sanitization for JS
+    "LOG-output": {"mask_pii", "redact", "sanitize_log", "mask_sensitive", "scrub", "anonymize"},
 }
 
 # ── Regex helpers ───────────────────────────────────────────────────────────

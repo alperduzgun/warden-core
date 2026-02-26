@@ -65,12 +65,18 @@ class TestTaintCatalogDefault:
         assert "db.escape" in sql_sans
 
     def test_all_sink_types_covered(self):
-        expected_types = {"SQL-value", "CMD-argument", "HTML-content", "CODE-execution", "FILE-path"}
+        expected_types = {
+            "SQL-value", "CMD-argument", "HTML-content", "CODE-execution",
+            "FILE-path", "HTTP-request", "URL-fetch", "LOG-output",
+        }
         actual_types = set(self.catalog.sinks.values())
         assert expected_types.issubset(actual_types)
 
     def test_sanitizers_all_sink_types_present(self):
-        expected_keys = {"SQL-value", "CMD-argument", "HTML-content", "CODE-execution", "FILE-path"}
+        expected_keys = {
+            "SQL-value", "CMD-argument", "HTML-content", "CODE-execution",
+            "FILE-path", "HTTP-request", "URL-fetch", "LOG-output",
+        }
         assert expected_keys.issubset(set(self.catalog.sanitizers.keys()))
 
     def test_sources_dict_contains_two_languages(self):
@@ -83,6 +89,44 @@ class TestTaintCatalogDefault:
         c2 = TaintCatalog.get_default()
         c1.sources["python"].add("__SENTINEL__")
         assert "__SENTINEL__" not in c2.sources.get("python", set())
+
+    # ── URL-fetch sinks (Issue #91) ─────────────────────────────────────────
+
+    def test_url_fetch_sinks_present(self):
+        """JS SSRF sinks must be registered with URL-fetch type."""
+        assert self.catalog.sinks.get("fetch") == "URL-fetch"
+        assert self.catalog.sinks.get("axios.get") == "URL-fetch"
+        assert self.catalog.sinks.get("axios.post") == "URL-fetch"
+        assert self.catalog.sinks.get("http.request") == "URL-fetch"
+
+    def test_url_fetch_sanitizers_present(self):
+        """URL-fetch sanitizers must include URL validation functions."""
+        url_sans = self.catalog.sanitizers.get("URL-fetch", set())
+        assert len(url_sans) >= 1
+        assert "url.parse" in url_sans or "new URL" in url_sans or "validator.isURL" in url_sans
+
+    # ── LOG-output sinks (Issue #89) ────────────────────────────────────────
+
+    def test_log_output_python_sinks_present(self):
+        """Python logging sinks must be registered with LOG-output type."""
+        assert self.catalog.sinks.get("logging.info") == "LOG-output"
+        assert self.catalog.sinks.get("logging.error") == "LOG-output"
+        assert self.catalog.sinks.get("logger.info") == "LOG-output"
+        assert self.catalog.sinks.get("logger.error") == "LOG-output"
+        assert self.catalog.sinks.get("print") == "LOG-output"
+
+    def test_log_output_js_sinks_present(self):
+        """JS logging sinks must be registered with LOG-output type."""
+        assert self.catalog.sinks.get("console.log") == "LOG-output"
+        assert self.catalog.sinks.get("console.error") == "LOG-output"
+        assert self.catalog.sinks.get("console.warn") == "LOG-output"
+        assert self.catalog.sinks.get("console.debug") == "LOG-output"
+
+    def test_log_output_sanitizers_present(self):
+        """LOG-output sanitizers must include PII masking functions."""
+        log_sans = self.catalog.sanitizers.get("LOG-output", set())
+        assert len(log_sans) >= 1
+        assert "mask_pii" in log_sans or "redact" in log_sans
 
 
 class TestTaintCatalogDefaultYaml:
@@ -155,6 +199,36 @@ class TestTaintCatalogDefaultYaml:
         assert sinks["db.query"] == "SQL-value"
         assert sinks["innerHTML"] == "HTML-content"
 
+    def test_default_yaml_contains_url_fetch_sinks(self):
+        """Default YAML must include URL-fetch sinks for JS SSRF detection."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sinks = data["sinks"]
+        assert sinks["fetch"] == "URL-fetch"
+        assert sinks["axios.get"] == "URL-fetch"
+        assert sinks["axios.post"] == "URL-fetch"
+        assert sinks["http.request"] == "URL-fetch"
+        assert sinks["https.request"] == "URL-fetch"
+
+    def test_default_yaml_contains_log_output_sinks(self):
+        """Default YAML must include LOG-output sinks for PII leak detection."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sinks = data["sinks"]
+        assert sinks["logging.info"] == "LOG-output"
+        assert sinks["logger.info"] == "LOG-output"
+        assert sinks["print"] == "LOG-output"
+        assert sinks["console.log"] == "LOG-output"
+        assert sinks["console.error"] == "LOG-output"
+
     def test_default_yaml_contains_sanitizers(self):
         """Default YAML must include core sanitizers."""
         from warden.validation.frames.security._internal.taint_catalog import (
@@ -168,6 +242,32 @@ class TestTaintCatalogDefaultYaml:
         assert "html.escape" in sanitizers["HTML-content"]
         assert "shlex.quote" in sanitizers["CMD-argument"]
         assert "DOMPurify.sanitize" in sanitizers["HTML-content"]
+
+    def test_default_yaml_contains_url_fetch_sanitizers(self):
+        """Default YAML must include URL-fetch sanitizers."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sanitizers = data["sanitizers"]
+        assert "URL-fetch" in sanitizers
+        url_sans = sanitizers["URL-fetch"]
+        assert "url.parse" in url_sans or "new URL" in url_sans or "validator.isURL" in url_sans
+
+    def test_default_yaml_contains_log_output_sanitizers(self):
+        """Default YAML must include LOG-output sanitizers for PII masking."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sanitizers = data["sanitizers"]
+        assert "LOG-output" in sanitizers
+        log_sans = sanitizers["LOG-output"]
+        assert "mask_pii" in log_sans or "redact" in log_sans
 
     def test_default_yaml_contains_assign_sinks(self):
         """Default YAML must include JS assign sinks."""
