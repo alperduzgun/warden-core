@@ -54,6 +54,12 @@ class PipelinePhaseRunner:
     ) -> None:
         """Execute all pipeline phases in order."""
 
+        # In CI mode, skip expensive LLM-heavy phases that add no value to CI results
+        if getattr(self.config, "ci_mode", False):
+            self.config.enable_fortification = False
+            self.config.enable_cleaning = False
+            logger.info("ci_mode_active", skipped_phases=["fortification", "cleaning"])
+
         # Phase 0: PRE-ANALYSIS
         context.current_phase = "Pre-Analysis"
         if self._progress_callback:
