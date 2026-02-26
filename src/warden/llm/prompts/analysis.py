@@ -5,6 +5,10 @@ Based on C# AnalysisPrompt.cs
 Focuses on ACCURACY FIRST with confidence scoring
 """
 
+from __future__ import annotations
+
+from warden.llm.types import StructuredPrompt
+
 ANALYSIS_SYSTEM_PROMPT = """You are Warden, an expert AI Code Guardian specialized in analyzing code quality and security.
 
 Your mission: Provide ACCURATE analysis that developers can trust. Reduce false positives while catching real issues.
@@ -128,3 +132,23 @@ def generate_analysis_request(code: str, language: str, file_path: str | None = 
 </source_code>
 
 Provide detailed analysis following the framework above. Return JSON only."""
+
+
+def build_analysis_prompt(code: str, language: str, file_path: str | None = None) -> StructuredPrompt:
+    """
+    Build a structured prompt for analysis, separating cacheable system
+    context from variable file content.
+
+    Args:
+        code: Code to analyze
+        language: Programming language
+        file_path: Optional file path for context
+
+    Returns:
+        StructuredPrompt with system_context (cacheable) and file_context (variable)
+    """
+    file_context = generate_analysis_request(code, language, file_path)
+    return StructuredPrompt(
+        system_context=ANALYSIS_SYSTEM_PROMPT,
+        file_context=file_context,
+    )
