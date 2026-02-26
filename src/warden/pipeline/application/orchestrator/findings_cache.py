@@ -7,8 +7,10 @@ replayed instead of re-running the LLM — matching the same pattern as
 
 Cache file: ``.warden/cache/findings_cache.json``
 
-Schema versioning: bump ``CACHE_SCHEMA_VERSION`` whenever ``Finding`` fields
-change to prevent stale entries from deserialising incorrectly.
+Schema versioning: ``CACHE_SCHEMA_VERSION`` is auto-derived from ``Finding``
+field signatures.  Any change to the dataclass fields (addition, removal, or
+type change) produces a different version string, automatically invalidating
+stale cache entries without requiring a manual bump.
 """
 
 from __future__ import annotations
@@ -23,14 +25,15 @@ from typing import Any
 
 import structlog
 
+from warden.shared.utils.schema_version import derive_schema_version
 from warden.validation.domain.frame import Finding
 
 logger = structlog.get_logger(__name__)
 
 MAX_ENTRIES = 10_000
 CACHE_FILENAME = "findings_cache.json"
-# Bump this when Finding schema changes to auto-invalidate stale caches.
-CACHE_SCHEMA_VERSION = 1
+# Auto-derived from Finding field signatures — no manual bump needed.
+CACHE_SCHEMA_VERSION: str = derive_schema_version(Finding)
 
 # Frame IDs eligible for cross-scan caching.  Only deterministic LLM frames
 # should be listed here; frames with side-effects or that depend on external
@@ -57,6 +60,7 @@ class FindingsCache:
 
     Invalidation:
     - Content changes → different hash → automatic miss
+    - Finding field changes → different schema version → automatic miss
     - Frame rule changes → use ``warden scan --no-cache`` (sets ``force_scan``)
     """
 
