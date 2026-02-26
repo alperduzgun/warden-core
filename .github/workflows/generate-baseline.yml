@@ -96,7 +96,7 @@ jobs:
       env:
         # Local Ollama only — no cloud API dependency, no rate limits
         WARDEN_LLM_PROVIDER: "ollama"
-        WARDEN_BLOCKED_PROVIDERS: "claude_code,codex,groq"
+        WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
         WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency || '2' }}
       run: |
         # Use input values or defaults for scheduled runs
