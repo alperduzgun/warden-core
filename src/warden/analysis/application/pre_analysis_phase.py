@@ -729,14 +729,27 @@ class PreAnalysisPhase:
         Returns:
             Dictionary mapping file paths to FileContextInfo
         """
-        logger.info("analyzing_file_contexts_optimized", file_count=len(code_files), mode="batch_plus_semantic")
+        pre_analysis_config = self.config.get("pre_analysis") or {}
+        max_concurrent = pre_analysis_config.get("max_concurrent_file_analysis", 50)
+        logger.info(
+            "analyzing_file_contexts_optimized",
+            file_count=len(code_files),
+            mode="batch_plus_semantic",
+            max_concurrent=max_concurrent,
+        )
 
         # STEP 1: Rule-based fast pass (LLM disabled here)
+        # Semaphore caps concurrent tasks to avoid OOM on large repos
+        sem = asyncio.Semaphore(max_concurrent)
+
+        async def _analyze_with_sem(cf: CodeFile, is_impacted: bool) -> Any:
+            async with sem:
+                return await self._analyze_single_file_async(cf, is_impacted, use_llm=False)
+
         tasks = []
         for code_file in code_files:
             is_impacted = bool(impacted_files and code_file.path in impacted_files)
-            # Pass use_llm=False to force fast rule-based + memory check
-            task = asyncio.create_task(self._analyze_single_file_async(code_file, is_impacted, use_llm=False))
+            task = asyncio.create_task(_analyze_with_sem(code_file, is_impacted))
             tasks.append((code_file.path, task))
 
         raw_contexts = {}
