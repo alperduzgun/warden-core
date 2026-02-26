@@ -47,7 +47,7 @@ class OllamaClient(ILlmClient):
     def provider(self) -> LlmProvider:
         return LlmProvider.OLLAMA
 
-    @resilient(name="provider_send", timeout_seconds=120.0, retry_max_attempts=2)
+    @resilient(name="provider_send", timeout_seconds=180.0, retry_max_attempts=2)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Send a request to the local Ollama instance.
