@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0  # Need full history for diff
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -54,7 +54,7 @@ jobs:
 
       - name: Upload SARIF Report
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: .warden/reports/warden-report.sarif
         continue-on-error: true
