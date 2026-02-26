@@ -1167,6 +1167,26 @@ def _render_text_report(
                 )
                 console.print(Padding(syntax, (0, 0, 0, 4)))
 
+            # ── Suggested fix (from Fortification remediation) ── (#197)
+            rem = finding.get("remediation")
+            rem_code = ""
+            if isinstance(rem, dict):
+                rem_code = rem.get("code", "")
+            elif rem is not None:
+                rem_code = getattr(rem, "code", "")
+            if rem_code:
+                console.print("    [bold green]Suggested Fix:[/bold green]")
+                fix_syntax = Syntax(
+                    rem_code,
+                    lang,
+                    theme="github-dark",
+                    line_numbers=False,
+                    word_wrap=True,
+                    background_color="default",
+                    indent_guides=False,
+                )
+                console.print(Padding(fix_syntax, (0, 0, 0, 4)))
+
             # ── Remediation tip (first meaningful line) ──
             if detail:
                 tip_lines = [
