@@ -3,6 +3,11 @@ AST Pre-Parser Service.
 
 Centralized AST pre-parsing that populates PipelineContext.ast_cache
 before frame execution, eliminating redundant per-frame parsing.
+
+The ast_cache on PipelineContext is an LRU-bounded cache (see
+``warden.pipeline.domain.lru_cache.LRUCache``).  Eviction is handled
+automatically by the cache when entries exceed its maxsize, so this
+module only needs to insert -- no manual eviction logic is required.
 """
 
 import asyncio
@@ -18,7 +23,8 @@ logger = get_logger(__name__)
 _DEFAULT_TIMEOUT = 10.0
 
 # Maximum AST cache entries to prevent OOM on large repos.
-# 500 parsed trees ≈ 300 MB upper bound; oldest entries (FIFO) are evicted first.
+# Kept for backward-compat (tests import this constant).
+# The authoritative limit lives in PipelineContext.max_ast_cache_entries.
 _MAX_AST_CACHE_ENTRIES = 500
 
 
@@ -48,6 +54,10 @@ class ASTPreParser:
 
         Skips files already in cache, unsupported languages, and handles
         timeouts/errors gracefully (log + continue).
+
+        The ast_cache is an LRU cache with automatic eviction; when the
+        cache is full the least-recently-used entry is silently dropped
+        on the next insertion.
         """
         if not code_files:
             return
@@ -94,20 +104,9 @@ class ASTPreParser:
                     provider.parse(code_file.content, lang, code_file.path),
                     timeout=self._timeout,
                 )
+                # LRUCache.__setitem__ handles eviction automatically
                 context.ast_cache[code_file.path] = result
                 parsed += 1
-
-                # Evict oldest entries if cache exceeds memory limit (FIFO — dict preserves insertion order)
-                if len(context.ast_cache) > _MAX_AST_CACHE_ENTRIES:
-                    evict_count = len(context.ast_cache) // 5  # drop oldest 20%
-                    oldest_keys = list(context.ast_cache.keys())[:evict_count]
-                    for k in oldest_keys:
-                        del context.ast_cache[k]
-                    logger.debug(
-                        "ast_cache_evicted",
-                        evicted=evict_count,
-                        remaining=len(context.ast_cache),
-                    )
             except asyncio.TimeoutError:
                 logger.debug(
                     "ast_pre_parse_timeout",

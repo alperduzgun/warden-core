@@ -17,13 +17,14 @@ from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.validation.domain.frame import CodeFile
 
 
-def _make_context():
+def _make_context(max_ast_cache_entries=500):
     """Create a minimal PipelineContext for testing."""
     return PipelineContext(
         pipeline_id="test-001",
         started_at=datetime.now(),
         file_path=Path("/tmp/test"),
         source_code="",
+        max_ast_cache_entries=max_ast_cache_entries,
     )
 
 
@@ -177,27 +178,19 @@ class TestASTPreParserLanguageHandling:
 
 
 class TestASTPreParserMemoryLimit:
-    """AST cache never exceeds _MAX_AST_CACHE_ENTRIES entries."""
+    """AST cache never exceeds configured maxsize via LRU eviction."""
 
     @pytest.mark.asyncio
     async def test_cache_bounded_when_exceeds_max(self, mock_registry):
         """Parsing more files than the limit keeps cache size bounded."""
-        context = _make_context()
-        # Use a small artificial limit via monkeypatching the module constant
-        import warden.pipeline.application.orchestrator.ast_pre_parser as _mod
+        context = _make_context(max_ast_cache_entries=5)
 
-        original = _mod._MAX_AST_CACHE_ENTRIES
-        _mod._MAX_AST_CACHE_ENTRIES = 5
+        files = [_make_code_file(f"src/f{i}.py") for i in range(20)]
+        parser = ASTPreParser()
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+            await parser.pre_parse_all_async(context, files)
 
-        try:
-            files = [_make_code_file(f"src/f{i}.py") for i in range(20)]
-            parser = ASTPreParser()
-            with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
-                await parser.pre_parse_all_async(context, files)
-
-            assert len(context.ast_cache) <= 5
-        finally:
-            _mod._MAX_AST_CACHE_ENTRIES = original
+        assert len(context.ast_cache) <= 5
 
     @pytest.mark.asyncio
     async def test_cache_not_evicted_below_max(self, mock_registry):
@@ -215,25 +208,18 @@ class TestASTPreParserMemoryLimit:
     @pytest.mark.asyncio
     async def test_eviction_removes_oldest_entries(self, mock_registry):
         """After eviction, the most recently parsed files survive."""
-        context = _make_context()
-        import warden.pipeline.application.orchestrator.ast_pre_parser as _mod
+        context = _make_context(max_ast_cache_entries=5)
 
-        original = _mod._MAX_AST_CACHE_ENTRIES
-        _mod._MAX_AST_CACHE_ENTRIES = 5
+        # Parse 10 files: f0..f9 (insertion order matters)
+        files = [_make_code_file(f"src/f{i}.py") for i in range(10)]
+        parser = ASTPreParser()
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+            await parser.pre_parse_all_async(context, files)
 
-        try:
-            # Parse 10 files: f0..f9 (insertion order matters)
-            files = [_make_code_file(f"src/f{i}.py") for i in range(10)]
-            parser = ASTPreParser()
-            with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
-                await parser.pre_parse_all_async(context, files)
-
-            # Cache must be bounded
-            assert len(context.ast_cache) <= 5
-            # Most recently inserted files should still be present
-            assert "src/f9.py" in context.ast_cache
-        finally:
-            _mod._MAX_AST_CACHE_ENTRIES = original
+        # Cache must be bounded
+        assert len(context.ast_cache) <= 5
+        # Most recently inserted files should still be present
+        assert "src/f9.py" in context.ast_cache
 
     def test_max_ast_cache_entries_constant_is_reasonable(self):
         """The constant should be a positive integer within a sane range."""
