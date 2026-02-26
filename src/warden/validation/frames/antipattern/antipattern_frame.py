@@ -43,7 +43,6 @@ from warden.validation.domain.frame import (
     CodeFile,
     Finding,
     FrameResult,
-    Remediation,
     ValidationFrame,
 )
 
@@ -361,9 +360,12 @@ class AntiPatternFrame(ValidationFrame):
         for v in violations:
             location = f"{Path(v.file_path).name}:{v.line}"
 
+            # Remediation is populated by the Fortification phase when actual
+            # replacement code is available.  At detection time we only have a
+            # textual suggestion which lives in `detail`; creating a Remediation
+            # with an empty `code` would be silently dropped by downstream
+            # consumers (SARIF, CLI) so we skip it here.
             remediation = None
-            if v.suggestion:
-                remediation = Remediation(description=v.suggestion, code="")
 
             finding = Finding(
                 id=v.pattern_id,
