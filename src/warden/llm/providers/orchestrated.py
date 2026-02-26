@@ -179,7 +179,9 @@ class OrchestratedLlmClient(ILlmClient):
             # CHAOS ENGINEERING: Race providers with FIRST_COMPLETED pattern
             # This prevents slow providers from blocking fast ones
             # Max concurrency limit prevents resource exhaustion
-            fast_timeout = 10  # seconds - fast tier should respond quickly
+            # Timeout derived from request budget: 1/3 gives fast tier priority
+            # without starving it — 3b Ollama on CI needs ~15-20s for warm inference.
+            fast_timeout = min(request.timeout_seconds / 3, 30.0)
 
             # Create tasks for all providers
             tasks = [asyncio.create_task(try_fast_provider(client)) for client in self.fast_clients]
@@ -309,7 +311,11 @@ class OrchestratedLlmClient(ILlmClient):
                             timeout_seconds=request.timeout_seconds,
                             use_fast_tier=True,
                         )
-                        fallback_response = await fast_client.send_async(fallback_request)
+                        # Bound fallback — @resilient retry (2×120s) would block 4min otherwise.
+                        fallback_response = await asyncio.wait_for(
+                            fast_client.send_async(fallback_request),
+                            timeout=request.timeout_seconds,
+                        )
                         if fallback_response.success and fallback_response.content:
                             logger.info(
                                 "smart_tier_fallback_succeeded",
