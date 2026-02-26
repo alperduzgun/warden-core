@@ -105,6 +105,9 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 )
                 context.errors.append(f"PRE_ANALYSIS failed: {e!s}")
 
+        # Post-condition check: validate expected fields are populated (#133)
+        context.assert_phase_complete("PRE_ANALYSIS")
+
         if self.progress_callback:
             duration = time.perf_counter() - start_time
             self.progress_callback(

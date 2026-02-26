@@ -129,6 +129,9 @@ class CleaningExecutor(BasePhaseExecutor):
                 )
                 context.errors.append(f"CLEANING failed: {e!s}")
 
+        # Post-condition check: validate expected fields are populated (#133)
+        context.assert_phase_complete("CLEANING")
+
         if self.progress_callback:
             duration = time.perf_counter() - start_time
             cleaning_data = {"phase": "CLEANING", "phase_name": "CLEANING", "duration": duration}

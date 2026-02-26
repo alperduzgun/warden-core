@@ -292,6 +292,9 @@ class FortificationExecutor(BasePhaseExecutor):
                 )
                 context.errors.append(f"FORTIFICATION failed: {e!s}")
 
+        # Post-condition check: validate expected fields are populated (#133)
+        context.assert_phase_complete("FORTIFICATION")
+
         if self.progress_callback:
             duration = time.perf_counter() - start_time
             fortification_data = {"phase": "FORTIFICATION", "phase_name": "FORTIFICATION", "duration": duration}

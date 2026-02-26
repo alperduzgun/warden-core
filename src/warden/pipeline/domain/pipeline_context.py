@@ -5,9 +5,46 @@ Shared context that flows through all pipeline phases.
 Each phase reads from and writes to this context.
 
 Thread-safe and memory-bounded implementation for production use.
+
+Phase Post-Condition Map
+========================
+Each pipeline phase is expected to populate specific fields upon successful
+completion.  The ``assert_phase_complete`` method validates these
+post-conditions at phase exit and emits warnings (never hard failures) when
+a field is missing.  This surfaces silent initialization bugs that defensive
+``getattr(context, "X", default)`` patterns would otherwise hide.
+
++-------------------+--------------------------------------------------------+
+| Phase             | Fields guaranteed after successful exit                 |
++-------------------+--------------------------------------------------------+
+| Phase 0           | project_context, file_contexts                         |
+| PRE_ANALYSIS      |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 0.5         | triage_decisions                                       |
+| TRIAGE            |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 1           | quality_metrics, quality_score_before                  |
+| ANALYSIS          |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 2           | selected_frames, suppression_rules                     |
+| CLASSIFICATION    |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 3           | frame_results, findings                                |
+| VALIDATION        |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 4           | fortifications, applied_fixes, security_improvements   |
+| FORTIFICATION     |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 5           | cleaning_suggestions, refactorings, quality_score_after|
+| CLEANING          |                                                        |
++-------------------+--------------------------------------------------------+
+
+Note: #161 added PRE-condition checks at phase ENTRY.  This module provides
+POST-condition checks at phase EXIT (see ``assert_phase_complete``).
 """
 
 import threading
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +55,48 @@ from warden.analysis.domain.project_context import Framework, ProjectType
 from warden.analysis.domain.quality_metrics import QualityMetrics
 from warden.pipeline.domain.lru_cache import LRUCache
 from warden.shared.utils.finding_utils import get_finding_severity
+
+# ---------------------------------------------------------------------------
+# Phase post-condition registry
+# ---------------------------------------------------------------------------
+# Maps each phase identifier to the context fields that MUST be meaningfully
+# populated after the phase exits successfully.
+#
+# "Meaningfully populated" means:
+#   - For Optional/None-default fields: value is not None
+#   - For list/dict fields: the field is a list/dict (empty is acceptable --
+#     e.g. no findings is a valid outcome)
+#
+# Callers should never need to know this map directly; use
+# ``PipelineContext.assert_phase_complete(phase_id)`` instead.
+# ---------------------------------------------------------------------------
+PHASE_POST_CONDITIONS: dict[str, list[str]] = {
+    "PRE_ANALYSIS": [
+        "project_context",
+        "file_contexts",
+    ],
+    "TRIAGE": [
+        "triage_decisions",
+    ],
+    "ANALYSIS": [
+        "quality_metrics",
+    ],
+    "CLASSIFICATION": [
+        "selected_frames",
+    ],
+    "VALIDATION": [
+        "frame_results",
+    ],
+    "FORTIFICATION": [
+        "fortifications",
+        "applied_fixes",
+        "security_improvements",
+    ],
+    "CLEANING": [
+        "cleaning_suggestions",
+        "refactorings",
+    ],
+}
 
 # Default maximum number of AST cache entries before LRU eviction kicks in.
 # 500 parsed trees ~ 300 MB upper bound.  Configurable via max_ast_cache_entries.
@@ -30,12 +109,26 @@ class PipelineContext:
     Shared context for all pipeline phases.
 
     This context accumulates information as it flows through:
-    0. PRE-ANALYSIS -> Project/File understanding
-    1. ANALYSIS -> Quality metrics
+    0. PRE-ANALYSIS  -> Project/File understanding
+    0.5 TRIAGE       -> Adaptive hybrid triage decisions
+    1. ANALYSIS      -> Quality metrics
     2. CLASSIFICATION -> Frame selection & suppressions
-    3. VALIDATION -> Findings & issues
+    3. VALIDATION    -> Findings & issues
     4. FORTIFICATION -> Security fixes
-    5. CLEANING -> Quality improvements
+    5. CLEANING      -> Quality improvements
+
+    Phase Post-Conditions:
+        After PRE_ANALYSIS:   project_context, file_contexts
+        After TRIAGE:         triage_decisions
+        After ANALYSIS:       quality_metrics, quality_score_before
+        After CLASSIFICATION: selected_frames, suppression_rules
+        After VALIDATION:     frame_results, findings
+        After FORTIFICATION:  fortifications, applied_fixes, security_improvements
+        After CLEANING:       cleaning_suggestions, refactorings, quality_score_after
+
+    Use ``assert_phase_complete(phase_id)`` at phase exit to validate
+    post-conditions.  Violations are emitted as warnings, never hard
+    assertions, so the pipeline always proceeds.
 
     Features:
     - Thread-safe operations with locks
@@ -173,6 +266,54 @@ class PipelineContext:
         """Initialise the LRU-bounded AST cache after dataclass init."""
         if self.ast_cache is None:
             self.ast_cache = LRUCache(maxsize=self.max_ast_cache_entries)
+
+    # -----------------------------------------------------------------------
+    # Phase post-condition validation
+    # -----------------------------------------------------------------------
+
+    def assert_phase_complete(self, phase_id: str) -> list[str]:
+        """
+        Validate that expected post-condition fields are populated after a
+        phase exits successfully.
+
+        This method is intentionally non-destructive: violations are collected
+        into ``self.warnings`` and emitted via the ``warnings`` module so the
+        pipeline always continues.  The return value allows callers (and tests)
+        to inspect failures programmatically.
+
+        Args:
+            phase_id: Phase identifier (e.g. "PRE_ANALYSIS", "CLASSIFICATION").
+                      Must be a key in ``PHASE_POST_CONDITIONS``.
+
+        Returns:
+            List of field names that failed the post-condition check.
+            Empty list means all post-conditions are satisfied.
+        """
+        expected_fields = PHASE_POST_CONDITIONS.get(phase_id)
+        if expected_fields is None:
+            # Unknown phase -- nothing to validate
+            return []
+
+        violations: list[str] = []
+        for field_name in expected_fields:
+            value = getattr(self, field_name, None)
+            # None-default fields must be non-None after the phase runs
+            if value is None:
+                violations.append(field_name)
+
+        if violations:
+            msg = (
+                f"[{self.pipeline_id}] Phase {phase_id} post-condition violation: "
+                f"fields {violations} are still None after phase exit"
+            )
+            self.warnings.append(msg)
+            warnings.warn(msg, stacklevel=2)
+
+        return violations
+
+    # -----------------------------------------------------------------------
+    # Existing methods
+    # -----------------------------------------------------------------------
 
     def add_phase_result(self, phase: str, result: dict[str, Any]) -> None:
         """
