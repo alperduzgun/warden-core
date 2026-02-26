@@ -121,12 +121,12 @@ llm:
   smart_model: qwen2.5-coder:3b
   fast_model: qwen2.5-coder:3b
   ci:
-    provider: groq
-    smart_model: ''
-    model: ''
+    provider: ollama
+    smart_model: qwen2.5-coder:3b
+    model: qwen2.5-coder:3b
     fast_tier_providers:
-    - groq
-    fast_model: ''
+    - ollama
+    fast_model: qwen2.5-coder:3b
 project:
   description: Warden configuration for warden-core
   detected_at: '2025-12-24T16:35:53.922859'
