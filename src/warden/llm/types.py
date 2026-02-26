@@ -37,7 +37,7 @@ class LlmRequest(BaseDomainModel):
     model: str | None = None
     temperature: float = 0.0  # Idempotency: deterministic outputs
     max_tokens: int = 4000
-    timeout_seconds: int = 60
+    timeout_seconds: float = 90.0
     use_fast_tier: bool = False  # If True, use local/fast model if available
 
 
