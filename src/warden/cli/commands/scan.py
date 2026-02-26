@@ -1428,6 +1428,24 @@ Updated: {scan_time}
         pass  # Silent fail for aux file
 
 
+def _update_tech_debt_file(final_result_data: dict, verbose: bool) -> None:
+    """Update .warden/TECH_DEBT.md with god class and large file findings."""
+    try:
+        from warden.reports.tech_debt_generator import TechDebtGenerator
+
+        generator = TechDebtGenerator(project_root=Path.cwd())
+        result = generator.generate(final_result_data)
+        if result:
+            try:
+                rel = result.relative_to(Path.cwd())
+            except ValueError:
+                rel = result
+            console.print(f"  [dim]Updated tech debt report: {rel}[/dim]")
+    except Exception as e:
+        if verbose:
+            console.print(f"[yellow]Warning: Tech debt update failed: {e}[/yellow]")
+
+
 def _update_baseline(
     final_result_data: dict,
     intelligence_context: dict | None,
@@ -1645,6 +1663,10 @@ async def _run_scan_async(
         # 5. Write AI status file
         if final_result_data:
             _write_ai_status_file(final_result_data)
+
+        # 5.5 Update .warden/TECH_DEBT.md with antipattern findings
+        if final_result_data:
+            _update_tech_debt_file(final_result_data, verbose)
 
         # 6. Update baseline
         if update_baseline and final_result_data:
