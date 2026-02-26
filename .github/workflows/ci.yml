@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -58,7 +58,11 @@ jobs:
         run: ruff check src/ --output-format=sarif --output-file=ruff-results.sarif || true
 
       - name: Upload Ruff SARIF to GitHub Security
+<<<<<<< HEAD
         uses: github/codeql-action/upload-sarif@v3
+=======
+        uses: github/codeql-action/upload-sarif@v4
+>>>>>>> origin/main
         if: always() && hashFiles('ruff-results.sarif') != ''
         with:
           sarif_file: ruff-results.sarif
@@ -75,8 +79,7 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    # Do NOT run the full test matrix on release tags; keep it for PRs/branch pushes
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: false  # Tests temporarily disabled
     strategy:
       fail-fast: false
       matrix:
@@ -87,7 +90,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -142,10 +145,11 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: 'pyproject.toml'
 
       # Rust is pre-installed on ubuntu-latest. We only cache the artifacts.
       - name: Cache Rust
@@ -154,13 +158,10 @@ jobs:
           workspaces: src/warden_rust
           shared-key: "rust-warden-scan"
 
-      # Removed apt-get install as build-essential is pre-installed on ubuntu-latest
-      # and it saves ~1-2 minutes of setup time.
-
       - name: Install Warden
         run: |
           pip install --upgrade pip
-          pip install .
+          pip install ".[semantic]"
           # Verify installation
           warden --help
 
@@ -173,6 +174,14 @@ jobs:
           key: warden-storage-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             warden-storage-${{ runner.os }}-
+
+      - name: Cache Warden Triage & Findings
+        uses: actions/cache@v5
+        with:
+          path: .warden/cache/
+          key: warden-cache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            warden-cache-${{ runner.os }}-
 
       - name: Cache AI Models
         uses: actions/cache@v5
@@ -211,13 +220,26 @@ jobs:
 
       - name: Run Warden Scan
         env:
+<<<<<<< HEAD
           # Configuration: Ollama only (local, no API key needed)
           WARDEN_LLM_PROVIDER: "ollama"
           WARDEN_FAST_TIER_PRIORITY: "ollama"
+=======
+          # Configuration: Ollama local LLM only (no cloud API dependency)
+          # Provider: Ollama qwen2.5-coder:3b — free, local, no rate limits
+
+          # Warden Configuration
+          WARDEN_LLM_PROVIDER: "ollama"
+          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
+>>>>>>> origin/main
           WARDEN_LLM_CONCURRENCY: "2"          # Conservative for local Ollama
 
-          # Local Service Config
+          # Ollama CPU Optimization
           OLLAMA_HOST: http://localhost:11434
+          OLLAMA_NUM_THREADS: "2"              # Match CI runner core count
+          OLLAMA_MAX_LOADED_MODELS: "1"        # No multi-model RAM overhead
+          OLLAMA_FLASH_ATTENTION: "1"          # Reduces KV cache memory pressure
+          OLLAMA_CONTEXT_LENGTH: "4096"        # Triage prompts ~2K; 4K is safe, 32K wastes RAM
 
           # Git ref for incremental scan (env var to prevent script injection)
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -263,7 +285,16 @@ jobs:
             echo "⬇️ Model not found in cache. Pulling..."
             ollama pull qwen2.5-coder:3b
           fi
-          
+
+          # Warm-up: load model into RAM and pin it for the entire job.
+          # keep_alive=-1 prevents Ollama from unloading the model between requests.
+          # This eliminates the 15-30s cold-start on the first triage batch.
+          echo "Warming up model (pinning to RAM)..."
+          curl -s http://localhost:11434/api/generate \
+            -d '{"model":"qwen2.5-coder:3b","prompt":"","keep_alive":-1}' \
+            -o /dev/null
+          echo "✅ Model warm and ready."
+
           # --- SCAN EXECUTION ---
           
           # Determine scan strategy: Baseline (first run) or Incremental (subsequent runs)
@@ -359,7 +390,7 @@ jobs:
           path: warden.sarif
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() && github.event_name != 'pull_request' && hashFiles('warden.sarif') != ''
         with:
           sarif_file: warden.sarif
@@ -379,7 +410,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'

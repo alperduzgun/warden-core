@@ -216,6 +216,24 @@ class FindingsPostProcessor:
                     pass
         return self.project_root / ".warden" / "baseline.json"
 
+    def _resolve_baseline_path(self) -> Path:
+        """Resolve the baseline file path from warden config, with fallback to default."""
+        for config_candidate in [
+            self.project_root / ".warden" / "config.yaml",
+            self.project_root / "warden.yaml",
+        ]:
+            if config_candidate.exists():
+                try:
+                    import yaml
+
+                    with open(config_candidate) as f:
+                        raw = yaml.safe_load(f) or {}
+                    raw_path = raw.get("baseline", {}).get("path", ".warden/baseline.json")
+                    return self.project_root / raw_path
+                except Exception:
+                    pass
+        return self.project_root / ".warden" / "baseline.json"
+
     def apply_baseline(self, context: PipelineContext) -> None:
         """Filter out existing issues present in baseline."""
         baseline_path = self._resolve_baseline_path()
