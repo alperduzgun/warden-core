@@ -2,6 +2,11 @@
 
 Stores ``TriageDecision`` results keyed by ``{file_path}:{content_hash}``.
 If a file's content hasn't changed, the cached decision is reused.
+
+Schema versioning: ``TRIAGE_CACHE_SCHEMA_VERSION`` is auto-derived from
+``TriageDecision`` field signatures.  Any change to the model's fields
+(addition, removal, or type change) produces a different version string,
+automatically invalidating stale cache entries.
 """
 
 from __future__ import annotations
@@ -14,14 +19,19 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from warden.analysis.domain.triage_models import TriageDecision
+from warden.shared.utils.schema_version import derive_schema_version
+
 if TYPE_CHECKING:
-    from warden.analysis.domain.triage_models import TriageDecision
+    pass
 
 logger = structlog.get_logger(__name__)
 
 # Default limits
 MAX_ENTRIES = 5000
 CACHE_FILENAME = "triage_cache.json"
+# Auto-derived from TriageDecision field signatures — no manual bump needed.
+TRIAGE_CACHE_SCHEMA_VERSION: str = derive_schema_version(TriageDecision)
 
 
 class TriageCacheManager:
@@ -32,6 +42,10 @@ class TriageCacheManager:
     Each entry maps ``file_path:sha256_hex`` to a serialised
     ``TriageDecision``.  On startup the cache is loaded from disk; on
     shutdown (or explicitly) it is flushed back.
+
+    Invalidation:
+    - Content changes → different hash → automatic miss
+    - TriageDecision field changes → different schema version → automatic miss
     """
 
     def __init__(self, project_root: Path, *, max_entries: int = MAX_ENTRIES) -> None:
@@ -59,13 +73,18 @@ class TriageCacheManager:
         if entry is None:
             return None
 
+        # Schema version guard — stale entries are silently evicted
+        if entry.get("_schema_v") != TRIAGE_CACHE_SCHEMA_VERSION:
+            del self._store[key]
+            self._dirty = True
+            logger.debug("triage_cache_schema_mismatch", file=file_path)
+            return None
+
         # Touch for LRU
         entry["_ts"] = time.time()
         self._dirty = True
 
         try:
-            from warden.analysis.domain.triage_models import TriageDecision
-
             decision = TriageDecision(**entry["decision"])
             decision.is_cached = True
             return decision
@@ -80,6 +99,7 @@ class TriageCacheManager:
         self._store[key] = {
             "decision": decision.model_dump(mode="json"),
             "_ts": time.time(),
+            "_schema_v": TRIAGE_CACHE_SCHEMA_VERSION,
         }
         self._dirty = True
         self._evict_if_needed()
