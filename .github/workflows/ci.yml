@@ -172,6 +172,14 @@ jobs:
           restore-keys: |
             warden-storage-${{ runner.os }}-
 
+      - name: Cache Warden Triage & Findings
+        uses: actions/cache@v5
+        with:
+          path: .warden/cache/
+          key: warden-cache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            warden-cache-${{ runner.os }}-
+
       - name: Cache AI Models
         uses: actions/cache@v5
         with:
@@ -217,8 +225,12 @@ jobs:
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
           WARDEN_LLM_CONCURRENCY: "2"          # Conservative for local Ollama
 
-          # Local Service Config
+          # Ollama CPU Optimization
           OLLAMA_HOST: http://localhost:11434
+          OLLAMA_NUM_THREADS: "2"              # Match CI runner core count
+          OLLAMA_MAX_LOADED_MODELS: "1"        # No multi-model RAM overhead
+          OLLAMA_FLASH_ATTENTION: "1"          # Reduces KV cache memory pressure
+          OLLAMA_CONTEXT_LENGTH: "4096"        # Triage prompts ~2K; 4K is safe, 32K wastes RAM
 
           # Git ref for incremental scan (env var to prevent script injection)
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -264,7 +276,16 @@ jobs:
             echo "⬇️ Model not found in cache. Pulling..."
             ollama pull qwen2.5-coder:3b
           fi
-          
+
+          # Warm-up: load model into RAM and pin it for the entire job.
+          # keep_alive=-1 prevents Ollama from unloading the model between requests.
+          # This eliminates the 15-30s cold-start on the first triage batch.
+          echo "Warming up model (pinning to RAM)..."
+          curl -s http://localhost:11434/api/generate \
+            -d '{"model":"qwen2.5-coder:3b","prompt":"","keep_alive":-1}' \
+            -o /dev/null
+          echo "✅ Model warm and ready."
+
           # --- SCAN EXECUTION ---
           
           # Determine scan strategy: Baseline (first run) or Incremental (subsequent runs)
