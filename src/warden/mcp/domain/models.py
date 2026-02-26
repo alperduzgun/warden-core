@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from warden.mcp.domain.enums import ResourceType, ServerStatus, ToolCategory
+from warden.mcp.domain.enums import ResourceType, ServerStatus, ToolCategory, ToolTier
 
 
 @dataclass
@@ -56,6 +56,10 @@ class MCPToolDefinition:
     MCP tool definition entity.
 
     Defines a tool that can be invoked by the MCP client.
+    Each tool belongs to a tier that controls its visibility:
+      - CORE: Exposed by default in tools/list (8 essential tools)
+      - EXTENDED: Hidden until unlocked via warden_expand_tools
+      - INTERNAL: Never exposed in tools/list (diagnostics only)
     """
 
     name: str
@@ -69,6 +73,7 @@ class MCPToolDefinition:
         }
     )
     requires_bridge: bool = False
+    tier: ToolTier = ToolTier.EXTENDED
 
     def to_mcp_format(self) -> dict[str, Any]:
         """Convert to MCP protocol format."""

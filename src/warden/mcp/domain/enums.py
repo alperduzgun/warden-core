@@ -95,3 +95,28 @@ class ToolCategory(str, Enum):
     CLEANUP = "cleanup"  # Code cleanup
     FORTIFICATION = "fortification"  # Security fortification
     SUPPRESSION = "suppression"  # Suppression rules
+
+    # Meta category for tool tiering
+    META = "meta"  # Meta-tools (e.g., expand_tools)
+
+
+class ToolTier(str, Enum):
+    """
+    Tool tiering for progressive disclosure.
+
+    Controls which tools are exposed to agents by default.
+    Agents get overwhelmed with 44+ tools; tiered exposure lets them
+    start with the 8 most important tools and expand on demand.
+
+    Tiers:
+        CORE: Essential tools exposed by default (8 tools).
+              These cover the primary scan/fix/config workflow.
+        EXTENDED: Additional tools unlocked via warden_expand_tools().
+                  Covers advanced analysis, search, CI, etc.
+        INTERNAL: Infrastructure tools not exposed in tools/list.
+                  Used for health checks, server diagnostics, etc.
+    """
+
+    CORE = "core"
+    EXTENDED = "extended"
+    INTERNAL = "internal"
