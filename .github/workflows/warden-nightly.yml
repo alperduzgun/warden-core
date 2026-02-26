@@ -27,7 +27,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install warden-core
+        run: pip install "warden-core[semantic]"
 
       - name: Setup Ollama
         run: |

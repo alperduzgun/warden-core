@@ -34,7 +34,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install .
+        run: pip install ".[semantic]"
 
       - name: Setup Ollama
         run: |
