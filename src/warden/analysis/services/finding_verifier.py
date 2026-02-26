@@ -8,6 +8,10 @@ import psutil
 from warden.llm.providers.base import ILlmClient
 from warden.memory.application.memory_manager import MemoryManager
 from warden.shared.infrastructure.logging import get_logger
+from warden.shared.utils.docstring_utils import (
+    has_docstring_context_indicator,
+    looks_like_comment_or_docstring,
+)
 from warden.shared.utils.finding_utils import get_finding_attribute
 from warden.shared.utils.retry_utils import async_retry
 
@@ -225,31 +229,17 @@ Return ONLY a JSON object:
 
     def _is_obvious_false_positive(self, finding: Any, code: str) -> bool:
         """Heuristic Alpha Filter to detect obvious false positives instantly."""
-        # 1. Comment/Docstring check (ENHANCED)
+        # 1. Comment/Docstring check (ENHANCED) - uses shared docstring utilities
         message_lower = (self._get(finding, "message") or "").lower()
         location_lower = (self._get(finding, "location") or "").lower()
 
-        # Direct comment/docstring markers
-        if code.startswith(("#", "//", "/*", '"""', "'''")) or "docstring" in message_lower:
+        # Direct comment/docstring markers (shared utility)
+        if looks_like_comment_or_docstring(code) or "docstring" in message_lower:
             return True
 
-        # Enhanced docstring detection - check for docstring keywords and patterns
-        docstring_indicators = [
-            "Example:",
-            "Examples:",
-            "Args:",
-            "Returns:",
-            "Raises:",
-            "Note:",
-            "Warning:",
-            "See also:",
-            '"""',
-            "'''",
-            "# Example",
-            "# Usage",
-        ]
-
-        if any(indicator in code for indicator in docstring_indicators):
+        # Enhanced docstring detection - uses shared docstring section keywords
+        # and context indicators (triple-quotes, "# Example", "# Usage", etc.)
+        if has_docstring_context_indicator(code):
             return True
 
         # Check if location suggests it's in a docstring (e.g., line appears to be documentation)
