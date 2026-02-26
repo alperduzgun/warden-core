@@ -54,40 +54,48 @@ class TriagePhase:
 
         decisions = {}
 
-        # Use Batch Processing
-        logger.info("triage_batch_processing_started", total_files=len(code_files))
+        # Attribute LLM calls in this phase to "triage" scope
+        from warden.llm.metrics import get_global_metrics_collector
 
-        try:
-            # Batch API handles grouping internally
-            decisions_map = await self.triage_service.batch_assess_risk_async(code_files)
+        metrics_collector = get_global_metrics_collector()
 
-            # Convert to dict format expected by context
-            for path, decision in decisions_map.items():
-                decisions[str(path)] = decision.model_dump()
+        with metrics_collector.frame_scope("triage"):
+            # Use Batch Processing
+            logger.info("triage_batch_processing_started", total_files=len(code_files))
 
-            # Handle any files that might have been missed (should be rare with fallback)
-            for file in code_files:
-                if str(file.path) not in decisions:
-                    logger.warning("triage_missed_file", file=file.path)
+            try:
+                # Batch API handles grouping internally
+                decisions_map = await self.triage_service.batch_assess_risk_async(code_files)
+
+                # Convert to dict format expected by context
+                for path, decision in decisions_map.items():
+                    decisions[str(path)] = decision.model_dump()
+
+                # Handle any files that might have been missed (should be rare with fallback)
+                for file in code_files:
+                    if str(file.path) not in decisions:
+                        logger.warning("triage_missed_file", file=file.path)
+                        fallback = TriageDecision(
+                            file_path=str(file.path),
+                            lane=TriageLane.MIDDLE,
+                            risk_score=RiskScore(score=5, confidence=0, reasoning="Missed in batch", category="error"),
+                            processing_time_ms=0,
+                        )
+                        decisions[str(file.path)] = fallback.model_dump()
+
+            except Exception as e:
+                logger.error("triage_phase_batch_failed", error=str(e))
+                # Critical fallback for phase failure
+                for file in code_files:
                     fallback = TriageDecision(
                         file_path=str(file.path),
                         lane=TriageLane.MIDDLE,
-                        risk_score=RiskScore(score=5, confidence=0, reasoning="Missed in batch", category="error"),
+                        risk_score=RiskScore(
+                            score=5, confidence=0, reasoning=f"Phase Error: {e!s}", category="error"
+                        ),
                         processing_time_ms=0,
                     )
                     decisions[str(file.path)] = fallback.model_dump()
-
-        except Exception as e:
-            logger.error("triage_phase_batch_failed", error=str(e))
-            # Critical fallback for phase failure
-            for file in code_files:
-                fallback = TriageDecision(
-                    file_path=str(file.path),
-                    lane=TriageLane.MIDDLE,
-                    risk_score=RiskScore(score=5, confidence=0, reasoning=f"Phase Error: {e!s}", category="error"),
-                    processing_time_ms=0,
-                )
-                decisions[str(file.path)] = fallback.model_dump()
 
         # Update pipeline context
         pipeline_context.triage_decisions = decisions
