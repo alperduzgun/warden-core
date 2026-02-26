@@ -140,19 +140,12 @@ class FrameRunner:
                 remaining=len(files_for_frame),
             )
 
-        # Pre-rules run on pre-triage files (before triage routing filters out fast-lane files)
-        # so they act as security gates that cannot be bypassed by triage.
-        pre_triage_files = files_for_frame
-
         frame_rules = self.config.frame_rules.get(frame.frame_id) if self.config.frame_rules else None
 
-        if frame_rules:
-            # When custom frame_rules are configured, the frame executes on pre-triage files.
-            # This ensures rule gates and frame analysis see the same file set.
-            code_files = pre_triage_files
-        else:
-            files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
-            code_files = files_for_frame
+        # Always apply triage routing so that pre-rules, frame execution, and
+        # post-rules all operate on the same (triage-filtered) file set.
+        files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
+        code_files = files_for_frame
 
         # Skip frame entirely when triage routed away every file.
         # Avoids the overhead of LLM service setup, PI injection, and a
@@ -414,7 +407,7 @@ class FrameRunner:
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:
             logger.info("executing_pre_rules", frame_id=frame.frame_id, rule_count=len(frame_rules.pre_rules))
-            pre_violations = await self.rule_executor.execute_rules_async(frame_rules.pre_rules, pre_triage_files)
+            pre_violations = await self.rule_executor.execute_rules_async(frame_rules.pre_rules, code_files)
 
             if pre_violations and RuleExecutor.has_blocker_violations(pre_violations):
                 if frame_rules.on_fail == "stop":
@@ -822,7 +815,7 @@ class FrameRunner:
 
         post_violations = []
         if frame_rules and frame_rules.post_rules:
-            post_violations = await self.rule_executor.execute_rules_async(frame_rules.post_rules, pre_triage_files)
+            post_violations = await self.rule_executor.execute_rules_async(frame_rules.post_rules, code_files)
 
             if post_violations and RuleExecutor.has_blocker_violations(post_violations):
                 if frame_rules.on_fail == "stop":
