@@ -16,7 +16,12 @@ from typing import Any
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import Framework, ProjectType
 from warden.analysis.domain.quality_metrics import QualityMetrics
+from warden.pipeline.domain.lru_cache import LRUCache
 from warden.shared.utils.finding_utils import get_finding_severity
+
+# Default maximum number of AST cache entries before LRU eviction kicks in.
+# 500 parsed trees ~ 300 MB upper bound.  Configurable via max_ast_cache_entries.
+DEFAULT_MAX_AST_CACHE_ENTRIES: int = 500
 
 
 @dataclass
@@ -35,6 +40,7 @@ class PipelineContext:
     Features:
     - Thread-safe operations with locks
     - Memory-bounded collections (FIFO eviction)
+    - LRU-bounded AST cache to prevent OOM on large repos
     - Configurable size limits
     """
 
@@ -54,6 +60,9 @@ class PipelineContext:
     MAX_FINDINGS: int = field(default=1000, init=False)
     MAX_LIST_SIZE: int = field(default=500, init=False)
 
+    # Configurable AST cache size limit (init-time parameter)
+    max_ast_cache_entries: int = DEFAULT_MAX_AST_CACHE_ENTRIES
+
     # Thread safety
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
@@ -72,7 +81,7 @@ class PipelineContext:
     # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
     taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
 
-    # Phase 0: Contract Mode — Data Dependency Graph
+    # Phase 0: Contract Mode --- Data Dependency Graph
     # Populated when contract_mode=True; consumed by DataFlowAware frames.
     data_dependency_graph: Any | None = None  # DataDependencyGraph instance
     contract_mode: bool = False  # Whether contract analysis is enabled
@@ -143,9 +152,10 @@ class PipelineContext:
     # Linter Metrics (Multi-Tool)
     linter_metrics: dict[str, Any] = field(default_factory=dict)
 
-    # Cross-Phases Cache (New)
-    # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)
-    ast_cache: dict[str, Any] = field(default_factory=dict)
+    # Cross-Phases Cache
+    # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY).
+    # Bounded by LRU eviction to prevent OOM on large repos.
+    ast_cache: LRUCache = field(default=None, init=False)  # type: ignore[assignment]
 
     # Shared Project Intelligence (populated in PRE-ANALYSIS, consumed by frames)
     project_intelligence: Any | None = None  # ProjectIntelligence instance
@@ -158,6 +168,11 @@ class PipelineContext:
     # State Tracking
     current_phase: str = "starting"  # Tracks active phase for timeout diagnostics
     completed_phases: set[str] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        """Initialise the LRU-bounded AST cache after dataclass init."""
+        if self.ast_cache is None:
+            self.ast_cache = LRUCache(maxsize=self.max_ast_cache_entries)
 
     def add_phase_result(self, phase: str, result: dict[str, Any]) -> None:
         """
