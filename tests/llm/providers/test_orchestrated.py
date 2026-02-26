@@ -6,13 +6,14 @@ Verifies:
 2. Available when only fast tier works
 3. Available when only smart tier works
 4. Unavailable when no tier works
+5. Response attribution fallback (model/provider always populated)
 """
 
 import pytest
 from unittest.mock import AsyncMock
 
 from warden.llm.providers.orchestrated import OrchestratedLlmClient
-from warden.llm.types import LlmProvider, LlmResponse
+from warden.llm.types import LlmProvider, LlmRequest, LlmResponse
 from warden.shared.infrastructure.exceptions import ExternalServiceError
 
 
@@ -155,8 +156,6 @@ class TestSmartTierFallback:
             fast_clients=[fast_client],
         )
 
-        from warden.llm.types import LlmRequest
-
         request = LlmRequest(
             system_prompt="test", user_message="test", use_fast_tier=False
         )
@@ -180,8 +179,6 @@ class TestSmartTierFallback:
             smart_client=smart_client,
             fast_clients=[],
         )
-
-        from warden.llm.types import LlmRequest
 
         request = LlmRequest(
             system_prompt="test", user_message="test", use_fast_tier=False
@@ -210,8 +207,6 @@ class TestSmartTierFallback:
             fast_clients=[unavailable_fast, available_fast],
         )
 
-        from warden.llm.types import LlmRequest
-
         request = LlmRequest(
             system_prompt="test", user_message="test", use_fast_tier=False
         )
@@ -238,8 +233,6 @@ class TestSmartTierFallback:
             smart_client=smart_client,
             fast_clients=[fast_client],
         )
-
-        from warden.llm.types import LlmRequest
 
         request = LlmRequest(
             system_prompt="test", user_message="test", use_fast_tier=False
@@ -274,11 +267,216 @@ class TestSmartTierFallback:
             fast_clients=[fast1, fast2],
         )
 
-        from warden.llm.types import LlmRequest
-
         request = LlmRequest(
             system_prompt="test", user_message="test", use_fast_tier=False
         )
         response = await orchestrated.send_async(request)
 
         assert response.content == "real result"
+
+
+class TestResponseAttribution:
+    """Test that model and provider attribution is always populated on responses.
+
+    Covers issue #146: LlmResponse.model and .provider must never be None
+    when the orchestrator returns a successful response.
+    """
+
+    @pytest.mark.asyncio
+    async def test_smart_tier_response_gets_fallback_model_when_none(self):
+        """Smart tier response with model=None gets fallback from smart_model."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="analysis result",
+                success=True,
+                provider=LlmProvider.OPENAI,
+                model=None,  # Provider did not set model
+            )
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[],
+            smart_model="gpt-4o",
+        )
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.success is True
+        assert response.model == "gpt-4o"
+        assert response.provider == LlmProvider.OPENAI
+
+    @pytest.mark.asyncio
+    async def test_smart_tier_response_gets_fallback_provider_when_none(self):
+        """Smart tier response with provider=None gets fallback from smart client."""
+        smart_client = _make_client(provider_val=LlmProvider.ANTHROPIC, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="analysis result",
+                success=True,
+                provider=None,  # Provider not set
+                model=None,  # Model not set
+            )
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[],
+            smart_model="claude-3-5-sonnet-20241022",
+        )
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.success is True
+        assert response.provider == LlmProvider.ANTHROPIC
+        assert response.model == "claude-3-5-sonnet-20241022"
+
+    @pytest.mark.asyncio
+    async def test_smart_tier_preserves_existing_attribution(self):
+        """When provider already sets model and provider, orchestrator does not overwrite."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="analysis result",
+                success=True,
+                provider=LlmProvider.OPENAI,
+                model="gpt-4o-2024-08-06",  # API returned specific model version
+            )
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[],
+            smart_model="gpt-4o",  # Generic name
+        )
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.success is True
+        assert response.model == "gpt-4o-2024-08-06"  # Original preserved
+        assert response.provider == LlmProvider.OPENAI
+
+    @pytest.mark.asyncio
+    async def test_smart_tier_fallback_response_gets_attribution(self):
+        """When smart fails and fast fallback succeeds, attribution is populated."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="", success=False, error_message="Smart failed"
+            )
+        )
+
+        fast_client = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
+        fast_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="fallback result",
+                success=True,
+                provider=None,  # Provider forgot to set
+                model=None,  # Model forgot to set
+            )
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[fast_client],
+            fast_model="qwen2.5-coder:3b",
+        )
+
+        request = LlmRequest(
+            system_prompt="test", user_message="test", use_fast_tier=False
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.success is True
+        assert response.provider == LlmProvider.OLLAMA
+        assert response.model == "qwen2.5-coder:3b"
+
+    @pytest.mark.asyncio
+    async def test_request_model_takes_precedence_as_fallback(self):
+        """When request specifies a model, it is used as fallback over smart_model."""
+        smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
+        smart_client.send_async = AsyncMock(
+            return_value=LlmResponse(
+                content="result",
+                success=True,
+                provider=LlmProvider.OPENAI,
+                model=None,  # API did not return model
+            )
+        )
+
+        orchestrated = OrchestratedLlmClient(
+            smart_client=smart_client,
+            fast_clients=[],
+            smart_model="gpt-4o",
+        )
+
+        request = LlmRequest(
+            system_prompt="test",
+            user_message="test",
+            model="gpt-4-turbo",  # Explicit model in request
+            use_fast_tier=False,
+        )
+        response = await orchestrated.send_async(request)
+
+        assert response.success is True
+        # target_model = request.model or self.smart_model -> "gpt-4-turbo"
+        assert response.model == "gpt-4-turbo"
+
+    def test_ensure_attribution_static_method(self):
+        """Unit test for _ensure_attribution helper."""
+        response = LlmResponse(
+            content="test", success=True, provider=None, model=None
+        )
+
+        result = OrchestratedLlmClient._ensure_attribution(
+            response,
+            fallback_provider=LlmProvider.GROQ,
+            fallback_model="llama-3.3-70b-versatile",
+        )
+
+        assert result.provider == LlmProvider.GROQ
+        assert result.model == "llama-3.3-70b-versatile"
+        assert result is response  # Mutated in-place
+
+    def test_ensure_attribution_preserves_existing(self):
+        """_ensure_attribution should not overwrite existing values."""
+        response = LlmResponse(
+            content="test",
+            success=True,
+            provider=LlmProvider.ANTHROPIC,
+            model="claude-3-5-sonnet-20241022",
+        )
+
+        result = OrchestratedLlmClient._ensure_attribution(
+            response,
+            fallback_provider=LlmProvider.OPENAI,
+            fallback_model="gpt-4o",
+        )
+
+        assert result.provider == LlmProvider.ANTHROPIC  # Not overwritten
+        assert result.model == "claude-3-5-sonnet-20241022"  # Not overwritten
+
+    def test_ensure_attribution_handles_none_fallbacks(self):
+        """_ensure_attribution with None fallbacks should not crash."""
+        response = LlmResponse(
+            content="test", success=True, provider=None, model=None
+        )
+
+        result = OrchestratedLlmClient._ensure_attribution(
+            response,
+            fallback_provider=None,
+            fallback_model=None,
+        )
+
+        assert result.provider is None
+        assert result.model is None
