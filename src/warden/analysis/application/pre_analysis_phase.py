@@ -344,32 +344,32 @@ class PreAnalysisPhase:
             analysis_level = self.config.get("analysis_level", AnalysisLevel.STANDARD)
 
             if analysis_level != AnalysisLevel.BASIC:
-                _emit("Running syntax integrity checks")
-                integrity_issues = await self.integrity_scanner.scan_async(
-                    code_files, project_context, pipeline_context
+                # Run integrity scan and dependency graph in parallel — they are
+                # fully independent (different inputs/outputs).  Expected gain:
+                # 10–25s on medium/large repos.
+                _emit("Running integrity checks and dependency graph (parallel)")
+                integrity_task = asyncio.create_task(
+                    self.integrity_scanner.scan_async(code_files, project_context, pipeline_context)
                 )
+                impact_task = asyncio.create_task(self._identify_impacted_files_async(code_files, project_context))
+                integrity_issues, impacted_files = await asyncio.gather(
+                    integrity_task, impact_task, return_exceptions=False
+                )
+
                 if integrity_issues:
-                    # Log issues
                     for issue in integrity_issues:
                         logger.error("integrity_check_failure", file=issue.file_path, error=issue.message)
 
-                    # Check for critical failures (syntax errors or build failures)
                     fail_fast = self.config.get("integrity_config", {}).get("fail_fast", True)
                     if fail_fast:
                         logger.error("integrity_check_failed_aborting", issue_count=len(integrity_issues))
                         raise RuntimeError(
-                            f"Integrity check failed with {len(integrity_issues)} issues. Fix syntax/build errors before running Warden."
+                            f"Integrity check failed with {len(integrity_issues)} issues. "
+                            "Fix syntax/build errors before running Warden."
                         )
             else:
-                logger.info("skipping_integrity_check_for_basic_level")
-
-            # Step 3: Dependency Awareness (Impact Analysis)
-            # Skip in BASIC level to hit performance targets
-            if analysis_level != AnalysisLevel.BASIC:
-                _emit("Building dependency graph")
-                impacted_files = await self._identify_impacted_files_async(code_files, project_context)
-            else:
-                logger.info("skipping_dependency_impact_analysis_for_basic_level")
+                logger.info("skipping_integrity_and_dependency_for_basic_level")
+                integrity_issues = []
                 impacted_files = set()
 
             # Populate dependency graph on pipeline context for downstream frame enrichment
