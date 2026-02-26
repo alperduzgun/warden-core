@@ -1,9 +1,9 @@
 """
 Classification result cache.
 
-Caches the selected frame IDs for a given set of files + project state so
-that the expensive LLM classification call can be skipped on repeat scans
-of unchanged files.
+Caches the selected frame IDs and suppression rules for a given set of
+files + project state so that the expensive LLM classification call can be
+skipped on repeat scans of unchanged files.
 
 Cache key = SHA256 of:
   - sorted (file_path, SHA256(content)) pairs
@@ -49,8 +49,16 @@ class ClassificationCache:
     # Public API
     # ------------------------------------------------------------------
 
-    def get(self, key: str) -> list[str] | None:
-        """Return cached frame list or None on miss / expiry."""
+    def get(self, key: str) -> dict[str, Any] | None:
+        """Return cached classification result or None on miss / expiry.
+
+        The returned dict contains:
+          - ``frames``: list[str] -- selected frame IDs
+          - ``suppression_rules``: list[dict] -- suppression rules
+
+        Legacy entries that lack ``suppression_rules`` are handled
+        gracefully by defaulting the field to an empty list.
+        """
         self._load()
         entry = self._data.get(key)
         if entry is None:
@@ -59,12 +67,24 @@ class ClassificationCache:
             del self._data[key]
             return None
         logger.debug("classification_cache_hit", key=key[:12])
-        return entry["frames"]
+        return {
+            "frames": entry["frames"],
+            "suppression_rules": entry.get("suppression_rules", []),
+        }
 
-    def put(self, key: str, frames: list[str]) -> None:
+    def put(
+        self,
+        key: str,
+        frames: list[str],
+        suppression_rules: list[dict[str, Any]] | None = None,
+    ) -> None:
         """Store classification result, evicting oldest entries when full."""
         self._load()
-        self._data[key] = {"frames": frames, "ts": time.time()}
+        self._data[key] = {
+            "frames": frames,
+            "suppression_rules": suppression_rules or [],
+            "ts": time.time(),
+        }
         # FIFO eviction
         if len(self._data) > _MAX_ENTRIES:
             oldest = sorted(self._data.items(), key=lambda kv: kv[1]["ts"])

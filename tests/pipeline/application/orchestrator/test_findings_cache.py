@@ -1,11 +1,12 @@
 """Tests for FindingsCache — cross-scan LLM findings persistence.
 
 Covers:
-- TestFindingsCacheSerialization:  serialize→deserialize roundtrip, is_blocker fidelity,
+- TestFindingsCacheSerialization:  serialize->deserialize roundtrip, is_blocker fidelity,
                                    missing field raises, wrong type raises
-- TestFindingsCacheOperations:     miss/hit, clean-file empty list, non-cacheable frame,
+- TestFindingsCacheOperations:     miss/hit, clean-file empty list, custom/hub frame caching,
                                    different content is miss, same content different file is miss
-- TestFindingsCacheSchema:         schema version mismatch evicts, correct version hits
+- TestFindingsCacheSchema:         schema version mismatch evicts, correct version hits,
+                                   auto-derived version is deterministic, version is a string
 - TestFindingsCacheFlush:          creates file, atomic (no .tmp orphan), idempotent if not dirty,
                                    reload after flush hits
 - TestFindingsCacheEviction:       LRU evict when exceeds max_entries
@@ -21,7 +22,6 @@ import pytest
 
 from warden.pipeline.application.orchestrator.findings_cache import (
     CACHE_SCHEMA_VERSION,
-    CACHEABLE_FRAME_IDS,
     FindingsCache,
     _deserialize_finding,
     _serialize_finding,
@@ -61,9 +61,8 @@ def _make_cache(tmp_path: Path, max_entries: int = 100) -> FindingsCache:
     return FindingsCache(tmp_path, max_entries=max_entries)
 
 
-# First cacheable frame ID for convenience
-_FRAME = next(iter(sorted(CACHEABLE_FRAME_IDS)))
-_NON_CACHEABLE = "unknown_frame_xyz"
+# Built-in frame ID for convenience
+_FRAME = "security"
 
 
 # ===========================================================================
@@ -72,7 +71,7 @@ _NON_CACHEABLE = "unknown_frame_xyz"
 
 
 class TestFindingsCacheSerialization:
-    """Serialize → deserialize roundtrips and field fidelity."""
+    """Serialize -> deserialize roundtrips and field fidelity."""
 
     def test_serialize_roundtrip_basic_fields(self) -> None:
         f = _make_finding()
@@ -123,7 +122,7 @@ class TestFindingsCacheSerialization:
 
 
 class TestFindingsCacheOperations:
-    """get / put / miss / hit / cacheable guard."""
+    """get / put / miss / hit / any frame ID cacheable."""
 
     def test_get_miss_returns_none(self, tmp_path: Path) -> None:
         cache = _make_cache(tmp_path)
@@ -149,20 +148,37 @@ class TestFindingsCacheOperations:
         assert result is not None
         assert result == []
 
-    def test_noncacheable_frame_always_miss(self, tmp_path: Path) -> None:
+    def test_custom_frame_is_cached(self, tmp_path: Path) -> None:
+        """Custom/hub frame IDs are cacheable (no hardcoded allowlist)."""
         cache = _make_cache(tmp_path)
         findings = [_make_finding()]
-        # put should silently skip non-cacheable frames
-        cache.put_findings(_NON_CACHEABLE, "src/app.py", "content", findings)
+        custom_frame = "custom_auth_frame"
 
-        result = cache.get_findings(_NON_CACHEABLE, "src/app.py", "content")
-        assert result is None
+        cache.put_findings(custom_frame, "src/app.py", "content", findings)
+        result = cache.get_findings(custom_frame, "src/app.py", "content")
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].id == "F001"
+
+    def test_hub_frame_is_cached(self, tmp_path: Path) -> None:
+        """Hub frames with arbitrary IDs are cacheable."""
+        cache = _make_cache(tmp_path)
+        findings = [_make_finding(id="HUB001")]
+        hub_frame = "redis-security"
+
+        cache.put_findings(hub_frame, "src/db.py", "redis code", findings)
+        result = cache.get_findings(hub_frame, "src/db.py", "redis code")
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].id == "HUB001"
 
     def test_different_content_is_cache_miss(self, tmp_path: Path) -> None:
         cache = _make_cache(tmp_path)
         cache.put_findings(_FRAME, "src/app.py", "version_1", [_make_finding()])
 
-        # Different content → different hash → miss
+        # Different content -> different hash -> miss
         result = cache.get_findings(_FRAME, "src/app.py", "version_2")
         assert result is None
 
@@ -170,7 +186,7 @@ class TestFindingsCacheOperations:
         cache = _make_cache(tmp_path)
         cache.put_findings(_FRAME, "src/a.py", "shared content", [_make_finding()])
 
-        # Same content but different path → miss
+        # Same content but different path -> miss
         result = cache.get_findings(_FRAME, "src/b.py", "shared content")
         assert result is None
 
@@ -202,6 +218,22 @@ class TestFindingsCacheOperations:
 class TestFindingsCacheSchema:
     """Schema version guard — stale entries are evicted."""
 
+    def test_schema_version_is_auto_derived_string(self) -> None:
+        """CACHE_SCHEMA_VERSION should be a hex string, not a manual int."""
+        assert isinstance(CACHE_SCHEMA_VERSION, str)
+        assert len(CACHE_SCHEMA_VERSION) == 8
+        # Must be valid hex
+        int(CACHE_SCHEMA_VERSION, 16)
+
+    def test_schema_version_is_deterministic(self) -> None:
+        """Calling derive_schema_version twice yields the same result."""
+        from warden.shared.utils.schema_version import derive_schema_version
+
+        v1 = derive_schema_version(Finding)
+        v2 = derive_schema_version(Finding)
+        assert v1 == v2
+        assert v1 == CACHE_SCHEMA_VERSION
+
     def test_correct_schema_version_hits(self, tmp_path: Path) -> None:
         cache = _make_cache(tmp_path)
         cache.put_findings(_FRAME, "src/app.py", "content", [_make_finding()])
@@ -219,7 +251,7 @@ class TestFindingsCacheSchema:
         key = FindingsCache.cache_key(_FRAME, "src/app.py", content)
 
         # Corrupt the schema version in internal store
-        cache._store[key]["_schema_v"] = CACHE_SCHEMA_VERSION + 99
+        cache._store[key]["_schema_v"] = "stale000"
 
         result = cache.get_findings(_FRAME, "src/app.py", content)
         assert result is None
@@ -263,7 +295,7 @@ class TestFindingsCacheFlush:
         cache_file = tmp_path / ".warden" / "cache" / "findings_cache.json"
         mtime_first = cache_file.stat().st_mtime
 
-        # Second flush — not dirty, file must not change
+        # Second flush -- not dirty, file must not change
         cache.flush()
         mtime_second = cache_file.stat().st_mtime
         assert mtime_first == mtime_second
@@ -282,7 +314,7 @@ class TestFindingsCacheFlush:
         assert result[0].id == "PERSIST"
 
     def test_reload_preserves_is_blocker(self, tmp_path: Path) -> None:
-        """is_blocker=True survives flush → reload cycle."""
+        """is_blocker=True survives flush -> reload cycle."""
         cache1 = _make_cache(tmp_path)
         cache1.put_findings(_FRAME, "src/app.py", "c", [_make_finding(is_blocker=True)])
         cache1.flush()
@@ -301,6 +333,18 @@ class TestFindingsCacheFlush:
         cache = _make_cache(tmp_path)
         assert cache.size == 0
         assert cache.get_findings(_FRAME, "src/app.py", "content") is None
+
+    def test_reload_custom_frame_after_flush(self, tmp_path: Path) -> None:
+        """Custom frame findings survive flush -> reload cycle."""
+        cache1 = _make_cache(tmp_path)
+        cache1.put_findings("my_custom_frame", "src/app.py", "code", [_make_finding(id="CUSTOM1")])
+        cache1.flush()
+
+        cache2 = _make_cache(tmp_path)
+        result = cache2.get_findings("my_custom_frame", "src/app.py", "code")
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].id == "CUSTOM1"
 
 
 # ===========================================================================

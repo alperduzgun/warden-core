@@ -657,6 +657,7 @@ async def _process_stream_events(
     _phase_passed = 0
     _phase_failed = 0
     _phase_issues = 0
+    _total_issues_so_far = 0  # cumulative findings across all phases
     _phase_start = time.monotonic()
     _last_phase = ""  # prevent duplicate headers
     _phase_steps: list[str] = []  # progress_update status strings for subtitle
@@ -727,12 +728,14 @@ async def _process_stream_events(
         counter_str = f" ({processed_units}/{total_units})" if total_units > 0 else ""
         frame_hint = f"  [dim]{current_frame}[/dim]" if current_frame and current_frame != current_phase else ""
 
+        issues_str = f"  [bold red]{_total_issues_so_far} issue{'s' if _total_issues_so_far != 1 else ''}[/bold red]" if _total_issues_so_far > 0 else ""
+
         active_tbl = Table.grid(padding=(0, 1))
         active_tbl.add_column(no_wrap=True)
         active_tbl.add_column(no_wrap=False)
         active_tbl.add_row(
             _spinner_widget,
-            Text.from_markup(f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}"),
+            Text.from_markup(f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}{issues_str}"),
         )
 
         # ── Build content block ──────────────────────────────────────────────
@@ -863,6 +866,7 @@ async def _process_stream_events(
                             icon, color = "–", "dim"
 
                         _phase_issues += findings_num
+                        _total_issues_so_far += findings_num
                         current_frame = nonlocal_frame_name
 
                         # ── Critical finding flash row ─────────────────────────────
@@ -1166,6 +1170,26 @@ def _render_text_report(
                     indent_guides=False,
                 )
                 console.print(Padding(syntax, (0, 0, 0, 4)))
+
+            # ── Suggested fix (from Fortification remediation) ── (#197)
+            rem = finding.get("remediation")
+            rem_code = ""
+            if isinstance(rem, dict):
+                rem_code = rem.get("code", "")
+            elif rem is not None:
+                rem_code = getattr(rem, "code", "")
+            if rem_code:
+                console.print("    [bold green]Suggested Fix:[/bold green]")
+                fix_syntax = Syntax(
+                    rem_code,
+                    lang,
+                    theme="github-dark",
+                    line_numbers=False,
+                    word_wrap=True,
+                    background_color="default",
+                    indent_guides=False,
+                )
+                console.print(Padding(fix_syntax, (0, 0, 0, 4)))
 
             # ── Remediation tip (first meaningful line) ──
             if detail:

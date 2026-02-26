@@ -55,141 +55,166 @@ class FindingsPostProcessor:
         """
         logger.info("phase_started", phase="VERIFICATION")
 
-        try:
-            verify_llm = self.llm_service or create_client()
-            verify_mem_manager = getattr(self.config, "memory_manager", None)
+        # Attribute LLM calls in this phase to "verification" scope
+        from warden.llm.metrics import get_global_metrics_collector
 
-            verifier = FindingVerificationService(
-                llm_client=verify_llm,
-                memory_manager=verify_mem_manager,
-                enabled=True,
-            )
+        metrics_collector = get_global_metrics_collector()
 
-            verified_count = 0
-            dropped_count = 0
+        with metrics_collector.frame_scope("verification"):
+            try:
+                verify_llm = self.llm_service or create_client()
+                verify_mem_manager = getattr(self.config, "memory_manager", None)
 
-            for frame_id, frame_res in context.frame_results.items():
-                result_obj = frame_res.get("result")
-                if result_obj and result_obj.findings:
-                    # Skip LLM verification for frames that declared supports_verification=False.
-                    # These frames produce factual/structural findings (dead code, property violations,
-                    # architectural gaps) that the security-focused verifier incorrectly rejects.
-                    frame_supports_verification = (result_obj.metadata or {}).get("supports_verification", True)
-                    if not frame_supports_verification:
+                verifier = FindingVerificationService(
+                    llm_client=verify_llm,
+                    memory_manager=verify_mem_manager,
+                    enabled=True,
+                )
+
+                verified_count = 0
+                dropped_count = 0
+
+                for frame_id, frame_res in context.frame_results.items():
+                    result_obj = frame_res.get("result")
+                    if result_obj and result_obj.findings:
+                        # Skip LLM verification for frames that declared supports_verification=False.
+                        # These frames produce factual/structural findings (dead code, property violations,
+                        # architectural gaps) that the security-focused verifier incorrectly rejects.
+                        frame_supports_verification = (result_obj.metadata or {}).get("supports_verification", True)
+                        if not frame_supports_verification:
+                            logger.info(
+                                "verification_skipped_frame_opt_out",
+                                frame_id=frame_id,
+                                findings_count=len(result_obj.findings),
+                            )
+                            verified_count += len(result_obj.findings)
+                            continue
+
+                        findings_to_verify = [f.to_dict() if hasattr(f, "to_dict") else f for f in result_obj.findings]
+                        total_findings = len(findings_to_verify)
+
                         logger.info(
-                            "verification_skipped_frame_opt_out",
+                            "finding_verification_started",
                             frame_id=frame_id,
-                            findings_count=len(result_obj.findings),
-                        )
-                        verified_count += len(result_obj.findings)
-                        continue
-
-                    findings_to_verify = [f.to_dict() if hasattr(f, "to_dict") else f for f in result_obj.findings]
-                    total_findings = len(findings_to_verify)
-
-                    logger.info(
-                        "finding_verification_started",
-                        frame_id=frame_id,
-                        findings_count=len(findings_to_verify),
-                    )
-
-                    verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)
-                    verified_ids = {f["id"] for f in verified_findings_dicts}
-
-                    if self._progress_callback:
-                        self._progress_callback(
-                            "progress_update",
-                            {"increment": total_findings, "phase": f"Verified {frame_id}"},
+                            findings_count=len(findings_to_verify),
                         )
 
-                    final_findings = []
-                    cached_count = 0
+                        verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)
+                        verified_ids = {f["id"] for f in verified_findings_dicts}
 
-                    for f in result_obj.findings:
-                        fid = f.get("id") if isinstance(f, dict) else f.id
-                        if fid in verified_ids:
-                            final_findings.append(f)
-                            if any(
-                                vf.get("verification_metadata", {}).get("cached")
-                                for vf in verified_findings_dicts
-                                if vf["id"] == fid
-                            ):
-                                cached_count += 1
-                        else:
-                            # Track dropped findings as false positives
-                            if hasattr(context, "false_positives"):
-                                context.false_positives.append(fid)
+                        if self._progress_callback:
+                            self._progress_callback(
+                                "progress_update",
+                                {"increment": total_findings, "phase": f"Verified {frame_id}"},
+                            )
 
-                    dropped = len(result_obj.findings) - len(final_findings)
-                    dropped_count += dropped
-                    verified_count += len(final_findings)
+                        final_findings = []
+                        cached_count = 0
 
-                    result_obj.findings = final_findings
-                    result_obj.issues_found = len(final_findings)
+                        for f in result_obj.findings:
+                            fid = f.get("id") if isinstance(f, dict) else f.id
+                            if fid in verified_ids:
+                                final_findings.append(f)
+                                if any(
+                                    vf.get("verification_metadata", {}).get("cached")
+                                    for vf in verified_findings_dicts
+                                    if vf["id"] == fid
+                                ):
+                                    cached_count += 1
+                            else:
+                                # Track dropped findings as false positives
+                                if hasattr(context, "false_positives"):
+                                    context.false_positives.append(fid)
 
-                    # Correct stale frame status after FP filtering
-                    # BUT preserve intentional failures (rule blocker violations)
-                    if (
-                        not final_findings
-                        and getattr(result_obj, "status", None) == "failed"
-                        and not self._has_blocker_violations(result_obj)
-                    ):
-                        result_obj.status = "passed"
+                        dropped = len(result_obj.findings) - len(final_findings)
+                        dropped_count += dropped
+                        verified_count += len(final_findings)
+
+                        result_obj.findings = final_findings
+                        result_obj.issues_found = len(final_findings)
+
+                        # Correct stale frame status after FP filtering
+                        # BUT preserve intentional failures (rule blocker violations)
+                        if (
+                            not final_findings
+                            and getattr(result_obj, "status", None) == "failed"
+                            and not self._has_blocker_violations(result_obj)
+                        ):
+                            result_obj.status = "passed"
+                            logger.info(
+                                "frame_status_corrected",
+                                frame_id=frame_id,
+                                old_status="failed",
+                                new_status="passed",
+                                reason="all_findings_filtered_by_verification",
+                            )
+
                         logger.info(
-                            "frame_status_corrected",
+                            "finding_verification_complete",
                             frame_id=frame_id,
-                            old_status="failed",
-                            new_status="passed",
-                            reason="all_findings_filtered_by_verification",
+                            total=total_findings,
+                            verified=len(final_findings),
+                            dropped=dropped,
+                            cached=cached_count,
                         )
 
-                    logger.info(
-                        "finding_verification_complete",
-                        frame_id=frame_id,
-                        total=total_findings,
-                        verified=len(final_findings),
-                        dropped=dropped,
-                        cached=cached_count,
-                    )
+                # Synchronize globally in context
+                all_verified = []
+                for fr in context.frame_results.values():
+                    res = fr.get("result")
+                    if res and res.findings:
+                        all_verified.extend(res.findings)
+                context.findings = all_verified
 
-            # Synchronize globally in context
-            all_verified = []
-            for fr in context.frame_results.values():
-                res = fr.get("result")
-                if res and res.findings:
-                    all_verified.extend(res.findings)
-            context.findings = all_verified
+                # Re-sync validated_issues — remove findings dropped by verification
+                if context.validated_issues:
+                    surviving_ids = {
+                        getattr(f, "id", None) or (f.get("id") if isinstance(f, dict) else None)
+                        for f in context.findings
+                    }
+                    before_count = len(context.validated_issues)
+                    context.validated_issues = [vi for vi in context.validated_issues if vi.get("id") in surviving_ids]
+                    if len(context.validated_issues) < before_count:
+                        logger.info(
+                            "validated_issues_synced",
+                            before=before_count,
+                            after=len(context.validated_issues),
+                            reason="verification_filtering",
+                        )
 
-            # Re-sync validated_issues — remove findings dropped by verification
-            if context.validated_issues:
-                surviving_ids = {
-                    getattr(f, "id", None) or (f.get("id") if isinstance(f, dict) else None) for f in context.findings
-                }
-                before_count = len(context.validated_issues)
-                context.validated_issues = [vi for vi in context.validated_issues if vi.get("id") in surviving_ids]
-                if len(context.validated_issues) < before_count:
-                    logger.info(
-                        "validated_issues_synced",
-                        before=before_count,
-                        after=len(context.validated_issues),
-                        reason="verification_filtering",
-                    )
+                logger.info(
+                    "verification_phase_completed",
+                    total_verified=verified_count,
+                    total_dropped=dropped_count,
+                )
 
-            logger.info(
-                "verification_phase_completed",
-                total_verified=verified_count,
-                total_dropped=dropped_count,
-            )
+            except Exception as e:
+                import traceback
 
-        except Exception as e:
-            import traceback
+                logger.warning(
+                    "verification_phase_failed",
+                    error=str(e),
+                    type=type(e).__name__,
+                    traceback=traceback.format_exc(),
+                )
 
-            logger.warning(
-                "verification_phase_failed",
-                error=str(e),
-                type=type(e).__name__,
-                traceback=traceback.format_exc(),
-            )
+    def _resolve_baseline_path(self) -> Path:
+        """Resolve the baseline file path from warden config, with fallback to default."""
+        for config_candidate in [
+            self.project_root / ".warden" / "config.yaml",
+            self.project_root / "warden.yaml",
+        ]:
+            if config_candidate.exists():
+                try:
+                    import yaml  # noqa: PLC0415
+
+                    with open(config_candidate) as f:
+                        raw = yaml.safe_load(f) or {}
+                    raw_path = raw.get("baseline", {}).get("path", ".warden/baseline.json")
+                    return self.project_root / raw_path
+                except Exception:
+                    pass
+        return self.project_root / ".warden" / "baseline.json"
 
     def _resolve_baseline_path(self) -> Path:
         """Resolve the baseline file path from warden config, with fallback to default."""

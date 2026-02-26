@@ -105,7 +105,7 @@ class AnthropicClient(ILlmClient):
                 content=result["content"][0]["text"],
                 success=True,
                 provider=self.provider,
-                model=result.get("model"),
+                model=result.get("model") or request.model or self._default_model,
                 prompt_tokens=usage.get("input_tokens"),
                 completion_tokens=usage.get("output_tokens"),
                 total_tokens=usage.get("input_tokens", 0) + usage.get("output_tokens", 0),

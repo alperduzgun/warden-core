@@ -15,31 +15,19 @@ jobs:
       WARDEN_LLM_PROVIDER: ollama
       WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
       OLLAMA_HOST: http://localhost:11434
-      OLLAMA_NUM_THREADS: "2"
-      OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_FLASH_ATTENTION: "1"
-      OLLAMA_CONTEXT_LENGTH: "4096"
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
       - name: Install Warden
-        run: pip install "warden-core[semantic]"
-
-      - name: Cache Warden Triage & Findings
-        uses: actions/cache@v5
-        with:
-          path: .warden/cache/
-          key: warden-cache-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            warden-cache-${{ runner.os }}-
+        run: pip install warden-core
 
       - name: Setup Ollama
         run: |
@@ -55,10 +43,6 @@ jobs:
             sleep 1
           done
           ollama pull qwen2.5-coder:3b
-          curl -s http://localhost:11434/api/generate \
-            -d '{"model":"qwen2.5-coder:3b","prompt":"","keep_alive":-1}' \
-            -o /dev/null
-          echo "✅ Model warm and ready."
 
 
       - name: Refresh Intelligence
@@ -83,14 +67,14 @@ jobs:
 
       - name: Upload SARIF Report
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: .warden/reports/warden-report.sarif
         continue-on-error: true
 
       - name: Upload Reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: warden-nightly-reports
           path: .warden/reports/

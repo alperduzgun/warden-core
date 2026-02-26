@@ -113,7 +113,7 @@ class OpenAIClient(ILlmClient):
                 content=result["choices"][0]["message"]["content"],
                 success=True,
                 provider=self.provider,
-                model=result.get("model"),
+                model=result.get("model") or request.model or self._default_model,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=total_tokens,

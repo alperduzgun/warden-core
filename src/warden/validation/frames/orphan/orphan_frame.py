@@ -15,12 +15,14 @@ NEW: LLM-powered intelligent filtering (optional)
 Priority: MEDIUM (warning)
 """
 
+from __future__ import annotations
+
 import fnmatch
 import os
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from warden.validation.domain.enums import (
     FrameApplicability,
@@ -45,6 +47,9 @@ from llm_orphan_filter import LLMOrphanFilter
 from orphan_detector import OrphanDetectorFactory, OrphanFinding
 
 from warden.shared.infrastructure.logging import get_logger
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 logger = get_logger(__name__)
 
@@ -329,7 +334,7 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAwar
         else:
             return f"Analyzed {candidates} candidates from {file_count} files."
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute orphan code detection on code file.
 

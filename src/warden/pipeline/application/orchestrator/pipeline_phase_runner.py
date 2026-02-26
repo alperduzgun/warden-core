@@ -13,6 +13,63 @@ from warden.validation.domain.frame import CodeFile, FrameResult
 
 logger = get_logger(__name__)
 
+# Decorator names that indicate authentication/authorization enforcement.
+# Used by _populate_project_intelligence to populate auth_patterns from AST.
+AUTH_DECORATOR_NAMES: frozenset[str] = frozenset(
+    {
+        "login_required",
+        "jwt_required",
+        "permission_required",
+        "require_http_methods",
+        "authenticate",
+        "requires_auth",
+        "auth_required",
+        "protected",
+        "token_required",
+        "permissions_required",
+        "has_permission",
+        "require_permissions",
+        "csrf_protect",
+        "csrf_exempt",
+        "require_role",
+        "roles_required",
+        "admin_required",
+        "api_key_required",
+        "oauth_required",
+        "bearer_token_required",
+    }
+)
+
+# Decorator names that indicate HTTP route/endpoint definitions.
+# Used to enhance entry_points with function-level info.
+ROUTE_DECORATOR_NAMES: frozenset[str] = frozenset(
+    {
+        "route",
+        "get",
+        "post",
+        "put",
+        "patch",
+        "delete",
+        "head",
+        "options",
+        "api_view",
+        "app.route",
+        "app.get",
+        "app.post",
+        "app.put",
+        "app.patch",
+        "app.delete",
+        "router.route",
+        "router.get",
+        "router.post",
+        "router.put",
+        "router.patch",
+        "router.delete",
+        "blueprint.route",
+        "require_http_methods",
+    }
+)
+
 
 class PipelinePhaseRunner:
     """Coordinates sequential execution of all pipeline phases."""
@@ -44,6 +101,63 @@ class PipelinePhaseRunner:
     @progress_callback.setter
     def progress_callback(self, value: Callable | None) -> None:
         self._progress_callback = value
+
+    # ------------------------------------------------------------------
+    # Phase pre-condition checks (PHASE-GAP-4 fix)
+    # ------------------------------------------------------------------
+
+    def _check_phase_preconditions(self, phase: str, context: PipelineContext) -> bool:
+        """Check that required context fields from prior phases are populated.
+
+        Returns True if all pre-conditions are satisfied.  When a pre-condition
+        fails the method logs a structured warning, records it on
+        ``context.warnings``, and returns False.  The caller decides whether to
+        skip or continue the phase — the pipeline is never crashed by a
+        pre-condition failure.
+        """
+        checks: dict[str, list[tuple[str, str, str]]] = {
+            # (field_name, human_description, producing_phase)
+            "Validation": [
+                ("selected_frames", "selected_frames (frame list from Classification)", "Classification"),
+            ],
+            "Verification": [
+                ("findings", "findings (issue list from Validation)", "Validation"),
+            ],
+            "Fortification": [
+                ("findings", "findings (issue list from Validation)", "Validation"),
+                ("frame_results", "frame_results (execution results from Validation)", "Validation"),
+            ],
+            "Cleaning": [
+                ("findings", "findings (issue list from Validation)", "Validation"),
+            ],
+        }
+
+        preconditions = checks.get(phase)
+        if not preconditions:
+            return True
+
+        all_ok = True
+        for field_name, description, producing_phase in preconditions:
+            value = getattr(context, field_name, None)
+            # An empty list / empty dict is acceptable for findings/frame_results
+            # (the phase ran but found nothing).  Only flag truly missing data:
+            # None means the field was never set by the producing phase.
+            if value is None:
+                msg = (
+                    f"Phase {phase} expects '{description}' from {producing_phase}, "
+                    f"but the field is None. {producing_phase} may have been skipped or "
+                    f"failed silently. {phase} will proceed but may produce empty results."
+                )
+                logger.warning(
+                    "phase_precondition_not_met",
+                    phase=phase,
+                    missing_field=field_name,
+                    expected_from=producing_phase,
+                )
+                context.warnings.append(msg)
+                all_ok = False
+
+        return all_ok
 
     async def execute_all_phases(
         self,
@@ -147,6 +261,7 @@ class PipelinePhaseRunner:
         context.current_phase = "Validation"
         enable_validation = getattr(self.config, "enable_validation", True)
         if enable_validation:
+            self._check_phase_preconditions("Validation", context)
             logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
             await self.frame_executor.execute_validation_with_strategy_async(context, code_files, pipeline)
         else:
@@ -168,6 +283,7 @@ class PipelinePhaseRunner:
         # Phase 3.5: VERIFICATION (False Positive Reduction)
         context.current_phase = "Verification"
         if getattr(self.config, "enable_issue_validation", False):
+            self._check_phase_preconditions("Verification", context)
             findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
             if self._progress_callback:
                 self._progress_callback(
@@ -187,6 +303,7 @@ class PipelinePhaseRunner:
 
         enable_fortification = getattr(self.config, "enable_fortification", True)
         if enable_fortification:
+            self._check_phase_preconditions("Fortification", context)
             logger.info("phase_enabled", phase="FORTIFICATION", enabled=enable_fortification)
             await self.phase_executor.execute_fortification_async(context, code_files)
 
@@ -215,6 +332,7 @@ class PipelinePhaseRunner:
 
         enable_cleaning = getattr(self.config, "enable_cleaning", True)
         if enable_cleaning:
+            self._check_phase_preconditions("Cleaning", context)
             logger.info("phase_enabled", phase="CLEANING", enabled=enable_cleaning)
             await self.phase_executor.execute_cleaning_async(context, code_files)
 
@@ -268,13 +386,21 @@ class PipelinePhaseRunner:
         """
         Populate ProjectIntelligence from AST analysis (zero LLM cost).
 
-        Scans code files for input sources, critical sinks, and project metadata.
+        Scans code files for input sources, critical sinks, auth patterns,
+        and project metadata.  Walks the universal AST tree stored in
+        ``context.ast_cache`` (``ParseResult`` objects) to extract
+        decorator-based auth patterns and function-level entry points.
+
         This runs during PRE-ANALYSIS and the result is shared with all frames.
         """
+        from warden.ast.domain.enums import ASTNodeType
         from warden.pipeline.domain.intelligence import ProjectIntelligence
 
         intel = ProjectIntelligence()
         intel.total_files = len(code_files)
+
+        # Track entry points already added by filename heuristic to avoid duplicates
+        entry_point_set: set[str] = set()
 
         # Language distribution
         lang_counts: dict[str, int] = {}
@@ -283,10 +409,11 @@ class PipelinePhaseRunner:
             lang_counts[lang] = lang_counts.get(lang, 0) + 1
             intel.total_lines += cf.line_count
 
-            # Detect entry points
+            # Detect entry points by filename heuristic
             path_lower = cf.path.lower()
             if any(p in path_lower for p in ["main.py", "app.py", "wsgi.py", "asgi.py", "manage.py", "index."]):
                 intel.entry_points.append(cf.path)
+                entry_point_set.add(cf.path)
 
             # Detect test files
             if any(p in path_lower for p in ["test_", "_test.", "tests/", "spec/"]):
@@ -302,9 +429,20 @@ class PipelinePhaseRunner:
 
         # Extract from AST cache if available
         for cf in code_files:
-            ast_data = context.ast_cache.get(cf.path, {})
+            ast_data = context.ast_cache.get(cf.path)
+            if ast_data is None:
+                continue
 
-            # Only process if ast_data is a dictionary (not a raw AST Module)
+            # Handle ParseResult objects (the normal path from AST pre-parser
+            # and integrity scanner).
+            ast_root = getattr(ast_data, "ast_root", None)
+            if ast_root is not None:
+                self._extract_intelligence_from_ast(
+                    ast_root, cf.path, intel, entry_point_set, ASTNodeType,
+                )
+                continue
+
+            # Legacy fallback: dict-based AST data
             if not isinstance(ast_data, dict):
                 continue
 
@@ -353,9 +491,100 @@ class PipelinePhaseRunner:
             total_files=intel.total_files,
             input_sources=len(intel.input_sources),
             critical_sinks=len(intel.critical_sinks),
+            auth_patterns=len(intel.auth_patterns),
             entry_points=len(intel.entry_points),
             primary_language=intel.primary_language,
         )
+
+    @staticmethod
+    def _extract_intelligence_from_ast(
+        ast_root: Any,
+        file_path: str,
+        intel: Any,
+        entry_point_set: set[str],
+        node_types: Any,
+    ) -> None:
+        """Walk a universal AST tree and populate intelligence fields.
+
+        Extracts:
+        - **auth_patterns** from decorator names on functions/classes that
+          match ``AUTH_DECORATOR_NAMES``.
+        - **entry_points** with ``file::function`` notation for functions
+          decorated with route/handler decorators.
+
+        Args:
+            ast_root: The root ``ASTNode`` of the universal AST.
+            file_path: Source file path for attribution.
+            intel: ``ProjectIntelligence`` instance to populate.
+            entry_point_set: Set tracking already-added entry points.
+            node_types: ``ASTNodeType`` enum for node filtering.
+        """
+        # Collect function and class nodes from the universal AST
+        func_nodes = ast_root.find_nodes(node_types.FUNCTION)
+        class_nodes = ast_root.find_nodes(node_types.CLASS)
+
+        for node in func_nodes:
+            decorators = node.attributes.get("decorators", [])
+            if not decorators:
+                continue
+
+            func_name = node.name or "<anonymous>"
+            line = node.location.start_line if node.location else 0
+
+            for dec_name in decorators:
+                # Normalize: strip parenthesized arguments from unparsed
+                # decorator strings, e.g. "permission_required('admin')"
+                # becomes "permission_required".
+                base_name = dec_name.split("(")[0].strip() if isinstance(dec_name, str) else str(dec_name)
+                # Also handle dotted names like "app.route" -> check both
+                # the full dotted name and the last segment.
+                segments = base_name.rsplit(".", 1)
+                last_segment = segments[-1].lower()
+                full_lower = base_name.lower()
+
+                # Check for auth decorator
+                if last_segment in AUTH_DECORATOR_NAMES or full_lower in AUTH_DECORATOR_NAMES:
+                    intel.auth_patterns.append(
+                        {
+                            "pattern": base_name,
+                            "type": "decorator",
+                            "function": func_name,
+                            "file": file_path,
+                            "line": line,
+                        }
+                    )
+
+                # Check for route/endpoint decorator -> function-level entry point
+                if last_segment in ROUTE_DECORATOR_NAMES or full_lower in ROUTE_DECORATOR_NAMES:
+                    entry = f"{file_path}::{func_name}"
+                    if entry not in entry_point_set:
+                        intel.entry_points.append(entry)
+                        entry_point_set.add(entry)
+
+        for node in class_nodes:
+            decorators = node.attributes.get("decorators", [])
+            if not decorators:
+                continue
+
+            class_name = node.name or "<anonymous>"
+            line = node.location.start_line if node.location else 0
+
+            for dec_name in decorators:
+                base_name = dec_name.split("(")[0].strip() if isinstance(dec_name, str) else str(dec_name)
+                segments = base_name.rsplit(".", 1)
+                last_segment = segments[-1].lower()
+                full_lower = base_name.lower()
+
+                if last_segment in AUTH_DECORATOR_NAMES or full_lower in AUTH_DECORATOR_NAMES:
+                    intel.auth_patterns.append(
+                        {
+                            "pattern": base_name,
+                            "type": "decorator",
+                            "class": class_name,
+                            "file": file_path,
+                            "line": line,
+                        }
+                    )
 
     def _populate_data_dependency_graph(self, context: PipelineContext) -> None:
         """Populate the DataDependencyGraph when contract_mode is enabled.

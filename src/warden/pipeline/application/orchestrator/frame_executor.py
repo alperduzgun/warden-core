@@ -207,6 +207,9 @@ class FrameExecutor:
             logger.error("phase_failed", phase="VALIDATION", error=str(e))
             context.errors.append(f"VALIDATION failed: {e!s}")
 
+        # Post-condition check: validate expected fields are populated (#133)
+        context.assert_phase_complete("VALIDATION")
+
         if self.progress_callback:
             duration = time.perf_counter() - start_time
             self.progress_callback(

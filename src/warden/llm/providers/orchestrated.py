@@ -92,6 +92,32 @@ class OrchestratedLlmClient(ILlmClient):
         """
         return self.smart_client.provider
 
+    @staticmethod
+    def _ensure_attribution(
+        response: LlmResponse,
+        fallback_provider: LlmProvider | None,
+        fallback_model: str | None,
+    ) -> LlmResponse:
+        """Ensure response has model and provider attribution.
+
+        Providers should always set these fields, but as a defense-in-depth
+        measure the orchestrator fills in any gaps so that downstream
+        findings always carry complete LLM attribution.
+
+        Args:
+            response: The LlmResponse to check.
+            fallback_provider: Provider to use if response.provider is None.
+            fallback_model: Model name to use if response.model is None.
+
+        Returns:
+            The same response object (mutated in-place for efficiency).
+        """
+        if not response.provider and fallback_provider:
+            response.provider = fallback_provider
+        if not response.model and fallback_model:
+            response.model = fallback_model
+        return response
+
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Routes request to the appropriate tier with hierarchical fallback.
@@ -102,7 +128,7 @@ class OrchestratedLlmClient(ILlmClient):
 
         Flow:
             - Parallel racing: Fast providers race, first success wins, losers cancelled
-            - Fallback chain: Fast tier → Smart tier → Failure
+            - Fallback chain: Fast tier -> Smart tier -> Failure
 
         Note:
             In Smart-Only mode (no fast_clients), routes directly to smart tier.
@@ -153,7 +179,9 @@ class OrchestratedLlmClient(ILlmClient):
             # CHAOS ENGINEERING: Race providers with FIRST_COMPLETED pattern
             # This prevents slow providers from blocking fast ones
             # Max concurrency limit prevents resource exhaustion
-            fast_timeout = 10  # seconds - fast tier should respond quickly
+            # Timeout derived from request budget: 1/3 gives fast tier priority
+            # without starving it — 3b Ollama on CI needs ~15-20s for warm inference.
+            fast_timeout = min(request.timeout_seconds / 3, 30.0)
 
             # Create tasks for all providers
             tasks = [asyncio.create_task(try_fast_provider(client)) for client in self.fast_clients]
@@ -170,6 +198,7 @@ class OrchestratedLlmClient(ILlmClient):
 
             # Process completed tasks to find first success
             successful_response = None
+            winning_client = None
             failed_providers = []
 
             for task in done:
@@ -177,6 +206,7 @@ class OrchestratedLlmClient(ILlmClient):
                     client, response = task.result()
                     if response.success:
                         successful_response = response
+                        winning_client = client
                         logger.info(
                             "fast_tier_winner", provider=client.provider.value, duration_ms=response.duration_ms
                         )
@@ -199,7 +229,11 @@ class OrchestratedLlmClient(ILlmClient):
 
             # Return successful response if any
             if successful_response:
-                return successful_response
+                return self._ensure_attribution(
+                    successful_response,
+                    fallback_provider=winning_client.provider if winning_client else None,
+                    fallback_model=request.model or self.fast_model,
+                )
 
             # If we are here, all fast clients failed or timed out
             logger.warning(
@@ -277,13 +311,21 @@ class OrchestratedLlmClient(ILlmClient):
                             timeout_seconds=request.timeout_seconds,
                             use_fast_tier=True,
                         )
-                        fallback_response = await fast_client.send_async(fallback_request)
+                        # Bound fallback — @resilient retry (2×120s) would block 4min otherwise.
+                        fallback_response = await asyncio.wait_for(
+                            fast_client.send_async(fallback_request),
+                            timeout=request.timeout_seconds,
+                        )
                         if fallback_response.success and fallback_response.content:
                             logger.info(
                                 "smart_tier_fallback_succeeded",
                                 provider=fast_client.provider.value,
                             )
-                            return fallback_response
+                            return self._ensure_attribution(
+                                fallback_response,
+                                fallback_provider=fast_client.provider,
+                                fallback_model=self.fast_model,
+                            )
                     except Exception as fallback_err:
                         logger.debug(
                             "smart_tier_fallback_failed",
@@ -294,7 +336,11 @@ class OrchestratedLlmClient(ILlmClient):
 
             raise ExternalServiceError(f"Smart tier failed: {response.error_message}")
 
-        return response
+        return self._ensure_attribution(
+            response,
+            fallback_provider=self.smart_client.provider,
+            fallback_model=target_model,
+        )
 
     async def is_available_async(self) -> bool:
         """

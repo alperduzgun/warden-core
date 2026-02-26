@@ -13,7 +13,7 @@ from pathlib import Path
 from warden.rules.application.rule_validator import CustomRuleValidator
 from warden.rules.domain.models import CustomRule, CustomRuleViolation
 from warden.shared.infrastructure.logging import get_logger
-from warden.validation.domain.frame import CodeFile, Finding, Remediation
+from warden.validation.domain.frame import CodeFile, Finding
 
 logger = get_logger(__name__)
 
@@ -113,5 +113,5 @@ class RuleExecutor:
             code=violation.code_snippet,
             line=violation.line,
             is_blocker=violation.is_blocker,
-            remediation=Remediation(description=violation.suggestion, code="") if violation.suggestion else None,
+            remediation=None,  # Populated by Fortification phase when replacement code is available
         )

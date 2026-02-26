@@ -1,9 +1,10 @@
 """Tests for 4-layer triage optimization.
 
 Covers:
-- TestTriageBypass:          Codex/Claude Code → heuristic-only, Groq/Ollama → LLM triage
+- TestTriageBypass:          Codex/Claude Code -> heuristic-only, Groq/Ollama -> LLM triage
 - TestImprovedHeuristics:    Extended safe-file detection
 - TestTriageCache:           Miss / hit / invalidation / disk persistence / eviction / corruption
+- TestTriageCacheSchema:     Auto-derived schema version / mismatch eviction
 - TestAdaptiveBatchSizing:   Provider-aware batch sizes
 """
 
@@ -16,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from warden.analysis.application.triage_cache import TriageCacheManager
+from warden.analysis.application.triage_cache import TRIAGE_CACHE_SCHEMA_VERSION, TriageCacheManager
 from warden.analysis.application.triage_service import TriageService
 from warden.analysis.domain.triage_heuristics import is_heuristic_safe
 from warden.analysis.domain.triage_models import RiskScore, TriageDecision, TriageLane
@@ -96,6 +97,46 @@ class TestImprovedHeuristics:
         cf = _make_code_file(path, content="a" * 500, line_count=50)
         assert is_heuristic_safe(cf) is True
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "app/__generated__/schema.ts",
+            "lib/generated/models.dart",
+            "proto/gen/service.go",
+            "api/grpc_generated/service_pb2.py",
+        ],
+    )
+    def test_safe_codegen_directories(self, path: str) -> None:
+        cf = _make_code_file(path, content="a" * 500, line_count=50)
+        assert is_heuristic_safe(cf) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            # Minified web assets
+            "static/vendor/jquery.min.js",
+            "assets/styles/app.min.css",
+            # Dart codegen
+            "lib/models/user.g.dart",
+            "lib/models/user.freezed.dart",
+            # Protocol Buffers — Python
+            "proto/service_pb2.py",
+            "proto/service_pb2_grpc.py",
+            # Protocol Buffers — other languages
+            "proto/service_pb.js",
+            "proto/service.pb.go",
+            "proto/service.pb.swift",
+            "proto/service.pb.cc",
+            # gRPC generated
+            "proto/service_grpc_pb.js",
+            # GraphQL Apollo codegen
+            "src/graphql/queries.graphql.ts",
+        ],
+    )
+    def test_safe_generated_suffixes(self, path: str) -> None:
+        cf = _make_code_file(path, content="a" * 500, line_count=50)
+        assert is_heuristic_safe(cf) is True
+
     def test_small_file_is_safe(self) -> None:
         cf = _make_code_file("src/app.py", content="x = 1", line_count=1)
         assert is_heuristic_safe(cf) is True
@@ -155,7 +196,7 @@ class TestTriageCache:
         decision = self._make_decision()
         cache.put("src/a.py", "content_v1", decision)
 
-        # Different content → miss
+        # Different content -> miss
         assert cache.get("src/a.py", "content_v2") is None
 
     def test_disk_persistence(self, tmp_path: Path) -> None:
@@ -198,6 +239,83 @@ class TestTriageCache:
         k1 = TriageCacheManager.cache_key("src/a.py", "hello world")
         k2 = TriageCacheManager.cache_key("src/a.py", "goodbye world")
         assert k1 != k2
+
+
+# ===========================================================================
+# STEP 3b: Triage Cache Schema Versioning
+# ===========================================================================
+
+
+class TestTriageCacheSchema:
+    """Auto-derived schema version and mismatch eviction for triage cache."""
+
+    def _make_cache(self, tmp_path: Path) -> TriageCacheManager:
+        return TriageCacheManager(tmp_path, max_entries=10)
+
+    def _make_decision(self, path: str = "src/a.py") -> TriageDecision:
+        return TriageDecision(
+            file_path=path,
+            lane=TriageLane.MIDDLE,
+            risk_score=RiskScore(score=5.0, confidence=0.8, reasoning="test", category="logic"),
+            processing_time_ms=10.0,
+        )
+
+    def test_schema_version_is_auto_derived_string(self) -> None:
+        """TRIAGE_CACHE_SCHEMA_VERSION should be a hex string, not a manual int."""
+        assert isinstance(TRIAGE_CACHE_SCHEMA_VERSION, str)
+        assert len(TRIAGE_CACHE_SCHEMA_VERSION) == 8
+        # Must be valid hex
+        int(TRIAGE_CACHE_SCHEMA_VERSION, 16)
+
+    def test_schema_version_is_deterministic(self) -> None:
+        """Calling derive_schema_version twice yields the same result."""
+        from warden.shared.utils.schema_version import derive_schema_version
+
+        v1 = derive_schema_version(TriageDecision)
+        v2 = derive_schema_version(TriageDecision)
+        assert v1 == v2
+        assert v1 == TRIAGE_CACHE_SCHEMA_VERSION
+
+    def test_correct_schema_version_hits(self, tmp_path: Path) -> None:
+        cache = self._make_cache(tmp_path)
+        cache.put("src/a.py", "content_v1", self._make_decision())
+
+        result = cache.get("src/a.py", "content_v1")
+        assert result is not None
+        assert result.lane == TriageLane.MIDDLE
+
+    def test_schema_version_mismatch_evicts_entry(self, tmp_path: Path) -> None:
+        """Manually inject a stale schema version; get should return None and delete entry."""
+        cache = self._make_cache(tmp_path)
+        content = "some content"
+
+        cache.put("src/a.py", content, self._make_decision())
+        key = TriageCacheManager.cache_key("src/a.py", content)
+
+        # Corrupt the schema version in internal store
+        cache._store[key]["_schema_v"] = "stale000"
+
+        result = cache.get("src/a.py", content)
+        assert result is None
+
+        # Entry must have been evicted from store
+        assert key not in cache._store
+
+    def test_schema_mismatch_on_disk_reload(self, tmp_path: Path) -> None:
+        """Entries with wrong schema version should be evicted after flush+reload."""
+        cache1 = self._make_cache(tmp_path)
+        cache1.put("src/a.py", "content_v1", self._make_decision())
+
+        # Corrupt the schema version before flushing
+        key = TriageCacheManager.cache_key("src/a.py", "content_v1")
+        cache1._store[key]["_schema_v"] = "oldver00"
+        cache1._dirty = True
+        cache1.flush()
+
+        # New instance loads from disk, entry should be evicted on get
+        cache2 = self._make_cache(tmp_path)
+        result = cache2.get("src/a.py", "content_v1")
+        assert result is None
 
 
 # ===========================================================================
@@ -249,7 +367,7 @@ class TestAdaptiveBatchSizing:
         wrapper.fast_clients = [fast]            # fast tier has Ollama
 
         svc = TriageService(wrapper)
-        # Must pick Ollama (5), not Groq (15) — triage uses fast tier
+        # Must pick Ollama (5), not Groq (15) -- triage uses fast tier
         assert svc._requested_batch_size == 5
 
     def test_orchestrated_client_no_fast_tier_falls_to_smart(self) -> None:
@@ -340,11 +458,11 @@ class TestTriageBypass:
         decisions = context.triage_decisions
         assert len(decisions) == 2
 
-        # __init__.py → FAST
+        # __init__.py -> FAST
         init_decision = decisions["src/__init__.py"]
         assert init_decision["lane"] == TriageLane.FAST
 
-        # auth.py → MIDDLE
+        # auth.py -> MIDDLE
         auth_decision = decisions["src/auth.py"]
         assert auth_decision["lane"] == TriageLane.MIDDLE
 

@@ -167,3 +167,34 @@ class DataFlowAware(ABC):
                  init_fields populated by DataDependencyService.
         """
         raise NotImplementedError
+
+
+class CodeGraphAware(ABC):
+    """
+    Mixin for frames that consume CodeGraph and GapReport data.
+
+    Frames implementing this mixin receive the pre-computed CodeGraph
+    (module dependency graph) and its associated GapReport (coverage gaps,
+    broken imports, circular dependencies) from Phase 0.7 (PRE-ANALYSIS).
+    The pipeline's ``FrameRunner`` calls ``set_code_graph`` before frame
+    execution.
+
+    Example:
+        class MyFrame(ValidationFrame, CodeGraphAware):
+            def set_code_graph(self, code_graph, gap_report):
+                self._code_graph = code_graph
+                self._gap_report = gap_report
+    """
+
+    @abstractmethod
+    def set_code_graph(self, code_graph: Any, gap_report: Any) -> None:
+        """
+        Inject CodeGraph and GapReport for structural analysis.
+
+        Args:
+            code_graph: CodeGraph instance with module nodes and edges
+                        representing the project's import/dependency structure.
+            gap_report: GapReport instance with coverage metrics, broken
+                        imports, circular dependencies, and orphan files.
+        """
+        raise NotImplementedError

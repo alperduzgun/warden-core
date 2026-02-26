@@ -472,6 +472,25 @@ class ReportGenerator:
                         result["properties"] = {}
                     result["properties"]["exploitEvidence"] = exploit_evidence
 
+                # Add SARIF fixes array when remediation is populated (#197)
+                remediation = self._get_val(finding, "remediation", None)
+                if remediation:
+                    rem_code = self._get_val(remediation, "code", "")
+                    rem_description = self._get_val(remediation, "description", "")
+                    if rem_code and file_path:
+                        result["fixes"] = [{
+                            "description": {"text": rem_description},
+                            "artifactChanges": [{
+                                "artifactLocation": {"uri": self._to_relative_uri(file_path)},
+                                "replacements": [{
+                                    "deletedRegion": {
+                                        "startLine": max(1, self._get_val(finding, "line", 1)),
+                                    },
+                                    "insertedContent": {"text": rem_code},
+                                }]
+                            }]
+                        }]
+
                 run["results"].append(result)
 
         # Include suppressed findings in SARIF with suppressions array (SARIF 2.1.0 §3.35) (#125).

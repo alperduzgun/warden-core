@@ -22,6 +22,7 @@ from warden.validation.domain.frame import FrameResult as CodeFrameResult
 from warden.validation.domain.mixins import (
     BatchExecutable,
     Cleanable,
+    CodeGraphAware,
     DataFlowAware,
     LSPAware,
     ProjectContextAware,
@@ -35,13 +36,62 @@ from .rule_executor import RuleExecutor
 from .suppression_filter import SuppressionFilter
 
 # Per-file timeout constants (proportional to file size, Bearer-inspired).
-_FILE_TIMEOUT_MIN_S: float = 10.0  # floor for cloud providers (Groq, OpenAI, etc.)
+# See: Bearer pkg/commands/process/filelist/timeout/timeout.go
+_FILE_TIMEOUT_MIN_S: float = 5.0  # floor: minimum timeout for any file
 _FILE_TIMEOUT_LOCAL_S: float = 120.0  # floor for local/slow providers (Ollama, Claude Code, Codex)
-_FILE_TIMEOUT_MAX_S: float = 300.0  # ceiling: raised from 90s for local LLM inference
-_FILE_BYTES_PER_SECOND: int = 15_000  # conservative parse + LLM throughput rate
+_FILE_TIMEOUT_MAX_S: float = 60.0  # ceiling: no single file gets more than this
+_FILE_BYTES_PER_SECOND: int = 10_000  # conservative parse + LLM throughput rate
 _LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
 logger = get_logger(__name__)
+
+
+def calculate_per_file_timeout(
+    file_size_bytes: int,
+    *,
+    provider: str = "",
+    min_timeout: float | None = None,
+    max_timeout: float = _FILE_TIMEOUT_MAX_S,
+    bytes_per_second: int = _FILE_BYTES_PER_SECOND,
+) -> float:
+    """Calculate a dynamic timeout proportional to file size.
+
+    Follows Bearer's approach: each file gets a fair time budget based on its
+    size so that small files finish quickly and large files get more time
+    without being able to monopolise the entire scan.
+
+    Formula:
+        timeout = max(MIN, min(file_size_bytes / bytes_per_second, MAX))
+
+    The *min_timeout* floor is chosen automatically based on the LLM provider
+    when not supplied explicitly.  Local providers (Ollama, Claude Code, Codex)
+    use a higher floor because inference latency is inherently slower.
+
+    The WARDEN_FILE_TIMEOUT_MIN environment variable overrides the floor
+    for all providers when set.
+
+    Args:
+        file_size_bytes: Size of the file content in bytes.
+        provider: LLM provider identifier (e.g. "ollama", "openai").
+        min_timeout: Explicit minimum timeout override. When *None* the
+            value is derived from the provider or environment variable.
+        max_timeout: Absolute ceiling for the timeout.
+        bytes_per_second: Assumed processing throughput.
+
+    Returns:
+        Timeout in seconds, clamped to [min_timeout, max_timeout].
+    """
+    if min_timeout is None:
+        env_min = os.environ.get("WARDEN_FILE_TIMEOUT_MIN")
+        if env_min:
+            min_timeout = float(env_min)
+        elif provider.lower() in _LOCAL_PROVIDERS:
+            min_timeout = _FILE_TIMEOUT_LOCAL_S
+        else:
+            min_timeout = _FILE_TIMEOUT_MIN_S
+
+    proportional = file_size_bytes / bytes_per_second if bytes_per_second > 0 else 0.0
+    return max(min_timeout, min(proportional, max_timeout))
 
 
 @dataclass
@@ -139,19 +189,12 @@ class FrameRunner:
                 remaining=len(files_for_frame),
             )
 
-        # Pre-rules run on pre-triage files (before triage routing filters out fast-lane files)
-        # so they act as security gates that cannot be bypassed by triage.
-        pre_triage_files = files_for_frame
-
         frame_rules = self.config.frame_rules.get(frame.frame_id) if self.config.frame_rules else None
 
-        if frame_rules:
-            # When custom frame_rules are configured, the frame executes on pre-triage files.
-            # This ensures rule gates and frame analysis see the same file set.
-            code_files = pre_triage_files
-        else:
-            files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
-            code_files = files_for_frame
+        # Always apply triage routing so that pre-rules, frame execution, and
+        # post-rules all operate on the same (triage-filtered) file set.
+        files_for_frame = FileFilter.apply_triage_routing(context, frame, files_for_frame)
+        code_files = files_for_frame
 
         # Skip frame entirely when triage routed away every file.
         # Avoids the overhead of LLM service setup, PI injection, and a
@@ -393,10 +436,27 @@ class FrameRunner:
                         error=str(e),
                     )
 
+        # Inject CodeGraph and GapReport into CodeGraphAware frames
+        if isinstance(frame, CodeGraphAware):
+            if hasattr(context, "code_graph") and context.code_graph is not None:
+                try:
+                    frame.set_code_graph(context.code_graph, getattr(context, "gap_report", None))
+                    logger.debug(
+                        "code_graph_injected",
+                        frame_id=frame.frame_id,
+                        has_gap_report=context.gap_report is not None,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "code_graph_injection_failed",
+                        frame_id=frame.frame_id,
+                        error=str(e),
+                    )
+
         pre_violations = []
         if frame_rules and frame_rules.pre_rules:
             logger.info("executing_pre_rules", frame_id=frame.frame_id, rule_count=len(frame_rules.pre_rules))
-            pre_violations = await self.rule_executor.execute_rules_async(frame_rules.pre_rules, pre_triage_files)
+            pre_violations = await self.rule_executor.execute_rules_async(frame_rules.pre_rules, code_files)
 
             if pre_violations and RuleExecutor.has_blocker_violations(pre_violations):
                 if frame_rules.on_fail == "stop":
@@ -511,33 +571,18 @@ class FrameRunner:
                                 metadata={"from_cache": True},
                             )
 
-                    # Per-file dynamic timeout: proportional to file size with min/max bounds.
-                    # Prevents a single large file from monopolising the scan budget.
+                    # Per-file dynamic timeout proportional to file size (#99).
                     try:
                         file_size = len(c_file.content.encode("utf-8", errors="replace")) if c_file.content else 0
                     except Exception:
                         file_size = 0
 
-                    # Use a higher floor for local/slow providers (Ollama, Claude Code, Codex)
-                    # since inference latency is 19-60s even for tiny files.
-                    # WARDEN_FILE_TIMEOUT_MIN env var allows manual override.
                     _provider = str(
                         getattr(getattr(context, "llm_config", None), "provider", "")
                         or getattr(context, "llm_provider", "")
                         or os.environ.get("WARDEN_LLM_PROVIDER", "")
                     ).lower()
-                    _env_min = os.environ.get("WARDEN_FILE_TIMEOUT_MIN")
-                    if _env_min:
-                        _timeout_min = float(_env_min)
-                    elif _provider in _LOCAL_PROVIDERS:
-                        _timeout_min = _FILE_TIMEOUT_LOCAL_S
-                    else:
-                        _timeout_min = _FILE_TIMEOUT_MIN_S
-
-                    per_file_timeout = max(
-                        _timeout_min,
-                        min(file_size / _FILE_BYTES_PER_SECOND, _FILE_TIMEOUT_MAX_S),
-                    )
+                    per_file_timeout = calculate_per_file_timeout(file_size, provider=_provider)
 
                     try:
                         coro = (
@@ -568,7 +613,27 @@ class FrameRunner:
                         )
                         if self.progress_callback:
                             self.progress_callback("progress_update", {"increment": 1, "error": True})
-                        return None
+                        # Record a finding so the timeout is visible in reports (#99).
+                        timeout_finding = Finding(
+                            id="WARDEN-TIMEOUT",
+                            severity="medium",
+                            message=(
+                                f"File processing timed out after {per_file_timeout:.0f}s "
+                                f"(size: {file_size / 1024:.1f} KB). "
+                                "Consider splitting this file or increasing the timeout."
+                            ),
+                            location=f"{c_file.path}:1",
+                        )
+                        return CodeFrameResult(
+                            frame_id=frame.frame_id,
+                            frame_name=frame.name,
+                            status="timeout",
+                            duration=per_file_timeout,
+                            issues_found=1,
+                            is_blocker=False,
+                            findings=[timeout_finding],
+                            metadata={"timeout": True, "timeout_s": per_file_timeout},
+                        )
                     except Exception as ex:
                         logger.error(
                             "frame_file_execution_error", frame=frame.frame_id, file=c_file.path, error=str(ex)
@@ -714,7 +779,7 @@ class FrameRunner:
                     suppressions = frame.config["suppressions"]
                     if suppressions and frame_findings:
                         findings_before = len(frame_findings)
-                        frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions)
+                        frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions, context=context)
                         findings_after = len(frame_findings)
 
                         if findings_before != findings_after:
@@ -804,7 +869,7 @@ class FrameRunner:
 
         post_violations = []
         if frame_rules and frame_rules.post_rules:
-            post_violations = await self.rule_executor.execute_rules_async(frame_rules.post_rules, pre_triage_files)
+            post_violations = await self.rule_executor.execute_rules_async(frame_rules.post_rules, code_files)
 
             if post_violations and RuleExecutor.has_blocker_violations(post_violations):
                 if frame_rules.on_fail == "stop":

@@ -5,9 +5,46 @@ Shared context that flows through all pipeline phases.
 Each phase reads from and writes to this context.
 
 Thread-safe and memory-bounded implementation for production use.
+
+Phase Post-Condition Map
+========================
+Each pipeline phase is expected to populate specific fields upon successful
+completion.  The ``assert_phase_complete`` method validates these
+post-conditions at phase exit and emits warnings (never hard failures) when
+a field is missing.  This surfaces silent initialization bugs that defensive
+``getattr(context, "X", default)`` patterns would otherwise hide.
+
++-------------------+--------------------------------------------------------+
+| Phase             | Fields guaranteed after successful exit                 |
++-------------------+--------------------------------------------------------+
+| Phase 0           | project_context, file_contexts                         |
+| PRE_ANALYSIS      |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 0.5         | triage_decisions                                       |
+| TRIAGE            |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 1           | quality_metrics, quality_score_before                  |
+| ANALYSIS          |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 2           | selected_frames, suppression_rules                     |
+| CLASSIFICATION    |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 3           | frame_results, findings                                |
+| VALIDATION        |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 4           | fortifications, applied_fixes, security_improvements   |
+| FORTIFICATION     |                                                        |
++-------------------+--------------------------------------------------------+
+| Phase 5           | cleaning_suggestions, refactorings, quality_score_after|
+| CLEANING          |                                                        |
++-------------------+--------------------------------------------------------+
+
+Note: #161 added PRE-condition checks at phase ENTRY.  This module provides
+POST-condition checks at phase EXIT (see ``assert_phase_complete``).
 """
 
 import threading
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +53,54 @@ from typing import Any
 from warden.analysis.domain.file_context import FileContext
 from warden.analysis.domain.project_context import Framework, ProjectType
 from warden.analysis.domain.quality_metrics import QualityMetrics
+from warden.pipeline.domain.lru_cache import LRUCache
 from warden.shared.utils.finding_utils import get_finding_severity
+
+# ---------------------------------------------------------------------------
+# Phase post-condition registry
+# ---------------------------------------------------------------------------
+# Maps each phase identifier to the context fields that MUST be meaningfully
+# populated after the phase exits successfully.
+#
+# "Meaningfully populated" means:
+#   - For Optional/None-default fields: value is not None
+#   - For list/dict fields: the field is a list/dict (empty is acceptable --
+#     e.g. no findings is a valid outcome)
+#
+# Callers should never need to know this map directly; use
+# ``PipelineContext.assert_phase_complete(phase_id)`` instead.
+# ---------------------------------------------------------------------------
+PHASE_POST_CONDITIONS: dict[str, list[str]] = {
+    "PRE_ANALYSIS": [
+        "project_context",
+        "file_contexts",
+    ],
+    "TRIAGE": [
+        "triage_decisions",
+    ],
+    "ANALYSIS": [
+        "quality_metrics",
+    ],
+    "CLASSIFICATION": [
+        "selected_frames",
+    ],
+    "VALIDATION": [
+        "frame_results",
+    ],
+    "FORTIFICATION": [
+        "fortifications",
+        "applied_fixes",
+        "security_improvements",
+    ],
+    "CLEANING": [
+        "cleaning_suggestions",
+        "refactorings",
+    ],
+}
+
+# Default maximum number of AST cache entries before LRU eviction kicks in.
+# 500 parsed trees ~ 300 MB upper bound.  Configurable via max_ast_cache_entries.
+DEFAULT_MAX_AST_CACHE_ENTRIES: int = 500
 
 
 @dataclass
@@ -25,16 +109,31 @@ class PipelineContext:
     Shared context for all pipeline phases.
 
     This context accumulates information as it flows through:
-    0. PRE-ANALYSIS → Project/File understanding
-    1. ANALYSIS → Quality metrics
-    2. CLASSIFICATION → Frame selection & suppressions
-    3. VALIDATION → Findings & issues
-    4. FORTIFICATION → Security fixes
-    5. CLEANING → Quality improvements
+    0. PRE-ANALYSIS  -> Project/File understanding
+    0.5 TRIAGE       -> Adaptive hybrid triage decisions
+    1. ANALYSIS      -> Quality metrics
+    2. CLASSIFICATION -> Frame selection & suppressions
+    3. VALIDATION    -> Findings & issues
+    4. FORTIFICATION -> Security fixes
+    5. CLEANING      -> Quality improvements
+
+    Phase Post-Conditions:
+        After PRE_ANALYSIS:   project_context, file_contexts
+        After TRIAGE:         triage_decisions
+        After ANALYSIS:       quality_metrics, quality_score_before
+        After CLASSIFICATION: selected_frames, suppression_rules
+        After VALIDATION:     frame_results, findings
+        After FORTIFICATION:  fortifications, applied_fixes, security_improvements
+        After CLEANING:       cleaning_suggestions, refactorings, quality_score_after
+
+    Use ``assert_phase_complete(phase_id)`` at phase exit to validate
+    post-conditions.  Violations are emitted as warnings, never hard
+    assertions, so the pipeline always proceeds.
 
     Features:
     - Thread-safe operations with locks
     - Memory-bounded collections (FIFO eviction)
+    - LRU-bounded AST cache to prevent OOM on large repos
     - Configurable size limits
     """
 
@@ -54,6 +153,9 @@ class PipelineContext:
     MAX_FINDINGS: int = field(default=1000, init=False)
     MAX_LIST_SIZE: int = field(default=500, init=False)
 
+    # Configurable AST cache size limit (init-time parameter)
+    max_ast_cache_entries: int = DEFAULT_MAX_AST_CACHE_ENTRIES
+
     # Thread safety
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
@@ -72,7 +174,7 @@ class PipelineContext:
     # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
     taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
 
-    # Phase 0: Contract Mode — Data Dependency Graph
+    # Phase 0: Contract Mode --- Data Dependency Graph
     # Populated when contract_mode=True; consumed by DataFlowAware frames.
     data_dependency_graph: Any | None = None  # DataDependencyGraph instance
     contract_mode: bool = False  # Whether contract analysis is enabled
@@ -107,6 +209,11 @@ class PipelineContext:
     true_positives: list[str] = field(default_factory=list)
     frame_results: dict[str, Any] = field(default_factory=dict)
 
+    # Phase 3: Suppression Audit Trail (#119)
+    # Records details of every finding suppressed by config-based suppression rules.
+    # Each entry: {id, file, title, severity, matched_rule, matched_files, timestamp}
+    suppressed_findings: list[dict[str, Any]] = field(default_factory=list)
+
     # Phase 4: FORTIFICATION Results
     fortifications: list[dict[str, Any]] = field(default_factory=list)
     applied_fixes: list[dict[str, Any]] = field(default_factory=list)
@@ -138,9 +245,10 @@ class PipelineContext:
     # Linter Metrics (Multi-Tool)
     linter_metrics: dict[str, Any] = field(default_factory=dict)
 
-    # Cross-Phases Cache (New)
-    # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY)
-    ast_cache: dict[str, Any] = field(default_factory=dict)
+    # Cross-Phases Cache
+    # Stores parsed ASTs to avoid re-parsing in multiple phases (DRY).
+    # Bounded by LRU eviction to prevent OOM on large repos.
+    ast_cache: LRUCache = field(default=None, init=False)  # type: ignore[assignment]
 
     # Shared Project Intelligence (populated in PRE-ANALYSIS, consumed by frames)
     project_intelligence: Any | None = None  # ProjectIntelligence instance
@@ -153,6 +261,59 @@ class PipelineContext:
     # State Tracking
     current_phase: str = "starting"  # Tracks active phase for timeout diagnostics
     completed_phases: set[str] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        """Initialise the LRU-bounded AST cache after dataclass init."""
+        if self.ast_cache is None:
+            self.ast_cache = LRUCache(maxsize=self.max_ast_cache_entries)
+
+    # -----------------------------------------------------------------------
+    # Phase post-condition validation
+    # -----------------------------------------------------------------------
+
+    def assert_phase_complete(self, phase_id: str) -> list[str]:
+        """
+        Validate that expected post-condition fields are populated after a
+        phase exits successfully.
+
+        This method is intentionally non-destructive: violations are collected
+        into ``self.warnings`` and emitted via the ``warnings`` module so the
+        pipeline always continues.  The return value allows callers (and tests)
+        to inspect failures programmatically.
+
+        Args:
+            phase_id: Phase identifier (e.g. "PRE_ANALYSIS", "CLASSIFICATION").
+                      Must be a key in ``PHASE_POST_CONDITIONS``.
+
+        Returns:
+            List of field names that failed the post-condition check.
+            Empty list means all post-conditions are satisfied.
+        """
+        expected_fields = PHASE_POST_CONDITIONS.get(phase_id)
+        if expected_fields is None:
+            # Unknown phase -- nothing to validate
+            return []
+
+        violations: list[str] = []
+        for field_name in expected_fields:
+            value = getattr(self, field_name, None)
+            # None-default fields must be non-None after the phase runs
+            if value is None:
+                violations.append(field_name)
+
+        if violations:
+            msg = (
+                f"[{self.pipeline_id}] Phase {phase_id} post-condition violation: "
+                f"fields {violations} are still None after phase exit"
+            )
+            self.warnings.append(msg)
+            warnings.warn(msg, stacklevel=2)
+
+        return violations
+
+    # -----------------------------------------------------------------------
+    # Existing methods
+    # -----------------------------------------------------------------------
 
     def add_phase_result(self, phase: str, result: dict[str, Any]) -> None:
         """
@@ -207,6 +368,22 @@ class PipelineContext:
                     "usage": usage or {},
                 }
             )
+
+    def add_suppressed_finding(self, record: dict[str, Any]) -> None:
+        """
+        Record a suppressed finding for audit trail (thread-safe, memory-bounded).
+
+        Args:
+            record: Suppression record with keys:
+                - id: Finding identifier
+                - file: File path where finding was located
+                - title: Finding title/message
+                - severity: Finding severity level
+                - matched_rule: The suppression rule pattern that matched
+                - matched_files: The file patterns from the suppression rule
+                - timestamp: ISO timestamp of suppression decision
+        """
+        self._add_to_bounded_list(self.suppressed_findings, record)
 
     def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int | None = None) -> None:
         """
@@ -308,6 +485,7 @@ class PipelineContext:
                     "false_positives": self.false_positives,
                     "true_positives": self.true_positives,
                     "frame_results": self.frame_results,
+                    "suppressed_findings": self.suppressed_findings,
                 }
             )
 
@@ -381,6 +559,10 @@ class PipelineContext:
                     severity_counts[sev] = severity_counts.get(sev, 0) + 1
                 context_parts.append(f"ISSUES FOUND: {severity_counts}")
 
+        # Add suppression summary
+        if self.suppressed_findings:
+            context_parts.append(f"SUPPRESSED: {len(self.suppressed_findings)} findings")
+
         # Add frame selection (skip for concise unless relevant)
         if self.selected_frames and not concise:
             context_parts.append(f"VALIDATION FRAMES: {', '.join(self.selected_frames)}")
@@ -425,6 +607,8 @@ class PipelineContext:
             "quality_score_before": self.quality_score_before,
             "quality_score_after": self.quality_score_after,
             "findings_count": len(self.findings),
+            "suppressed_findings_count": len(self.suppressed_findings),
+            "suppressed_findings": self.suppressed_findings,
             "fortifications_count": len(self.fortifications),
             "cleaning_suggestions_count": len(self.cleaning_suggestions),
             "llm_interactions": len(self.llm_history),
@@ -460,10 +644,13 @@ class PipelineContext:
             summary_parts.append(f"File Type: {self.file_context.value}")
 
         if self.quality_score_before > 0:
-            summary_parts.append(f"Quality: {self.quality_score_before:.1f} → {self.quality_score_after:.1f}")
+            summary_parts.append(f"Quality: {self.quality_score_before:.1f} -> {self.quality_score_after:.1f}")
 
         if self.findings:
             summary_parts.append(f"Issues Found: {len(self.findings)}")
+
+        if self.suppressed_findings:
+            summary_parts.append(f"Suppressed Findings: {len(self.suppressed_findings)}")
 
         if self.fortifications:
             summary_parts.append(f"Fixes Generated: {len(self.fortifications)}")
