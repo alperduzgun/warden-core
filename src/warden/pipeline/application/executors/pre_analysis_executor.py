@@ -84,12 +84,24 @@ class PreAnalysisExecutor(BasePhaseExecutor):
                 )
 
             except RuntimeError as e:
-                # Re-raise integrity check failures or other critical errors to stop pipeline
-                logger.error("phase_failed", phase="PRE_ANALYSIS", error=str(e), tb=traceback.format_exc())
-                raise e
-            except Exception as e:
+                # Critical error: log, record in context, and re-raise to stop pipeline
                 logger.error(
-                    "phase_failed", phase="PRE_ANALYSIS", error=str(e), type=type(e).__name__, tb=traceback.format_exc()
+                    "phase_failed",
+                    phase="PRE_ANALYSIS",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    tb=traceback.format_exc(),
+                )
+                context.errors.append(f"PRE_ANALYSIS failed: {e!s}")
+                raise
+            except Exception as e:
+                # Non-critical error: log with full context and continue pipeline
+                logger.error(
+                    "phase_failed",
+                    phase="PRE_ANALYSIS",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    tb=traceback.format_exc(),
                 )
                 context.errors.append(f"PRE_ANALYSIS failed: {e!s}")
 
