@@ -82,7 +82,9 @@ _GENERATED_SUFFIXES: tuple[str, ...] = (
     # Dart codegen (json_serializable, freezed)
     ".g.dart",
     ".freezed.dart",
-    # Protocol Buffers (non-Python languages; Python _pb2.py already in path check)
+    # Protocol Buffers — all languages including Python
+    "_pb2.py",
+    "_pb2_grpc.py",
     "_pb.js",
     "_pb.ts",
     ".pb.go",

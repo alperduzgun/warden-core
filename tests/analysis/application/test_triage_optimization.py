@@ -96,6 +96,46 @@ class TestImprovedHeuristics:
         cf = _make_code_file(path, content="a" * 500, line_count=50)
         assert is_heuristic_safe(cf) is True
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "app/__generated__/schema.ts",
+            "lib/generated/models.dart",
+            "proto/gen/service.go",
+            "api/grpc_generated/service_pb2.py",
+        ],
+    )
+    def test_safe_codegen_directories(self, path: str) -> None:
+        cf = _make_code_file(path, content="a" * 500, line_count=50)
+        assert is_heuristic_safe(cf) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            # Minified web assets
+            "static/vendor/jquery.min.js",
+            "assets/styles/app.min.css",
+            # Dart codegen
+            "lib/models/user.g.dart",
+            "lib/models/user.freezed.dart",
+            # Protocol Buffers — Python
+            "proto/service_pb2.py",
+            "proto/service_pb2_grpc.py",
+            # Protocol Buffers — other languages
+            "proto/service_pb.js",
+            "proto/service.pb.go",
+            "proto/service.pb.swift",
+            "proto/service.pb.cc",
+            # gRPC generated
+            "proto/service_grpc_pb.js",
+            # GraphQL Apollo codegen
+            "src/graphql/queries.graphql.ts",
+        ],
+    )
+    def test_safe_generated_suffixes(self, path: str) -> None:
+        cf = _make_code_file(path, content="a" * 500, line_count=50)
+        assert is_heuristic_safe(cf) is True
+
     def test_small_file_is_safe(self) -> None:
         cf = _make_code_file("src/app.py", content="x = 1", line_count=1)
         assert is_heuristic_safe(cf) is True
