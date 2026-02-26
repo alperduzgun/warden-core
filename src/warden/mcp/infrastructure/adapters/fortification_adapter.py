@@ -8,11 +8,10 @@ Maps to gRPC FortificationMixin functionality.
 from pathlib import Path
 from typing import Any
 
-from warden.shared.utils.language_utils import get_code_extensions
-
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
+from warden.shared.utils.language_utils import get_code_extensions
 
 
 class FortificationAdapter(BaseWardenAdapter):

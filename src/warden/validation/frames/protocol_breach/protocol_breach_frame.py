@@ -83,7 +83,7 @@ class ProtocolBreachFrame(ValidationFrame):
     def frame_id(self) -> str:
         return "protocol_breach"
 
-    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:  # noqa: ARG002
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Run protocol breach analysis.
 
@@ -245,7 +245,7 @@ class ProtocolBreachFrame(ValidationFrame):
         try:
             source = frame_runner_path.read_text(encoding="utf-8")
         except OSError:
-            return {m: False for m in _MIXIN_PROTOCOL}
+            return dict.fromkeys(_MIXIN_PROTOCOL, False)
 
         status: dict[str, bool] = {}
         for mixin_name, setter_method in _MIXIN_PROTOCOL.items():

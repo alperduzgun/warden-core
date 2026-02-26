@@ -104,7 +104,7 @@ class StaleSyncFrame(ValidationFrame, DataFlowAware):
         """Inject the DataDependencyGraph into this frame."""
         self._ddg = ddg
 
-    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:  # noqa: ARG002
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Run STALE_SYNC analysis.
 

@@ -65,14 +65,13 @@ class FortificationExecutor(BasePhaseExecutor):
             # ResultAggregator already filters false positives and creates validated_issues
             raw_findings = getattr(context, "validated_issues", [])
 
-            # Fallback to findings if validated_issues not available (shouldn't happen in normal flow)
+            # If validated_issues is empty, there is nothing to fortify.
+            # Falling back to raw context.findings would generate patches for suppressed or
+            # baseline-filtered findings — producing confusing output for intentionally
+            # silenced issues (#122).
             if not raw_findings:
-                raw_findings = getattr(context, "findings", []) or []
-                logger.warning(
-                    "fortification_using_raw_findings",
-                    reason="validated_issues_empty",
-                    findings_count=len(raw_findings),
-                )
+                logger.info("fortification_skipped", reason="no_validated_issues")
+                return
 
             # Convert objects to dicts expected by FortificationPhase (BATCH 1: Type Safety)
             _emit(f"Normalizing {len(raw_findings)} findings for patch generation")
@@ -210,11 +209,21 @@ class FortificationExecutor(BasePhaseExecutor):
                     # BATCH 3: Track unlinked fortifications
                     unlinked_count += 1
                     unlinked_ids.append(fid)
-                    logger.warning(
+                    logger.error(
                         "fortification_unlinked",
                         fortification_id=fid,
                         reason="finding_not_in_map",
+                        hint="LLM may have modified the finding_id — patch silently dropped (#135)",
                     )
+
+            # Post-LLM validation: alert when fixes were silently dropped (#135)
+            if unlinked_count > 0:
+                logger.error(
+                    "fortification_linking_incomplete",
+                    linked=linked_count,
+                    unlinked=unlinked_count,
+                    unlinked_ids=unlinked_ids[:10],
+                )
 
             # Add phase result (BATCH 3: Include linking metrics)
             total_forts = len(result.fortifications)

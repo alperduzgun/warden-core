@@ -59,7 +59,11 @@ class TokenBucketLimiter:
     async def acquire(self, n=1):
         if n <= 0:
             return
-        async with self._lock:
+        # Use manual acquire/release so we can drop the lock while sleeping.
+        # Mixing async-with and manual release inside the same block causes a
+        # double-release on __aexit__, corrupting lock state under concurrency.
+        await self._lock.acquire()
+        try:
             now = time.time()
             elapsed = now - self.last
             self.tokens = min(self.burst, self.tokens + elapsed * self.tpm / 60)
@@ -67,11 +71,13 @@ class TokenBucketLimiter:
             if self.tokens < n:
                 wait = (n - self.tokens) * 60 / self.tpm
                 self.tokens = 0
-                # Release lock while sleeping so other acquires can queue
                 self._lock.release()
-                try:
-                    await asyncio.sleep(wait)
-                finally:
-                    await self._lock.acquire()
+                await asyncio.sleep(wait)
+                await self._lock.acquire()
             else:
                 self.tokens -= n
+        except Exception:
+            # Ensure the lock is always released on unexpected errors
+            if self._lock.locked():
+                self._lock.release()
+            raise

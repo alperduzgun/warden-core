@@ -99,6 +99,16 @@ class PipelineAdapter(BaseWardenAdapter):
                 file_path=str(safe_path),
                 frames=frames,
             )
+            # Validate pipeline completion before returning (#158).
+            # PipelineStatus.COMPLETED=2, COMPLETED_WITH_FAILURES=5 are the only
+            # states where findings and frame_results are meaningful.
+            _COMPLETE_STATUSES = {2, 5}
+            pipeline_status = result.get("status") if isinstance(result, dict) else None
+            if pipeline_status is not None and pipeline_status not in _COMPLETE_STATUSES:
+                return MCPToolResult.error(
+                    f"Pipeline did not complete (status={pipeline_status}). "
+                    "Results may be partial or empty — retry the scan."
+                )
             return MCPToolResult.json_result(result)
         except ValueError as e:
             return MCPToolResult.error(f"Path validation failed: {e}")

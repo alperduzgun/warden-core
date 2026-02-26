@@ -66,20 +66,20 @@ class TestFindingsMapSource:
             {"id": "NEW-1", "severity": "high", "message": "sql injection", "file_path": "app.py"},
         ]
 
-        fort_result = _make_fortification_result([
-            {
-                "finding_id": "NEW-1",
-                "title": "Fix SQL injection",
-                "suggested_code": "safe_query()",
-                "original_code": "raw_query()",
-            }
-        ])
+        fort_result = _make_fortification_result(
+            [
+                {
+                    "finding_id": "NEW-1",
+                    "title": "Fix SQL injection",
+                    "suggested_code": "safe_query()",
+                    "original_code": "raw_query()",
+                }
+            ]
+        )
 
         executor = _make_executor(llm_service=MagicMock())
 
-        with patch(
-            "warden.fortification.application.fortification_phase.FortificationPhase"
-        ) as MockPhase:
+        with patch("warden.fortification.application.fortification_phase.FortificationPhase") as MockPhase:
             mock_phase = AsyncMock()
             mock_phase.execute_async.return_value = fort_result
             MockPhase.return_value = mock_phase
@@ -100,20 +100,20 @@ class TestFindingsMapSource:
             {"id": "F1", "severity": "high", "message": "xss", "file_path": "app.py"},
         ]
 
-        fort_result = _make_fortification_result([
-            {
-                "finding_id": "NONEXISTENT",
-                "title": "Fix something",
-                "suggested_code": "fix()",
-                "original_code": "broken()",
-            }
-        ])
+        fort_result = _make_fortification_result(
+            [
+                {
+                    "finding_id": "NONEXISTENT",
+                    "title": "Fix something",
+                    "suggested_code": "fix()",
+                    "original_code": "broken()",
+                }
+            ]
+        )
 
         executor = _make_executor(llm_service=MagicMock())
 
-        with patch(
-            "warden.fortification.application.fortification_phase.FortificationPhase"
-        ) as MockPhase:
+        with patch("warden.fortification.application.fortification_phase.FortificationPhase") as MockPhase:
             mock_phase = AsyncMock()
             mock_phase.execute_async.return_value = fort_result
             MockPhase.return_value = mock_phase
@@ -133,16 +133,16 @@ class TestFindingsMapSource:
             {"id": "F2", "severity": "medium", "message": "info", "file_path": "app.py"},
         ]
 
-        fort_result = _make_fortification_result([
-            {"finding_id": "F1", "title": "Fix 1", "suggested_code": "s()", "original_code": "b()"},
-            {"finding_id": "GHOST", "title": "Fix 2", "suggested_code": "s()", "original_code": "b()"},
-        ])
+        fort_result = _make_fortification_result(
+            [
+                {"finding_id": "F1", "title": "Fix 1", "suggested_code": "s()", "original_code": "b()"},
+                {"finding_id": "GHOST", "title": "Fix 2", "suggested_code": "s()", "original_code": "b()"},
+            ]
+        )
 
         executor = _make_executor(llm_service=MagicMock())
 
-        with patch(
-            "warden.fortification.application.fortification_phase.FortificationPhase"
-        ) as MockPhase:
+        with patch("warden.fortification.application.fortification_phase.FortificationPhase") as MockPhase:
             mock_phase = AsyncMock()
             mock_phase.execute_async.return_value = fort_result
             MockPhase.return_value = mock_phase
@@ -166,20 +166,20 @@ class TestRemediationDictAssignment:
             {"id": "F1", "severity": "high", "message": "eval usage", "file_path": "app.py"},
         ]
 
-        fort_result = _make_fortification_result([
-            {
-                "finding_id": "F1",
-                "title": "Remove eval",
-                "suggested_code": "ast.literal_eval(x)",
-                "original_code": "eval(x)",
-            }
-        ])
+        fort_result = _make_fortification_result(
+            [
+                {
+                    "finding_id": "F1",
+                    "title": "Remove eval",
+                    "suggested_code": "ast.literal_eval(x)",
+                    "original_code": "eval(x)",
+                }
+            ]
+        )
 
         executor = _make_executor(llm_service=MagicMock())
 
-        with patch(
-            "warden.fortification.application.fortification_phase.FortificationPhase"
-        ) as MockPhase:
+        with patch("warden.fortification.application.fortification_phase.FortificationPhase") as MockPhase:
             mock_phase = AsyncMock()
             mock_phase.execute_async.return_value = fort_result
             MockPhase.return_value = mock_phase
@@ -200,20 +200,20 @@ class TestRemediationDictAssignment:
             {"id": "F1", "severity": "high", "message": "issue", "file_path": "app.py"},
         ]
 
-        fort_result = _make_fortification_result([
-            {
-                "finding_id": "F1",
-                "title": "Fix it",
-                "suggested_code": "safe(x)",
-                "original_code": "unsafe(x)",
-            }
-        ])
+        fort_result = _make_fortification_result(
+            [
+                {
+                    "finding_id": "F1",
+                    "title": "Fix it",
+                    "suggested_code": "safe(x)",
+                    "original_code": "unsafe(x)",
+                }
+            ]
+        )
 
         executor = _make_executor(llm_service=MagicMock())
 
-        with patch(
-            "warden.fortification.application.fortification_phase.FortificationPhase"
-        ) as MockPhase:
+        with patch("warden.fortification.application.fortification_phase.FortificationPhase") as MockPhase:
             mock_phase = AsyncMock()
             mock_phase.execute_async.return_value = fort_result
             MockPhase.return_value = mock_phase
@@ -226,35 +226,32 @@ class TestRemediationDictAssignment:
 
 
 class TestFallbackToFindings:
-    """When validated_issues is empty, falls back to context.findings."""
+    """When validated_issues is empty, fortification is skipped (not fallen back to raw findings)."""
 
     @pytest.mark.asyncio
-    async def test_fallback_to_findings_when_validated_empty(self):
-        """Uses context.findings when validated_issues is empty."""
+    async def test_skipped_when_validated_issues_empty(self):
+        """Fortification is skipped when validated_issues is empty — no raw findings fallback."""
         ctx = _make_context()
         ctx.validated_issues = []
         ctx.findings = [
             MagicMock(
-                id="F1", severity="high", message="test",
-                file_path="app.py", location="app.py:1",
-                type="security", code_snippet="x()",
+                id="F1",
+                severity="high",
+                message="test",
+                file_path="app.py",
+                location="app.py:1",
+                type="security",
+                code_snippet="x()",
             )
         ]
 
-        fort_result = _make_fortification_result([
-            {"finding_id": "F1", "title": "Fix", "suggested_code": "y()", "original_code": "x()"}
-        ])
-
         executor = _make_executor(llm_service=MagicMock())
 
-        with patch(
-            "warden.fortification.application.fortification_phase.FortificationPhase"
-        ) as MockPhase:
+        with patch("warden.fortification.application.fortification_phase.FortificationPhase") as MockPhase:
             mock_phase = AsyncMock()
-            mock_phase.execute_async.return_value = fort_result
             MockPhase.return_value = mock_phase
 
             await executor.execute_async(ctx, [])
 
-        phase_result = _get_phase_result(ctx)
-        assert phase_result["fortifications_total"] == 1
+        # LLM phase must NOT have been called — no raw fallback
+        mock_phase.execute_async.assert_not_called()

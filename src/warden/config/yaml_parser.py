@@ -41,7 +41,6 @@ from typing import Any
 import yaml
 
 from warden.config.domain.models import (
-    CustomRule,
     PipelineConfig,
     PipelineEdge,
     PipelineNode,
@@ -49,6 +48,7 @@ from warden.config.domain.models import (
     Position,
     ProjectSummary,
 )
+from warden.rules.domain.models import CustomRule
 from warden.validation.domain.frame import get_frame_by_id
 
 

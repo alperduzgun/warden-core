@@ -23,6 +23,9 @@ class PipelineHandler(BaseHandler):
     def __init__(self, orchestrator: Any, project_root: Path):
         self.orchestrator = orchestrator
         self.project_root = project_root
+        # Serialize concurrent streaming requests so each request exclusively
+        # owns the shared orchestrator's progress_callback slot (#211).
+        self._stream_lock = asyncio.Lock()
 
     async def execute_pipeline_async(
         self, file_path: str, frames: list[str] | None = None, analysis_level: str = "standard"
@@ -92,42 +95,44 @@ class PipelineHandler(BaseHandler):
             logger.warning("dependency_check_failed", error=str(e))
 
         progress_queue: asyncio.Queue = asyncio.Queue()
-        asyncio.Event()
 
         def progress_callback(event: str, data: dict) -> None:
             progress_queue.put_nowait({"type": "progress", "event": event, "data": data})
 
-        # Temporarily swap callback
-        original_callback = self.orchestrator.progress_callback
-        self.orchestrator.progress_callback = progress_callback
+        # Acquire the streaming lock before swapping the shared progress_callback.
+        # This serializes concurrent streaming requests so each request exclusively
+        # owns the orchestrator's callback slot and receives its own events (#211).
+        async with self._stream_lock:
+            original_callback = self.orchestrator.progress_callback
+            self.orchestrator.progress_callback = progress_callback
 
-        try:
-            # Run in background
-            pipeline_task = asyncio.create_task(
-                self.orchestrator.execute_async(
-                    code_files, frames_to_execute=frames, analysis_level=analysis_level, force=force
+            try:
+                # Run in background
+                pipeline_task = asyncio.create_task(
+                    self.orchestrator.execute_async(
+                        code_files, frames_to_execute=frames, analysis_level=analysis_level, force=force
+                    )
                 )
-            )
 
-            while not pipeline_task.done() or not progress_queue.empty():
-                try:
-                    event = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
-                    yield event
-                    if event.get("type") == "result":
-                        break
-                except asyncio.TimeoutError:
-                    continue
+                while not pipeline_task.done() or not progress_queue.empty():
+                    try:
+                        event = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                        yield event
+                        if event.get("type") == "result":
+                            break
+                    except asyncio.TimeoutError:
+                        continue
 
-            result, context = await pipeline_task
+                result, context = await pipeline_task
 
-            # Apply Baseline Filtering (Delta Analysis)
-            if baseline_fingerprints:
-                result = self._filter_result(result, baseline_fingerprints)
+                # Apply Baseline Filtering (Delta Analysis)
+                if baseline_fingerprints:
+                    result = self._filter_result(result, baseline_fingerprints)
 
-            yield {"type": "result", "result": result, "context": context}
+                yield {"type": "result", "result": result, "context": context}
 
-        finally:
-            self.orchestrator.progress_callback = original_callback
+            finally:
+                self.orchestrator.progress_callback = original_callback
 
     async def _collect_files_async(self, paths: list[Path]) -> list[CodeFile]:
         """Collect and prepare code files for pipeline execution using optimized discoverer."""

@@ -59,6 +59,15 @@ class PipelineResultBuilder:
         quality_score = calculate_quality_score(findings, base_score)
         context.quality_score_after = quality_score
 
+        # Count blocker violations from pre/post custom rules
+        blocker_violations = 0
+        if hasattr(context, "frame_results") and context.frame_results:
+            for frame_data in context.frame_results.values():
+                for violations_key in ("pre_violations", "post_violations"):
+                    for v in frame_data.get(violations_key, []):
+                        if getattr(v, "is_blocker", False):
+                            blocker_violations += 1
+
         # Calculate frame counts
         frames_passed = getattr(pipeline, "frames_passed", 0)
         frames_failed = getattr(pipeline, "frames_failed", 0)
@@ -84,6 +93,7 @@ class PipelineResultBuilder:
             medium_findings=medium_findings,
             low_findings=low_findings,
             manual_review_findings=manual_review_count,
+            blocker_violations=blocker_violations,
             findings=[f if isinstance(f, dict) else f.to_dict() for f in findings],
             frame_results=frame_results,
             metadata={
