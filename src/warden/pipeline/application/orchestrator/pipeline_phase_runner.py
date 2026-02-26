@@ -13,6 +13,63 @@ from warden.validation.domain.frame import CodeFile, FrameResult
 
 logger = get_logger(__name__)
 
+# Decorator names that indicate authentication/authorization enforcement.
+# Used by _populate_project_intelligence to populate auth_patterns from AST.
+AUTH_DECORATOR_NAMES: frozenset[str] = frozenset(
+    {
+        "login_required",
+        "jwt_required",
+        "permission_required",
+        "require_http_methods",
+        "authenticate",
+        "requires_auth",
+        "auth_required",
+        "protected",
+        "token_required",
+        "permissions_required",
+        "has_permission",
+        "require_permissions",
+        "csrf_protect",
+        "csrf_exempt",
+        "require_role",
+        "roles_required",
+        "admin_required",
+        "api_key_required",
+        "oauth_required",
+        "bearer_token_required",
+    }
+)
+
+# Decorator names that indicate HTTP route/endpoint definitions.
+# Used to enhance entry_points with function-level info.
+ROUTE_DECORATOR_NAMES: frozenset[str] = frozenset(
+    {
+        "route",
+        "get",
+        "post",
+        "put",
+        "patch",
+        "delete",
+        "head",
+        "options",
+        "api_view",
+        "app.route",
+        "app.get",
+        "app.post",
+        "app.put",
+        "app.patch",
+        "app.delete",
+        "router.route",
+        "router.get",
+        "router.post",
+        "router.put",
+        "router.patch",
+        "router.delete",
+        "blueprint.route",
+        "require_http_methods",
+    }
+)
+
 
 class PipelinePhaseRunner:
     """Coordinates sequential execution of all pipeline phases."""
@@ -329,13 +386,21 @@ class PipelinePhaseRunner:
         """
         Populate ProjectIntelligence from AST analysis (zero LLM cost).
 
-        Scans code files for input sources, critical sinks, and project metadata.
+        Scans code files for input sources, critical sinks, auth patterns,
+        and project metadata.  Walks the universal AST tree stored in
+        ``context.ast_cache`` (``ParseResult`` objects) to extract
+        decorator-based auth patterns and function-level entry points.
+
         This runs during PRE-ANALYSIS and the result is shared with all frames.
         """
+        from warden.ast.domain.enums import ASTNodeType
         from warden.pipeline.domain.intelligence import ProjectIntelligence
 
         intel = ProjectIntelligence()
         intel.total_files = len(code_files)
+
+        # Track entry points already added by filename heuristic to avoid duplicates
+        entry_point_set: set[str] = set()
 
         # Language distribution
         lang_counts: dict[str, int] = {}
@@ -344,10 +409,11 @@ class PipelinePhaseRunner:
             lang_counts[lang] = lang_counts.get(lang, 0) + 1
             intel.total_lines += cf.line_count
 
-            # Detect entry points
+            # Detect entry points by filename heuristic
             path_lower = cf.path.lower()
             if any(p in path_lower for p in ["main.py", "app.py", "wsgi.py", "asgi.py", "manage.py", "index."]):
                 intel.entry_points.append(cf.path)
+                entry_point_set.add(cf.path)
 
             # Detect test files
             if any(p in path_lower for p in ["test_", "_test.", "tests/", "spec/"]):
@@ -363,9 +429,20 @@ class PipelinePhaseRunner:
 
         # Extract from AST cache if available
         for cf in code_files:
-            ast_data = context.ast_cache.get(cf.path, {})
+            ast_data = context.ast_cache.get(cf.path)
+            if ast_data is None:
+                continue
 
-            # Only process if ast_data is a dictionary (not a raw AST Module)
+            # Handle ParseResult objects (the normal path from AST pre-parser
+            # and integrity scanner).
+            ast_root = getattr(ast_data, "ast_root", None)
+            if ast_root is not None:
+                self._extract_intelligence_from_ast(
+                    ast_root, cf.path, intel, entry_point_set, ASTNodeType,
+                )
+                continue
+
+            # Legacy fallback: dict-based AST data
             if not isinstance(ast_data, dict):
                 continue
 
@@ -414,9 +491,100 @@ class PipelinePhaseRunner:
             total_files=intel.total_files,
             input_sources=len(intel.input_sources),
             critical_sinks=len(intel.critical_sinks),
+            auth_patterns=len(intel.auth_patterns),
             entry_points=len(intel.entry_points),
             primary_language=intel.primary_language,
         )
+
+    @staticmethod
+    def _extract_intelligence_from_ast(
+        ast_root: Any,
+        file_path: str,
+        intel: Any,
+        entry_point_set: set[str],
+        node_types: Any,
+    ) -> None:
+        """Walk a universal AST tree and populate intelligence fields.
+
+        Extracts:
+        - **auth_patterns** from decorator names on functions/classes that
+          match ``AUTH_DECORATOR_NAMES``.
+        - **entry_points** with ``file::function`` notation for functions
+          decorated with route/handler decorators.
+
+        Args:
+            ast_root: The root ``ASTNode`` of the universal AST.
+            file_path: Source file path for attribution.
+            intel: ``ProjectIntelligence`` instance to populate.
+            entry_point_set: Set tracking already-added entry points.
+            node_types: ``ASTNodeType`` enum for node filtering.
+        """
+        # Collect function and class nodes from the universal AST
+        func_nodes = ast_root.find_nodes(node_types.FUNCTION)
+        class_nodes = ast_root.find_nodes(node_types.CLASS)
+
+        for node in func_nodes:
+            decorators = node.attributes.get("decorators", [])
+            if not decorators:
+                continue
+
+            func_name = node.name or "<anonymous>"
+            line = node.location.start_line if node.location else 0
+
+            for dec_name in decorators:
+                # Normalize: strip parenthesized arguments from unparsed
+                # decorator strings, e.g. "permission_required('admin')"
+                # becomes "permission_required".
+                base_name = dec_name.split("(")[0].strip() if isinstance(dec_name, str) else str(dec_name)
+                # Also handle dotted names like "app.route" -> check both
+                # the full dotted name and the last segment.
+                segments = base_name.rsplit(".", 1)
+                last_segment = segments[-1].lower()
+                full_lower = base_name.lower()
+
+                # Check for auth decorator
+                if last_segment in AUTH_DECORATOR_NAMES or full_lower in AUTH_DECORATOR_NAMES:
+                    intel.auth_patterns.append(
+                        {
+                            "pattern": base_name,
+                            "type": "decorator",
+                            "function": func_name,
+                            "file": file_path,
+                            "line": line,
+                        }
+                    )
+
+                # Check for route/endpoint decorator -> function-level entry point
+                if last_segment in ROUTE_DECORATOR_NAMES or full_lower in ROUTE_DECORATOR_NAMES:
+                    entry = f"{file_path}::{func_name}"
+                    if entry not in entry_point_set:
+                        intel.entry_points.append(entry)
+                        entry_point_set.add(entry)
+
+        for node in class_nodes:
+            decorators = node.attributes.get("decorators", [])
+            if not decorators:
+                continue
+
+            class_name = node.name or "<anonymous>"
+            line = node.location.start_line if node.location else 0
+
+            for dec_name in decorators:
+                base_name = dec_name.split("(")[0].strip() if isinstance(dec_name, str) else str(dec_name)
+                segments = base_name.rsplit(".", 1)
+                last_segment = segments[-1].lower()
+                full_lower = base_name.lower()
+
+                if last_segment in AUTH_DECORATOR_NAMES or full_lower in AUTH_DECORATOR_NAMES:
+                    intel.auth_patterns.append(
+                        {
+                            "pattern": base_name,
+                            "type": "decorator",
+                            "class": class_name,
+                            "file": file_path,
+                            "line": line,
+                        }
+                    )
 
     def _populate_data_dependency_graph(self, context: PipelineContext) -> None:
         """Populate the DataDependencyGraph when contract_mode is enabled.
