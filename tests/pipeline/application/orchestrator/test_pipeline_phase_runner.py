@@ -271,9 +271,7 @@ class TestManualFrameOverride:
         runner = _make_runner(config=config, phase_executor=pe)
 
         ctx = make_context()
-        await runner.execute_all_phases(
-            ctx, [make_code_file()], make_pipeline(), frames_to_execute=["security"]
-        )
+        await runner.execute_all_phases(ctx, [make_code_file()], make_pipeline(), frames_to_execute=["security"])
 
         pe.execute_classification_async.assert_not_awaited()
 
@@ -365,7 +363,6 @@ class TestFinalizePipelineStatus:
 
 
 # ---------------------------------------------------------------------------
-<<<<<<< HEAD
 # _check_phase_preconditions (PHASE-GAP-4)
 # ---------------------------------------------------------------------------
 
@@ -826,8 +823,14 @@ class TestAuthDecoratorConstants:
         assert isinstance(AUTH_DECORATOR_NAMES, frozenset)
 
     def test_common_auth_decorators_present(self):
-        for name in ["login_required", "jwt_required", "token_required",
-                      "permission_required", "requires_auth", "auth_required"]:
+        for name in [
+            "login_required",
+            "jwt_required",
+            "token_required",
+            "permission_required",
+            "requires_auth",
+            "auth_required",
+        ]:
             assert name in AUTH_DECORATOR_NAMES, f"{name} missing from AUTH_DECORATOR_NAMES"
 
     def test_route_decorator_names_is_frozenset(self):
