@@ -732,7 +732,7 @@ class FrameRunner:
                     suppressions = frame.config["suppressions"]
                     if suppressions and frame_findings:
                         findings_before = len(frame_findings)
-                        frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions)
+                        frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions, context=context)
                         findings_after = len(frame_findings)
 
                         if findings_before != findings_after:

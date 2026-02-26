@@ -25,12 +25,12 @@ class PipelineContext:
     Shared context for all pipeline phases.
 
     This context accumulates information as it flows through:
-    0. PRE-ANALYSIS → Project/File understanding
-    1. ANALYSIS → Quality metrics
-    2. CLASSIFICATION → Frame selection & suppressions
-    3. VALIDATION → Findings & issues
-    4. FORTIFICATION → Security fixes
-    5. CLEANING → Quality improvements
+    0. PRE-ANALYSIS -> Project/File understanding
+    1. ANALYSIS -> Quality metrics
+    2. CLASSIFICATION -> Frame selection & suppressions
+    3. VALIDATION -> Findings & issues
+    4. FORTIFICATION -> Security fixes
+    5. CLEANING -> Quality improvements
 
     Features:
     - Thread-safe operations with locks
@@ -106,6 +106,11 @@ class PipelineContext:
     false_positives: list[str] = field(default_factory=list)
     true_positives: list[str] = field(default_factory=list)
     frame_results: dict[str, Any] = field(default_factory=dict)
+
+    # Phase 3: Suppression Audit Trail (#119)
+    # Records details of every finding suppressed by config-based suppression rules.
+    # Each entry: {id, file, title, severity, matched_rule, matched_files, timestamp}
+    suppressed_findings: list[dict[str, Any]] = field(default_factory=list)
 
     # Phase 4: FORTIFICATION Results
     fortifications: list[dict[str, Any]] = field(default_factory=list)
@@ -208,6 +213,22 @@ class PipelineContext:
                 }
             )
 
+    def add_suppressed_finding(self, record: dict[str, Any]) -> None:
+        """
+        Record a suppressed finding for audit trail (thread-safe, memory-bounded).
+
+        Args:
+            record: Suppression record with keys:
+                - id: Finding identifier
+                - file: File path where finding was located
+                - title: Finding title/message
+                - severity: Finding severity level
+                - matched_rule: The suppression rule pattern that matched
+                - matched_files: The file patterns from the suppression rule
+                - timestamp: ISO timestamp of suppression decision
+        """
+        self._add_to_bounded_list(self.suppressed_findings, record)
+
     def _add_to_bounded_list(self, target_list: list, item: Any, max_size: int | None = None) -> None:
         """
         Add item to list with memory bounds (internal helper).
@@ -308,6 +329,7 @@ class PipelineContext:
                     "false_positives": self.false_positives,
                     "true_positives": self.true_positives,
                     "frame_results": self.frame_results,
+                    "suppressed_findings": self.suppressed_findings,
                 }
             )
 
@@ -381,6 +403,10 @@ class PipelineContext:
                     severity_counts[sev] = severity_counts.get(sev, 0) + 1
                 context_parts.append(f"ISSUES FOUND: {severity_counts}")
 
+        # Add suppression summary
+        if self.suppressed_findings:
+            context_parts.append(f"SUPPRESSED: {len(self.suppressed_findings)} findings")
+
         # Add frame selection (skip for concise unless relevant)
         if self.selected_frames and not concise:
             context_parts.append(f"VALIDATION FRAMES: {', '.join(self.selected_frames)}")
@@ -425,6 +451,8 @@ class PipelineContext:
             "quality_score_before": self.quality_score_before,
             "quality_score_after": self.quality_score_after,
             "findings_count": len(self.findings),
+            "suppressed_findings_count": len(self.suppressed_findings),
+            "suppressed_findings": self.suppressed_findings,
             "fortifications_count": len(self.fortifications),
             "cleaning_suggestions_count": len(self.cleaning_suggestions),
             "llm_interactions": len(self.llm_history),
@@ -460,10 +488,13 @@ class PipelineContext:
             summary_parts.append(f"File Type: {self.file_context.value}")
 
         if self.quality_score_before > 0:
-            summary_parts.append(f"Quality: {self.quality_score_before:.1f} → {self.quality_score_after:.1f}")
+            summary_parts.append(f"Quality: {self.quality_score_before:.1f} -> {self.quality_score_after:.1f}")
 
         if self.findings:
             summary_parts.append(f"Issues Found: {len(self.findings)}")
+
+        if self.suppressed_findings:
+            summary_parts.append(f"Suppressed Findings: {len(self.suppressed_findings)}")
 
         if self.fortifications:
             summary_parts.append(f"Fixes Generated: {len(self.fortifications)}")
