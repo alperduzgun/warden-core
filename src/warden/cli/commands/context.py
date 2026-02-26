@@ -10,6 +10,7 @@ KISS/DRY/SOLID/YAGNI:
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -76,27 +77,182 @@ _detect_style = detect_style
 
 
 def _detect_testing(pyproject: dict[str, Any]) -> dict[str, Any]:
-    pytest = (pyproject.get("tool") or {}).get("pytest", {}).get("ini_options", {})
-    markers = pytest.get("markers") or []
-    naming = pytest.get("python_files") or ["test_*.py"]
+    """Detect testing configuration from pyproject.toml.
+
+    Auto-populates:
+    - testing.markers from [tool.pytest.ini_options].markers
+    - testing.framework (pytest detected from config or presence)
+    - testing.naming from python_files option
+    """
+    tool = pyproject.get("tool") or {}
+    pytest_opts = tool.get("pytest", {}).get("ini_options", {})
+
+    # Extract markers - they can be a list of strings like "slow: marks slow tests"
+    raw_markers = pytest_opts.get("markers") or []
+    markers: list[str] = []
+    for m in raw_markers:
+        if isinstance(m, str):
+            # Extract just the marker name (before the colon description)
+            marker_name = m.split(":")[0].strip()
+            if marker_name:
+                markers.append(marker_name)
+
+    naming = pytest_opts.get("python_files") or ["test_*.py"]
+
     return {"framework": "pytest", "markers": markers, "naming": naming}
 
 
-def _detect_commands() -> dict[str, Any]:
-    return {
-        "lint": "ruff check .",
-        "format": "ruff format .",
-        "test": "pytest -q",
-        "scan": "warden scan",
+def _detect_commands(root: Path | None = None) -> dict[str, Any]:
+    """Detect lint/format/test/scan commands from common tool configs.
+
+    Checks for the presence of tool configuration files (ruff, black, flake8,
+    eslint, prettier, etc.) and generates appropriate command suggestions.
+    """
+    if root is None:
+        root = Path.cwd()
+
+    commands: dict[str, str] = {}
+
+    # --- Lint command detection ---
+    # Python linters (prefer ruff > flake8 > pylint)
+    if _has_tool_config(root, "ruff"):
+        commands["lint"] = "ruff check ."
+    elif (root / ".flake8").exists() or (root / "setup.cfg").exists():
+        commands["lint"] = "flake8 ."
+    elif (root / ".pylintrc").exists():
+        commands["lint"] = "pylint src/"
+    # JS/TS linters
+    elif (root / ".eslintrc.js").exists() or (root / ".eslintrc.json").exists() or (root / ".eslintrc.yml").exists():
+        commands["lint"] = "eslint ."
+    else:
+        commands["lint"] = "ruff check ."
+
+    # --- Format command detection ---
+    # Python formatters (prefer ruff > black > yapf)
+    if _has_tool_config(root, "ruff"):
+        commands["format"] = "ruff format ."
+    elif _has_tool_config(root, "black"):
+        commands["format"] = "black ."
+    elif (root / ".style.yapf").exists():
+        commands["format"] = "yapf -r -i ."
+    # JS/TS formatters
+    elif (root / ".prettierrc").exists() or (root / ".prettierrc.json").exists():
+        commands["format"] = "prettier --write ."
+    else:
+        commands["format"] = "ruff format ."
+
+    # --- Test command detection ---
+    # Python test runners (prefer pytest > unittest)
+    if _has_tool_config(root, "pytest"):
+        commands["test"] = "pytest -q"
+    elif (root / "package.json").exists():
+        # Check for test script in package.json
+        try:
+            pkg = json.loads((root / "package.json").read_text(encoding="utf-8"))
+            scripts = pkg.get("scripts", {})
+            if "test" in scripts:
+                commands["test"] = "npm test"
+            else:
+                commands["test"] = "pytest -q"
+        except Exception:
+            commands["test"] = "npm test"
+    elif (root / "Makefile").exists():
+        commands["test"] = "make test"
+    else:
+        commands["test"] = "pytest -q"
+
+    # Scan is always warden
+    commands["scan"] = "warden scan"
+
+    return commands
+
+
+def _has_tool_config(root: Path, tool: str) -> bool:
+    """Check if a tool has configuration in pyproject.toml or dedicated config files."""
+    # Check pyproject.toml
+    pyproject_path = root / "pyproject.toml"
+    if pyproject_path.exists():
+        try:
+            content = pyproject_path.read_text(encoding="utf-8")
+            if f"[tool.{tool}]" in content:
+                return True
+        except Exception:
+            pass
+
+    # Tool-specific config files
+    config_files: dict[str, list[str]] = {
+        "ruff": ["ruff.toml", ".ruff.toml"],
+        "black": [".black.toml", "black.toml"],
+        "pytest": ["pytest.ini", "setup.cfg", "tox.ini"],
     }
+    for cfg_file in config_files.get(tool, []):
+        if (root / cfg_file).exists():
+            return True
+
+    # For pytest, also check pyproject.toml [tool.pytest]
+    if tool == "pytest" and pyproject_path.exists():
+        try:
+            content = pyproject_path.read_text(encoding="utf-8")
+            if "[tool.pytest" in content:
+                return True
+        except Exception:
+            pass
+
+    return False
 
 
 def _detect_commit_convention(root: Path) -> str:
+    """Detect commit convention from config files and git history.
+
+    Checks (in order):
+    1. .commitlintrc, .commitlintrc.json, .commitlintrc.yml, .commitlintrc.yaml
+    2. commitlint.config.js / commitlint.config.ts
+    3. Git log pattern matching for conventional commits
+    """
+    # Check commitlint config files first
+    commitlint_files = [
+        ".commitlintrc",
+        ".commitlintrc.json",
+        ".commitlintrc.yml",
+        ".commitlintrc.yaml",
+        "commitlint.config.js",
+        "commitlint.config.ts",
+        "commitlint.config.cjs",
+        "commitlint.config.mjs",
+    ]
+    for cfg_file in commitlint_files:
+        cfg_path = root / cfg_file
+        if cfg_path.exists():
+            # If commitlint is configured, check for conventional-commits preset
+            try:
+                content = cfg_path.read_text(encoding="utf-8")
+                if "conventional" in content.lower():
+                    return "conventional"
+                # commitlint presence alone implies conventional
+                return "conventional"
+            except Exception:
+                return "conventional"
+
+    # Check package.json for commitlint config
+    pkg_path = root / "package.json"
+    if pkg_path.exists():
+        try:
+            pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+            if "commitlint" in pkg:
+                return "conventional"
+            # Also check devDependencies for commitlint
+            deps = {**pkg.get("devDependencies", {}), **pkg.get("dependencies", {})}
+            if any("commitlint" in dep for dep in deps):
+                return "conventional"
+        except Exception:
+            pass
+
+    # Fall back to git log analysis
     try:
         out = subprocess.run(
             ["git", "log", "-n", "10", "--pretty=%s"], cwd=root, text=True, capture_output=True, timeout=2
         )
-        if out.returncode == 0 and re.search(r"^(feat|fix|chore|docs|refactor|style|test)(\(.+\))?:", out.stdout, re.M):
+        if out.returncode == 0 and re.search(r"^(feat|fix|chore|docs|refactor|style|test|ci|perf|build)(\(.+\))?:", out.stdout, re.M):
             return "conventional"
     except Exception:
         pass
@@ -149,7 +305,7 @@ def detect(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
         "structure": detect_structure(root),
         "style": detect_style(pyproj),
         "testing": _detect_testing(pyproj),
-        "commands": _detect_commands(),
+        "commands": _detect_commands(root),
         "repo": {"commit_convention": _detect_commit_convention(root)},
     }
     if dry_run:
