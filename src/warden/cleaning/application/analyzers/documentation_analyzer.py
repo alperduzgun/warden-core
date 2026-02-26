@@ -23,6 +23,7 @@ from warden.cleaning.domain.models import (
     CleaningResult,
     CleaningSuggestion,
 )
+from warden.shared.utils.docstring_utils import has_param_section, has_return_section
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
@@ -290,13 +291,8 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                     if isinstance(node, ast.FunctionDef) and node.args.args:
                         params = [arg.arg for arg in node.args.args if arg.arg != "self"]
                         if params:
-                            # Check if parameters are documented (simple heuristic)
-                            has_params_section = any(
-                                keyword in docstring.lower()
-                                for keyword in ["args:", "arguments:", "parameters:", "params:"]
-                            )
-
-                            if not has_params_section:
+                            # Check if parameters are documented (shared utility)
+                            if not has_param_section(docstring):
                                 issues.append(
                                     CleaningIssue(
                                         issue_type=CleaningIssueType.POOR_DOC,
@@ -306,13 +302,9 @@ class DocumentationAnalyzer(BaseCleaningAnalyzer):
                                     )
                                 )
 
-                            # Check for return documentation if not None
+                            # Check for return documentation if not None (shared utility)
                             if not self._returns_none(node):
-                                has_return_doc = any(
-                                    keyword in docstring.lower()
-                                    for keyword in ["returns:", "return:", "yields:", "yield:"]
-                                )
-                                if not has_return_doc:
+                                if not has_return_section(docstring):
                                     issues.append(
                                         CleaningIssue(
                                             issue_type=CleaningIssueType.POOR_DOC,
