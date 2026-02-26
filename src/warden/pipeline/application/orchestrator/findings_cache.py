@@ -1,9 +1,14 @@
-"""Cross-scan findings cache for SecurityFrame and other LLM-heavy frames.
+"""Cross-scan findings cache for all validation frames.
 
 Stores ``FrameResult`` findings keyed by ``{frame_id}:{file_path}:{content_hash}``.
 On a subsequent scan, if a file's content is unchanged, the cached findings are
 replayed instead of re-running the LLM — matching the same pattern as
 ``TriageCacheManager`` for Phase 0.5.
+
+All frame IDs (built-in, hub, and custom) are eligible for caching.  The cache
+key includes the frame_id so frames are isolated from each other.  Content-hash
+keying ensures that changed files are automatically re-analysed.  To force a
+full re-scan (e.g. after frame rule changes), use ``warden scan --no-cache``.
 
 Cache file: ``.warden/cache/findings_cache.json``
 
@@ -35,21 +40,6 @@ CACHE_FILENAME = "findings_cache.json"
 # Auto-derived from Finding field signatures — no manual bump needed.
 CACHE_SCHEMA_VERSION: str = derive_schema_version(Finding)
 
-# Frame IDs eligible for cross-scan caching.  Only deterministic LLM frames
-# should be listed here; frames with side-effects or that depend on external
-# state should be excluded.
-CACHEABLE_FRAME_IDS: frozenset[str] = frozenset(
-    {
-        "security",
-        "resilience",
-        "spec",
-        "property",
-        "orphan",
-        "fuzz",
-        "architecture",
-    }
-)
-
 
 class FindingsCache:
     """Persistent, hash-based findings cache for LLM validation frames.
@@ -57,6 +47,9 @@ class FindingsCache:
     Each entry maps ``{frame_id}:{file_path}:{content_hash}`` to a list of
     serialised ``Finding`` dicts.  Findings are replayed on cache hit so that
     repeated ``warden scan`` runs on unchanged files skip all LLM calls.
+
+    All frame IDs are cacheable — built-in, hub, and custom frames all benefit
+    from incremental scan caching.
 
     Invalidation:
     - Content changes → different hash → automatic miss
@@ -93,9 +86,6 @@ class FindingsCache:
         Returns an empty list if the file was previously scanned clean.
         Returns *None* if there is no cache entry (uncached).
         """
-        if frame_id not in CACHEABLE_FRAME_IDS:
-            return None
-
         key = self.cache_key(frame_id, file_path, content)
         entry = self._store.get(key)
         if entry is None:
@@ -125,9 +115,6 @@ class FindingsCache:
 
     def put_findings(self, frame_id: str, file_path: str, content: str, findings: list[Finding]) -> None:
         """Serialize and store findings for a (frame, file) pair."""
-        if frame_id not in CACHEABLE_FRAME_IDS:
-            return
-
         key = self.cache_key(frame_id, file_path, content)
         self._store[key] = {
             "findings": [_serialize_finding(f) for f in findings],
