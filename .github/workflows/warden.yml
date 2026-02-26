@@ -18,7 +18,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      WARDEN_LLM_PROVIDER: azure_openai
+      WARDEN_LLM_PROVIDER: ollama
+      WARDEN_BLOCKED_PROVIDERS: "claude_code,codex,groq"
+      OLLAMA_HOST: http://localhost:11434
 
 
     steps:
@@ -34,6 +36,19 @@ jobs:
       - name: Install Warden
         run: pip install .
 
+      - name: Setup Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama is ready!"
+              break
+            fi
+            sleep 1
+          done
+          ollama pull qwen2.5-coder:3b
+
       - name: Run Warden Scan
         run: |
           mkdir -p .warden/reports
@@ -41,7 +56,7 @@ jobs:
 
       - name: Upload SARIF Report
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: .warden/reports/warden-report.sarif
         continue-on-error: true
