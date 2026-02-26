@@ -50,7 +50,7 @@ jobs:
           # CI mode with diff - only scan changed files
           # Output SARIF for GitHub Code Scanning integration
           mkdir -p .warden/reports
-          warden scan --ci --diff --base ${ github.base_ref } --format sarif --output .warden/reports/warden-report.sarif
+          warden scan --ci --diff --base ${{ github.base_ref }} --format sarif --output .warden/reports/warden-report.sarif
 
       - name: Upload SARIF Report
         if: always()
