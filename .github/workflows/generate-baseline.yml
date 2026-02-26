@@ -14,7 +14,7 @@ on:
         - standard
         - deep
       concurrency:
-        description: 'Concurrency Limit (Default: 10 for safe Azure usage)'
+        description: 'Concurrency Limit (Default: 2 for local Ollama)'
         required: true
         default: '10'
         type: string
@@ -88,29 +88,23 @@ jobs:
         
     - name: Pull Local Model (Fast Tier Backup)
       run: |
-        # Local fallback for Groq rate-limit scenarios.
-        # Timeout fixed in PR #228 (60s → 90s), 3b quality preferred for baseline scans.
-        # Model is cached between runs via actions/cache.
+        # Primary model for all scan tasks.
+        # Timeout: 90s (fixed PR #228), cached between runs via actions/cache.
         ollama pull qwen2.5-coder:3b
 
     - name: Run Warden Scan
       env:
-        # STRATEGY:
-        # Smart Tier: Groq (fast cloud API)
-        # Fast/Local Tier: Ollama qwen2.5-coder:3b (free, local fallback)
-        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-
-        # Enforce Optimized Chain
-        WARDEN_LLM_PROVIDER: "groq"        # Smart Tier: Groq
-        WARDEN_FAST_TIER_PRIORITY: "ollama" # Fast/Local: Ollama only
-        WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency || '10' }}
+        # Local Ollama only — no cloud API dependency, no rate limits
+        WARDEN_LLM_PROVIDER: "ollama"
+        WARDEN_BLOCKED_PROVIDERS: "claude_code,codex,groq"
+        WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency || '2' }}
       run: |
         # Use input values or defaults for scheduled runs
         SCAN_LEVEL="${{ inputs.level }}"
         SCAN_LEVEL="${SCAN_LEVEL:-deep}"
 
         echo "Running Baseline Scan with: Level=${SCAN_LEVEL}"
-        echo "Strategy: Groq (Primary) -> Ollama (Backup) -> Azure (Complex)"
+        echo "Strategy: Ollama qwen2.5-coder:3b (local)"
 
         # Run scan and ensure baseline.sarif is generated/updated
         # Baseline update is enabled by default (use --no-update-baseline to skip)

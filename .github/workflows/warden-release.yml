@@ -16,13 +16,13 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      WARDEN_LLM_PROVIDER: groq
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      WARDEN_LLM_PROVIDER: ollama
+      WARDEN_BLOCKED_PROVIDERS: "claude_code,codex,groq"
       OLLAMA_HOST: http://localhost:11434
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload Reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: warden-release-reports
           path: .warden/reports/
