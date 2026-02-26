@@ -143,16 +143,16 @@ class ClassificationExecutor(BasePhaseExecutor):
 
                     # -- Layer 1: classification cache --
                     cache_key = ClassificationCache.make_key(files_to_classify, available_ids, self.project_root)
-                    cached_frames = self._classification_cache.get(cache_key)
-                    if cached_frames is not None:
+                    cached = self._classification_cache.get(cache_key)
+                    if cached is not None:
                         logger.info(
                             "classification_cache_hit",
-                            frames=cached_frames,
+                            frames=cached["frames"],
                             skipped_llm=True,
                         )
                         result = ClassificationResult(
-                            selected_frames=cached_frames,
-                            suppression_rules=[],
+                            selected_frames=cached["frames"],
+                            suppression_rules=cached["suppression_rules"],
                             reasoning="Classification from cache (unchanged inputs)",
                         )
                     else:
@@ -196,7 +196,11 @@ class ClassificationExecutor(BasePhaseExecutor):
 
                         # Store in cache regardless of whether LLM was used
                         if result and result.selected_frames:
-                            self._classification_cache.put(cache_key, result.selected_frames)
+                            self._classification_cache.put(
+                                cache_key,
+                                result.selected_frames,
+                                result.suppression_rules,
+                            )
                             logger.debug("classification_cached", frames=result.selected_frames)
 
                 # Validate result exists (should always be set by above branches)
