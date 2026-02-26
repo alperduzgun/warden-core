@@ -95,15 +95,10 @@ jobs:
 
     - name: Run Warden Scan
       env:
-        # STRATEGY:
-        # Smart Tier: Groq (fast cloud API)
-        # Fast/Local Tier: Ollama qwen2.5-coder:3b (free, local fallback)
-        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-
-        # Enforce Optimized Chain
-        WARDEN_LLM_PROVIDER: "groq"        # Smart Tier: Groq
-        WARDEN_FAST_TIER_PRIORITY: "ollama" # Fast/Local: Ollama only
-        WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency || '10' }}
+        # STRATEGY: Ollama only (local, no API key needed)
+        WARDEN_LLM_PROVIDER: "ollama"
+        WARDEN_FAST_TIER_PRIORITY: "ollama"
+        WARDEN_LLM_CONCURRENCY: ${{ inputs.concurrency || '2' }}
       run: |
         # Use input values or defaults for scheduled runs
         SCAN_LEVEL="${{ inputs.level }}"
