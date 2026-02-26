@@ -5,6 +5,7 @@ Covers:
 1. execute_all_phases — phase orchestration with enable/disable flags
 2. _apply_manual_frame_override — manual frame selection
 3. _finalize_pipeline_status — blocker/non-blocker logic + LLM usage
+4. _check_phase_preconditions — pre-condition checks for phase transitions
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -327,3 +328,197 @@ class TestFinalizePipelineStatus:
         assert ctx.prompt_tokens == 600
         assert ctx.completion_tokens == 400
         assert ctx.request_count == 5
+
+
+# ---------------------------------------------------------------------------
+# _check_phase_preconditions (PHASE-GAP-4)
+# ---------------------------------------------------------------------------
+
+
+class TestPhasePreconditionChecks:
+    """Pre-condition gate checks before each phase transition."""
+
+    def test_validation_precondition_passes_with_selected_frames(self):
+        """selected_frames populated → Validation pre-check returns True."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.selected_frames = ["security", "resilience"]
+
+        assert runner._check_phase_preconditions("Validation", ctx) is True
+        assert len(ctx.warnings) == 0
+
+    def test_validation_precondition_warns_when_selected_frames_is_none(self):
+        """selected_frames is None → Validation pre-check returns False + warning."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.selected_frames = None
+
+        result = runner._check_phase_preconditions("Validation", ctx)
+
+        assert result is False
+        assert len(ctx.warnings) == 1
+        assert "selected_frames" in ctx.warnings[0]
+        assert "Classification" in ctx.warnings[0]
+
+    def test_validation_precondition_passes_with_empty_list(self):
+        """selected_frames is [] (Classification ran, selected nothing) → True.
+
+        An empty list means the producing phase ran but produced no frames,
+        which is a valid (if unusual) result.  Only None signals a skipped phase.
+        """
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.selected_frames = []
+
+        assert runner._check_phase_preconditions("Validation", ctx) is True
+        assert len(ctx.warnings) == 0
+
+    def test_fortification_precondition_passes_with_findings(self):
+        """findings and frame_results populated → Fortification pre-check returns True."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = [{"id": "F1", "severity": "high"}]
+        ctx.frame_results = {"sec": {"result": "ok"}}
+
+        assert runner._check_phase_preconditions("Fortification", ctx) is True
+        assert len(ctx.warnings) == 0
+
+    def test_fortification_precondition_warns_when_findings_is_none(self):
+        """findings is None → Fortification pre-check returns False + warning."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = None
+        ctx.frame_results = {}
+
+        result = runner._check_phase_preconditions("Fortification", ctx)
+
+        assert result is False
+        assert len(ctx.warnings) == 1
+        assert "findings" in ctx.warnings[0]
+        assert "Validation" in ctx.warnings[0]
+
+    def test_fortification_precondition_warns_when_frame_results_is_none(self):
+        """frame_results is None → Fortification pre-check returns False + warning."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = []
+        ctx.frame_results = None
+
+        result = runner._check_phase_preconditions("Fortification", ctx)
+
+        assert result is False
+        assert len(ctx.warnings) == 1
+        assert "frame_results" in ctx.warnings[0]
+
+    def test_fortification_precondition_warns_on_both_none(self):
+        """Both findings and frame_results None → two warnings."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = None
+        ctx.frame_results = None
+
+        result = runner._check_phase_preconditions("Fortification", ctx)
+
+        assert result is False
+        assert len(ctx.warnings) == 2
+
+    def test_fortification_precondition_passes_with_empty_findings(self):
+        """findings is [] (Validation ran, found nothing) → True."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = []
+        ctx.frame_results = {}
+
+        assert runner._check_phase_preconditions("Fortification", ctx) is True
+        assert len(ctx.warnings) == 0
+
+    def test_verification_precondition_passes_with_findings(self):
+        """findings populated → Verification pre-check returns True."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = [{"id": "F1"}]
+
+        assert runner._check_phase_preconditions("Verification", ctx) is True
+        assert len(ctx.warnings) == 0
+
+    def test_verification_precondition_warns_when_findings_is_none(self):
+        """findings is None → Verification pre-check returns False + warning."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = None
+
+        result = runner._check_phase_preconditions("Verification", ctx)
+
+        assert result is False
+        assert len(ctx.warnings) == 1
+        assert "findings" in ctx.warnings[0]
+
+    def test_cleaning_precondition_passes_with_findings(self):
+        """findings populated → Cleaning pre-check returns True."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = []
+
+        assert runner._check_phase_preconditions("Cleaning", ctx) is True
+        assert len(ctx.warnings) == 0
+
+    def test_cleaning_precondition_warns_when_findings_is_none(self):
+        """findings is None → Cleaning pre-check returns False + warning."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.findings = None
+
+        result = runner._check_phase_preconditions("Cleaning", ctx)
+
+        assert result is False
+        assert len(ctx.warnings) == 1
+        assert "findings" in ctx.warnings[0]
+
+    def test_unknown_phase_returns_true(self):
+        """Unknown phase name → no checks, returns True."""
+        runner = _make_runner()
+        ctx = make_context()
+
+        assert runner._check_phase_preconditions("UnknownPhase", ctx) is True
+        assert len(ctx.warnings) == 0
+
+    def test_precondition_does_not_raise(self):
+        """Pre-condition failures must never raise — only warn."""
+        runner = _make_runner()
+        ctx = make_context()
+        ctx.selected_frames = None
+        ctx.findings = None
+        ctx.frame_results = None
+
+        # Should not raise for any phase
+        for phase in ["Validation", "Verification", "Fortification", "Cleaning"]:
+            runner._check_phase_preconditions(phase, ctx)
+
+        # Warnings accumulated but no exceptions raised
+        assert len(ctx.warnings) > 0
+
+    @pytest.mark.asyncio
+    async def test_pipeline_continues_despite_failed_precondition(self):
+        """Validation still executes even when selected_frames is None.
+
+        The pre-condition check logs a warning but does NOT block execution.
+        """
+        config = PipelineConfig(
+            enable_validation=True,
+            enable_fortification=False,
+            enable_cleaning=False,
+        )
+        fe = AsyncMock()
+        fe.frames = ["security"]
+        runner = _make_runner(config=config, frame_executor=fe)
+
+        ctx = make_context()
+        # Simulate Classification that failed to populate selected_frames
+        ctx.selected_frames = None
+
+        await runner.execute_all_phases(ctx, [make_code_file()], make_pipeline())
+
+        # Validation should still be called despite the warning
+        fe.execute_validation_with_strategy_async.assert_awaited_once()
+        # A warning should have been recorded
+        assert any("selected_frames" in w for w in ctx.warnings)

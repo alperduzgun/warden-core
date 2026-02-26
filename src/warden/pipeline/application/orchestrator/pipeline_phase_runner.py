@@ -45,6 +45,63 @@ class PipelinePhaseRunner:
     def progress_callback(self, value: Callable | None) -> None:
         self._progress_callback = value
 
+    # ------------------------------------------------------------------
+    # Phase pre-condition checks (PHASE-GAP-4 fix)
+    # ------------------------------------------------------------------
+
+    def _check_phase_preconditions(self, phase: str, context: PipelineContext) -> bool:
+        """Check that required context fields from prior phases are populated.
+
+        Returns True if all pre-conditions are satisfied.  When a pre-condition
+        fails the method logs a structured warning, records it on
+        ``context.warnings``, and returns False.  The caller decides whether to
+        skip or continue the phase — the pipeline is never crashed by a
+        pre-condition failure.
+        """
+        checks: dict[str, list[tuple[str, str, str]]] = {
+            # (field_name, human_description, producing_phase)
+            "Validation": [
+                ("selected_frames", "selected_frames (frame list from Classification)", "Classification"),
+            ],
+            "Verification": [
+                ("findings", "findings (issue list from Validation)", "Validation"),
+            ],
+            "Fortification": [
+                ("findings", "findings (issue list from Validation)", "Validation"),
+                ("frame_results", "frame_results (execution results from Validation)", "Validation"),
+            ],
+            "Cleaning": [
+                ("findings", "findings (issue list from Validation)", "Validation"),
+            ],
+        }
+
+        preconditions = checks.get(phase)
+        if not preconditions:
+            return True
+
+        all_ok = True
+        for field_name, description, producing_phase in preconditions:
+            value = getattr(context, field_name, None)
+            # An empty list / empty dict is acceptable for findings/frame_results
+            # (the phase ran but found nothing).  Only flag truly missing data:
+            # None means the field was never set by the producing phase.
+            if value is None:
+                msg = (
+                    f"Phase {phase} expects '{description}' from {producing_phase}, "
+                    f"but the field is None. {producing_phase} may have been skipped or "
+                    f"failed silently. {phase} will proceed but may produce empty results."
+                )
+                logger.warning(
+                    "phase_precondition_not_met",
+                    phase=phase,
+                    missing_field=field_name,
+                    expected_from=producing_phase,
+                )
+                context.warnings.append(msg)
+                all_ok = False
+
+        return all_ok
+
     async def execute_all_phases(
         self,
         context: PipelineContext,
@@ -147,6 +204,7 @@ class PipelinePhaseRunner:
         context.current_phase = "Validation"
         enable_validation = getattr(self.config, "enable_validation", True)
         if enable_validation:
+            self._check_phase_preconditions("Validation", context)
             logger.info("phase_enabled", phase="VALIDATION", enabled=enable_validation)
             await self.frame_executor.execute_validation_with_strategy_async(context, code_files, pipeline)
         else:
@@ -168,6 +226,7 @@ class PipelinePhaseRunner:
         # Phase 3.5: VERIFICATION (False Positive Reduction)
         context.current_phase = "Verification"
         if getattr(self.config, "enable_issue_validation", False):
+            self._check_phase_preconditions("Verification", context)
             findings_count = len(context.findings) if hasattr(context, "findings") and context.findings else 0
             if self._progress_callback:
                 self._progress_callback(
@@ -187,6 +246,7 @@ class PipelinePhaseRunner:
 
         enable_fortification = getattr(self.config, "enable_fortification", True)
         if enable_fortification:
+            self._check_phase_preconditions("Fortification", context)
             logger.info("phase_enabled", phase="FORTIFICATION", enabled=enable_fortification)
             await self.phase_executor.execute_fortification_async(context, code_files)
 
@@ -215,6 +275,7 @@ class PipelinePhaseRunner:
 
         enable_cleaning = getattr(self.config, "enable_cleaning", True)
         if enable_cleaning:
+            self._check_phase_preconditions("Cleaning", context)
             logger.info("phase_enabled", phase="CLEANING", enabled=enable_cleaning)
             await self.phase_executor.execute_cleaning_async(context, code_files)
 
