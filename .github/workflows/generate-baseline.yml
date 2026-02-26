@@ -88,11 +88,11 @@ jobs:
         
     - name: Pull Local Model (Fast Tier Backup)
       run: |
-        # Use a tiny model for CI fallback to handle Rate Limits without cost
-        # With caching, this will be instant on subsequent runs
-        # 0.5b is 10x faster than 3b for CI triage tasks; avoids 60s timeout
-        ollama pull qwen2.5-coder:0.5b
-        
+        # Local fallback for Groq rate-limit scenarios.
+        # Timeout fixed in PR #228 (60s → 90s), 3b quality preferred for baseline scans.
+        # Model is cached between runs via actions/cache.
+        ollama pull qwen2.5-coder:3b
+
     - name: Run Warden Scan
       env:
         # STRATEGY:
