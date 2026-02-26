@@ -105,11 +105,13 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             sys.path.append(current_dir)
 
         try:
+            from _internal.crypto_check import WeakCryptoCheck
             from _internal.csrf_check import CSRFCheck
             from _internal.hardcoded_password_check import (
                 HardcodedPasswordCheck,
             )
             from _internal.http_security_check import HTTPSecurityCheck
+            from _internal.jwt_check import JWTMisconfigCheck
             from _internal.secrets_check import SecretsCheck
             from _internal.sql_injection_check import SQLInjectionCheck
             from _internal.xss_check import XSSCheck
@@ -124,6 +126,8 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self.checks.register(HardcodedPasswordCheck(self.config.get("hardcoded_password", {})))
         self.checks.register(HTTPSecurityCheck(self.config.get("http_security", {})))
         self.checks.register(CSRFCheck(self.config.get("csrf", {})))
+        self.checks.register(WeakCryptoCheck(self.config.get("weak_crypto", {})))
+        self.checks.register(JWTMisconfigCheck(self.config.get("jwt_misconfiguration", {})))
 
         logger.info(
             "builtin_checks_registered",
