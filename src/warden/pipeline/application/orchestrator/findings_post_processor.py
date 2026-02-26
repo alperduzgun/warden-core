@@ -289,6 +289,26 @@ class FindingsPostProcessor:
                         all_findings.extend(res.findings)
                 context.findings = all_findings
 
+                # CRITICAL: sync validated_issues so downstream phases
+                # (Fortification, SARIF) operate on the filtered set.
+                # Without this, fortification generates patches for
+                # findings the user already accepted as technical debt.
+                # validated_issues holds dicts, so match by rule_id:path key.
+                if hasattr(context, "validated_issues") and context.validated_issues:
+                    before_count = len(context.validated_issues)
+                    context.validated_issues = [
+                        vf
+                        for vf in context.validated_issues
+                        if f"{vf.get('rule_id') or vf.get('check_id')}:"
+                        f"{self._normalize_path(vf.get('file_path') or vf.get('path', ''))}" not in known_issues
+                    ]
+                    logger.info(
+                        "baseline_validated_issues_synced",
+                        before=before_count,
+                        after=len(context.validated_issues),
+                        suppressed=before_count - len(context.validated_issues),
+                    )
+
         except Exception as e:
             logger.warning("baseline_application_failed", error=str(e))
 
