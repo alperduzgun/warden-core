@@ -10,10 +10,12 @@ Validates business logic correctness:
 Priority: HIGH
 """
 
+from __future__ import annotations
+
 import json as _json
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
 from warden.shared.infrastructure.logging import get_logger
@@ -30,6 +32,9 @@ from warden.validation.domain.frame import (
     ValidationFrame,
 )
 from warden.validation.domain.mixins import BatchExecutable
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 logger = get_logger(__name__)
 
@@ -365,7 +370,7 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
                 logger.warning("property_serial_fallback_failed", file=code_file.path, error=str(e))
         return findings_map
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute property testing checks on code file.
 
