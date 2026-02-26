@@ -51,7 +51,7 @@ jobs:
       - name: Run Full Scan and Update Baseline
         run: |
           mkdir -p .warden/reports
-          warden scan --update-baseline --format sarif --output .warden/reports/warden-report.sarif
+          warden scan --format sarif --output .warden/reports/warden-report.sarif
 
       - name: Check Technical Debt
         run: warden baseline debt
