@@ -122,7 +122,11 @@ class FortificationExecutor(BasePhaseExecutor):
                         normalization_success += 1
                     except Exception as e:
                         normalization_failures.append(get_finding_attribute(f, "id", "unknown"))
-                        logger.error("finding_normalization_exception", error=str(e))
+                        logger.error(
+                            "finding_normalization_exception",
+                            error=str(e),
+                            error_type=type(e).__name__,
+                        )
 
                 # BATCH 3: Log normalization summary
                 if normalization_failures:
@@ -202,8 +206,14 @@ class FortificationExecutor(BasePhaseExecutor):
                                     lineterm="",
                                 )
                                 unified_diff = "\n".join(list(diff))
-                            except (ValueError, TypeError, RuntimeError):  # Fortification isolated
-                                pass
+                            except Exception as diff_err:
+                                # Non-critical: diff generation failure should not stop fortification
+                                logger.warning(
+                                    "fortification_diff_generation_failed",
+                                    finding_id=fid,
+                                    error=str(diff_err),
+                                    error_type=type(diff_err).__name__,
+                                )
 
                         # Assign remediation (dict-compatible — findings_map contains dicts)
                         finding["remediation"] = {
@@ -260,13 +270,25 @@ class FortificationExecutor(BasePhaseExecutor):
                     fortifications=len(result.fortifications),
                 )
 
-            except Exception as e:
+            except RuntimeError as e:
+                # Critical error: log, record in context, and re-raise to stop pipeline
                 logger.error(
                     "phase_failed",
                     phase="FORTIFICATION",
                     error=str(e),
                     error_type=type(e).__name__,
-                    traceback=traceback.format_exc(),
+                    tb=traceback.format_exc(),
+                )
+                context.errors.append(f"FORTIFICATION failed: {e!s}")
+                raise
+            except Exception as e:
+                # Non-critical error: log with full context and continue pipeline
+                logger.error(
+                    "phase_failed",
+                    phase="FORTIFICATION",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    tb=traceback.format_exc(),
                 )
                 context.errors.append(f"FORTIFICATION failed: {e!s}")
 

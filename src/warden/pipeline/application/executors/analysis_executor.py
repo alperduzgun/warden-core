@@ -233,11 +233,25 @@ class AnalysisExecutor(BasePhaseExecutor):
                 )
 
             except RuntimeError as e:
-                logger.error("phase_failed", phase="ANALYSIS", error=str(e), tb=traceback.format_exc())
+                # Critical error: log, record in context, and re-raise to stop pipeline
+                logger.error(
+                    "phase_failed",
+                    phase="ANALYSIS",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    tb=traceback.format_exc(),
+                )
                 context.errors.append(f"ANALYSIS failed: {e!s}")
-                raise e
+                raise
             except Exception as e:
-                logger.error("phase_failed", phase="ANALYSIS", error=str(e), tb=traceback.format_exc())
+                # Non-critical error: log with full context and continue pipeline
+                logger.error(
+                    "phase_failed",
+                    phase="ANALYSIS",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    tb=traceback.format_exc(),
+                )
                 context.errors.append(f"ANALYSIS failed: {e!s}")
 
         if self.progress_callback:
