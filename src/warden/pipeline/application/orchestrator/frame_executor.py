@@ -243,17 +243,53 @@ class FrameExecutor:
         frames_to_execute: list[ValidationFrame],
         pipeline: ValidationPipeline,
     ) -> None:
-        """Execute frames in parallel with concurrency limit."""
+        """Execute frames in parallel with concurrency limit and fail-fast blocker detection.
+
+        When config.fail_fast=True (default), cancels remaining tasks as soon as
+        a blocker violation is produced — avoids wasting 270s+ when a blocker fires
+        in the first 2s of a long parallel run.
+        """
         logger.info("executing_frames_parallel", count=len(frames_to_execute))
 
         semaphore = asyncio.Semaphore(self.config.parallel_limit or 3)
+        fail_fast = getattr(self.config, "fail_fast", True)
 
-        async def execute_with_semaphore_async(frame):
+        async def execute_with_semaphore_async(frame: ValidationFrame) -> FrameResult | None:
             async with semaphore:
-                await self.frame_runner.execute_frame_with_rules_async(context, frame, code_files, pipeline)
+                return await self.frame_runner.execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
-        tasks = [execute_with_semaphore_async(frame) for frame in frames_to_execute]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # Create named tasks so we can cancel remaining ones on blocker
+        pending: set[asyncio.Task] = {
+            asyncio.create_task(execute_with_semaphore_async(frame), name=frame.frame_id) for frame in frames_to_execute
+        }
+
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+
+            for task in done:
+                exc = task.exception()
+                if exc is not None:
+                    logger.warning(
+                        "parallel_frame_task_error",
+                        frame_id=task.get_name(),
+                        error=str(exc),
+                    )
+                    continue
+
+                result: FrameResult | None = task.result()
+                if fail_fast and result is not None and getattr(result, "is_blocker", False):
+                    # Blocker found — cancel remaining frames immediately
+                    for remaining in pending:
+                        remaining.cancel()
+                    logger.info(
+                        "parallel_blocker_fail_fast",
+                        blocker_frame=task.get_name(),
+                        cancelled_frames=[t.get_name() for t in pending],
+                    )
+                    # Drain cancelled tasks to avoid warnings
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
+                    return
 
     async def _execute_frames_fail_fast_async(
         self,
