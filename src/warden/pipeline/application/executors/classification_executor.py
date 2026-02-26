@@ -280,6 +280,9 @@ class ClassificationExecutor(BasePhaseExecutor):
                 logger.warning("classification_failed_using_all_frames")
                 # This will be handled by frame executor
 
+        # Post-condition check: validate expected fields are populated (#133)
+        context.assert_phase_complete("CLASSIFICATION")
+
         if self.progress_callback:
             duration = time.perf_counter() - start_time
             classification_data = {"phase": "CLASSIFICATION", "phase_name": "CLASSIFICATION", "duration": duration}

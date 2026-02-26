@@ -254,6 +254,9 @@ class AnalysisExecutor(BasePhaseExecutor):
                 )
                 context.errors.append(f"ANALYSIS failed: {e!s}")
 
+        # Post-condition check: validate expected fields are populated (#133)
+        context.assert_phase_complete("ANALYSIS")
+
         if self.progress_callback:
             duration = time.perf_counter() - start_time
             # Include LLM analysis info in progress
