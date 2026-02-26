@@ -200,7 +200,7 @@ jobs:
       - name: Verify Code Intelligence (Audit Context)
         env:
           WARDEN_LLM_PROVIDER: "ollama"
-          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex,groq"
+          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
         run: |
           echo "Generating Code Intelligence and Context Graphs..."
           warden refresh --force
@@ -216,7 +216,7 @@ jobs:
 
           # Warden Configuration
           WARDEN_LLM_PROVIDER: "ollama"
-          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex,groq"
+          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
           WARDEN_LLM_CONCURRENCY: "2"          # Conservative for local Ollama
 
           # Local Service Config
