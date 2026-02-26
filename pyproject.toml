@@ -79,6 +79,7 @@ warden = "warden.main:main"
 
 [tool.setuptools.package-data]
 "warden" = [
+    "validation/frames/security/_internal/*.yaml",
     "validation/frames/security/models/**/*.yaml",
     "validation/frames/security/models/*.yaml",
     "templates/**/*",

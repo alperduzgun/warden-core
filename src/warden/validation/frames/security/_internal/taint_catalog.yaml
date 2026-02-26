@@ -1,0 +1,191 @@
+# Default Taint Catalog — sources, sinks, and sanitizers.
+#
+# This file externalizes the hardcoded taint analysis catalog so that new
+# frameworks and patterns can be added without changing Python source code.
+#
+# Load order (handled by TaintCatalog):
+#   1. This file (default catalog, shipped with warden)
+#   2. YAML model packs  (models/{lang}/*.yaml) — unioned on top
+#   3. .warden/taint_catalog.yaml — user project-level overrides (union)
+#
+# Hardcoded Python constants serve as the ultimate fallback if this file
+# is missing or fails to parse.
+#
+# Format:
+#   sources:    lang -> list of source patterns
+#   sinks:      sink_name -> sink_type  (flat map, all languages combined)
+#   sanitizers: sink_type -> list of sanitizer functions
+#   assign_sinks: list of JS DOM property assignment sinks
+#
+# NOTE: When a sink name exists in both Python and JavaScript with different
+# types (e.g. "exec"), the JavaScript type takes precedence (matching the
+# original hardcoded merge order). The combined mapping is stored flat.
+
+# ── Sources (user-controlled input) ─────────────────────────────────────────
+
+sources:
+  python:
+    - request.args
+    - request.form
+    - request.json
+    - request.data
+    - request.values
+    - request.cookies
+    - request.headers
+    - request.get_json
+    - request.files
+    - input
+    - sys.argv
+    - os.environ
+    - os.getenv
+    - stdin
+    - sys.stdin
+
+  javascript:
+    # Express / Node HTTP
+    - req.body
+    - req.query
+    - req.params
+    - req.headers
+    - req.cookies
+    - request.body
+    - request.query
+    - request.params
+    - request.headers
+    - request.cookies
+    # Environment / process
+    - process.env
+    # DOM / browser
+    - document.cookie
+    - document.location
+    - window.location
+    - location.search
+    - location.hash
+    - location.href
+    - localStorage.getItem
+    - sessionStorage.getItem
+    # WebSocket / events
+    - event.data
+
+# ── Sinks (dangerous functions that should not receive tainted data) ────────
+# All languages combined in a flat mapping. For keys that appear in both
+# Python and JS with different types, the JS type is used (matching the
+# original hardcoded constant merge order: Python first, JS second).
+
+sinks:
+  # SQL sinks (Python + JS)
+  cursor.execute: SQL-value
+  cursor.executemany: SQL-value
+  connection.execute: SQL-value
+  db.execute: SQL-value
+  session.execute: SQL-value
+  engine.execute: SQL-value
+  db.query: SQL-value
+  pool.query: SQL-value
+  connection.query: SQL-value
+  client.query: SQL-value
+  sequelize.query: SQL-value
+  knex.raw: SQL-value
+
+  # Command sinks (Python + JS)
+  os.system: CMD-argument
+  os.popen: CMD-argument
+  subprocess.run: CMD-argument
+  subprocess.call: CMD-argument
+  subprocess.Popen: CMD-argument
+  # "exec" exists in both Python (CODE-execution) and JS (CMD-argument).
+  # JS wins in the original merge order.
+  exec: CMD-argument
+  execSync: CMD-argument
+  spawn: CMD-argument
+  spawnSync: CMD-argument
+  child_process.exec: CMD-argument
+  child_process.execSync: CMD-argument
+  child_process.spawn: CMD-argument
+
+  # HTML sinks (Python + JS)
+  render_template_string: HTML-content
+  Markup: HTML-content
+  innerHTML: HTML-content
+  outerHTML: HTML-content
+  document.write: HTML-content
+  document.writeln: HTML-content
+  insertAdjacentHTML: HTML-content
+
+  # Code execution sinks (Python + JS)
+  eval: CODE-execution
+  compile: CODE-execution
+  Function: CODE-execution
+  setTimeout: CODE-execution
+  setInterval: CODE-execution
+
+  # File sinks (Python + JS)
+  open: FILE-path
+  pathlib.Path: FILE-path
+  fs.readFile: FILE-path
+  fs.readFileSync: FILE-path
+  fs.writeFile: FILE-path
+  fs.writeFileSync: FILE-path
+
+  # HTTP / SSRF sinks (CWE-918) — Python only
+  requests.get: HTTP-request
+  requests.post: HTTP-request
+  requests.put: HTTP-request
+  requests.delete: HTTP-request
+  requests.patch: HTTP-request
+  requests.request: HTTP-request
+  requests.head: HTTP-request
+  urllib.request.urlopen: HTTP-request
+  urllib.request.Request: HTTP-request
+  httpx.get: HTTP-request
+  httpx.post: HTTP-request
+  httpx.put: HTTP-request
+  httpx.delete: HTTP-request
+  httpx.request: HTTP-request
+  httpx.AsyncClient.get: HTTP-request
+  httpx.AsyncClient.post: HTTP-request
+  aiohttp.ClientSession.get: HTTP-request
+  aiohttp.ClientSession.post: HTTP-request
+  aiohttp.ClientSession.request: HTTP-request
+
+# ── Sanitizers (functions that neutralize taint for a given sink type) ──────
+
+sanitizers:
+  SQL-value:
+    - parameterized_query
+    - sqlalchemy.text
+    - prepared_statement
+    - db.escape
+    - connection.escape
+    - mysql.escape
+    - sequelize.escape
+    - knex.escape
+  CMD-argument:
+    - shlex.quote
+    - shlex.split
+  HTML-content:
+    - html.escape
+    - markupsafe.escape
+    - bleach.clean
+    - DOMPurify.sanitize
+    - sanitizeHtml
+    - escapeHtml
+    - encodeURIComponent
+    - xss
+  CODE-execution: []
+  FILE-path:
+    - os.path.basename
+    - pathlib.PurePath
+    - path.basename
+    - path.resolve
+    - encodeURIComponent
+  HTTP-request:
+    - urllib.parse.urlparse
+    - ipaddress.ip_address
+    - validators.url
+
+# ── JS DOM property-assignment sinks ────────────────────────────────────────
+
+assign_sinks:
+  - innerHTML
+  - outerHTML
