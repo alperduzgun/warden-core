@@ -393,6 +393,11 @@ def scan_command(
         "--contract-mode",
         help="Run data flow contract analysis (DEAD_WRITE, MISSING_WRITE, NEVER_POPULATED).",
     ),
+    resume: bool = typer.Option(
+        False,
+        "--resume",
+        help="Resume a previously interrupted scan, skipping already-scanned files.",
+    ),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -535,6 +540,21 @@ def scan_command(
             except Exception as e:
                 console.print(f"[yellow]⚠️  Intelligence load failed: {e}[/yellow]")
 
+        # Resume support (#101): if --resume and partial results exist, load them
+        resume_keys: set[tuple[str, str]] | None = None
+        if resume:
+            from warden.pipeline.application.orchestrator.partial_results_writer import (
+                PartialResultsWriter,
+            )
+
+            if PartialResultsWriter.has_partial_results(Path.cwd()):
+                resume_keys = PartialResultsWriter.load_completed_keys(Path.cwd())
+                console.print(
+                    f"[green]Resuming scan: {len(resume_keys)} file/frame pairs already completed[/green]"
+                )
+            else:
+                console.print("[yellow]No partial results found, starting fresh scan[/yellow]")
+
         exit_code = asyncio.run(
             _run_scan_async(
                 paths,
@@ -554,6 +574,7 @@ def scan_command(
                 force=force,
                 benchmark=benchmark,
                 contract_mode=contract_mode,
+                resume=resume,
             )
         )
 
@@ -596,6 +617,7 @@ def scan_command(
                         force=force,
                         benchmark=benchmark,
                         contract_mode=contract_mode,
+                        resume=resume,
                     )
                 )
                 if exit_code != 0:
@@ -1516,6 +1538,7 @@ async def _run_scan_async(
     force: bool = False,
     benchmark: bool = False,
     contract_mode: bool = False,
+    resume: bool = False,
 ) -> int:
     """Async implementation of scan command."""
 
