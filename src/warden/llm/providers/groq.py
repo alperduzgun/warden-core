@@ -5,9 +5,11 @@ Based on C# GroqClient.cs
 API: https://api.groq.com
 """
 
+import asyncio
 import time
 
 import httpx
+import structlog
 
 from warden.shared.infrastructure.resilience import resilient
 
@@ -16,9 +18,14 @@ from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 
+logger = structlog.get_logger(__name__)
+
 
 class GroqClient(ILlmClient):
     """Groq client - Fast inference API"""
+
+    # Class-level rate-limit timestamp shared across instances
+    _rate_limited_until: float = 0.0
 
     def __init__(self, config: ProviderConfig):
         if not config.api_key:
@@ -32,15 +39,21 @@ class GroqClient(ILlmClient):
     def provider(self) -> LlmProvider:
         return LlmProvider.GROQ
 
-    @resilient(name="provider_send", timeout_seconds=60.0)
+    @resilient(name="provider_send", timeout_seconds=90.0)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         start_time = time.time()
+
+        # Short-circuit if we know we are rate-limited
+        remaining = GroqClient._rate_limited_until - time.time()
+        if remaining > 0:
+            logger.info("groq_rate_limited_backoff", wait_seconds=round(remaining, 1))
+            await asyncio.sleep(remaining)
 
         try:
             from warden.llm.global_rate_limiter import GlobalRateLimiter
 
             limiter = await GlobalRateLimiter.get_instance()
-            await limiter.acquire("default", tokens=request.max_tokens)
+            await limiter.acquire("groq", tokens=request.max_tokens)
 
             headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
@@ -97,6 +110,23 @@ class GroqClient(ILlmClient):
         except httpx.HTTPStatusError as e:
             duration_ms = int((time.time() - start_time) * 1000)
             body = e.response.text[:500] if e.response else ""
+
+            if e.response is not None and e.response.status_code == 429:
+                retry_after = int(e.response.headers.get("retry-after", 5))
+                GroqClient._rate_limited_until = time.time() + retry_after
+                logger.info(
+                    "groq_rate_limited",
+                    retry_after_seconds=retry_after,
+                    rate_limited_until=GroqClient._rate_limited_until,
+                )
+                return LlmResponse(
+                    content="",
+                    success=False,
+                    error_message=f"Groq rate limited (429) — retry after {retry_after}s | body={body}",
+                    provider=self.provider,
+                    duration_ms=duration_ms,
+                )
+
             return LlmResponse(
                 content="",
                 success=False,
