@@ -22,6 +22,7 @@ from warden.validation.domain.frame import FrameResult as CodeFrameResult
 from warden.validation.domain.mixins import (
     BatchExecutable,
     Cleanable,
+    CodeGraphAware,
     DataFlowAware,
     LSPAware,
     ProjectContextAware,
@@ -389,6 +390,23 @@ class FrameRunner:
                 except Exception as e:
                     logger.error(
                         "lsp_injection_failed",
+                        frame_id=frame.frame_id,
+                        error=str(e),
+                    )
+
+        # Inject CodeGraph and GapReport into CodeGraphAware frames
+        if isinstance(frame, CodeGraphAware):
+            if hasattr(context, "code_graph") and context.code_graph is not None:
+                try:
+                    frame.set_code_graph(context.code_graph, getattr(context, "gap_report", None))
+                    logger.debug(
+                        "code_graph_injected",
+                        frame_id=frame.frame_id,
+                        has_gap_report=context.gap_report is not None,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "code_graph_injection_failed",
                         frame_id=frame.frame_id,
                         error=str(e),
                     )

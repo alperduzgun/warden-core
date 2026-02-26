@@ -27,7 +27,7 @@ from warden.validation.domain.frame import (
     MachineContext,
     ValidationFrame,
 )
-from warden.validation.domain.mixins import BatchExecutable, TaintAware
+from warden.validation.domain.mixins import BatchExecutable, CodeGraphAware, TaintAware
 from warden.validation.infrastructure.check_loader import CheckLoader
 
 from .ast_analyzer import extract_ast_context, format_ast_context
@@ -40,7 +40,7 @@ from .data_flow_analyzer import analyze_data_flow, format_data_flow_context
 logger = get_logger(__name__)
 
 
-class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
+class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware):
     """
     Security validation frame - Critical security checks.
 
@@ -80,6 +80,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
 
         # Shared taint paths (injected by pipeline via TaintAware mixin)
         self._taint_paths: dict[str, list] = {}
+
+        # CodeGraphAware: injected by FrameRunner before execution
+        self._code_graph: Any = None
+        self._gap_report: Any = None
 
         # Check registry
         self.checks = CheckRegistry()
@@ -154,6 +158,11 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware):
     def set_taint_paths(self, taint_paths: dict[str, list]) -> None:
         """TaintAware implementation — receive shared taint analysis results."""
         self._taint_paths = taint_paths
+
+    def set_code_graph(self, code_graph: Any, gap_report: Any) -> None:
+        """CodeGraphAware implementation — receive CodeGraph and GapReport."""
+        self._code_graph = code_graph
+        self._gap_report = gap_report
 
     async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """

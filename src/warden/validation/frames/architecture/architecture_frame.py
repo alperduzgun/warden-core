@@ -35,6 +35,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
+from warden.validation.domain.mixins import CodeGraphAware
 
 if TYPE_CHECKING:
     from warden.analysis.domain.code_graph import CodeGraph, GapReport
@@ -140,7 +141,7 @@ _DETAIL_MAP: dict[str, str] = {
 }
 
 
-class ArchitectureFrame(ValidationFrame):
+class ArchitectureFrame(ValidationFrame, CodeGraphAware):
     """
     Architecture validation frame — detects structural gaps from CodeGraph.
 
@@ -167,6 +168,15 @@ class ArchitectureFrame(ValidationFrame):
         self._graph_query_service: GraphQueryService | None = None
         self._use_llm_verification: bool = (config or {}).get("use_llm_verification", False)
 
+        # CodeGraphAware: injected by FrameRunner before execution
+        self._code_graph: CodeGraph | None = None
+        self._gap_report: GapReport | None = None
+
+    def set_code_graph(self, code_graph: Any, gap_report: Any) -> None:
+        """CodeGraphAware implementation -- receive CodeGraph and GapReport."""
+        self._code_graph = code_graph
+        self._gap_report = gap_report
+
     async def execute_async(
         self,
         code_file: CodeFile,
@@ -177,25 +187,25 @@ class ArchitectureFrame(ValidationFrame):
         # Lazy-build the file gap map on first call
         if not self._build_attempted:
             self._build_attempted = True
-            if context is not None:
-                gap_report = getattr(context, "gap_report", None)
-                code_graph = getattr(context, "code_graph", None)
-                if gap_report is not None:
-                    self._file_gap_map = _build_file_gap_map(gap_report, code_graph)
-                    logger.info(
-                        "architecture_gap_map_built",
-                        files_with_gaps=len(self._file_gap_map),
-                    )
-                    # Initialise GraphQueryService for LLM verification
-                    if self._use_llm_verification and code_graph is not None:
-                        try:
-                            from warden.analysis.services.graph_query_service import (
-                                GraphQueryService,
-                            )
+            # Prefer mixin-injected data; fall back to context for compatibility
+            gap_report = self._gap_report or (getattr(context, "gap_report", None) if context else None)
+            code_graph = self._code_graph or (getattr(context, "code_graph", None) if context else None)
+            if gap_report is not None:
+                self._file_gap_map = _build_file_gap_map(gap_report, code_graph)
+                logger.info(
+                    "architecture_gap_map_built",
+                    files_with_gaps=len(self._file_gap_map),
+                )
+                # Initialise GraphQueryService for LLM verification
+                if self._use_llm_verification and code_graph is not None:
+                    try:
+                        from warden.analysis.services.graph_query_service import (
+                            GraphQueryService,
+                        )
 
-                            self._graph_query_service = GraphQueryService(code_graph, gap_report)
-                        except Exception as e:
-                            logger.warning("graph_query_service_init_failed", error=str(e))
+                        self._graph_query_service = GraphQueryService(code_graph, gap_report)
+                    except Exception as e:
+                        logger.warning("graph_query_service_init_failed", error=str(e))
 
         # No gap data available — graceful no-op
         if self._file_gap_map is None:
