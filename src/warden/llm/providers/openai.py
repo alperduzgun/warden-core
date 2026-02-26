@@ -4,6 +4,8 @@ OpenAI GPT LLM Client (supports both OpenAI and Azure OpenAI)
 Based on C# OpenAIClient.cs
 """
 
+from __future__ import annotations
+
 import json
 import time
 from typing import Any
@@ -15,7 +17,7 @@ from warden.shared.infrastructure.resilience import resilient
 
 from ..config import ProviderConfig
 from ..registry import ProviderRegistry
-from ..types import LlmProvider, LlmRequest, LlmResponse
+from ..types import LlmProvider, LlmRequest, LlmResponse, StructuredPrompt
 from .base import ILlmClient
 
 
@@ -48,6 +50,35 @@ class OpenAIClient(ILlmClient):
     def get_usage(self) -> dict[str, int]:
         """Get cumulative token usage."""
         return self._usage.copy()
+
+    @staticmethod
+    def build_messages(
+        system_prompt: str,
+        user_message: str,
+        structured: StructuredPrompt | None = None,
+    ) -> list[dict[str, Any]]:
+        """Build the ``messages`` array for the OpenAI Chat API.
+
+        When a ``StructuredPrompt`` is provided the system message is split
+        into two messages: the first carries the stable system context (which
+        OpenAI can auto-cache for supported models), and the second carries
+        the variable file context.  This layout allows the API's automatic
+        prompt caching to recognise the shared prefix.
+
+        When no structured prompt is supplied the plain ``system_prompt`` +
+        ``user_message`` pair is used (backwards compatible).
+        """
+        if structured is None:
+            return [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ]
+
+        return [
+            {"role": "system", "content": structured.system_context},
+            {"role": "system", "content": structured.file_context},
+            {"role": "user", "content": user_message},
+        ]
 
     @resilient(name="openai_send", timeout_seconds=60.0, retry_max_attempts=3)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
@@ -140,6 +171,112 @@ class OpenAIClient(ILlmClient):
             )
         except Exception as e:
             # Last resort for truly unexpected errors
+            duration_ms = int((time.time() - start_time) * 1000)
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"Unexpected error: {e!s}",
+                provider=self.provider,
+                duration_ms=duration_ms,
+            )
+
+    async def send_structured_async(self, structured: StructuredPrompt, request: LlmRequest) -> LlmResponse:
+        """Send a request using a StructuredPrompt with cache-friendly layout.
+
+        The system_context is sent as a separate system message before the
+        file_context, allowing OpenAI's automatic prompt caching to
+        recognise and cache the shared prefix across multiple file analyses.
+
+        Args:
+            structured: StructuredPrompt with system_context and file_context
+            request: LLM request parameters (system_prompt field is overridden)
+
+        Returns:
+            LlmResponse with content or error
+        """
+        start_time = time.time()
+
+        try:
+            from warden.llm.global_rate_limiter import GlobalRateLimiter
+
+            limiter = await GlobalRateLimiter.get_instance()
+            provider_name = "azure" if self._provider == LlmProvider.AZURE_OPENAI else "openai"
+            await limiter.acquire(provider_name, tokens=request.max_tokens)
+
+            headers = {"Content-Type": "application/json"}
+
+            if self._provider == LlmProvider.AZURE_OPENAI:
+                headers["api-key"] = self._api_key
+                url = f"{self._base_url}/openai/deployments/{request.model or self._default_model}/chat/completions?api-version={self._api_version}"
+            else:
+                headers["Authorization"] = f"Bearer {self._api_key}"
+                url = f"{self._base_url}/chat/completions"
+
+            payload = {
+                "messages": self.build_messages(request.system_prompt, request.user_message, structured),
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+            }
+
+            if self._provider != LlmProvider.AZURE_OPENAI:
+                payload["model"] = request.model or self._default_model
+
+            async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            if not result.get("choices"):
+                return LlmResponse(
+                    content="",
+                    success=False,
+                    error_message="No response from OpenAI",
+                    provider=self.provider,
+                    duration_ms=duration_ms,
+                )
+
+            usage = result.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+
+            self._usage["prompt_tokens"] += prompt_tokens
+            self._usage["completion_tokens"] += completion_tokens
+            self._usage["total_tokens"] += total_tokens
+            self._usage["request_count"] += 1
+
+            return LlmResponse(
+                content=result["choices"][0]["message"]["content"],
+                success=True,
+                provider=self.provider,
+                model=result.get("model") or request.model or self._default_model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                duration_ms=duration_ms,
+            )
+
+        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"HTTP error: {e!s}",
+                provider=self.provider,
+                duration_ms=duration_ms,
+            )
+        except (json.JSONDecodeError, KeyError) as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"JSON/Data error: {e!s}",
+                provider=self.provider,
+                duration_ms=duration_ms,
+            )
+        except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return LlmResponse(
                 content="",

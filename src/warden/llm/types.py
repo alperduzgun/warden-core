@@ -2,9 +2,10 @@
 LLM Type Definitions - Panel Compatible
 
 Multi-provider LLM support with fallback chain.
-All types designed for Panel JSON compatibility (camelCase ↔ snake_case).
+All types designed for Panel JSON compatibility (camelCase <-> snake_case).
 """
 
+from dataclasses import dataclass
 from enum import Enum
 
 from pydantic import Field
@@ -27,6 +28,34 @@ class LlmProvider(str, Enum):
     CLAUDE_CODE = "claude_code"  # Local Claude Code CLI/SDK integration
     CODEX = "codex"  # Local Codex CLI integration (file-based/CLI)
     UNKNOWN = "unknown"  # Fallback/offline mode
+
+
+@dataclass(frozen=True)
+class StructuredPrompt:
+    """
+    Separates stable system context from variable file content.
+
+    Allows LLM providers to cache the static ``system_context`` part across
+    multiple calls while only varying the per-file ``file_context``.
+
+    Providers that support prompt caching (Anthropic ``cache_control``,
+    OpenAI ``cached`` content blocks) can attach cache hints to the
+    system_context portion.
+
+    Attributes:
+        system_context: Cacheable instructions (severity guide, output format,
+                        confidence rules, project intelligence).  Stable across
+                        files within the same scan run.
+        file_context:   Variable per-file content (source code, file path,
+                        language, detected dependencies).
+    """
+
+    system_context: str
+    file_context: str
+
+    def to_single_prompt(self) -> str:
+        """Flatten into a single string for providers without cache support."""
+        return f"{self.system_context}\n\n{self.file_context}"
 
 
 class LlmRequest(BaseDomainModel):

@@ -5,12 +5,32 @@ Defines the structure of knowledge stored in Warden's Persistent Memory.
 """
 
 import time
+from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
 from pydantic import Field
 
 from warden.shared.domain.base_model import BaseDomainModel
+
+
+@dataclass(frozen=True)
+class Citation:
+    """
+    A source reference grounding a Fact in the codebase.
+
+    Provides ``file:line`` provenance so that project knowledge can be
+    traced back to the exact location in source code where it was derived.
+
+    Attributes:
+        file: Relative or absolute path to the source file.
+        line: Optional 1-based line number within the file.
+        text: Optional verbatim snippet or description of the cited content.
+    """
+
+    file: str
+    line: int | None = None
+    text: str = ""
 
 
 class Fact(BaseDomainModel):
@@ -34,6 +54,9 @@ class Fact(BaseDomainModel):
     created_at: float = Field(default_factory=time.time)
     updated_at: float = Field(default_factory=time.time)
 
+    # Typed source references grounding this fact in the codebase
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+
     # Additional structured data
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -45,6 +68,35 @@ class Fact(BaseDomainModel):
     def from_json(cls, data: dict[str, Any]) -> "Fact":
         """Create from JSON dict."""
         return cls.model_validate(data)
+
+    def get_citations(self) -> list[Citation]:
+        """Return citations as typed Citation objects."""
+        result = []
+        for c in self.citations:
+            if isinstance(c, dict):
+                result.append(
+                    Citation(
+                        file=c.get("file", ""),
+                        line=c.get("line"),
+                        text=c.get("text", ""),
+                    )
+                )
+        return result
+
+    def add_citation(self, citation: Citation) -> "Fact":
+        """Return a new Fact with the citation appended.
+
+        Since citations is a list of dicts (for Pydantic JSON compatibility),
+        the Citation dataclass is serialized before storage.
+        """
+        citation_dict: dict[str, Any] = {"file": citation.file}
+        if citation.line is not None:
+            citation_dict["line"] = citation.line
+        if citation.text:
+            citation_dict["text"] = citation.text
+
+        new_citations = [*self.citations, citation_dict]
+        return self.model_copy(update={"citations": new_citations})
 
 
 class KnowledgeGraph(BaseDomainModel):
