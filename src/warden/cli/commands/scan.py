@@ -984,7 +984,13 @@ def _render_contract_mode_summary(res: dict) -> None:
     console.print(panel)
 
 
-def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
+def _render_text_report(
+    res: dict,
+    total_units: int,
+    verbose: bool,
+    scan_duration: float = 0.0,
+    frames_skipped: int = 0,
+) -> None:
     """Render scan results as a Rich text report to the console."""
     # Classify findings into core vs linter
     all_findings = (
@@ -1230,6 +1236,14 @@ def _render_text_report(res: dict, total_units: int, verbose: bool) -> None:
             "New debt",
             f"[bold {new_debt_col}]{'+' if new_debt_added > 0 else ''}{new_debt_added}[/]",
         )
+
+    duration_str = f"{scan_duration:.1f}s" if scan_duration > 0 else "—"
+    stat_table.add_row(
+        "Scan duration",
+        f"[bold white]{duration_str}[/]",
+        "Frames skipped",
+        f"[bold white]{frames_skipped}[/]",
+    )
 
     console.print(stat_table)
     console.print()
@@ -1507,8 +1521,11 @@ async def _run_scan_async(
 
         bench_collector = BenchmarkCollector()
 
+    import time as _time
+
     try:
         # 1. Stream pipeline events and collect results
+        _scan_wall_start = _time.monotonic()
         final_result_data, frame_stats, total_units = await _process_stream_events(
             bridge,
             paths,
@@ -1520,6 +1537,7 @@ async def _run_scan_async(
             bench_collector=bench_collector,
             contract_mode=contract_mode,
         )
+        _scan_wall_duration = _time.monotonic() - _scan_wall_start
 
         # 1.5 Display benchmark report if requested.
         if bench_collector is not None:
@@ -1537,7 +1555,13 @@ async def _run_scan_async(
 
         # 2. Render text report to console
         if final_result_data and format == "text":
-            _render_text_report(final_result_data, total_units, verbose)
+            _render_text_report(
+                final_result_data,
+                total_units,
+                verbose,
+                scan_duration=_scan_wall_duration,
+                frames_skipped=frame_stats.get("skipped", 0),
+            )
 
             # Display per-frame cost breakdown if requested
             if cost_report:
