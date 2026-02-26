@@ -10,9 +10,11 @@ Tests code behavior with unexpected/malformed inputs:
 Priority: MEDIUM
 """
 
+from __future__ import annotations
+
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
 from warden.shared.infrastructure.logging import get_logger
@@ -29,6 +31,9 @@ from warden.validation.domain.frame import (
     ValidationFrame,
 )
 from warden.validation.domain.mixins import TaintAware
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 logger = get_logger(__name__)
 
@@ -131,7 +136,7 @@ Output must be a valid JSON object with the following structure:
         """TaintAware implementation — receive shared taint analysis results."""
         self._taint_paths = taint_paths
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute fuzz testing checks on code file.
 

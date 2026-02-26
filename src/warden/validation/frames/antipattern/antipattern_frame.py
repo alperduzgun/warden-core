@@ -23,9 +23,11 @@ Author: Warden Team
 Version: 3.0.0 (Universal AST)
 """
 
+from __future__ import annotations
+
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from warden.ast.application.provider_registry import ASTProviderRegistry
 from warden.ast.domain.enums import CodeLanguage
@@ -59,6 +61,9 @@ from warden.validation.frames.antipattern.types import (
     AntiPatternSeverity,
     AntiPatternViolation,
 )
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 logger = get_logger(__name__)
 
@@ -155,7 +160,7 @@ class AntiPatternFrame(ValidationFrame):
                 pass
         return cls._registry
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """Execute anti-pattern detection on a code file."""
         start_time = time.perf_counter()
 

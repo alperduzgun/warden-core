@@ -14,11 +14,13 @@ Usage in CI/CD:
     - Focus on new code quality
 """
 
+from __future__ import annotations
+
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Add current directory to path for local imports
 if str(Path(__file__).parent) not in sys.path:
@@ -39,6 +41,9 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 logger = get_logger(__name__)
 
@@ -91,7 +96,7 @@ class GitChangesFrame(ValidationFrame):
         # Parser
         self.diff_parser = GitDiffParser()
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute git changes analysis on code file.
 

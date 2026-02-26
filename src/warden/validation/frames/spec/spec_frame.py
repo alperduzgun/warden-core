@@ -30,9 +30,11 @@ Author: Warden Team
 Version: 1.0.0
 """
 
+from __future__ import annotations
+
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from warden.shared.infrastructure.logging import get_logger
 from warden.shared.infrastructure.resilience import (
@@ -64,6 +66,9 @@ from warden.validation.frames.spec.models import (
     PlatformRole,
     SpecAnalysisResult,
 )
+
+if TYPE_CHECKING:
+    from warden.pipeline.domain.pipeline_context import PipelineContext
 
 logger = get_logger(__name__)
 
@@ -323,7 +328,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
 
         return fnmatch.fnmatch(gap_key, rule)
 
-    async def execute_async(self, code_file: CodeFile) -> FrameResult:
+    async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute spec analysis asynchronously.
 
