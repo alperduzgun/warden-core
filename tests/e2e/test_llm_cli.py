@@ -19,7 +19,16 @@ def test_init_help_shows_new_flags(runner, monkeypatch):
     result = runner.invoke(app, ["init", "--help"])
     assert result.exit_code == 0
     out = result.stdout
-    for flag in ("--agent", "--no-agent", "--baseline", "--no-baseline", "--intel", "--no-intel", "--grammars", "--no-grammars"):
+    for flag in (
+        "--agent",
+        "--no-agent",
+        "--baseline",
+        "--no-baseline",
+        "--intel",
+        "--no-intel",
+        "--grammars",
+        "--no-grammars",
+    ):
         assert flag in out, f"missing flag: {flag}"
 
 
@@ -38,7 +47,7 @@ def test_config_llm_help_and_status(runner, isolated_project, monkeypatch):
     # Status should render without crashing in fixture project
     status_res = runner.invoke(app, ["config", "llm", "status"])
     assert status_res.exit_code == 0
-    assert "LLM Status" in status_res.stdout
+    assert "LLM Configuration" in status_res.stdout
 
 
 @pytest.mark.e2e
@@ -59,4 +68,3 @@ def test_config_llm_use_and_test_ollama(runner, isolated_project, monkeypatch):
     assert test_res.exit_code == 0
     # Output should at least mention provider name
     assert "ollama" in test_res.stdout.lower()
-

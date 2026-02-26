@@ -346,7 +346,7 @@ class PreAnalysisPhase:
             if analysis_level != AnalysisLevel.BASIC:
                 # Run integrity scan and dependency graph in parallel — they are
                 # fully independent (different inputs/outputs).  Expected gain:
-                # 10–25s on medium/large repos.
+                # 10-25s on medium/large repos.
                 _emit("Running integrity checks and dependency graph (parallel)")
                 integrity_task = asyncio.create_task(
                     self.integrity_scanner.scan_async(code_files, project_context, pipeline_context)

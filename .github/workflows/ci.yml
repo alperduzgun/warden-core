@@ -58,7 +58,7 @@ jobs:
         run: ruff check src/ --output-format=sarif --output-file=ruff-results.sarif || true
 
       - name: Upload Ruff SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() && hashFiles('ruff-results.sarif') != ''
         with:
           sarif_file: ruff-results.sarif
@@ -367,7 +367,7 @@ jobs:
           path: warden.sarif
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() && github.event_name != 'pull_request' && hashFiles('warden.sarif') != ''
         with:
           sarif_file: warden.sarif
