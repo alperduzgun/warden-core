@@ -58,11 +58,7 @@ jobs:
         run: ruff check src/ --output-format=sarif --output-file=ruff-results.sarif || true
 
       - name: Upload Ruff SARIF to GitHub Security
-<<<<<<< HEAD
-        uses: github/codeql-action/upload-sarif@v3
-=======
         uses: github/codeql-action/upload-sarif@v4
->>>>>>> origin/main
         if: always() && hashFiles('ruff-results.sarif') != ''
         with:
           sarif_file: ruff-results.sarif
@@ -79,7 +75,7 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    if: false  # Tests temporarily disabled
+    if: ${{ false }}  # Tests temporarily disabled
     strategy:
       fail-fast: false
       matrix:
@@ -220,18 +216,12 @@ jobs:
 
       - name: Run Warden Scan
         env:
-<<<<<<< HEAD
-          # Configuration: Ollama only (local, no API key needed)
-          WARDEN_LLM_PROVIDER: "ollama"
-          WARDEN_FAST_TIER_PRIORITY: "ollama"
-=======
           # Configuration: Ollama local LLM only (no cloud API dependency)
           # Provider: Ollama qwen2.5-coder:3b — free, local, no rate limits
 
           # Warden Configuration
           WARDEN_LLM_PROVIDER: "ollama"
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
->>>>>>> origin/main
           WARDEN_LLM_CONCURRENCY: "2"          # Conservative for local Ollama
 
           # Ollama CPU Optimization

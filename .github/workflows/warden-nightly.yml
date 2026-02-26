@@ -13,6 +13,7 @@ jobs:
 
     env:
       WARDEN_LLM_PROVIDER: ollama
+      WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
       OLLAMA_HOST: http://localhost:11434
 
     steps:
