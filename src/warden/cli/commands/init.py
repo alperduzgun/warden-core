@@ -1045,6 +1045,16 @@ def init_command(
         except Exception as e:
             console.print(f"[yellow]Warning: Could not create taint_catalog.yaml: {e}[/yellow]")
 
+    # --- Step 5.6: TECH_DEBT.md Scaffold ---
+    try:
+        from warden.reports.tech_debt_generator import TechDebtGenerator
+
+        td_path = TechDebtGenerator.create_scaffold(warden_dir)
+        if td_path.exists():
+            console.print(f"[green]Created tech debt tracker: [bold]{td_path}[/bold][/green]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not create TECH_DEBT.md: {e}[/yellow]")
+
     # --- Step 6: Ignore Files ---
     _generate_ignore_file(Path.cwd(), meta)
 
