@@ -701,13 +701,77 @@ class FrameRunner:
                                 total_files_to_scan = len(files_to_scan)
                                 CHUNK_SIZE = 5
 
-                                for i in range(0, total_files_to_scan, CHUNK_SIZE):
-                                    chunk = files_to_scan[i : i + CHUNK_SIZE]
+                                # --- Cross-scan findings cache for batch path ---
+                                # Separate files with cache hits from those needing LLM.
+                                uncached_files: list[CodeFile] = []
+                                batch_cached_count = 0
+                                for cf in files_to_scan:
+                                    if self._findings_cache is not None and cf.content:
+                                        cached = self._findings_cache.get_findings(
+                                            frame.frame_id, str(cf.path), cf.content
+                                        )
+                                        if cached is not None:
+                                            logger.debug(
+                                                "findings_cache_hit",
+                                                frame=frame.frame_id,
+                                                file=cf.path,
+                                                cached_findings=len(cached),
+                                            )
+                                            batch_cached_count += 1
+                                            if cached:
+                                                has_critical = any(f.severity == "critical" for f in cached)
+                                                cached_is_blocker = any(f.is_blocker for f in cached)
+                                                cached_status = "failed" if has_critical else "warning"
+                                                f_results.append(
+                                                    CodeFrameResult(
+                                                        frame_id=frame.frame_id,
+                                                        frame_name=frame.name,
+                                                        status=cached_status,
+                                                        duration=0.0,
+                                                        issues_found=len(cached),
+                                                        is_blocker=cached_is_blocker,
+                                                        findings=cached,
+                                                        metadata={"from_cache": True},
+                                                    )
+                                                )
+                                            # cached == [] means clean file, no result needed
+                                            continue
+                                    uncached_files.append(cf)
+
+                                if batch_cached_count > 0:
+                                    logger.info(
+                                        "batch_findings_cache_summary",
+                                        frame=frame.frame_id,
+                                        cached=batch_cached_count,
+                                        uncached=len(uncached_files),
+                                    )
+                                    if self.progress_callback:
+                                        self.progress_callback(
+                                            "progress_update",
+                                            {
+                                                "increment": batch_cached_count,
+                                                "frame_id": frame.frame_id,
+                                                "cached": True,
+                                            },
+                                        )
+
+                                for i in range(0, len(uncached_files), CHUNK_SIZE):
+                                    chunk = uncached_files[i : i + CHUNK_SIZE]
                                     chunk_results = await asyncio.wait_for(
                                         frame.execute_batch_async(chunk),
                                         timeout=getattr(self.config, "frame_timeout", 300.0),
                                     )
                                     if chunk_results:
+                                        # Persist each result to findings cache (1:1 with chunk files)
+                                        if self._findings_cache is not None:
+                                            for cf, res in zip(chunk, chunk_results):
+                                                if cf.content and res is not None:
+                                                    self._findings_cache.put_findings(
+                                                        frame.frame_id,
+                                                        str(cf.path),
+                                                        cf.content,
+                                                        res.findings or [],
+                                                    )
                                         f_results.extend(chunk_results)
                                         if self.progress_callback:
                                             self.progress_callback(
