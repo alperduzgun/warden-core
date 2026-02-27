@@ -139,9 +139,7 @@ class PartialResultsWriter:
         return path.exists() and path.stat().st_size > 0
 
     @classmethod
-    def load_completed_keys(
-        cls, project_root: Path | None = None
-    ) -> set[tuple[str, str]]:
+    def load_completed_keys(cls, project_root: Path | None = None) -> set[tuple[str, str]]:
         """Load ``{(frame_id, file_path), ...}`` from existing partial results.
 
         Returns an empty set when no partial results exist or on parse
@@ -189,9 +187,7 @@ class PartialResultsWriter:
         return keys
 
     @classmethod
-    def load_findings(
-        cls, project_root: Path | None = None
-    ) -> list[dict[str, Any]]:
+    def load_findings(cls, project_root: Path | None = None) -> list[dict[str, Any]]:
         """Load all findings from partial results for report merging.
 
         Returns a flat list of finding dicts collected from every line

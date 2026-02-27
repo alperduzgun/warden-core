@@ -142,16 +142,18 @@ class ASTPreParser:
         from warden.ast.domain.enums import CodeLanguage
 
         if self._use_process_isolation:
-            parsed, skipped_cached, skipped_unsupported, errors, failed = (
-                await self._parse_with_process_isolation(
-                    context, code_files, registry, CodeLanguage,
-                )
+            parsed, skipped_cached, skipped_unsupported, errors, failed = await self._parse_with_process_isolation(
+                context,
+                code_files,
+                registry,
+                CodeLanguage,
             )
         else:
-            parsed, skipped_cached, skipped_unsupported, errors, failed = (
-                await self._parse_in_process(
-                    context, code_files, registry, CodeLanguage,
-                )
+            parsed, skipped_cached, skipped_unsupported, errors, failed = await self._parse_in_process(
+                context,
+                code_files,
+                registry,
+                CodeLanguage,
             )
 
         duration = time.perf_counter() - start

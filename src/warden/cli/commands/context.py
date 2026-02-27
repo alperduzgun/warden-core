@@ -252,7 +252,9 @@ def _detect_commit_convention(root: Path) -> str:
         out = subprocess.run(
             ["git", "log", "-n", "10", "--pretty=%s"], cwd=root, text=True, capture_output=True, timeout=2
         )
-        if out.returncode == 0 and re.search(r"^(feat|fix|chore|docs|refactor|style|test|ci|perf|build)(\(.+\))?:", out.stdout, re.M):
+        if out.returncode == 0 and re.search(
+            r"^(feat|fix|chore|docs|refactor|style|test|ci|perf|build)(\(.+\))?:", out.stdout, re.M
+        ):
             return "conventional"
     except Exception:
         pass

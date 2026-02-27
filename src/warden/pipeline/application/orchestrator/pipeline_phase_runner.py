@@ -438,7 +438,11 @@ class PipelinePhaseRunner:
             ast_root = getattr(ast_data, "ast_root", None)
             if ast_root is not None:
                 self._extract_intelligence_from_ast(
-                    ast_root, cf.path, intel, entry_point_set, ASTNodeType,
+                    ast_root,
+                    cf.path,
+                    intel,
+                    entry_point_set,
+                    ASTNodeType,
                 )
                 continue
 

@@ -339,14 +339,8 @@ class TechDebtGenerator:
         merged.recently_resolved = list(previous.recently_resolved)
 
         # --- God classes ---
-        prev_god_keys = {
-            (item.class_name, self._normalize_path(item.file_path))
-            for item in previous.god_classes
-        }
-        curr_god_keys = {
-            (item.class_name, self._normalize_path(item.file_path))
-            for item in current.god_classes
-        }
+        prev_god_keys = {(item.class_name, self._normalize_path(item.file_path)) for item in previous.god_classes}
+        curr_god_keys = {(item.class_name, self._normalize_path(item.file_path)) for item in current.god_classes}
 
         # Resolved god classes
         for item in previous.god_classes:
@@ -364,12 +358,8 @@ class TechDebtGenerator:
         merged.god_classes = list(current.god_classes)
 
         # --- Large files ---
-        prev_large_keys = {
-            self._normalize_path(item.file_path) for item in previous.large_files
-        }
-        curr_large_keys = {
-            self._normalize_path(item.file_path) for item in current.large_files
-        }
+        prev_large_keys = {self._normalize_path(item.file_path) for item in previous.large_files}
+        curr_large_keys = {self._normalize_path(item.file_path) for item in current.large_files}
 
         # Resolved large files
         for item in previous.large_files:
@@ -415,9 +405,7 @@ class TechDebtGenerator:
             lines.append("|-------|------|-------|--------|")
             for item in report.god_classes:
                 status = item.notes if item.notes else item.status
-                lines.append(
-                    f"| {item.class_name} | {item.file_path} | {item.line_count} | {status} |"
-                )
+                lines.append(f"| {item.class_name} | {item.file_path} | {item.line_count} | {status} |")
         else:
             lines.append("No god classes detected.")
         lines.append("")
@@ -429,9 +417,7 @@ class TechDebtGenerator:
             lines.append("| File | Lines | Notes |")
             lines.append("|------|-------|-------|")
             for item in report.large_files:
-                lines.append(
-                    f"| {item.file_path} | {item.line_count} | {item.notes} |"
-                )
+                lines.append(f"| {item.file_path} | {item.line_count} | {item.notes} |")
         else:
             lines.append("No large files detected.")
         lines.append("")
@@ -443,9 +429,7 @@ class TechDebtGenerator:
             lines.append("| Item | Resolution | Date |")
             lines.append("|------|------------|------|")
             for item in report.recently_resolved:
-                lines.append(
-                    f"| {item.description} | {item.resolution} | {item.date} |"
-                )
+                lines.append(f"| {item.description} | {item.resolution} | {item.date} |")
         else:
             lines.append("No recently resolved items.")
         lines.append("")

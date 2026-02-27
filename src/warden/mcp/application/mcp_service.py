@@ -310,9 +310,7 @@ class MCPService:
         }
 
         if tier_str not in tier_map:
-            return MCPToolResult.error(
-                f"Invalid tier: '{tier_str}'. Must be 'core' or 'extended'."
-            ).to_dict()
+            return MCPToolResult.error(f"Invalid tier: '{tier_str}'. Must be 'core' or 'extended'.").to_dict()
 
         new_tier = tier_map[tier_str]
         old_tier = self._active_tier

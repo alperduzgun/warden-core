@@ -76,11 +76,7 @@ class ClassificationExecutor(BasePhaseExecutor):
                             fallback_to_rules=True,
                             tpm_limit=self.config.llm_config.get("tpm_limit", 1000)
                             if getattr(self.config, "llm_config", None)
-                            else (
-                                getattr(self.config.llm, "tpm_limit", 1000)
-                                if hasattr(self.config, "llm")
-                                else 1000
-                            ),
+                            else (getattr(self.config.llm, "tpm_limit", 1000) if hasattr(self.config, "llm") else 1000),
                             rpm_limit=self.config.llm_config.get("rpm_limit", 6)
                             if getattr(self.config, "llm_config", None)
                             else (getattr(self.config.llm, "rpm_limit", 6) if hasattr(self.config, "llm") else 6),

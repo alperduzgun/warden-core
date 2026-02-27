@@ -190,19 +190,13 @@ class WeakCryptoCheck(ValidationCheck):
 
         # Pre-compile weak cipher patterns
         self._compiled_cipher_patterns = [
-            (re.compile(pattern_str), description, lang)
-            for pattern_str, description, lang in self.WEAK_CIPHER_PATTERNS
+            (re.compile(pattern_str), description, lang) for pattern_str, description, lang in self.WEAK_CIPHER_PATTERNS
         ]
 
         # Pre-compile context keywords
-        self._password_context_re = re.compile(
-            "|".join(self.PASSWORD_CONTEXT_KEYWORDS), re.IGNORECASE
-        )
+        self._password_context_re = re.compile("|".join(self.PASSWORD_CONTEXT_KEYWORDS), re.IGNORECASE)
         # Safe context patterns already include word boundaries
-        self._compiled_safe_patterns = [
-            re.compile(pattern, re.IGNORECASE)
-            for pattern in self.SAFE_CONTEXT_KEYWORDS
-        ]
+        self._compiled_safe_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.SAFE_CONTEXT_KEYWORDS]
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute weak cryptography detection."""
@@ -226,9 +220,7 @@ class WeakCryptoCheck(ValidationCheck):
             },
         )
 
-    def _check_weak_hashes(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[CheckFinding]:
+    def _check_weak_hashes(self, code_file: CodeFile, lines: list[str]) -> list[CheckFinding]:
         """
         Check for weak hash algorithms used in password context.
 
@@ -262,12 +254,8 @@ class WeakCryptoCheck(ValidationCheck):
                 in_password_context = line_num in password_context_lines
                 if not in_password_context:
                     # Check surrounding lines (5 lines before and after)
-                    nearby_range = range(
-                        max(1, line_num - 5), min(len(lines) + 1, line_num + 6)
-                    )
-                    in_password_context = any(
-                        ln in password_context_lines for ln in nearby_range
-                    )
+                    nearby_range = range(max(1, line_num - 5), min(len(lines) + 1, line_num + 6))
+                    in_password_context = any(ln in password_context_lines for ln in nearby_range)
 
                 if not in_password_context:
                     continue
@@ -309,9 +297,7 @@ class WeakCryptoCheck(ValidationCheck):
 
         return findings
 
-    def _check_weak_ciphers(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[CheckFinding]:
+    def _check_weak_ciphers(self, code_file: CodeFile, lines: list[str]) -> list[CheckFinding]:
         """Check for weak cipher algorithms and insecure modes (DES, RC4, ECB)."""
         findings: list[CheckFinding] = []
 
@@ -378,9 +364,7 @@ class WeakCryptoCheck(ValidationCheck):
 
         return password_lines
 
-    def _is_safe_hash_context(
-        self, line: str, lines: list[str], line_num: int
-    ) -> bool:
+    def _is_safe_hash_context(self, line: str, lines: list[str], line_num: int) -> bool:
         """
         Check if the weak hash usage is in a safe (non-password) context.
 

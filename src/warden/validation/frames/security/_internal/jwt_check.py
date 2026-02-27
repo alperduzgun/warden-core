@@ -51,41 +51,23 @@ class JWTMisconfigCheck(ValidationCheck):
     enabled_by_default = True
 
     # ---- JS jwt.sign() without expiresIn ----
-    JS_JWT_SIGN_RE = re.compile(
-        r"jwt\.sign\s*\("
-    )
-    JS_EXPIRES_IN_RE = re.compile(
-        r"expiresIn\s*:", re.IGNORECASE
-    )
-    JS_EXP_CLAIM_RE = re.compile(
-        r"\bexp\s*:", re.IGNORECASE
-    )
+    JS_JWT_SIGN_RE = re.compile(r"jwt\.sign\s*\(")
+    JS_EXPIRES_IN_RE = re.compile(r"expiresIn\s*:", re.IGNORECASE)
+    JS_EXP_CLAIM_RE = re.compile(r"\bexp\s*:", re.IGNORECASE)
 
     # ---- JS jwt.verify() with algorithms: ['none'] ----
-    JS_JWT_VERIFY_RE = re.compile(
-        r"jwt\.verify\s*\("
-    )
-    ALGO_NONE_RE = re.compile(
-        r"""algorithms\s*[:=]\s*\[?\s*['"]none['"]\s*\]?""", re.IGNORECASE
-    )
+    JS_JWT_VERIFY_RE = re.compile(r"jwt\.verify\s*\(")
+    ALGO_NONE_RE = re.compile(r"""algorithms\s*[:=]\s*\[?\s*['"]none['"]\s*\]?""", re.IGNORECASE)
 
     # ---- Python jwt.encode() without exp ----
-    PY_JWT_ENCODE_RE = re.compile(
-        r"jwt\.encode\s*\("
-    )
+    PY_JWT_ENCODE_RE = re.compile(r"jwt\.encode\s*\(")
 
     # ---- Python jwt.decode() without algorithms ----
-    PY_JWT_DECODE_RE = re.compile(
-        r"jwt\.decode\s*\("
-    )
-    PY_ALGORITHMS_PARAM_RE = re.compile(
-        r"algorithms\s*="
-    )
+    PY_JWT_DECODE_RE = re.compile(r"jwt\.decode\s*\(")
+    PY_ALGORITHMS_PARAM_RE = re.compile(r"algorithms\s*=")
 
     # ---- Generic 'none' algorithm references in JWT context ----
-    GENERIC_ALGO_NONE_RE = re.compile(
-        r"""['"](?:alg|algorithm)['"]\s*:\s*['"]none['"]""", re.IGNORECASE
-    )
+    GENERIC_ALGO_NONE_RE = re.compile(r"""['"](?:alg|algorithm)['"]\s*:\s*['"]none['"]""", re.IGNORECASE)
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize JWT misconfiguration check."""
@@ -134,9 +116,7 @@ class JWTMisconfigCheck(ValidationCheck):
     # ------------------------------------------------------------------
     # JS: jwt.sign() without expiresIn
     # ------------------------------------------------------------------
-    def _check_js_jwt_sign(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[CheckFinding]:
+    def _check_js_jwt_sign(self, code_file: CodeFile, lines: list[str]) -> list[CheckFinding]:
         """
         Detect jwt.sign(payload, secret) calls without expiresIn option.
 
@@ -191,9 +171,7 @@ class JWTMisconfigCheck(ValidationCheck):
     # ------------------------------------------------------------------
     # JS: jwt.verify() with algorithms: ['none']
     # ------------------------------------------------------------------
-    def _check_js_jwt_verify_none(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[CheckFinding]:
+    def _check_js_jwt_verify_none(self, code_file: CodeFile, lines: list[str]) -> list[CheckFinding]:
         """
         Detect jwt.verify() with algorithms: ['none'].
 
@@ -243,9 +221,7 @@ class JWTMisconfigCheck(ValidationCheck):
     # ------------------------------------------------------------------
     # Python: jwt.encode() without exp claim
     # ------------------------------------------------------------------
-    def _check_py_jwt_encode(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[CheckFinding]:
+    def _check_py_jwt_encode(self, code_file: CodeFile, lines: list[str]) -> list[CheckFinding]:
         """
         Detect jwt.encode(payload, key) without exp claim.
 
@@ -267,9 +243,7 @@ class JWTMisconfigCheck(ValidationCheck):
             context_block = self._get_context_block(lines, line_num)
 
             # Check for 'exp' as a dictionary key in the payload
-            has_exp_key = re.search(
-                r"""['"]exp['"]\s*:""", context_block
-            )
+            has_exp_key = re.search(r"""['"]exp['"]\s*:""", context_block)
             # Also check for timedelta / datetime.utcnow patterns (common exp patterns)
             has_exp_pattern = re.search(
                 r"(?:timedelta|datetime\.utcnow|datetime\.now|time\.time)\s*\(",
@@ -304,9 +278,7 @@ class JWTMisconfigCheck(ValidationCheck):
     # ------------------------------------------------------------------
     # Python: jwt.decode() without algorithms parameter
     # ------------------------------------------------------------------
-    def _check_py_jwt_decode(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[CheckFinding]:
+    def _check_py_jwt_decode(self, code_file: CodeFile, lines: list[str]) -> list[CheckFinding]:
         """
         Detect jwt.decode() without explicit algorithms parameter.
 
@@ -378,9 +350,7 @@ class JWTMisconfigCheck(ValidationCheck):
     # ------------------------------------------------------------------
     # Generic: algorithm 'none' in JWT context
     # ------------------------------------------------------------------
-    def _check_generic_algo_none(
-        self, code_file: CodeFile, lines: list[str]
-    ) -> list[CheckFinding]:
+    def _check_generic_algo_none(self, code_file: CodeFile, lines: list[str]) -> list[CheckFinding]:
         """Detect generic 'alg': 'none' patterns in code."""
         findings: list[CheckFinding] = []
 

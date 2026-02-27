@@ -198,7 +198,6 @@ sanitizers:
     catalog_path.write_text(content, encoding="utf-8")
 
 
-
 def _generate_root_rules_yaml(rules_dir: Path, meta) -> None:
     """Generate .warden/rules/root.yaml with per-frame rule orchestration.
 
@@ -255,9 +254,7 @@ def _generate_ai_rules_md(warden_dir: Path) -> None:
     try:
         import importlib.resources
 
-        template_content = importlib.resources.read_text(
-            "warden.cli.commands", "AI_RULES.md"
-        )
+        template_content = importlib.resources.read_text("warden.cli.commands", "AI_RULES.md")
     except Exception:
         template_content = """# Warden Code Verification Protocol for AI Agents
 

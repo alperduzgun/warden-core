@@ -143,8 +143,7 @@ class HTTPSecurityCheck(ValidationCheck):
 
         # Pre-compile CORS patterns
         self._compiled_cors_patterns = [
-            (re.compile(pattern_str, re.IGNORECASE), description)
-            for pattern_str, description in self.CORS_PATTERNS
+            (re.compile(pattern_str, re.IGNORECASE), description) for pattern_str, description in self.CORS_PATTERNS
         ]
 
         # Pre-compile cookie patterns (non-special ones)
@@ -159,12 +158,8 @@ class HTTPSecurityCheck(ValidationCheck):
         self._set_cookie_call_pattern = re.compile(r"""set_cookie\s*\(""")
 
         # Pre-compile header patterns
-        self._express_require_pattern = re.compile(
-            r"""require\s*\(\s*['"]express['"]\s*\)"""
-        )
-        self._express_import_pattern = re.compile(
-            r"""import\s+.*\s+from\s+['"]express['"]"""
-        )
+        self._express_require_pattern = re.compile(r"""require\s*\(\s*['"]express['"]\s*\)""")
+        self._express_import_pattern = re.compile(r"""import\s+.*\s+from\s+['"]express['"]""")
         self._helmet_pattern = re.compile(r"""helmet\s*\(""")
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
@@ -348,10 +343,7 @@ class HTTPSecurityCheck(ValidationCheck):
             return findings
 
         # Check if this is an Express application
-        is_express = bool(
-            self._express_require_pattern.search(content)
-            or self._express_import_pattern.search(content)
-        )
+        is_express = bool(self._express_require_pattern.search(content) or self._express_import_pattern.search(content))
 
         if not is_express:
             return findings
@@ -394,9 +386,7 @@ class HTTPSecurityCheck(ValidationCheck):
 
         return findings
 
-    def _get_multiline_context(
-        self, lines: list[str], start_idx: int, max_lines: int = 5
-    ) -> str:
+    def _get_multiline_context(self, lines: list[str], start_idx: int, max_lines: int = 5) -> str:
         """Get multiline context starting from a line index."""
         end_idx = min(start_idx + max_lines, len(lines))
         return "\n".join(lines[start_idx:end_idx])

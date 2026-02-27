@@ -25,7 +25,7 @@ from warden.pipeline.domain.phase_checklist import PhaseChecklist, PhaseChecklis
 _STATUS_GLYPHS: dict[PhaseStatus, tuple[str, str]] = {
     # (glyph, rich_style)
     PhaseStatus.DONE: ("OK", "bold green"),
-    PhaseStatus.RUNNING: (">>" , "bold blue"),
+    PhaseStatus.RUNNING: (">>", "bold blue"),
     PhaseStatus.FAILED: ("!!", "bold red"),
     PhaseStatus.SKIPPED: ("--", "dim"),
     PhaseStatus.PENDING: ("  ", "dim"),
@@ -63,9 +63,11 @@ def _render_item(item: PhaseChecklistItem) -> Text:
     row.append(" ", style="")
 
     # Phase name (fixed width for alignment)
-    name_style = "bold white" if item.status == PhaseStatus.RUNNING else (
-        "white" if item.status == PhaseStatus.DONE else (
-            "bold red" if item.status == PhaseStatus.FAILED else "dim"
+    name_style = (
+        "bold white"
+        if item.status == PhaseStatus.RUNNING
+        else (
+            "white" if item.status == PhaseStatus.DONE else ("bold red" if item.status == PhaseStatus.FAILED else "dim")
         )
     )
     row.append(f"{item.name:<{_NAME_WIDTH}}", style=name_style)

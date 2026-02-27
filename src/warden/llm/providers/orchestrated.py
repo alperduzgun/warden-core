@@ -228,9 +228,7 @@ class OrchestratedLlmClient(ILlmClient):
 
                 # Wait for first completion or timeout
                 try:
-                    done, pending = await asyncio.wait(
-                        tasks, timeout=fast_timeout, return_when=asyncio.FIRST_COMPLETED
-                    )
+                    done, pending = await asyncio.wait(tasks, timeout=fast_timeout, return_when=asyncio.FIRST_COMPLETED)
                 except Exception as e:
                     # Cancel all tasks on error
                     for task in tasks:

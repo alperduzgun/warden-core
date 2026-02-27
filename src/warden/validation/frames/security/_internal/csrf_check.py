@@ -68,8 +68,7 @@ class CSRFCheck(ValidationCheck):
 
         # Pre-compile Django patterns
         self._compiled_django_patterns = [
-            (re.compile(pattern_str), description)
-            for pattern_str, description in self.DJANGO_PATTERNS
+            (re.compile(pattern_str), description) for pattern_str, description in self.DJANGO_PATTERNS
         ]
 
         # Pre-compile detection helpers
@@ -78,32 +77,18 @@ class CSRFCheck(ValidationCheck):
             r"""from\s+django\.views\.decorators\.csrf\s+import\s+csrf_exempt"""
         )
         self._middleware_pattern = re.compile(r"""MIDDLEWARE\s*=\s*\[""")
-        self._csrf_middleware_pattern = re.compile(
-            r"""django\.middleware\.csrf\.CsrfViewMiddleware"""
-        )
+        self._csrf_middleware_pattern = re.compile(r"""django\.middleware\.csrf\.CsrfViewMiddleware""")
 
         # Flask patterns
-        self._flask_app_pattern = re.compile(
-            r"""Flask\s*\(\s*__name__\s*\)"""
-        )
-        self._flask_csrf_pattern = re.compile(
-            r"""CSRFProtect\s*\("""
-        )
-        self._flask_wtf_import_pattern = re.compile(
-            r"""from\s+flask_wtf\.csrf\s+import\s+CSRFProtect"""
-        )
+        self._flask_app_pattern = re.compile(r"""Flask\s*\(\s*__name__\s*\)""")
+        self._flask_csrf_pattern = re.compile(r"""CSRFProtect\s*\(""")
+        self._flask_wtf_import_pattern = re.compile(r"""from\s+flask_wtf\.csrf\s+import\s+CSRFProtect""")
 
         # Express patterns
-        self._express_require_pattern = re.compile(
-            r"""require\s*\(\s*['"]express['"]\s*\)"""
-        )
-        self._express_import_pattern = re.compile(
-            r"""import\s+.*\s+from\s+['"]express['"]"""
-        )
+        self._express_require_pattern = re.compile(r"""require\s*\(\s*['"]express['"]\s*\)""")
+        self._express_import_pattern = re.compile(r"""import\s+.*\s+from\s+['"]express['"]""")
         self._csurf_pattern = re.compile(r"""csurf""")
-        self._csrf_middleware_js_pattern = re.compile(
-            r"""csrf|csrfProtection|csrfToken|_csrf"""
-        )
+        self._csrf_middleware_js_pattern = re.compile(r"""csrf|csrfProtection|csrfToken|_csrf""")
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute CSRF protection detection."""
@@ -241,10 +226,7 @@ class CSRFCheck(ValidationCheck):
             return findings
 
         # Check if CSRFProtect is used
-        has_csrf = bool(
-            self._flask_csrf_pattern.search(content)
-            or self._flask_wtf_import_pattern.search(content)
-        )
+        has_csrf = bool(self._flask_csrf_pattern.search(content) or self._flask_wtf_import_pattern.search(content))
 
         if not has_csrf:
             # Find the Flask app instantiation for location
@@ -286,33 +268,22 @@ class CSRFCheck(ValidationCheck):
         content = code_file.content
 
         # Only check Express applications
-        is_express = bool(
-            self._express_require_pattern.search(content)
-            or self._express_import_pattern.search(content)
-        )
+        is_express = bool(self._express_require_pattern.search(content) or self._express_import_pattern.search(content))
 
         if not is_express:
             return findings
 
         # Check if csurf or any CSRF middleware is used
-        has_csrf = bool(
-            self._csurf_pattern.search(content)
-            or self._csrf_middleware_js_pattern.search(content)
-        )
+        has_csrf = bool(self._csurf_pattern.search(content) or self._csrf_middleware_js_pattern.search(content))
 
         if not has_csrf:
             # Check if app handles POST/PUT/DELETE (state-changing operations)
-            has_state_changing = bool(
-                re.search(r"""\.(post|put|delete|patch)\s*\(""", content)
-            )
+            has_state_changing = bool(re.search(r"""\.(post|put|delete|patch)\s*\(""", content))
 
             if has_state_changing:
                 # Find the express import for location
                 for line_num, line in enumerate(content.split("\n"), start=1):
-                    if (
-                        self._express_require_pattern.search(line)
-                        or self._express_import_pattern.search(line)
-                    ):
+                    if self._express_require_pattern.search(line) or self._express_import_pattern.search(line):
                         suppression_matcher = self._get_suppression_matcher(code_file.path)
                         if suppression_matcher and suppression_matcher.is_suppressed(
                             line=line_num,

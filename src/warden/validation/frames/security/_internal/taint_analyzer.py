@@ -290,7 +290,16 @@ KNOWN_SANITIZERS: dict[str, set[str]] = {
     # SSRF mitigation: allowlist / URL validation functions
     "HTTP-request": {"urllib.parse.urlparse", "ipaddress.ip_address", "validators.url"},
     # PII masking / log sanitization
-    "LOG-output": {"mask_pii", "redact", "sanitize_log", "PIIMaskingFilter", "mask_sensitive", "scrub", "anonymize", "re.sub"},
+    "LOG-output": {
+        "mask_pii",
+        "redact",
+        "sanitize_log",
+        "PIIMaskingFilter",
+        "mask_sensitive",
+        "scrub",
+        "anonymize",
+        "re.sub",
+    },
 }
 
 
@@ -426,12 +435,14 @@ ALL_SINK_TYPES: set[str] = {
 
 # ── Interprocedural helper dataclass ───────────────────────────────────────
 
+
 @dataclass
 class _FunctionSummary:
     """Summary of taint-relevant information for a single function.
 
     Built during the first pass of interprocedural analysis.
     """
+
     name: str
     node: ast.FunctionDef | ast.AsyncFunctionDef
     param_names: list[str] = field(default_factory=list)
@@ -588,17 +599,13 @@ class TaintAnalyzer:
         for fname, summary in summaries.items():
             tainted_vars: dict[str, TaintSource] = {}
             taint_labels: dict[str, set[str]] = {}
-            paths = self._analyze_function_multilabel(
-                summary.node, source_code, tainted_vars, taint_labels
-            )
+            paths = self._analyze_function_multilabel(summary.node, source_code, tainted_vars, taint_labels)
             summary.paths = paths
             func_tainted_vars[fname] = tainted_vars
             func_taint_labels[fname] = taint_labels
 
             # Check if function returns tainted data
-            ret_source, ret_labels = self._check_function_returns(
-                summary.node, tainted_vars, taint_labels
-            )
+            ret_source, ret_labels = self._check_function_returns(summary.node, tainted_vars, taint_labels)
             if ret_source:
                 summary.returns_taint = ret_source
                 summary.return_taint_labels = ret_labels
@@ -625,7 +632,7 @@ class TaintAnalyzer:
                     resolved_name = callee_name
                     if resolved_name not in summaries:
                         # Try the last segment for method calls (self.foo -> foo)
-                        last_segment = resolved_name.rsplit('.', 1)[-1]
+                        last_segment = resolved_name.rsplit(".", 1)[-1]
                         if last_segment in summaries:
                             resolved_name = last_segment
                         else:
@@ -649,7 +656,9 @@ class TaintAnalyzer:
                                     node_type="interprocedural-arg",
                                     line=tainted_source.line,
                                     confidence=tainted_source.confidence * self._propagation_confidence,
-                                    taint_labels=set(tainted_source.taint_labels) if tainted_source.taint_labels else set(ALL_SINK_TYPES),
+                                    taint_labels=set(tainted_source.taint_labels)
+                                    if tainted_source.taint_labels
+                                    else set(ALL_SINK_TYPES),
                                 )
                                 # Propagate labels
                                 arg_var_name = self._get_var_name(arg)
@@ -662,21 +671,19 @@ class TaintAnalyzer:
                     # Propagate: callee's return taint -> caller's assignment
                     if callee.returns_taint:
                         # Find the assignment target: x = callee_func(...)
-                        assign_target = self._find_call_assignment_target(
-                            summary.node, node
-                        )
+                        assign_target = self._find_call_assignment_target(summary.node, node)
                         if assign_target and assign_target not in tainted_vars:
                             tainted_vars[assign_target] = TaintSource(
                                 name=f"{resolved_name}()",
                                 node_type="interprocedural-return",
                                 line=getattr(node, "lineno", 0),
                                 confidence=callee.returns_taint.confidence * self._propagation_confidence,
-                                taint_labels=set(callee.return_taint_labels) if callee.return_taint_labels else set(ALL_SINK_TYPES),
+                                taint_labels=set(callee.return_taint_labels)
+                                if callee.return_taint_labels
+                                else set(ALL_SINK_TYPES),
                             )
                             taint_labels[assign_target] = (
-                                set(callee.return_taint_labels)
-                                if callee.return_taint_labels
-                                else set(ALL_SINK_TYPES)
+                                set(callee.return_taint_labels) if callee.return_taint_labels else set(ALL_SINK_TYPES)
                             )
                             changed = True
 
@@ -687,15 +694,11 @@ class TaintAnalyzer:
             for fname, summary in summaries.items():
                 tainted_vars = func_tainted_vars[fname]
                 taint_labels = func_taint_labels[fname]
-                paths = self._analyze_function_multilabel(
-                    summary.node, source_code, tainted_vars, taint_labels
-                )
+                paths = self._analyze_function_multilabel(summary.node, source_code, tainted_vars, taint_labels)
                 summary.paths = paths
 
                 # Re-check return taint
-                ret_source, ret_labels = self._check_function_returns(
-                    summary.node, tainted_vars, taint_labels
-                )
+                ret_source, ret_labels = self._check_function_returns(summary.node, tainted_vars, taint_labels)
                 if ret_source:
                     summary.returns_taint = ret_source
                     summary.return_taint_labels = ret_labels
@@ -1068,9 +1071,7 @@ class TaintAnalyzer:
                             taint_labels[var_name] = set(ALL_SINK_TYPES)
 
                         # Check if the RHS passes through a sanitizer
-                        self._apply_sanitizer_labels(
-                            node.value, var_name, taint_labels
-                        )
+                        self._apply_sanitizer_labels(node.value, var_name, taint_labels)
 
     def _apply_sanitizer_labels(
         self,
