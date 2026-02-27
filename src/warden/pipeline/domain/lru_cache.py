@@ -42,7 +42,7 @@ class LRUCache:
     2
     """
 
-    __slots__ = ("_maxsize", "_data", "_lock")
+    __slots__ = ("_data", "_lock", "_maxsize")
 
     def __init__(self, maxsize: int = 500) -> None:
         if maxsize < 1:

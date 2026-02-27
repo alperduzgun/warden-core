@@ -614,7 +614,9 @@ class FrameRunner:
                                     for f in (result.findings or [])
                                 ]
                                 self._partial_writer.append(
-                                    str(c_file.path), frame.frame_id, findings_dicts,
+                                    str(c_file.path),
+                                    frame.frame_id,
+                                    findings_dicts,
                                 )
                             except Exception:
                                 pass  # best-effort persistence
@@ -656,7 +658,8 @@ class FrameRunner:
                         if self._partial_writer is not None:
                             try:
                                 self._partial_writer.append(
-                                    str(c_file.path), frame.frame_id,
+                                    str(c_file.path),
+                                    frame.frame_id,
                                     [timeout_finding.to_json()],
                                 )
                             except Exception:
@@ -793,7 +796,7 @@ class FrameRunner:
                                     if chunk_results:
                                         # Persist each result to findings cache (1:1 with chunk files)
                                         if self._findings_cache is not None:
-                                            for cf, res in zip(chunk, chunk_results):
+                                            for cf, res in zip(chunk, chunk_results, strict=False):
                                                 if cf.content and res is not None:
                                                     self._findings_cache.put_findings(
                                                         frame.frame_id,
@@ -872,7 +875,9 @@ class FrameRunner:
                     suppressions = frame.config["suppressions"]
                     if suppressions and frame_findings:
                         findings_before = len(frame_findings)
-                        frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions, context=context)
+                        frame_findings = SuppressionFilter.apply_config_suppressions(
+                            frame_findings, suppressions, context=context
+                        )
                         findings_after = len(frame_findings)
 
                         if findings_before != findings_after:

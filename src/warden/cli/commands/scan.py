@@ -549,9 +549,7 @@ def scan_command(
 
             if PartialResultsWriter.has_partial_results(Path.cwd()):
                 resume_keys = PartialResultsWriter.load_completed_keys(Path.cwd())
-                console.print(
-                    f"[green]Resuming scan: {len(resume_keys)} file/frame pairs already completed[/green]"
-                )
+                console.print(f"[green]Resuming scan: {len(resume_keys)} file/frame pairs already completed[/green]")
             else:
                 console.print("[yellow]No partial results found, starting fresh scan[/yellow]")
 
@@ -688,10 +686,11 @@ async def _process_stream_events(
 
     from warden.cli.commands import _scan_ux as _UX
 
-
     # ── Phase checklist (Issue #202) ─────────────────────────────────────
     from warden.cli.commands._phase_checklist_renderer import (
         normalise_phase_name as _norm_phase,
+    )
+    from warden.cli.commands._phase_checklist_renderer import (
         render_checklist_rows as _render_checklist,
     )
     from warden.pipeline.domain.phase_checklist import PhaseChecklist
@@ -760,20 +759,26 @@ async def _process_stream_events(
         counter_str = f" ({processed_units}/{total_units})" if total_units > 0 else ""
         frame_hint = f"  [dim]{current_frame}[/dim]" if current_frame and current_frame != current_phase else ""
 
-        issues_str = f"  [bold red]{_total_issues_so_far} issue{'s' if _total_issues_so_far != 1 else ''}[/bold red]" if _total_issues_so_far > 0 else ""
+        issues_str = (
+            f"  [bold red]{_total_issues_so_far} issue{'s' if _total_issues_so_far != 1 else ''}[/bold red]"
+            if _total_issues_so_far > 0
+            else ""
+        )
 
         active_tbl = Table.grid(padding=(0, 1))
         active_tbl.add_column(no_wrap=True)
         active_tbl.add_column(no_wrap=False)
         active_tbl.add_row(
             _spinner_widget,
-            Text.from_markup(f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}{issues_str}"),
+            Text.from_markup(
+                f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}{issues_str}"
+            ),
         )
 
         # ── Build content block ──────────────────────────────────────────────
         # Phase checklist at the top (Issue #202)
         checklist_rows = _render_checklist(_phase_checklist)
-        content: list = [*checklist_rows, Text(''), *phase_summary_rows]
+        content: list = [*checklist_rows, Text(""), *phase_summary_rows]
 
         # Phase hint: only when no live status is already shown in spinner row
         phase_hint_text = _UX.PHASE_HINTS.get(current_phase, "")

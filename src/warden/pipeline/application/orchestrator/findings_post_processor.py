@@ -206,7 +206,7 @@ class FindingsPostProcessor:
         ]:
             if config_candidate.exists():
                 try:
-                    import yaml  # noqa: PLC0415
+                    import yaml
 
                     with open(config_candidate) as f:
                         raw = yaml.safe_load(f) or {}
