@@ -1,9 +1,19 @@
-name: Check Runner Hardware
+name: Check Runner Hardware + Ollama Benchmark
 
 on:
   push:
     branches: [ feature/ci-hardware-check ]
   workflow_dispatch:
+    inputs:
+      model:
+        description: 'Ollama model to benchmark'
+        required: false
+        default: 'qwen2.5-coder:0.5b'
+        type: choice
+        options:
+          - qwen2.5-coder:0.5b
+          - qwen2.5-coder:1.5b
+          - qwen2.5-coder:3b
 
 jobs:
   check-hardware:
@@ -28,3 +38,118 @@ jobs:
           sudo apt-get update > /dev/null
           sudo apt-get install -y speedtest-cli > /dev/null
           speedtest-cli --simple
+
+  ollama-benchmark:
+    name: Ollama Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: System Specs
+        run: |
+          echo "=== CPU ==="
+          lscpu | grep -E "Model name|CPU\(s\)|Thread|MHz" || true
+          echo "Cores: $(nproc)"
+          echo "=== RAM ===" && free -h
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama --version
+
+      - name: Start Ollama Server
+        run: |
+          ollama serve &
+          for i in $(seq 1 30); do
+            curl -s http://localhost:11434/api/tags > /dev/null 2>&1 && echo "✅ Ollama ready (${i}s)" && break
+            sleep 1
+          done
+
+      - name: Pull Model
+        run: |
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          echo "Pulling $MODEL..."
+          START=$(date +%s)
+          ollama pull "$MODEL"
+          END=$(date +%s)
+          echo "⏱ Pull time: $((END - START))s"
+
+      - name: Warm-up
+        run: |
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          START=$(date +%s)
+          curl -s http://localhost:11434/api/generate \
+            -d "{\"model\":\"$MODEL\",\"prompt\":\"\",\"keep_alive\":-1}" -o /dev/null
+          END=$(date +%s)
+          echo "⏱ Warm-up: $((END - START))s"
+
+      - name: Benchmark - Short prompt
+        run: |
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          echo "=== SHORT PROMPT (latency test) ==="
+          START=$(date +%s%N)
+          RESPONSE=$(curl -s http://localhost:11434/api/generate \
+            -d "{\"model\":\"$MODEL\",\"prompt\":\"Reply with only: OK\",\"stream\":false}" \
+            --max-time 60)
+          END=$(date +%s%N)
+          echo "Wall time: $(( (END - START) / 1000000 ))ms"
+          python3 - <<'PYEOF'
+          import json, sys
+          r = json.loads("""$RESPONSE""")
+          ec = r.get('eval_count', 0)
+          ed = r.get('eval_duration', 1)
+          ped = r.get('prompt_eval_duration', 0)
+          tps = ec / (ed / 1e9) if ed > 0 else 0
+          print(f"Eval tokens: {ec}, Tokens/sec: {tps:.1f}")
+          print(f"Prompt eval: {ped/1e6:.0f}ms, Generation: {ed/1e6:.0f}ms")
+          PYEOF
+
+      - name: Benchmark - Triage prompt (realistic)
+        run: |
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          echo "=== TRIAGE PROMPT (realistic CI workload) ==="
+          PROMPT='Analyze for security issues. Return JSON only: {"risk_score": 8, "has_issues": true, "reason": "command injection via shell=True"}\n\nCode:\ndef run(cmd):\n    subprocess.run(cmd, shell=True)'
+
+          START=$(date +%s)
+          RESPONSE=$(curl -s http://localhost:11434/api/generate \
+            -d "{\"model\":\"$MODEL\",\"prompt\":\"$PROMPT\",\"stream\":false}" \
+            --max-time 120)
+          END=$(date +%s)
+
+          ELAPSED=$((END - START))
+          echo "Wall time: ${ELAPSED}s"
+          echo "Response: $(echo "$RESPONSE" | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r.get("response","ERR")[:150])' 2>/dev/null)"
+          echo "Tokens/sec: $(echo "$RESPONSE" | python3 -c '
+          import json,sys
+          r=json.load(sys.stdin)
+          ec=r.get("eval_count",0); ed=r.get("eval_duration",1)
+          print(f"{ec/(ed/1e9):.1f} tok/s ({ec} tokens)")
+          ' 2>/dev/null)"
+
+      - name: Benchmark - 5 sequential requests (batch=1 simulation)
+        run: |
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          echo "=== 5 SEQUENTIAL REQUESTS (simulate warden batch=1 x5 files) ==="
+          TOTAL_START=$(date +%s)
+          for i in 1 2 3 4 5; do
+            START=$(date +%s)
+            curl -s http://localhost:11434/api/generate \
+              -d "{\"model\":\"$MODEL\",\"prompt\":\"File $i: def f(x): return eval(x). Risk?\",\"stream\":false}" \
+              --max-time 60 | python3 -c "
+          import json,sys
+          r=json.load(sys.stdin)
+          ec=r.get('eval_count',0); ed=r.get('eval_duration',1)
+          print(f'  [{i}] {ec/(ed/1e9):.1f} tok/s')
+          " 2>/dev/null || echo "  [$i] TIMEOUT/ERROR"
+            END=$(date +%s)
+            echo "     wall: $((END-START))s"
+          done
+          TOTAL_END=$(date +%s)
+          TOTAL=$((TOTAL_END - TOTAL_START))
+          echo ""
+          echo "=== SUMMARY ==="
+          echo "Total 5 requests: ${TOTAL}s"
+          echo "Average per file: $(( TOTAL / 5 ))s"
+          echo ""
+          echo "Warden estimate ($(cat /proc/$(pgrep -f 'warden scan' | head -1)/status 2>/dev/null | grep VmRSS || echo 'N/A') RAM):"
+          echo "  If repo has 50 files → 50 × $(( TOTAL / 5 ))s = $(( 50 * TOTAL / 5 ))s total triage"
