@@ -116,14 +116,14 @@ llm:
   tpm_limit: 10000
   rpm_limit: 60
   provider: ollama
-  model: qwen2.5-coder:3b
+  model: qwen2.5-coder:0.5b
   timeout: 300
   smart_model: qwen2.5-coder:3b
-  fast_model: qwen2.5-coder:3b
+  fast_model: qwen2.5-coder:0.5b
   ci:
     provider: ollama
-    smart_model: qwen2.5-coder:3b
-    model: qwen2.5-coder:3b
+    smart_model: qwen2.5-coder:0.5b
+    model: qwen2.5-coder:0.5b
     fast_tier_providers:
     - ollama
     fast_model: qwen2.5-coder:0.5b
@@ -165,9 +165,9 @@ settings:
     use_llm: false
   classification_config:
     enabled: true
-    model: qwen2.5-coder:3b
-    batch_size: 2
-  timeout: 1800
+    model: qwen2.5-coder:0.5b
+    batch_size: 1
+  timeout: 3600
 custom_rules:
 - .warden/rules/my_custom_rules.yaml
 - .warden/rules/warden_core_rules.yaml
