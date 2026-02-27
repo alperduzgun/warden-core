@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 # Larger batches reduce the number of LLM round-trips at the cost of more
 # context tokens per request.
 _BATCH_SIZES: dict[str, int] = {
-    "ollama": 5,  # Small local models (e.g. Qwen 3b, 2K context)
+    "ollama": 1,  # Small local models on CPU — single-file batches to avoid timeout
     "groq": 15,  # Fast cloud API, 32K+ context
     "openai": 15,  # Cloud API, 128K context
     "azure_openai": 15,
