@@ -2,6 +2,7 @@
 Frame runner for executing validation frames.
 
 Handles the execution of individual frames with rules and dependencies.
+Supports incremental persistence via PartialResultsWriter (#101).
 """
 
 import asyncio
@@ -118,6 +119,7 @@ class FrameRunner:
         rule_executor: RuleExecutor | None = None,
         llm_service: Any | None = None,
         semantic_search_service: Any | None = None,
+        partial_results_writer: Any | None = None,
     ):
         self.config = config or PipelineConfig()
         self.progress_callback = progress_callback
@@ -126,6 +128,7 @@ class FrameRunner:
         self.semantic_search_service = semantic_search_service
         self.ignore_matcher: IgnoreMatcher | None = None
         self._findings_cache: FindingsCache | None = None
+        self._partial_writer = partial_results_writer
 
     @async_error_handler(fallback_value=None, log_level="error", context_keys=["frame_id"], reraise=False)
     async def execute_frame_with_rules_async(
@@ -602,6 +605,20 @@ class FrameRunner:
                             self.progress_callback(
                                 "progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path}
                             )
+
+                        # Persist partial results incrementally (#101)
+                        if self._partial_writer is not None and result is not None:
+                            try:
+                                findings_dicts = [
+                                    f.to_json() if hasattr(f, "to_json") else {"message": str(f)}
+                                    for f in (result.findings or [])
+                                ]
+                                self._partial_writer.append(
+                                    str(c_file.path), frame.frame_id, findings_dicts,
+                                )
+                            except Exception:
+                                pass  # best-effort persistence
+
                         return result
                     except asyncio.TimeoutError:
                         logger.warning(
@@ -624,7 +641,7 @@ class FrameRunner:
                             ),
                             location=f"{c_file.path}:1",
                         )
-                        return CodeFrameResult(
+                        timeout_result = CodeFrameResult(
                             frame_id=frame.frame_id,
                             frame_name=frame.name,
                             status="timeout",
@@ -634,6 +651,18 @@ class FrameRunner:
                             findings=[timeout_finding],
                             metadata={"timeout": True, "timeout_s": per_file_timeout},
                         )
+
+                        # Persist timeout finding incrementally (#101)
+                        if self._partial_writer is not None:
+                            try:
+                                self._partial_writer.append(
+                                    str(c_file.path), frame.frame_id,
+                                    [timeout_finding.to_json()],
+                                )
+                            except Exception:
+                                pass
+
+                        return timeout_result
                     except Exception as ex:
                         logger.error(
                             "frame_file_execution_error", frame=frame.frame_id, file=c_file.path, error=str(ex)
