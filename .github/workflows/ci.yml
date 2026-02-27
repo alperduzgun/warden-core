@@ -203,16 +203,10 @@ jobs:
             warden-baseline-${{ github.ref_name }}-
             warden-baseline-main-
 
-      - name: Verify Code Intelligence (Audit Context)
-        env:
-          WARDEN_LLM_PROVIDER: "ollama"
-          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
-        run: |
-          echo "Generating Code Intelligence and Context Graphs..."
-          warden refresh --force
-
-          echo "Checking for structural gaps (Broken Imports, Unreachable Code, Circular Docs)..."
-          warden audit-context --check
+      # Verify Code Intelligence disabled in CI: warden refresh --force runs
+      # tree-sitter AST analysis on all 557 files before Ollama is ready,
+      # adding 10-20 min of overhead for no benefit in incremental scan mode.
+      # - name: Verify Code Intelligence (Audit Context)
 
 
       - name: Run Warden Scan
