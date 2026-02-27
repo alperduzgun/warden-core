@@ -112,7 +112,7 @@ llm:
     base_url: http://localhost:11434
   fast_tier_providers:
   - ollama
-  max_retries: 2
+  max_retries: 0
   tpm_limit: 10000
   rpm_limit: 60
   provider: ollama
@@ -120,6 +120,18 @@ llm:
   timeout: 300
   smart_model: qwen2.5-coder:3b
   fast_model: qwen2.5-coder:0.5b
+  token_budgets:
+    # CI 0.5b CPU: ~20 tok/s. Total prompt = code_budget + ~300 instruction tokens.
+    # Target: total prompt ≤ 700 tokens → 35s prefill → well within 60s WARDEN_FILE_TIMEOUT_MIN.
+    security: {deep: 400, fast: 150}
+    resilience: {deep: 400, fast: 150}
+    property: {deep: 300, fast: 100}
+    fuzz: {deep: 300, fast: 100}
+    orphan: {deep: 500, fast: 200}
+    fortification: {deep: 400, fast: 150}
+    triage: {deep: 400, fast: 300}
+    classification: {deep: 400, fast: 300}
+    analysis: {deep: 200, fast: 100}
   ci:
     provider: ollama
     smart_model: qwen2.5-coder:0.5b
@@ -155,7 +167,7 @@ settings:
   enable_issue_validation: true
   enable_suppression: true
   fail_fast: false
-  frame_timeout: 120
+  frame_timeout: 45
   min_severity: high
   mode: normal
   pre_analysis_config:

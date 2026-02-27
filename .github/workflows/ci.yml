@@ -181,6 +181,7 @@ jobs:
             warden-cache-${{ runner.os }}-
 
       - name: Cache AI Models
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/cache@v5
         with:
           path: ~/.ollama
@@ -211,96 +212,43 @@ jobs:
 
       - name: Run Warden Scan
         env:
-          # Configuration: Ollama local LLM only (no cloud API dependency)
-          # Provider: Ollama qwen2.5-coder:3b — free, local, no rate limits
-
-          # Warden Configuration
-          # CI uses 0.5b only — avoids 3b timeout (563 files × 300s = impossible)
-          WARDEN_LLM_PROVIDER: "ollama"
-          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
-          WARDEN_LLM_CONCURRENCY: "1"          # Single request at a time on CI CPU
-
-          # Ollama CPU Optimization
-          OLLAMA_HOST: http://localhost:11434
-          OLLAMA_NUM_THREADS: "4"              # Use all 4 vCPUs for inference
-          OLLAMA_MAX_LOADED_MODELS: "1"        # Single model — no RAM split
-          OLLAMA_FLASH_ATTENTION: "1"          # Reduces KV cache memory pressure
-          OLLAMA_CONTEXT_LENGTH: "4096"        # Triage prompts ~2K; 4K is safe
-
           # Git ref for incremental scan (env var to prevent script injection)
           BASE_REF: ${{ github.base_ref || 'main' }}
+          # Ollama config — only used for workflow_dispatch deep scans
+          WARDEN_LLM_PROVIDER: "ollama"
+          WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
+          OLLAMA_HOST: http://localhost:11434
+          OLLAMA_NUM_THREADS: "4"
+          OLLAMA_MAX_LOADED_MODELS: "1"
+          OLLAMA_FLASH_ATTENTION: "1"
+          OLLAMA_CONTEXT_LENGTH: "2048"
         run: |
-          # --- OLLAMA SETUP ---
-          # We run this here to ensure the background process persists for the scan duration.
+          # =============================================================
+          # SCAN STRATEGY
+          # - push/PR (incremental): --level basic (rule-based, no LLM)
+          #   → fast (< 30s), catches OWASP patterns, misconfigs, secrets
+          # - workflow_dispatch (manual/nightly): --level standard (LLM)
+          #   → deep analysis via Ollama 0.5b
+          # =============================================================
 
-          echo "Installing Ollama (Official Script)..."
-          # Download and verify before executing
-          curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
-          bash /tmp/ollama-install.sh
-          rm /tmp/ollama-install.sh
-          
-          # The install script starts a systemd service as 'ollama' user.
-          # We must stop it to run our own instance as 'runner' user (to see the cache).
-          sudo systemctl stop ollama || true
-          sudo systemctl disable ollama || true
-          
-          echo "Debug: Checking Cache Content..."
-          ls -la ~/.ollama || echo "No .ollama directory found"
-          
-          echo "Starting Local Ollama Server..."
-          ollama serve &
-          
-          echo "Waiting for Ollama service..."
-          for i in {1..30}; do
-            if curl -s http://localhost:11434/api/tags > /dev/null; then
-              echo "Ollama service is ready!"
-              break
-            fi
-            sleep 1
-          done
-          if ! curl -s http://localhost:11434/api/tags > /dev/null; then
-            echo "::warning::Ollama failed to start, continuing without local LLM"
-            export OLLAMA_UNAVAILABLE=true
-          fi
-          
-          echo "Checking for existing models..."
-          ollama list
-
-          # Fast tier: 0.5b for triage/classification (speed critical)
-          if ollama list | grep -q "qwen2.5-coder:0.5b"; then
-            echo "✅ Fast model qwen2.5-coder:0.5b already cached."
-          else
-            echo "⬇️ Pulling fast model qwen2.5-coder:0.5b..."
-            ollama pull qwen2.5-coder:0.5b
-          fi
-
-          # CI uses 0.5b for everything: fast enough, avoids dual-model RAM pressure
-          # (3b is NOT pulled in CI — it causes triage timeouts on 2-CPU runners)
-          echo "✅ Using qwen2.5-coder:0.5b for all CI triage and analysis."
-
-          # Warm-up: pin 0.5b to RAM before scan starts
-          echo "Warming up model (pinning to RAM)..."
-          curl -s http://localhost:11434/api/generate \
-            -d '{"model":"qwen2.5-coder:0.5b","prompt":"","keep_alive":-1}' \
-            -o /dev/null
-          echo "✅ Model ready."
-
-          # --- SCAN EXECUTION ---
-          
-          # Determine scan strategy: Baseline (first run) or Incremental (subsequent runs)
-          if [[ -f ".warden/baseline.sarif" ]]; then
-            echo "✅ Baseline found - Running INCREMENTAL SCAN"
-            SCAN_MODE="incremental"
-          else
-            echo "🔍 No baseline found - Running FULL DEEP SCAN to establish baseline"
-            SCAN_MODE="baseline"
-          fi
-          
-          LEVEL="standard"
-          
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Manual dispatch: full scan of source code only (not tests)
-            echo "Manual dispatch — scanning src/warden/ ..."
+            # --- DEEP SCAN (manual trigger) ---
+            # Install and start Ollama for LLM analysis.
+            echo "Manual dispatch — setting up Ollama for deep LLM scan..."
+            curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
+            bash /tmp/ollama-install.sh && rm /tmp/ollama-install.sh
+            sudo systemctl stop ollama || true
+            sudo systemctl disable ollama || true
+            ollama serve &
+            for i in {1..30}; do curl -s http://localhost:11434/api/tags > /dev/null && break || sleep 1; done
+            if ollama list | grep -q "qwen2.5-coder:0.5b"; then
+              echo "✅ Model already cached."
+            else
+              ollama pull qwen2.5-coder:0.5b
+            fi
+            curl -s http://localhost:11434/api/generate \
+              -d '{"model":"qwen2.5-coder:0.5b","prompt":"","keep_alive":-1}' -o /dev/null
+            echo "✅ Ollama ready. Running full LLM scan on src/warden/ ..."
             set +e
             warden scan src/warden --level standard --format sarif --output warden.sarif
             EXIT_CODE=$?
@@ -310,17 +258,21 @@ jobs:
               exit 1
             elif [ $EXIT_CODE -ne 0 ]; then
               echo "::warning title=Scan Incomplete::Scan failed (infrastructure). Quality gate skipped."
-              echo "⚠️ Scan infrastructure failure (exit $EXIT_CODE)."
+              echo "⚠️ Scan exit $EXIT_CODE — infrastructure issue, not a code quality failure."
             else
-              echo "✅ Scan passed."
+              echo "✅ Deep scan passed."
             fi
             if [ -f warden.sarif ]; then
               mkdir -p .warden && cp warden.sarif .warden/baseline.sarif
               echo "📦 Baseline saved."
             fi
+
           else
-            # INCREMENTAL SCAN: Only changed Python files (always, with or without baseline)
-            echo "Running INCREMENTAL SCAN on changed files..."
+            # --- INCREMENTAL RULE-BASED SCAN (push / PR) ---
+            # No LLM required. Rule-based only (--level basic).
+            # Catches: hardcoded secrets, SQL injection, OWASP patterns, misconfigs.
+            # Fast: < 30s for any number of files.
+            echo "Running INCREMENTAL RULE-BASED SCAN (--level basic) on changed files..."
 
             # 1. Fetch base branch for diff
             git fetch origin "$BASE_REF" --depth=1 2>/dev/null || true
@@ -329,17 +281,17 @@ jobs:
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               CHANGED_FILES=$(git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD 2>/dev/null | grep "\.py$" || true)
             else
-              # push: compare against parent commit, or against main if shallow clone
               CHANGED_FILES=$(git diff --name-only --diff-filter=d HEAD~1 HEAD 2>/dev/null | grep "\.py$" || \
                               git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD 2>/dev/null | grep "\.py$" || true)
             fi
 
-            # Filter: only existing source files (not deleted, not test-only)
+            # Filter: only existing files
             if [ -n "$CHANGED_FILES" ]; then
               CHANGED_FILES=$(echo "$CHANGED_FILES" | while read f; do [ -f "$f" ] && echo "$f"; done || true)
             fi
 
-            echo "Changed Python files ($(echo "$CHANGED_FILES" | grep -c . || echo 0)):"
+            FILE_COUNT=$(echo "$CHANGED_FILES" | grep -c . || echo 0)
+            echo "Changed Python files ($FILE_COUNT):"
             echo "$CHANGED_FILES"
 
             if [[ -z "$CHANGED_FILES" ]]; then
@@ -347,34 +299,21 @@ jobs:
               exit 0
             fi
 
-            # Cap at 30 files to stay within time budget (0.5b: ~5-10s/file × 30 = 5 min)
-            FILE_COUNT=$(echo "$CHANGED_FILES" | grep -c . || echo 0)
-            if [ "$FILE_COUNT" -gt 30 ]; then
-              echo "⚠️  $FILE_COUNT files changed — capping at 30 highest-risk files for CI budget."
-              CHANGED_FILES=$(echo "$CHANGED_FILES" | head -30)
-            fi
-
             set +e
             FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ')
-            warden scan $FILES --level standard --format sarif --output warden.sarif
+            warden scan $FILES --level basic --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
 
             if [ $EXIT_CODE -eq 0 ]; then
-              echo "✅ Scan passed successfully."
+              echo "✅ Rule-based scan passed."
             elif [ $EXIT_CODE -eq 2 ]; then
-              echo "🚫 CRITICAL ISSUES FOUND"
+              echo "🚫 CRITICAL ISSUES FOUND (rule-based)"
               echo "::error title=Policy Violation::Critical issues found in changed files. Review SARIF."
               exit 1
             else
               echo "::warning title=Scan Incomplete::Scan failed (infrastructure). Quality gate skipped."
-              echo "⚠️ Scan infrastructure failure (exit $EXIT_CODE) — not a code quality violation."
-            fi
-
-            # Save as baseline if this is main/dev branch and scan succeeded
-            if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "dev" ]] && [ -f warden.sarif ]; then
-              mkdir -p .warden && cp warden.sarif .warden/baseline.sarif
-              echo "📦 Incremental result saved as new baseline."
+              echo "⚠️ Scan exit $EXIT_CODE — not a code quality violation."
             fi
           fi
 
