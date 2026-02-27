@@ -43,7 +43,7 @@ _BATCH_SIZES: dict[str, int] = {
     "claude_code": 25,
     "codex": 25,
 }
-_DEFAULT_BATCH_SIZE = 5
+_DEFAULT_BATCH_SIZE = 5  # CI: single-file batches via config override
 
 
 class TriageService:
