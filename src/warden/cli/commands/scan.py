@@ -688,6 +688,16 @@ async def _process_stream_events(
 
     from warden.cli.commands import _scan_ux as _UX
 
+
+    # ── Phase checklist (Issue #202) ─────────────────────────────────────
+    from warden.cli.commands._phase_checklist_renderer import (
+        normalise_phase_name as _norm_phase,
+        render_checklist_rows as _render_checklist,
+    )
+    from warden.pipeline.domain.phase_checklist import PhaseChecklist
+
+    _phase_checklist = PhaseChecklist.from_defaults()
+
     def _flush_phase() -> None:
         """Collapse the current phase into a summary row (+ dim step subtitle)."""
         nonlocal _phase_passed, _phase_failed, _phase_issues, _phase_start, _last_phase, _phase_steps
@@ -761,7 +771,9 @@ async def _process_stream_events(
         )
 
         # ── Build content block ──────────────────────────────────────────────
-        content: list = [*phase_summary_rows]
+        # Phase checklist at the top (Issue #202)
+        checklist_rows = _render_checklist(_phase_checklist)
+        content: list = [*checklist_rows, Text(''), *phase_summary_rows]
 
         # Phase hint: only when no live status is already shown in spinner row
         phase_hint_text = _UX.PHASE_HINTS.get(current_phase, "")
@@ -846,10 +858,29 @@ async def _process_stream_events(
                             current_frame = ""
                             _last_phase = label
 
+                        # Update phase checklist (Issue #202)
+                        _cl_name = _norm_phase(data.get("phase_name", data.get("phase", "")))
+                        if _cl_name:
+                            _phase_checklist.mark_phase_running(_cl_name)
+
                         phase_total = data.get("total_units", 0)
                         if phase_total > 0:
                             total_units = phase_total
                             processed_units = 0
+
+                    # ── phase completed (Issue #202) ───────────────────────────
+                    elif evt == "phase_completed":
+                        if bench_collector is not None:
+                            bench_collector.on_event("phase_completed", data)
+                        _cl_name = _norm_phase(data.get("phase_name", data.get("phase", "")))
+                        if _cl_name:
+                            _phase_checklist.mark_phase_done(_cl_name)
+
+                    # ── phase skipped (Issue #202) ─────────────────────────────
+                    elif evt == "phase_skipped":
+                        _cl_name = _norm_phase(data.get("phase_name", data.get("phase", "")))
+                        if _cl_name:
+                            _phase_checklist.mark_phase_skipped(_cl_name)
 
                     # ── per-frame activity ───────────────────────────────────
                     elif evt == "progress_update":
@@ -918,6 +949,10 @@ async def _process_stream_events(
                 elif event_type == "result":
                     final_result_data = event["data"]
                     _flush_phase()  # collapse final phase
+                    # Mark any still-running phase as done (Issue #202)
+                    active = _phase_checklist.active_phase
+                    if active:
+                        active.mark_done()
                     current_phase = "Complete"
                     current_frame = ""
 
