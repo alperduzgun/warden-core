@@ -350,8 +350,6 @@ jobs:
 
             if [[ -z "$CHANGED_FILES" ]]; then
               echo "✅ No Python files changed. Skipping scan."
-              # Emit empty SARIF so upload step doesn't fail
-              echo '{"version":"2.1.0","runs":[]}' > warden.sarif
               exit 0
             fi
 
